@@ -71,7 +71,7 @@ public:
   std::string  m_reconFileName;                                ///< output reconstruction file
   std::string  m_RCStatsFileName;                              ///< rate control statistics file
   vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
-  int          m_FrameSkip                    = 0;             ///< number of skipped frames from the beginning
+  int          m_FrameSkip                     = 0;            ///< number of skipped frames from the beginning
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
   bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )

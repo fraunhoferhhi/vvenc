@@ -394,10 +394,20 @@ enum DFunc
   DF_HAD64           = DF_HAD+6,      ///<  64xM HAD
   DF_HAD128          = DF_HAD+7,      ///< 16NxM HAD
 
-  DF_HAD_2SAD                  = 24,  //tbd th remove
+  DF_HAD_2SAD        = 24,            //tbd th remove
 
-  DF_SAD_WITH_MASK = 25,
-  DF_TOTAL_FUNCTIONS = 26,
+  DF_SAD_WITH_MASK   = 25,
+  
+  DF_HAD_fast        = 26,            ///< general size Hadamard
+  DF_HAD2_fast       = DF_HAD_fast+1,      ///<   2xM fast HAD
+  DF_HAD4_fast       = DF_HAD_fast+2,      ///<   4xM fast HAD
+  DF_HAD8_fast       = DF_HAD_fast+3,      ///<   8xM fast HAD
+  DF_HAD16_fast      = DF_HAD_fast+4,      ///<  16xM fast HAD
+  DF_HAD32_fast      = DF_HAD_fast+5,      ///<  32xM fast HAD
+  DF_HAD64_fast      = DF_HAD_fast+6,      ///<  64xM fast HAD
+  DF_HAD128_fast     = DF_HAD_fast+7,      ///< 16NxM fast HAD
+
+  DF_TOTAL_FUNCTIONS = 34,
 
   DF_SSE_WTD         = 0xfedc          // out of func scope
 };
@@ -906,6 +916,67 @@ struct XUCache
   TUCache tuCache;
 };
 
+
+typedef struct GOPEntry : vvencGOPEntry
+{
+  int       m_codingNum;
+  int       m_gopNum;
+  int       m_defaultRPLIdx;
+  int       m_mctfIndex;
+  bool      m_isSTSA;
+  bool      m_useBckwdOnly;
+  bool      m_isStartOfGop;
+  bool      m_isStartOfIntra;
+
+  void setDefaultGOPEntry()
+  {
+    vvenc_GOPEntry_default( this );
+    m_codingNum        = -1;
+    m_gopNum           = -1;
+    m_defaultRPLIdx    = -1;
+    m_mctfIndex        = -1;
+    m_isSTSA           = false;
+    m_useBckwdOnly     = false;
+    m_isStartOfGop     = false;
+    m_isStartOfIntra   = false;
+  }
+
+  void copyFromGopCfg( const vvencGOPEntry& cfgEntry )
+  {
+    this->vvencGOPEntry::operator=( cfgEntry );
+  }
+
+  GOPEntry() = default;
+
+  GOPEntry( char sliceType, int poc, int qpOffset, double qpOffsetModelOffset, double qpOffsetModelScale, double qpFactor, int temporalId, int numRefPicsActiveL0, const std::vector<int>& deltaRefPicsL0, int numRefPicsActiveL1, const std::vector<int>& deltaRefPicsL1 )
+  {
+    setDefaultGOPEntry();
+    m_sliceType             = sliceType;
+    m_POC                   = poc;
+    m_QPOffset              = qpOffset;
+    m_QPOffsetModelOffset   = qpOffsetModelOffset;
+    m_QPOffsetModelScale    = qpOffsetModelScale;
+    m_QPFactor              = qpFactor;
+    m_temporalId            = temporalId;
+    m_numRefPicsActive[ 0 ] = numRefPicsActiveL0;
+    m_numRefPics[ 0 ]       = (int)deltaRefPicsL0.size();
+    CHECK( m_numRefPicsActive[ 0 ] > m_numRefPics[ 0 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 0 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 0 ]; i++ )
+    {
+      m_deltaRefPics[ 0 ][ i ] = deltaRefPicsL0[ i ];
+    }
+    m_numRefPicsActive[ 1 ] = numRefPicsActiveL1;
+    m_numRefPics[ 1 ]       = (int)deltaRefPicsL1.size();
+    CHECK( m_numRefPicsActive[ 1 ] > m_numRefPics[ 1 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 1 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 1 ]; i++ )
+    {
+      m_deltaRefPics[ 1 ][ i ] = deltaRefPicsL1[ i ];
+    }
+  }
+
+} GOPEntry;
 
 
 } // namespace vvenc

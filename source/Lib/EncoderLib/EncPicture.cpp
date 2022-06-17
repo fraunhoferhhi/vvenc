@@ -51,7 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -70,6 +69,8 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
+                       std::mutex* const noiseMinimaMutex,
+                       uint64_t* const noiseMinimaStats,
                        NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg = &encCfg;
@@ -79,6 +80,8 @@ void EncPicture::init( const VVEncCfg& encCfg,
 
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
+  m_noiseMinMutex = noiseMinimaMutex;
+  m_noiseMinStats = noiseMinimaStats;
 }
 
 
@@ -111,11 +114,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   }
 
   // compress picture
-  xInitPicEncoder ( pic );
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    gopEncoder.picInitRateControl( pic, pic.slices[0], this );
-  }
+  xInitPicEncoder( pic );
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
@@ -254,9 +253,19 @@ void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
 
 void EncPicture::xInitPicEncoder( Picture& pic )
 {
-  m_SliceEncoder.initPic( &pic, pic.gopId);
-
   Slice* slice = pic.cs->slice;
+
+  CHECK( slice != pic.slices[0], "Slice pointers don't match!" );
+
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    pic.picInitialQP     = -1;
+    pic.picInitialLambda = -1.0;
+
+    m_pcRateCtrl->initRateControlPic( pic, slice, pic.picInitialQP, pic.picInitialLambda );
+  }
+
+  m_SliceEncoder.initPic( &pic, m_noiseMinStats, m_noiseMinMutex );
 
   xInitSliceColFromL0Flag( slice );
   xInitSliceCheckLDC     ( slice );
@@ -277,7 +286,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
   {
     return;
   }
-  
+
   if ( slice->sliceType == VVENC_B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed

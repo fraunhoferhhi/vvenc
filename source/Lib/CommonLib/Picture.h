@@ -209,10 +209,10 @@ public:
   bool                          writePic;
   bool                          precedingDRAP; // preceding a DRAP picture in decoding order
 
+  const GOPEntry*               gopEntry;
+
   int                           refCounter;
   int                           poc;
-  int                           gopId;
-  int                           rcIdxInGop;
   unsigned                      TLayer;
   int                           layerId;
   bool                          isSubPicBorderSaved;
@@ -231,6 +231,7 @@ public:
   std::vector<Pel>              ctuAdaptedQP;
   std::mutex                    wppMutex;
   int                           picInitialQP;
+  double                        picInitialLambda;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
   double                        psnr[MAX_NUM_COMP];

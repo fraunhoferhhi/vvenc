@@ -70,6 +70,7 @@ public:
   , m_ctsValid   ( false )
   {
     std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
+    m_gopEntry.setDefaultGOPEntry();
   };
 
   ~PicShared() {};
@@ -122,6 +123,12 @@ public:
     pic->cts         = m_cts;
     pic->ctsValid    = m_ctsValid;
     m_refCount      += 1;
+    if( ! isLeadTrail() )
+    {
+      CHECK( m_gopEntry.m_codingNum < 0, "GOP entry, coding number not initialized" );
+      CHECK( m_gopEntry.m_POC != m_poc,  "GOP entry, POC not initialized" );
+      pic->gopEntry  = &m_gopEntry;
+    }
   }
 
   void releaseShared( Picture* pic )
@@ -160,6 +167,7 @@ public:
 
 public:
   PicShared* m_prevShared[ NUM_PREV_FRAMES ];
+  GOPEntry   m_gopEntry;
   bool       m_isSccWeak;
   bool       m_isSccStrong;
 
@@ -187,6 +195,7 @@ public:
   , m_minQueueSize    ( 0 )
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
+  , m_sortByPoc       ( false )
   , m_ctuSize         ( MAX_CU_SIZE )
   , m_isNonBlocking   ( false )
   , m_picCount        ( 0 )
@@ -216,11 +225,13 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
-  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, bool sortByPoc, int ctuSize, bool nonBlocking )
   {
+    CHECK( processLeadTrail && ! sortByPoc, "sort by coding number only for non lead trail pics supported" );
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
+    m_sortByPoc        = sortByPoc;
     m_ctuSize          = ctuSize;
     m_isNonBlocking    = nonBlocking;
   }
@@ -267,10 +278,21 @@ public:
 
     // sort picture into processing queue
     PicList::iterator picItr;
-    for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
+    if( m_sortByPoc )
     {
-      if( pic->poc < ( *picItr )->poc )
-        break;
+      for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
+      {
+        if( pic->poc < ( *picItr )->poc )
+          break;
+      }
+    }
+    else
+    {
+      for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
+      {
+        if( pic->gopEntry->m_codingNum < ( *picItr )->gopEntry->m_codingNum )
+          break;
+      }
     }
     m_procList.insert( picItr, pic );
     m_picCount++;
@@ -330,6 +352,7 @@ private:
   int       m_minQueueSize;
   bool      m_flushAll;
   bool      m_processLeadTrail;
+  bool      m_sortByPoc;
   int       m_ctuSize;
   bool      m_isNonBlocking;
 protected:

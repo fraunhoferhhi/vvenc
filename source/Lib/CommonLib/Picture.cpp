@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Picture.h"
 #include "SEI.h"
 
+#include <algorithm>
 #include <math.h>
 
 //! \ingroup CommonLib
@@ -76,7 +77,7 @@ void BlkStat::storeBlkSize( const Picture& pic )
 
   if ( ! slice.isIRAP() )
   {
-    const int refLayer = slice.depth < NUM_AMAXBT_LAYER ? slice.depth: NUM_AMAXBT_LAYER - 1;
+    const int refLayer = std::min<int>( slice.TLayer, NUM_AMAXBT_LAYER - 1 );
     for ( const CodingUnit *cu : pic.cs->cus )
     {
       m_uiBlkSize[ refLayer ] += cu->Y().area();
@@ -89,7 +90,7 @@ void BlkStat::updateMaxBT( const Slice& slice, const BlkStat& blkStat )
 {
   if ( ! slice.isIRAP() )
   {
-    const int refLayer = slice.depth < NUM_AMAXBT_LAYER ? slice.depth: NUM_AMAXBT_LAYER - 1;
+    const int refLayer = std::min<int>( slice.TLayer, NUM_AMAXBT_LAYER - 1 );
     m_uiBlkSize[ refLayer ] += blkStat.m_uiBlkSize[ refLayer ];
     m_uiNumBlk [ refLayer ] += blkStat.m_uiNumBlk [ refLayer ];
   }
@@ -99,7 +100,7 @@ void BlkStat::setSliceMaxBT( Slice& slice )
 {
   if( ! slice.isIRAP() )
   {
-    int refLayer = slice.depth < NUM_AMAXBT_LAYER ? slice.depth: NUM_AMAXBT_LAYER - 1;
+    const int refLayer = std::min<int>( slice.TLayer, NUM_AMAXBT_LAYER - 1 );
     if( m_bResetAMaxBT && slice.poc > m_uiPrevISlicePOC )
     {
       ::memset( m_uiBlkSize, 0, sizeof( m_uiBlkSize ) );
@@ -162,10 +163,9 @@ Picture::Picture()
     , encPic            ( true )
     , writePic          ( true )
     , precedingDRAP     ( false )
+    , gopEntry          ( nullptr )
     , refCounter        ( 0 )
     , poc               ( 0 )
-    , gopId             ( 0 )
-    , rcIdxInGop        ( 0 )
     , TLayer            ( std::numeric_limits<uint32_t>::max() )
     , layerId           ( 0 )
     , isSubPicBorderSaved (false)
@@ -174,7 +174,8 @@ Picture::Picture()
     , ctsValid          ( false )
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
-    , picInitialQP      ( 0 )
+    , picInitialQP      ( -1 )
+    , picInitialLambda  ( -1.0 )
     , picVisActTL0      ( 0 )
     , picVisActY        ( 0 )
     , isSccWeak         ( false )
@@ -221,10 +222,9 @@ void Picture::reset()
   writePic            = false;
   precedingDRAP       = false;
 
+  gopEntry            = nullptr;
   refCounter          = 0;
   poc                 = -1;
-  gopId               = 0;
-  rcIdxInGop          = 0;
   TLayer              = std::numeric_limits<uint32_t>::max();
 
   actualHeadBits      = 0;

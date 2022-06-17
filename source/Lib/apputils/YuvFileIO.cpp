@@ -522,6 +522,7 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   m_packedYUVMode       = packedYUVMode;
   m_readStdin           = false;
   m_y4mMode             = y4mMode;
+  m_packetCount         = 0;
 
   if( m_packedYUVMode && !bWriteMode && m_fileBitdepth != 10 )
   {
@@ -606,11 +607,62 @@ bool YuvFileIO::isFail()
   return m_cHandle.fail();
 }
 
-void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
+int YuvFileIO::countYuvFrames( int width, int height, bool countFromStart )
+{
+  if( m_readStdin ) return -1;
+  
+  //set the frame size according to the chroma format
+  std::streamoff frameSize      = 0;
+  const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
+
+  if( m_packedYUVMode)
+  {
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += (( ( width * 5 / 4 ) >> csx_file) * (height >> csy_file));
+    }
+  }
+  else
+  {
+    unsigned wordsize             = ( m_fileBitdepth > 8 ) ? 2 : 1;
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += ( width >> csx_file ) * ( height >> csy_file );
+    }
+    frameSize *= wordsize;
+  }
+
+  if( m_y4mMode )
+  {
+    const char Y4MHeader[] = {'F','R','A','M','E'};
+    frameSize += (sizeof(Y4MHeader) + 1);  /* assume basic FRAME\n headers */;
+  }
+  
+  std::streamoff lastPos = m_cHandle.tellg();  // backup last position
+  
+  if( countFromStart )
+  {
+    m_cHandle.seekg( 0, std::ios::beg );
+  }
+  std::streamoff curPos = m_cHandle.tellg();
+    
+  m_cHandle.seekg( 0, std::ios::end );
+  std::streamoff filelength = m_cHandle.tellg() - curPos;
+  
+  m_cHandle.seekg( lastPos, std::ios::beg ); // rewind to last pos
+  
+  return filelength / frameSize;
+}
+
+int YuvFileIO::skipYuvFrames( int numFrames, int width, int height )
 {
   if ( numFrames <= 0 )
   {
-    return;
+    return -1;
   }
 
   //set the frame size according to the chroma format
@@ -645,23 +697,40 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
   }
 
   const std::streamoff offset = frameSize * numFrames;
+  
+  std::istream& inStream = m_readStdin ? std::cin : m_cHandle;
+  
+  // check for file size
+  if( !m_readStdin )
+  {
+    std::streamoff fsize = m_cHandle.tellg();
+    m_cHandle.seekg( 0, std::ios::end );
+    std::streamoff filelength = m_cHandle.tellg() - fsize;
+    m_cHandle.seekg( fsize, std::ios::beg );
+    if( offset >= filelength )
+    {
+      return -1;
+    }
+  } 
 
   // attempt to seek
-  if ( !! m_cHandle.seekg( offset, std::ios::cur ) )
+  if ( !! inStream.seekg( offset, std::ios::cur ) )
   {
-    return; /* success */
+    return 0; /* success */
   }
 
-  m_cHandle.clear();
+  inStream.clear();
 
   // fall back to consuming the input
   char buf[ 512 ];
   const std::streamoff offset_mod_bufsize = offset % sizeof( buf );
   for ( std::streamoff i = 0; i < offset - offset_mod_bufsize; i += sizeof( buf ) )
   {
-    m_cHandle.read( buf, sizeof( buf ) );
+    inStream.read( buf, sizeof( buf ) );
   }
-  m_cHandle.read( buf, offset_mod_bufsize );
+  inStream.read( buf, offset_mod_bufsize );
+  
+  return 0;
 }
 
 int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
@@ -710,7 +779,7 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
       {
         m_lastError = "Source image does not contain valid y4m header (FRAME) - end of stream";
         eof = true;
-        return 0;
+        return ( m_packetCount ? 0 : -1); // return error if no frames has been proceeded, otherwise expect eof
       }
     }
 
@@ -732,6 +801,8 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
 
     scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
   }
+  
+  m_packetCount++;
 
   return 0;
 }
@@ -767,7 +838,8 @@ bool YuvFileIO::writeYuvBuf( const vvencYUVBuffer& yuvOutBuf )
     if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
-
+  
+  m_packetCount++;
   vvenc_YUVBuffer_free_buffer( &yuvScaled );
 
   return true;
