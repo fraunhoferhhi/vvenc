@@ -522,6 +522,7 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   m_packedYUVMode       = packedYUVMode;
   m_readStdin           = false;
   m_y4mMode             = y4mMode;
+  m_packetCount         = 0;
 
   if( m_packedYUVMode && !bWriteMode && m_fileBitdepth != 10 )
   {
@@ -778,7 +779,7 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
       {
         m_lastError = "Source image does not contain valid y4m header (FRAME) - end of stream";
         eof = true;
-        return 0;
+        return ( m_packetCount ? 0 : -1); // return error if no frames has been proceeded, otherwise expect eof
       }
     }
 
@@ -800,6 +801,8 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
 
     scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
   }
+  
+  m_packetCount++;
 
   return 0;
 }
@@ -835,7 +838,8 @@ bool YuvFileIO::writeYuvBuf( const vvencYUVBuffer& yuvOutBuf )
     if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
-
+  
+  m_packetCount++;
   vvenc_YUVBuffer_free_buffer( &yuvScaled );
 
   return true;
