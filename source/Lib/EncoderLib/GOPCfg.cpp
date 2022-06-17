@@ -68,6 +68,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
   const int remainSize = m_fixIntraPeriod > 0 ? m_fixIntraPeriod - ( m_defGopSize * numGops ) : 0;
   const int minPrevPoc = xGetMinPoc( m_maxGopSize, cfgGopList );
   const int numDefault = ( ( -1 * minPrevPoc ) + m_maxGopSize - 1 ) / m_maxGopSize + 1;
+  CHECK( numDefault <= 0, "number of gop lists to be created is 0" );
 
   // setup default gop lists
   GOPEntryList* prevGopList = nullptr;
@@ -81,7 +82,8 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
   }
   if( remainSize && remainSize != m_defGopSize )
   {
-    prevGopList = numGops < (int)m_defaultGopLists.size() ? &m_defaultGopLists[ numGops ] : &m_defaultGopLists.back();
+    const int prevGopIdx = Clip3<int>( 0, (int)m_defaultGopLists.size() - 1, numGops - 1 );
+    prevGopList = &m_defaultGopLists[ prevGopIdx ];
     pocOffset   = numGops * m_defGopSize;
     xCreateGopList( m_maxGopSize, remainSize, pocOffset, cfgGopList, prevGopList, m_remainGopList );
   }
