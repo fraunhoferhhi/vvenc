@@ -89,7 +89,7 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int fr
   isLookAhead         = lookAhead;
   targetRate          = targetBitrate;
   frameRate           = frRate;
-  intraPeriod         = intraPer;
+  intraPeriod         = Clip3( GOPSize, 4 * VVENC_MAX_GOP, intraPer );
   gopSize             = GOPSize;
   firstPassData       = firstPassStats;
   bitDepth            = bitDpth;
@@ -207,7 +207,7 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, int frameLevel )
 
 void EncRCPic::addToPictureList( std::list<EncRCPic*>& listPreviousPictures )
 {
-  if ( listPreviousPictures.size() > std::min( 64, 2 * encRCSeq->gopSize ) )
+  if ( listPreviousPictures.size() > std::min( VVENC_MAX_GOP, 2 * encRCSeq->gopSize ) )
   {
     EncRCPic* p = listPreviousPictures.front();
     listPreviousPictures.pop_front();
@@ -542,7 +542,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
 #else
   m_listRCFirstPassStats.push_back( statsData );
 
-  if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
+  if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > encRCSeq->intraPeriod + encRCSeq->gopSize + 1 )
   {
     m_listRCFirstPassStats.pop_front();
   }
@@ -619,7 +619,7 @@ void RateCtrl::processFirstPassData (const bool flush, const int poc)
       picStat.addedToList = true;
       m_numPicAddedToList++;
       m_listRCFirstPassStats.push_back( picStat );
-      if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
+      if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > encRCSeq->intraPeriod + encRCSeq->gopSize + 1 )
       {
         m_listRCFirstPassStats.pop_front();
         m_firstPassCache.pop_front();
