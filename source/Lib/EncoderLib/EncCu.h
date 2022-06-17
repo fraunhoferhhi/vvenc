@@ -167,7 +167,6 @@ private:
   std::vector<int>*     m_globalCtuQpVector;
   XUCache               m_unitCache;
   std::mutex*           m_wppMutex;
-  std::mutex*           m_rcMutex;
   CodingStructure*      m_pTempCS[maxCuDepth];
   CodingStructure*      m_pBestCS[maxCuDepth];
   CodingStructure*      m_pTempCS2;

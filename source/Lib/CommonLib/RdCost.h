@@ -156,7 +156,7 @@ public:
     return ( useUnadjustedLambda ? m_DistScaleUnadjusted : m_DistScale ) * double( distortion ) + double( fracBits );
   }
 
-  void          setDistParam        ( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, bool useHadamard = false );
+  void          setDistParam        ( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, int useHadamard = 0 );
   DistParam     setDistParam        ( const CPelBuf& org, const CPelBuf& cur, int bitDepth, DFunc dfunc );
   DistParam     setDistParam        ( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift, bool isDMVR = false );
   void          setDistParamGeo     ( DistParam &rcDP, const CPelBuf& org, const Pel *piRefY, int iRefStride, const Pel *mask, int iMaskStride, int stepX, int iMaskStride2, int bitDepth, ComponentID compID );
@@ -223,6 +223,7 @@ private:
   
   static Distortion xCalcHADs2x2      ( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur );
   static Distortion xGetHAD2SADs      ( const DistParam& pcDtParam );
+  template<bool fastHad>
   static Distortion xGetHADs          ( const DistParam& pcDtParam );
 
 #ifdef TARGET_SIMD_X86
@@ -236,7 +237,7 @@ private:
   template<int iWidth, X86_VEXT vext>
   static Distortion xGetSAD_NxN_SIMD( const DistParam& pcDtParam );
 
-  template<X86_VEXT vext>
+  template<X86_VEXT vext, bool fastHad>
   static Distortion xGetHADs_SIMD   ( const DistParam& pcDtParam );
   template<X86_VEXT vext>
   static Distortion xGetHAD2SADs_SIMD( const DistParam &rcDtParam );
