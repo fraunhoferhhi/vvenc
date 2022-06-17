@@ -219,6 +219,8 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
             << " gopNum= " << gopEntry.m_gopNum
             << " codingNum= " << gopEntry.m_codingNum
             << " TID= " << gopEntry.m_temporalId
+            << " isStartOfIntra= " << gopEntry.m_isStartOfIntra
+            << " isStartOfGop= " << gopEntry.m_isStartOfGop
             << " MCTF= " << gopEntry.m_mctfIndex
             << " qpOffset= " << gopEntry.m_QPOffset
             << " modelOffset= " << gopEntry.m_QPOffsetModelOffset
