@@ -127,6 +127,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
       std::cout << "    Frame" << ( j + 1 )
                 << " POC= " << gopEntry.m_POC
                 << " TID= " << gopEntry.m_temporalId
+                << " isStartOfGop= " << gopEntry.m_isStartOfGop
                 << " MCTF= " << gopEntry.m_mctfIndex
                 << " qpOffset= " << gopEntry.m_QPOffset
                 << " modelOffset= " << gopEntry.m_QPOffsetModelOffset
@@ -546,7 +547,7 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetMctfIndex( maxGopSize, gopList );
 
   // mark first gop entry
-  gopList[ 0 ].m_isStartOfGop = true;
+  gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
 }
 
 void GOPCfg::xGetPrevGopRefs( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const
