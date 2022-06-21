@@ -271,7 +271,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   if (frameLevel == 0 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
   halvedAvgQP = (halvedAvgQP < 0 /* not set */ ? MAX_QP : (MAX_QP + halvedAvgQP) >> 1);
-  if (frameLevel == 1 && lastCurrTLQP > halvedAvgQP) lastCurrTLQP = halvedAvgQP;
+  if (frameLevel <= 1 && lastCurrTLQP > halvedAvgQP) lastCurrTLQP = halvedAvgQP;
 
   qp = Clip3 (frameLevel + std::max (0, baseQP >> 1), MAX_QP, qp);
 
@@ -283,7 +283,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   }
   if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
   {
-    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), (lastCurrTLQP < 0 ? std::min ((1 + lastPrevTLQP + MAX_QP) >> 1, 1 + lastPrevTLQP * 2) : MAX_QP), qp);
+    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), MAX_QP, qp);
   }
   else if (encRCSeq->lastIntraQP >= -1 && (frameLevel == 1 || frameLevel == 2))
   {
@@ -847,9 +847,10 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
       {
         if ( ( it->poc == slice->poc ) && ( encRcPic->targetBits > 0 ) && ( it->numBits > 0 ) )
         {
-          double d = (double)encRcPic->targetBits;
+          const double dLimit = std::max ( 2.0, 6.0 - double( frameLevel >> 1 ) );
           const int firstPassSliceQP = it->qp;
           const int log2HeightMinus7 = int( 0.5 + log( (double)std::max( 128, m_pcEncCfg->m_SourceHeight ) ) / log( 2.0 ) ) - 7;
+          double d = (double)encRcPic->targetBits;
           uint16_t visAct = it->visActY;
 
           if ( it->isNewScene ) // spatiotemporal visual activity is transient at camera/scene change, find next steady-state activity
@@ -898,12 +899,16 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             else
             {
               d = std::max( 1.0, d + ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * 0.5 * it->frameInGopRatio );
-              encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
             }
+            encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
           }
-          else if ( d > 2.0 * encRcPic->tmpTargetBits )
+          else if ( d > dLimit * encRcPic->tmpTargetBits )
           {
-            encRcPic->targetBits = int( ( d = 2.0 * encRcPic->tmpTargetBits ) + 0.5 ); // avoid huge rate spending after easy scenes
+            encRcPic->targetBits = int( ( d = encRcPic->tmpTargetBits * dLimit ) + 0.5 ); // avoid large spendings after easy scenes
+          }
+          else if ( d * dLimit < encRcPic->tmpTargetBits )
+          {
+            encRcPic->targetBits = int( ( d = encRcPic->tmpTargetBits / dLimit ) + 0.5 ); // avoid small spendings after hard scenes
           }
 
           d /= (double)it->numBits;
