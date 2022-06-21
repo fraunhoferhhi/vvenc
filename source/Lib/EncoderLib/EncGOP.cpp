@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or
-other Intellectual Property Rights other than the copyrights concerning
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
 The Clear BSD License
@@ -463,7 +463,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
         // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
-        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) )
+        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) ) 
         {
           break;
         }
@@ -517,13 +517,13 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
-
+      
       xEncodePicture( pic, picEncoder );
     }
   }
-
+  
   // picture/AU output
-  //
+  // 
   // in lock-step mode:
   // the output of a picture is connected to evaluation of the lock-step-chunk
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
@@ -1361,7 +1361,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no frame parallel processing enabled, but multiple pics in flight" );
 
-  // loop over pic list, which is sorted in coding number order
+  // loop over pic list, which is sorted in coding number order 
   for( auto pic : picList )
   {
     // skip pics, which have already been initialised
