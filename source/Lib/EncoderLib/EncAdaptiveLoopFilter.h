@@ -377,6 +377,15 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
+  int                    m_maxApuSize;
+  //int                    m_maxApuSizeLog2;
+  int                    m_maxApuWidth;
+  int                    m_maxApuHeight;
+  int                    m_numApusInWidth;
+  int                    m_numApusInHeight;
+  int                    m_numApusInPic;
+  int                    m_numCtusInApuSize;
+
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
@@ -399,6 +408,10 @@ public:
   void alfReconstructor             ( CodingStructure& cs );
   void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
+  void   xStoreAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
+  double xCodeAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
+  double xCodeAlfApuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
+  double xCodeAlfApuLuma( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
 private:
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
