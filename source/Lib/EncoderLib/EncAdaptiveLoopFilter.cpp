@@ -62,6 +62,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#define OPTIMIZE_ORIG_CASE 0
+
 #ifdef TRACE_ENABLE_ITT
 static __itt_string_handle* itt_handle_pre = __itt_string_handle_create( "ALF_pre" );
 static __itt_domain* itt_domain_ALF_pre   = __itt_domain_create( "ALFPre" );
@@ -1338,7 +1340,8 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
   m_numApusInWidth  = ( m_picWidth / m_maxApuWidth ) + ( ( m_picWidth % m_maxApuWidth ) ? 1 : 0 );
   m_numApusInHeight = ( m_picHeight / m_maxApuHeight ) + ( ( m_picHeight % m_maxApuHeight ) ? 1 : 0 );
   m_numApusInPic    = m_numApusInHeight * m_numApusInWidth;
-  m_numCtusInApuSize = m_maxApuSize / encCfg.m_CTUSize;
+  m_numCtusInApuWidth  = m_maxApuWidth  / m_maxCUWidth;
+  m_numCtusInApuHeight = m_maxApuHeight / m_maxCUHeight;
 
   const int numBins = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma ? MaxAlfNumClippingValues : 1;
 
@@ -2327,7 +2330,7 @@ void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
     }
   }
 }
-#define OPTIMIZE_ORIG_CASE 0
+
 void EncAdaptiveLoopFilter::xStoreAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag )
 {
 #if OPTIMIZE_ORIG_CASE
@@ -2338,8 +2341,8 @@ void EncAdaptiveLoopFilter::xStoreAlfApuEnabledFlag( CodingStructure& cs, int ct
   else
 #endif
   {
-    int ctuMaxX = std::min( ctuX + m_numCtusInApuSize, (int)cs.pcv->widthInCtus );
-    int ctuMaxY = std::min( ctuY + m_numCtusInApuSize, (int)cs.pcv->heightInCtus );
+    int ctuMaxX = getApuMaxCtuX( ctuX );
+    int ctuMaxY = getApuMaxCtuY( ctuY );
 
     for( int cY = ctuY; cY < ctuMaxY; cY++ )
     {
@@ -2365,8 +2368,8 @@ double EncAdaptiveLoopFilter::xCodeAlfApuEnabledFlag( CodingStructure& cs, int c
   else
 #endif
   {
-    int ctuMaxX = std::min( ctuX + m_numCtusInApuSize, (int)cs.pcv->widthInCtus );
-    int ctuMaxY = std::min( ctuY + m_numCtusInApuSize, (int)cs.pcv->heightInCtus );
+    int ctuMaxX = getApuMaxCtuX( ctuX );
+    int ctuMaxY = getApuMaxCtuY( ctuY );
 
     const uint8_t flag = m_ctuEnableFlag[compIdx][ctuIdx];
     for( int cY = ctuY; cY < ctuMaxY; cY++ )
@@ -2398,8 +2401,8 @@ double EncAdaptiveLoopFilter::xCodeAlfApuLuma( CodingStructure& cs, int ctuX, in
   else
 #endif
   {
-    int ctuMaxX = std::min( ctuX + m_numCtusInApuSize, (int)cs.pcv->widthInCtus );
-    int ctuMaxY = std::min( ctuY + m_numCtusInApuSize, (int)cs.pcv->heightInCtus );
+    int ctuMaxX = getApuMaxCtuX( ctuX );
+    int ctuMaxY = getApuMaxCtuY( ctuY );
 
     const uint8_t flag = m_ctuEnableFlag[compIdx][ctuIdx];
     const short fltIdx = cs.picture->m_alfCtbFilterIndex[ctuIdx];
@@ -2435,8 +2438,8 @@ double EncAdaptiveLoopFilter::xCodeAlfApuAlternative( CodingStructure& cs, int c
   else
 #endif
   {
-    int ctuMaxX = std::min( ctuX + m_numCtusInApuSize, (int)cs.pcv->widthInCtus );
-    int ctuMaxY = std::min( ctuY + m_numCtusInApuSize, (int)cs.pcv->heightInCtus );
+    int ctuMaxX = getApuMaxCtuX( ctuX );
+    int ctuMaxY = getApuMaxCtuY( ctuY );
 
     const uint8_t alt = m_ctuAlternative[compIdx][ctuIdx];
     for( int cY = ctuY; cY < ctuMaxY; cY++ )
@@ -2491,8 +2494,8 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
   for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
 #endif
   {
-    int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-    int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
+    int ctuX, ctuY;
+    getApuCtuXY( apuIdx, ctuX, ctuY );
     int ctuIdx = ctuY * cs.pcv->widthInCtus + ctuX;
 
     for( int compID = compIDFirst; compID <= compIDLast; compID++ )
@@ -3429,8 +3432,8 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
 #if ENC_ALF_MODS
     for( int apuIdx = 0; apuIdx < m_numApusInPic; apuIdx++ )
     {
-      int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-      int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
+      int ctuX, ctuY;
+      getApuCtuXY( apuIdx, ctuX, ctuY );
       int ctuIdx = ctuY * m_numCTUsInWidth/*cs.pcv->widthInCtus*/ + ctuX;
       if( ctbEnableFlags[ctuIdx]  && ( altIdx == ctbAltIdx[ctuIdx] ))
       {
@@ -5011,8 +5014,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
 #if ENC_ALF_MODS_LUMA
           for( int apuIdx = 0; apuIdx < m_numApusInPic; apuIdx++ )
           {
-            int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-            int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
+            int ctuX, ctuY;
+            getApuCtuXY( apuIdx, ctuX, ctuY );
             int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
 #else
           for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
@@ -5095,8 +5098,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
 #if ENC_ALF_MODS_LUMA
         for( int apuIdx = 0; apuIdx < m_numApusInPic; apuIdx++ )
         {
-          int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-          int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
+          int ctuX, ctuY;
+          getApuCtuXY( apuIdx, ctuX, ctuY );
           int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
 #else
         for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
@@ -5376,8 +5379,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
 #if ENC_ALF_MODS_CHROMA
       for( int apuIdx = 0; apuIdx < m_numApusInPic; apuIdx++ )
       {
-        int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-        int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
+        int ctuX, ctuY;
+        getApuCtuXY( apuIdx, ctuX, ctuY );
         int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
 #else
       for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
@@ -5588,10 +5591,10 @@ void EncAdaptiveLoopFilter::initCtuAlternativeChroma( uint8_t* ctuAlts[MAX_NUM_C
   {
     for( int apuIdx = 0; apuIdx < m_numApusInPic; apuIdx++ )
     {
-      int ctuY = ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuSize;
-      int ctuX = ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuSize;
-      int ctuMaxX = std::min( ctuX + m_numCtusInApuSize, (int)m_numCTUsInWidth );
-      int ctuMaxY = std::min( ctuY + m_numCtusInApuSize, (int)m_numCTUsInHeight );
+      int ctuX, ctuY;
+      getApuCtuXY( apuIdx, ctuX, ctuY );
+      int ctuMaxX = getApuMaxCtuX( ctuX );
+      int ctuMaxY = getApuMaxCtuY( ctuY );
       for( int cY = ctuY; cY < ctuMaxY; cY++ )
       {
         for( int cX = ctuX; cX < ctuMaxX; cX++ )

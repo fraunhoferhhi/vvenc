@@ -384,7 +384,8 @@ private:
   int                    m_numApusInWidth;
   int                    m_numApusInHeight;
   int                    m_numApusInPic;
-  int                    m_numCtusInApuSize;
+  int                    m_numCtusInApuWidth;
+  int                    m_numCtusInApuHeight;
 
 public:
   EncAdaptiveLoopFilter();
@@ -486,6 +487,33 @@ private:
   void countChromaSampleValueNearMidPoint(const Pel* chroma, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* chromaSampleCountNearMidPoint, int chromaSampleCountNearMidPointStride);
   void getFrameStatsCcalf        ( ComponentID compIdx, int filterIdc);
   void initDistortionCcalf       ();
+  inline int getApuMaxCtuX( int ctuX )
+  {
+    return std::min( ctuX + m_numCtusInApuWidth, (int)m_numCTUsInWidth );
+  }
+
+  inline int getApuMaxCtuY( int ctuY )
+  {
+    return std::min( ctuY + m_numCtusInApuHeight, (int)m_numCTUsInHeight );
+  }
+
+  //inline int getApuCtuY( int apuIdx )
+  //{
+  //  return ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuHeight;
+  //}
+
+  //inline int getApuCtuX( int apuIdx, int ctuY )
+  //{
+  //  return ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuWidth;
+  //}
+
+  inline void getApuCtuXY( int apuIdx, int& ctuX, int& ctuY )
+  {
+    int apuY = ( apuIdx / m_numApusInWidth        );
+    int apuX = ( apuIdx - apuY * m_numApusInWidth );
+    ctuX = apuX * m_numCtusInApuWidth;
+    ctuY = apuY * m_numCtusInApuHeight;
+  }
 };
 
 } // namespace vvenc
