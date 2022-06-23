@@ -1371,7 +1371,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     if( ! flush && pic->gopEntry->m_codingNum != m_lastCodingNum + 1 )
       break;
 
-    CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "ecnoding should start with an I-Slice" );
+    CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
 
     // initialize slice header
     pic->encTime.startTimer();
