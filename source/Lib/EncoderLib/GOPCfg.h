@@ -56,6 +56,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+class PicShared;
+
 class GOPCfg
 {
   typedef std::vector<GOPEntry> GOPEntryList;
@@ -115,6 +117,7 @@ class GOPCfg
 
     void initGopList( int refreshType, int intraPeriod, int gopSize, bool bLowDelay, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
     void getNextGopEntry( GOPEntry& gopEntry );
+    void correctIncompleteLastGop( std::list<PicShared*>& picSharedList ) const;
     void getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const;
 
     int  getMaxTLayer() const                             { return m_maxTid; }
