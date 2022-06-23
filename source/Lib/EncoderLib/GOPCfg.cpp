@@ -265,7 +265,7 @@ void GOPCfg::correctIncompleteLastGop( std::list<PicShared*>& picSharedList ) co
     const int lastGopNum = usedList.back()->m_gopEntry.m_gopNum;
 
     GOPEntry* startOfLastGop = &usedList.back()->m_gopEntry;
-    for( int i = size - 1; i >= 0; i-- )
+    for( int i = size - 2; i >= 0; i-- )
     {
       if( usedList[ i ]->m_gopEntry.m_gopNum != lastGopNum )
       {
