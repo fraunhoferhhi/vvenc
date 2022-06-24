@@ -746,7 +746,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
     ;
 
-    opts.setSubSection("Quad-Tree size and depth");
+    opts.setSubSection("Low-level QT-BTT partitioning options");
     opts.addOptions()
     ("CTUSize",                                         c->m_CTUSize,                                        "CTUSize")
     ("MinQTISlice",                                     c->m_MinQT[0],                                       "MinQTISlice")
