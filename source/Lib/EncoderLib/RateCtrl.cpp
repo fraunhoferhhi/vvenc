@@ -784,28 +784,45 @@ void RateCtrl::processGops()
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
   int vecIdx;
+  int gopNum;
   std::list<TRCPassStats>::iterator it;
   std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum)); // +2 for the first I frame (GOP) and a potential last incomplete GOP
   std::vector<float>    tgtBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum));
 
   vecIdx = 0;
+  gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 1
   {
+    if ( it->gopNum > gopNum )
+    {
+      vecIdx += 1;
+      gopNum  = it->gopNum;
+    }
+    CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
-    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
     tgtBits[vecIdx] += float (it->numBits * ratio);
-    if (it->isStartOfGop)
+    if ( it->poc==0 && it->isStartOfGop ) // put first I-Frame into separate gop
+    {
       vecIdx++;
+    }
   }
   vecIdx = 0;
+  gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 2
   {
-    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
+    if ( it->gopNum > gopNum )
+    {
+      vecIdx += 1;
+      gopNum  = it->gopNum;
+    }
+    CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
-    if (it->isStartOfGop)
+    if ( it->poc==0 && it->isStartOfGop ) // put first I-Frame into separate gop
+    {
       vecIdx++;
+    }
   }
 }
 
