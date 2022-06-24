@@ -802,7 +802,7 @@ void RateCtrl::processGops()
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
     tgtBits[vecIdx] += float (it->numBits * ratio);
-    if ( it->poc==0 && it->isStartOfGop ) // put first I-Frame into separate gop
+    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
     {
       vecIdx++;
     }
@@ -819,7 +819,7 @@ void RateCtrl::processGops()
     CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
-    if ( it->poc==0 && it->isStartOfGop ) // put first I-Frame into separate gop
+    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
     {
       vecIdx++;
     }
