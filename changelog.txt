@@ -3,9 +3,9 @@ tag 1.5.0rc1
 
 * libvvenc:
   - removed library paramters:
-	- vvenc_config::m_RPLList0, vvenc_config::m_RPLList1, vvenc_config::m_maxDecPicBuffering, vvenc_config::m_maxNumReorderPics,
+    - vvenc_config::m_RPLList0, vvenc_config::m_RPLList1, vvenc_config::m_maxDecPicBuffering, vvenc_config::m_maxNumReorderPics,
       vvenc_config::m_maxNumReorderPics, vvenc_config::m_numRPLList0, vvenc_config::m_numRPLList1, vvenc_config::m_bUseConstrainedIntraPred,
-	  vvenc_config::m_deblockingFilterMetric, vvenc_config::m_videoSignalTypePresent
+      vvenc_config::m_deblockingFilterMetric, vvenc_config::m_videoSignalTypePresent
   - added library parameters:
     - vvenc_config::m_deblockLastTLayers, vvenc_config::m_lowDelay, vvenc_config::m_fastHad
   - allowing arbitrary intra periods (not required to benecessarily multiples of the GOP size)
