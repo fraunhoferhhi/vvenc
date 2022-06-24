@@ -377,7 +377,7 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
-  int                    m_maxApuSize;
+  //int                    m_maxApuSize;
   //int                    m_maxApuSizeLog2;
   int                    m_maxApuWidth;
   int                    m_maxApuHeight;

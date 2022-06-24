@@ -1329,11 +1329,12 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
   m_CtxCache = &ctxCache;
 
 #if ENABLE_ALF_MAX_APU_SIZE
-  m_maxApuSize    = MAX_CU_SIZE;
-  m_maxApuWidth   = m_maxApuSize;
-  m_maxApuHeight  = m_maxApuSize;
+  //m_maxApuSize    = MAX_CU_SIZE;
+  m_maxApuWidth   = MAX_CU_SIZE;
+  m_maxApuHeight  = MAX_CU_SIZE;
+  //m_maxApuHeight  = encCfg.m_CTUSize;
 #else
-  m_maxApuSize    = encCfg.m_CTUSize;
+  //m_maxApuSize    = encCfg.m_CTUSize;
   m_maxApuWidth   = m_maxCUWidth;
   m_maxApuHeight  = m_maxCUHeight;
 #endif
@@ -2676,8 +2677,11 @@ void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam,
           {
             m_CABACEstimator->getCtx() = AlfCtx(ctxStart);
             cost = m_lambda[channel] * uiCoeffBits;
+            //DTRACE( g_trace_ctx, D_TMP, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, cofBitsCost=%.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, iter, cost );
             cost += deriveCtbAlfEnableFlags(cs, iShapeIdx, channel, lambdaChromaWeight,
                                             numClasses, alfFilterShape[iShapeIdx].numCoeff, distUnfilter);
+
+            DTRACE( g_trace_ctx, D_TMP, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f, cost = %.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, numAlternatives, iter, costMin, cost );
             if (cost < costMin)
             {
               m_bitsNewFilter[channel] = uiCoeffBits;
@@ -2700,6 +2704,7 @@ void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam,
             // unfiltered distortion is added due to some CTBs may not use filter
             // no need to reset CABAC here, since uiCoeffBits is not affected
             /*cost = */getFilterCoeffAndCost( cs, distUnfilter, channel, true, iShapeIdx, uiCoeffBits );
+            DTRACE( g_trace_ctx, D_TMP, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, numAlternatives, iter, costMin );
           }
         }//for iter
         // Decrease number of alternatives and reset ctu params and filters
@@ -5438,6 +5443,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           double altDist = doClip ? m_alfCovariance[compId][0][apuIdx][0].calcErrorForCoeffs<true >( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor )
                                   : m_alfCovariance[compId][0][apuIdx][0].calcErrorForCoeffs<false>( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor );
           double altCost = altDist + r_altCost;
+          //DTRACE( g_trace_ctx, D_TMP, "AlfEncCtb_Chroma: POC%d, comp_%d, apu_%d, numalt=%d, bestAltCost=%.2f, altCost=%.2f\n", cs.slice->poc, compId, apuIdx, altIdx, bestAltCost, altCost );
           if( altCost < bestAltCost )
           {
             bestAltCost = altCost;
@@ -5478,6 +5484,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         //cost
         const double costOff = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
 #endif
+        DTRACE( g_trace_ctx, D_TMP, "AlfEncCtb_Chroma: POC%d, comp_%d, apu_%d, costOff=%.2f[distUnf=%2.f,rateCost=%2.f], CostOn=%.2f\n", cs.slice->poc, compId, apuIdx, costOff, distUnfilterCtu, rateCost, costOn );
         
         uint8_t enable = 0;
         if (costOn < costOff)
