@@ -410,6 +410,8 @@ public:
   void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
   void   xStoreAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
+  void   xStoreAlfApuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
+  void   xStoreAlfApuFilterIdx( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex );
   double xCodeAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
   double xCodeAlfApuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
   double xCodeAlfApuLuma( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
