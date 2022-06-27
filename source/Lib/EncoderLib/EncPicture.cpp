@@ -158,6 +158,35 @@ void EncPicture::finalizePicture( Picture& pic )
   }
 
   xCalcDistortion( pic, *slice->sps );
+#if ENABLE_TRACING
+    DTRACE( g_trace_ctx, D_TMP, "poc=%d, FilterSetIdx\n", cs.slice->poc );
+    for( int cY = 0; cY < cs.pcv->heightInCtus; cY++ )
+    {
+      for( int cX = 0; cX < cs.pcv->widthInCtus; cX++ )
+      {
+        int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+        int val = cs.picture->m_alfCtuEnabled[COMP_Y][curCtuIdx] ? cs.picture->m_alfCtbFilterIndex[curCtuIdx]: -1;
+        DTRACE( g_trace_ctx, D_TMP, "%2d ", val );
+      }
+      DTRACE( g_trace_ctx, D_TMP, "\n" );
+    }
+
+    for (int compId = 1; compId < MAX_NUM_COMP; compId++)
+    {
+      DTRACE( g_trace_ctx, D_TMP, "poc=%d, AlfAlternatives comp_%d\n", cs.slice->poc, compId );
+      for( int cY = 0; cY < cs.pcv->heightInCtus; cY++ )
+      {
+        for( int cX = 0; cX < cs.pcv->widthInCtus; cX++ )
+        {
+          int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+          int val = cs.picture->m_alfCtuEnabled[compId][curCtuIdx] ? cs.picture->m_alfCtuAlternative[compId][curCtuIdx] : -1;
+          DTRACE( g_trace_ctx, D_TMP, "%2d ", val );
+        }
+        DTRACE( g_trace_ctx, D_TMP, "\n" );
+      }
+    }
+    DTRACE( g_trace_ctx, D_TMP, "\n\n" );
+#endif
   
   // finalize
   pic.extendPicBorder();
