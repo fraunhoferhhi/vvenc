@@ -2555,7 +2555,9 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
 
     for( int compID = compIDFirst; compID <= compIDLast; compID++ )
     {
+#if !ENC_ALF_MODS
       const double ctuLambda = chromaWeight > 0.0 ? (isLuma (channel) ? cs.picture->ctuQpaLambda[ctuIdx] : cs.picture->ctuQpaLambda[ctuIdx] * chromaWeight) : m_lambda[compID];
+#endif
       double distUnfilterCtu = getUnfilteredDistortion( m_alfCovariance[compID][iShapeIdx][apuIdx], numClasses );
 
       ctxTempStart = AlfCtx( m_CABACEstimator->getCtx() );
