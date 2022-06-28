@@ -5578,7 +5578,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
     //chroma idc
     setEnableFlag(m_alfParamTemp, CH_C, m_ctuEnableFlag);
 
+
     DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, APSId_%d, costMin=%.2f, Cost=%.2f\n", cs.slice->poc, curApsId, curApsId, (costMin != MAX_DOUBLE ? costMin: 0.0), curCost );
+    DTRACE( g_trace_ctx, D_ALF_EST, "\n" );
 
     if (curCost < costMin)
     {
