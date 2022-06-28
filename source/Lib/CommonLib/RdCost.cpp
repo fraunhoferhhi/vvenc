@@ -203,7 +203,7 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
   }
   else if( subShiftMode == 2 )
   {
-    if( rcDP.org.height > 8 && rcDP.org.width <= 64 )
+    if( rcDP.org.height > 8 && rcDP.org.width <= 128 )
     {
       rcDP.subShift = 1;
     }

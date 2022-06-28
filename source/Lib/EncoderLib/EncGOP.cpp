@@ -1371,6 +1371,8 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     if( ! flush && pic->gopEntry->m_codingNum != m_lastCodingNum + 1 )
       break;
 
+    CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
+
     // initialize slice header
     pic->encTime.startTimer();
     xInitFirstSlice( *pic, picList, false );
@@ -2477,11 +2479,11 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
       std::string cInfo;
       if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC
       {
-        cInfo = prnt("RC analyze POC %5d", slice->poc );
+        cInfo = prnt("RC analyze poc %5d", slice->poc );
       }
       else
       {
-        cInfo = prnt("RC pass %d/%d, analyze POC %5d",
+        cInfo = prnt("RC pass %d/%d, analyze poc %5d",
             m_pcRateCtrl->rcPass + 1,
             m_pcEncCfg->m_RCNumPasses,
             slice->poc );
