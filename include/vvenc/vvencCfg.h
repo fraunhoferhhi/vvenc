@@ -703,6 +703,7 @@ typedef struct vvenc_config
   int                 m_ccalfQpThreshold;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
   int                 m_alfSpeed;
+  int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
 
   vvencMCTF           m_vvencMCTF;
 

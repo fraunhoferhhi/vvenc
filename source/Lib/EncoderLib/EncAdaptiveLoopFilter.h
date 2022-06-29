@@ -360,6 +360,7 @@ private:
   int                    m_clipDefaultEnc[MAX_NUM_ALF_LUMA_COEFF];
   int                    m_filterTmp[MAX_NUM_ALF_LUMA_COEFF];
   int                    m_clipTmp[MAX_NUM_ALF_LUMA_COEFF];
+  std::vector<uint8_t>   m_numCtusInAsu;
 
   int m_apsIdCcAlfStart[2];
 
@@ -377,15 +378,13 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
-  //int                    m_maxApuSize;
-  //int                    m_maxApuSizeLog2;
-  int                    m_maxApuWidth;
-  int                    m_maxApuHeight;
-  int                    m_numApusInWidth;
-  int                    m_numApusInHeight;
-  int                    m_numApusInPic;
-  int                    m_numCtusInApuWidth;
-  int                    m_numCtusInApuHeight;
+  int                    m_maxAsuWidth;
+  int                    m_maxAsuHeight;
+  int                    m_numAsusInWidth;
+  int                    m_numAsusInHeight;
+  int                    m_numAsusInPic;
+  int                    m_numCtusInAsuWidth;
+  int                    m_numCtusInAsuHeight;
 
 public:
   EncAdaptiveLoopFilter();
@@ -398,8 +397,10 @@ public:
   void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
-  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
+  //void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
 
+  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xC, int yC, int wC, int hC );
+  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC );
   void copyCTUForCCALF              ( CodingStructure& cs, int ctuPosX, int ctuPosY );
   void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
@@ -407,15 +408,15 @@ public:
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
   void alfReconstructor             ( CodingStructure& cs );
-  void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
-  void   xStoreAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
-  void   xStoreAlfApuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
-  void   xStoreAlfApuFilterIdx( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex );
-  double xCodeAlfApuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
-  double xCodeAlfApuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
-  double xCodeAlfApuLuma( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, AlfParam* alfParam, const double chromaWeight );
 private:
+  void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
+  void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
+  void   xStoreAlfAsuFilterIdx      ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex );
+  double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
+  double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
+  double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda );
+  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr );
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
   void   copyAlfParam            ( AlfParam& alfParamDst, AlfParam& alfParamSrc, ChannelType channel );
@@ -489,32 +490,22 @@ private:
   void countChromaSampleValueNearMidPoint(const Pel* chroma, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* chromaSampleCountNearMidPoint, int chromaSampleCountNearMidPointStride);
   void getFrameStatsCcalf        ( ComponentID compIdx, int filterIdc);
   void initDistortionCcalf       ();
-  inline int getApuMaxCtuX( int ctuX )
+  inline int getAsuMaxCtuX( int ctuX )
   {
-    return std::min( ctuX + m_numCtusInApuWidth, (int)m_numCTUsInWidth );
+    return std::min( ctuX + m_numCtusInAsuWidth, (int)m_numCTUsInWidth );
   }
 
-  inline int getApuMaxCtuY( int ctuY )
+  inline int getAsuMaxCtuY( int ctuY )
   {
-    return std::min( ctuY + m_numCtusInApuHeight, (int)m_numCTUsInHeight );
+    return std::min( ctuY + m_numCtusInAsuHeight, (int)m_numCTUsInHeight );
   }
 
-  //inline int getApuCtuY( int apuIdx )
-  //{
-  //  return ( apuIdx / m_numApusInWidth        ) * m_numCtusInApuHeight;
-  //}
-
-  //inline int getApuCtuX( int apuIdx, int ctuY )
-  //{
-  //  return ( apuIdx - ctuY * m_numApusInWidth ) * m_numCtusInApuWidth;
-  //}
-
-  inline void getApuCtuXY( int apuIdx, int& ctuX, int& ctuY )
+  inline void getAsuCtuXY( int asuIdx, int& ctuX, int& ctuY )
   {
-    int apuY = ( apuIdx / m_numApusInWidth        );
-    int apuX = ( apuIdx - apuY * m_numApusInWidth );
-    ctuX = apuX * m_numCtusInApuWidth;
-    ctuY = apuY * m_numCtusInApuHeight;
+    int asuY = ( asuIdx / m_numAsusInWidth        );
+    int asuX = ( asuIdx - asuY * m_numAsusInWidth );
+    ctuX = asuX * m_numCtusInAsuWidth;
+    ctuY = asuY * m_numCtusInAsuHeight;
   }
 };
 
