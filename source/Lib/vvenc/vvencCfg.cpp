@@ -1164,6 +1164,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
 
+  if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
+  {
+    msg.log( VVENC_WARNING, "\nWARNING: Setting IntraPeriod in the range of ( N * GOPSize + 1 ) .. ( N * GOPSize + 4 ), i.e. only a small distance above a multiple of the GOPSize, will lead to degraded results.\n" );
+    msg.log( VVENC_WARNING, "         Consider changing the IntraPeriod for better results. For optimal results, set the IntraPeriod to a multiple of GOPSize.\n\n" );
+  }
+
   // set number of lead / trail frames in segment mode
   const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
   const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
