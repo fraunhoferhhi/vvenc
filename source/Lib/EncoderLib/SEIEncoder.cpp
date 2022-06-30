@@ -98,7 +98,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   //       Using getIntraPeriod() should be avoided though, because it assumes certain GOP
   //       properties, which are only valid in CTC.
   //       Still copying this setting from HM for consistency, improvements welcome
-  bool isRandomAccess  = ! m_pcEncCfg->m_lowDelay;
+  bool isRandomAccess  = m_pcEncCfg->m_picReordering;
   if( isRandomAccess && m_pcEncCfg->m_IntraPeriod < 256)
   {
     bpSei.cpbRemovalDelayLength =                                                           // 6  // 32 = 2^5 (plus 1)

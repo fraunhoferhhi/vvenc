@@ -1004,7 +1004,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.saoEnabled                    = m_pcEncCfg->m_bUseSAO;
   sps.jointCbCr                     = m_pcEncCfg->m_JointCbCrMode;
   sps.maxTLayers                    = m_pcEncCfg->m_maxTLayer + 1;
-  sps.rpl1CopyFromRpl0              = m_pcEncCfg->m_lowDelay;
+  sps.rpl1CopyFromRpl0              = ! m_pcEncCfg->m_picReordering;
   sps.SbtMvp                        = m_pcEncCfg->m_SbTMVP;
   sps.CIIP                          = m_pcEncCfg->m_CIIP != 0;
   sps.SBT                           = m_pcEncCfg->m_SBT != 0;
