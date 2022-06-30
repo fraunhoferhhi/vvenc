@@ -787,7 +787,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("JointCbCr",                                       c->m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
     ("CabacInitPresent",                                c->m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")
     ("LCTUFast",                                        c->m_useFastLCTU,                                    "Fast methods for large CTU")
-    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off, 1: VTM, 2: relaxed, giving intra more chance)")
+    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off ... 2:fastest)")
     ("FastMrg",                                         c->m_useFastMrg,                                     "Fast methods for inter merge")
     ("AMaxBT",                                          c->m_useAMaxBT,                                      "Adaptive maximal BT-size")
     ("FastQtBtEnc",                                     c->m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
