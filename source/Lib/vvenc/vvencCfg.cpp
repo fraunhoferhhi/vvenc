@@ -1166,8 +1166,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
   {
-    msg.log( VVENC_WARNING, "\nWARNING: Setting IntraPeriod in the range of ( N * GOPSize + 1 ) .. ( N * GOPSize + 4 ), e.g. only a small distance above a multiple of the GOPSize, will lead to an increased bit-rate\n" );
-    msg.log( VVENC_WARNING, "         Consider further increasing IntraPeriod or using a multiple of GOPSize for IntraPeriod to achieve a better encoding result in terms of bit-rate and quality.\n\n" );
+    msg.log( VVENC_WARNING, "\nWARNING: Setting IntraPeriod in the range of ( N * GOPSize + 1 ) .. ( N * GOPSize + 4 ), i.e. only a small distance above a multiple of the GOPSize, will lead to degraded results.\n" );
+    msg.log( VVENC_WARNING, "         Consider changing the IntraPeriod for better results. For optimal results, set the IntraPeriod to a multiple of GOPSize.\n\n" );
   }
 
   // set number of lead / trail frames in segment mode
