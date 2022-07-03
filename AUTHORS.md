@@ -12,3 +12,4 @@
 * Christian Stoffers, , Fraunhofer HHI
 * Gabriel Hege, , Fraunhofer HHI
 * Jens Güther, , Fraunhofer HHI
+* Kai Hollberg, @Schweinepriester,
