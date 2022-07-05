@@ -1184,7 +1184,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_confirmParameter( c, ! c->m_picReordering && bPicReordering, "PicReordering disabled, but given GOP configuration uses picture reordering" );
     if( c->m_picReordering && ! bPicReordering )
     {
-      msg.log( VVENC_WARNING, "\nPicReordering enabled, but not used in given GOP configuration, disable PicReordering\n\n" );
+      msg.log( VVENC_WARNING, "\nPicReordering enabled, but not used in given GOP configuration, disabling PicReordering\n\n" );
       c->m_picReordering = false;
     }
   }
