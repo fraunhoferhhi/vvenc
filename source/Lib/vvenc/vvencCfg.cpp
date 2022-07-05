@@ -1170,6 +1170,25 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "         Consider changing the IntraPeriod for better results. For optimal results, set the IntraPeriod to a multiple of GOPSize.\n\n" );
   }
 
+  if( c->m_GOPSize > 1 && c->m_GOPList[ 0 ].m_POC != -1  )
+  {
+    bool bPicReordering = false;
+    for( int i = 1; i < c->m_GOPSize; i++ )
+    {
+      if( c->m_GOPList[ i - 1 ].m_POC > c->m_GOPList[ i ].m_POC )
+      {
+        bPicReordering = true;
+        break;
+      }
+    }
+    vvenc_confirmParameter( c, ! c->m_picReordering && bPicReordering, "PicReordering disabled, but given GOP configuration uses picture reordering" );
+    if( c->m_picReordering && ! bPicReordering )
+    {
+      msg.log( VVENC_WARNING, "\nPicReordering enabled, but not used in given GOP configuration, disable PicReordering\n\n" );
+      c->m_picReordering = false;
+    }
+  }
+
   // set number of lead / trail frames in segment mode
   const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
   const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
