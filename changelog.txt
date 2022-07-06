@@ -7,7 +7,7 @@ tag 1.5.0rc1
       vvenc_config::m_maxNumReorderPics, vvenc_config::m_numRPLList0, vvenc_config::m_numRPLList1, vvenc_config::m_bUseConstrainedIntraPred,
       vvenc_config::m_deblockingFilterMetric, vvenc_config::m_videoSignalTypePresent
   - added library parameters:
-    - vvenc_config::m_deblockLastTLayers, vvenc_config::m_lowDelay, vvenc_config::m_fastHad
+    - vvenc_config::m_deblockLastTLayers, vvenc_config::m_picReordering, vvenc_config::m_fastHad
   - allowing arbitrary intra periods (not required to benecessarily multiples of the GOP size)
   - improvements to rate control stability, mostly regarding to noisy input and scene changes
   - many speedups and improvements
@@ -25,7 +25,7 @@ tag 1.5.0rc1
   - removed command line parameters:
     - DeblockingFilterMetric, ConstrainedIntraPred
   - added command line parameters
-    - LowDelay: enable/disable picture reordering during encoding (default 0, picture reordering enabled)
+    - PicReordering: enable/disable picture reordering during encoding (default 1, picture reordering enabled)
     - FastHAD: enable/disable the usage of a fast subsampled HAD calculation for large blocks
     - DeblockLastLayers: indicates to only use deblocking filter for the N highest temporal layers (default 0, deblock all temporal layers)
 
