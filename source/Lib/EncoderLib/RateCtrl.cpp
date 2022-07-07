@@ -259,7 +259,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     if ((*it)->frameLevel == frameLevel - 1 && (*it)->picQP >= 0) // last temporal level
     {
-      lastPrevTLQP = (*it)->picQP;
+      lastPrevTLQP = (*it)->picQP >> (frameLevel == 1 ? 1 : 0);
     }
     if ((*it)->frameLevel == 1 && frameLevel == 0 && refreshParams && lastCurrTLQP < 0)
     {
@@ -268,10 +268,8 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     halvedAvgQP += (*it)->picQP;
   }
   if (listPreviousPictures.size() >= 1) halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
-  if (frameLevel == 0 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
+  if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
-  halvedAvgQP = (halvedAvgQP < 0 /* not set */ ? MAX_QP : (MAX_QP + halvedAvgQP) >> 1);
-  if (frameLevel <= 1 && lastCurrTLQP > halvedAvgQP) lastCurrTLQP = halvedAvgQP;
 
   qp = Clip3 (frameLevel + std::max (0, baseQP >> 1), MAX_QP, qp);
 
@@ -287,7 +285,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   }
   else if (encRCSeq->lastIntraQP >= -1 && (frameLevel == 1 || frameLevel == 2))
   {
-    qp = Clip3 (std::min (MAX_QP, encRCSeq->lastIntraQP + 1), MAX_QP, qp);
+    qp = Clip3 ((encRCSeq->lastIntraQP >> 1) + 1, MAX_QP, qp);
   }
 }
 
@@ -307,7 +305,7 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
     if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
 
     encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
-    encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal * (0.15625 + frameLevel * frameLevel * 0.0234375), clipVal, encRCSeq->qpCorrection[frameLevel]);
+    encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
   }
 }
 

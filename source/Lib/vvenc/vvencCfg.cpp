@@ -354,7 +354,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size
-  c->m_lowDelay                                = 0;
+  c->m_picReordering                           = 1;
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
   c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
@@ -1168,6 +1168,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
 
+  if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
+  {
+    msg.log( VVENC_WARNING, "\nWARNING: Setting IntraPeriod in the range of ( N * GOPSize + 1 ) .. ( N * GOPSize + 4 ), i.e. only a small distance above a multiple of the GOPSize, will lead to degraded results.\n" );
+    msg.log( VVENC_WARNING, "         Consider changing the IntraPeriod for better results. For optimal results, set the IntraPeriod to a multiple of GOPSize.\n\n" );
+  }
+
+  if( c->m_GOPSize > 1 && c->m_GOPList[ 0 ].m_POC != -1  )
+  {
+    bool bPicReordering = false;
+    for( int i = 1; i < c->m_GOPSize; i++ )
+    {
+      if( c->m_GOPList[ i - 1 ].m_POC > c->m_GOPList[ i ].m_POC )
+      {
+        bPicReordering = true;
+        break;
+      }
+    }
+    vvenc_confirmParameter( c, ! c->m_picReordering && bPicReordering, "PicReordering disabled, but given GOP configuration uses picture reordering" );
+    if( c->m_picReordering && ! bPicReordering )
+    {
+      msg.log( VVENC_WARNING, "\nPicReordering enabled, but not used in given GOP configuration, disabling PicReordering\n\n" );
+      c->m_picReordering = false;
+    }
+  }
+
   // set number of lead / trail frames in segment mode
   const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
   const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
@@ -1299,7 +1324,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     else if( c->m_GOPSize == 8 )
     {
-      vvenc_confirmParameter( c, c->m_lowDelay == 0, "gop auto configuration for gop size 8 supports only low delay" );
+      vvenc_confirmParameter( c, c->m_picReordering, "gop auto configuration for gop size 8 only without picture reordering supported" );
       //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
       //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
       //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
@@ -1406,7 +1431,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_deblockLastTLayers > 0 )
   {
-    const int maxTLayer = c->m_lowDelay || c->m_GOPSize <= 1 ? 0 : vvenc::ceilLog2( c->m_GOPSize );
+    const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
     vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                  "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
     vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
     c->m_loopFilterOffsetInPPS = false;
@@ -1564,8 +1589,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
-  vvenc_confirmParameter( c, ! c->m_lowDelay && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
-  vvenc_confirmParameter( c,   c->m_lowDelay &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
+  vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
+  vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
@@ -1622,7 +1647,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
-  const int maxTLayer = c->m_lowDelay || c->m_GOPSize <= 1 ? 0 : vvenc::ceilLog2( c->m_GOPSize );
+  const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
   if( ( c->m_FastInferMerge & 7 ) > maxTLayer )
   {
@@ -2166,6 +2191,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   switch( preset )
   {
     case vvencPresetMode::VVENC_FIRSTPASS:
+
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
@@ -2187,7 +2213,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 7;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2214,7 +2241,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       break;
 
     case vvencPresetMode::VVENC_FASTER:
-      c->m_DMVR                            = 1;
 
       // motion estimation
       c->m_SearchRange                     = 128;
@@ -2237,7 +2263,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 7;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2254,6 +2281,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
       c->m_ccalf                           = 1;
+      c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
@@ -2287,15 +2315,16 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
-      c->m_qtbttSpeedUp                    = 3;
+      c->m_qtbttSpeedUp                    = 7;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 2;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = false;
+      c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
-      c->m_FIMMode                         = 2;
+      c->m_FIMMode                         = 3;
       c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
@@ -2303,24 +2332,21 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools
-      c->m_RDOQ                            = 2;
-      c->m_SignDataHidingEnabled           = 1;
       c->m_Affine                          = 2;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_AMVRspeed                       = 5;
-      c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 2;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MMVD                            = 3;
-      c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
       c->m_PROF                            = 1;
       c->m_SbTMVP                          = 1;
@@ -2353,18 +2379,19 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 3;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
-      c->m_FastIntraTools                  = 1;
+      c->m_FastIntraTools                  = 0;
       c->m_FIMMode                         = 0;
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
-      c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools
       c->m_Affine                          = 2;
@@ -2385,8 +2412,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 1;
-      c->m_MIP                             = 1;
-      c->m_useFastMIP                      = 4;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
@@ -2422,7 +2447,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 2;
       c->m_fastTTSplit                     = 5;
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2455,7 +2481,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 3;
@@ -2494,7 +2520,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 1;
       c->m_fastTTSplit                     = 1;
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 1;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2527,7 +2554,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 1;
@@ -2568,8 +2595,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 2;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -2664,7 +2692,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
     css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
     css << "GOP size                               : " << c->m_GOPSize << "\n";
-    css << "LowDelay                               : " << c->m_lowDelay << "\n";
+    css << "PicReordering                          : " << c->m_picReordering << "\n";
     css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
     css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
     css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";

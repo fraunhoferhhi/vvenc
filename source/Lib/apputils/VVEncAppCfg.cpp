@@ -559,7 +559,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("RefreshSec,-rs",                                 c->m_IntraPeriodSec,                                  "Intra period/refresh in seconds")
     ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE - CRA with constrained encoding for RASL pictures)")
     ("GOPSize,g",                                      c->m_GOPSize,                                         "GOP size of temporal structure (16,32)")
-    ("LowDelay",                                       c->m_lowDelay,                                        "Disable picture reordering for low delay encoding (0:off, 1:on)")
+    ("PicReordering",                                  c->m_picReordering,                                   "Allow reordering of pictures (0:off, 1:on), should be disabled for low delay requirements")
     ;
 
     opts.setSubSection("Rate control, Perceptual Quantization");
@@ -779,7 +779,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("CostMode",                                        toCostMode,                                          "Use alternative cost functions: choose between 'lossy', 'sequence_level_lossless', 'lossless' (which forces QP to " MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP) ") and 'mixed_lossless_lossy' (which used QP'=" MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME) " for pre-estimates of transquant-bypass blocks).")
     ("ASR",                                             c->m_bUseASR,                                        "Adaptive motion search range")
     ("HadamardME",                                      c->m_bUseHADME,                                      "Hadamard ME for fractional-pel")
-    ("FastHAD",                                         c->m_fastHad,                                        "Use fast sub-sampled hadamard for sqaure blocks >=32x32")
+    ("FastHAD",                                         c->m_fastHad,                                        "Use fast sub-sampled hadamard for square blocks >=32x32")
     ("RDOQ",                                            c->m_RDOQ,                                           "Rate-Distortion Optimized Quantization mode")
     ("RDOQTS",                                          c->m_useRDOQTS,                                      "Rate-Distortion Optimized Quantization mode for TransformSkip")
     ("SelectiveRDOQ",                                   c->m_useSelectiveRDOQ,                               "Enable selective RDOQ")
@@ -787,7 +787,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("JointCbCr",                                       c->m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
     ("CabacInitPresent",                                c->m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")
     ("LCTUFast",                                        c->m_useFastLCTU,                                    "Fast methods for large CTU")
-    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off, 1: VTM, 2: relaxed, giving intra more chance)")
+    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off ... 2:fastest)")
     ("FastMrg",                                         c->m_useFastMrg,                                     "Fast methods for inter merge")
     ("AMaxBT",                                          c->m_useAMaxBT,                                      "Adaptive maximal BT-size")
     ("FastQtBtEnc",                                     c->m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
