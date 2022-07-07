@@ -438,8 +438,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #endif
   const SPS& sps = *cu.cs->sps;
   const bool mipAllowed = sps.MIP && cu.lwidth() <= sps.getMaxTbSize() && cu.lheight() <= sps.getMaxTbSize() && ((cu.lfnstIdx == 0) || allowLfnstWithMip(cu.lumaSize()));
-  const int SizeThr = 8>>std::max(0,m_pcEncCfg->m_useFastMIP-2);
-  const bool testMip    = mipAllowed && (cu.lwidth() <= (SizeThr * cu.lheight()) && cu.lheight() <= (SizeThr * cu.lwidth())) && (cu.lwidth() <= MIP_MAX_WIDTH && cu.lheight() <= MIP_MAX_HEIGHT);
+  const int SizeThr     = 8 >> std::max( 0, m_pcEncCfg->m_useFastMIP - 1 );
+  const bool testMip    = mipAllowed && ( cu.lwidth() <= ( SizeThr * cu.lheight() ) && cu.lheight() <= ( SizeThr * cu.lwidth() ) ) && ( cu.lwidth() <= MIP_MAX_WIDTH && cu.lheight() <= MIP_MAX_HEIGHT );
   bool testISP = sps.ISP && CU::canUseISP(width, height, cu.cs->sps->getMaxTbSize());
   if (testISP)
   {
