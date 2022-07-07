@@ -187,7 +187,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   const UnitArea localUnitArea(area.chromaFormat, Area(0, 0, area.width, area.height));
   if( testMip)
   {
-    numModesForFullRD += fastMip ? numModesForFullRD - std::max( m_pcEncCfg->m_useFastMIP, numModesAvailable )
+    numModesForFullRD += fastMip ? numModesForFullRD - std::min( m_pcEncCfg->m_useFastMIP, numModesForFullRD )
                                  : numModesForFullRD;
     m_SortedPelUnitBufs->prepare( localUnitArea, numModesForFullRD + 1 );
   }
