@@ -82,6 +82,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
   , m_accessUnitOutputStarted( false )
+  , m_firstFlushDone ( false )
 {
 }
 
@@ -211,7 +212,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // GOP structure
   m_gopCfg = new GOPCfg( msg );
-  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_lowDelay, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
+  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_picReordering, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
   CHECK( m_gopCfg->getMaxTLayer() != m_encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   // thread pool
@@ -283,9 +284,10 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
   m_prevSharedTL0 = nullptr;
 
-  m_picsRcvd        = -m_encCfg.m_leadFrames;
+  m_picsRcvd                = -m_encCfg.m_leadFrames;
   m_accessUnitOutputStarted = false;
-  m_passInitialized = pass;
+  m_firstFlushDone          = false;
+  m_passInitialized         = pass;
 }
 
 void EncLib::xUninitLib()
@@ -434,6 +436,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       }
     }
 
+    if( flush && ! m_firstFlushDone )
+    {
+      m_gopCfg->correctIncompleteLastGop( m_picSharedList );
+      m_firstFlushDone = true;
+    }
+
     PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
     // trigger stages
@@ -453,7 +461,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( !m_accessUnitOutputStarted )
         m_accessUnitOutputStarted = !m_encCfg.m_stageParallelProc || m_AuList.size() > 4 || flush;
     }
-    
+
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
     bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )

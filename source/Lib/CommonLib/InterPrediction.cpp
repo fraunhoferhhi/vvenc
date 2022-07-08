@@ -1284,7 +1284,6 @@ void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t
 void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied )
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
-  int iterationCount = 1;
   /*Always High Precision*/
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;
   const int mvShiftC = mvShift + getChannelTypeScaleX(CH_C, cu.chromaFormat);
@@ -1360,76 +1359,67 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
         int16_t deltaMV[2]      = { 0, 0 };
 
         // set all entries to MAX_UNIT64
-        memset( sadArray, 0xff, sizeof( sadArray ) );
         uint64_t *pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
 
         const Pel* addrL0Centre = biLinearPredL0 + yStart * bilinearBufStride + xStart;
         const Pel* addrL1Centre = biLinearPredL1 + yStart * bilinearBufStride + xStart;
 
-        for( int i = 0; i < iterationCount; i++ )
+        const Pel* addrL0 = addrL0Centre;
+        const Pel* addrL1 = addrL1Centre;
+
+        distParam.org.buf = addrL0;
+        distParam.cur.buf = addrL1;
+        minCost  = distParam.distFunc( distParam ) >> 1;
+        minCost -= ( minCost >> 2 );
+
+        if( minCost < ( dx * dy ) )
         {
-          const ptrdiff_t diff0 = totalDeltaMV[0] + (totalDeltaMV[1] * bilinearBufStride);
-          const Pel* addrL0 = addrL0Centre + diff0;
-          const Pel* addrL1 = addrL1Centre - diff0;
-          if (i == 0)
-          {
-            distParam.org.buf = addrL0;
-            distParam.cur.buf = addrL1;
-            minCost = distParam.distFunc(distParam)>>1;
-            minCost -= (minCost >>2);
-            if (minCost < (dx * dy))
-            {
-              notZeroCost = false;
-              break;
-            }
-            pSADsArray[0] = minCost;
-          }
-          if (!minCost)
-          {
-            notZeroCost = false;
-            break;
-          }
+          notZeroCost = false;
+        }
+        else
+        {
+          pSADsArray[0] = minCost;
+          pSADsArray    = sadArray;
 
           //xBIPMVRefine
           {
-            deltaMV[0] = 0;
-            deltaMV[1] = 0;
-
-            for (int nIdx = 0; (nIdx < 25); ++nIdx)
+            for( int ver = -2; ver <= 2; ver++ )
             {
-              int32_t sadOffset = ((m_pSearchOffset[nIdx].ver * ((2 * DMVR_NUM_ITERATION) + 1)) + m_pSearchOffset[nIdx].hor);
-              if (*(pSADsArray + sadOffset) == MAX_UINT64)
+              const int initHor = -2;
+              const ptrdiff_t offset = initHor + ver * bilinearBufStride;
+              
+              distParam.org.buf = addrL0 + offset;
+              distParam.cur.buf = addrL1 - offset;
+              
+              distParam.dmvrSadX5( distParam, pSADsArray, ver != 0 );
+
+              for( int hor = -2; hor <= 2; hor++, pSADsArray++ )
               {
-                const ptrdiff_t diff = m_pSearchOffset[nIdx].hor + (m_pSearchOffset[nIdx].ver * bilinearBufStride);
-                distParam.org.buf = addrL0 + diff;
-                distParam.cur.buf = addrL1 - diff;
-                const uint64_t cost = distParam.distFunc(distParam)>>1;
-                *(pSADsArray + sadOffset) = cost;
-              }
-              if (*(pSADsArray + sadOffset) < minCost)
-              {
-                minCost = *(pSADsArray + sadOffset);
-                deltaMV[0] = m_pSearchOffset[nIdx].hor;
-                deltaMV[1] = m_pSearchOffset[nIdx].ver;
+                Distortion cost = *pSADsArray;
+
+                if( cost < minCost )
+                {
+                  minCost = cost;
+                  deltaMV[0] = hor;
+                  deltaMV[1] = ver;
+                }
               }
             }
           }
 
-          if (deltaMV[0] == 0 && deltaMV[1] == 0)
-          {
-            break;
-          }
-          totalDeltaMV[0] += deltaMV[0];
-          totalDeltaMV[1] += deltaMV[1];
-          pSADsArray += ((deltaMV[1] * (((2 * DMVR_NUM_ITERATION) + 1))) + deltaMV[0]);
+          pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
         }
 
-        bioAppliedType[num] = (minCost < bioEnabledThres) ? false : bioApplied;
-        totalDeltaMV[0] = totalDeltaMV[0] * (1 << mvShift);
-        totalDeltaMV[1] = totalDeltaMV[1] * (1 << mvShift);
-        xDMVRSubPixelErrorSurface(notZeroCost, totalDeltaMV, deltaMV, pSADsArray);
+        totalDeltaMV[0] += deltaMV[0];
+        totalDeltaMV[1] += deltaMV[1];
+        pSADsArray += ( ( deltaMV[1] * ( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) ) + deltaMV[0] );
 
-        cu.mvdL0SubPu[num] = Mv(totalDeltaMV[0], totalDeltaMV[1]);
+        bioAppliedType[num] = ( minCost < bioEnabledThres ) ? false : bioApplied;
+        totalDeltaMV[0] = totalDeltaMV[0] * ( 1 << mvShift );
+        totalDeltaMV[1] = totalDeltaMV[1] * ( 1 << mvShift );
+        xDMVRSubPixelErrorSurface( notZeroCost, totalDeltaMV, deltaMV, pSADsArray );
+
+        cu.mvdL0SubPu[num] = Mv( totalDeltaMV[0], totalDeltaMV[1] );
 
         num++;
       }

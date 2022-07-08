@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "GOPCfg.h"
+#include "EncStage.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -54,7 +55,7 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bLowDelay, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
+void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
@@ -111,7 +112,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
   m_nextPoc      = 0;
   m_pocOffset    = 0;
   m_cnOffset     = 0;
-  CHECK( m_refreshType == VVENC_DRT_IDR2 && ( m_fixIntraPeriod == 1 || bLowDelay ), "refresh type idr2 only for random access possible" );
+  CHECK( m_refreshType == VVENC_DRT_IDR2 && ( m_fixIntraPeriod == 1 || ! bPicReordering ), "refresh type idr2 only for random access possible" );
   m_numTillGop   = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
   m_numTillIntra = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
 
@@ -127,6 +128,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
       std::cout << "    Frame" << ( j + 1 )
                 << " POC= " << gopEntry.m_POC
                 << " TID= " << gopEntry.m_temporalId
+                << " isStartOfGop= " << gopEntry.m_isStartOfGop
                 << " MCTF= " << gopEntry.m_mctfIndex
                 << " qpOffset= " << gopEntry.m_QPOffset
                 << " modelOffset= " << gopEntry.m_QPOffsetModelOffset
@@ -241,6 +243,45 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
             << " " << gopEntry.m_deltaRefPics[ 1 ][ 5 ]
             << ")" << std::endl;
 #endif
+}
+
+void GOPCfg::correctIncompleteLastGop( std::list<PicShared*>& picSharedList ) const
+{
+  std::vector<PicShared*> usedList;
+  usedList.reserve( picSharedList.size() );
+  for( auto picShared : picSharedList )
+  {
+    if( picShared->getPOC() >= 0 && picShared->isUsed() )
+    {
+      usedList.push_back( picShared );
+    }
+  }
+
+  if( ! usedList.empty() )
+  {
+    std::sort( usedList.begin(), usedList.end(), []( auto& a, auto& b ){ return a->m_gopEntry.m_codingNum < b->m_gopEntry.m_codingNum; } );
+
+    const int size       = (int)usedList.size();
+    const int lastGopNum = usedList.back()->m_gopEntry.m_gopNum;
+
+    GOPEntry* startOfLastGop = &usedList.back()->m_gopEntry;
+    for( int i = size - 2; i >= 0; i-- )
+    {
+      if( usedList[ i ]->m_gopEntry.m_gopNum != lastGopNum )
+      {
+        break;
+      }
+      startOfLastGop = &usedList[ i ]->m_gopEntry;
+    }
+
+    startOfLastGop->m_isStartOfGop = true;
+    if( startOfLastGop->m_gopNum == 0 && ! startOfLastGop->m_isStartOfIntra )
+    {
+      startOfLastGop->m_isStartOfIntra = true;
+      startOfLastGop->m_sliceType      = 'I';
+      startOfLastGop->m_temporalId     = 0;
+    }
+  }
 }
 
 void GOPCfg::getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const
@@ -546,7 +587,7 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetMctfIndex( maxGopSize, gopList );
 
   // mark first gop entry
-  gopList[ 0 ].m_isStartOfGop = true;
+  gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
 }
 
 void GOPCfg::xGetPrevGopRefs( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const
