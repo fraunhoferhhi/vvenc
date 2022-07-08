@@ -1664,7 +1664,7 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_useFastMrg < 0 || c->m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
-  vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 3,   "FastMIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
 
@@ -2404,6 +2404,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_MIP                             = 1;
+      c->m_useFastMIP                      = 3;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
@@ -2623,7 +2625,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
-      c->m_useFastMIP                      = 4;
+      c->m_useFastMIP                      = 3;
       c->m_MMVD                            = 2;
       c->m_MRL                             = 1;
       c->m_MTS                             = 1;
