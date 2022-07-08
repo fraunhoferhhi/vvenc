@@ -134,6 +134,9 @@ void RdCost::create()
   m_wtdPredPtr[1] = lumaWeightedSSE_Core<1>;
   m_fxdWtdPredPtr = fixWeightedSSE_Core;
 
+  m_afpDistortFuncX5[0] = RdCost::xGetSAD8X5;
+  m_afpDistortFuncX5[1] = RdCost::xGetSAD16X5;
+
 #if ENABLE_SIMD_OPT_DIST
 #ifdef TARGET_SIMD_X86
   initRdCostX86();
@@ -263,6 +266,11 @@ DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStri
   const int base = (rcDP.bitDepth > 10) ? 1 : 0;
 
   rcDP.distFunc = m_afpDistortFunc[base][ DF_SAD + Log2( width ) ];
+  
+  if( isDMVR )
+  {
+    rcDP.dmvrSadX5 = m_afpDistortFuncX5[Log2( width ) - 3];
+  }
 
 #if ENABLE_MEASURE_SEARCH_SPACE
   if( !isDMVR )
@@ -2058,6 +2066,58 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
   }
 
   return 0;
+}
+
+void RdCost::xGetSAD8X5(const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos) {
+  DistParam rcDtParamTmp0 = rcDtParam;
+
+  DistParam rcDtParamTmp1 = rcDtParam;
+  rcDtParamTmp1.org.buf += 1;
+  rcDtParamTmp1.cur.buf -= 1;
+
+  DistParam rcDtParamTmp2 = rcDtParam;
+  rcDtParamTmp2.org.buf += 2;
+  rcDtParamTmp2.cur.buf -= 2;
+
+  DistParam rcDtParamTmp3 = rcDtParam;
+  rcDtParamTmp3.org.buf += 3;
+  rcDtParamTmp3.cur.buf -= 3;
+
+  DistParam rcDtParamTmp4 = rcDtParam;
+  rcDtParamTmp4.org.buf += 4;
+  rcDtParamTmp4.cur.buf -= 4;
+  
+  cost[0] = (RdCost::xGetSAD8(rcDtParamTmp0)) >> 1;
+  cost[1] = (RdCost::xGetSAD8(rcDtParamTmp1)) >> 1;
+  if (isCalCentrePos) cost[2] = (RdCost::xGetSAD8(rcDtParamTmp2)) >> 1;
+  cost[3] = (RdCost::xGetSAD8(rcDtParamTmp3)) >> 1;
+  cost[4] = (RdCost::xGetSAD8(rcDtParamTmp4)) >> 1;
+}
+
+void RdCost::xGetSAD16X5(const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos) {
+  DistParam rcDtParamTmp0 = rcDtParam;
+
+  DistParam rcDtParamTmp1 = rcDtParam;
+  rcDtParamTmp1.org.buf += 1;
+  rcDtParamTmp1.cur.buf -= 1;
+
+  DistParam rcDtParamTmp2 = rcDtParam;
+  rcDtParamTmp2.org.buf += 2;
+  rcDtParamTmp2.cur.buf -= 2;
+
+  DistParam rcDtParamTmp3 = rcDtParam;
+  rcDtParamTmp3.org.buf += 3;
+  rcDtParamTmp3.cur.buf -= 3;
+
+  DistParam rcDtParamTmp4 = rcDtParam;
+  rcDtParamTmp4.org.buf += 4;
+  rcDtParamTmp4.cur.buf -= 4;
+  
+  cost[0] = (RdCost::xGetSAD16(rcDtParamTmp0)) >> 1;
+  cost[1] = (RdCost::xGetSAD16(rcDtParamTmp1)) >> 1;
+  if (isCalCentrePos) cost[2] = (RdCost::xGetSAD16(rcDtParamTmp2)) >> 1;
+  cost[3] = (RdCost::xGetSAD16(rcDtParamTmp3)) >> 1;
+  cost[4] = (RdCost::xGetSAD16(rcDtParamTmp4)) >> 1;
 }
 
 void RdCost::setDistParamGeo(DistParam &rcDP, const CPelBuf &org, const Pel *piRefY, int iRefStride, const Pel *mask,

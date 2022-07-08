@@ -1004,7 +1004,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.saoEnabled                    = m_pcEncCfg->m_bUseSAO;
   sps.jointCbCr                     = m_pcEncCfg->m_JointCbCrMode;
   sps.maxTLayers                    = m_pcEncCfg->m_maxTLayer + 1;
-  sps.rpl1CopyFromRpl0              = m_pcEncCfg->m_lowDelay;
+  sps.rpl1CopyFromRpl0              = ! m_pcEncCfg->m_picReordering;
   sps.SbtMvp                        = m_pcEncCfg->m_SbTMVP;
   sps.CIIP                          = m_pcEncCfg->m_CIIP != 0;
   sps.SBT                           = m_pcEncCfg->m_SBT != 0;
@@ -1370,6 +1370,8 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     // continue with next pic in increasing coding number order
     if( ! flush && pic->gopEntry->m_codingNum != m_lastCodingNum + 1 )
       break;
+
+    CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
 
     // initialize slice header
     pic->encTime.startTimer();
@@ -2477,11 +2479,11 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
       std::string cInfo;
       if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC
       {
-        cInfo = prnt("RC analyze POC %5d", slice->poc );
+        cInfo = prnt("RC analyze poc %5d", slice->poc );
       }
       else
       {
-        cInfo = prnt("RC pass %d/%d, analyze POC %5d",
+        cInfo = prnt("RC pass %d/%d, analyze poc %5d",
             m_pcRateCtrl->rcPass + 1,
             m_pcEncCfg->m_RCNumPasses,
             slice->poc );

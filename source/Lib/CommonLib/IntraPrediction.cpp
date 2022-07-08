@@ -1561,7 +1561,7 @@ void IntraPrediction::xGetLMParameters(const CodingUnit& cu, const ComponentID c
       int v = DivSigTable[normDiff] | 8;
       x += normDiff != 0;
 
-      int y = floorLog2( abs( diffC ) ) + 1;
+      int y = diffC == 0 ? 0 : floorLog2( abs( diffC ) ) + 1;
       int add = 1 << y >> 1;
       a = (diffC * v + add) >> y;
       iShift = 3 + x - y;

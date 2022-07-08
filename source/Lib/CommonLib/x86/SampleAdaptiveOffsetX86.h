@@ -118,7 +118,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
         {
           for (x=0; x< width; x+=16)
           {
-            vsrca = _mm256_load_si256((__m256i*)&srcLine[x]);
+            vsrca = _mm256_loadu_si256((__m256i*)&srcLine[x]);
             vsrcal = _mm256_loadu_si256((__m256i*)&srcLine[x-1]);
             vsrcar = _mm256_loadu_si256((__m256i*)&srcLine[x+1]);
             vsrcal = _mm256_sub_epi16(vsrca, vsrcal);
@@ -154,7 +154,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
 
           for (x=0; x< width; x+=8)
           {
-            vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+            vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
             vsrcal = _mm_loadu_si128((__m128i*)&srcLine[x-1]);
             vsrcar = _mm_loadu_si128((__m128i*)&srcLine[x+1]);
             vsrcal = _mm_sub_epi16(vsrca, vsrcal);
@@ -239,7 +239,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       {
         for (x=0; x< width; x+=16)
         {
-          vsrca = _mm256_load_si256((__m256i*)&srcLine[x]);
+          vsrca = _mm256_loadu_si256((__m256i*)&srcLine[x]);
           vsrcat = _mm256_loadu_si256((__m256i*)&srcLineAbove[x]);
           vsrcab = _mm256_loadu_si256((__m256i*)&srcLineBelow[x]);
           vsrcat = _mm256_sub_epi16(vsrca, vsrcat);
@@ -276,7 +276,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       {
         for (x=0; x< width; x+=8)
         {
-          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
           vsrcat = _mm_loadu_si128((__m128i*)&srcLineAbove[x]);
           vsrcab = _mm_loadu_si128((__m128i*)&srcLineBelow[x]);
           vsrcat = _mm_sub_epi16(vsrca, vsrcat);
@@ -344,7 +344,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
         {
           for (x=0; x< width; x+=16)
           {
-            vsrca = _mm256_load_si256((__m256i*)&srcLine[x]);
+            vsrca = _mm256_loadu_si256((__m256i*)&srcLine[x]);
             vsrcat = _mm256_loadu_si256((__m256i*)&srcLineAbove[x-1]);
             vsrcab = _mm256_loadu_si256((__m256i*)&srcLineBelow[x+1]);
             vsrcat = _mm256_sub_epi16(vsrca, vsrcat);
@@ -381,7 +381,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
         {
           for (x=0; x< width; x+=8)
           {
-            vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+            vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
             vsrcat = _mm_loadu_si128((__m128i*)&srcLineAbove[x-1]);
             vsrcab = _mm_loadu_si128((__m128i*)&srcLineBelow[x+1]);
             vsrcat = _mm_sub_epi16(vsrca, vsrcat);
@@ -518,7 +518,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
         {
           for (x=0; x< width; x+=16)
           {
-            vsrca = _mm256_load_si256((__m256i*)&srcLine[x]);
+            vsrca = _mm256_loadu_si256((__m256i*)&srcLine[x]);
             vsrcat = _mm256_loadu_si256((__m256i*)&srcLineAbove[x+1]);
             vsrcab = _mm256_loadu_si256((__m256i*)&srcLineBelow[x-1]);
             vsrcat = _mm256_sub_epi16(vsrca, vsrcat);
@@ -554,7 +554,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
         {
           for (x=0; x< width; x+=8)
           {
-            vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+            vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
             vsrcat = _mm_loadu_si128((__m128i*)&srcLineAbove[x+1]);
             vsrcab = _mm_loadu_si128((__m128i*)&srcLineBelow[x-1]);
             vsrcat = _mm_sub_epi16(vsrca, vsrcat);
@@ -659,7 +659,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       {
         for (x=0; x< width; x+=16)
         {
-          vsrc = _mm256_load_si256((__m256i*)&srcLine[x]);
+          vsrc = _mm256_loadu_si256((__m256i*)&srcLine[x]);
           __m256i bands = _mm256_srai_epi16(vsrc, shiftBits);
           bands = _mm256_sub_epi16(bands, vbaseoffset);
           __m256i mask1 = _mm256_cmpgt_epi16(bands,vminus);
@@ -696,7 +696,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       {
         for (x=0; x< width; x+=8)
         {
-          vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
           __m128i bands = _mm_srai_epi16(vsrc, shiftBits);
           bands = _mm_sub_epi16(bands, vbaseoffset);
           __m128i mask1 = _mm_cmpgt_epi16(bands,vminus);
@@ -746,10 +746,10 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
         __m128i vsrca, vsrcb;
         __m128i vdiffa,vdiffb;
         if (sizeof(Pel) == 1){
-          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
           vsrca = _mm_unpacklo_epi8(vsrc, vzero);
           vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
-          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
           __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
           __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
@@ -757,10 +757,10 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
         }
         else
         {
-          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
-          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
           vdiffb = _mm_sub_epi16(vorgb, vsrcb);
         }
@@ -840,10 +840,10 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
         __m128i vsrca, vsrcb;
         __m128i vdiffa,vdiffb;
         if (sizeof(Pel) == 1){
-          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
           vsrca = _mm_unpacklo_epi8(vsrc, vzero);
           vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
-          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
           __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
           __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
@@ -851,10 +851,10 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
         }
         else
         {
-          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
-          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
           vdiffb = _mm_sub_epi16(vorgb, vsrcb);
         }
@@ -1047,7 +1047,7 @@ void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcL
         // load reconstruction and compute difference between original signal and reconstruction
         if (sizeof(Pel) ==1)
         {
-          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
           __m128i vsrcl = _mm_loadu_si128((__m128i*)&srcLine[x-1]);
           __m128i vsrcr = _mm_loadu_si128((__m128i*)&srcLine[x+1]);
           __m128i vsrca = _mm_unpacklo_epi8(vsrc, vzero);
@@ -1068,7 +1068,7 @@ void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcL
         }
         else
         {
-          __m128i vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+          __m128i vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
           vsrcal = _mm_loadu_si128((__m128i*)&srcLine[x-1]);
           vsrcar = _mm_loadu_si128((__m128i*)&srcLine[x+1]);
           vsrcal = _mm_sub_epi16(vsrca, vsrcal);
@@ -1183,8 +1183,8 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
       __m128i vsrcat,vsrcbt;
       if (sizeof(Pel) == 1)
       {
-        __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
-        __m128i vsrct = _mm_load_si128((__m128i*)&srcLine[x-srcStride]);
+        __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
+        __m128i vsrct = _mm_loadu_si128((__m128i*)&srcLine[x-srcStride]);
         vsrca = _mm_unpacklo_epi8(vsrc, vzero);
         vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
         vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
@@ -1192,10 +1192,10 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
       }
       else
       {
-        vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
-        vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
-        vsrcat = _mm_load_si128((__m128i*)&srcLine[x   - srcStride]);
-        vsrcbt = _mm_load_si128((__m128i*)&srcLine[x+8 - srcStride]);
+        vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
+        vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
+        vsrcat = _mm_loadu_si128((__m128i*)&srcLine[x   - srcStride]);
+        vsrcbt = _mm_loadu_si128((__m128i*)&srcLine[x+8 - srcStride]);
       }
       vsrcat = _mm_sub_epi16(vsrcat, vsrca);
       vsrcbt = _mm_sub_epi16(vsrcbt, vsrcb);
@@ -1221,14 +1221,14 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
         // load reconstruction and compute difference between original signal and reconstruction
         if (sizeof(Pel) == 1)
         {
-          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
-          __m128i vsrcd = _mm_load_si128((__m128i*)&srcLine[x+srcStride]);
+          __m128i vsrc = _mm_loadu_si128((__m128i*)&srcLine[x]);
+          __m128i vsrcd = _mm_loadu_si128((__m128i*)&srcLine[x+srcStride]);
           vsrca = _mm_unpacklo_epi8(vsrc, vzero);
           vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
           vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
           vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
 
-          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
           __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
           __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
@@ -1236,12 +1236,12 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
         }
         else
         {
-          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
-          vsrcad = _mm_load_si128((__m128i*)&srcLine[x   + srcStride]);
-          vsrcbd = _mm_load_si128((__m128i*)&srcLine[x+8 + srcStride]);
-          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
+          vsrcad = _mm_loadu_si128((__m128i*)&srcLine[x   + srcStride]);
+          vsrcbd = _mm_loadu_si128((__m128i*)&srcLine[x+8 + srcStride]);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
           vdiffb = _mm_sub_epi16(vorgb, vsrcb);
         }
@@ -1370,7 +1370,7 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
         if (sizeof(Pel) == 1)
         {
           __m128i vsrct = _mm_loadu_si128((__m128i*)&srcLine[ x-srcStride-1 ]);
-          __m128i vsrc  = _mm_load_si128((__m128i*)&srcLine[ x ]);
+          __m128i vsrc  = _mm_loadu_si128((__m128i*)&srcLine[ x ]);
           __m128i vsrcd = _mm_loadu_si128((__m128i*)&srcLine[ x+srcStride+1 ]);
           vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
           vsrcbt = _mm_unpackhi_epi8(vsrct, vzero);
@@ -1378,7 +1378,7 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
           vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
           vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
           vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
-          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&orgLine[x]);
           __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
           __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
@@ -1388,12 +1388,12 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
         {
           vsrcat = _mm_loadu_si128((__m128i*)&srcLine[x - 1 - srcStride ]);
           vsrcbt = _mm_loadu_si128((__m128i*)&srcLine[x - 1 + 8 - srcStride]);
-          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
-          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
+          vsrca = _mm_loadu_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_loadu_si128((__m128i*)&srcLine[x+8]);
           vsrcad = _mm_loadu_si128((__m128i*)&srcLine[x + 1 + srcStride ]);
           vsrcbd = _mm_loadu_si128((__m128i*)&srcLine[x + 1 + 8 + srcStride]);
-          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
-          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&orgLine[x+8]);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
           vdiffb = _mm_sub_epi16(vorgb, vsrcb);
         }
@@ -1523,7 +1523,7 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
         if (sizeof(Pel) == 1)
         {
           __m128i vsrct = _mm_loadu_si128((__m128i*)&pRec[ x-srcStride+1 ]);
-          __m128i vsrc  = _mm_load_si128((__m128i*)&pRec[ x ]);
+          __m128i vsrc  = _mm_loadu_si128((__m128i*)&pRec[ x ]);
           __m128i vsrcd = _mm_loadu_si128((__m128i*)&pRec[ x+srcStride-1 ]);
           vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
           vsrcbt = _mm_unpackhi_epi8(vsrct, vzero);
@@ -1531,7 +1531,7 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
           vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
           vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
           vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
-          __m128i vorg  = _mm_load_si128((__m128i*)&pOrg[x]);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&pOrg[x]);
           __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
           __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
@@ -1541,12 +1541,12 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
         {
           vsrcat = _mm_loadu_si128((__m128i*)&pRec[x + 1 - srcStride ]);
           vsrcbt = _mm_loadu_si128((__m128i*)&pRec[x + 1 + 8 - srcStride]);
-          vsrca = _mm_load_si128((__m128i*)&pRec[x]);
-          vsrcb = _mm_load_si128((__m128i*)&pRec[x+8]);
+          vsrca = _mm_loadu_si128((__m128i*)&pRec[x]);
+          vsrcb = _mm_loadu_si128((__m128i*)&pRec[x+8]);
           vsrcad = _mm_loadu_si128((__m128i*)&pRec[x - 1 + srcStride ]);
           vsrcbd = _mm_loadu_si128((__m128i*)&pRec[x - 1 + 8 + srcStride]);
-          __m128i vorga = _mm_load_si128((__m128i*)&pOrg[x]);
-          __m128i vorgb = _mm_load_si128((__m128i*)&pOrg[x+8]);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&pOrg[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&pOrg[x+8]);
           vdiffa = _mm_sub_epi16(vorga, vsrca);
           vdiffb = _mm_sub_epi16(vorgb, vsrcb);
         }

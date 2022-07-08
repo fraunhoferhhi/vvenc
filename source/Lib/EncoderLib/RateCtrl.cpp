@@ -259,7 +259,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     if ((*it)->frameLevel == frameLevel - 1 && (*it)->picQP >= 0) // last temporal level
     {
-      lastPrevTLQP = (*it)->picQP;
+      lastPrevTLQP = (*it)->picQP >> (frameLevel == 1 ? 1 : 0);
     }
     if ((*it)->frameLevel == 1 && frameLevel == 0 && refreshParams && lastCurrTLQP < 0)
     {
@@ -268,10 +268,8 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     halvedAvgQP += (*it)->picQP;
   }
   if (listPreviousPictures.size() >= 1) halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
-  if (frameLevel == 0 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
+  if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
-  halvedAvgQP = (halvedAvgQP < 0 /* not set */ ? MAX_QP : (MAX_QP + halvedAvgQP) >> 1);
-  if (frameLevel == 1 && lastCurrTLQP > halvedAvgQP) lastCurrTLQP = halvedAvgQP;
 
   qp = Clip3 (frameLevel + std::max (0, baseQP >> 1), MAX_QP, qp);
 
@@ -283,11 +281,11 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   }
   if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
   {
-    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), (lastCurrTLQP < 0 ? std::min ((1 + lastPrevTLQP + MAX_QP) >> 1, 1 + lastPrevTLQP * 2) : MAX_QP), qp);
+    qp = Clip3 (std::min (MAX_QP, lastPrevTLQP + 1), MAX_QP, qp);
   }
   else if (encRCSeq->lastIntraQP >= -1 && (frameLevel == 1 || frameLevel == 2))
   {
-    qp = Clip3 (std::min (MAX_QP, encRCSeq->lastIntraQP + 1), MAX_QP, qp);
+    qp = Clip3 ((encRCSeq->lastIntraQP >> 1) + 1, MAX_QP, qp);
   }
 }
 
@@ -307,7 +305,7 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
     if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
 
     encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
-    encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal * (0.15625 + frameLevel * frameLevel * 0.0234375), clipVal, encRCSeq->qpCorrection[frameLevel]);
+    encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
   }
 }
 
@@ -784,28 +782,45 @@ void RateCtrl::processGops()
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
   int vecIdx;
+  int gopNum;
   std::list<TRCPassStats>::iterator it;
   std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum)); // +2 for the first I frame (GOP) and a potential last incomplete GOP
   std::vector<float>    tgtBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum));
 
   vecIdx = 0;
+  gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 1
   {
+    if ( it->gopNum > gopNum )
+    {
+      vecIdx += 1;
+      gopNum  = it->gopNum;
+    }
+    CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
-    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
     tgtBits[vecIdx] += float (it->numBits * ratio);
-    if (it->isStartOfGop)
+    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
+    {
       vecIdx++;
+    }
   }
   vecIdx = 0;
+  gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 2
   {
-    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
+    if ( it->gopNum > gopNum )
+    {
+      vecIdx += 1;
+      gopNum  = it->gopNum;
+    }
+    CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
-    if (it->isStartOfGop)
+    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
+    {
       vecIdx++;
+    }
   }
 }
 
@@ -847,9 +862,10 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
       {
         if ( ( it->poc == slice->poc ) && ( encRcPic->targetBits > 0 ) && ( it->numBits > 0 ) )
         {
-          double d = (double)encRcPic->targetBits;
+          const double dLimit = std::max ( 2.0, 6.0 - double( frameLevel >> 1 ) );
           const int firstPassSliceQP = it->qp;
           const int log2HeightMinus7 = int( 0.5 + log( (double)std::max( 128, m_pcEncCfg->m_SourceHeight ) ) / log( 2.0 ) ) - 7;
+          double d = (double)encRcPic->targetBits;
           uint16_t visAct = it->visActY;
 
           if ( it->isNewScene ) // spatiotemporal visual activity is transient at camera/scene change, find next steady-state activity
@@ -898,12 +914,16 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             else
             {
               d = std::max( 1.0, d + ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * 0.5 * it->frameInGopRatio );
-              encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
             }
+            encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
           }
-          else if ( d > 2.0 * encRcPic->tmpTargetBits )
+          else if ( d > dLimit * encRcPic->tmpTargetBits )
           {
-            encRcPic->targetBits = int( ( d = 2.0 * encRcPic->tmpTargetBits ) + 0.5 ); // avoid huge rate spending after easy scenes
+            encRcPic->targetBits = int( ( d = encRcPic->tmpTargetBits * dLimit ) + 0.5 ); // avoid large spendings after easy scenes
+          }
+          else if ( d * dLimit < encRcPic->tmpTargetBits )
+          {
+            encRcPic->targetBits = int( ( d = encRcPic->tmpTargetBits / dLimit ) + 0.5 ); // avoid small spendings after hard scenes
           }
 
           d /= (double)it->numBits;

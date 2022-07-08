@@ -95,6 +95,7 @@ private:
   int                        m_passInitialized;
   int                        m_maxNumPicShared;
   bool                       m_accessUnitOutputStarted;
+  bool                       m_firstFlushDone;
   std::mutex                 m_stagesMutex;
   std::condition_variable    m_stagesCond;
   std::deque<AccessUnitList> m_AuList;

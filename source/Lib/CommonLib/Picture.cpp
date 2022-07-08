@@ -293,7 +293,8 @@ void Picture::createTempBuffers( unsigned _maxCUSize )
 {
   CHECK( !cs, "Coding structure is required a this point!" );
 
-  m_picBufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
+  // SAO reads/writes +-1 sample, especially SIMD
+  m_picBufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 2, MEMORY_ALIGN_DEF_SIZE );
 
   if( cs ) cs->rebindPicBufs();
 }
