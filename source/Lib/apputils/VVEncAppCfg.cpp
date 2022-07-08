@@ -211,13 +211,13 @@ const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap
   { "none",                  VVENC_DRT_NONE },
   { "cra",                   VVENC_DRT_CRA },
   { "idr",                   VVENC_DRT_IDR },
-  { "rpsei",                 VVENC_DRT_RECOVERY_POINT_SEI },
+  { "gdr",                   VVENC_DRT_GDR },
   { "idr2",                  VVENC_DRT_IDR2 },
   { "cra_cre",               VVENC_DRT_CRA_CRE },
   { "0",                     VVENC_DRT_NONE },
   { "1",                     VVENC_DRT_CRA },
   { "2",                     VVENC_DRT_IDR },
-  { "3",                     VVENC_DRT_RECOVERY_POINT_SEI },
+  { "3",                     VVENC_DRT_GDR },
   { "4",                     VVENC_DRT_IDR2 },
   { "5",                     VVENC_DRT_CRA_CRE },
 };
@@ -583,11 +583,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 #if GDR_ENABLED
   opts.setSubSection("GDR options");
   opts.addOptions()
-  ("GdrEnabled",                                        c->m_gdrEnabled,                                     "GDR enabled")
   ("GdrPocStart",                                       c->m_gdrPocStart,                                    "GDR poc start")
   ("GdrPeriod",                                         c->m_gdrPeriod,                                      "Number of frames between GDR picture to the next GDR picture")
   ("GdrInterval",                                       c->m_gdrInterval,                                    "Number of frames from GDR picture to the recovery point picture")  
-  ("GdrNoHash",                                         c->m_gdrNoHash,                                      "Do not generate decode picture hash SEI messages for GDR and recovering pictures")  
   ;
 #endif
 

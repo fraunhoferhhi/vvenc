@@ -190,7 +190,7 @@ typedef enum
   VVENC_DRT_NONE               = 0,
   VVENC_DRT_CRA                = 1,
   VVENC_DRT_IDR                = 2,
-  VVENC_DRT_RECOVERY_POINT_SEI = 3,
+  VVENC_DRT_GDR                = 3,
   VVENC_DRT_IDR2               = 4,
   VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
 }vvencDecodingRefreshType;
@@ -452,7 +452,6 @@ typedef struct vvenc_config
   int                 m_gdrPocStart;
   int                 m_gdrPeriod;
   int                 m_gdrInterval;  
-  bool                m_gdrNoHash;  
 #endif
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
