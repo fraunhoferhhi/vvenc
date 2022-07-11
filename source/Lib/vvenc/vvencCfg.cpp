@@ -2392,7 +2392,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
-      c->m_CIIP                            = 3;
+      c->m_CIIP                            = 2;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
