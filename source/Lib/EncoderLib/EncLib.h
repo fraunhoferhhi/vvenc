@@ -111,7 +111,7 @@ public:
   void     uninitEncoderLib    ();
   void     printSummary        ();
   void     getParameterSets    ( AccessUnitList& au );
-  int      getCurPass() const;
+  int      getCurPass          () const;
 
 private:
   void     xUninitLib          ();
