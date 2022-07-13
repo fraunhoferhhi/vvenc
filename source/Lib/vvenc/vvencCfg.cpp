@@ -2938,7 +2938,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     if (c->m_gdrEnabled)
     {
       css << "\nGDR CFG: ";
-      css << "GdrEnabled:" << c->m_gdrEnabled << " ";
       css << "GdrPocStart:" << c->m_gdrPocStart << " ";
       css << "GdrInterval:" << c->m_gdrInterval << " ";
       css << "GdrPeriod:" << c->m_gdrPeriod << " ";
