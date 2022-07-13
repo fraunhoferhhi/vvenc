@@ -2933,19 +2933,19 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
     css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
-    css << "\n";
 
 #if GDR_ENABLED
-    css << "\nGDR CFG: ";
-    css << "GdrEnabled:" << c->m_gdrEnabled << " ";
-
     if (c->m_gdrEnabled)
     {
+      css << "\nGDR CFG: ";
+      css << "GdrEnabled:" << c->m_gdrEnabled << " ";
       css << "GdrPocStart:" << c->m_gdrPocStart << " ";
       css << "GdrInterval:" << c->m_gdrInterval << " ";
       css << "GdrPeriod:" << c->m_gdrPeriod << " ";
     }
 #endif
+
+    css << "\n";
   }
 
   vvenc_cfgString = css.str();
