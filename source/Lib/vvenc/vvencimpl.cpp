@@ -381,6 +381,31 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
       *pbEncodeDone = false;
     }
   }
+  else
+  {     
+    if( bFlush && m_cVVEncCfg.m_RCNumPasses == 2 && m_pEncLib->getCurPass() == 0 )
+    {
+      // process all remaining pictures of first pass on first flush packet 
+      while ( ! *pbEncodeDone )
+      {
+#if HANDLE_EXCEPTION
+        try
+#endif
+        {
+          m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, *pbEncodeDone );
+        }
+#if HANDLE_EXCEPTION
+        catch( std::exception& e )
+        {
+          msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+          m_cErrorString = e.what();
+          return VVENC_ERR_UNSPECIFIED;
+        }
+#endif 
+      }
+      m_eState = INTERNAL_STATE_FINALIZED;      
+    }
+  }
 
   /* copy output AU */
   if ( !cAu.empty() )
