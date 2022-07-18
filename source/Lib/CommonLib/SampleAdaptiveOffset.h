@@ -108,6 +108,13 @@ protected:
                         std::vector<int8_t> &signLineBuf1,
                         std::vector<int8_t> &signLineBuf2);
 
+
+  void (*calcSaoStatisticsEo0) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *count,int64_t  *diff);
+  void (*calcSaoStatisticsBo) (int width,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff);
+  void (*calcSaoStatisticsEo90) (int width,int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine);
+  void (*calcSaoStatisticsEo135) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine,int8_t *signDownLine);
+  void (*calcSaoStatisticsEo45) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine);
+
   void invertQuantOffsets       (ComponentID compIdx, int typeIdc, int typeAuxInfo, int* dstOffsets, int* srcOffsets);
   void reconstructBlkSAOParam   (SAOBlkParam& recParam, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES]);
   int  getMergeList             (CodingStructure& cs, int ctuRsAddr, SAOBlkParam* blkParams, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES]);

@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
 #include "Utilities/MsgLog.h"
+#include "GOPCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -70,6 +71,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_encCfg         ()
   , m_orgCfg         ()
   , m_firstPassCfg   ()
+  , m_gopCfg         ( nullptr )
   , m_rateCtrl       ( nullptr )
   , m_MCTF           ( nullptr )
   , m_preEncoder     ( nullptr )
@@ -80,6 +82,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
   , m_accessUnitOutputStarted( false )
+  , m_firstFlushDone ( false )
 {
 }
 
@@ -207,6 +210,11 @@ void EncLib::initPass( int pass, const char* statsFName )
     }
   }
 
+  // GOP structure
+  m_gopCfg = new GOPCfg( msg );
+  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_picReordering, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
+  CHECK( m_gopCfg->getMaxTLayer() != m_encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
+
   // thread pool
   if( m_encCfg.m_numThreads > 0 )
   {
@@ -217,9 +225,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
-    const int leadFrames = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
+    const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
-    m_MCTF->initStage( minQueueSize, true, true, m_encCfg.m_CTUSize );
+    m_MCTF->initStage( minQueueSize, true, true, true, m_encCfg.m_CTUSize, false );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minQueueSize - leadFrames;
@@ -230,8 +238,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_preEncoder = new EncGOP( msg );
     const int minQueueSize = m_firstPassCfg.m_GOPSize + 1;
-    m_preEncoder->initStage( minQueueSize, true, false, m_firstPassCfg.m_CTUSize );
-    m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
+    m_preEncoder->initStage( minQueueSize, true, false, false, m_firstPassCfg.m_CTUSize, false );
+    m_preEncoder->init( m_firstPassCfg, m_gopCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
     m_maxNumPicShared += minQueueSize;
   }
@@ -239,17 +247,19 @@ void EncLib::initPass( int pass, const char* statsFName )
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
   const int minQueueSize = m_encCfg.m_GOPSize + 1;
-  m_gopEncoder->initStage( minQueueSize, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
-  m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
+  m_gopEncoder->initStage( minQueueSize, false, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
+  m_gopEncoder->init( m_encCfg, m_gopCfg, *m_rateCtrl, m_threadPool, false );
+  m_encStages.push_back( m_gopEncoder );
+  m_maxNumPicShared += minQueueSize;
+
+  // additional pictures due to structural delay
+  m_maxNumPicShared += m_gopCfg->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
+  m_maxNumPicShared += 3;
+
   if( m_rateCtrl->rcIsFinalPass )
   {
     m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
   }
-  m_encStages.push_back( m_gopEncoder );
-  m_maxNumPicShared += minQueueSize;
-  // additional pictures due to structural delay
-  m_maxNumPicShared += m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1];
-  m_maxNumPicShared += 3;
 
   // link encoder stages
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )
@@ -274,9 +284,10 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
   m_prevSharedTL0 = nullptr;
 
-  m_picsRcvd        = -m_encCfg.m_leadFrames;
+  m_picsRcvd                = -m_encCfg.m_leadFrames;
   m_accessUnitOutputStarted = false;
-  m_passInitialized = pass;
+  m_firstFlushDone          = false;
+  m_passInitialized         = pass;
 }
 
 void EncLib::xUninitLib()
@@ -327,6 +338,13 @@ void EncLib::xUninitLib()
   {
     delete m_threadPool;
     m_threadPool = nullptr;
+  }
+
+  // GOP structure
+  if( m_gopCfg )
+  {
+    delete m_gopCfg;
+    m_gopCfg = nullptr;
   }
 }
 
@@ -394,6 +412,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( picShared )
       {
         picShared->reuse( m_picsRcvd, yuvInBuf );
+        if( picShared->getPOC() >= 0 ) // skip lead frames
+        {
+          m_gopCfg->getNextGopEntry( picShared->m_gopEntry );
+        }
         if( m_encCfg.m_sliceTypeAdapt
             || m_encCfg.m_usePerceptQPA
             || m_encCfg.m_RCNumPasses == 2
@@ -412,6 +434,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
         m_picsRcvd  += 1;
         inputPending = false;
       }
+    }
+
+    if( flush && ! m_firstFlushDone )
+    {
+      m_gopCfg->correctIncompleteLastGop( m_picSharedList );
+      m_firstFlushDone = true;
     }
 
     PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
@@ -433,7 +461,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( !m_accessUnitOutputStarted )
         m_accessUnitOutputStarted = !m_encCfg.m_stageParallelProc || m_AuList.size() > 4 || flush;
     }
-    
+
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
     bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
@@ -482,6 +510,11 @@ void EncLib::getParameterSets( AccessUnitList& au )
   }
 }
 
+int EncLib::getCurPass() const 
+{ 
+  return m_passInitialized; 
+}
+
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
@@ -528,9 +561,21 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
 
   if( m_encCfg.m_sliceTypeAdapt )
   {
-    const int idr2Adj = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
-
-    if( ( picShared->getPOC() + idr2Adj ) % m_encCfg.m_GOPSize == 0 )
+    bool isTL0 = false;
+    if( picShared->getPOC() >= 0 )
+    {
+      isTL0 = picShared->m_gopEntry.m_temporalId == 0;
+    }
+    else
+    {
+      // lead pictures, before first I frame
+      const int numGops     = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod / m_encCfg.m_GOPSize               : 0;
+      const int numRemain   = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod - ( numGops * m_encCfg.m_GOPSize ) : 0;
+      const int lastGopSize = numRemain > 0 ? numRemain : m_encCfg.m_GOPSize;
+      const int idr2Adj     = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
+      isTL0                 = ( ( picShared->getPOC() + idr2Adj ) % lastGopSize ) == 0;
+    }
+    if( isTL0 )
     {
       if( m_prevSharedTL0 )
       {

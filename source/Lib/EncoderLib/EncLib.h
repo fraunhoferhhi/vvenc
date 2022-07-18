@@ -65,6 +65,7 @@ namespace vvenc {
 
 class NoMallocThreadPool;
 class MsgLog;
+class GOPCfg;
 
 /// encoder class
 class EncLib
@@ -78,6 +79,7 @@ private:
   const VVEncCfg             m_encCfg;
   const VVEncCfg             m_orgCfg;
   VVEncCfg                   m_firstPassCfg;
+  GOPCfg*                    m_gopCfg;
   RateCtrl*                  m_rateCtrl;
   MCTF*                      m_MCTF;
   EncGOP*                    m_preEncoder;
@@ -93,6 +95,7 @@ private:
   int                        m_passInitialized;
   int                        m_maxNumPicShared;
   bool                       m_accessUnitOutputStarted;
+  bool                       m_firstFlushDone;
   std::mutex                 m_stagesMutex;
   std::condition_variable    m_stagesCond;
   std::deque<AccessUnitList> m_AuList;
@@ -108,6 +111,7 @@ public:
   void     uninitEncoderLib    ();
   void     printSummary        ();
   void     getParameterSets    ( AccessUnitList& au );
+  int      getCurPass          () const;
 
 private:
   void     xUninitLib          ();

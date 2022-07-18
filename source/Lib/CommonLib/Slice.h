@@ -106,6 +106,7 @@ struct ReferencePictureList
 
   ReferencePictureList();
 
+  void     initFromGopEntry     ( const GOPEntry& gopEntry, int l );
   void     setRefPicIdentifier  ( int idx, int identifier, bool isLongterm, bool isInterLayerRefPic, int interLayerIdx );
   int      getNumRefEntries     ()  const { return numberOfShorttermPictures + numberOfLongtermPictures; }
   bool     isPOCInRefPicList    ( const int poc, const int currPoc ) const;
@@ -1244,14 +1245,12 @@ class Slice
   bool                        biDirPred;
   bool                        lmChromaCheckDisable;
   int                         symRefIdx[2];
-  
+
   //  Data
   int                         sliceChromaQpDelta[MAX_NUM_COMP+1];
   Picture*                    refPicList [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
   int                         refPOCList  [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
   bool                        isUsedAsLongTerm[NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
-  int                         depth;
-
 
   // access channel
   const VPS*                  vps;
@@ -1275,14 +1274,14 @@ class Slice
   uint32_t                    sliceSubPicId;
   SliceType                   encCABACTableIdx;           // Used to transmit table selection across slices.
   APS*                        alfAps[ALF_CTB_MAX_NUM_APS];
-  bool                        tileGroupAlfEnabled[MAX_NUM_COMP];
-  int                         tileGroupNumAps;
-  std::vector<int>            tileGroupLumaApsId;
-  int                         tileGroupChromaApsId;
-  bool                        tileGroupCcAlfCbEnabled;
-  bool                        tileGroupCcAlfCrEnabled;
-  int                         tileGroupCcAlfCbApsId;
-  int                         tileGroupCcAlfCrApsId;
+  bool                        alfEnabled[MAX_NUM_COMP];
+  int                         numAps;
+  std::vector<int>            lumaApsId;
+  int                         chromaApsId;
+  bool                        ccAlfCbEnabled;
+  bool                        ccAlfCrEnabled;
+  int                         ccAlfCbApsId;
+  int                         ccAlfCrApsId;
 
   bool                        disableSATDForRd;
   bool                        isLossless;
@@ -1326,7 +1325,6 @@ public:
 
   void                        checkLeadingPictureRestrictions( const PicList& rcListPic ) const;
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
-  bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic ) const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
   bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
   void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );

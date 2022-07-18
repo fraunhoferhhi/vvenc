@@ -57,6 +57,8 @@ struct VVEncCfg : public vvenc_config
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
   bool m_stageParallelProc;
+  int  m_log2GopSize;
+  int  m_maxTLayer;
 
 private:
   void xInitCfgMembers();

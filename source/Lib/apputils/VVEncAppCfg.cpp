@@ -559,6 +559,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("RefreshSec,-rs",                                 c->m_IntraPeriodSec,                                  "Intra period/refresh in seconds")
     ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE - CRA with constrained encoding for RASL pictures)")
     ("GOPSize,g",                                      c->m_GOPSize,                                         "GOP size of temporal structure (16,32)")
+    ("PicReordering",                                  c->m_picReordering,                                   "Allow reordering of pictures (0:off, 1:on), should be disabled for low delay requirements")
     ;
 
     opts.setSubSection("Rate control, Perceptual Quantization");
@@ -748,7 +749,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LFBetaTcOffsets",                                 c->m_loopFilterBetaTcOffsets,                        "Use beta offset and tc offset per temporal layer for loop filter")
     ;
 
-    opts.setSubSection("Quad-Tree size and depth");
+    opts.setSubSection("Low-level QT-BTT partitioning options");
     opts.addOptions()
     ("CTUSize",                                         c->m_CTUSize,                                        "CTUSize")
     ("MinQTISlice",                                     c->m_MinQT[0],                                       "MinQTISlice")
@@ -781,6 +782,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("CostMode",                                        toCostMode,                                          "Use alternative cost functions: choose between 'lossy', 'sequence_level_lossless', 'lossless' (which forces QP to " MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP) ") and 'mixed_lossless_lossy' (which used QP'=" MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME) " for pre-estimates of transquant-bypass blocks).")
     ("ASR",                                             c->m_bUseASR,                                        "Adaptive motion search range")
     ("HadamardME",                                      c->m_bUseHADME,                                      "Hadamard ME for fractional-pel")
+    ("FastHAD",                                         c->m_fastHad,                                        "Use fast sub-sampled hadamard for square blocks >=32x32")
     ("RDOQ",                                            c->m_RDOQ,                                           "Rate-Distortion Optimized Quantization mode")
     ("RDOQTS",                                          c->m_useRDOQTS,                                      "Rate-Distortion Optimized Quantization mode for TransformSkip")
     ("SelectiveRDOQ",                                   c->m_useSelectiveRDOQ,                               "Enable selective RDOQ")
@@ -788,7 +790,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("JointCbCr",                                       c->m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
     ("CabacInitPresent",                                c->m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")
     ("LCTUFast",                                        c->m_useFastLCTU,                                    "Fast methods for large CTU")
-    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off, 1: VTM, 2: relaxed, giving intra more chance)")
+    ("PBIntraFast",                                     c->m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off ... 2:fastest)")
     ("FastMrg",                                         c->m_useFastMrg,                                     "Fast methods for inter merge")
     ("AMaxBT",                                          c->m_useAMaxBT,                                      "Adaptive maximal BT-size")
     ("FastQtBtEnc",                                     c->m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
@@ -798,7 +800,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FDM",                                             c->m_useFastDecisionForMerge,                        "Fast decision for Merge RD Cost")
 
     ("DisableIntraInInter",                             c->m_bDisableIntraCUsInInterSlices,                  "Flag to disable intra CUs in inter slices")
-    ("ConstrainedIntraPred",                            c->m_bUseConstrainedIntraPred,                       "Constrained Intra Prediction")
     ("FastUDIUseMPMEnabled",                            c->m_bFastUDIUseMPMEnabled,                          "If enabled, adapt intra direction search, accounting for MPM")
     ("FastMEForGenBLowDelayEnabled",                    c->m_bFastMEForGenBLowDelayEnabled,                  "If enabled use a fast ME for generalised B Low Delay slices")
 
@@ -843,10 +844,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LoopFilterCbTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[1],                      "")
     ("LoopFilterCrBetaOffset_div2",                     c->m_loopFilterBetaOffsetDiv2[2],                    "")
     ("LoopFilterCrTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[2],                      "")
-    ("DeblockingFilterMetric",                          c->m_deblockingFilterMetric,                         "")
 
     ("DeblockLastTLayers",                              c->m_deblockLastTLayers,                             "Deblock only the highest n temporal layers, 0: all temporal layers are deblocked")
-    
+
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
@@ -887,7 +887,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("ChromaSampleLocType",                             c->m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content")
     ("OverscanInfoPresent",                             c->m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
-    ("VideoSignalTypePresent",                          c->m_videoSignalTypePresent,                         "Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present")
     ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
 
 
@@ -989,9 +988,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("MTS",                                             c->m_MTS,                                            "Multiple Transform Set (MTS)" )
     ("MTSIntraMaxCand",                                 c->m_MTSIntraMaxCand,                                "Number of additional candidates to test for MTS in intra slices")
     ("ISP",                                             c->m_ISP,                                            "Intra Sub-Partitions Mode (0: off, 1: vtm, 2: fast, 3: faster)")
-    ("TransformSkip",                                   c->m_TS,                                             "Intra transform skipping, 0: off, 1: TS, 2: TS with SCC detection ")
-    ("TransformSkipLog2MaxSize",                        c->m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
-    ("ChromaTS",                                        c->m_useChromaTS,                                    "Enable encoder search of chromaTS")
+    ("TransformSkip",                                   c->m_TS,                                             "Transform skipping, 0: off, 1: TS, 2: TS with SCC detection ")
+    ("TransformSkipLog2MaxSize",                        c->m_TSsize,                                         "Specify transform-skip maximum log2-size. Minimum 2, Maximum 5")
+    ("ChromaTS",                                        c->m_useChromaTS,                                    "Transform skipping for chroma, 0:off, 1:on (requires transform skipping)")
     ("BDPCM",                                           c->m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
     ("RPR",                                             c->m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
     ("IBC",                                             c->m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")

@@ -823,7 +823,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
   Pel*  piRefPos;
   int iRefStride = pcPatternKey->width + 1;
-  m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && bAllowUseOfHadamard );
+  m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && bAllowUseOfHadamard ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
   const ClpRng& clpRng = m_lumaClpRng;
   int width = pattern->width;
@@ -1219,7 +1219,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
         int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
         double besCostMerge = bestCostInter;
         bestCostInter = (uiCost[0] < uiCost[1]) ? uiCost[0] : uiCost[1];
-        if ((cu.slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
+        if ((cu.slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
         {
           m_skipPROF = false;
           m_encOnly = false;
@@ -2767,7 +2767,7 @@ void InterSearch::xPatternSearchIntRefine(CodingUnit& cu, TZSearchStruct&  cStru
   CHECK( cu.imv == 0 || cu.imv == IMV_HPEL , "xPatternSearchIntRefine(): Sub-pel MV used.");
   CHECK( amvpInfo.mvCand[riMVPIdx] != rcMvPred, "xPatternSearchIntRefine(): MvPred issue.");
 
-  m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && !cu.cs->slice->disableSATDForRd);
+  m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && !cu.cs->slice->disableSATDForRd ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
   // -> set MV scale for cost calculation to QPEL (0)
   m_pcRdCost->setCostScale ( 0 );

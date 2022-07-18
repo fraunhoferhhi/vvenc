@@ -70,7 +70,7 @@ namespace vvenc {
 
 static inline int rightShiftMSB(int numer, int denom)
 {
-  int shiftIdx = _bit_scan_reverse(denom);
+  int shiftIdx = bit_scan_reverse(denom);
   return (numer >> shiftIdx);
 }
   

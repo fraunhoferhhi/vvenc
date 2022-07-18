@@ -406,7 +406,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
 
 void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 {
-  if (!cs.slice->tileGroupAlfEnabled[COMP_Y] && !cs.slice->tileGroupAlfEnabled[COMP_Cb] && !cs.slice->tileGroupAlfEnabled[COMP_Cr])
+  if (!cs.slice->alfEnabled[COMP_Y] && !cs.slice->alfEnabled[COMP_Cb] && !cs.slice->alfEnabled[COMP_Cr])
   {
     return;
   }
@@ -445,7 +445,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
       const CodingUnit *cu = cs.getCU( Position(xPos, yPos), CH_L, TREE_D );
 
       // skip this CTU if ALF is disabled
-      if (!cu->slice->tileGroupAlfEnabled[COMP_Y] && !cu->slice->tileGroupAlfEnabled[COMP_Cb] && !cu->slice->tileGroupAlfEnabled[COMP_Cr])
+      if (!cu->slice->alfEnabled[COMP_Y] && !cu->slice->alfEnabled[COMP_Cb] && !cu->slice->alfEnabled[COMP_Cr])
       {
         ctuIdx++;
         continue;
@@ -455,7 +455,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
       if(ctuIdx == 0 || lastSliceIdx != cu->slice->sliceSubPicId || alfCtuFilterIndex==nullptr)
       {
         cs.slice = cu->slice;
-        reconstructCoeffAPSs(cs, true, cu->slice->tileGroupAlfEnabled[COMP_Cb] || cu->slice->tileGroupAlfEnabled[COMP_Cr], false);
+        reconstructCoeffAPSs(cs, true, cu->slice->alfEnabled[COMP_Cb] || cu->slice->alfEnabled[COMP_Cr], false);
         alfCtuFilterIndex = cu->slice->pic->m_alfCtbFilterIndex.data();
         m_ccAlfFilterParam = cu->slice->ccAlfFilterParam;
       }
@@ -636,9 +636,9 @@ void AdaptiveLoopFilter::reconstructCoeffAPSs(CodingStructure& cs, bool luma, bo
   APS* curAPS;
   if (luma)
   {
-    for (int i = 0; i < cs.slice->tileGroupNumAps; i++)
+    for (int i = 0; i < cs.slice->numAps; i++)
     {
-      int apsIdx = cs.slice->tileGroupLumaApsId[i];
+      int apsIdx = cs.slice->lumaApsId[i];
       curAPS = aps[apsIdx];
       CHECK(curAPS == NULL, "invalid APS");
       alfParamTmp = curAPS->alfParam;
@@ -651,7 +651,7 @@ void AdaptiveLoopFilter::reconstructCoeffAPSs(CodingStructure& cs, bool luma, bo
   //chroma
   if (chroma)
   {
-    int apsIdxChroma = cs.slice->tileGroupChromaApsId;
+    int apsIdxChroma = cs.slice->chromaApsId;
     curAPS = aps[apsIdxChroma];
     m_alfParamChroma = &curAPS->alfParam;
     alfParamTmp = *m_alfParamChroma;

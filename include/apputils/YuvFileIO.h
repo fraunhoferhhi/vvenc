@@ -76,6 +76,7 @@ private:
   bool                m_packedYUVMode       = false;            ///< used packed buffer file format
   bool                m_readStdin           = false;            ///< read input from stdin
   bool                m_y4mMode             = false;            ///< use/force y4m file format
+  size_t              m_packetCount         = 0;
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
@@ -84,9 +85,11 @@ public:
   bool  isOpen();
   bool  isEof();
   bool  isFail();
-  void  skipYuvFrames( int numFrames, int width, int height );
-  int   readYuvBuf   ( vvencYUVBuffer& yuvInBuf, bool& eof );
-  bool  writeYuvBuf  ( const vvencYUVBuffer& yuvOutBuf );
+  int   skipYuvFrames ( int numFrames, int width, int height );
+  int   readYuvBuf    ( vvencYUVBuffer& yuvInBuf, bool& eof );
+  bool  writeYuvBuf   ( const vvencYUVBuffer& yuvOutBuf );
+  int   countYuvFrames( int width, int height, bool countFromStart = true ); 
+  
   std::string getLastError() const { return m_lastError; }   
 
   static int parseY4mHeader( const std::string &fileName, vvenc_config& config, VVEncAppCfg& appconfig );

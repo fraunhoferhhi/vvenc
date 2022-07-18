@@ -253,7 +253,7 @@ int testLibParameterRanges()
   vvencParams.m_IntraPeriod = 1;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1 } );
   vvencParams.m_IntraPeriod = 32;
-  testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
+  testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { -1,0,33,64,128 }, true ); //th is this intended
 
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { 320,1920,3840 } );
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { -1,0 }, true );
@@ -261,8 +261,8 @@ int testLibParameterRanges()
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { 16,32,1080,1088 } );
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 1,16,32,48, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,17,24 }, true );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );

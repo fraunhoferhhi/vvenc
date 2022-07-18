@@ -51,7 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -70,6 +69,8 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
+                       std::mutex* const noiseMinimaMutex,
+                       uint64_t* const noiseMinimaStats,
                        NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg = &encCfg;
@@ -79,6 +80,8 @@ void EncPicture::init( const VVEncCfg& encCfg,
 
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
+  m_noiseMinMutex = noiseMinimaMutex;
+  m_noiseMinStats = noiseMinimaStats;
 }
 
 
@@ -111,11 +114,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   }
 
   // compress picture
-  xInitPicEncoder ( pic );
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    gopEncoder.picInitRateControl( pic, pic.slices[0], this );
-  }
+  xInitPicEncoder( pic );
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
@@ -254,9 +253,19 @@ void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
 
 void EncPicture::xInitPicEncoder( Picture& pic )
 {
-  m_SliceEncoder.initPic( &pic, pic.gopId);
-
   Slice* slice = pic.cs->slice;
+
+  CHECK( slice != pic.slices[0], "Slice pointers don't match!" );
+
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    pic.picInitialQP     = -1;
+    pic.picInitialLambda = -1.0;
+
+    m_pcRateCtrl->initRateControlPic( pic, slice, pic.picInitialQP, pic.picInitialLambda );
+  }
+
+  m_SliceEncoder.initPic( &pic, m_noiseMinStats, m_noiseMinMutex );
 
   xInitSliceColFromL0Flag( slice );
   xInitSliceCheckLDC     ( slice );
@@ -265,7 +274,7 @@ void EncPicture::xInitPicEncoder( Picture& pic )
   {
     for (int s = 0; s < (int)pic.slices.size(); s++)
     {
-      pic.slices[s]->tileGroupAlfEnabled[COMP_Y] = false;
+      pic.slices[s]->alfEnabled[COMP_Y] = false;
     }
   }
 }
@@ -277,7 +286,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
   {
     return;
   }
-  
+
   if ( slice->sliceType == VVENC_B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed
@@ -330,7 +339,7 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
     m_SliceEncoder.saoDisabledRate( cs, pic.getSAO( 1 ) );
   }
 
-  if ( slice->sps->alfEnabled && ( slice->tileGroupAlfEnabled[COMP_Y] || slice->tileGroupCcAlfCbEnabled || slice->tileGroupCcAlfCrEnabled ) )
+  if ( slice->sps->alfEnabled && ( slice->alfEnabled[COMP_Y] || slice->ccAlfCbEnabled || slice->ccAlfCrEnabled ) )
   {
     // IRAP AU: reset APS map
     int layerIdx = slice->vps == nullptr ? 0 : slice->vps->generalLayerIdx[ pic.layerId ];
@@ -338,7 +347,7 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
     {
       // We have to reset all APS on IRAP, but in not encoding case we have to keep the parsed APS of current slice
       // Get active ALF APSs from picture/slice header
-      const std::vector<int> sliceApsIdsLuma = slice->tileGroupLumaApsId;
+      const std::vector<int> sliceApsIdsLuma = slice->lumaApsId;
 
       m_ALF.setApsIdStart( ALF_CTB_MAX_NUM_APS );
 
@@ -365,10 +374,10 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
             }
           }
           // Chroma
-          activeAps |= ( slice->tileGroupAlfEnabled[COMP_Cb] || slice->tileGroupAlfEnabled[COMP_Cr] ) && aps->apsId == slice->tileGroupChromaApsId;
+          activeAps |= ( slice->alfEnabled[COMP_Cb] || slice->alfEnabled[COMP_Cr] ) && aps->apsId == slice->chromaApsId;
           // CC-ALF
-          activeApsCcAlf |= slice->tileGroupCcAlfCbEnabled && aps->apsId == slice->tileGroupCcAlfCbApsId;
-          activeApsCcAlf |= slice->tileGroupCcAlfCrEnabled && aps->apsId == slice->tileGroupCcAlfCrApsId;
+          activeApsCcAlf |= slice->ccAlfCbEnabled && aps->apsId == slice->ccAlfCbApsId;
+          activeApsCcAlf |= slice->ccAlfCrEnabled && aps->apsId == slice->ccAlfCrApsId;
 
           if( !activeAps && !activeApsCcAlf )
           {

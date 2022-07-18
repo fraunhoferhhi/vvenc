@@ -372,9 +372,38 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     {
       m_eState = INTERNAL_STATE_FINALIZED;
     }
+    else if( m_eState == INTERNAL_STATE_INITIALIZED )
+    {
+      m_eState = INTERNAL_STATE_INITIALIZED; // keep initialized state, when flushing without having encoded anything, we still can start to encode
+    }
     else
     {
       *pbEncodeDone = false;
+    }
+  }
+  else
+  {     
+    if( bFlush && m_cVVEncCfg.m_RCNumPasses == 2 && m_pEncLib->getCurPass() == 0 )
+    {
+      // process all remaining pictures of first pass on first flush packet 
+      while ( ! *pbEncodeDone )
+      {
+#if HANDLE_EXCEPTION
+        try
+#endif
+        {
+          m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, *pbEncodeDone );
+        }
+#if HANDLE_EXCEPTION
+        catch( std::exception& e )
+        {
+          msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+          m_cErrorString = e.what();
+          return VVENC_ERR_UNSPECIFIED;
+        }
+#endif 
+      }
+      m_eState = INTERNAL_STATE_FINALIZED;      
     }
   }
 
