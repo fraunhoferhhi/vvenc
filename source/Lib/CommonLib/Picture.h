@@ -232,6 +232,7 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
+  int16_t                       picMemorySTA;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
   double                        psnr[MAX_NUM_COMP];
