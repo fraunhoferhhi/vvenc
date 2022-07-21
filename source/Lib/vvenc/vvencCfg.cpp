@@ -2377,13 +2377,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
-      c->m_FastIntraTools                  = 0;
+      c->m_FastIntraTools                  = 1;
       c->m_FIMMode                         = 0;
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
-      c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_reduceIntraChromaModesFullRD    = false;
 
       // tools
       c->m_Affine                          = 2;
@@ -2392,6 +2392,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_CIIP                            = 2;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
