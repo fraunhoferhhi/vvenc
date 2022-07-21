@@ -746,7 +746,8 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[5];
+  int                 m_reservedInt[4];
+  int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
   int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded

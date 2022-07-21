@@ -96,8 +96,8 @@ public:
   InterpolationFilter();
   ~InterpolationFilter() {}
 
-  void( *m_filterHor[3][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
-  void( *m_filterVer[3][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
+  void( *m_filterHor[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
+  void( *m_filterVer[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
   void( *m_filterCopy[2][2] )  ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, bool biMCForDMVR);
   void( *m_filter4x4  [2][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
   void( *m_filter8x8  [3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
@@ -116,8 +116,8 @@ public:
   void filter4x4  (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
   void filter8x8  (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
   void filter16x16(const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
-  void filterHor  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac,               bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf  = false,                             int nFilterIdx = 0, bool biMCForDMVR = false);
-  void filterVer  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac, bool isFirst, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf  = false,                             int nFilterIdx = 0, bool biMCForDMVR = false);
+  void filterHor  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac,               bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf  = false,                             int nFilterIdx = 0, bool biMCForDMVR = false, int reduceTap = 0);
+  void filterVer  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac, bool isFirst, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf  = false,                             int nFilterIdx = 0, bool biMCForDMVR = false, int reduceTap = 0);
 
   static TFilterCoeff const * const getChromaFilterTable(const int deltaFract) { return m_chromaFilter[deltaFract]; };
 };
