@@ -830,6 +830,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FastMEAssumingSmootherMVEnabled",                 c->m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
     ("IntegerET",                                       c->m_bIntegerET,                                     "Enable early termination for integer motion search")
     ("FastSubPel",                                      c->m_fastSubPel,                                     "Enable fast sub-pel ME (1: enable fast sub-pel ME, 2: completely disable sub-pel ME)")
+    ("ReduceFilterME",                                  c->m_meReduceTap,                                    "Use reduced filter taps during subpel refinement (0 - use 8-tap; 1 - 6-tap; 2 - 4-tap)")
     ;
 
     // Deblocking filter parameters

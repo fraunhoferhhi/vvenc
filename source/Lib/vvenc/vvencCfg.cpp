@@ -524,6 +524,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
   c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
+  c->m_meReduceTap                             = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
   c->m_LMChroma                                = false;
@@ -1667,6 +1668,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 3,   "FastMIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_meReduceTap < 0 || c->m_meReduceTap > 2, "ReduceFilterME out of range [0..2]" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
@@ -2218,6 +2220,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_RDOQ                            = 2;
@@ -2268,6 +2271,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_alf                             = 1;
@@ -2322,6 +2326,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2384,6 +2389,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2455,6 +2461,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -2528,6 +2535,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 1;
@@ -2603,6 +2611,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2827,6 +2836,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
     css << "IntegerET:" << c->m_bIntegerET << " ";
     css << "FastSubPel:" << c->m_fastSubPel << " ";
+    css << "ReduceFilterME:" << c->m_meReduceTap << " ";
     css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
     css << "FastTTSplit:" << c->m_fastTTSplit << " ";
     if( c->m_IBCMode )
