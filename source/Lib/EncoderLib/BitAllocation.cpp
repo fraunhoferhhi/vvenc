@@ -788,13 +788,17 @@ bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* 
     if (!slice->isIntra() && slice->getRefPic (REF_PIC_LIST_0, 0)) // detect scene change if comparison is possible
     {
       const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
-      const int scThreshold = (curPic->isSccStrong ? 3 : (curPic->isSccWeak ? 2 : 1)) * (isHighRes ? 19 : 15);
+      const int scThreshold = ((curPic->isSccStrong ? 6 : (curPic->isSccWeak ? 5 : 4)) * (isHighRes ? 19 : 15)) >> 2;
 
-      return ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
-               refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * (scThreshold + 1)) && refPic->picVisActTL0 > 0);
+      if ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
+           refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * (scThreshold + 1)) && refPic->picVisActTL0 > 0)
+      {
+        curPic->picMemorySTA = refPic->picVisActTL0 * (curPic->picVisActTL0 < refPic->picVisActTL0 ? -1 : 1);
+
+        if (curPic->picMemorySTA * refPic->picMemorySTA >= 0) return true;
+      }
     }
-
-    return false;
+    curPic->picMemorySTA = 0;
   }
 
   return false;
