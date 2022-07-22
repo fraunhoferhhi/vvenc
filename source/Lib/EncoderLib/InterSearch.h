@@ -457,7 +457,7 @@ private:
     int             iBestY;
     uint32_t        uiBestRound;
     uint32_t        uiBestDistance;
-    Distortion      uiBestSad = MAX_DISTORTION;
+    Distortion      uiBestSad;
     uint8_t         ucPointNr;
     int             subShiftMode;
     unsigned        imvShift;

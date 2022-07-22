@@ -1950,6 +1950,8 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   cStruct.imvShift      = cu.imv == IMV_HPEL ? 1 : (cu.imv << 1);
   cStruct.useAltHpelIf  = cu.imv == IMV_HPEL;
   cStruct.zeroMV        = false;
+  cStruct.uiBestSad     = MAX_DISTORTION;
+
 
   CodedCUInfo &relatedCU = m_modeCtrl->getBlkInfo( cu );
 
@@ -6249,12 +6251,13 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPr
   const CPelBuf refBuf = refPic->getRecoBuf(cu.blocks[COMP_Y]);
 
   TZSearchStruct cStruct; 
-  cStruct.pcPatternKey = pcPatternKey;
-  cStruct.iRefStride = refBuf.stride;
-  cStruct.piRefY = refBuf.buf;
-  CHECK(cu.imv == IMV_HPEL, "IF_IBC");
-  cStruct.imvShift = cu.imv << 1;
-  cStruct.subShiftMode = 0; 
+  cStruct.pcPatternKey  = pcPatternKey;
+  cStruct.iRefStride    = refBuf.stride;
+  cStruct.piRefY        = refBuf.buf;
+  CHECK( cu.imv == IMV_HPEL, "IF_IBC" );
+  cStruct.imvShift      = cu.imv << 1;
+  cStruct.subShiftMode  = 0;
+  cStruct.uiBestSad     = MAX_DISTORTION;
 
   m_pcRdCost->getMotionCostIBC(0);
   m_pcRdCost->setPredictorsIBC(pcMvPred);
