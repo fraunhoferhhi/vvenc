@@ -488,7 +488,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
-  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_MODE3;
   c->m_useEarlyCU                              = 0;
   c->m_useFastDecisionForMerge                 = true;
 
@@ -833,25 +833,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   /* rules for input, output and internal bitdepths as per help text */
-  if (c->m_MSBExtendedBitDepth[0  ] == 0)
-    c->m_MSBExtendedBitDepth[0  ] = c->m_inputBitDepth      [0  ];
+  if (c->m_MSBExtendedBitDepth[0] == 0)
+    c->m_MSBExtendedBitDepth  [0] = c->m_inputBitDepth      [0];
   if (c->m_MSBExtendedBitDepth[1] == 0)
-    c->m_MSBExtendedBitDepth[1] = c->m_MSBExtendedBitDepth[0  ];
-  if (c->m_internalBitDepth   [0  ] == 0)
-    c->m_internalBitDepth   [0  ] = c->m_MSBExtendedBitDepth[0  ];
+    c->m_MSBExtendedBitDepth  [1] = c->m_MSBExtendedBitDepth[0];
+  if (c->m_internalBitDepth   [0] == 0)
+    c->m_internalBitDepth     [0] = c->m_MSBExtendedBitDepth[0];
   if (c->m_internalBitDepth   [1] == 0)
-    c->m_internalBitDepth   [1] = c->m_internalBitDepth   [0  ];
+    c->m_internalBitDepth     [1] = c->m_internalBitDepth   [0];
   if (c->m_inputBitDepth      [1] == 0)
-    c->m_inputBitDepth      [1] = c->m_inputBitDepth      [0  ];
-  if (c->m_outputBitDepth     [0  ] == 0)
-    c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
+    c->m_inputBitDepth        [1] = c->m_inputBitDepth      [0];
+  if (c->m_outputBitDepth     [0] == 0)
+    c->m_outputBitDepth       [0] = c->m_internalBitDepth   [0];
   if (c->m_outputBitDepth     [1] == 0)
-    c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
-
-  if( c->m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
-  {
-    c->m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
-  }
+    c->m_outputBitDepth       [1] = c->m_outputBitDepth     [0];
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
      (( c->m_masteringDisplay[0] != 0 && c->m_masteringDisplay[1] != 0 && c->m_masteringDisplay[8] != 0 && c->m_masteringDisplay[9] != 0 ) ||
@@ -1457,7 +1452,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,    "Error: FastInterSearchMode parameter out of range" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_OFF || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,     "Error: FastInterSearchMode parameter out of range [0...3]" );
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
@@ -2190,7 +2185,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2241,7 +2236,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2296,7 +2291,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT10
@@ -2359,7 +2354,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -2431,7 +2426,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT32
@@ -2505,7 +2500,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND;
 
       // partitioning: CTUSize128 QT44MTT33
@@ -2581,7 +2576,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
