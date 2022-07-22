@@ -2007,7 +2007,6 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   cStruct.piRefY        = buf.buf;
   cStruct.imvShift      = cu.imv == IMV_HPEL ? 1 : (cu.imv << 1);
   cStruct.useAltHpelIf  = cu.imv == IMV_HPEL;
-  cStruct.inCtuSearch   = false;
   cStruct.zeroMV        = false;
 
   CodedCUInfo &relatedCU = m_modeCtrl->getBlkInfo( cu );

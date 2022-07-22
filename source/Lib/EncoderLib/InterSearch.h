@@ -445,7 +445,7 @@ private:
      int right;
      int top;
      int bottom;
-   }SearchRange;
+   } SearchRange;
 
   typedef struct
   {
@@ -462,14 +462,13 @@ private:
     int             subShiftMode;
     unsigned        imvShift;
     bool            useAltHpelIf;
-    bool            inCtuSearch;
     bool            zeroMV;
   } TZSearchStruct;
 
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
-  inline void xTZ4PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
+  inline void xTZ4PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointDiamondSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist, const bool bCheckCornersAtDist1 );
 
