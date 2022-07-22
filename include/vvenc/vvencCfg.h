@@ -267,15 +267,6 @@ typedef enum
 
 typedef enum
 {
-  VVENC_RCM_AUTO          = -1,
-  VVENC_RCM_OFF           = 0,
-  VVENC_RCM_CTU_LEVEL     = 1,
-  VVENC_RCM_PICTURE_LEVEL = 2,
-  VVENC_RCM_GOP_LEVEL     = 3
-}vvencRateControlMode;
-
-typedef enum
-{
   VVENC_FASTINTERSEARCH_OFF      = 0,
   VVENC_FASTINTERSEARCH_MODE1    = 1,
   VVENC_FASTINTERSEARCH_MODE2    = 2,
