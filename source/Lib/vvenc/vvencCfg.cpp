@@ -1453,8 +1453,12 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
   vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_OFF || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,     "Error: FastInterSearchMode parameter out of range [0...3]" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0
+                          || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS
+                          || c->m_motionEstimationSearchMethod == VVENC_MESEARCH_DEPRECATED,                                                 "Error: FastSearch parameter out of range [0,1,3,4]");
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0
+                          || c->m_motionEstimationSearchMethodSCC == 1
+                          || c->m_motionEstimationSearchMethodSCC > 3,                                                                       "Error: FastSearchSCC parameter out of range [0,2,3]" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
   vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);

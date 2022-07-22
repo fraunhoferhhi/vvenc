@@ -187,31 +187,12 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
 
   if( subShiftMode == 1 )
   {
-    if( rcDP.org.height > 32 && ( rcDP.org.height & 15 ) == 0 )
-    {
-      rcDP.subShift = 4;
-    }
-    else if( rcDP.org.height > 16 && ( rcDP.org.height & 7 ) == 0 )
-    {
-      rcDP.subShift = 3;
-    }
-    else if( rcDP.org.height > 8 && ( rcDP.org.height & 3 ) == 0 )
-    {
-      rcDP.subShift = 2;
-    }
-    else if( ( rcDP.org.height & 1 ) == 0 )
-    {
-      rcDP.subShift = 1;
-    }
-  }
-  else if( subShiftMode == 2 )
-  {
     if( rcDP.org.height > 8 && rcDP.org.width <= 128 )
     {
       rcDP.subShift = 1;
     }
   }
-  else if (subShiftMode == 3)
+  else if( subShiftMode == 2 )
   {
     if (rcDP.org.height > 8)
     {

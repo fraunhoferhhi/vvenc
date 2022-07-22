@@ -457,7 +457,7 @@ private:
     int             iBestY;
     uint32_t        uiBestRound;
     uint32_t        uiBestDistance;
-    Distortion      uiBestSad;
+    Distortion      uiBestSad = MAX_DISTORTION;
     uint8_t         ucPointNr;
     int             subShiftMode;
     unsigned        imvShift;
@@ -511,15 +511,6 @@ private:
                                     const Mv* const       pIntegerMv2Nx2NPred,
                                     const bool            bExtendedSettings,
                                     const bool            bFastSettings = false
-                                  );
-
-  void xTZSearchSelective         ( const CodingUnit&     cu,
-                                    RefPicList            refPicList,
-                                    int                   iRefIdxPred,
-                                    TZSearchStruct&       cStruct,
-                                    Mv&                   rcMv,
-                                    Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred
                                   );
 
   void xSetSearchRange            ( const CodingUnit&     cu,
