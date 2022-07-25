@@ -2193,8 +2193,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
                              const bool            bExtendedSettings,
                              const bool            bFastSettings)
 {
-  const bool bUseRasterInFastMode                    = true; //toggle this to further reduce runtime
-
+  const bool bUseRasterInFastMode                    = false; //toggle this to further reduce runtime
   const bool bUseAdaptiveRaster                      = bExtendedSettings;
   const int  iRaster                                 = (bFastSettings && bUseRasterInFastMode) ? 8 : 5;
   const bool bTestZeroVector                         = true && !bFastSettings;
@@ -2212,7 +2211,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   const bool bStarRefinementEnable                   = true;  // enable either star refinement or raster refinement
   const bool bStarRefinementDiamond                  = true;  // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
   const bool bStarRefinementCornersForDiamondDist1   = bExtendedSettings;
-  const bool bStarRefinementStop                     = false || bFastSettings;
+  const bool bStarRefinementStop                     = bFastSettings;
   const uint32_t uiStarRefinementRounds              = 2;  // star refinement stop X rounds after best match (must be >=1)
   const bool bNewZeroNeighbourhoodTest               = bExtendedSettings;
 
