@@ -2739,7 +2739,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
 
   if( iCols > iRows && ( iCols & 15 ) == 0 && ( iRows & 7 ) == 0 )
   {
-    for( y = 0; y < iRows; y += 8 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 8 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
@@ -2754,7 +2754,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
   {
-    for( y = 0; y < iRows; y += 16 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2769,7 +2769,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols > iRows && ( iCols & 7 ) == 0 && ( iRows & 3 ) == 0 )
   {
-    for( y = 0; y < iRows; y += 4 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 4 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2781,7 +2781,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols < iRows && ( iRows & 7 ) == 0 && ( iCols & 3 ) == 0 )
   {
-    for( y = 0; y < iRows; y += 8 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 8 )
     {
       for( x = 0; x < iCols; x += 4 )
       {
@@ -2793,7 +2793,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( fastHad && vext >= AVX2 && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows; y += 32 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 32 )
     {
       for( x = 0; x < iCols; x += 32 )
       {
@@ -2805,7 +2805,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows; y += 16 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
@@ -2817,7 +2817,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( vext >= AVX2 && ( ( ( iRows | iCols ) & 15 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows; y += 16 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
@@ -2829,7 +2829,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y<iRows; y += 8 )
+    for( y = 0; y<iRows && uiSum < maxDist; y += 8 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2841,7 +2841,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
   {
-    for( y = 0; y < iRows; y += 4 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 4 )
     {
       for( x = 0; x < iCols; x += 4 )
       {
@@ -2853,7 +2853,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
   {
-    for( y = 0; y < iRows; y += 2 )
+    for( y = 0; y < iRows && uiSum < maxDist; y += 2 )
     {
       for( x = 0; x < iCols; x += 2 )
       {
