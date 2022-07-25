@@ -508,7 +508,6 @@ private:
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
                                     Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred,
                                     const bool            bExtendedSettings,
                                     const bool            bFastSettings = false
                                   );
@@ -524,8 +523,7 @@ private:
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
-                                    Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred
+                                    Distortion&           ruiSAD
                                   );
 
   void xPatternSearch             ( TZSearchStruct&       cStruct,

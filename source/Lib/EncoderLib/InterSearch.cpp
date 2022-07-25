@@ -2026,14 +2026,14 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   {
     rcMv = cIntMv;
     cStruct.subShiftMode = ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 1 : 0;
-    xTZSearch( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, NULL, false, true );
+    xTZSearch( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, false, true );
   }
   else
   {
     cStruct.subShiftMode = ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 1 : 0;
     rcMv = rcMvPred;
     const Mv *pIntegerMv2Nx2NPred = nullptr;
-    xPatternSearchFast(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, pIntegerMv2Nx2NPred);
+    xPatternSearchFast(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost );
     relatedCU.setMv( refPicList, iRefIdxPred, rcMv );
   }
 
@@ -2147,18 +2147,17 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
                                       int                   iRefIdxPred,
                                       TZSearchStruct&       cStruct,
                                       Mv&                   rcMv,
-                                      Distortion&           ruiSAD,
-                                      const Mv* const       pIntegerMv2Nx2NPred )
+                                      Distortion&           ruiSAD )
 {
   if( cu.cs->picture->useScME )
   {
     switch ( m_motionEstimationSearchMethodSCC )
     {
       case 3: //VVENC_MESEARCH_DIAMOND_FAST:
-        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
+        xTZSearch( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, true, true );
         break;
       case 2: //VVENC_MESEARCH_DIAMOND:
-        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+        xTZSearch( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, true );
         break;
       default:
         THROW("shouldn't get here");
@@ -2170,13 +2169,13 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
   switch ( m_motionEstimationSearchMethod )
   {
     case VVENC_MESEARCH_DIAMOND_FAST:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, false, true );
       break;
     case VVENC_MESEARCH_DIAMOND:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, false );
       break;
     case VVENC_MESEARCH_DIAMOND_ENHANCED:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, true );
       break;
     case VVENC_MESEARCH_FULL:
     default:
@@ -2192,7 +2191,6 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
                              TZSearchStruct&       cStruct,
                              Mv&                   rcMv,
                              Distortion&           ruiSAD,
-                             const Mv* const       pIntegerMv2Nx2NPred,
                              const bool            bExtendedSettings,
                              const bool            bFastSettings)
 {
@@ -2248,24 +2246,6 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   }
 
   SearchRange& sr = cStruct.searchRange;
-
-  if (pIntegerMv2Nx2NPred != 0)
-  {
-    Mv integerMv2Nx2NPred = *pIntegerMv2Nx2NPred;
-    integerMv2Nx2NPred.changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
-    {
-      clipMv( integerMv2Nx2NPred, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-    }
-    integerMv2Nx2NPred.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_QUARTER);
-    integerMv2Nx2NPred.divideByPowerOf2(2);
-
-    if ((rcMv != integerMv2Nx2NPred) &&
-      (integerMv2Nx2NPred.hor != cStruct.iBestX || integerMv2Nx2NPred.ver != cStruct.iBestY))
-    {
-      // only test integerMv2Nx2NPred if not obviously previously tested.
-      xTZSearchHelp( cStruct, integerMv2Nx2NPred.hor, integerMv2Nx2NPred.ver, 0, 0);
-    }
-  }
 
   for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
   {
