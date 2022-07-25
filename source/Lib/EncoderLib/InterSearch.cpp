@@ -2272,7 +2272,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   int  iStartY = cStruct.iBestY;
 
   // Early termination of motion search after selection of starting candidate
-  if ( m_pcEncCfg->m_bIntegerET )
+  if( m_pcEncCfg->m_bIntegerET )
   {
     bool isLargeBlock = cu.lumaSize().area() > 64;
     xTZ8PointDiamondSearch( cStruct, iStartX, iStartY, 1, false ); // 4-point small diamond search
@@ -2304,59 +2304,35 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   iStartX = cStruct.iBestX;
   iStartY = cStruct.iBestY;
 
-  const bool bBestCandidateZero = (cStruct.iBestX == 0) && (cStruct.iBestY == 0);
+  const bool bBestCandidateZero = ( cStruct.iBestX == 0 ) && ( cStruct.iBestY == 0 );
 
   // first search around best position up to now.
   // The following works as a "subsampled/log" window search around the best candidate
-  for ( iDist = 1; iDist <= iSearchRange; iDist*=2 )
+  for( iDist = 1; iDist <= iSearchRange; iDist *= 2 )
   {
-    if ( bFirstSearchDiamond == 1 )
+    if( bFirstSearchDiamond == 1 )
     {
-      xTZ8PointDiamondSearch ( cStruct, iStartX, iStartY, iDist, bFirstCornersForDiamondDist1 );
+      xTZ8PointDiamondSearch( cStruct, iStartX, iStartY, iDist, bFirstCornersForDiamondDist1 );
     }
     else
     {
-      xTZ8PointSquareSearch  ( cStruct, iStartX, iStartY, iDist );
+      xTZ8PointSquareSearch( cStruct, iStartX, iStartY, iDist );
     }
 
-    if ( bFirstSearchStop && ( cStruct.uiBestRound >= uiFirstSearchRounds ) ) // stop criterion
+    if( bFirstSearchStop && ( cStruct.uiBestRound >= uiFirstSearchRounds ) ) // stop criterion
     {
       break;
     }
   }
 
-  if (!bNewZeroNeighbourhoodTest)
+  if( bNewZeroNeighbourhoodTest )
   {
-    // test whether zero Mv is a better start point than Median predictor
-    if ( bTestZeroVectorStart && ((cStruct.iBestX != 0) || (cStruct.iBestY != 0)) )
+    if( bTestZeroVectorStart && !bBestCandidateZero )
     {
-      xTZSearchHelp( cStruct, 0, 0, 0, 0 );
-      if ( (cStruct.iBestX == 0) && (cStruct.iBestY == 0) )
-      {
-        // test its neighborhood
-        for ( iDist = 1; iDist <= iSearchRange; iDist*=2 )
-        {
-          xTZ8PointDiamondSearch( cStruct, 0, 0, iDist, false );
-          if ( bTestZeroVectorStop && (cStruct.uiBestRound > 0) ) // stop criterion
-          {
-            break;
-          }
-        }
-      }
-    }
-  }
-  else
-  {
-    // Test also zero neighbourhood but with half the range
-    // It was reported that the original (above) search scheme using bTestZeroVectorStart did not
-    // make sense since one would have already checked the zero candidate earlier
-    // and thus the conditions for that test would have not been satisfied
-    if (bTestZeroVectorStart == true && bBestCandidateZero != true)
-    {
-      for ( iDist = 1; iDist <= (iSearchRange >> 1); iDist*=2 )
+      for( iDist = 1; iDist <= ( iSearchRange >> 1 ); iDist *= 2 )
       {
         xTZ8PointDiamondSearch( cStruct, 0, 0, iDist, false );
-        if ( bTestZeroVectorStop && (cStruct.uiBestRound > 2) ) // stop criterion
+        if( bTestZeroVectorStop && ( cStruct.uiBestRound > 2 ) ) // stop criterion
         {
           break;
         }
