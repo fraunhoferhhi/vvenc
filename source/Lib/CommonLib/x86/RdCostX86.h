@@ -1645,7 +1645,7 @@ static uint32_t xCalcHAD4x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
   return sad;
 }
 
-static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth, const Distortion maxDist )
+static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
 {
   uint32_t sad = 0;
 
@@ -1831,15 +1831,13 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
     tmp += absDc1 >> 2;
     tmp = ( ( tmp + 2 ) >> 2 );
     sad += tmp;
-
-    if( ( sad << 2 ) >= maxDist ) break;
   }
 
 #endif
   return ( sad << 2 );
 }
 
-static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth, const Distortion maxDist )
+static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
 {
   uint32_t sad = 0;
 
@@ -2002,8 +2000,6 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
     tmp += absDc1 >> 2;
     tmp = ( ( tmp + 2 ) >> 2 );
     sad += tmp;
-
-    if( sad >= maxDist ) break;
   }
 
 #endif
@@ -2732,14 +2728,13 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   const int iStrideCur = rcDtParam.cur.stride;
   const int iStrideOrg = rcDtParam.org.stride;
   const int iBitDepth  = rcDtParam.bitDepth;
-  const Distortion maxDist = rcDtParam.maximumDistortionForEarlyExit;
 
   int  x, y;
   Distortion uiSum = 0;
 
   if( iCols > iRows && ( iCols & 15 ) == 0 && ( iRows & 7 ) == 0 )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 8 )
+    for( y = 0; y < iRows; y += 8 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
@@ -2754,7 +2749,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
+    for( y = 0; y < iRows; y += 16 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2769,7 +2764,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols > iRows && ( iCols & 7 ) == 0 && ( iRows & 3 ) == 0 )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 4 )
+    for( y = 0; y < iRows; y += 4 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2781,7 +2776,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( iCols < iRows && ( iRows & 7 ) == 0 && ( iCols & 3 ) == 0 )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 8 )
+    for( y = 0; y < iRows; y += 8 )
     {
       for( x = 0; x < iCols; x += 4 )
       {
@@ -2793,11 +2788,11 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( fastHad && vext >= AVX2 && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 32 )
+    for( y = 0; y < iRows; y += 32 )
     {
       for( x = 0; x < iCols; x += 32 )
       {
-        uiSum += xCalcHAD32x32_fast_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth, maxDist );
+        uiSum += xCalcHAD32x32_fast_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 32 * iStrideOrg;
       piCur += 32 * iStrideCur;
@@ -2805,7 +2800,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
+    for( y = 0; y < iRows; y += 16 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
@@ -2817,11 +2812,11 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( vext >= AVX2 && ( ( ( iRows | iCols ) & 15 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 16 )
+    for( y = 0; y < iRows; y += 16 )
     {
       for( x = 0; x < iCols; x += 16 )
       {
-        uiSum += xCalcHAD16x16_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth, maxDist );
+        uiSum += xCalcHAD16x16_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 16*iStrideOrg;
       piCur += 16*iStrideCur;
@@ -2829,7 +2824,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y<iRows && uiSum < maxDist; y += 8 )
+    for( y = 0; y<iRows; y += 8 )
     {
       for( x = 0; x < iCols; x += 8 )
       {
@@ -2841,7 +2836,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 4 )
+    for( y = 0; y < iRows; y += 4 )
     {
       for( x = 0; x < iCols; x += 4 )
       {
@@ -2853,7 +2848,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
   }
   else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
   {
-    for( y = 0; y < iRows && uiSum < maxDist; y += 2 )
+    for( y = 0; y < iRows; y += 2 )
     {
       for( x = 0; x < iCols; x += 2 )
       {

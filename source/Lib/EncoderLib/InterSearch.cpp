@@ -2400,17 +2400,11 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   {
     if( bEnableRasterSearch && ( ( ( int ) ( cStruct.uiBestDistance ) >= iRaster ) || bAlwaysRasterSearch ) )
     {
-      //int iDist   = cStruct.uiBestDistance;
-      int left    = sr.left  ;//std::max( cStruct.iBestX - iDist, sr.left );
-      int right   = sr.right ;//std::min( cStruct.iBestX + iDist, sr.right );
-      int top     = sr.top   ;//std::max( cStruct.iBestY - iDist, sr.top );
-      int bottom  = sr.bottom;//std::min( cStruct.iBestY + iDist, sr.bottom );
-
       cStruct.uiBestDistance = iRaster;
 
-      for( iStartY = top; iStartY <= bottom; iStartY += iRaster )
+      for( iStartY = sr.top; iStartY <= sr.bottom; iStartY += iRaster )
       {
-        for( iStartX = left; iStartX <= right; iStartX += iRaster )
+        for( iStartX = sr.left; iStartX <= sr.right; iStartX += iRaster )
         {
           xTZSearchHelp( cStruct, iStartX, iStartY, 0, iRaster );
         }
