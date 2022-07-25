@@ -2398,53 +2398,21 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   }
   else
   {
-    if( false )
+    if( bEnableRasterSearch && ( ( ( int ) ( cStruct.uiBestDistance ) >= iRaster ) || bAlwaysRasterSearch ) )
     {
-      if( bEnableRasterSearch && ( ( ( int ) ( cStruct.uiBestDistance ) >= iRaster ) || bAlwaysRasterSearch ) )
+      int iDist   = cStruct.uiBestDistance;
+      int left    = std::max( cStruct.iBestX - iDist, sr.left );
+      int right   = std::min( cStruct.iBestX + iDist, sr.right );
+      int top     = std::max( cStruct.iBestY - iDist, sr.top );
+      int bottom  = std::min( cStruct.iBestY + iDist, sr.bottom );
+
+      cStruct.uiBestDistance = iRaster;
+
+      for( iStartY = top; iStartY <= bottom; iStartY += iRaster )
       {
-        cStruct.uiBestDistance = iRaster;
-        for( iStartY = sr.top; iStartY <= sr.bottom; iStartY += iRaster )
+        for( iStartX = left; iStartX <= right; iStartX += iRaster )
         {
-          for( iStartX = sr.left; iStartX <= sr.right; iStartX += iRaster )
-          {
-            xTZSearchHelp( cStruct, iStartX, iStartY, 0, iRaster );
-          }
-        }
-      }
-    }
-    else
-    {
-      int boundX = std::max( std::abs( sr.left ), std::abs( sr.right ) );
-      int boundY = std::max( std::abs( sr.top ), std::abs( sr.bottom ) );
-
-      for( int iDistY = 1; iDistY <= boundY; iDistY *= 2 )
-      {
-        for( int iDistX = 1; iDistX <= boundX; iDistX *= 2 )
-        {
-          int tlX = -iDistX; int tlY = -iDistY;
-          int trX =  iDistX; int trY = -iDistY;
-          int blX = -iDistX; int blY =  iDistY;
-          int brX =  iDistX; int brY =  iDistY;
-
-          if( tlX >= sr.left && tlY >= sr.top )
-          {
-            xTZSearchHelp( cStruct, tlX, tlY, 0, std::max( iDistX, iDistY ) );
-          }
-
-          if( trX <= sr.right && trY >= sr.top )
-          {
-            xTZSearchHelp( cStruct, trX, trY, 0, std::max( iDistX, iDistY ) );
-          }
-
-          if( blX >= sr.left && blY <= sr.bottom )
-          {
-            xTZSearchHelp( cStruct, blX, blY, 0, std::max( iDistX, iDistY ) );
-          }
-
-          if( brX <= sr.right && brY <= sr.bottom )
-          {
-            xTZSearchHelp( cStruct, brX, brY, 0, std::max( iDistX, iDistY ) );
-          }
+          xTZSearchHelp( cStruct, iStartX, iStartY, 0, iRaster );
         }
       }
     }
