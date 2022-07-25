@@ -437,7 +437,7 @@ public:
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
   /// sub-function for motion vector refinement used in fractional-pel accuracy
-  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, bool bAllowUseOfHadamard, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
+  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
 
    typedef struct
    {

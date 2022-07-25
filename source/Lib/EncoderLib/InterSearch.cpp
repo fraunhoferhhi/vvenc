@@ -753,7 +753,6 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
 Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
                                             Mv baseRefMv,
                                             int iFrac, Mv& rcMvFrac,
-                                            bool bAllowUseOfHadamard,
                                             Distortion& uiDistBest,
                                             int& patternId,
                                             CPelBuf* pattern,
@@ -766,7 +765,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
   Pel*  piRefPos;
   int iRefStride = pcPatternKey->width + 1;
-  m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && bAllowUseOfHadamard ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
+  m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
   const ClpRng& clpRng = m_lumaClpRng;
   int width = pattern->width;
@@ -2493,7 +2492,7 @@ void InterSearch::xPatternSearchIntRefine(CodingUnit& cu, TZSearchStruct&  cStru
   CHECK( cu.imv == 0 || cu.imv == IMV_HPEL , "xPatternSearchIntRefine(): Sub-pel MV used.");
   CHECK( amvpInfo.mvCand[riMVPIdx] != rcMvPred, "xPatternSearchIntRefine(): MvPred issue.");
 
-  m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME && !cu.cs->slice->disableSATDForRd ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
+  m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
   // -> set MV scale for cost calculation to QPEL (0)
   m_pcRdCost->setCostScale ( 0 );
@@ -2613,7 +2612,7 @@ void InterSearch::xPatternSearchFracDIF(
   Mv baseRefMv(0, 0);
   Distortion  uiDistBest = MAX_DISTORTION;
   int patternId = 41;
-  ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 2, rcMvHalf, ( !cu.cs->slice->disableSATDForRd ), uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
+  ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 2, rcMvHalf, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
   patternId -= ( m_pcEncCfg->m_fastSubPel == 1 ? 41 : 0 );
 
 
@@ -2628,7 +2627,7 @@ void InterSearch::xPatternSearchFracDIF(
 
     rcMvQter = rcMvInt;    rcMvQter <<= 1;    // for mv-cost
     rcMvQter += rcMvHalf;  rcMvQter <<= 1;
-    ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 1, rcMvQter, ( !cu.cs->slice->disableSATDForRd ), uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
+    ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 1, rcMvQter, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
   }
 
 }
@@ -2658,8 +2657,7 @@ Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf,
   double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
 
   // calc distortion
-  DFunc distFunc = ( !cu.slice->disableSATDForRd ) ? DF_HAD : DF_SAD;
-  cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, distFunc ) );
+  cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
 
   return(cost);
 }
@@ -4404,9 +4402,8 @@ void InterSearch::xSymMvdCheckBestMvp(
       clipMv( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
       xPredInterBlk( COMP_Y, cu, picRefB, mvB, predBufB, false, cu.slice->clpRngs[ COMP_Y ], false, false );
 
-        // calc distortion
-      DFunc distFunc = ( !cu.slice->disableSATDForRd ) ? DF_HAD : DF_SAD;
-      cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, distFunc ) );
+      // calc distortion
+      cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
 
       Mv pred = amvpCur.mvCand[i];
       pred.changeTransPrecInternal2Amvr(cu.imv);
@@ -5111,10 +5108,7 @@ Distortion InterSearch::xGetAffineTemplateCost(CodingUnit& cu, CPelUnitBuf& orig
   xPredAffineBlk(COMP_Y, cu, picRef, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
   // calc distortion
-  enum DFunc distFunc = (cu.cs->slice->disableSATDForRd) ? DF_SAD : DF_HAD;
-  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y
-    , distFunc
-  );
+  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD );
   uiCost += m_pcRdCost->getCost(m_auiMVPIdxCost[iMVPIdx][iMVPNum]);
 
   DTRACE(g_trace_ctx, D_COMMON, " (%d) affineTemplateCost=%d\n", DTRACE_GET_COUNTER(g_trace_ctx, D_COMMON), uiCost);
@@ -5274,7 +5268,6 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   double        fWeight = 1.0;
 
   CPelUnitBuf  origBufTmpCnst;
-  enum DFunc distFunc = (cu.cs->slice->disableSATDForRd) ? DF_SAD : DF_HAD;
 
   // if Bi, set to ( 2 * Org - ListX )
   if (bBi)
@@ -5335,7 +5328,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.cs->slice->clpRngs[COMP_Y], refPicList);
 
   // get error
-  uiCostBest = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, distFunc);
+  uiCostBest = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
 
   // get cost with mv
   m_pcRdCost->setCostScale(0);
@@ -5484,7 +5477,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
     // get error
-    Distortion uiCostTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, distFunc);
+    Distortion uiCostTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
     DTRACE(g_trace_ctx, D_COMMON, " (%d) uiCostTemp=%d\n", DTRACE_GET_COUNTER(g_trace_ctx, D_COMMON), uiCostTemp);
 
     // get cost with mv
@@ -5511,7 +5504,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   {
     xPredAffineBlk(COMP_Y, cu, refPic, ctrlPtMv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
     // get error
-    Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, distFunc);
+    Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
     // get cost with mv
     m_pcRdCost->setCostScale(0);
     uint32_t bitsTemp = ruiBits;
@@ -5600,7 +5593,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
             clipMv(acMvTemp[j], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
             xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
-            Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, distFunc);
+            Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
             uint32_t bitsTemp = ruiBits;
             bitsTemp += xCalcAffineMVBits(cu, acMvTemp, acMvPred);
             costTemp = (Distortion)(floor(fWeight * (double)costTemp) + (double)m_pcRdCost->getCost(bitsTemp));
