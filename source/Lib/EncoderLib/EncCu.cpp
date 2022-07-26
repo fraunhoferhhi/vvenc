@@ -3924,7 +3924,7 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
       {
         sameMV[m] = m != 0;
       }
-      else
+      else if( !sameMV[m + 1] )
       {
         for( int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++ )
         {
