@@ -591,7 +591,7 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
   int dx,
   int dy,
   const int bs,
-  const int besterror = 8 * 8 * 1024 * 1024) const
+  const int besterror = MAX_INT) const
 {
   int fx = dx & 0xf;
   int fy = dy & 0xf;
@@ -1118,11 +1118,11 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       int yStart; 
     };
 
-    std::vector<FltParams> FltParamsArray( orgPic.Y().height/8 );
+    std::vector<FltParams> FltParamsArray( orgPic.Y().height/ MCTF_blk_size + 1 );
 
     WaitCounter taskCounter;
 
-    for (int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += 8, n++)
+    for (int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += MCTF_blk_size, n++)
     {
       static auto task = []( int tId, FltParams* params)
       {
@@ -1150,7 +1150,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
   }
   else
   {
-    for (int yStart = 0; yStart < orgPic.Y().height; yStart += 8)
+    for (int yStart = 0; yStart < orgPic.Y().height; yStart += MCTF_blk_size)
     {
       xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, correctedPics, yStart, sigmaSqCh, overallStrength );
     }
