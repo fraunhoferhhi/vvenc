@@ -313,9 +313,7 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   const int centreTapOffset = 1;
   const int maxValue        = ( 1 << bitDepth ) - 1;
 
-  static constexpr int lbs = 8;
-
-  Pel tempArray[lbs + numFilterTaps][lbs];
+  Pel tempArray[64 + numFilterTaps][64];
 
   for( int by = 0; by < h + numFilterTaps; by++ )
   {
