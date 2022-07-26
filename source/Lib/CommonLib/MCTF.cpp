@@ -261,9 +261,7 @@ void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   const int centreTapOffset = 3;
   const int maxValue        = ( 1 << bitDepth ) - 1;
 
-  static constexpr int lbs = 8;
-
-  Pel tempArray[lbs + numFilterTaps][lbs];
+  Pel tempArray[64 + numFilterTaps][64];
 
   for( int by = 1; by < h + numFilterTaps - 1; by++ )
   {
@@ -897,16 +895,16 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
   const int csy=getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
   const int blockSizeX = lumaBlockSize >> csx;
   const int y          = blockNumY * ( lumaBlockSize >> csy );
-  const int blockSizeY = std::min<int>( lumaBlockSize >> csy, input.bufs[compID].width - y );
+  const int blockSizeY = std::min<int>( lumaBlockSize >> csy, input.bufs[compID].height - y );
   const int width      = input.bufs[compID].width;
 
-  const Pel* srcImage = input.bufs[compID].buf;
+  const Pel* srcImage  = input.bufs[compID].buf;
   const int srcStride  = input.bufs[compID].stride;
 
-  Pel* dstImage = output.bufs[compID].buf;
+        Pel* dstImage  = output.bufs[compID].buf;
   const int dstStride  = output.bufs[compID].stride;
 
-  for (int x = 0, blockNumX = 0; x + blockSizeX <= width; x += blockSizeX, blockNumX++)
+  for( int x = 0, blockNumX = 0; x + blockSizeX <= width; x += blockSizeX, blockNumX++ )
   {
     const MotionVector &mv = mvs.get(blockNumX,blockNumY);
     const int dx = mv.x >> csx ;
@@ -919,19 +917,21 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const Pel* src = srcImage + yOffset * srcStride + xOffset;
           Pel* dst = dstImage + y       * dstStride + x;
 
+    const int curSizeX = std::min<int>( lumaBlockSize >> csx, input.bufs[compID].width - x );
+
     if( m_lowResFltApply ) // || isChroma( compID )
     {
       const int16_t* xFilter = m_interpolationFilter4[dx & 0xf];
       const int16_t* yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
 
-      m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
+      m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, curSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
     else
     {
       const int16_t *xFilter = m_interpolationFilter8[dx & 0xf];
       const int16_t *yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
 
-      m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
+      m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, curSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
   }
 }
