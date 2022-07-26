@@ -670,7 +670,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c-> m_deblockLastTLayers                     = 0;
   c->m_addGOP32refPics                         = false;
-  c->m_loopFilterBetaTcOffsets                 = false;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -1461,52 +1460,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
-
-  if( c->m_loopFilterBetaTcOffsets )
-  {
-    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                          "Error: LFBetaTcOffsets can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
-    vvenc_confirmParameter( c, c->m_GOPSize != 32,                               "Error: LFBetaTcOffsets is only configured for GOP szie 32" );
-    
-    c->m_loopFilterOffsetInPPS       = false;
-    c->m_loopFilterBetaOffsetDiv2[0] = -2;
-    c->m_loopFilterTcOffsetDiv2[0]   = -5;
-    c->m_loopFilterBetaOffsetDiv2[1] = -2;
-    c->m_loopFilterTcOffsetDiv2[1]   = -5;
-    c->m_loopFilterBetaOffsetDiv2[2] = -2;
-    c->m_loopFilterTcOffsetDiv2[2]   = -5;
-
-    for( int i = 0; i < 32; i++ )
-    {
-      switch( c->m_GOPList[i].m_temporalId )
-      {
-        case 0: c->m_GOPList[i].m_tcOffsetDiv2   = 1;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 1;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 1;
-                break;
-        case 1: c->m_GOPList[i].m_tcOffsetDiv2   = 2;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 2;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 2;
-                break;
-        case 2: c->m_GOPList[i].m_tcOffsetDiv2   = 3;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 3;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 3;
-                break;
-        case 3: c->m_GOPList[i].m_tcOffsetDiv2   = 4;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 4;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 4;
-                break;
-        case 4: c->m_GOPList[i].m_tcOffsetDiv2   = 5;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 5;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 5;
-                break;
-        case 5: c->m_GOPList[i].m_tcOffsetDiv2   = 5;
-                c->m_GOPList[i].m_CbTcOffsetDiv2 = 5;
-                c->m_GOPList[i].m_CrTcOffsetDiv2 = 5;
-                break;
-        default: break;
-      }
-    }
-  }
   
   if( c->m_deblockLastTLayers > 0 )
   {
