@@ -2374,7 +2374,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   }
   else
   {
-#if 1
+#if 0
     if( bEnableRasterSearch && ( ( ( int ) ( cStruct.uiBestDistance ) >= iRaster ) || bAlwaysRasterSearch ) )
     {
       int iDist   = cStruct.uiBestDistance << 1;
