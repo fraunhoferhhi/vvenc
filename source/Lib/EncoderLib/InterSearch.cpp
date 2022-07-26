@@ -2194,7 +2194,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
 {
   const bool bUseRasterInFastMode                    = true; //toggle this to further reduce runtime
   const bool bUseAdaptiveRaster                      = bExtendedSettings;
-  const int  iRaster                                 = (bFastSettings && bUseRasterInFastMode) ? 8 : 5;
+  const int  iRaster                                 = (bFastSettings && bUseRasterInFastMode) ? 10 : 5;
   const bool bTestZeroVector                         = true && !bFastSettings;
   const bool bTestZeroVectorStart                    = bExtendedSettings;
   const bool bTestZeroVectorStop                     = false;

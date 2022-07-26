@@ -822,7 +822,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     opts.addOptions()
     ("FastSearch",                                      c->m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Deprecated 3:Enhanced Diamond 4: FastDiamond)")
     ("FastSearchSCC",                                   c->m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Deprecated 2:DiamondSCC 3:FastDiamondSCC)")
-    ("RestrictMESampling",                              c->m_bRestrictMESampling,                            "Enable restrict ME Sampling for selective inter motion search")
     ("SearchRange,-sr",                                 c->m_SearchRange,                                    "Motion search range")
     ("BipredSearchRange",                               c->m_bipredSearchRange,                              "Motion search range for bipred refinement")
     ("MinSearchWindow",                                 c->m_minSearchWindow,                                "Minimum motion search window size for the adaptive window ME")
