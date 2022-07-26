@@ -165,6 +165,7 @@ private:
   bool                  m_lowResFltSearch = false;  // TODO: use this to select high/low-res filter (6/4 tap) for motion search
   bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
   int                   m_searchPttrn     = 0;
+  int                   m_mctfUnitSize;
 
   void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
 

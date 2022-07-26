@@ -118,8 +118,6 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
-static constexpr int MCTF_blk_size = 16;
-
 int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
   int error = 0;
@@ -402,6 +400,7 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
   m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
+  m_mctfUnitSize     = m_encCfg->m_vvencMCTF.MCTFUnitSize;
 }
 
 // ====================================================================================================================
@@ -527,9 +526,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         const int width = m_area.width;
         const int height = m_area.height;
-        Array2D<MotionVector> mv_0( width / ( MCTF_blk_size * 8 ) + 1, height / ( MCTF_blk_size * 8 ) + 1 );
-        Array2D<MotionVector> mv_1( width / ( MCTF_blk_size * 4 ) + 1, height / ( MCTF_blk_size * 4 ) + 1 );
-        Array2D<MotionVector> mv_2( width / ( MCTF_blk_size * 2 ) + 1, height / ( MCTF_blk_size * 2 ) + 1 );
+        Array2D<MotionVector> mv_0( width / ( m_mctfUnitSize * 8 ) + 1, height / ( m_mctfUnitSize * 8 ) + 1 );
+        Array2D<MotionVector> mv_1( width / ( m_mctfUnitSize * 4 ) + 1, height / ( m_mctfUnitSize * 4 ) + 1 );
+        Array2D<MotionVector> mv_2( width / ( m_mctfUnitSize * 2 ) + 1, height / ( m_mctfUnitSize * 2 ) + 1 );
 
         PelStorage bufferSub2;
         PelStorage bufferSub4;
@@ -537,11 +536,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         subsampleLuma(srcPic.picBuffer, bufferSub2);
         subsampleLuma(bufferSub2, bufferSub4);
 
-        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * MCTF_blk_size);
-        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * MCTF_blk_size, &mv_0, 2);
-        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * MCTF_blk_size, &mv_1, 2);
+        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize );
+        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * m_mctfUnitSize, &mv_0, 2);
+        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2);
 
-        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, MCTF_blk_size, &mv_2, 1, true);
+        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, m_mctfUnitSize, &mv_2, 1, true);
       }
 
       srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
@@ -891,7 +890,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
 void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const
 {
-  static const int lumaBlockSize = MCTF_blk_size;
+  static const int lumaBlockSize = m_mctfUnitSize;
 
   const ComponentID compID=(ComponentID)comp;
   const int csx=getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
@@ -972,7 +971,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
   {
     for( int i = 0; i < numRefs; i++ )
     {
-      applyMotionLn( srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / MCTF_blk_size, c );
+      applyMotionLn( srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / m_mctfUnitSize, c );
     }
 
     const ComponentID compID = ( ComponentID ) c;
@@ -985,13 +984,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
 
-    const int blkSizeY = MCTF_blk_size >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
-    const int blkSizeX = MCTF_blk_size >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
-    const int yOut     = yStart        >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
+    const int blkSizeY = m_mctfUnitSize >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
+    const int blkSizeX = m_mctfUnitSize >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
+    const int yOut     = yStart         >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
     const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
           Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
 
-    for( int by = yOut, yBlkAddr = yStart / MCTF_blk_size; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
+    for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
     {
       const Pel* srcPel  = srcPelRow;
             Pel* dstPel  = dstPelRow;
@@ -1118,11 +1117,11 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       int yStart; 
     };
 
-    std::vector<FltParams> FltParamsArray( orgPic.Y().height/ MCTF_blk_size + 1 );
+    std::vector<FltParams> FltParamsArray( orgPic.Y().height/ m_mctfUnitSize + 1 );
 
     WaitCounter taskCounter;
 
-    for (int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += MCTF_blk_size, n++)
+    for (int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize, n++)
     {
       static auto task = []( int tId, FltParams* params)
       {
@@ -1150,7 +1149,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
   }
   else
   {
-    for (int yStart = 0; yStart < orgPic.Y().height; yStart += MCTF_blk_size)
+    for (int yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize )
     {
       xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, correctedPics, yStart, sigmaSqCh, overallStrength );
     }
