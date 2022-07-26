@@ -2023,6 +2023,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     au.cts      = pic.cts;
     au.ctsValid = pic.ctsValid;
     au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    au.dtsValid = pic.ctsValid;
   }
 
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );

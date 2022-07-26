@@ -408,82 +408,24 @@ inline void InterSearch::xTZSearchHelp( TZSearchStruct& rcStruct, const int iSea
 
   m_cDistParam.cur.buf = piRefSrch;
 
-  if( 1 == rcStruct.subShiftMode )
+  uiSad = m_cDistParam.distFunc( m_cDistParam );
+
+  // only add motion cost if uiSad is smaller than best. Otherwise pointless
+  // to add motion cost.
+  if( uiSad < rcStruct.uiBestSad )
   {
     // motion cost
-    Distortion uiBitCost = m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
+    uiSad += m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
 
-    // Skip search if bit cost is already larger than best SAD
-    if (uiBitCost < rcStruct.uiBestSad)
-    {
-      Distortion uiTempSad = m_cDistParam.distFunc( m_cDistParam );
-
-      if((uiTempSad + uiBitCost) < rcStruct.uiBestSad)
-      {
-        // it's not supposed that any member of DistParams is manipulated beside cur.buf
-        int subShift = m_cDistParam.subShift;
-        const Pel* pOrgCpy = m_cDistParam.org.buf;
-        uiSad += uiTempSad >> m_cDistParam.subShift;
-
-        while( m_cDistParam.subShift > 0 )
-        {
-          int isubShift           = m_cDistParam.subShift -1;
-          m_cDistParam.org.buf = rcStruct.pcPatternKey->buf + (rcStruct.pcPatternKey->stride << isubShift);
-          m_cDistParam.cur.buf = piRefSrch + (rcStruct.iRefStride << isubShift);
-          uiTempSad            = m_cDistParam.distFunc( m_cDistParam );
-          uiSad               += uiTempSad >> m_cDistParam.subShift;
-
-          if(((uiSad << isubShift) + uiBitCost) > rcStruct.uiBestSad)
-          {
-            break;
-          }
-
-          m_cDistParam.subShift--;
-        }
-
-        if(m_cDistParam.subShift == 0)
-        {
-          uiSad += uiBitCost;
-
-          if( uiSad < rcStruct.uiBestSad )
-          {
-            rcStruct.uiBestSad      = uiSad;
-            rcStruct.iBestX         = iSearchX;
-            rcStruct.iBestY         = iSearchY;
-            rcStruct.uiBestDistance = uiDistance;
-            rcStruct.uiBestRound    = 0;
-            rcStruct.ucPointNr      = ucPointNr;
-            m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-          }
-        }
-
-        // restore org ptr
-        m_cDistParam.org.buf  = pOrgCpy;
-        m_cDistParam.subShift = subShift;
-      }
-    }
-  }
-  else
-  {
-    uiSad = m_cDistParam.distFunc( m_cDistParam );
-
-    // only add motion cost if uiSad is smaller than best. Otherwise pointless
-    // to add motion cost.
     if( uiSad < rcStruct.uiBestSad )
     {
-      // motion cost
-      uiSad += m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
-
-      if( uiSad < rcStruct.uiBestSad )
-      {
-        rcStruct.uiBestSad      = uiSad;
-        rcStruct.iBestX         = iSearchX;
-        rcStruct.iBestY         = iSearchY;
-        rcStruct.uiBestDistance = uiDistance;
-        rcStruct.uiBestRound    = 0;
-        rcStruct.ucPointNr      = ucPointNr;
-        m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-      }
+      rcStruct.uiBestSad      = uiSad;
+      rcStruct.iBestX         = iSearchX;
+      rcStruct.iBestY         = iSearchY;
+      rcStruct.uiBestDistance = uiDistance;
+      rcStruct.uiBestRound    = 0;
+      rcStruct.ucPointNr      = ucPointNr;
+      m_cDistParam.maximumDistortionForEarlyExit = uiSad;
     }
   }
 }
@@ -820,6 +762,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   Distortion  uiDist;
   uiDistBest = m_pcEncCfg->m_fastSubPel == 1 ? uiDistBest : MAX_DISTORTION;
   uint32_t        uiDirecBest = 0;
+  const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   Pel*  piRefPos;
   int iRefStride = pcPatternKey->width + 1;
@@ -863,38 +806,38 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         if( 0 == i )
         {
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 0 ][ 0 ], intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
-          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 0 ][ 0 ] + width, intStride, 1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
+          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 0 ][ 0 ], intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 0 ][ 0 ] + width, intStride, 1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 2 ][ 0 ], intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
-          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 2 ][ 0 ] + width, intStride, 1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
+          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 2 ][ 0 ], intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 2 ][ 0 ] + width, intStride, 1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
           intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + halfFilterSize * intStride + 1;
           dstPtr = m_filteredBlock[ 0 ][ 0 ][ 0 ];
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
         }
         else if( 1 == i )
         {
           intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + ( halfFilterSize - 1 ) * intStride + 1;
           dstPtr = m_filteredBlock[ 2 ][ 0 ][ 0 ];
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
         }
         else if( 3 == i )
         {
           intPtr = m_filteredBlockTmp[ 2 ][ 0 ] + halfFilterSize * intStride;
           dstPtr = m_filteredBlock[ 0 ][ 2 ][ 0 ];
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
-          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
         }
         else if( 5 == i )
         {
           intPtr = m_filteredBlockTmp[ 2 ][ 0 ] + ( halfFilterSize - 1 ) * intStride;
           dstPtr = m_filteredBlock[ 2 ][ 2 ][ 0 ];
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
-          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+          m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride, 1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
         }
       }
     }
@@ -1287,7 +1230,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           int iNumIter = 4;
 
           // fast encoder setting: only one iteration
-          if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
+          if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE3 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
           {
             iNumIter = 1;
           }
@@ -1298,7 +1241,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           {
             int         iRefList    = iIter % 2;
 
-            if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 )
+            if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE3 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 )
             {
               if( uiCost[0] <= uiCost[1] )
               {
@@ -2006,20 +1949,20 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   cStruct.piRefY        = buf.buf;
   cStruct.imvShift      = cu.imv == IMV_HPEL ? 1 : (cu.imv << 1);
   cStruct.useAltHpelIf  = cu.imv == IMV_HPEL;
-  cStruct.inCtuSearch   = false;
   cStruct.zeroMV        = false;
+  cStruct.uiBestSad     = MAX_DISTORTION;
+
 
   CodedCUInfo &relatedCU = m_modeCtrl->getBlkInfo( cu );
 
-  bool bQTBTMV  = false;
-  bool bQTBTMV2 = false;
+  bool bQTBTMV = false;
   Mv cIntMv;
   if( !bBi )
   {
     bool bValid = relatedCU.getMv( refPicList, iRefIdxPred, cIntMv );
     if( bValid )
     {
-      bQTBTMV2 = true;
+      bQTBTMV = true;
       cIntMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL);
     }
   }
@@ -2030,10 +1973,10 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   m_pcRdCost->setCostScale(2);
 
   //  Do integer search
-  if( ( m_motionEstimationSearchMethod == VVENC_MESEARCH_FULL ) || bBi || bQTBTMV )
+  if( m_motionEstimationSearchMethod == VVENC_MESEARCH_FULL || bBi )
   {
-    cStruct.subShiftMode = m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ? 2 : 0;
-    m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode);
+    cStruct.subShiftMode = m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ? 1 : 0;
+    m_pcRdCost->setDistParam( m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode );
 
     Mv bestInitMv = (bBi ? rcMv : rcMvPred);
     Mv cTmpMv     = bestInitMv;
@@ -2045,21 +1988,21 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
 
     Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
 
-    for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
+    for( int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++ )
     {
       const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i );
       cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
       prevMv[i] = cTmpMv;
 
       int j = 0;
-      for (; j < i; j++)
+      for( ; j < i; j++ )
       {
-        if (cTmpMv == prevMv[j])
+        if( cTmpMv == prevMv[j] )
         {
           break;
         }
       }
-      if (j < i)
+      if( j < i )
         continue;
 
       clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
@@ -2068,7 +2011,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
 
       Distortion uiSad = m_cDistParam.distFunc(m_cDistParam);
       uiSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
-      if (uiSad < uiBestSad)
+      if( uiSad < uiBestSad )
       {
         uiBestSad = uiSad;
         bestInitMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
@@ -2076,23 +2019,18 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
       }
     }
 
-    if( !bQTBTMV )
-    {
-      xSetSearchRange(cu, bestInitMv, iSrchRng, cStruct.searchRange );
-    }
-    xPatternSearch( cStruct, rcMv, ruiCost);
+    xSetSearchRange( cu, bestInitMv, iSrchRng, cStruct.searchRange );
+    xPatternSearch ( cStruct, rcMv, ruiCost);
   }
-  else if( bQTBTMV2 )
+  else if( bQTBTMV )
   {
     rcMv = cIntMv;
-    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == VVENC_MESEARCH_SELECTIVE ) ? 1 :
-                            ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 2 : 0;
-    xTZSearch(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, NULL, false, true);
+    cStruct.subShiftMode = ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 1 : 0;
+    xTZSearch( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, NULL, false, true );
   }
   else
   {
-    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == VVENC_MESEARCH_SELECTIVE ) ? 1 :
-                            ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 2 : 0;
+    cStruct.subShiftMode = ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 1 : 0;
     rcMv = rcMvPred;
     const Mv *pIntegerMv2Nx2NPred = nullptr;
     xPatternSearchFast(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, pIntegerMv2Nx2NPred);
@@ -2222,9 +2160,6 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
       case 2: //VVENC_MESEARCH_DIAMOND:
         xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
         break;
-      case 1: //VVENC_MESEARCH_SELECTIVE:
-        xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-        break;
       default:
         THROW("shouldn't get here");
         break;
@@ -2240,15 +2175,9 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
     case VVENC_MESEARCH_DIAMOND:
       xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
       break;
-
-    case VVENC_MESEARCH_SELECTIVE:
-      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-      break;
-
     case VVENC_MESEARCH_DIAMOND_ENHANCED:
       xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
       break;
-
     case VVENC_MESEARCH_FULL:
     default:
       THROW("shouldn't get here");
@@ -2260,7 +2189,7 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
 void InterSearch::xTZSearch( const CodingUnit& cu,
                              RefPicList            refPicList,
                              int                   iRefIdxPred,
-                             TZSearchStruct&    cStruct,
+                             TZSearchStruct&       cStruct,
                              Mv&                   rcMv,
                              Distortion&           ruiSAD,
                              const Mv* const       pIntegerMv2Nx2NPred,
@@ -2296,9 +2225,6 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   }
   rcMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_QUARTER);
   rcMv.divideByPowerOf2(2);
-
-  // init TZSearchStruct
-  cStruct.uiBestSad = MAX_DISTORTION;
 
   //
   m_cDistParam.maximumDistortionForEarlyExit = cStruct.uiBestSad;
@@ -2558,181 +2484,6 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
         if ( bStarRefinementDiamond == 1 )
         {
           xTZ8PointDiamondSearch ( cStruct, iStartX, iStartY, iDist, bStarRefinementCornersForDiamondDist1 );
-        }
-        else
-        {
-          xTZ8PointSquareSearch  ( cStruct, iStartX, iStartY, iDist );
-        }
-        if ( bStarRefinementStop && (cStruct.uiBestRound >= uiStarRefinementRounds) ) // stop criterion
-        {
-          break;
-        }
-      }
-
-      // calculate only 2 missing points instead 8 points if cStrukt.uiBestDistance == 1
-      if ( cStruct.uiBestDistance == 1 )
-      {
-        cStruct.uiBestDistance = 0;
-        if ( cStruct.ucPointNr != 0 )
-        {
-          xTZ2PointSearch( cStruct );
-        }
-      }
-    }
-  }
-
-  // write out best match
-  rcMv.set( cStruct.iBestX, cStruct.iBestY );
-  ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY, cStruct.imvShift );
-}
-
-
-void InterSearch::xTZSearchSelective( const CodingUnit& cu,
-                                      RefPicList            refPicList,
-                                      int                   iRefIdxPred,
-                                      TZSearchStruct&    cStruct,
-                                      Mv                    &rcMv,
-                                      Distortion            &ruiSAD,
-                                      const Mv* const       pIntegerMv2Nx2NPred )
-{
-  const bool bTestZeroVector          = true;
-  const bool bEnableRasterSearch      = true;
-  const bool bAlwaysRasterSearch      = false;  // 1: BETTER but factor 15x slower
-  const bool bStarRefinementEnable    = true;   // enable either star refinement or raster refinement
-  const bool bStarRefinementDiamond   = true;   // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
-  const bool bStarRefinementStop      = false;
-  const uint32_t uiStarRefinementRounds   = 2;  // star refinement stop X rounds after best match (must be >=1)
-  const int  iSearchRange             = m_iSearchRange;
-  const int  iSearchRangeInitial      = m_iSearchRange >> 2;
-  const int  uiSearchStep             = 4;
-  const int  iMVDistThresh            = 8;
-
-  int   iStartX                 = 0;
-  int   iStartY                 = 0;
-  int   iDist                   = 0;
-  clipMv( rcMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  rcMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_QUARTER);
-  rcMv.divideByPowerOf2(2);
-
-  // init TZSearchStruct
-  cStruct.uiBestSad = MAX_DISTORTION;
-  cStruct.iBestX = 0;
-  cStruct.iBestY = 0;
-
-  m_cDistParam.maximumDistortionForEarlyExit = cStruct.uiBestSad;
-  m_pcRdCost->setDistParam( m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode );
-
-
-  // set rcMv (Median predictor) as start point and as best point
-  xTZSearchHelp( cStruct, rcMv.hor, rcMv.ver, 0, 0 );
-
-  // test whether zero Mv is better start point than Median predictor
-  if ( bTestZeroVector )
-  {
-    xTZSearchHelp( cStruct, 0, 0, 0, 0 );
-  }
-
-  SearchRange& sr = cStruct.searchRange;
-
-  if ( pIntegerMv2Nx2NPred != 0 )
-  {
-    Mv integerMv2Nx2NPred = *pIntegerMv2Nx2NPred;
-    integerMv2Nx2NPred.changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
-    clipMv( integerMv2Nx2NPred, cu.lumaPos(), cu.lumaSize(),*cu.cs->pcv );
-    integerMv2Nx2NPred.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_QUARTER);
-    integerMv2Nx2NPred.divideByPowerOf2(2);
-
-    xTZSearchHelp( cStruct, integerMv2Nx2NPred.hor, integerMv2Nx2NPred.ver, 0, 0);
-
-  }
-
-  Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
-
-  for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
-  {
-    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
-    Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
-    prevMv[i] = cTmpMv;
-
-    int j = 0;
-    for (; j < i; j++)
-    {
-      if (cTmpMv == prevMv[j])
-      {
-        break;
-      }
-    }
-    if (j < i)
-      continue;
-
-    clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
-    cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
-    m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
-
-    Distortion uiSad = m_cDistParam.distFunc(m_cDistParam);
-    uiSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
-    if (uiSad < cStruct.uiBestSad)
-    {
-      cStruct.uiBestSad = uiSad;
-      cStruct.iBestX = cTmpMv.hor;
-      cStruct.iBestY = cTmpMv.ver;
-      m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-    }
-  }
-
-  {
-    // set search range
-    Mv currBestMv(cStruct.iBestX, cStruct.iBestY );
-    currBestMv <<= 2;
-    xSetSearchRange( cu, currBestMv, m_iSearchRange, sr );
-  }
-
-  // Initial search
-  int iBestX = cStruct.iBestX;
-  int iBestY = cStruct.iBestY;
-  int iFirstSrchRngHorLeft    = ((iBestX - iSearchRangeInitial) > sr.left)   ? (iBestX - iSearchRangeInitial) : sr.left;
-  int iFirstSrchRngVerTop     = ((iBestY - iSearchRangeInitial) > sr.top)    ? (iBestY - iSearchRangeInitial) : sr.top;
-  int iFirstSrchRngHorRight   = ((iBestX + iSearchRangeInitial) < sr.right)  ? (iBestX + iSearchRangeInitial) : sr.right;
-  int iFirstSrchRngVerBottom  = ((iBestY + iSearchRangeInitial) < sr.bottom) ? (iBestY + iSearchRangeInitial) : sr.bottom;
-
-  for ( iStartY = iFirstSrchRngVerTop; iStartY <= iFirstSrchRngVerBottom; iStartY += uiSearchStep )
-  {
-    for ( iStartX = iFirstSrchRngHorLeft; iStartX <= iFirstSrchRngHorRight; iStartX += uiSearchStep )
-    {
-      xTZSearchHelp( cStruct, iStartX, iStartY, 0, 0 );
-      xTZ8PointDiamondSearch ( cStruct, iStartX, iStartY, 1, false );
-      xTZ8PointDiamondSearch ( cStruct, iStartX, iStartY, 2, false );
-    }
-  }
-
-  int iMaxMVDistToPred = (abs(cStruct.iBestX - iBestX) > iMVDistThresh || abs(cStruct.iBestY - iBestY) > iMVDistThresh);
-
-  //full search with early exit if MV is distant from predictors
-  if ( bEnableRasterSearch && (iMaxMVDistToPred || bAlwaysRasterSearch) )
-  {
-    for ( iStartY = sr.top; iStartY <= sr.bottom; iStartY += 1 )
-    {
-      for ( iStartX = sr.left; iStartX <= sr.right; iStartX += 1 )
-      {
-        xTZSearchHelp( cStruct, iStartX, iStartY, 0, 1 );
-      }
-    }
-  }
-  //Smaller MV, refine around predictor
-  else if ( bStarRefinementEnable && cStruct.uiBestDistance > 0 )
-  {
-    // start refinement
-    while ( cStruct.uiBestDistance > 0 )
-    {
-      iStartX = cStruct.iBestX;
-      iStartY = cStruct.iBestY;
-      cStruct.uiBestDistance = 0;
-      cStruct.ucPointNr = 0;
-      for ( iDist = 1; iDist < iSearchRange + 1; iDist*=2 )
-      {
-        if ( bStarRefinementDiamond == 1 )
-        {
-          xTZ8PointDiamondSearch ( cStruct, iStartX, iStartY, iDist, false );
         }
         else
         {
@@ -3091,6 +2842,7 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
   int width      = pattern->width;
   int height     = pattern->height;
   int srcStride  = pattern->stride;
+  const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   int intStride = width + 1;
   int dstStride = width + 1;
@@ -3103,32 +2855,32 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
   const ChromaFormat chFmt = m_currChromaFormat;
 
   // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[0][0]        , intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
-  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[0][0] + width, intStride,     1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
+  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[0][0]        , intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[0][0] + width, intStride,     1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
   // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[2][0],         intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
-  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[2][0] + width, intStride,     1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf );
+  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[2][0],         intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[2][0] + width, intStride,     1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
   intPtr = m_filteredBlockTmp[0][0] + halfFilterSize * intStride + 1;
   dstPtr = m_filteredBlock[0][0][0];
-  m_if.filterVer(COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf);
+  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
   intPtr = m_filteredBlockTmp[0][0] + (halfFilterSize - 1) * intStride + 1;
   dstPtr = m_filteredBlock[2][0][0];
-  m_if.filterVer(COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf);
+  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
   intPtr = m_filteredBlockTmp[2][0] + halfFilterSize * intStride;
   dstPtr = m_filteredBlock[0][2][0];
   // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
-  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 
   intPtr = m_filteredBlockTmp[2][0] + (halfFilterSize - 1) * intStride;
   dstPtr = m_filteredBlock[2][2][0];
   // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
-  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf );
+  m_if.filterVer( COMP_Y, intPtr,         intStride, dstPtr,         dstStride, width, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
+  m_if.filterVer( COMP_Y, intPtr + width, intStride, dstPtr + width, dstStride,     1, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, false, reduceTap );
 }
 
 
@@ -3149,6 +2901,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
   int width      = pattern->width;
   int height     = pattern->height;
   int srcStride  = pattern->stride;
+  const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   Pel const* srcPtr;
   int intStride = width + 1;
@@ -3176,7 +2929,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     {
       srcPtr += 1;
     }
-    m_if.filterHor( COMP_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 1 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng );
+    m_if.filterHor( COMP_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 1 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if( s_doInterpQ[ patternId ][ 13 ] )
@@ -3192,7 +2945,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     {
       srcPtr += 1;
     }
-    m_if.filterHor( COMP_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 3 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng );
+    m_if.filterHor( COMP_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 3 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if( s_doInterpQ[ patternId ][ 3 ] )
@@ -3204,7 +2957,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     {
       intPtr += intStride;
     }
-    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if( s_doInterpQ[ patternId ][ 11 ] )
@@ -3212,7 +2965,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     // Generate @ 3,3
     intPtr = m_filteredBlockTmp[ 3 ][ 0 ] + ( halfFilterSize - 1 ) * intStride;
     dstPtr = m_filteredBlock[ 3 ][ 3 ][ 0 ];
-    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if( s_doInterpQ[ patternId ][ 5 ] )
@@ -3220,7 +2973,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     // Generate @ 3,1
     intPtr = m_filteredBlockTmp[ 1 ][ 0 ] + ( halfFilterSize - 1 ) * intStride;
     dstPtr = m_filteredBlock[ 3 ][ 1 ][ 0 ];
-    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if( s_doInterpQ[ patternId ][ 9 ] )
@@ -3232,7 +2985,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     {
       intPtr += intStride;
     }
-    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+    m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
   }
 
   if (halfPelRef.ver != 0)
@@ -3246,7 +2999,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
 
     if( s_doInterpQ[ patternId ][ 10 ] )
@@ -3258,7 +3011,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
   }
   else
@@ -3268,7 +3021,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       // Generate @ 0,1
       intPtr = m_filteredBlockTmp[ 1 ][ 0 ] + halfFilterSize * intStride;
       dstPtr = m_filteredBlock[ 0 ][ 1 ][ 0 ];
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
 
     if( s_doInterpQ[ patternId ][ 8 ] )
@@ -3276,7 +3029,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       // Generate @ 0,3
       intPtr = m_filteredBlockTmp[ 3 ][ 0 ] + halfFilterSize * intStride;
       dstPtr = m_filteredBlock[ 0 ][ 3 ][ 0 ];
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
   }
 
@@ -3295,7 +3048,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
 
     if( s_doInterpQ[ patternId ][ 7 ] )
@@ -3311,7 +3064,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
   }
   else
@@ -3325,7 +3078,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
 
     if( s_doInterpQ[ patternId ][ 1 ] )
@@ -3337,7 +3090,7 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
       {
         intPtr += intStride;
       }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng );
+      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, false, reduceTap );
     }
   }
 }
@@ -5152,7 +4905,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
       // 4-times iteration (default)
       int iNumIter = 4;
       // fast encoder setting or GPB: only one iteration
-      if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2 || slice.picHeader->mvdL1Zero)
+      if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2 || slice.picHeader->mvdL1Zero)
       {
         iNumIter = 1;
       }
@@ -5161,7 +4914,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
       {
         // Set RefList
         int iRefList = iIter % 2;
-        if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2)
+        if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2)
         {
           if (uiCost[0] <= uiCost[1])
           {
@@ -6498,12 +6251,13 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPr
   const CPelBuf refBuf = refPic->getRecoBuf(cu.blocks[COMP_Y]);
 
   TZSearchStruct cStruct; 
-  cStruct.pcPatternKey = pcPatternKey;
-  cStruct.iRefStride = refBuf.stride;
-  cStruct.piRefY = refBuf.buf;
-  CHECK(cu.imv == IMV_HPEL, "IF_IBC");
-  cStruct.imvShift = cu.imv << 1;
-  cStruct.subShiftMode = 0; 
+  cStruct.pcPatternKey  = pcPatternKey;
+  cStruct.iRefStride    = refBuf.stride;
+  cStruct.piRefY        = refBuf.buf;
+  CHECK( cu.imv == IMV_HPEL, "IF_IBC" );
+  cStruct.imvShift      = cu.imv << 1;
+  cStruct.subShiftMode  = 0;
+  cStruct.uiBestSad     = MAX_DISTORTION;
 
   m_pcRdCost->getMotionCostIBC(0);
   m_pcRdCost->setPredictorsIBC(pcMvPred);

@@ -488,7 +488,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
-  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_MODE3;
   c->m_useEarlyCU                              = 0;
   c->m_useFastDecisionForMerge                 = true;
 
@@ -524,6 +524,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
   c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
+  c->m_meReduceTap                             = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
   c->m_LMChroma                                = false;
@@ -670,7 +671,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c-> m_deblockLastTLayers                     = 0;
   c->m_addGOP32refPics                         = false;
   c->m_loopFilterBetaTcOffsets                 = false;
-  
+
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
@@ -712,13 +713,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
   vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
-  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                                             "GOP Size must be between 1 and 64" );
-  vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                                       "Lead frames exceeds supported range (0 to 64)" );
-  vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                                  "Trail frames exceeds supported range (0 to 4)" );
+  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                           "GOP Size must be between 1 and 64" );
+  vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
+  vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
 
-  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                 "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                     "QP exceeds supported range (0 to 63)" );
 
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                           "TargetBitrate must be between 0 - 800000000" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,               "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == c->m_RCTargetBitrate )
    {
@@ -848,11 +849,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
   if (c->m_outputBitDepth     [1] == 0)
     c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
-
-  if( c->m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
-  {
-    c->m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
-  }
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
      (( c->m_masteringDisplay[0] != 0 && c->m_masteringDisplay[1] != 0 && c->m_masteringDisplay[8] != 0 && c->m_masteringDisplay[9] != 0 ) ||
@@ -1161,7 +1157,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPSize = 1;
     for( int i = 0; i < VVENC_MAX_GOP; i++ )
     {
-      vvenc_GOPEntry_default( &c->m_GOPList[i]);
+      vvenc_GOPEntry_default( &c->m_GOPList[i] );
     }
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
@@ -1258,7 +1254,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   if ( c->m_usePerceptQPATempFiltISlice == 2
-      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize) )
+      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
   {
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
@@ -1334,7 +1330,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     6,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 6, 14, 22 },             4,   { 1, 6, 14, 22 } );
       c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     7,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 7, 15, 23 },             4,   { 1, 7, 15, 23 } );
       c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     8,    1,          0.0,      0.0,  1.0,         0,             4,   { 1, 8, 16, 24 },             4,   { 1, 8, 16, 24 } );
-                  }
+    }
     else if( c->m_GOPSize == 16 )
     {
       //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
@@ -1361,44 +1357,44 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if( !c->m_addGOP32refPics )
       {
-        //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
-        //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
-        //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
-        c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },           2,   {  32,  64                } );
-        c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },           2,   { -16,  16                } );
-        c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8, -24                } );
-        c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12, -28           } );
-        c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14, -30      } );
-        c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },           2,   {  -1,  -3,  -7, -15, -31 } );
-        c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },           2,   {  -1,  -5, -13, -29      } );
-        c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },           2,   {  -2, -10, -26           } );
-        c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },           2,   {  -1,  -3, -11, -27      } );
-        c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },           2,   {  -1,  -9, -25           } );
-        c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },           2,   {  -4, -20                } );
-        c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },           2,   {  -2,  -6, -22           } );
-        c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },           2,   {  -1,  -3,  -7, -23      } );
-        c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },           2,   {  -1,  -5, -21           } );
-        c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },           2,   {  -2, -18                } );
-        c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },           2,   {  -1,  -3, -19           } );
-        c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },           2,   {  -1, -17                } );
-        c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8,   8                } );
-        c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12                } );
-        c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14           } );
-        c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },           2,   {  -1,  -3,  -7, -15      } );
-        c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },           2,   {  -1,  -5, -13           } );
-        c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },           2,   {  -2, -10                } );
-        c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },           2,   {  -1,  -3, -11           } );
-        c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },           2,   {  -1,  -9                } );
-        c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },           2,   {  -4,   4                } );
-        c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },           2,   {  -2,  -6                } );
-        c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },           2,   {  -1,  -3, -7            } );
-        c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },           2,   {  -1,  -5                } );
-        c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },           2,   {  -2,   2                } );
-        c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },           2,   {  -1,  -3                } );
-        c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },           2,   {  -1,   1                } );
-      }
-      else
-      {
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },           2,   {  32,  64                } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },           2,   { -16,  16                } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8, -24                } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12, -28           } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14, -30      } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },           2,   {  -1,  -3,  -7, -15, -31 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },           2,   {  -1,  -5, -13, -29      } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },           2,   {  -2, -10, -26           } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },           2,   {  -1,  -3, -11, -27      } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },           2,   {  -1,  -9, -25           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },           2,   {  -4, -20                } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },           2,   {  -2,  -6, -22           } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },           2,   {  -1,  -3,  -7, -23      } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },           2,   {  -1,  -5, -21           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },           2,   {  -2, -18                } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },           2,   {  -1,  -3, -19           } );
+      c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },           2,   {  -1, -17                } );
+      c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8,   8                } );
+      c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12                } );
+      c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14           } );
+      c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },           2,   {  -1,  -3,  -7, -15      } );
+      c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },           2,   {  -1,  -5, -13           } );
+      c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },           2,   {  -2, -10                } );
+      c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },           2,   {  -1,  -3, -11           } );
+      c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },           2,   {  -1,  -9                } );
+      c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },           2,   {  -4,   4                } );
+      c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },           2,   {  -2,  -6                } );
+      c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },           2,   {  -1,  -3, -7            } );
+      c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },           2,   {  -1,  -5                } );
+      c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },           2,   {  -2,   2                } );
+      c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },           2,   {  -1,  -3                } );
+      c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },           2,   {  -1,   1                } );
+    }
+    else
+    {
         //overwrite GOPEntries
         c->m_GOPList[  0 ] = vvenc::GOPEntry(  'B',   32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48, 40, 36 },       1,   {  32, 48                 } );
         c->m_GOPList[  1 ] = vvenc::GOPEntry(  'B',   16,    0,       -4.9309,  0.2265,  1.0,         1,             3,   { 16, 32, 48, 24, 20 },       1,   { -16                     } );
@@ -1465,7 +1461,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
-  
+
   if( c->m_loopFilterBetaTcOffsets )
   {
     vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                          "Error: LFBetaTcOffsets can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
@@ -1515,7 +1511,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_deblockLastTLayers > 0 )
   {
     const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
-    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                          "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
+    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                  "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
     vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
     c->m_loopFilterOffsetInPPS = false;
   }
@@ -1543,9 +1539,13 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,    "Error: FastInterSearchMode parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_OFF || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,     "Error: FastInterSearchMode parameter out of range [0...3]" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0
+                          || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS
+                          || c->m_motionEstimationSearchMethod == VVENC_MESEARCH_DEPRECATED,                                                 "Error: FastSearch parameter out of range [0,1,3,4]");
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0
+                          || c->m_motionEstimationSearchMethodSCC == 1
+                          || c->m_motionEstimationSearchMethodSCC > 3,                                                                       "Error: FastSearchSCC parameter out of range [0,2,3]" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
   vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
@@ -1754,6 +1754,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 3,   "FastMIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_meReduceTap < 0 || c->m_meReduceTap > 2, "ReduceFilterME out of range [0..2]" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
@@ -2276,7 +2277,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2306,6 +2307,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_RDOQ                            = 2;
@@ -2326,7 +2328,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2356,6 +2358,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_alf                             = 1;
@@ -2380,7 +2383,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT10
@@ -2410,6 +2413,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2442,7 +2446,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -2465,13 +2469,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
-      c->m_FastIntraTools                  = 0;
+      c->m_FastIntraTools                  = 1;
       c->m_FIMMode                         = 0;
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
-      c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2480,6 +2485,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_CIIP                            = 2;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
@@ -2512,7 +2518,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT32
@@ -2542,6 +2548,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -2585,7 +2592,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND;
 
       // partitioning: CTUSize128 QT44MTT33
@@ -2615,6 +2622,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 1;
@@ -2660,7 +2668,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -2690,6 +2698,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2748,214 +2757,215 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
                                                        << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
-  css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
-  css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
-  css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
-  css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
+    css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
+    css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
+    css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
+    css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
+    css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
     //css << "Frame/Field                            : Frame based coding\n";
-  if ( c->m_framesToBeEncoded > 0 )
-    css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
-  else
-    css << "Frame index                            : all frames\n";
+    if ( c->m_framesToBeEncoded > 0 )
+      css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
+    else
+      css << "Frame index                            : all frames\n";
 
-  css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
-  css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
-  css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
-  css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
-  css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
-  css << "Motion search range                    : " << c->m_SearchRange << "\n";
-  css << "Intra period                           : " << c->m_IntraPeriod << "\n";
-  css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
-  css << "QP                                     : " << c->m_QP << "\n";
-  css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
-  css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
-  css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
-  css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
-  css << "GOP size                               : " << c->m_GOPSize << "\n";
+    css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
+    css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
+    css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
+    css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
+    css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
+    css << "Motion search range                    : " << c->m_SearchRange << "\n";
+    css << "Intra period                           : " << c->m_IntraPeriod << "\n";
+    css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
+    css << "QP                                     : " << c->m_QP << "\n";
+    css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
+    css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
+    css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
+    css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
+    css << "GOP size                               : " << c->m_GOPSize << "\n";
     css << "PicReordering                          : " << c->m_picReordering << "\n";
-  css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
-  css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
-  css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
-  css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
-  if (c->m_bUseSAO)
-  {
-    css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
-    css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
-  }
-  css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
+    css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
+    css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
+    css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
+    if (c->m_bUseSAO)
+    {
+      css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
+      css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
+    }
+    css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
 
-  if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
-  {
-    css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
-  }
-  if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
-  {
-    css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
-  }
-  css << "\n";
+    if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
+    {
+      css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
+    }
+    if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
+    {
+      css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
+    }
+    css << "\n";
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )
   {
-  // verbose output
-  css << "CODING TOOL CFG: ";
-  css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
-  css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
-  css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
-  css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
-  if( c->m_alf )
-  {
-    css << "(NonLinLuma:" << c->m_useNonLinearAlfLuma << " ";
-    css << "NonLinChr:" << c->m_useNonLinearAlfChroma << ") ";
-  }
-  css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
-
-  css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
-  css << "Slices:"<< c->m_numSlicesInPic << " ";
-
-  const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
-  css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
-  css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
-  css << "TMVP:" << c->m_TMVPModeId << " ";
-
-  css << "DQ:" << c->m_DepQuantEnabled << " ";
-  css << "SDH:" << c->m_SignDataHidingEnabled << " ";
-  css << "CST:" << c->m_dualITree << " ";
-  css << "BDOF:" << c->m_BDOF << " ";
-  css << "DMVR:" << c->m_DMVR << " ";
-  css << "MTSImplicit:" << c->m_MTSImplicit << " ";
-  css << "SBT:" << c->m_SBT << " ";
-  css << "JCbCr:" << c->m_JointCbCrMode << " ";
-  css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
-  css << "AMVR:" << c->m_AMVRspeed << " ";
-  css << "SMVD:" << c->m_SMVD << " ";
-
-  css << "LMCS:" << c->m_lumaReshapeEnable << " ";
-  if( c->m_lumaReshapeEnable )
-  {
-    css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
-    css << "Opt:" << c->m_adpOption << "";
-    if( c->m_adpOption > 0 )
+    // verbose output
+    css << "CODING TOOL CFG: ";
+    css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+    css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
+    css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
+    css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
+    if( c->m_alf )
     {
-      css << " CW:" << c->m_initialCW << "";
+      css << "(NonLinLuma:" << c->m_useNonLinearAlfLuma << " ";
+      css << "NonLinChr:" << c->m_useNonLinearAlfChroma << ") ";
     }
-    css << ") ";
-  }
-  css << "CIIP:" << c->m_CIIP << " ";
-  css << "MIP:" << c->m_MIP << " ";
-  css << "AFFINE:" << c->m_Affine << " ";
-  if( c->m_Affine )
-  {
-    css << "(PROF:" << c->m_PROF << ", ";
-    css << "Type:" << c->m_AffineType << ") ";
-  }
-  css << "MMVD:" << c->m_MMVD << " ";
-  if( c->m_MMVD )
-    css << "DisFracMMVD:" << c->m_allowDisFracMMVD << " ";
-  css << "SbTMVP:" << c->m_SbTMVP << " ";
-  css << "GPM:" << c->m_Geo << " ";
-  css << "LFNST:" << c->m_LFNST << " ";
-  css << "MTS:" << c->m_MTS << " ";
-  if( c->m_MTS )
-  {
-    css << "(IntraCand:" << c->m_MTSIntraMaxCand << ") ";
-  }
-  css << "ISP:" << c->m_ISP << " ";
-  css << "TS:" << c->m_TS << " ";
-  if( c->m_TS )
-  {
-    css << "TSLog2MaxSize:" << c->m_TSsize << " ";
-    css << "useChromaTS:" << c->m_useChromaTS << " ";
-  }
-  css << "BDPCM:" << c->m_useBDPCM << " ";
-  css << "IBC:" << c->m_IBCMode << " ";
-  css << "BCW:" << c->m_BCW << " ";
+    css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
 
-  css << "\nENC. ALG. CFG: ";
-  css << "QPA:" << c->m_usePerceptQPA << " ";
-  css << "HAD:" << c->m_bUseHADME << " ";
+    css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
+    css << "Slices:"<< c->m_numSlicesInPic << " ";
+
+    const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
+    css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
+    css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
+    css << "TMVP:" << c->m_TMVPModeId << " ";
+
+    css << "DQ:" << c->m_DepQuantEnabled << " ";
+    css << "SDH:" << c->m_SignDataHidingEnabled << " ";
+    css << "CST:" << c->m_dualITree << " ";
+    css << "BDOF:" << c->m_BDOF << " ";
+    css << "DMVR:" << c->m_DMVR << " ";
+    css << "MTSImplicit:" << c->m_MTSImplicit << " ";
+    css << "SBT:" << c->m_SBT << " ";
+    css << "JCbCr:" << c->m_JointCbCrMode << " ";
+    css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
+    css << "AMVR:" << c->m_AMVRspeed << " ";
+    css << "SMVD:" << c->m_SMVD << " ";
+
+    css << "LMCS:" << c->m_lumaReshapeEnable << " ";
+    if( c->m_lumaReshapeEnable )
+    {
+      css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
+      css << "Opt:" << c->m_adpOption << "";
+      if( c->m_adpOption > 0 )
+      {
+        css << " CW:" << c->m_initialCW << "";
+      }
+      css << ") ";
+    }
+    css << "CIIP:" << c->m_CIIP << " ";
+    css << "MIP:" << c->m_MIP << " ";
+    css << "AFFINE:" << c->m_Affine << " ";
+    if( c->m_Affine )
+    {
+      css << "(PROF:" << c->m_PROF << ", ";
+      css << "Type:" << c->m_AffineType << ") ";
+    }
+    css << "MMVD:" << c->m_MMVD << " ";
+    if( c->m_MMVD )
+      css << "DisFracMMVD:" << c->m_allowDisFracMMVD << " ";
+    css << "SbTMVP:" << c->m_SbTMVP << " ";
+    css << "GPM:" << c->m_Geo << " ";
+    css << "LFNST:" << c->m_LFNST << " ";
+    css << "MTS:" << c->m_MTS << " ";
+    if( c->m_MTS )
+    {
+      css << "(IntraCand:" << c->m_MTSIntraMaxCand << ") ";
+    }
+    css << "ISP:" << c->m_ISP << " ";
+    css << "TS:" << c->m_TS << " ";
+    if( c->m_TS )
+    {
+      css << "TSLog2MaxSize:" << c->m_TSsize << " ";
+      css << "useChromaTS:" << c->m_useChromaTS << " ";
+    }
+    css << "BDPCM:" << c->m_useBDPCM << " ";
+    css << "IBC:" << c->m_IBCMode << " ";
+    css << "BCW:" << c->m_BCW << " ";
+
+    css << "\nENC. ALG. CFG: ";
+    css << "QPA:" << c->m_usePerceptQPA << " ";
+    css << "HAD:" << c->m_bUseHADME << " ";
     if( c->m_fastHad ) css << "(fast) ";
-  css << "RDQ:" << c->m_RDOQ << " ";
-  css << "RDQTS:" << c->m_useRDOQTS << " ";
-  css << "ASR:" << c->m_bUseASR << " ";
-  css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
-  css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
-  css << "EDO:" << c->m_EDO << " ";
-  css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
+    css << "RDQ:" << c->m_RDOQ << " ";
+    css << "RDQTS:" << c->m_useRDOQTS << " ";
+    css << "ASR:" << c->m_bUseASR << " ";
+    css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
+    css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
+    css << "EDO:" << c->m_EDO << " ";
+    css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
 
-  css << "\nPRE-ANALYSIS CFG: ";
-  css << "STA:" << c->m_sliceTypeAdapt << " ";
-  css << "LeadFrames:" << c->m_leadFrames << " ";
-  css << "TrailFrames:" << c->m_trailFrames << " ";
+    css << "\nPRE-ANALYSIS CFG: ";
+    css << "STA:" << c->m_sliceTypeAdapt << " ";
+    css << "LeadFrames:" << c->m_leadFrames << " ";
+    css << "TrailFrames:" << c->m_trailFrames << " ";
 
-  css << "\nFAST TOOL CFG: ";
-  css << "ECU:" << c->m_useEarlyCU << " ";
-  css << "FEN:" << c->m_fastInterSearchMode << " ";
-  css << "FDM:" << c->m_useFastDecisionForMerge << " ";
-  css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
-  if( c->m_motionEstimationSearchMethodSCC )
-  {
-    css << "(SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
-  }
-  css << "LCTUFast:" << c->m_useFastLCTU << " ";
-  css << "FastMrg:" << c->m_useFastMrg << " ";
-  css << "PBIntraFast:" << c->m_usePbIntraFast << " ";
-  css << "AMaxBT:" << c->m_useAMaxBT << " ";
-  css << "FastQtBtEnc:" << c->m_fastQtBtEnc << " ";
-  css << "ContentBasedFastQtbt:" << c->m_contentBasedFastQtbt << " ";
-  if( c->m_MIP )
-  {
-    css << "FastMIP:" << c->m_useFastMIP << " ";
-  }
-  css << "FastIntraTools:" << c->m_FastIntraTools << " ";
-  css << "IntraEstDecBit:" << c->m_IntraEstDecBit << " ";
-  css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
-  css << "IntegerET:" << c->m_bIntegerET << " ";
-  css << "FastSubPel:" << c->m_fastSubPel << " ";
-  css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
-  css << "FastTTSplit:" << c->m_fastTTSplit << " ";
-  if( c->m_IBCMode )
-  {
-    css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
-  }
-  css << "FIM:" << c->m_FIMMode << " ";
-  if( c->m_FastInferMerge )
-  {
-    css << "(" << c->m_FastInferMerge << ") ";
-  }
-  if( c->m_alf )
-  {
-    css << "ALFSpeed:" << c->m_alfSpeed << " ";
-  }
-  if( c->m_quantThresholdVal & 1 )
-    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
-  else
-    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
+    css << "\nFAST TOOL CFG: ";
+    css << "ECU:" << c->m_useEarlyCU << " ";
+    css << "FEN:" << c->m_fastInterSearchMode << " ";
+    css << "FDM:" << c->m_useFastDecisionForMerge << " ";
+    css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
+    if( c->m_motionEstimationSearchMethodSCC )
+    {
+      css << "(SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
+    }
+    css << "LCTUFast:" << c->m_useFastLCTU << " ";
+    css << "FastMrg:" << c->m_useFastMrg << " ";
+    css << "PBIntraFast:" << c->m_usePbIntraFast << " ";
+    css << "AMaxBT:" << c->m_useAMaxBT << " ";
+    css << "FastQtBtEnc:" << c->m_fastQtBtEnc << " ";
+    css << "ContentBasedFastQtbt:" << c->m_contentBasedFastQtbt << " ";
+    if( c->m_MIP )
+    {
+      css << "FastMIP:" << c->m_useFastMIP << " ";
+    }
+    css << "FastIntraTools:" << c->m_FastIntraTools << " ";
+    css << "IntraEstDecBit:" << c->m_IntraEstDecBit << " ";
+    css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
+    css << "IntegerET:" << c->m_bIntegerET << " ";
+    css << "FastSubPel:" << c->m_fastSubPel << " ";
+    css << "ReduceFilterME:" << c->m_meReduceTap << " ";
+    css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
+    css << "FastTTSplit:" << c->m_fastTTSplit << " ";
+    if( c->m_IBCMode )
+    {
+      css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
+    }
+    css << "FIM:" << c->m_FIMMode << " ";
+    if( c->m_FastInferMerge )
+    {
+      css << "(" << c->m_FastInferMerge << ") ";
+    }
+    if( c->m_alf )
+    {
+      css << "ALFSpeed:" << c->m_alfSpeed << " ";
+    }
+    if( c->m_quantThresholdVal & 1 )
+      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+    else
+      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
 
-  css << "\nRATE CONTROL CFG: ";
-  css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
-  if ( c->m_RCTargetBitrate > 0 )
-  {
-    css << "Passes:" << c->m_RCNumPasses << " ";
-    css << "Pass:" << c->m_RCPass << " ";
-    css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
-    css << "RCInitialQP:" << c->m_RCInitialQP << " ";
-    css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
-  }
-  css << "LookAhead:" << c->m_LookAhead << " ";
+    css << "\nRATE CONTROL CFG: ";
+    css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
+    if ( c->m_RCTargetBitrate > 0 )
+    {
+      css << "Passes:" << c->m_RCNumPasses << " ";
+      css << "Pass:" << c->m_RCPass << " ";
+      css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
+      css << "RCInitialQP:" << c->m_RCInitialQP << " ";
+      css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
+    }
+    css << "LookAhead:" << c->m_LookAhead << " ";
 
-  css << "\nPARALLEL PROCESSING CFG: ";
-  css << "NumThreads:" << c->m_numThreads << " ";
-  css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
-  if( c->m_picPartitionFlag )
-  {
-    css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
-  }
-  css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
-  css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
-  css << "\n";
+    css << "\nPARALLEL PROCESSING CFG: ";
+    css << "NumThreads:" << c->m_numThreads << " ";
+    css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+    if( c->m_picPartitionFlag )
+    {
+      css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
+    }
+    css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
+    css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
+    css << "\n";
   }
 
   vvenc_cfgString = css.str();

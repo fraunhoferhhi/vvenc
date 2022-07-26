@@ -537,7 +537,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0-63)")
     ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "Number of threads default: [size < 720p: 4, >= 720p: 8]")
-    ("gopsize,g",                                       c->m_GOPSize,                                        "GOP size of temporal structure (16,32)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "Intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
@@ -618,6 +617,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("vuiparameterspresent,-vui",                       toVui,                                              "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
     ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "Emit VUI HRD information (0: off, 1: on; default: 1)")
     ("decodedpicturehash,-dph",                         toHashType,                                         "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
+    // --> deprecated
+    ("gopsize,g",                                       c->m_GOPSize,                                       "GOP size of temporal structure (16,32) (deprecated)")
+    // <-- deprecated
     ;
   }
 
@@ -821,8 +823,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     // motion search options
     opts.setSubSection("Motion search options");
     opts.addOptions()
-    ("FastSearch",                                      c->m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond 4: FastDiamond)")
-    ("FastSearchSCC",                                   c->m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Selective 2:DiamondSCC 3:FastDiamondSCC)")
+    ("FastSearch",                                      c->m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Deprecated 3:Enhanced Diamond 4: FastDiamond)")
+    ("FastSearchSCC",                                   c->m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Deprecated 2:DiamondSCC 3:FastDiamondSCC)")
     ("RestrictMESampling",                              c->m_bRestrictMESampling,                            "Enable restrict ME Sampling for selective inter motion search")
     ("SearchRange,-sr",                                 c->m_SearchRange,                                    "Motion search range")
     ("BipredSearchRange",                               c->m_bipredSearchRange,                              "Motion search range for bipred refinement")
@@ -831,6 +833,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FastMEAssumingSmootherMVEnabled",                 c->m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
     ("IntegerET",                                       c->m_bIntegerET,                                     "Enable early termination for integer motion search")
     ("FastSubPel",                                      c->m_fastSubPel,                                     "Enable fast sub-pel ME (1: enable fast sub-pel ME, 2: completely disable sub-pel ME)")
+    ("ReduceFilterME",                                  c->m_meReduceTap,                                    "Use reduced filter taps during subpel refinement (0 - use 8-tap; 1 - 6-tap; 2 - 4-tap)")
     ;
 
     // Deblocking filter parameters
@@ -1138,6 +1141,11 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
+    }
+
+    if( m_easyMode && c->m_GOPSize != 32 )
+    {
+      err.warn( "deprecated option" ) << "--gopsize option is deprecated as it is not needed anymore (auto adapted by arbitrary intra period)\n";
     }
 
     for( auto& a : argv_unhandled )
