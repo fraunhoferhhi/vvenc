@@ -118,6 +118,8 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
+static constexpr int MCTF_blk_size = 16;
+
 int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror )
 {
   int error = 0;
@@ -535,11 +537,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         subsampleLuma(srcPic.picBuffer, bufferSub2);
         subsampleLuma(bufferSub2, bufferSub4);
 
-        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 16);
-        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 16, &mv_0, 2);
-        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 16, &mv_1, 2);
+        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * MCTF_blk_size);
+        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * MCTF_blk_size, &mv_0, 2);
+        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * MCTF_blk_size, &mv_1, 2);
 
-        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, 8, &mv_2, 1, true);
+        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, MCTF_blk_size, &mv_2, 1, true);
       }
 
       srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
@@ -901,15 +903,15 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
 void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const
 {
-  static const int lumaBlockSize=8;
+  static const int lumaBlockSize = MCTF_blk_size;
 
   const ComponentID compID=(ComponentID)comp;
   const int csx=getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
   const int csy=getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-  const int blockSizeX = lumaBlockSize>>csx;
-  const int blockSizeY = lumaBlockSize>>csy;
-  const int width  = input.bufs[compID].width;
-  int y = blockNumY*blockSizeY;
+  const int blockSizeX = lumaBlockSize >> csx;
+  const int y          = blockNumY * ( lumaBlockSize >> csy );
+  const int blockSizeY = std::min<int>( lumaBlockSize >> csy, input.bufs[compID].width - y );
+  const int width      = input.bufs[compID].width;
 
   const Pel* srcImage = input.bufs[compID].buf;
   const int srcStride  = input.bufs[compID].stride;
@@ -978,11 +980,11 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
   int vnoise[MAX_NUM_REF] = { 0, };
   int verror[MAX_NUM_REF] = { 0, };
 
-  for(int c=0; c< getNumberValidComponents(m_encCfg->m_internChromaFormat); c++)
+  for( int c = 0; c < getNumberValidComponents( m_encCfg->m_internChromaFormat ); c++ )
   {
-    for (int i = 0; i < numRefs; i++)
+    for( int i = 0; i < numRefs; i++ )
     {
-      applyMotionLn(srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / 8, c);
+      applyMotionLn( srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / MCTF_blk_size, c );
     }
 
     const ComponentID compID = ( ComponentID ) c;
@@ -995,19 +997,22 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
 
-    const int blkSizeY = 8      >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const int blkSizeX = 8      >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
-    const int yOut     = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
+    const int blkSizeY = MCTF_blk_size >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
+    const int blkSizeX = MCTF_blk_size >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
+    const int yOut     = yStart        >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
     const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
           Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
 
-    for( int by = yOut, yBlkAddr = yStart / 8; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
+    for( int by = yOut, yBlkAddr = yStart / MCTF_blk_size; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
     {
-      const Pel* srcPel = srcPelRow;
-            Pel* dstPel = dstPelRow;
+      const Pel* srcPel  = srcPelRow;
+            Pel* dstPel  = dstPelRow;
+      const int h = std::min( blkSizeY, height - by );
 
       for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++, srcPel += blkSizeX, dstPel += blkSizeX )
       {
+        const int w = std::min( blkSizeX, width - bx );
+
         int minError = 9999999;
 
         for( int i = 0; i < numRefs; i++ )
@@ -1015,23 +1020,23 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
           int64_t variance = 0, diffsum = 0;
           const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
           const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
-          for( int y1 = 0; y1 < blkSizeY; y1++ )
+          for( int y1 = 0; y1 < h; y1++ )
           {
-            for( int x1 = 0; x1 < blkSizeX; x1++ )
+            for( int x1 = 0; x1 < w; x1++ )
             {
               const Pel pix = *( srcPel + srcStride * y1 + x1 );
               const Pel ref = *( refPel + refStride * y1 + x1 );
 
               const int diff = pix - ref;
               variance += diff * diff;
-              if( x1 != blkSizeX - 1 )
+              if( x1 != w - 1 )
               {
                 const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
                 const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
                 const int diffR = pixR - refR;
                 diffsum += ( diffR - diff ) * ( diffR - diff );
               }
-              if( y1 != blkSizeY - 1 )
+              if( y1 != h - 1 )
               {
                 const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
                 const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
@@ -1040,16 +1045,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
               }
             }
           }
-          const int cntV = blkSizeX * blkSizeY;
-          const int cntD = 2 * cntV - blkSizeX - blkSizeY;
+          const int cntV = w * h;
+          const int cntD = 2 * cntV - w - h;
           vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
           verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
           minError = std::min( minError, verror[i] );
           //srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
         }
-
-        int w = std::min( blkSizeX, width - bx );
-        int h = std::min( blkSizeY, std::min( yOut + blkSizeY, height ) - by );
 
         for( int y = 0; y < h; y++ )
         {
