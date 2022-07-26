@@ -120,16 +120,16 @@ const double MCTF::m_refStrengths[3][4] =
 
 static constexpr int MCTF_blk_size = 16;
 
-int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror )
+int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
   int error = 0;
 
-  for( int y1 = 0; y1 < bs; y1++ )
+  for( int y1 = 0; y1 < h; y1++ )
   {
     const Pel* origRowStart   = org + y1 * origStride;
     const Pel* bufferRowStart = buf + y1 * buffStride;
 
-    for( int x1 = 0; x1 < bs; x1 += 2 )
+    for( int x1 = 0; x1 < w; x1 += 2 )
     {
       int diff = origRowStart[x1] - bufferRowStart[x1];
       error += diff * diff;
@@ -145,18 +145,18 @@ int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* b
   return error;
 }
 
-int motionErrorLumaFrac6( const Pel *org, const ptrdiff_t origStride, const Pel *buf, const ptrdiff_t buffStride, const int bs, const int16_t *xFilter, const int16_t *yFilter, const int bitDepth, const int besterror )
+int motionErrorLumaFrac6( const Pel *org, const ptrdiff_t origStride, const Pel *buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t *xFilter, const int16_t *yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
   Pel tempArray[64 + 8][64];
   int sum, base;
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
-  for( int y1 = 1; y1 < bs + 7; y1++ )
+  for( int y1 = 1; y1 < h + 7; y1++ )
   {
     const int yOffset = y1 - 3;
     const Pel *sourceRow = buf + yOffset * buffStride;
-    for( int x1 = 0; x1 < bs; x1++ )
+    for( int x1 = 0; x1 < w; x1++ )
     {
       sum = 0;
       base = x1 - 3;
@@ -176,10 +176,10 @@ int motionErrorLumaFrac6( const Pel *org, const ptrdiff_t origStride, const Pel 
     }
   }
 
-  for( int y1 = 0; y1 < bs; y1++ )
+  for( int y1 = 0; y1 < h; y1++ )
   {
     const Pel *origRow = org + y1 * origStride;
-    for( int x1 = 0; x1 < bs; x1++ )
+    for( int x1 = 0; x1 < w; x1++ )
     {
       sum = 0;
       sum += yFilter[1] * tempArray[y1 + 1][x1];
@@ -203,18 +203,18 @@ int motionErrorLumaFrac6( const Pel *org, const ptrdiff_t origStride, const Pel 
   return error;
 }
 
-int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
   Pel tempArray[64 + 4][64];
   int sum, base;
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
-  for( int y1 = 0; y1 < bs + 3; y1++ )
+  for( int y1 = 0; y1 < h + 3; y1++ )
   {
     const int yOffset = y1 - 1;
     const Pel* sourceRow = buf + yOffset * buffStride;
-    for( int x1 = 0; x1 < bs; x1++ )
+    for( int x1 = 0; x1 < w; x1++ )
     {
       sum = 0;
       base = x1 - 1;
@@ -232,10 +232,10 @@ int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel*
     }
   }
 
-  for( int y1 = 0; y1 < bs; y1++ )
+  for( int y1 = 0; y1 < h; y1++ )
   {
     const Pel* origRow = org + y1 * origStride;
-    for( int x1 = 0; x1 < bs; x1++ )
+    for( int x1 = 0; x1 < w; x1++ )
     {
       sum = 0;
       sum += yFilter[0] * tempArray[y1 + 0][x1];
@@ -257,7 +257,7 @@ int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel*
   return error;
 }
 
-void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
 {
   const int numFilterTaps   = 7;
   const int centreTapOffset = 3;
@@ -267,11 +267,11 @@ void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
 
   Pel tempArray[lbs + numFilterTaps][lbs];
 
-  for( int by = 1; by < bsy + numFilterTaps - 1; by++ )
+  for( int by = 1; by < h + numFilterTaps - 1; by++ )
   {
     const int yOffset = by - centreTapOffset;
     const Pel *sourceRow = org + yOffset * origStride;
-    for( int bx = 0; bx < bsx; bx++ )
+    for( int bx = 0; bx < w; bx++ )
     {
       int base = bx - centreTapOffset;
       const Pel *rowStart = sourceRow + base;
@@ -290,10 +290,10 @@ void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   }
 
   Pel *dstRow = dst;
-  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  for( int by = 0; by < h; by++, dstRow += dstStride )
   {
     Pel *dstPel = dstRow;
-    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    for( int bx = 0; bx < w; bx++, dstPel++ )
     {
       int sum = 0;
 
@@ -311,7 +311,7 @@ void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   }
 }
 
-void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
 {
   const int numFilterTaps   = 3;
   const int centreTapOffset = 1;
@@ -321,12 +321,12 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
 
   Pel tempArray[lbs + numFilterTaps][lbs];
 
-  for( int by = 0; by < bsy + numFilterTaps; by++ )
+  for( int by = 0; by < h + numFilterTaps; by++ )
   {
     const int yOffset    = by - centreTapOffset;
     const Pel* sourceRow = org + yOffset * origStride;
 
-    for( int bx = 0; bx < bsx; bx++ )
+    for( int bx = 0; bx < w; bx++ )
     {
       int base = bx - centreTapOffset;
       const Pel* rowStart = sourceRow + base;
@@ -343,10 +343,10 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   }
 
   Pel* dstRow = dst;
-  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  for( int by = 0; by < h; by++, dstRow += dstStride )
   {
     Pel* dstPel = dstRow;
-    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    for( int bx = 0; bx < w; bx++, dstPel++ )
     {
       int sum = 0;
       sum += yFilter[0] * tempArray[by + 0][bx];
@@ -527,9 +527,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         const int width = m_area.width;
         const int height = m_area.height;
-        Array2D<MotionVector> mv_0(width / 64, height / 64);
-        Array2D<MotionVector> mv_1(width / 32, height / 32);
-        Array2D<MotionVector> mv_2(width / 16, height / 16);
+        Array2D<MotionVector> mv_0( width / ( MCTF_blk_size * 8 ) + 1, height / ( MCTF_blk_size * 8 ) + 1 );
+        Array2D<MotionVector> mv_1( width / ( MCTF_blk_size * 4 ) + 1, height / ( MCTF_blk_size * 4 ) + 1 );
+        Array2D<MotionVector> mv_2( width / ( MCTF_blk_size * 2 ) + 1, height / ( MCTF_blk_size * 2 ) + 1 );
 
         PelStorage bufferSub2;
         PelStorage bufferSub4;
@@ -600,6 +600,11 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 
   CHECKD( bs & 7, "Blocksize has to be a multiple of 8!" );
 
+  const int w = std::min<int>( bs, orig.Y().width  - x ) & ~7;
+  const int h = std::min<int>( bs, orig.Y().height - y ) & ~7;
+
+  CHECK( !w || !h, "Incompatible sizes!" );
+
   if( ( fx | fy ) == 0 )
   {
     dx /= m_motionVectorFactor;
@@ -610,14 +615,7 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
     const int  buffStride = buffer.Y().stride;
     const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
 
-    //if( bs & 7 )
-    //{
-    //  return m_motionErrorLumaIntX( org, origStride, buf, buffStride, bs, besterror );
-    //}
-    //else
-    {
-      return m_motionErrorLumaInt8( org, origStride, buf, buffStride, bs, besterror );
-    }
+    return m_motionErrorLumaInt8( org, origStride, buf, buffStride, w, h, besterror );
   }
   else if( m_lowResFltSearch )
   {
@@ -632,14 +630,7 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
     const int16_t *xFilter = m_interpolationFilter4[fx];
     const int16_t *yFilter = m_interpolationFilter4[fy];
 
-    //if( bs & 7 )
-    //{
-    //  return m_motionErrorLumaFracX[1]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
-    //}
-    //else
-    {
-      return m_motionErrorLumaFrac8[1]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
-    }
+    return m_motionErrorLumaFrac8[1]( org, origStride, buf, buffStride, w, h, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
   }
   else
   {
@@ -654,15 +645,9 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
     const int16_t *xFilter = m_interpolationFilter8[fx];
     const int16_t *yFilter = m_interpolationFilter8[fy];
 
-    //if( bs & 7 )
-    //{
-    //  return m_motionErrorLumaFracX[0]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
-    //}
-    //else
-    {
-      return m_motionErrorLumaFrac8[0]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
-    }
+    return m_motionErrorLumaFrac8[0]( org, origStride, buf, buffStride, w,h, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
   }
+
   return error;
 }
 
@@ -674,7 +659,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
-  for( int blockX = blockX_.load(); blockX + blockSize <= origWidth; blockX += stepSize, blockX_.store( blockX) )
+  for( int blockX = blockX_.load(); blockX + 7 <= origWidth; blockX += stepSize, blockX_.store( blockX) )
   {
     if( prevLineX && blockX >= prevLineX->load() ) return false;
 
@@ -806,28 +791,31 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
 
+    const int w = std::min<int>( blockSize, orig.Y().width  - blockX ) & ~7;
+    const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
+
     // calculate average
     double avg = 0.0;
-    for( int y1 = 0; y1 < blockSize; y1++ )
+    for( int y1 = 0; y1 < h; y1++ )
     {
-      for( int x1 = 0; x1 < blockSize; x1++ )
+      for( int x1 = 0; x1 < w; x1++ )
       {
         avg = avg + orig.Y().at( blockX + x1, blockY + y1 );
       }
     }
-    avg = avg / ( blockSize * blockSize );
+    avg = avg / ( w * h );
 
     // calculate variance
     double variance = 0;
-    for( int y1 = 0; y1 < blockSize; y1++ )
+    for( int y1 = 0; y1 < h; y1++ )
     {
-      for( int x1 = 0; x1 < blockSize; x1++ )
+      for( int x1 = 0; x1 < w; x1++ )
       {
         int pix = orig.Y().at( blockX + x1, blockY + y1 );
         variance = variance + ( pix - avg ) * ( pix - avg );
       }
     }
-    best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( blockSize * blockSize ) ) / 50 );
+    best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }
@@ -892,7 +880,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   }
   else
   {
-    for( int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize )
+    for( int blockY = 0; blockY + 7 <= origHeight; blockY += stepSize )
     {
       std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
       estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY );
