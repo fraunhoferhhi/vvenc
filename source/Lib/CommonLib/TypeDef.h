@@ -215,14 +215,14 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 #define CHROMA_444 VVENC_CHROMA_444
 #define NUM_CHROMA_FORMAT VVENC_NUM_CHROMA_FORMAT
 
-enum ChannelType
+enum ChannelType : int8_t
 {
   CH_L = 0,
   CH_C = 1,
   MAX_NUM_CH = 2
 };
 
-enum ComponentID
+enum ComponentID : int8_t
 {
   COMP_Y          = 0,
   COMP_Cb         = 1,
@@ -232,14 +232,14 @@ enum ComponentID
   MAX_NUM_TBLOCKS = MAX_NUM_COMP
 };
 
-enum ApsType
+enum ApsType : int8_t
 {
   ALF_APS = 0,
   LMCS_APS = 1,
   SCALING_LIST_APS = 2,
 };
 
-enum QuantFlags
+enum QuantFlags : int8_t
 {
   Q_INIT           = 0x0,
   Q_USE_RDOQ       = 0x1,
@@ -248,7 +248,7 @@ enum QuantFlags
 };
 
 //EMT transform tags
-enum TransType
+enum TransType : int8_t
 {
   DCT2 = 0,
   DCT8 = 1,
@@ -256,7 +256,7 @@ enum TransType
   NUM_TRANS_TYPE = 3
 };
 
-enum MTSIdx
+enum MTSIdx : int8_t
 {
   MTS_DCT2_DCT2 = 0,
   MTS_SKIP = 1,
@@ -266,7 +266,7 @@ enum MTSIdx
   MTS_DCT8_DCT8 = 5
 };
 
-enum ISPType
+enum ISPType : int8_t
 {
   NOT_INTRA_SUBPARTITIONS       = 0,
   HOR_INTRA_SUBPARTITIONS       = 1,
@@ -275,7 +275,7 @@ enum ISPType
   INTRA_SUBPARTITIONS_RESERVED  = 4
 };
 
-enum SbtIdx
+enum SbtIdx : int8_t
 {
   SBT_OFF_DCT  = 0,
   SBT_VER_HALF = 1,
@@ -286,14 +286,14 @@ enum SbtIdx
   SBT_OFF_MTS, //note: must be after all SBT modes, only used in fast algorithm to discern the best mode is inter EMT
 };
 
-enum SbtPos
+enum SbtPos : int8_t
 {
   SBT_POS0 = 0,
   SBT_POS1 = 1,
   NUMBER_SBT_POS
 };
 
-enum SbtMode
+enum SbtMode : int8_t
 {
   SBT_VER_H0 = 0,
   SBT_VER_H1 = 1,
@@ -306,36 +306,21 @@ enum SbtMode
   NUMBER_SBT_MODE
 };
 
-enum TreeType
+enum TreeType : int8_t
 {
   TREE_D = 0, //default tree status (for single-tree slice, TREE_D means joint tree; for dual-tree I slice, TREE_D means TREE_L for luma and TREE_C for chroma)
   TREE_L = 1, //separate tree only contains luma (may split)
   TREE_C = 2, //separate tree only contains chroma (not split), to avoid small chroma block
 };
 
-enum ModeType
+enum ModeType : int8_t
 {
   MODE_TYPE_ALL = 0, //all modes can try
   MODE_TYPE_INTER = 1, //can try inter
   MODE_TYPE_INTRA = 2, //can try intra, ibc, palette
 };
 
-enum MATRIX_COEFFICIENTS // Table E.5 (Matrix coefficients)
-{
-  MATRIX_COEFFICIENTS_RGB                           = 0,
-  MATRIX_COEFFICIENTS_BT709                         = 1,
-  MATRIX_COEFFICIENTS_UNSPECIFIED                   = 2,
-  MATRIX_COEFFICIENTS_RESERVED_BY_ITUISOIEC         = 3,
-  MATRIX_COEFFICIENTS_USFCCT47                      = 4,
-  MATRIX_COEFFICIENTS_BT601_625                     = 5,
-  MATRIX_COEFFICIENTS_BT601_525                     = 6,
-  MATRIX_COEFFICIENTS_SMPTE240                      = 7,
-  MATRIX_COEFFICIENTS_YCGCO                         = 8,
-  MATRIX_COEFFICIENTS_BT2020_NON_CONSTANT_LUMINANCE = 9,
-  MATRIX_COEFFICIENTS_BT2020_CONSTANT_LUMINANCE     = 10,
-};
-
-enum DeblockEdgeDir
+enum DeblockEdgeDir : int8_t
 {
   EDGE_VER     = 0,
   EDGE_HOR     = 1,
@@ -343,7 +328,7 @@ enum DeblockEdgeDir
 };
 
 /// supported prediction type
-enum PredMode
+enum PredMode : int8_t
 {
   MODE_INTER                 = 0,     ///< inter-prediction mode
   MODE_INTRA                 = 1,     ///< intra-prediction mode
@@ -353,7 +338,7 @@ enum PredMode
 };
 
 /// reference list index
-enum RefPicList
+enum RefPicList : int8_t
 {
   REF_PIC_LIST_0               = 0,   ///< reference list 0
   REF_PIC_LIST_1               = 1,   ///< reference list 1
@@ -365,7 +350,7 @@ enum RefPicList
 #define L1 REF_PIC_LIST_1
 
 /// distortion function index
-enum DFunc
+enum DFunc : uint8_t
 {
   DF_SSE             = 0,             ///< general size SSE
   DF_SSE2            = DF_SSE+1,      ///<   2xM SSE
@@ -409,11 +394,11 @@ enum DFunc
 
   DF_TOTAL_FUNCTIONS = 34,
 
-  DF_SSE_WTD         = 0xfedc          // out of func scope
+  DF_SSE_WTD         = 0xf2u          // out of func scope
 };
 
 /// motion vector predictor direction used in AMVP
-enum MvpDir
+enum MvpDir : int8_t
 {
   MD_LEFT = 0,          ///< MVP of left block
   MD_ABOVE,             ///< MVP of above block
@@ -422,7 +407,7 @@ enum MvpDir
   MD_ABOVE_LEFT         ///< MVP of above left block
 };
 
-enum TransformDirection
+enum TransformDirection : int8_t
 {
   TRANSFORM_FORWARD              = 0,
   TRANSFORM_INVERSE              = 0,
@@ -431,14 +416,14 @@ enum TransformDirection
   //TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
-enum CoeffScanGroupType
+enum CoeffScanGroupType : int8_t
 {
   SCAN_UNGROUPED   = 0,
   SCAN_GROUPED_4x4 = 1,
   SCAN_NUMBER_OF_GROUP_TYPES = 2
 };
 
-enum ScalingListSize
+enum ScalingListSize : int8_t
 {
   SCALING_LIST_1x1 = 0,
   SCALING_LIST_2x2,
@@ -453,7 +438,7 @@ enum ScalingListSize
   SCALING_LIST_LAST_CODED = SCALING_LIST_64x64
 };
 
-enum SAOMode //mode
+enum SAOMode : int8_t //mode
 {
   SAO_MODE_OFF = 0,
   SAO_MODE_NEW,
@@ -461,7 +446,7 @@ enum SAOMode //mode
   NUM_SAO_MODES
 };
 
-enum SAOModeMergeTypes
+enum SAOModeMergeTypes : int8_t
 {
   SAO_MERGE_LEFT =0,
   SAO_MERGE_ABOVE,
@@ -469,7 +454,7 @@ enum SAOModeMergeTypes
 };
 
 
-enum SAOModeNewTypes
+enum SAOModeNewTypes : int8_t
 {
   SAO_TYPE_START_EO =0,
   SAO_TYPE_EO_0 = SAO_TYPE_START_EO,
@@ -484,7 +469,7 @@ enum SAOModeNewTypes
 };
 #define NUM_SAO_EO_TYPES_LOG2 2
 
-enum SAOEOClasses
+enum SAOEOClasses : int8_t
 {
   SAO_CLASS_EO_FULL_VALLEY = 0,
   SAO_CLASS_EO_HALF_VALLEY = 1,
@@ -497,24 +482,19 @@ enum SAOEOClasses
 #define NUM_SAO_BO_CLASSES_LOG2  5
 #define NUM_SAO_BO_CLASSES       (1<<NUM_SAO_BO_CLASSES_LOG2)
 
-enum SPSExtensionFlagIndex
+enum SPSExtensionFlagIndex : int8_t
 {
   SPS_EXT__REXT           = 0,
-//SPS_EXT__MVHEVC         = 1, //for use in future versions
-//SPS_EXT__SHVC           = 2, //for use in future versions
-  SPS_EXT__NEXT           = 3,
   NUM_SPS_EXTENSION_FLAGS = 8
 };
 
-enum PPSExtensionFlagIndex
+enum PPSExtensionFlagIndex : int8_t
 {
   PPS_EXT__REXT           = 0,
-//PPS_EXT__MVHEVC         = 1, //for use in future versions
-//PPS_EXT__SHVC           = 2, //for use in future versions
   NUM_PPS_EXTENSION_FLAGS = 8
 };
 
-enum MergeType
+enum MergeType : int8_t
 {
   MRG_TYPE_DEFAULT_N        = 0, // 0
   MRG_TYPE_SUBPU_ATMVP,
@@ -526,7 +506,7 @@ enum MergeType
 // Encoder modes to try out
 //////////////////////////////////////////////////////////////////////////
 
-enum ImvMode
+enum ImvMode : int8_t
 {
  IMV_OFF = 0,
  IMV_FPEL,
@@ -651,7 +631,7 @@ public:
 };
 
 
-enum RESHAPE_SIGNAL_TYPE
+enum RESHAPE_SIGNAL_TYPE : int8_t
 {
   RESHAPE_SIGNAL_SDR = 0,
   RESHAPE_SIGNAL_PQ  = 1,
