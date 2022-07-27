@@ -497,8 +497,9 @@ static constexpr uint8_t MAX_TMP_BUFS = 6;
 
 struct ClpRng
 {
-  constexpr int min() const { return 0; }
-            int max() const { return ( 1 << bd )-1; }
+  static constexpr
+  int min()       { return 0; }
+  int max() const { return ( 1 << bd )-1; }
   int bd;
 };
 
