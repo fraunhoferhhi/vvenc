@@ -3914,7 +3914,7 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
 
   const double sqrtLambdaForFirstPassIntra = m_cRdCost.getMotionLambda() * FRAC_BITS_SCALE;
 
-  bool sameMV[AFFINE_MRG_MAX_NUM_CANDS] = { false, };
+  bool sameMV[AFFINE_MRG_MAX_NUM_CANDS + 1] = { false, };
 
   if( m_pcEncCfg->m_Affine > 1 )
   {
