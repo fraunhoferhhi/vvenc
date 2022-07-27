@@ -312,7 +312,7 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->MCTFFutureReference = true;
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
-  vvencMCTF->MCTFUnitSize = 8;
+  vvencMCTF->MCTFUnitSize = 16;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
