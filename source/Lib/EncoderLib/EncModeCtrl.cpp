@@ -991,7 +991,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     if( cuECtx.bestCS && cuECtx.bestCU && cuECtx.interHad )
     {
       // Get SATD threshold from best Inter-CU
-      if (!cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast && !cs.slice->disableSATDForRd)
+      if( !cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast )
       {
         const DFunc dfunc = DF_HAD;
         DistParam distParam = m_pcRdCost->setDistParam( cs.getOrgBuf( COMP_Y ), cuECtx.bestCS->getPredBuf( COMP_Y ), cs.sps->bitDepths[ CH_L ], dfunc );

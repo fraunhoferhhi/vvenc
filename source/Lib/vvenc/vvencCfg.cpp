@@ -516,7 +516,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
   c->m_motionEstimationSearchMethodSCC         = 0;
-  c->m_bRestrictMESampling                     = false;
   c->m_SearchRange                             = 96;
   c->m_bipredSearchRange                       = 4;
   c->m_minSearchWindow                         = 8;
@@ -2802,7 +2801,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "RDQTS:" << c->m_useRDOQTS << " ";
     css << "ASR:" << c->m_bUseASR << " ";
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
-    css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
 

@@ -1283,7 +1283,6 @@ class Slice
   int                         ccAlfCbApsId;
   int                         ccAlfCrApsId;
 
-  bool                        disableSATDForRd;
   bool                        isLossless;
   CcAlfFilterParam            ccAlfFilterParam;
   uint8_t*                    ccAlfFilterControl[2];

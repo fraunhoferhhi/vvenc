@@ -110,7 +110,6 @@ Slice::Slice()
   , ccAlfCrEnabled             ( false )
   , ccAlfCbApsId               ( -1 )
   , ccAlfCrApsId               ( -1 )
-  , disableSATDForRd                    ( 0 )
   , isLossless                          ( false )
 {
   ::memset( saoEnabled,              0, sizeof( saoEnabled ) );
@@ -699,7 +698,6 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   numAps               = slice->numAps;
   lumaApsId            = slice->lumaApsId;
   chromaApsId          = slice->chromaApsId;
-  disableSATDForRd              = slice->disableSATDForRd;
   isLossless                    = slice->isLossless;
 
   sliceMap                      = slice->sliceMap;
