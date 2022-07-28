@@ -902,7 +902,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
         Pel* dstImage  = output.bufs[compID].buf;
   const int dstStride  = output.bufs[compID].stride;
 
-  for( int x = 0, blockNumX = 0; x + blockSizeX <= width; x += blockSizeX, blockNumX++ )
+  for( int x = 0, blockNumX = 0; x + 7 <= width; x += blockSizeX, blockNumX++ )
   {
     const MotionVector &mv = mvs.get(blockNumX,blockNumY);
     const int dx = mv.x >> csx ;
@@ -915,6 +915,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const Pel* src = srcImage + yOffset * srcStride + xOffset;
           Pel* dst = dstImage + y       * dstStride + x;
 
+    // no need to mask because the original resolution is a multiple of 8 for sure
     const int curSizeX = std::min<int>( lumaBlockSize >> csx, input.bufs[compID].width - x );
 
     if( m_lowResFltApply ) // || isChroma( compID )
