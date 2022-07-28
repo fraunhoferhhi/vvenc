@@ -395,7 +395,7 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 mctfUnused1;                                                       // TODO: remove unused memory from configuration
+  int                 MCTFUnitSize;
   int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
 
   int                 numFrames;
