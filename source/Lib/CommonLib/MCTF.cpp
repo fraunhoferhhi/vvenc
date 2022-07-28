@@ -902,7 +902,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
         Pel* dstImage  = output.bufs[compID].buf;
   const int dstStride  = output.bufs[compID].stride;
 
-  for( int x = 0, blockNumX = 0; x + 7 <= width; x += blockSizeX, blockNumX++ )
+  for( int x = 0, blockNumX = 0; x < width; x += blockSizeX, blockNumX++ )
   {
     const MotionVector &mv = mvs.get(blockNumX,blockNumY);
     const int dx = mv.x >> csx ;
