@@ -925,7 +925,6 @@ void InterpolationFilter::xWeightedGeoBlk(const ClpRngs &clpRngs, const CodingUn
   int32_t strideSrc1 = predSrc1.get(compIdx).stride - width;
 
   const char log2WeightBase = 3;
-  // const ClpRng clipRng        = cu.cs->slice->clpRngs[compIdx]   // cu.slice->clpRngs().comp[compIdx];
   const int32_t  clipbd         = clpRngs[compIdx].bd;
   const int32_t  shiftWeighted  = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + log2WeightBase;
   const int32_t  offsetWeighted = (1 << (shiftWeighted - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);

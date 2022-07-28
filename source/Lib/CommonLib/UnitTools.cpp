@@ -2882,7 +2882,7 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
   }
 }
 
-void CU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefList)
+void CU::setAllAffineMvField(CodingUnit& cu, const MvField *mvField, RefPicList eRefList)
 {
   // Set Mv
   Mv mv[3];

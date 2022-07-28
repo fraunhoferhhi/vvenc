@@ -2179,10 +2179,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
               clip = m_clipDefault;
             }
-            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-              , m_alfVBLumaCTUHeight
-              , m_alfVBLumaPos
-              );
+            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
           }
 
           for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
@@ -2195,10 +2192,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               const Area blkSrc( 0, 0, w >> chromaScaleX, h >> chromaScaleY );
               const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
               const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-                , m_alfVBChmaCTUHeight
-                , m_alfVBChmaPos
-                );
+              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
             }
           }
 
@@ -2228,10 +2222,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
           clip = m_clipDefault;
         }
-        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-          , m_alfVBLumaCTUHeight
-          , m_alfVBLumaPos
-          );
+        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
 
       for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
@@ -2244,10 +2235,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           Area blk( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
           const Area blkSrc( 0, 0, width >> chromaScaleX, height >> chromaScaleY );
           const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-            , m_alfVBChmaCTUHeight
-            , m_alfVBChmaPos
-            );
+          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
         }
       }
     }

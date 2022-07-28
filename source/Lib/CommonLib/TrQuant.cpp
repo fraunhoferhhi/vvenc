@@ -567,8 +567,8 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
 
   if (width > 1 && height > 1)
   {
-    const int shift_1st = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
-    const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT                          + COM16_C806_TRANS_PREC;
+    const int shift_1st = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
+    const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
@@ -576,13 +576,13 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   }
   else if (height == 1)   // 1-D horizontal transform
   {
-    const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
     CHECK( shift < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift, 1, 0, skipWidth);
   }
   else   // if (iWidth == 1) //1-D vertical transform
   {
-    int shift = ((floorLog2(height)) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    int shift = ((floorLog2(height)) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
     CHECK(shift < 0, "Negative shift");
     CHECKD((transformHeightIndex < 0), "There is a problem with the height.");
     fastFwdTrans[trTypeVer][transformHeightIndex](block, dstCoeff.buf, shift, 1, 0, skipHeight);
@@ -631,8 +631,8 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   TCoeff *tmp   = m_tmp;
   if (width > 1 && height > 1)   // 2-D transform
   {
-    const int shift_1st =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
-    const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
+    const int shift_1st =   TRANSFORM_MATRIX_SHIFT + 1; // 1 has been added to shift_1st at the expense of shift_2nd
+    const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
@@ -640,14 +640,14 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   }
   else if (width == 1)   // 1-D vertical transform
   {
-    int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
     CHECK(shift < 0, "Negative shift");
     CHECK((transformHeightIndex < 0), "There is a problem with the height.");
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, block, shift + 1, 1, 0, skipHeight, clipMinimum, clipMaximum);
   }
   else   // if(iHeight == 1) //1-D horizontal transform
   {
-    const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
     CHECK(shift < 0, "Negative shift");
     CHECK((transformWidthIndex < 0), "There is a problem with the width.");
     fastInvTrans[trTypeHor][transformWidthIndex](pCoeff.buf, block, shift + 1, 1, 0, skipWidth, clipMinimum, clipMaximum);

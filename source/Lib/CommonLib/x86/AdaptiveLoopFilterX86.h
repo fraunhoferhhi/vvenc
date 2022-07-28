@@ -337,8 +337,8 @@ void simdFilter5x5Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
 
 
   const __m128i mmOffset = _mm_set1_epi32(ROUND);
-  const __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  const __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  const __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  const __m128i mmMax = _mm_set1_epi16( clpRng.max() );
 
   __m128i params[2][3];
   __m128i fs   = _mm_loadu_si128((__m128i *) filterSet);
@@ -492,8 +492,8 @@ void simdFilter5x5Blk_AVX2( const AlfClassifier *, const PelUnitBuf& recDst, con
   Pel*       dst = dstBuffer.buf + blkDst.y * dstStride + blkDst.x;
 
   const __m256i mmOffset = _mm256_set1_epi32( ROUND );
-  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min );
-  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max );
+  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min() );
+  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max() );
 
   __m256i params[2][3];
   __m256i fs   = _mm256_castsi128_si256( _mm_loadu_si128( ( __m128i* ) filterSet ) );
@@ -694,8 +694,8 @@ void simdFilter7x7Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
 
   const __m128i mmOffset = _mm_set1_epi32(ROUND);
   const __m128i mmOffset1 = _mm_set1_epi32((1 << ((SHIFT_P3) - 1)) - ROUND);
-  const __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  const __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  const __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  const __m128i mmMax = _mm_set1_epi16( clpRng.max() );
 
   for (size_t i = 0; i < height; i += STEP_Y)
   {
@@ -890,8 +890,8 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
   Pel*       dst = dstBuffer.buf + blkDst.y * dstStride + blkDst.x;
 
   const __m256i mmOffset = _mm256_set1_epi32( ROUND );
-  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min );
-  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max );
+  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min() );
+  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max() );
 
   for (size_t i = 0; i < height; i += STEP_Y)
   {
@@ -1229,11 +1229,11 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           xsum      = _mm_add_epi32( xsum, xin0 );
           xsum      = _mm_srai_epi32( xsum, scaleBits );
           
-          xin0      = _mm_set1_epi32( 1 << clpRngs.comp[compId].bd >> 1 );
+          xin0      = _mm_set1_epi32( 1 << clpRngs[compId].bd >> 1 );
           xsum      = _mm_add_epi32( xsum, xin0 );
           
           xsum      = _mm_max_epi32( _mm_setzero_si128(), xsum );
-          xsum      = _mm_min_epi32( _mm_set1_epi32( clpRngs[compId].max ), xsum );
+          xsum      = _mm_min_epi32( _mm_set1_epi32( clpRngs[compId].max() ), xsum );
           xsum      = _mm_sub_epi32( xsum, xin0 );
           xsum      = _mm_packs_epi32( xsum, xsum );
           
@@ -1267,7 +1267,7 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           xin0 = _mm_add_epi16( xsum, xin1 );
           
           xin0 = _mm_max_epi16( _mm_setzero_si128(), xin0 );
-          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max ), xin0 );
+          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max() ), xin0 );
           
           _mm_storel_epi64( ( __m128i* ) &srcSelf[0], xin0 );
         }
@@ -1403,11 +1403,11 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
           vsum = _mm256_add_epi32( vsum, vin0 );
           vsum = _mm256_srai_epi32( vsum, scaleBits );
 
-          vin0 = _mm256_set1_epi32( 1 << clpRngs.comp[compId].bd >> 1 );
+          vin0 = _mm256_set1_epi32( 1 << clpRngs[compId].bd >> 1 );
           vsum = _mm256_add_epi32( vsum, vin0 );
 
           vsum = _mm256_max_epi32( _mm256_setzero_si256(), vsum );
-          vsum = _mm256_min_epi32( _mm256_set1_epi32( clpRngs[compId].max ), vsum );
+          vsum = _mm256_min_epi32( _mm256_set1_epi32( clpRngs[compId].max() ), vsum );
           vsum = _mm256_sub_epi32( vsum, vin0 );
           vsum = _mm256_packs_epi32( vsum, vsum );
           vsum = _mm256_permute4x64_epi64( vsum, ( 0 << 0 ) + ( 2 << 2 ) + ( 2 << 4 ) + ( 3 << 6 ) );
@@ -1419,7 +1419,7 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
           xin0 = _mm_add_epi16( xin0, xin1 );
 
           xin0 = _mm_max_epi16( _mm_setzero_si128(), xin0 );
-          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max ), xin0 );
+          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max() ), xin0 );
 
           _mm_storeu_si128( ( __m128i* ) &srcSelf[0], xin0 );
         }
