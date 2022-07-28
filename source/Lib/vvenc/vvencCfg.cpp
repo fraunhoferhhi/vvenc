@@ -1208,6 +1208,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       break;
   }
 
+  if( c->m_vvencMCTF.MCTFUnitSize == -1 )
+  {
+    c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
+  }
+
   vvenc_confirmParameter( c, c->m_leadFrames > 0 && c->m_temporalSubsampleRatio > 1, "Use of leading frames not supported in combination with temporal subsampling" );
   vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0,    "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
 
@@ -1601,12 +1606,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,                "MCTF parameter list sizes differ" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 3,          "MCTFSpeed exceeds supported range (0..3)" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8 && c->m_vvencMCTF.MCTFUnitSize != -1,  "MCTFUnitSize is smaller than 8 and not set to auto (-1)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8,                                       "MCTFUnitSize is smaller than 8" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > 64,                                      "MCTFUnitSize is larger than 64" );
-  if( c->m_vvencMCTF.MCTFUnitSize == -1 )
-  {
-    c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
-  }
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize & ( c->m_vvencMCTF.MCTFUnitSize - 1 ),     "MCTFUnitSize is not a power of 2" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
