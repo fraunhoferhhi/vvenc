@@ -739,7 +739,7 @@ typedef UnitBuf<const TCoeff> CCoeffUnitBuf;
 template<typename T>
 void UnitBuf<T>::fill( const T &val )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].fill( val );
   }
@@ -750,7 +750,7 @@ void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other)
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
 
-  for(size_t i = 0; i < bufs.size(); i++)
+  for( int i = 0; i < bufs.size(); i++)
   {
     if( bufs[ i ].buf != nullptr && other.bufs[ i ].buf != nullptr )
       bufs[i].copyFrom( other.bufs[i] );
@@ -763,7 +763,7 @@ void UnitBuf<T>::subtract( const UnitBuf<const T>& minuend, const UnitBuf<const 
   CHECK( chromaFormat != minuend.chromaFormat, "Incompatible formats" );
   CHECK( chromaFormat != subtrahend.chromaFormat, "Incompatible formats");
 
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].subtract( minuend.bufs[i], subtrahend.bufs[i] );
   }
@@ -775,11 +775,11 @@ void UnitBuf<T>::copyClip(const UnitBuf<const T> &src, const ClpRngs &clpRngs, c
   CHECK( chromaFormat != src.chromaFormat, "Incompatible formats" );
 
   CHECK(lumaOnly && chromaOnly, "Not allowed to have both lumaOnly and chromaOnly selected");
-  const size_t compStart = chromaOnly ? 1 : 0;
-  const size_t compEnd = lumaOnly ? 1 : bufs.size();
-  for (size_t i = compStart; i < compEnd; i++)
+  const int compStart = chromaOnly ? 1 : 0;
+  const int compEnd   = lumaOnly   ? 1 : ( int ) bufs.size();
+  for( int i = compStart; i < compEnd; i++ )
   {
-    bufs[i].copyClip( src.bufs[i], clpRngs.comp[i] );
+    bufs[i].copyClip( src.bufs[i], clpRngs[i] );
   }
 }
 
@@ -789,44 +789,44 @@ void UnitBuf<T>::reconstruct(const UnitBuf<const T>& pred, const UnitBuf<const T
   CHECK( chromaFormat != pred.chromaFormat, "Incompatible formats" );
   CHECK( chromaFormat != resi.chromaFormat, "Incompatible formats" );
 
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
-    bufs[i].reconstruct( pred.bufs[i], resi.bufs[i], clpRngs.comp[i] );
+    bufs[i].reconstruct( pred.bufs[i], resi.bufs[i], clpRngs[i] );
   }
 }
 
 template<typename T>
 void UnitBuf<T>::addAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
-  const size_t istart = chromaOnly ? 1 : 0;
-  const size_t iend   = lumaOnly   ? 1 : bufs.size();
+  const int istart = chromaOnly ? 1 : 0;
+  const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
 
   CHECK( lumaOnly && chromaOnly, "should not happen" );
 
-  for( size_t i = istart; i < iend; i++)
+  for( int i = istart; i < iend; i++)
   {
-    bufs[i].addAvg( other1.bufs[i], other2.bufs[i], clpRngs.comp[i]);
+    bufs[i].addAvg( other1.bufs[i], other2.bufs[i], clpRngs[i]);
   }
 }
 
 template<typename T>
 void UnitBuf<T>::addWeightedAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx /* = BCW_DEFAULT */, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
-  const size_t istart = chromaOnly ? 1 : 0;
-  const size_t iend = lumaOnly ? 1 : bufs.size();
+  const int istart = chromaOnly ? 1 : 0;
+  const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
 
-  CHECK(lumaOnly && chromaOnly, "should not happen");
+  CHECK( lumaOnly && chromaOnly, "should not happen" );
 
-  for (size_t i = istart; i < iend; i++)
+  for ( int i = istart; i < iend; i++)
   {
-    bufs[i].addWeightedAvg(other1.bufs[i], other2.bufs[i], clpRngs.comp[i], BcwIdx);
+    bufs[i].addWeightedAvg(other1.bufs[i], other2.bufs[i], clpRngs[i], BcwIdx);
   }
 }
 
 template<typename T>
 void UnitBuf<T>::extendBorderPelTop   ( int x, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -837,7 +837,7 @@ void UnitBuf<T>::extendBorderPelTop   ( int x, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelBot   ( int x, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -848,7 +848,7 @@ void UnitBuf<T>::extendBorderPelBot   ( int x, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelLft   ( int y, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -859,7 +859,7 @@ void UnitBuf<T>::extendBorderPelLft   ( int y, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelRgt   ( int y, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -872,14 +872,14 @@ void UnitBuf<T>::extendBorderPel( unsigned margin, bool scaleMargin )
 {
   if( ! scaleMargin )
   {
-    for( size_t i = 0; i < bufs.size(); i++ )
+    for( int i = 0; i < bufs.size(); i++ )
     {
       bufs[i].extendBorderPel( margin, margin );
     }
   }
   else
   {
-    for (unsigned i = 0; i < bufs.size(); i++)
+    for ( int i = 0; i < bufs.size(); i++)
     {
       bufs[i].extendBorderPel(margin >> getComponentScaleX(ComponentID(i), chromaFormat), margin >> getComponentScaleY(ComponentID(i), chromaFormat));
     }
@@ -889,7 +889,7 @@ void UnitBuf<T>::extendBorderPel( unsigned margin, bool scaleMargin )
 template<typename T>
 void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 {
-  for( unsigned i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].padBorderPel( margin >> getComponentScaleX( ComponentID( i ), chromaFormat ), margin >> getComponentScaleY( ComponentID( i ), chromaFormat ), dir );
   }
@@ -898,7 +898,7 @@ void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 template<typename T>
 void UnitBuf<T>::removeHighFreq( const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs)
 {
-  bufs[0].removeHighFreq(other.bufs[0], bClip, clpRngs.comp[0]);
+  bufs[0].removeHighFreq(other.bufs[0], bClip, clpRngs[0]);
 }
 
 template<typename T>

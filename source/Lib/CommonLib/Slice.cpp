@@ -110,7 +110,6 @@ Slice::Slice()
   , ccAlfCrEnabled             ( false )
   , ccAlfCbApsId               ( -1 )
   , ccAlfCrApsId               ( -1 )
-  , disableSATDForRd                    ( 0 )
   , isLossless                          ( false )
 {
   ::memset( saoEnabled,              0, sizeof( saoEnabled ) );
@@ -169,13 +168,9 @@ void Slice::resetSlicePart()
 
 void Slice::setDefaultClpRng( const SPS& sps )
 {
-  clpRngs.comp[COMP_Y].min = clpRngs.comp[COMP_Cb].min  = clpRngs.comp[COMP_Cr].min = 0;
-  clpRngs.comp[COMP_Y].max = (1<< sps.bitDepths[ CH_L ])-1;
-  clpRngs.comp[COMP_Y].bd  = sps.bitDepths[ CH_L ];
-  clpRngs.comp[COMP_Y].n   = 0;
-  clpRngs.comp[COMP_Cb].max = clpRngs.comp[COMP_Cr].max = (1<< sps.bitDepths[ CH_C ])-1;
-  clpRngs.comp[COMP_Cb].bd  = clpRngs.comp[COMP_Cr].bd  = sps.bitDepths[ CH_C ];
-  clpRngs.comp[COMP_Cb].n   = clpRngs.comp[COMP_Cr].n   = 0;
+  CHECK( sps.bitDepths[CH_L] != sps.bitDepths[CH_C], "Different luma/chroma bitdepths not supported!" );
+
+  clpRngs.bd = sps.bitDepths[CH_L];
 }
 
 
@@ -699,7 +694,6 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   numAps               = slice->numAps;
   lumaApsId            = slice->lumaApsId;
   chromaApsId          = slice->chromaApsId;
-  disableSATDForRd              = slice->disableSATDForRd;
   isLossless                    = slice->isLossless;
 
   sliceMap                      = slice->sliceMap;

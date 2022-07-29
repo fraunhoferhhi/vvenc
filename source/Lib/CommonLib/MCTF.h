@@ -137,11 +137,11 @@ private:
   void _initMCTF_X86();
 #endif
 
-  int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror );
-  int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror );
+  int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
+  int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
 
-  int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
-  int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+  int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+  int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
 
   void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
 
@@ -165,23 +165,24 @@ private:
   bool                  m_lowResFltSearch = false;  // TODO: use this to select high/low-res filter (6/4 tap) for motion search
   bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
   int                   m_searchPttrn     = 0;
+  int                   m_mctfUnitSize;
 
-  void subsampleLuma(const PelStorage &input, PelStorage &output, const int factor = 2) const;
+  void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
 
-  int motionErrorLuma(const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
+  int motionErrorLuma   (const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
 
-  bool estimateLumaLn( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
+  bool estimateLumaLn   ( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const;
 
   void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int bs,
     const Array2D<MotionVector> *previous=0, const int factor = 1, const bool doubleRes = false) const;
 
-  void bilateralFilter(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
+  void bilateralFilter  (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
 
-  void xFinalizeBlkLine(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
+  void xFinalizeBlkLine (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
     std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
 
-  void applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const;
+  void applyMotionLn    (const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const;
 
 }; // END CLASS DEFINITION MCTF
 

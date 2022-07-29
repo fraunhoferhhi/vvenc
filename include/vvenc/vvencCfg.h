@@ -395,7 +395,7 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 mctfUnused1;                                                       // TODO: remove unused memory from configuration
+  int                 MCTFUnitSize;
   int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
 
   int                 numFrames;
@@ -590,7 +590,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
+  bool                m_cfgUnused12;
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME

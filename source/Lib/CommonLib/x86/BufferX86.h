@@ -495,8 +495,8 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
   if( numSamples >= 16 )
   {
     const __m256i voffset   = _mm256_set1_epi32( offset );
-    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min() );
+    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max() );
     const __m256i vone      = _mm256_set1_epi16( 1 );
 
     for( int col = 0; col < numSamples; col += 16 )
@@ -527,8 +527,8 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
   {
     const __m128i vone     = _mm_set1_epi16( 1 );
     const __m128i voffset  = _mm_set1_epi32( offset );
-    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
     for( int col = 0; col < numSamples; col += 8 )
     {
@@ -557,8 +557,8 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
     const __m128i vone      = _mm_set1_epi16( 1 );
     const __m128i vzero     = _mm_setzero_si128();
     const __m128i voffset   = _mm_set1_epi32( offset );
-    const __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
 
     __m128i vsum = _mm_loadl_epi64  ( ( const __m128i * )&src0[0] );
     __m128i vdst = _mm_loadl_epi64  ( ( const __m128i * )&src1[0] );
@@ -588,8 +588,8 @@ void roundGeo_SSE( const Pel* src, Pel* dst, const int numSamples, unsigned shif
   if( numSamples >= 16 )
   {
     __m256i voffset   = _mm256_set1_epi16( offset );
-    __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-    __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    __m256i vibdimin  = _mm256_set1_epi16( clpRng.min() );
+    __m256i vibdimax  = _mm256_set1_epi16( clpRng.max() );
 
     for( int col = 0; col < numSamples; col += 16 )
     {
@@ -604,8 +604,8 @@ void roundGeo_SSE( const Pel* src, Pel* dst, const int numSamples, unsigned shif
 #endif
   {
     __m128i voffset   = _mm_set1_epi16( offset );
-    __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+    __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
 
     if( numSamples >= 8 )
     {
@@ -639,8 +639,8 @@ void recoCore_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, c
 #if USE_AVX2
   if( vext >= AVX2 && numSamples >= 16 )
   {
-    __m256i vbdmin = _mm256_set1_epi16( clpRng.min );
-    __m256i vbdmax = _mm256_set1_epi16( clpRng.max );
+    __m256i vbdmin = _mm256_set1_epi16( clpRng.min() );
+    __m256i vbdmax = _mm256_set1_epi16( clpRng.max() );
 
     for( int n = 0; n < numSamples; n += 16 )
     {
@@ -657,8 +657,8 @@ void recoCore_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, c
 #endif
   if( numSamples >= 8 )
   {
-    __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     for( int n = 0; n < numSamples; n += 8 )
     {
@@ -673,8 +673,8 @@ void recoCore_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, c
   }
   else
   {
-    __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     __m128i vsrc = _mm_loadl_epi64( ( const __m128i * )&src0[0] );
     __m128i vdst = _mm_loadl_epi64( ( const __m128i * )&src1[0] );
@@ -696,8 +696,8 @@ void copyClip_SSE( const Pel* src, Pel* dst, int numSamples, const ClpRng& clpRn
   if( vext >= AVX2 && numSamples >= 16 )
   {
 #if USE_AVX2
-    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min );
-    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max );
+    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
+    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
 
     for( int col = 0; col < numSamples; col += 16 )
     {
@@ -709,8 +709,8 @@ void copyClip_SSE( const Pel* src, Pel* dst, int numSamples, const ClpRng& clpRn
   }
   else if(numSamples >= 8 )
   {
-    __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     for( int col = 0; col < numSamples; col += 8 )
     {
@@ -721,8 +721,8 @@ void copyClip_SSE( const Pel* src, Pel* dst, int numSamples, const ClpRng& clpRn
   }
   else
   {
-    __m128i vbdmin  = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax  = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin  = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax  = _mm_set1_epi16( clpRng.max() );
 
     __m128i val;
     val = _mm_loadl_epi64   ( ( const __m128i * )&src[0] );
@@ -743,8 +743,8 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
   if( W == 16 )
   {
     const __m256i voffset   = _mm256_set1_epi32( offset );
-    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min() );
+    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max() );
     const __m256i vone      = _mm256_set1_epi16( 1 );
 
     for( int row = 0; row < height; row++ )
@@ -782,8 +782,8 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
   if( W >= 8 )
   {
     __m256i voffset  = _mm256_set1_epi32( offset );
-    __m128i vibdimin = _mm_set1_epi16   ( clpRng.min );
-    __m128i vibdimax = _mm_set1_epi16   ( clpRng.max );
+    __m128i vibdimin = _mm_set1_epi16   ( clpRng.min() );
+    __m128i vibdimax = _mm_set1_epi16   ( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {
@@ -814,8 +814,8 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
   if( W >= 8 )
   {
     const __m128i voffset  = _mm_set1_epi32( offset );
-    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
     const __m128i vone     = _mm_set1_epi16( 1 );
 
     for( int row = 0; row < height; row++ )
@@ -852,8 +852,8 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
   {
     __m128i vzero     = _mm_setzero_si128();
     __m128i voffset   = _mm_set1_epi32( offset );
-    __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+    __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {
@@ -912,8 +912,8 @@ void addWghtAvg_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, i
     if( ( width & 15 ) == 0 && vext >= AVX2 )
     {
       __m256i voffset  = _mm256_set1_epi32( offset );
-      __m256i vibdimin = _mm256_set1_epi16( clpRng.min );
-      __m256i vibdimax = _mm256_set1_epi16( clpRng.max );
+      __m256i vibdimin = _mm256_set1_epi16( clpRng.min() );
+      __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
       __m256i vw       = _mm256_unpacklo_epi16( _mm256_set1_epi16( w0 ), _mm256_set1_epi16( w1 ) );
 
       for( int row = 0; row < height; row++ )
@@ -946,8 +946,8 @@ void addWghtAvg_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, i
 #endif
     {
       __m128i voffset  = _mm_set1_epi32( offset );
-      __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-      __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+      __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+      __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
       __m128i vw       = _mm_unpacklo_epi16( _mm_set1_epi16( w0 ), _mm_set1_epi16( w1 ) );
 
       for( int row = 0; row < height; row++ )
@@ -981,8 +981,8 @@ void addWghtAvg_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, i
   {
     __m128i vzero     = _mm_setzero_si128();
     __m128i voffset   = _mm_set1_epi32( offset );
-    __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+    __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
     __m128i vw        = _mm_unpacklo_epi16( _mm_set1_epi16( w0 ), _mm_set1_epi16( w1 ) );
 
     for( int row = 0; row < height; row++ )
@@ -1082,8 +1082,8 @@ void reco_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, int src
 #if USE_AVX2
     if( vext >= AVX2 && ( width & 15 ) == 0 )
     {
-      __m256i vbdmin = _mm256_set1_epi16( clpRng.min );
-      __m256i vbdmax = _mm256_set1_epi16( clpRng.max );
+      __m256i vbdmin = _mm256_set1_epi16( clpRng.min() );
+      __m256i vbdmax = _mm256_set1_epi16( clpRng.max() );
 
       for( int row = 0; row < height; row++ )
       {
@@ -1106,8 +1106,8 @@ void reco_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, int src
     else
 #endif
     {
-      __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-      __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+      __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+      __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
       for( int row = 0; row < height; row++ )
       {
@@ -1130,8 +1130,8 @@ void reco_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, int src
   }
   else if( W == 4 )
   {
-    __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {
@@ -1334,8 +1334,8 @@ void linTf_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride, int widt
   {
 #if USE_AVX2
     __m256i vzero    = _mm256_setzero_si256();
-    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min );
-    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max );
+    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
+    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
     __m256i voffset  = _mm256_set1_epi32( offset );
     __m256i vscale   = _mm256_set1_epi32( scale );
 
@@ -1363,8 +1363,8 @@ void linTf_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride, int widt
   else
   {
     __m128i vzero   = _mm_setzero_si128();
-    __m128i vbdmin  = _mm_set1_epi16   ( clpRng.min );
-    __m128i vbdmax  = _mm_set1_epi16   ( clpRng.max );
+    __m128i vbdmin  = _mm_set1_epi16   ( clpRng.min() );
+    __m128i vbdmax  = _mm_set1_epi16   ( clpRng.max() );
     __m128i voffset = _mm_set1_epi32   ( offset );
     __m128i vscale  = _mm_set1_epi32   ( scale );
 
@@ -1445,8 +1445,8 @@ void copyClip_SSE( const int16_t* src, int srcStride, int16_t* dst, int dstStrid
   if( vext >= AVX2 && ( width & 15 ) == 0 && W == 8 )
   {
 #if USE_AVX2
-    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min );
-    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max );
+    __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
+    __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {
@@ -1464,8 +1464,8 @@ void copyClip_SSE( const int16_t* src, int srcStride, int16_t* dst, int dstStrid
   }
   else if( W == 8 )
   {
-    __m128i vbdmin = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {
@@ -1482,8 +1482,8 @@ void copyClip_SSE( const int16_t* src, int srcStride, int16_t* dst, int dstStrid
   }
   else
   {
-    __m128i vbdmin  = _mm_set1_epi16( clpRng.min );
-    __m128i vbdmax  = _mm_set1_epi16( clpRng.max );
+    __m128i vbdmin  = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax  = _mm_set1_epi16( clpRng.max() );
 
     for( int row = 0; row < height; row++ )
     {

@@ -1496,7 +1496,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->lastIDR                   = m_lastIDR;
   slice->depQuantEnabled           = m_pcEncCfg->m_DepQuantEnabled;
   slice->signDataHidingEnabled     = m_pcEncCfg->m_SignDataHidingEnabled;
-  slice->disableSATDForRd          = false;
 
   slice->picHeader->splitConsOverride = false;
   for( int i = 0; i < 3; i++ )

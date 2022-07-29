@@ -241,8 +241,8 @@ private:
   void xCheckRDCostIntra      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostInter      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostInterIMV   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
-  bool xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
-    , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size);
+  bool xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, const AffineMergeCtx &affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
+    , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam& distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size);
   void xCheckRDCostMerge      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm,       EncTestMode& encTestMode );
   void xCheckRDCostMergeGeo   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );

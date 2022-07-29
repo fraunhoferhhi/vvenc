@@ -218,8 +218,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
         if (useCubicFilter)
         {
-          vbdmin = _mm256_set1_epi16( clpRng.min );
-          vbdmax = _mm256_set1_epi16( clpRng.max );
+          vbdmin = _mm256_set1_epi16( clpRng.min() );
+          vbdmax = _mm256_set1_epi16( clpRng.max() );
         }
 
         for (int y = 0; y<height; y++ )
@@ -292,8 +292,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
         if (useCubicFilter)
         {
-          vbdmin = _mm_set1_epi16( clpRng.min );
-          vbdmax = _mm_set1_epi16( clpRng.max );
+          vbdmin = _mm_set1_epi16( clpRng.min() );
+          vbdmax = _mm_set1_epi16( clpRng.max() );
         }
 
         for (int y = 0; y<height; y++ )
@@ -347,8 +347,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
       __m128i offset = _mm_set1_epi32( 32 );
       if (useCubicFilter)
       {
-        vbdmin = _mm_set1_epi16( clpRng.min );
-        vbdmax = _mm_set1_epi16( clpRng.max );
+        vbdmin = _mm_set1_epi16( clpRng.min() );
+        vbdmax = _mm_set1_epi16( clpRng.max() );
       }
       for (int y = 0; y<height; y++ )
       {
@@ -409,8 +409,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
     if (useCubicFilter)
     {
-      vbdmin = _mm_set1_epi16( clpRng.min );
-      vbdmax = _mm_set1_epi16( clpRng.max );
+      vbdmin = _mm_set1_epi16( clpRng.min() );
+      vbdmax = _mm_set1_epi16( clpRng.max() );
     }
 
     for (int y = 0; y<height; y++ )
@@ -1295,8 +1295,8 @@ void IntraHorVerPDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int 
    {
 #ifdef USE_AVX2
      __m256i v32 = _mm256_set1_epi32(32);
-     __m256i vbdmin   = _mm256_set1_epi16( clpRng.min );
-     __m256i vbdmax   = _mm256_set1_epi16( clpRng.max );
+     __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
+     __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
 
      __m256i wl16;
      if (scale==0)
@@ -1363,8 +1363,8 @@ void IntraHorVerPDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int 
    }
    else      //width <= 8
    {
-     __m128i vbdmin   = _mm_set1_epi16( clpRng.min );
-     __m128i vbdmax   = _mm_set1_epi16( clpRng.max );
+     __m128i vbdmin   = _mm_set1_epi16( clpRng.min() );
+     __m128i vbdmax   = _mm_set1_epi16( clpRng.max() );
      __m128i wl16;
 
      if (scale==0)
