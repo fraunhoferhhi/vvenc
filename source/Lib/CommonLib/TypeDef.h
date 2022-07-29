@@ -71,6 +71,16 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
+#define PRINT_RC_DATA                                     1
+#define CB_DEB                                            0
+#if CB_DEB
+#define DEB_POC                                           16
+#define DEB_POSX                                          88
+#define DEB_POSY                                          8
+#define DEB_WIDTH                                         8
+#define DEB_HEIGHT                                        8
+#endif
+
 // ====================================================================================================================
 // General settings
 // ====================================================================================================================

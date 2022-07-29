@@ -3972,6 +3972,14 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
     m_cInterSearch.motionCompensation(cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X);
     cu.mcControl = 0;
 
+#if CB_DEB
+    if( uiAffMergeCand == 0 && cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
+    {
+//          printf("\nbase");
+      m_SortedPelUnitBufs.getTestBuf().Y().printBlock();
+    }
+#endif
+
     Distortion uiSad = distParam.distFunc(distParam);
 
     m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::MergeFlag(), merge_ctx_size), ctxStart);

@@ -940,6 +940,15 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
+          
+#if PRINT_RC_DATA
+#ifdef __APPLE__
+          printf("HORST %d  targetBits %d  diffEstUsed %lld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda );
+#else
+          printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda );
+#endif
+#endif
+
           encRcPic->clipTargetQP( getPicList(), m_pcEncCfg->m_QP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
