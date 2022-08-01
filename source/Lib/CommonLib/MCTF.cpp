@@ -358,7 +358,7 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
 inline static float fastExp( float n, float d )
 {
   // using the e^x ~= ( 1 + x/n )^n for n -> inf
-  float x = 1.0 + n / ( d * 1024 );
+  float x = 1.0f + n / ( d * 1024 );
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x;
