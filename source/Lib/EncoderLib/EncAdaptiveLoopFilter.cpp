@@ -1740,7 +1740,7 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
     return;
   }
@@ -1885,16 +1885,36 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
         );
       }
     }
-  }
+  }  
 }
 
-void EncAdaptiveLoopFilter::copyCTUForCCALF( CodingStructure& cs, int ctuPosX, int ctuPosY )
+void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPosX, int ctuPosY )
 {
-  UnitArea   ctuArea   = UnitArea( m_chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
-  PelUnitBuf ctuBufSrc = cs.getRecoBuf( ctuArea );
-  PelUnitBuf ctuBufDst  = m_tempBuf.getBuf( ctuArea );
-  ctuBufDst.get( COMP_Cb ).copyFrom( ctuBufSrc.get( COMP_Cb ) );
-  ctuBufDst.get( COMP_Cr ).copyFrom( ctuBufSrc.get( COMP_Cr ) );
+  // copy unfiltered reco (including padded / extented area)
+  const ChromaFormat chromaFormat = cs.area.chromaFormat;
+  UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
+  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
+  {
+    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
+    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
+    CompArea cpyArea = ctuArea.blocks[ i ];
+    cpyArea.x += extX;
+    cpyArea.y += extY;
+    if( ctuPosX == 0 )
+    {
+      cpyArea.x     -= 2 * extX;
+      cpyArea.width += 2 * extX;
+    }
+    if( ctuPosY == 0 )
+    {
+      cpyArea.y      -= 2 * extY;
+      cpyArea.height += 2 * extY;
+    }
+           PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
+    const CPelBuf srcBuf = cs.getRecoBuf( cpyArea.compID ).subBuf( cpyArea.pos(), cpyArea.size() );
+    dstBuf.copyFrom( srcBuf );
+  }
 }
 
 void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& cs )
@@ -1911,9 +1931,8 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
-    memset( cs.slice->alfEnabled, 0, sizeof( cs.slice->alfEnabled ) );
     return;
   }
 
@@ -2017,7 +2036,7 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
 
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
     return;
   }
@@ -2028,28 +2047,6 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
   // copy unfiltered reco (including padded / extented area)
   const ChromaFormat chromaFormat = cs.area.chromaFormat;
   UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( nCtuX, nCtuY ) );
-  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
-  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
-  {
-    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
-    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
-    CompArea cpyArea = ctuArea.blocks[ i ];
-    cpyArea.x += extX;
-    cpyArea.y += extY;
-    if ( nCtuX == 0 )
-    {
-      cpyArea.x     -= 2 * extX;
-      cpyArea.width += 2 * extX;
-    }
-    if ( nCtuY == 0 )
-    {
-      cpyArea.y      -= 2 * extY;
-      cpyArea.height += 2 * extY;
-    }
-    PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
-    PelBuf srcBuf = pic.getRecoBuf( cpyArea );
-    dstBuf.copyFrom( srcBuf );
-  }
 
   // Perform filtering
   PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
@@ -2300,6 +2297,16 @@ void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
       }
     }
   }
+}
+
+bool EncAdaptiveLoopFilter::isSkipAlfForFrame( const Picture& pic ) const
+{
+  if( !pic.cs->sps->alfEnabled || ( pic.cs->sps->maxTLayers > 1 && pic.cs->sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer ) )
+  {
+    return true;
+  }
+
+  return false;
 }
 
 double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, const int iShapeIdx, ChannelType channel, const double chromaWeight,
@@ -5320,7 +5327,7 @@ int EncAdaptiveLoopFilter::getCoeffRateCcAlf(short chromaCoeff[MAX_NUM_CC_ALF_FI
   return bits;
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const PelUnitBuf& recYuv, const PelUnitBuf& recYuvExt, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
+void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
 {
   int forward_tab[CCALF_CANDS_COEFF_NR * 2 - 1] = {0};
   for (int i = 0; i < CCALF_CANDS_COEFF_NR; i++)
@@ -5673,19 +5680,18 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( Picture& pic, CodingStructure& cs
 
   const TempCtx ctxStartCcAlf( m_CtxCache, SubCtx( Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx() ) );
   const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
-  const PelUnitBuf tmpYuv = m_tempBuf.getBuf( cs.area );
   const PelUnitBuf recYuv = cs.getRecoBuf();
 
   m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
-  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, tmpYuv, recYuv );
+  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, recYuv );
 
   m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
-  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, tmpYuv, recYuv );
+  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, recYuv );
 
   xSetupCcAlfAPS( cs );
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& tempDecYuvBuf, const PelUnitBuf& dstYuv )
+void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& dstYuv )
 {
   if (!cs.slice->alfEnabled[COMP_Y])
   {
@@ -5831,7 +5837,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
             if (!referencingExistingAps)
             {
               getFrameStatsCcalf(compID, (filterIdx + 1));
-              deriveCcAlfFilterCoeff(compID, dstYuv, tempDecYuvBuf, ccAlfFilterCoeff, filterIdx);
+              deriveCcAlfFilterCoeff(compID, ccAlfFilterCoeff, filterIdx);
             }
             const int numCoeff  = m_filterShapesCcAlf[compID - 1][0].numCoeff - 1;
             int log2BlockWidth  = cs.pcv->maxCUSizeLog2 - scaleX;
