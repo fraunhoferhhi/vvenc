@@ -367,7 +367,6 @@ inline static float fastExp( float n, float d )
 
 void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double refStrenghts[4], double weightScaling, double sigmaSq )
 {
-  const ComponentID c = blk.compID;
   const int         w = blk.width;
   const int         h = blk.height;
   const int        bx = blk.x;
