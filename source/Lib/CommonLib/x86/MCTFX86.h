@@ -767,8 +767,6 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   const Pel *srcPel = src.bufAt( bx, by );
         Pel *dstPel = dst.bufAt( bx, by );
 
-  const Pel maxSampleValue = clpRng.max();
-
   int vnoise[4] = { 0, };
   int verror[4] = { 0, };
   float vsw[4] = { 0.0f, };
