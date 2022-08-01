@@ -389,8 +389,7 @@ public:
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
-
-  void copyCTUForCCALF              ( CodingStructure& cs, int ctuPosX, int ctuPosY );
+  void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
   void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
@@ -399,6 +398,7 @@ public:
   void alfReconstructor             ( CodingStructure& cs );
   void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
+  bool isSkipAlfForFrame            ( const Picture& pic ) const;
 private:
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
@@ -455,7 +455,7 @@ private:
   void copyCtuAlternativeChroma  ( uint8_t* ctuAltsDst[MAX_NUM_COMP], uint8_t* ctuAltsSrc[MAX_NUM_COMP] );
   int  getMaxNumAlternativesChroma( );
   int  getCoeffRateCcAlf         ( short chromaCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], bool filterEnabled[MAX_NUM_CC_ALF_FILTERS], uint8_t filterCount, ComponentID compID);
-  void deriveCcAlfFilterCoeff    ( ComponentID compID, const PelUnitBuf& recYuv, const PelUnitBuf& recYuvExt, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx );
+  void deriveCcAlfFilterCoeff    ( ComponentID compID, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx );
   void determineControlIdcValues ( CodingStructure &cs, const ComponentID compID, const PelBuf *buf, const int ctuWidthC,
                                    const int ctuHeightC, const int picWidthC, const int picHeightC,
                                    double **unfilteredDistortion, uint64_t *trainingDistortion[MAX_NUM_CC_ALF_FILTERS],
@@ -466,7 +466,7 @@ private:
                                    bool     filterEnabled[MAX_NUM_CC_ALF_FILTERS],
                                    uint8_t  mapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS + 1],
                                    uint8_t &ccAlfFilterCount);
-  void deriveCcAlfFilter         ( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& tempDecYuvBuf, const PelUnitBuf& dstYuv );
+  void deriveCcAlfFilter         ( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& dstYuv );
   void xSetupCcAlfAPS            ( CodingStructure& cs );
   std::vector<int> getAvailableCcAlfApsIds(CodingStructure& cs, ComponentID compID);
   void countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride);
