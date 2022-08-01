@@ -1662,7 +1662,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
       cu.initPuData();
 
-      const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : ( m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
+      const DFunc dfunc = encTestMode.lossless ? DF_SAD : ( m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[ CH_L ],  dfunc);
 
       bool sameMV[ MRG_MAX_NUM_CANDS ] = { false, };
@@ -2481,7 +2481,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   static_vector<uint8_t, GEO_MAX_TRY_WEIGHTED_SAD> geoRdModeList;
   static_vector<double, GEO_MAX_TRY_WEIGHTED_SAD>  geocandCostList;
 
-  const DFunc dfunc         = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;//new
+  const DFunc dfunc         = encTestMode.lossless ? DF_SAD : DF_HAD;//new
   DistParam  distParamSAD2 = m_cRdCost.setDistParam( tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[CH_L], dfunc);
 
   int geoNumMrgSATDCand = std::min(GEO_MAX_TRY_WEIGHTED_SATD, geoNumCobo);
@@ -2721,8 +2721,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       }
       double cost = (double)sad + (double)bitsCand * sqrtLambdaForFirstPass;
 
-      updateCandList(mergeCand, cost, RdModeList, candCostList
-        , numMrgSATDCand);
+      updateCandList( mergeCand, cost, RdModeList, candCostList, numMrgSATDCand );
     }
 
     // Try to limit number of candidates using SATD-costs
@@ -3902,35 +3901,36 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
   xCheckBestMode  (  tempCS, bestCS, partitioner, cachedMode, m_EDO );
 }
 
-bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
-  , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
+bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, const AffineMergeCtx& affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
+  , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam& distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
 {
-  bool mmvdCandInserted = false;
-  cu.mmvdSkip = false;
-  cu.geo = false;
-  cu.affine = true;
-
-  cu.mergeFlag = true;
-  cu.ciip = false;
-  cu.mmvdMergeFlag = false;
+  cu.mmvdSkip         = false;
+  cu.geo              = false;
+  cu.affine           = true;
+  cu.mergeFlag        = true;
+  cu.ciip             = false;
+  cu.mmvdMergeFlag    = false;
   cu.regularMergeFlag = false;
-  const double sqrtLambdaForFirstPassIntra = m_cRdCost.getMotionLambda() * FRAC_BITS_SCALE;
-  bool sameMV[MRG_MAX_NUM_CANDS] = { false, };
 
-  if (m_pcEncCfg->m_Affine > 1)
+  const double sqrtLambdaForFirstPassIntra = m_cRdCost.getMotionLambda() * FRAC_BITS_SCALE;
+
+  bool sameMV[AFFINE_MRG_MAX_NUM_CANDS + 1] = { false, };
+
+  if( m_pcEncCfg->m_Affine > 1 )
   {
-    for (int m = 0; m < affineMergeCtx.numValidMergeCand; m++)
+    for( int m = 0; m < affineMergeCtx.numValidMergeCand; m++ )
     {
-      if ((tempCS->slice->TLayer > 3) && (affineMergeCtx.mergeType[m] != MRG_TYPE_SUBPU_ATMVP))
+      if( ( tempCS->slice->TLayer > 3 ) && ( affineMergeCtx.mergeType[m] != MRG_TYPE_SUBPU_ATMVP ) )
       {
         sameMV[m] = m != 0;
       }
-      else if (sameMV[m + 1] == false)
+      else if( !sameMV[m + 1] )
       {
-        for (int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++)
+        for( int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++ )
         {
-          if ((affineMergeCtx.mvFieldNeighbours[(m << 1) + 0]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 0]->mv)
-            && (affineMergeCtx.mvFieldNeighbours[(m << 1) + 1]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 1]->mv))
+          // TODO: check interDir? check all affine candidates?
+          if( ( affineMergeCtx.mvFieldNeighbours[( m << 1 ) + 0][0].mv == affineMergeCtx.mvFieldNeighbours[( n << 1 ) + 0][0].mv )
+           && ( affineMergeCtx.mvFieldNeighbours[( m << 1 ) + 1][0].mv == affineMergeCtx.mvFieldNeighbours[( n << 1 ) + 1][0].mv ) )
           {
             sameMV[n] = true;
           }
@@ -3938,65 +3938,78 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
       }
     }
   }
-  int insertPos = -1;
-  for (uint32_t uiAffMergeCand = 0; uiAffMergeCand < affineMergeCtx.numValidMergeCand; uiAffMergeCand++)
+
+  bool mmvdCandInserted = false;
+
+  for( uint32_t uiAffMergeCand = 0; uiAffMergeCand < affineMergeCtx.numValidMergeCand; uiAffMergeCand++ )
   {
-    if ((m_pcEncCfg->m_Affine > 1) && sameMV[uiAffMergeCand])
+    CHECK( uiAffMergeCand >= AFFINE_MRG_MAX_NUM_CANDS, "Out of bounds!" );
+
+    if( ( m_pcEncCfg->m_Affine > 1 ) && sameMV[uiAffMergeCand] )
     {
       continue;
     }
     // set merge information
-    cu.interDir = affineMergeCtx.interDirNeighbours[uiAffMergeCand];
-    cu.mergeIdx = uiAffMergeCand;
+    cu.interDir   = affineMergeCtx.interDirNeighbours[uiAffMergeCand];
+    cu.mergeIdx   = uiAffMergeCand;
     cu.affineType = affineMergeCtx.affineType[uiAffMergeCand];
-    cu.BcwIdx = affineMergeCtx.BcwIdx[uiAffMergeCand];
-    cu.mv[0]->setZero();
-    cu.mv[1]->setZero();
-    cu.imv = 0;
+    cu.BcwIdx     = affineMergeCtx.BcwIdx[uiAffMergeCand];
+    cu.imv        = 0;
+    cu.mv[0][0].setZero();
+    cu.mv[1][0].setZero();
+    cu.mv[0][1].setZero();
+    cu.mv[1][1].setZero();
+    cu.mv[0][2].setZero();
+    cu.mv[1][2].setZero();
 
     cu.mergeType = affineMergeCtx.mergeType[uiAffMergeCand];
-    if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
+
+    if( cu.mergeType == MRG_TYPE_SUBPU_ATMVP )
     {
-      cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 0][0].refIdx;
-      cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 1][0].refIdx;
-      CU::spanMotionInfo(cu, mrgCtx);
+      cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0][0].refIdx;
+      cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1][0].refIdx;
+      CU::spanMotionInfo( cu, mrgCtx );
     }
     else
     {
-      CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 0], REF_PIC_LIST_0);
-      CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 1], REF_PIC_LIST_1);
-      CU::spanMotionInfo(cu);
+      CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0], REF_PIC_LIST_0 );
+      CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1], REF_PIC_LIST_1 );
+      CU::spanMotionInfo( cu );
     }
-    distParam.cur.buf = sortedPelBuffer.getTestBuf().Y().buf;
-    cu.mcControl = 2;
-    m_cInterSearch.motionCompensation(cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X);
-    cu.mcControl = 0;
 
-    Distortion uiSad = distParam.distFunc(distParam);
+    distParam.cur = sortedPelBuffer.getTestBuf().Y();
+    cu.mcControl  = 2;
+    m_cInterSearch.motionCompensation( cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X );
+    cu.mcControl  = 0;
 
-    m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::MergeFlag(), merge_ctx_size), ctxStart);
-    uint64_t fracBits = xCalcPuMeBits(cu);
-    double cost = (double)uiSad + (double)fracBits * sqrtLambdaForFirstPassIntra;
+    Distortion uiSad = distParam.distFunc( distParam );
 
-    insertPos = -1;
-    updateCandList(ModeInfo(uiAffMergeCand, false, false, false, false, true), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
+    m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::MergeFlag(), merge_ctx_size ), ctxStart );
+    uint64_t fracBits = xCalcPuMeBits( cu );
+    double cost = ( double ) uiSad + ( double ) fracBits * sqrtLambdaForFirstPassIntra;
+
+    int insertPos = -1;
+    updateCandList( ModeInfo( uiAffMergeCand, false, false, false, false, true ), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos );
     mmvdCandInserted |= insertPos > -1;
-    sortedPelBuffer.insert(insertPos, (int)RdModeList.size());
+    sortedPelBuffer.insert( insertPos, ( int ) RdModeList.size() );
   }
+
   cu.regularMergeFlag = true;
-  cu.affine = false;
+  cu.affine           = false;
+
   return mmvdCandInserted;
 }
 
-uint64_t EncCu::xCalcPuMeBits(const CodingUnit& cu)
+uint64_t EncCu::xCalcPuMeBits( const CodingUnit &cu )
 {
-  assert(cu.mergeFlag);
-  assert(!CU::isIBC(cu));
+  CHECK( !cu.mergeFlag, "Should only be used for merge!" );
+  CHECK( CU::isIBC( cu ), "Shound not be used for IBC" );
+
   m_CABACEstimator->resetBits();
   m_CABACEstimator->merge_flag(cu);
-  if (cu.mergeFlag)
+  if( cu.mergeFlag )
   {
-    m_CABACEstimator->merge_data(cu);
+    m_CABACEstimator->merge_data( cu );
   }
   return m_CABACEstimator->getEstFracBits();
 }

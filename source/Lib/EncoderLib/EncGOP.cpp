@@ -1496,7 +1496,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->lastIDR                   = m_lastIDR;
   slice->depQuantEnabled           = m_pcEncCfg->m_DepQuantEnabled;
   slice->signDataHidingEnabled     = m_pcEncCfg->m_SignDataHidingEnabled;
-  slice->disableSATDForRd          = false;
 
   slice->picHeader->splitConsOverride = false;
   for( int i = 0; i < 3; i++ )
@@ -2022,6 +2021,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     au.cts      = pic.cts;
     au.ctsValid = pic.ctsValid;
     au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    au.dtsValid = pic.ctsValid;
   }
 
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );

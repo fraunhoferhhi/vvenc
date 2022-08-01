@@ -1249,13 +1249,11 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
         const PelBuf& srcBuf = refBuf[refId].bufs[compID];
         int offset = (deltaIntMvY)*srcBuf.stride + (deltaIntMvX);
 
-        xPredInterBlk((ComponentID)compID, cu, nullptr, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs.comp[compID],
-          bioApplied, false, refId, 0, 0, 0, srcBuf.buf + offset, srcBuf.stride);
+        xPredInterBlk( ( ComponentID ) compID, cu, nullptr, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs[compID], bioApplied, false, refId, 0, 0, 0, srcBuf.buf + offset, srcBuf.stride );
       }
       else
       {
-        xPredInterBlk((ComponentID)compID, cu, refPic, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs.comp[compID],
-          bioApplied, false, refId, 0, 0, 0);
+        xPredInterBlk( ( ComponentID ) compID, cu, refPic,  cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs[compID], bioApplied, false, refId, 0, 0, 0 );
       }
     }
   }
@@ -1322,7 +1320,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       mergeMVL0.hor -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
       mergeMVL0.ver -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
 
-      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL0, yuvTmp, true, clpRngs.comp[COMP_Y], false, false, L0, cu.lwidth() + padSize, cu.lheight() + padSize, true);
+      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL0, yuvTmp, true, clpRngs[COMP_Y], false, false, L0, cu.lwidth() + padSize, cu.lheight() + padSize, true);
     }
 
     /*L1 MC for refinement*/
@@ -1334,14 +1332,14 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       mergeMVL1.hor -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
       mergeMVL1.ver -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
 
-      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL1, yuvTmp, true, clpRngs.comp[COMP_Y], false, false, L1, cu.lwidth() + padSize, cu.lheight() + padSize, true);
+      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL1, yuvTmp, true, clpRngs[COMP_Y], false, false, L1, cu.lwidth() + padSize, cu.lheight() + padSize, true);
     }
 
     // point mc buffer to center point to avoid multiplication to reach each iteration to the beginning
     const Pel* biLinearPredL0 = m_yuvTmp[0].getBuf( COMP_Y ).buf;
     const Pel* biLinearPredL1 = m_yuvTmp[1].getBuf( COMP_Y ).buf;
     const int bioEnabledThres = 2 * dy * dx;
-    const int bd = cu.cs->slice->clpRngs.comp[COMP_Y].bd;
+    const int bd = cu.cs->slice->clpRngs[COMP_Y].bd;
 
     DistParam distParam = m_pcRdCost->setDistParam( nullptr, nullptr, bilinearBufStride, bilinearBufStride, bd, COMP_Y, dx, dy, 1, true );
 

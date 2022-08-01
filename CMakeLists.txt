@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.4.0 )
+project( vvenc VERSION 1.5.0 )
 
 # set alternative version numbering for release candidates
 #set( PROJECT_VERSION_RC rc1 )
