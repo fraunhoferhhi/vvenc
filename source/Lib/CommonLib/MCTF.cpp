@@ -465,7 +465,7 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
       newVal /= temporalWeightSum;
       Pel sampleVal = ( Pel ) ( newVal + 0.5 );
       sampleVal = ( sampleVal < 0 ? 0 : ( sampleVal > maxSampleValue ? maxSampleValue : sampleVal ) );
-      *( dstPel + srcStride * y + x ) = sampleVal;
+      *( dstPel + dstStride * y + x ) = sampleVal;
     }
   }
 }

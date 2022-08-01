@@ -899,7 +899,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
       
       vnewi = _mm_packs_epi32( vnewi, vnewi );
       //*( dstPel + srcStride * y + x ) = sampleVal;
-      _mm_storel_epi64( ( __m128i * ) ( dstPel + srcStride * y + x ), vnewi );
+      _mm_storel_epi64( ( __m128i * ) ( dstPel + dstStride * y + x ), vnewi );
     }
   }
 }
