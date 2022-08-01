@@ -1148,14 +1148,14 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     for( auto& a : argv_unhandled )
     {
       rcOstr << "Unknown argument: '" << a << "'\n";
-      ret = -1;
+      ret = warnUnknowParameter ? 2 : -1;
     }
 
     if( err.is_errored )
     {
       rcOstr << err.outstr.str();
       if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
-      else            return -1;
+      else            return warnUnknowParameter ? 2 : -1;
     }
     else if( err.is_warning )
     {
