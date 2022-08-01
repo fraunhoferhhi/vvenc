@@ -383,10 +383,10 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
 
   const Pel maxSampleValue = clpRng.max();
 
-  int vnoise[4] = { 0, };
-  int verror[4] = { 0, };
-  float vsw[4] = { 0.0f, };
-  float vww[4] = { 0.0f, };
+  int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
+  int verror[2 * VVENC_MCTF_RANGE] = { 0, };
+  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
   int minError = 9999999;
 
