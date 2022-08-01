@@ -355,6 +355,121 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   }
 }
 
+inline static double fastExp( double n, double d )
+{
+  // using the e^x ~= ( 1 + x/n )^n for n -> inf
+  double x = 1.0 + n / ( d * 1024 );
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x;
+  return x;
+}
+
+void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng& clpRng,
+                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, std::vector<PelStorage> &correctedPics,
+                     const double refStrenghts[4], double weightScaling, double sigmaSq )
+{
+  const ComponentID c = blk.compID;
+  const int         w = blk.width;
+  const int         h = blk.height;
+  const int        bx = blk.x;
+  const int        by = blk.y;
+
+  const ptrdiff_t srcStride = src.stride;
+  const ptrdiff_t dstStride = dst.stride;
+
+  const Pel *srcPel = src.bufAt( bx, by );
+        Pel *dstPel = dst.bufAt( bx, by );
+
+  const Pel maxSampleValue = clpRng.max();
+
+  int vnoise[4] = { 0, };
+  int verror[4] = { 0, };
+  double vsw[4] = { 0.0, };
+  double vww[4] = { 0.0, };
+
+  int minError = 9999999;
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    int64_t variance = 0, diffsum = 0;
+    const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
+    const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
+    for( int y1 = 0; y1 < h; y1++ )
+    {
+      for( int x1 = 0; x1 < w; x1++ )
+      {
+        const Pel pix = *( srcPel + srcStride * y1 + x1 );
+        const Pel ref = *( refPel + refStride * y1 + x1 );
+
+        const int diff = pix - ref;
+        variance += diff * diff;
+        if( x1 != w - 1 )
+        {
+          const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
+          const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
+          const int diffR = pixR - refR;
+          diffsum += ( diffR - diff ) * ( diffR - diff );
+        }
+        if( y1 != h - 1 )
+        {
+          const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
+          const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
+          const int diffD = pixD - refD;
+          diffsum += ( diffD - diff ) * ( diffD - diff );
+        }
+      }
+    }
+    const int cntV = w * h;
+    const int cntD = 2 * cntV - w - h;
+    vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
+    verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
+    minError = std::min( minError, verror[i] );
+  }
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    const int error = verror[i];
+    const int noise = vnoise[i];
+    double ww = 1, sw = 1;
+    ww *= ( noise < 25 ) ? 1.0 : 0.6;
+    sw *= ( noise < 25 ) ? 1.0 : 0.8;
+    ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
+    sw *= ( error < 50 ) ? 1.0 : 0.8;
+    ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
+
+    const int index = srcFrameInfo[i].index;
+    vww[i] = ww * weightScaling * refStrenghts[index];
+    vsw[i] = sw * 2 * sigmaSq;
+  }
+
+  for( int y = 0; y < h; y++ )
+  {
+    for( int x = 0; x < w; x++ )
+    {
+      const Pel orgVal  = *( srcPel + srcStride * y + x );
+      double temporalWeightSum = 1.0;
+      double newVal = ( double ) orgVal;
+
+      for( int i = 0; i < numRefs; i++ )
+      {
+        const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
+        const int    refVal = *pCorrectedPelPtr;
+        const int    diff   = refVal - orgVal;
+        const double diffSq = diff * diff;
+
+        double weight = vww[i] * fastExp( -diffSq, vsw[i] );
+        newVal += weight * refVal;
+        temporalWeightSum += weight;
+      }
+      newVal /= temporalWeightSum;
+      Pel sampleVal = ( Pel ) ( newVal + 0.5 );
+      sampleVal = ( sampleVal < 0 ? 0 : ( sampleVal > maxSampleValue ? maxSampleValue : sampleVal ) );
+      *( dstPel + srcStride * y + x ) = sampleVal;
+    }
+  }
+}
+
 MCTF::MCTF()
   : m_encCfg    ( nullptr )
   , m_threadPool( nullptr )
@@ -371,6 +486,7 @@ MCTF::MCTF()
   m_applyFrac[0][1]         = applyFrac8Core_4Tap;
   m_applyFrac[1][0]         = applyFrac8Core_6Tap;
   m_applyFrac[1][1]         = applyFrac8Core_4Tap;
+  m_applyBlock              = applyBlockCore;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
@@ -935,17 +1051,6 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
   }
 }
 
-
-inline static double fastExp( double n, double d )
-{
-  // using the e^x ~= ( 1 + x/n )^n for n -> inf
-  double x = 1.0 + n / ( d * 1024 );
-  x *= x; x *= x; x *= x; x *= x;
-  x *= x; x *= x; x *= x; x *= x;
-  x *= x; x *= x;
-  return x;
-}
-
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 {
@@ -963,9 +1068,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     refStrengthRow = 1;
   }
 
-  int vnoise[MAX_NUM_REF] = { 0, };
-  int verror[MAX_NUM_REF] = { 0, };
-
   for( int c = 0; c < getNumberValidComponents( m_encCfg->m_internChromaFormat ); c++ )
   {
     for( int i = 0; i < numRefs; i++ )
@@ -981,7 +1083,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
     const double sigmaSq = sigmaSqCh[ toChannelType( compID) ];
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
-    const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
+    const ClpRng clpRng{ m_encCfg->m_internalBitDepth[toChannelType( compID )] };
 
     const int blkSizeY = m_mctfUnitSize >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
     const int blkSizeX = m_mctfUnitSize >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
@@ -999,81 +1101,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
       {
         const int w = std::min( blkSizeX, width - bx );
 
-        int minError = 9999999;
-
-        for( int i = 0; i < numRefs; i++ )
-        {
-          int64_t variance = 0, diffsum = 0;
-          const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
-          const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
-          for( int y1 = 0; y1 < h; y1++ )
-          {
-            for( int x1 = 0; x1 < w; x1++ )
-            {
-              const Pel pix = *( srcPel + srcStride * y1 + x1 );
-              const Pel ref = *( refPel + refStride * y1 + x1 );
-
-              const int diff = pix - ref;
-              variance += diff * diff;
-              if( x1 != w - 1 )
-              {
-                const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
-                const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
-                const int diffR = pixR - refR;
-                diffsum += ( diffR - diff ) * ( diffR - diff );
-              }
-              if( y1 != h - 1 )
-              {
-                const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
-                const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
-                const int diffD = pixD - refD;
-                diffsum += ( diffD - diff ) * ( diffD - diff );
-              }
-            }
-          }
-          const int cntV = w * h;
-          const int cntD = 2 * cntV - w - h;
-          vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
-          verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
-          minError = std::min( minError, verror[i] );
-          //srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
-        }
-
-        for( int y = 0; y < h; y++ )
-        {
-          for( int x = 0; x < w; x++ )
-          {
-            const Pel orgVal  = *( srcPel + srcStride * y + x );
-            double temporalWeightSum = 1.0;
-            double newVal = ( double ) orgVal;
-
-            for( int i = 0; i < numRefs; i++ )
-            {
-              //const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr );
-              const int error = verror[i];
-              const int noise = vnoise[i];
-              const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
-              const int    refVal = ( int ) *pCorrectedPelPtr;
-              const double diff = ( double ) ( refVal - orgVal );
-              const double diffSq = diff * diff;
-
-              double ww = 1, sw = 1;
-              ww *= ( noise < 25 ) ? 1.0 : 0.6;
-              sw *= ( noise < 25 ) ? 1.0 : 0.8;
-              ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
-              sw *= ( error < 50 ) ? 1.0 : 0.8;
-              ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
-              const int index = srcFrameInfo[i].index;
-              double weight = weightScaling * m_refStrengths[refStrengthRow][index] * ww * fastExp( -diffSq, ( 2 * sw * sigmaSq ) );
-              newVal += weight * refVal;
-              temporalWeightSum += weight;
-            }
-            newVal /= temporalWeightSum;
-            Pel sampleVal = ( Pel ) ( newVal + 0.5 );
-            sampleVal = ( sampleVal < 0 ? 0 : ( sampleVal > maxSampleValue ? maxSampleValue : sampleVal ) );
-            *( dstPel + srcStride * y + x ) = sampleVal;
-          }
-        }
+        m_applyBlock( orgPic.bufs[c], newOrgPic.bufs[c], CompArea( compID, orgPic.chromaFormat, Area( bx, by, w, h ) ), xBlkAddr, yBlkAddr, numRefs, clpRng, srcFrameInfo, correctedPics, m_refStrengths[refStrengthRow], weightScaling, sigmaSq );
       }
     }
   }
