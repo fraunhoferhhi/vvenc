@@ -355,10 +355,10 @@ void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, 
   }
 }
 
-inline static double fastExp( double n, double d )
+inline static float fastExp( float n, float d )
 {
   // using the e^x ~= ( 1 + x/n )^n for n -> inf
-  double x = 1.0 + n / ( d * 1024 );
+  float x = 1.0 + n / ( d * 1024 );
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x;
@@ -385,8 +385,8 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
 
   int vnoise[4] = { 0, };
   int verror[4] = { 0, };
-  double vsw[4] = { 0.0, };
-  double vww[4] = { 0.0, };
+  float vsw[4] = { 0.0f, };
+  float vww[4] = { 0.0f, };
 
   int minError = 9999999;
 
@@ -431,7 +431,7 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   {
     const int error = verror[i];
     const int noise = vnoise[i];
-    double ww = 1, sw = 1;
+    float ww = 1, sw = 1;
     ww *= ( noise < 25 ) ? 1.0 : 0.6;
     sw *= ( noise < 25 ) ? 1.0 : 0.8;
     ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
@@ -448,17 +448,17 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     for( int x = 0; x < w; x++ )
     {
       const Pel orgVal  = *( srcPel + srcStride * y + x );
-      double temporalWeightSum = 1.0;
-      double newVal = ( double ) orgVal;
+      float temporalWeightSum = 1.0;
+      float newVal = ( float ) orgVal;
 
       for( int i = 0; i < numRefs; i++ )
       {
         const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
         const int    refVal = *pCorrectedPelPtr;
         const int    diff   = refVal - orgVal;
-        const double diffSq = diff * diff;
+        const float  diffSq = diff * diff;
 
-        double weight = vww[i] * fastExp( -diffSq, vsw[i] );
+        float weight = vww[i] * fastExp( -diffSq, vsw[i] );
         newVal += weight * refVal;
         temporalWeightSum += weight;
       }
