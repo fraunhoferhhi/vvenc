@@ -751,10 +751,8 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
 }
 
 template<X86_VEXT vext>
-void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng& clpRng,
-                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const Pel **correctedPics, const double refStrenghts[4], double weightScaling, double sigmaSq )
+void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel **correctedPics, int numRefs, const int *verror, const double *refStrenghts, double weightScaling, double sigmaSq )
 {
-  const ComponentID c = blk.compID;
   const int         w = blk.width;
   const int         h = blk.height;
   const int        bx = blk.x;
@@ -767,7 +765,6 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
         Pel *dstPel = dst.bufAt( bx, by );
 
   int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
-  int verror[2 * VVENC_MCTF_RANGE] = { 0, };
   float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
   float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
@@ -806,7 +803,6 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;
     vnoise[i] = ( int ) ( ( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) ) + 0.5 );
-    verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
     minError = std::min( minError, verror[i] );
   }
 
@@ -821,8 +817,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     sw *= ( error < 50 ) ? 1.0 : 0.8;
     ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
 
-    const int index = srcFrameInfo[i].index;
-    vww[i] = ww * weightScaling * refStrenghts[index];
+    vww[i] = ww * weightScaling * refStrenghts[i];
     vsw[i] = sw * 2 * sigmaSq;
   }
 

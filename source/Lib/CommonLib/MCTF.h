@@ -145,8 +145,7 @@ private:
 
   void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
 
-  void( *m_applyBlock )( const CPelBuf &src, PelBuf &dst, const CompArea &blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng &clpRng,
-                         std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const Pel** correctedPictures, const double refStrenghts[4], double weightScaling, double sigmaSq );
+  void( *m_applyBlock )( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts, double weightScaling, double sigmaSq );
 
 private:
   static const double   m_chromaFactor;

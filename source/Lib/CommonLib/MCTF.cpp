@@ -365,9 +365,7 @@ inline static float fastExp( float n, float d )
   return x;
 }
 
-void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng& clpRng,
-                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const Pel** correctedPics,
-                     const double refStrenghts[4], double weightScaling, double sigmaSq )
+void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double refStrenghts[4], double weightScaling, double sigmaSq )
 {
   const ComponentID c = blk.compID;
   const int         w = blk.width;
@@ -384,7 +382,6 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   const Pel maxSampleValue = clpRng.max();
 
   int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
-  int verror[2 * VVENC_MCTF_RANGE] = { 0, };
   float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
   float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
@@ -423,7 +420,6 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;
     vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
-    verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
     minError = std::min( minError, verror[i] );
   }
 
@@ -438,8 +434,7 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     sw *= ( error < 50 ) ? 1.0 : 0.8;
     ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
 
-    const int index = srcFrameInfo[i].index;
-    vww[i] = ww * weightScaling * refStrenghts[index];
+    vww[i] = ww * weightScaling * refStrenghts[i];
     vsw[i] = sw * 2 * sigmaSq;
   }
 
@@ -1052,6 +1047,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
         const Pel* correctedPics[2 * VVENC_MCTF_RANGE] = { nullptr, };
               Pel* currDst = dstBufs;
+        int verror     [2 * VVENC_MCTF_RANGE] = { 0,   };
+        double refStr  [2 * VVENC_MCTF_RANGE] = { 0.0, };
 
         for( int i = 0; i < numRefs; i++, currDst += w * h )
         {
@@ -1086,9 +1083,12 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
             m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, w, h, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
           }
+
+          verror[i] = mv.error;
+          refStr[i] = m_refStrengths[refStrengthRow][srcFrameInfo[i].index];
         }
 
-        m_applyBlock( orgPic.bufs[c], newOrgPic.bufs[c], CompArea( compID, orgPic.chromaFormat, Area( bx, by, w, h ) ), xBlkAddr, yBlkAddr, numRefs, clpRng, srcFrameInfo, correctedPics, m_refStrengths[refStrengthRow], weightScaling, sigmaSq );
+        m_applyBlock( orgPic.bufs[c], newOrgPic.bufs[c], CompArea( compID, orgPic.chromaFormat, Area( bx, by, w, h ) ), clpRng, correctedPics, numRefs, verror, refStr, weightScaling, sigmaSq );
       }
     }
   }
