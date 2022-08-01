@@ -752,8 +752,7 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
 
 template<X86_VEXT vext>
 void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng& clpRng,
-                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, std::vector<PelStorage> &correctedPics,
-                     const double refStrenghts[4], double weightScaling, double sigmaSq )
+                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const Pel **correctedPics, const double refStrenghts[4], double weightScaling, double sigmaSq )
 {
   const ComponentID c = blk.compID;
   const int         w = blk.width;
@@ -777,8 +776,8 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   for( int i = 0; i < numRefs; i++ )
   {
     int64_t variance = 0, diffsum = 0;
-    const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
-    const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
+    const ptrdiff_t refStride = w;
+    const Pel *     refPel    = correctedPics[i];
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
@@ -851,7 +850,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
 
       for( int i = 0; i < numRefs; i++ )
       {
-        const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
+        const Pel* pCorrectedPelPtr = correctedPics[i] + y * w + x;
         __m128i vrefi = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( __m128i* ) pCorrectedPelPtr ) );
         //const int    refVal = *pCorrectedPelPtr;
         __m128i vdifi = _mm_sub_epi16( vrefi, vorgi );

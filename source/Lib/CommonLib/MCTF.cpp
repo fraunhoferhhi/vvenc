@@ -366,7 +366,7 @@ inline static float fastExp( float n, float d )
 }
 
 void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const int xBlkAddr, const int yBlkAddr, int numRefs, const ClpRng& clpRng,
-                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, std::vector<PelStorage> &correctedPics,
+                     std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const Pel** correctedPics,
                      const double refStrenghts[4], double weightScaling, double sigmaSq )
 {
   const ComponentID c = blk.compID;
@@ -393,8 +393,8 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   for( int i = 0; i < numRefs; i++ )
   {
     int64_t variance = 0, diffsum = 0;
-    const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
-    const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
+    const ptrdiff_t refStride = w;
+    const Pel *     refPel    = correctedPics[i];
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
@@ -453,7 +453,7 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
 
       for( int i = 0; i < numRefs; i++ )
       {
-        const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
+        const Pel* pCorrectedPelPtr = correctedPics[i] + y * w + x;
         const int    refVal = *pCorrectedPelPtr;
         const int    diff   = refVal - orgVal;
         const float  diffSq = diff * diff;
@@ -1000,59 +1000,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   }
 }
 
-void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const
-{
-  static const int lumaBlockSize = m_mctfUnitSize;
-
-  const ComponentID compID=(ComponentID)comp;
-  const int csx=getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
-  const int csy=getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-  const int blockSizeX = lumaBlockSize >> csx;
-  const int y          = blockNumY * ( lumaBlockSize >> csy );
-  const int blockSizeY = std::min<int>( lumaBlockSize >> csy, input.bufs[compID].height - y );
-  const int width      = input.bufs[compID].width;
-
-  const Pel* srcImage  = input.bufs[compID].buf;
-  const int srcStride  = input.bufs[compID].stride;
-
-        Pel* dstImage  = output.bufs[compID].buf;
-  const int dstStride  = output.bufs[compID].stride;
-
-  for( int x = 0, blockNumX = 0; x < width; x += blockSizeX, blockNumX++ )
-  {
-    const MotionVector &mv = mvs.get(blockNumX,blockNumY);
-    const int dx = mv.x >> csx ;
-    const int dy = mv.y >> csy ;
-    const int xInt = mv.x >> (4+csx) ;
-    const int yInt = mv.y >> (4+csy) ;
-
-    const int yOffset = y + yInt;
-    const int xOffset = x + xInt;
-    const Pel* src = srcImage + yOffset * srcStride + xOffset;
-          Pel* dst = dstImage + y       * dstStride + x;
-
-    // no need to mask because the original resolution is a multiple of 8 for sure
-    const int curSizeX = std::min<int>( lumaBlockSize >> csx, input.bufs[compID].width - x );
-
-    if( m_lowResFltApply ) // || isChroma( compID )
-    {
-      const int16_t* xFilter = m_interpolationFilter4[dx & 0xf];
-      const int16_t* yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
-
-      m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, curSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
-    }
-    else
-    {
-      const int16_t *xFilter = m_interpolationFilter8[dx & 0xf];
-      const int16_t *yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
-
-      m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, curSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
-    }
-  }
-}
-
-void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
-  std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
+void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_APPLY );
 
@@ -1068,13 +1016,11 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     refStrengthRow = 1;
   }
 
+  // max 64*64*8*2 = 2^(6+6+3+1)=2^16=64kbps, usually 16*16*8*2=2^(4+4+3+1)=2kbps
+  Pel* dstBufs = ( Pel* ) alloca( sizeof( Pel ) * numRefs * m_mctfUnitSize * m_mctfUnitSize );
+
   for( int c = 0; c < getNumberValidComponents( m_encCfg->m_internChromaFormat ); c++ )
   {
-    for( int i = 0; i < numRefs; i++ )
-    {
-      applyMotionLn( srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / m_mctfUnitSize, c );
-    }
-
     const ComponentID compID = ( ComponentID ) c;
     const int height    = orgPic.bufs[c].height;
     const int width     = orgPic.bufs[c].width;
@@ -1101,6 +1047,47 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
       {
         const int w = std::min( blkSizeX, width - bx );
 
+        const int csx = getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
+        const int csy = getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
+
+        const Pel* correctedPics[2 * VVENC_MCTF_RANGE] = { nullptr, };
+              Pel* currDst = dstBufs;
+
+        for( int i = 0; i < numRefs; i++, currDst += w * h )
+        {
+          const Pel* srcImage = srcFrameInfo[i].picBuffer.bufs[compID].buf;
+          const int srcStride = srcFrameInfo[i].picBuffer.bufs[compID].stride;
+
+                Pel* dst      = currDst;
+          const int dstStride = w;
+          correctedPics[i]    = dst;
+
+          const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr);
+          const int dx   = mv.x >> csx;
+          const int dy   = mv.y >> csy;
+          const int xInt = mv.x >> ( 4 + csx );
+          const int yInt = mv.y >> ( 4 + csy );
+
+          const int yOffset = by + yInt;
+          const int xOffset = bx + xInt;
+          const Pel* src = srcImage + yOffset * srcStride + xOffset;
+
+          if( m_lowResFltApply ) // || isChroma( compID )
+          {
+            const int16_t* xFilter = m_interpolationFilter4[dx & 0xf];
+            const int16_t* yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
+
+            m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, w, h, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
+          }
+          else
+          {
+            const int16_t* xFilter = m_interpolationFilter8[dx & 0xf];
+            const int16_t* yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
+
+            m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, w, h, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
+          }
+        }
+
         m_applyBlock( orgPic.bufs[c], newOrgPic.bufs[c], CompArea( compID, orgPic.chromaFormat, Area( bx, by, w, h ) ), xBlkAddr, yBlkAddr, numRefs, clpRng, srcFrameInfo, correctedPics, m_refStrengths[refStrengthRow], weightScaling, sigmaSq );
       }
     }
@@ -1123,13 +1110,6 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
     sigmaSqCh[ch] = ( isChroma( ch ) ? chromaSigmaSq : lumaSigmaSq ) / ( bitDepthDiffWeighting * bitDepthDiffWeighting );
   }
 
-#
-  std::vector<PelStorage> correctedPics(numRefs);
-  for (int i = 0; i < numRefs; i++)
-  {
-    correctedPics[i].create(m_encCfg->m_internChromaFormat, m_area, 0, m_padding);
-  }
-
   if( m_threadPool )
   {
     struct FltParams
@@ -1137,7 +1117,6 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       const PelStorage *orgPic; 
       std::deque<TemporalFilterSourcePicInfo> *srcFrameInfo; 
       PelStorage *newOrgPic;
-      std::vector<PelStorage>* correctedPics;
       const double *sigmaSqCh;
       double overallStrength;
       const MCTF* mctf;
@@ -1154,7 +1133,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       {
         ITT_TASKSTART( itt_domain_MCTF_flt, itt_handle_flt );
 
-        params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, *params->correctedPics, params->yStart, params->sigmaSqCh, params->overallStrength );
+        params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, params->yStart, params->sigmaSqCh, params->overallStrength );
 
         ITT_TASKEND( itt_domain_MCTF_flt, itt_handle_flt );
         return true;
@@ -1164,7 +1143,6 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       cFltParams.orgPic = &orgPic; 
       cFltParams.srcFrameInfo = &srcFrameInfo; 
       cFltParams.newOrgPic = &newOrgPic;
-      cFltParams.correctedPics = &correctedPics;
       cFltParams.sigmaSqCh = sigmaSqCh;
       cFltParams.overallStrength = overallStrength;
       cFltParams.mctf = this;
@@ -1178,7 +1156,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
   {
     for (int yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize )
     {
-      xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, correctedPics, yStart, sigmaSqCh, overallStrength );
+      xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, yStart, sigmaSqCh, overallStrength );
     }
   }
 }
