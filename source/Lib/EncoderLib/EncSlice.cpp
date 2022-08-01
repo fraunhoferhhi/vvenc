@@ -1065,7 +1065,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         }
 
         // ALF border extension
-        if( !encSlice->m_pALF->isSkipAlfForFrame( *pic ) )
+        if( cs.sps->alfEnabled )
         {
           // we have to do some kind of position aware boundary padding
           // it's done here because the conditions are readable
@@ -1082,13 +1082,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );
 
-        if( !encSlice->m_pALF->isSkipAlfForFrame( *pic ) && ctuPosX+1 == pcv.widthInCtus )
+        if( ctuPosX+1 == pcv.widthInCtus )
         {
           processStates[ctuRsAddr] = ALF_GET_STATISTICS;
-        }
-        else if( ctuRsAddr == pcv.sizeInCtus-1 )
-        {
-          processStates[ctuRsAddr] = FINISH_SLICE;
         }
         else
         {
