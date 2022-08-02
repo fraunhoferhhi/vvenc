@@ -751,6 +751,155 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
 }
 
 template<X86_VEXT vext>
+void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel **correctedPics, int numRefs, const int *verror, const double *refStrenghts, double weightScaling, double sigmaSq )
+{
+  const int         w = blk.width;
+  const int         h = blk.height;
+  const int        bx = blk.x;
+  const int        by = blk.y;
+
+  const ptrdiff_t srcStride = src.stride;
+  const ptrdiff_t dstStride = dst.stride;
+
+  const Pel *srcPel = src.bufAt( bx, by );
+        Pel *dstPel = dst.bufAt( bx, by );
+
+  int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
+  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
+
+  int minError = 9999999;
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    int64_t variance = 0, diffsum = 0;
+    const ptrdiff_t refStride = w;
+    const Pel *     refPel    = correctedPics[i];
+    for( int y1 = 0; y1 < h; y1++ )
+    {
+      for( int x1 = 0; x1 < w; x1++ )
+      {
+        const Pel pix = *( srcPel + srcStride * y1 + x1 );
+        const Pel ref = *( refPel + refStride * y1 + x1 );
+
+        const int diff = pix - ref;
+        variance += diff * diff;
+        if( x1 != w - 1 )
+        {
+          const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
+          const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
+          const int diffR = pixR - refR;
+          diffsum += ( diffR - diff ) * ( diffR - diff );
+        }
+        if( y1 != h - 1 )
+        {
+          const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
+          const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
+          const int diffD = pixD - refD;
+          diffsum += ( diffD - diff ) * ( diffD - diff );
+        }
+      }
+    }
+    const int cntV = w * h;
+    const int cntD = 2 * cntV - w - h;
+    vnoise[i] = ( int ) ( ( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) ) + 0.5 );
+    minError = std::min( minError, verror[i] );
+  }
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    const int error = verror[i];
+    const int noise = vnoise[i];
+    float ww = 1, sw = 1;
+    ww *= ( noise < 25 ) ? 1.0 : 0.6;
+    sw *= ( noise < 25 ) ? 1.0 : 0.8;
+    ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
+    sw *= ( error < 50 ) ? 1.0 : 0.8;
+    ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
+
+    vww[i] = ww * weightScaling * refStrenghts[i];
+    vsw[i] = sw * 2 * sigmaSq;
+  }
+
+  //inline static float fastExp( float x )
+  //{
+  //  // using the e^x ~= ( 1 + x/n )^n for n -> inf
+  //  float x = 1.0 + x / 1024;
+  //  x *= x; x *= x; x *= x; x *= x;
+  //  x *= x; x *= x; x *= x; x *= x;
+  //  x *= x; x *= x;
+  //  return x;
+  //}
+
+  for( int y = 0; y < h; y++ )
+  {
+    for( int x = 0; x < w; x += 4 )
+    {
+      __m128i vorgi = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( __m128i* ) ( srcPel + srcStride * y + x ) ) );
+      __m128  vorg  = _mm_cvtepi32_ps( vorgi );
+      //const Pel orgVal  = *( srcPel + srcStride * y + x );
+      __m128  vtws  = _mm_set1_ps( 1.0f );
+      //float temporalWeightSum = 1.0;
+      //float newVal = ( float ) orgVal;
+      __m128  vnewv = vorg;
+
+      for( int i = 0; i < numRefs; i++ )
+      {
+        const Pel* pCorrectedPelPtr = correctedPics[i] + y * w + x;
+        __m128i vrefi = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( __m128i* ) pCorrectedPelPtr ) );
+        //const int    refVal = *pCorrectedPelPtr;
+        __m128i vdifi = _mm_sub_epi16( vrefi, vorgi );
+        //const int    diff   = refVal - orgVal;
+        //const float  diffSq = diff * diff;
+        __m128i vdsqi = _mm_madd_epi16( vdifi, vdifi );
+        __m128  vdsq  = _mm_cvtepi32_ps( vdsqi );
+
+        // apply fast exp with 10 iterations!
+        __m128  vwght = _mm_div_ps( vdsq, _mm_set1_ps( -vsw[i] * 1024.0f ) );
+        vwght = _mm_add_ps( vwght, _mm_set1_ps( 1.0f ) );
+
+        vwght = _mm_mul_ps( vwght, vwght ); //  1
+        vwght = _mm_mul_ps( vwght, vwght ); //  2
+        vwght = _mm_mul_ps( vwght, vwght ); //  3
+        vwght = _mm_mul_ps( vwght, vwght ); //  4
+        vwght = _mm_mul_ps( vwght, vwght ); //  5
+                                       
+        vwght = _mm_mul_ps( vwght, vwght ); //  6
+        vwght = _mm_mul_ps( vwght, vwght ); //  7
+        vwght = _mm_mul_ps( vwght, vwght ); //  8
+        vwght = _mm_mul_ps( vwght, vwght ); //  9
+        vwght = _mm_mul_ps( vwght, vwght ); // 10
+
+        vwght = _mm_mul_ps( vwght, _mm_set1_ps( vww[i] ) );
+        //float weight = vww[i] * fastExp( -diffSq, vsw[i] );
+        
+        vnewv = _mm_add_ps( vnewv, _mm_mul_ps( vwght, _mm_cvtepi32_ps( vrefi ) ) );
+        //newVal += weight * refVal;
+
+        vtws  = _mm_add_ps( vtws, vwght );
+        //temporalWeightSum += weight;
+      }
+
+      vnewv = _mm_div_ps( vnewv, vtws );
+      //newVal /= temporalWeightSum;
+      vnewv = _mm_add_ps( vnewv, _mm_set1_ps( 0.5f ) );
+      vnewv = _mm_round_ps( vnewv, ( _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC ) );
+      //Pel sampleVal = ( Pel ) ( newVal + 0.5 );
+      __m128i vnewi = _mm_cvtps_epi32( vnewv );
+
+      vnewi = _mm_max_epi32( vnewi, _mm_setzero_si128() );
+      vnewi = _mm_min_epi32( vnewi, _mm_set1_epi32( clpRng.max() ) );
+      //sampleVal = ( sampleVal < 0 ? 0 : ( sampleVal > maxSampleValue ? maxSampleValue : sampleVal ) );
+      
+      vnewi = _mm_packs_epi32( vnewi, vnewi );
+      //*( dstPel + srcStride * y + x ) = sampleVal;
+      _mm_storel_epi64( ( __m128i * ) ( dstPel + dstStride * y + x ), vnewi );
+    }
+  }
+}
+
+
+template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
 {
   m_motionErrorLumaInt8     = motionErrorLumaInt_SIMD<vext>;
@@ -759,6 +908,8 @@ void MCTF::_initMCTF_X86()
 
   m_applyFrac[0][0] = applyFrac6tap_SIMD_8x<vext>;
   m_applyFrac[1][0] = applyFrac6tap_SIMD_4x<vext>;
+
+  m_applyBlock      = applyBlockSIMD<vext>;
 }
 
 template
