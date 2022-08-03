@@ -89,7 +89,7 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int fr
   isLookAhead         = lookAhead;
   targetRate          = targetBitrate;
   frameRate           = frRate;
-  intraPeriod         = Clip3( GOPSize, 4 * VVENC_MAX_GOP, intraPer );
+  intraPeriod         = (intraPer < 0 ? 4 * VVENC_MAX_GOP : Clip3 (GOPSize, 4 * VVENC_MAX_GOP, intraPer));
   gopSize             = GOPSize;
   firstPassData       = firstPassStats;
   bitDepth            = bitDpth;
@@ -271,7 +271,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
 
-  qp = Clip3 (frameLevel + std::max (0, baseQP >> 1), MAX_QP, qp);
+  qp = Clip3 (frameLevel + std::max (0, baseQP >> (encRCSeq->isLookAhead ? 2 : 1)), MAX_QP, qp);
 
   if (lastCurrTLQP >= 0) // limit QP changes among prev. frames from same temporal level
   {
@@ -943,9 +943,9 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           
 #if PRINT_RC_DATA
 #ifdef __APPLE__
-          printf("HORST %d  targetBits %d  diffEstUsed %lld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda );
+          printf("HORST %d  targetBits %d  diffEstUsed %lld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
 #else
-          printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda );
+          printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
 #endif
 #endif
 
