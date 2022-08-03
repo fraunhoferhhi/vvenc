@@ -397,10 +397,9 @@ public:
   void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
-  //void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
-  void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
   void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC );
+  void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
   void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );

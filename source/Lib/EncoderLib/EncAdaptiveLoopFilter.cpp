@@ -62,8 +62,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#define OPTIMIZE_ORIG_CASE 0
-
 #ifdef TRACE_ENABLE_ITT
 static __itt_string_handle* itt_handle_pre = __itt_string_handle_create( "ALF_pre" );
 static __itt_domain* itt_domain_ALF_pre   = __itt_domain_create( "ALFPre" );
@@ -1935,7 +1933,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
         );
       }
     }
-  }
+  }  
 }
 
 void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPosX, int ctuPosY )
@@ -1955,7 +1953,7 @@ void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPos
     {
       cpyArea.x     -= 2 * extX;
       cpyArea.width += 2 * extX;
-}
+    }
     if( ctuPosY == 0 )
     {
       cpyArea.y      -= 2 * extY;
@@ -2341,72 +2339,45 @@ void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
 
 void EncAdaptiveLoopFilter::xStoreAlfAsuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag )
 {
-#if OPTIMIZE_ORIG_CASE
-  if( m_numAsusInPic == m_numCTUsInPic )
-  {
-    m_ctuEnableFlag[compIdx][ctuIdx] = flag;
-  }
-  else
-#endif
-  {
-    int ctuMaxX = getAsuMaxCtuX( ctuX );
-    int ctuMaxY = getAsuMaxCtuY( ctuY );
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
 
-    for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
     {
-      for( int cX = ctuX; cX < ctuMaxX; cX++ )
-      {
-        int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
-        m_ctuEnableFlag[compIdx][curCtuIdx] = flag;
-      }
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuEnableFlag[compIdx][curCtuIdx] = flag;
     }
   }
 }
 
 void EncAdaptiveLoopFilter::xStoreAlfAsuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt )
 {
-#if OPTIMIZE_ORIG_CASE
-  if( m_numAsusInPic == m_numCTUsInPic )
-  {
-    m_ctuAlternative[compIdx][ctuIdx] = alt;
-  }
-  else
-#endif
-  {
-    int ctuMaxX = getAsuMaxCtuX( ctuX );
-    int ctuMaxY = getAsuMaxCtuY( ctuY );
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
 
-    for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
     {
-      for( int cX = ctuX; cX < ctuMaxX; cX++ )
-      {
-        int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
-        m_ctuAlternative[compIdx][curCtuIdx] = alt;
-      }
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuAlternative[compIdx][curCtuIdx] = alt;
     }
   }
 }
 
 void EncAdaptiveLoopFilter::xStoreAlfAsuFilterIdx( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex )
 {
-#if OPTIMIZE_ORIG_CASE
-  if( m_numAsusInPic == m_numCTUsInPic )
-  {
-    cs.picture->m_alfCtbFilterIndex[curCtuIdx] = fltIdx;
-  }
-  else
-#endif
-  {
-    int ctuMaxX = getAsuMaxCtuX( ctuX );
-    int ctuMaxY = getAsuMaxCtuY( ctuY );
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
 
-    for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
     {
-      for( int cX = ctuX; cX < ctuMaxX; cX++ )
-      {
-        int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
-        alfCtbFilterSetIndex[curCtuIdx] = fltIdx;
-      }
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      alfCtbFilterSetIndex[curCtuIdx] = fltIdx;
     }
   }
 }
@@ -3078,8 +3049,6 @@ int EncAdaptiveLoopFilter::lengthUvlc( int uiCode )
   int uiLength = 1;
   int uiTemp = ++uiCode;
 
-  _CASE( !uiTemp )
-    _BREAK;
   CHECK( !uiTemp, "Integer overflow" );
 
   while( 1 != uiTemp )
