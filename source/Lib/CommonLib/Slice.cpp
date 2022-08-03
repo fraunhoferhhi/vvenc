@@ -116,7 +116,7 @@ Slice::Slice()
   ::memset( numRefIdx,               0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,      0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,                 0, sizeof( lambdas ) );
-  ::memset( alfEnabled,     0, sizeof( alfEnabled ) );
+  ::memset( alfEnabled,              0, sizeof( alfEnabled ) );
   ::memset( alfAps,                  0, sizeof( alfAps ) );
   ::memset( refPicList,              0, sizeof( refPicList ) );
   ::memset( refPOCList,              0, sizeof( refPOCList ) );
@@ -157,7 +157,7 @@ void Slice::resetSlicePart()
   ::memset( numRefIdx,           0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,  0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,             0, sizeof( lambdas ) );
-  ::memset( alfEnabled, 0, sizeof( alfEnabled ) );
+  ::memset( alfEnabled,          0, sizeof( alfEnabled ) );
 
   ccAlfFilterParam.reset();
   ccAlfCbEnabled = false;

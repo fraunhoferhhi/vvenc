@@ -314,14 +314,11 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
     const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
     const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
 
-    int filterIdx =
-      ( filterControl == nullptr )
-      ? -1/*selectedFilterIdx*/
-      : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
     bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
     if( !skipFiltering )
     {
-
       const ClpRngs& clpRngs      = cs.slice->clpRngs;
       const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
       const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
@@ -383,8 +380,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
             const Area blkSrc( 0, 0, w, h );
 
             const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
-            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-              m_alfVBLumaPos );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
 
             xStart = xEnd;
           }
@@ -397,8 +393,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
         Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
         Area blkSrc( xPos, yPos, width, height );
 
-        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-          m_alfVBLumaPos );
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
     }
   }
