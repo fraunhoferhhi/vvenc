@@ -694,7 +694,6 @@ typedef struct vvenc_config
   int                 m_ccalfQpThreshold;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
   int                 m_alfSpeed;
-  int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
 
   vvencMCTF           m_vvencMCTF;
 
@@ -738,7 +737,8 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[4];
+  int                 m_reservedInt[3];
+  int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
   int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
   int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
