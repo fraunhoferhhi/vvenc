@@ -518,7 +518,7 @@ void TransformUnit::init(TCoeffSig** coeffs)
   }
 }
 
-TransformUnit& TransformUnit::operator=(const TransformUnit& other)
+TransformUnit& TransformUnit::operator=( const TransformUnit& other )
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
 
@@ -528,7 +528,8 @@ TransformUnit& TransformUnit::operator=(const TransformUnit& other)
     CHECKD( blocks[i].area() != other.blocks[i].area(), "Transformation units cover different areas" );
 
     cbf[i]      = other.cbf[i];
-    if( m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i] && cbf[i] )
+    bool cpyRsi = other.cbf[i] || ( i && other.jointCbCr && numBlocks > 1 && ( TU::getCbf( other, COMP_Cb ) || TU::getCbf( other, COMP_Cr ) ) );
+    if( m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i] && cpyRsi )
     {
       uint32_t area = blocks[i].area();
       memcpy( m_coeffs[i], other.m_coeffs[i], sizeof( TCoeffSig ) * area );
@@ -542,17 +543,16 @@ TransformUnit& TransformUnit::operator=(const TransformUnit& other)
   return *this;
 }
 
-void TransformUnit::copyComponentFrom(const TransformUnit& other, const ComponentID i)
+void TransformUnit::copyComponentFrom( const TransformUnit& other, const ComponentID i )
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
-
   CHECKD( blocks[i].area() != other.blocks[i].area(), "Transformation units cover different areas" );
 
-  uint32_t area = blocks[i].area();
-
-  if (m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i])
+  bool cpyRsi = other.cbf[i] || ( i && other.jointCbCr && blocks.size() > 1 && ( TU::getCbf( other, COMP_Cb ) || TU::getCbf( other, COMP_Cr ) ) );
+  if( m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i] && cpyRsi )
   {
-    memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeffSig) * area);
+    uint32_t area = blocks[i].area();
+    memcpy( m_coeffs[i], other.m_coeffs[i], sizeof( TCoeffSig ) * area );
   }
 
   cbf[i]      = other.cbf[i];
