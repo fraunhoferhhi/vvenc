@@ -455,6 +455,107 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
   
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
+#if USE_AVX2
+  if( vext >= AVX2 && ( w & 15 ) == 0 )
+  {
+    const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+
+    const __m256i yfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[0] ), _mm256_set1_epi16( yFilter[1] ) );
+    const __m256i yfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[2] ), _mm256_set1_epi16( yFilter[3] ) );
+
+    const __m256i xfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[0] ), _mm256_set1_epi16( xFilter[1] ) );
+    const __m256i xfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[2] ), _mm256_set1_epi16( xFilter[3] ) );
+  
+    const __m256i xmax   = _mm256_set1_epi16( maxSampleValue );
+    const __m256i xmin = _mm256_setzero_si256();
+  
+    const int yOffset    = -1;
+    const Pel* sourceCol = buf + base + yOffset * buffStride;
+    const Pel* origCol   = org;
+
+    for( int x1 = 0; x1 < w; x1 += 16, sourceCol += 16, origCol += 16 )
+    {
+      const Pel* origRow  = origCol;
+      const Pel* rowStart = sourceCol;
+
+      __m256i xsrc[4];
+
+      for( int y1 = 0; y1 < h + 3; y1++, rowStart += buffStride )
+      {
+        __m256i xsrc1 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[0] );
+        __m256i xsrc2 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[1] );
+        __m256i xsrc3 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[2] );
+        __m256i xsrc4 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[3] );
+
+        __m256i
+        xsum0 = _mm256_set1_epi32( 1 << 5 );
+        __m256i
+        xsum1 = _mm256_set1_epi32( 1 << 5 );
+
+        xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( _mm256_unpacklo_epi16( xsrc1, xsrc2 ), xfilt12 ) );
+        xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( _mm256_unpackhi_epi16( xsrc1, xsrc2 ), xfilt12 ) );
+
+        xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( _mm256_unpacklo_epi16( xsrc3, xsrc4 ), xfilt34 ) );
+        xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( _mm256_unpackhi_epi16( xsrc3, xsrc4 ), xfilt34 ) );
+
+        xsum0 = _mm256_srai_epi32( xsum0, 6 );
+        xsum1 = _mm256_srai_epi32( xsum1, 6 );
+        __m256i
+        xsum  = _mm256_packs_epi32( xsum0, xsum1 );
+        xsum  = _mm256_min_epi16( xmax, _mm256_max_epi16( xmin, xsum ) );
+
+        if( y1 >= 3 )
+        {
+          xsrc[0] = xsrc[1];
+          xsrc[1] = xsrc[2];
+          xsrc[2] = xsrc[3];
+          xsrc[3] = xsum;
+        
+          xsum0 = _mm256_set1_epi32( 1 << 5 );
+          xsum1 = _mm256_set1_epi32( 1 << 5 );
+
+          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt12, _mm256_unpacklo_epi16( xsrc[0], xsrc[1] ) ) );
+          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt12, _mm256_unpackhi_epi16( xsrc[0], xsrc[1] ) ) );
+
+          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt34, _mm256_unpacklo_epi16( xsrc[2], xsrc[3] ) ) );
+          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt34, _mm256_unpackhi_epi16( xsrc[2], xsrc[3] ) ) );
+        
+          xsum0 = _mm256_srai_epi32( xsum0, 6 );
+          xsum1 = _mm256_srai_epi32( xsum1, 6 );
+
+          xsum  = _mm256_packs_epi32( xsum0, xsum1 );
+          xsum  = _mm256_min_epi16  ( xmax, _mm256_max_epi16( xmin, xsum ) );
+
+          __m256i
+          xorg  = _mm256_loadu_si256( ( const __m256i * ) origRow );
+          origRow += origStride;
+
+          xsum = _mm256_sub_epi16( xsum, xorg );
+          xsum = _mm256_madd_epi16( xsum, xsum );
+          xsum = _mm256_hadd_epi32( xsum, xsum );
+
+          __m128i
+          ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
+
+          error += _mm_extract_epi32( ysum, 0 );
+          error += _mm_extract_epi32( ysum, 1 );
+
+          if( error > besterror )
+          {
+            return error;
+          }
+        }
+        else
+        {
+          xsrc[y1 + 1] = xsum;
+        }
+      }
+    }
+
+    return error;
+  }
+#endif 
+
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
   const __m128i yfilt12 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[0] ), _mm_set1_epi16( yFilter[1] ) );
