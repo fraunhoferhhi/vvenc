@@ -527,13 +527,12 @@ TransformUnit& TransformUnit::operator=(const TransformUnit& other)
   {
     CHECKD( blocks[i].area() != other.blocks[i].area(), "Transformation units cover different areas" );
 
-    uint32_t area = blocks[i].area();
-
-    if (m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i])
-    {
-      memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeffSig) * area);
-    }
     cbf[i]      = other.cbf[i];
+    if( m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i] && cbf[i] )
+    {
+      uint32_t area = blocks[i].area();
+      memcpy( m_coeffs[i], other.m_coeffs[i], sizeof( TCoeffSig ) * area );
+    }
     mtsIdx[i]   = other.mtsIdx[i];
     lastPos[i]  = other.lastPos[i];
   }
