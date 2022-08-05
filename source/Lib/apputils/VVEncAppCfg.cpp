@@ -951,6 +951,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("UseNonLinearAlfChroma",                           c->m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
     ("MaxNumAlfAlternativesChroma",                     c->m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
     ("ALFTempPred",                                     c->m_alfTempPred,                                    "Enable usage of ALF temporal prediction for filter data\n" )
+    ("ALFUnitSize",                                     c->m_alfUnitSize,                                    "Size of ALF Search Unit [-1:default size(CTU)]\n" )
     ("PROF",                                            c->m_PROF,                                           "Enable prediction refinement with optical flow for affine mode")
     ("Affine",                                          c->m_Affine,                                         "Enable affine prediction")
     ("AffineType",                                      c->m_AffineType,                                     "Enable affine type prediction")
