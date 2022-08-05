@@ -391,7 +391,10 @@ int RateCtrl::getBaseQP()
   }
   else if (m_pcEncCfg->m_LookAhead)
   {
-    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset;
+//    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset;
+    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log (double (encRCSeq->intraPeriod / encRCSeq->gopSize)) / log (2.0);
+
+
     baseQP = int (0.5 + d + 0.125 * log2HeightMinus7 * std::max (0.0, 24.0 - d));
   }
 

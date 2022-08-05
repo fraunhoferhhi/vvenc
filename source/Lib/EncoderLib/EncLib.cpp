@@ -206,6 +206,10 @@ void EncLib::initPass( int pass, const char* statsFName )
     {
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
+      if( m_encCfg.m_LookAhead )
+      {
+        m_rateCtrl->init( m_encCfg );
+      }
       const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
     }
   }
@@ -270,7 +274,10 @@ void EncLib::initPass( int pass, const char* statsFName )
   // rate control
   if( m_encCfg.m_RCTargetBitrate > 0 )
   {
-    m_rateCtrl->init( m_encCfg );
+    if( !m_encCfg.m_LookAhead )
+    {
+      m_rateCtrl->init( m_encCfg );
+    }
     if( pass == 1 )
     {
       m_rateCtrl->processFirstPassData( false );
