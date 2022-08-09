@@ -3986,18 +3986,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       csSplit->fracBits = m_CABACEstimator->getEstFracBits();
       csSplit->cost     = m_pcRdCost->calcRdCost(csSplit->fracBits, csSplit->dist);
-
-      if( bCheckFull && anyCbfSet && csSplit->cost < csFull->cost )
-      {
-        cs.useSubStructure( *csSplit, partitioner.chType, partitioner.treeType, currArea, false );
-        cs.cost = csSplit->cost;
-      }
-    }
-
-    if( csSplit && csFull )
-    {
-      csSplit->releaseIntermediateData();
-      csFull ->releaseIntermediateData();
     }
   }
 }
