@@ -688,7 +688,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   cu.ispMode = bestISP;
   if (validReturn)
   {
-    cs.useSubStructure( *csBest, partitioner.chType, TREE_D, cu.singleChan( CH_L ) );
+    cs.useSubStructure( *csBest, partitioner.chType, TREE_D, cu.singleChan( CH_L ), false );
     const ReshapeData& reshapeData = cs.picture->reshapeData;
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
