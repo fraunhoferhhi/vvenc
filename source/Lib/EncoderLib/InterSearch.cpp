@@ -3942,7 +3942,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
     partitioner.exitCurrSplit();
 
-    unsigned        anyCbfSet   =   0;
     unsigned        compCbf[3]  = { 0, 0, 0 };
 
     if( !bCheckFull )
@@ -3963,13 +3962,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           TU::setCbfAtDepth ( currTU, COMP_Cb, currDepth, compCbf[ COMP_Cb ] );
           TU::setCbfAtDepth ( currTU, COMP_Cr, currDepth, compCbf[ COMP_Cr ] );
         }
-      }
-
-      anyCbfSet    = compCbf[ COMP_Y  ];
-      if( currArea.chromaFormat != CHROMA_400 )
-      {
-        anyCbfSet |= compCbf[ COMP_Cb ];
-        anyCbfSet |= compCbf[ COMP_Cr ];
       }
 
       m_CABACEstimator->getCtx() = ctxStart;
