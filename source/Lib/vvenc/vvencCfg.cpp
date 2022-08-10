@@ -618,7 +618,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ccalf                                   = false;
   c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;
-  c->m_alfUnitSize                             = -1;
+  c->m_alfUnitSize                             = 128;
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
@@ -826,9 +826,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
   }
-
-  if( c->m_alfUnitSize < 0 )
-    c->m_alfUnitSize = c->m_CTUSize;
 
   // quantization threshold
   if( c->m_quantThresholdVal < 0 )
