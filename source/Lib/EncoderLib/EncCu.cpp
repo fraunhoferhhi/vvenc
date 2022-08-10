@@ -415,7 +415,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_wppMutex ) m_wppMutex->lock();
 
-  cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), true );
+  cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ) );
 
   if ( m_wppMutex ) m_wppMutex->unlock();
 
@@ -442,7 +442,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
     if ( m_wppMutex ) m_wppMutex->lock();
 
-    cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), true );
+    cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ) );
 
     if ( m_wppMutex ) m_wppMutex->unlock();
   }
@@ -1116,7 +1116,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
         return;
       }
 
-      tempCS->useSubStructure( *bestSubCS, partitioner.chType, TREE_D, CS::getArea( *tempCS, subCUArea, partitioner.chType, partitioner.treeType ), true );
+      tempCS->useSubStructure( *bestSubCS, partitioner.chType, TREE_D, CS::getArea( *tempCS, subCUArea, partitioner.chType, partitioner.treeType ), partitioner.hasNextPart() );
 
       if( partitioner.currQgEnable() )
       {
@@ -1245,7 +1245,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     xCompressCU( tempCSChroma, bestCSChroma, partitioner );
 
     //attach chromaCS to luma CS and update cost
-    tempCS->useSubStructure( *bestCSChroma, partitioner.chType, TREE_D, CS::getArea( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType ), true );
+    tempCS->useSubStructure( *bestCSChroma, partitioner.chType, TREE_D, CS::getArea( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType ), false );
 
     //release tmp resource
     tempCSChroma->releaseIntermediateData();

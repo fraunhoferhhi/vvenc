@@ -1099,10 +1099,9 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
     cond_mm_prefetch( (const char *) &src[7 * srcStride], _MM_HINT_T0 );
   }
 
-  __m256i voffset    = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
-  __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
-  __m256i vzero      = _mm256_setzero_si256();
+  const __m256i voffset    = _mm256_set1_epi32( offset );
+  const __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
+  const __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
   __m256i vsum, vsuma, vsumb;
 
   __m256i vsrc[N];
@@ -1127,7 +1126,7 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
       cond_mm_prefetch( (const char *) &src[col + ( N + 1 ) * srcStride], _MM_HINT_T0 );
 
       vsrc[N-1]= _mm256_loadu_si256( ( const __m256i * )&src[col + ( N-1 ) * srcStride] );
-      vsuma = vsumb = vzero;
+      vsuma = vsumb = voffset;
       for( int i=0; i<N; i+=2 )
       {
         __m256i vsrca = _mm256_unpacklo_epi16( vsrc[i], vsrc[i+1] );
@@ -1140,8 +1139,6 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
         vsrc[i] = vsrc[i+1];
       }
 
-      vsuma = _mm256_add_epi32  ( vsuma, voffset );
-      vsumb = _mm256_add_epi32  ( vsumb, voffset );
       vsuma = _mm256_srai_epi32 ( vsuma, shift );
       vsumb = _mm256_srai_epi32 ( vsumb, shift );
 

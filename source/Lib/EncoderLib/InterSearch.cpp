@@ -3942,7 +3942,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
     partitioner.exitCurrSplit();
 
-    unsigned        anyCbfSet   =   0;
     unsigned        compCbf[3]  = { 0, 0, 0 };
 
     if( !bCheckFull )
@@ -3965,13 +3964,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
       }
 
-      anyCbfSet    = compCbf[ COMP_Y  ];
-      if( currArea.chromaFormat != CHROMA_400 )
-      {
-        anyCbfSet |= compCbf[ COMP_Cb ];
-        anyCbfSet |= compCbf[ COMP_Cr ];
-      }
-
       m_CABACEstimator->getCtx() = ctxStart;
       m_CABACEstimator->resetBits();
 
@@ -3986,18 +3978,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       csSplit->fracBits = m_CABACEstimator->getEstFracBits();
       csSplit->cost     = m_pcRdCost->calcRdCost(csSplit->fracBits, csSplit->dist);
-
-      if( bCheckFull && anyCbfSet && csSplit->cost < csFull->cost )
-      {
-        cs.useSubStructure( *csSplit, partitioner.chType, partitioner.treeType, currArea, false );
-        cs.cost = csSplit->cost;
-      }
-    }
-
-    if( csSplit && csFull )
-    {
-      csSplit->releaseIntermediateData();
-      csFull ->releaseIntermediateData();
     }
   }
 }
