@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
@@ -2791,7 +2791,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
             const bool chroma = !CU::isSepTree(cu);
 
             //  MC
-            cu.mcControl = chroma ? 0: 2;        
+            cu.mcControl = chroma ? 0: 2;
             m_cInterSearch.motionCompensationIBC(cu, tempCS->getPredBuf());
             m_CABACEstimator->getCtx() = m_CurrCtx->start;
 

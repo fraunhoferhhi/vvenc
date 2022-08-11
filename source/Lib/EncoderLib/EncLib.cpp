@@ -195,9 +195,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
-  if( m_encCfg.m_RCNumPasses > 1 || (m_encCfg.m_LookAhead && m_orgCfg.m_RCTargetBitrate) )
+  if( m_encCfg.m_RCNumPasses > 1 || ( m_orgCfg.m_RCTargetBitrate > 0 && m_encCfg.m_LookAhead ) )
   {
-    if (!m_rateCtrl->rcIsFinalPass)
+    if( !m_rateCtrl->rcIsFinalPass )
     {
       // set encoder config for 1st rate control pass
       const_cast<VVEncCfg&>(m_encCfg) = m_firstPassCfg;
@@ -206,7 +206,12 @@ void EncLib::initPass( int pass, const char* statsFName )
     {
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
+      m_rateCtrl->init( m_encCfg );
       const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+    }
+    if( m_encCfg.m_RCTargetBitrate > 0 && !m_encCfg.m_LookAhead )
+    {
+      m_rateCtrl->processFirstPassData( false );
     }
   }
 
@@ -265,16 +270,6 @@ void EncLib::initPass( int pass, const char* statsFName )
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )
   {
     m_encStages[ i ]->linkNextStage( m_encStages[ i + 1 ] );
-  }
-
-  // rate control
-  if( m_encCfg.m_RCTargetBitrate > 0 )
-  {
-    m_rateCtrl->init( m_encCfg );
-    if( pass == 1 )
-    {
-      m_rateCtrl->processFirstPassData( false );
-    }
   }
 
   // prepare prev shared data

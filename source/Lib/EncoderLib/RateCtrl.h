@@ -102,11 +102,11 @@ namespace vvenc {
 
     bool            twoPass;
     bool            isLookAhead;
-    int             framesCoded;
+    unsigned        framesCoded;
     int             targetRate;
     int             frameRate;
     int             gopSize;
-    int             intraPeriod;
+    unsigned        intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         bitsUsedIn1stPass;
