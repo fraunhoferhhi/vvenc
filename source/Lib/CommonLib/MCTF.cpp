@@ -950,11 +950,11 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       const MCTF* mctf;
     };
 
-    std::vector<EstParams> EstParamsArray( origHeight/stepSize);
+    std::vector<EstParams> EstParamsArray( origHeight/stepSize + 1 );
 
     WaitCounter taskCounter;
 
-    for( int n = 0, blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize, n++ )
+    for( int n = 0, blockY = 0; blockY + 7 <= origHeight; blockY += stepSize, n++ )
     {
       static auto task = []( int tId, EstParams* params)
       {
