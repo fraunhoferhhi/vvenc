@@ -690,6 +690,10 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
+      if (it->tempLayer <= m_pcEncCfg->m_maxTLayer && it->refreshParameters)
+      {
+        tlBits[it->tempLayer] = tlCount[it->tempLayer] = 0; // exclude ref-frame stats of previous scene
+      }
       tlBits[it->tempLayer] += it->numBits;
       tlCount[it->tempLayer]++;
     }
@@ -747,7 +751,7 @@ void RateCtrl::detectSceneCuts()
     {
       if (it->poc >= sceneCutPocPrev + minPocDif)
       {
-        for (int frameLevel = 0; frameLevel <= m_pcEncCfg->m_maxTLayer; frameLevel++)
+        for (int frameLevel = 0; frameLevel <= m_pcEncCfg->m_maxTLayer + 1; frameLevel++)
         {
           needRefresh[frameLevel] = true;
         }
@@ -861,7 +865,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
         {
           const double dLimit = std::max ( 2.0, 6.0 - double( frameLevel >> 1 ) );
           const int firstPassSliceQP = it->qp;
-          const int secondPassBaseQP = ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ); // estimated QP for look-ahead RC
+          const int secondPassBaseQP = ( m_pcEncCfg->m_LookAhead ? ( m_pcEncCfg->m_QP + getBaseQP() ) >> 1 : m_pcEncCfg->m_QP );
           const int log2HeightMinus7 = int( 0.5 + log( (double)std::max( 128, m_pcEncCfg->m_SourceHeight ) ) / log( 2.0 ) ) - 7;
           double d = (double)encRcPic->targetBits;
           uint16_t visAct = it->visActY;
