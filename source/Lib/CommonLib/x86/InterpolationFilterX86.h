@@ -2769,7 +2769,7 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     int vcoeffh[2];
     int vcoeffv[2];
 
-#ifndef _NDEBUG
+#ifdef _DEBUG
     __m128i vsrcv0 = _mm_setzero_si128(), vsrcv1 = _mm_setzero_si128(), vsrcv2 = _mm_setzero_si128(), vsrcv3 = _mm_setzero_si128();
 #else
     __m128i vsrcv0, vsrcv1, vsrcv2, vsrcv3;
