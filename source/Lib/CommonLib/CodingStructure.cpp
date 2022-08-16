@@ -755,20 +755,20 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   }
 }
 
-void CodingStructure::useSubStructure( CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyReco )
+void CodingStructure::useSubStructure( CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyRecoToPic )
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
 
-  if( cpyReco )
+  CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
+
+  if( parent )
   {
-    CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
+    // copy data to picture
+    getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
+  }
 
-    if( parent )
-    {
-      // copy data to picture
-      getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
-    }
-
+  if( cpyRecoToPic )
+  {
     picture->getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
   }
 

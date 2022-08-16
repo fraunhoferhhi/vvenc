@@ -951,6 +951,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("UseNonLinearAlfChroma",                           c->m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
     ("MaxNumAlfAlternativesChroma",                     c->m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
     ("ALFTempPred",                                     c->m_alfTempPred,                                    "Enable usage of ALF temporal prediction for filter data\n" )
+    ("ALFUnitSize",                                     c->m_alfUnitSize,                                    "Size of ALF Search Unit [-1:default size(CTU)]\n" )
     ("PROF",                                            c->m_PROF,                                           "Enable prediction refinement with optical flow for affine mode")
     ("Affine",                                          c->m_Affine,                                         "Enable affine prediction")
     ("AffineType",                                      c->m_AffineType,                                     "Enable affine type prediction")
@@ -1148,14 +1149,14 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     for( auto& a : argv_unhandled )
     {
       rcOstr << "Unknown argument: '" << a << "'\n";
-      ret = -1;
+      ret = warnUnknowParameter ? 2 : -1;
     }
 
     if( err.is_errored )
     {
       rcOstr << err.outstr.str();
       if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
-      else            return -1;
+      else            return warnUnknowParameter ? 2 : -1;
     }
     else if( err.is_warning )
     {
