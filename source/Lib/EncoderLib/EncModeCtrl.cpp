@@ -701,7 +701,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   }
 
   const PartSplit split = getPartSplit( encTestmode );
-  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 )
+  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 || ( skipScore == 1 && m_ComprCUCtxList.size() == 2 ) )
   {
     if( split == CU_HORZ_SPLIT ) cuECtx.didHorzSplit = false;
     if( split == CU_VERT_SPLIT ) cuECtx.didVertSplit = false;
