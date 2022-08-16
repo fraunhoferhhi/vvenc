@@ -687,7 +687,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if ((!slice.isIntra() || slice.sps->IBC) && cuECtx.isBestNoSplitSkip )
   {
-    for( int i = 2; i < m_ComprCUCtxList.size(); i++ )
+    for( int i = 2; i <= m_ComprCUCtxList.size(); i++ )
     {
       if( ( m_ComprCUCtxList.end() - i )->isBestNoSplitSkip )
       {
