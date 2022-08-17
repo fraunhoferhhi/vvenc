@@ -129,6 +129,28 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 // ====================================================================================================================
 // Quant class member functions
 // ====================================================================================================================
+static void QuantCore(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum )
+{
+  const int qBits8 = iQBits - 8;
+ printf("QuantCore\n");
+  piQCoef.memset( 0 );
+  for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
+  {
+    const TCoeff iLevel   = piCoef.buf[uiBlockPos];
+    const TCoeff iSign    = (iLevel < 0 ? -1: 1);
+
+    const int64_t  tmpLevel = (int64_t)abs(iLevel) * defaultQuantisationCoefficient;
+    const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+    deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+
+    uiAbsSum += quantisedMagnitude;
+    const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+
+    piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+  } // for n
+
+}
+
 static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoeffSig* const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
 {
   const int inputMinimum = -(inputMaximum+1);
@@ -163,8 +185,10 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
 
 Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
 {
+  printf("Quant::Quant useScalingLists %d \n",useScalingLists);
   xInitScalingList( other, useScalingLists );
   DeQuant=DeQuantCore;
+  xQuant=QuantCore;
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   initQuantX86();
 #endif
@@ -656,6 +680,12 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
     const uint32_t lfnstIdx = tu.cu->lfnstIdx;
     const int maxNumberOfCoeffs = lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
+    //printf("maxNumberOfCoeffs %d enableScalingLists %d defaultQuantisationCoefficient %d \n",maxNumberOfCoeffs,enableScalingLists,defaultQuantisationCoefficient);
+
+#if 1
+    xQuant (piCoef,piQCoef,uiAbsSum,deltaU,maxNumberOfCoeffs,defaultQuantisationCoefficient,iQBits,iAdd,entropyCodingMinimum,entropyCodingMaximum );
+
+#else
     piQCoef.memset( 0 );
     for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
     {
@@ -663,7 +693,6 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
       const TCoeff iSign    = (iLevel < 0 ? -1: 1);
 
       const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
-
       const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
       deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
 
@@ -672,6 +701,8 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
       piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     } // for n
+#endif
+
     if (tu.cu->bdpcmM[toChannelType(compID)])
     {
       fwdResDPCM( tu, compID );
