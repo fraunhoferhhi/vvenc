@@ -491,6 +491,8 @@ static constexpr uint8_t MIP_OFFSET_MATRIX = 32;
 static constexpr uint8_t SORTED_BUFS = 9;
 static constexpr uint8_t MAX_TMP_BUFS = 6;
 
+static constexpr int QPA_MAX_NOISE_LEVELS = 8;
+
 // ====================================================================================================================
 // Macro functions
 // ====================================================================================================================

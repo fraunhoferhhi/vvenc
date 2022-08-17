@@ -506,7 +506,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
           }
         }
         else if ( m_isPreAnalysis && ( m_pcEncCfg->m_GOPSize > 8 ) && ( pic->poc >= m_pcEncCfg->m_GOPSize ) &&
-                ( ( pic->slices[0]->TLayer == 0 ) || ( m_procList.empty() && flush ) ) ) // TLayer-0 or last coded POC
+                ( pic->gopEntry->m_isStartOfGop || ( m_procList.empty() && flush ) ) ) // TLayer-0 or last coded POC
         {
           m_pcRateCtrl->prepareNoiseMinStats( picEncoder->getNoiseMinStatPtr() ); // @ end of each GOP
         }
@@ -517,11 +517,11 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
-      
+
       xEncodePicture( pic, picEncoder );
     }
   }
-  
+
   // picture/AU output
   // 
   // in lock-step mode:
@@ -2437,7 +2437,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   slice->TLayer,
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
-                                  pic->gopEntry->m_gopNum );
+                                  pic->gopEntry->m_gopNum,
+                                  pic->minNoiseLevels );
   }
 
   //===== add PSNR =====

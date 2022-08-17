@@ -248,6 +248,18 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
   return 0;
 }
 
+void updateMinNoiseLevelsPic( Picture* pic, const int bitDepth, const unsigned avgValue, const unsigned noise )
+{
+  const unsigned idx = avgValue >> (bitDepth - 3); // one of 8 mean level regions
+
+  CHECK( idx >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
+
+  if( noise < (unsigned)pic->minNoiseLevels[ idx ] )
+  {
+    pic->minNoiseLevels[ idx ] = (uint8_t)noise;
+  }
+}
+
 static void updateNoiseEstimatesMinimStats (uint64_t* const noiseMinStats, const int bitDepth, const unsigned avgValue,
                                             const unsigned stdDevValue12Bits, std::mutex* mutex = nullptr)
 {
@@ -264,12 +276,22 @@ static void updateNoiseEstimatesMinimStats (uint64_t* const noiseMinStats, const
   if (mutex) mutex->unlock();
 }
 
-static void clipQPValToEstimatedMinimStats (uint64_t* const noiseMinStats, const int bitDepth, const unsigned avgValue,
+static void clipQPValToEstimatedMinimStats (uint64_t* const noiseMinStats, const uint8_t* minNoiseLevels, const int bitDepth, const unsigned avgValue,
                                             const double resFac, const int extraQPOffset, int& QP) // output QP
 {
   const unsigned avgIndex = avgValue >> (bitDepth - 3); // one of 8 mean level regions
   const int32_t dQPOffset = -9;
   uint8_t* const noiseMin = (uint8_t* const) noiseMinStats;
+
+  // TODO (jb): debug cleanup
+#if 0
+  {
+    for( int i = 0; i < QPA_MAX_NOISE_LEVELS; i++ )
+    {
+      CHECK( noiseMin[ i ] != minNoiseLevels[ i ], "noise level mismatch" );
+    }
+  }
+#endif
 
   if (noiseMin == nullptr || bitDepth < 6 || bitDepth > 16 || avgValue >= (1 << bitDepth)) return;
 
@@ -346,6 +368,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
         pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
 
         updateNoiseEstimatesMinimStats (noiseMinStats, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart, mutex);
+        updateMinNoiseLevelsPic( pic, bitDepth, pic->ctuAdaptedQP[ ctuRsAddr ], minActivityPart );
       }
 
       hpEner[comp] /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);
@@ -398,6 +421,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
 int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda, bool isEncPass,
                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory, uint64_t* const noiseMinStats,
+                                          const uint8_t* minNoiseLevels,
                                           const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, std::mutex* mutex /*= nullptr*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
@@ -618,7 +642,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
           const double resRatio = double (encCfg->m_SourceWidth * encCfg->m_SourceHeight) / (3840.0 * 2160.0 * (1.0 + encCfg->m_RCTargetBitrate));
 
           meanLuma = ctuAvgLuma[ctuRsAddr - ctuStartAddr];
-          clipQPValToEstimatedMinimStats (noiseMinStats, bitDepth, meanLuma, resRatio, (encCfg->m_QP >> 3) + (slice->isIntra() ? encCfg->m_intraQPOffset >> 1 : slice->TLayer), clippedLumaQP);
+          clipQPValToEstimatedMinimStats (noiseMinStats, minNoiseLevels, bitDepth, meanLuma, resRatio, (encCfg->m_QP >> 3) + (slice->isIntra() ? encCfg->m_intraQPOffset >> 1 : slice->TLayer), clippedLumaQP);
         }
         clippedLumaQP = Clip3 (0, MAX_QP, clippedLumaQP);
 
@@ -653,7 +677,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, uint64_t* const noiseMinStats)
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, uint64_t* const noiseMinStats, const uint8_t* minNoiseLevels)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;
@@ -709,7 +733,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
     const double resRatio = double (encCfg->m_SourceWidth * encCfg->m_SourceHeight) / (3840.0 * 2160.0 * (1.0 + encCfg->m_RCTargetBitrate));
 
     if (meanLuma == MAX_UINT) meanLuma = pic->getOrigBuf (subArea).getAvg();
-    clipQPValToEstimatedMinimStats (noiseMinStats, bitDepth, meanLuma, resRatio, (encCfg->m_QP >> 3) + (slice->isIntra() ? encCfg->m_intraQPOffset >> 1 : slice->TLayer), adaptedSubCtuQP);
+    clipQPValToEstimatedMinimStats (noiseMinStats, minNoiseLevels, bitDepth, meanLuma, resRatio, (encCfg->m_QP >> 3) + (slice->isIntra() ? encCfg->m_intraQPOffset >> 1 : slice->TLayer), adaptedSubCtuQP);
   }
 
   return adaptedSubCtuQP;

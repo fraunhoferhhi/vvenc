@@ -337,7 +337,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
-    if (rcIsEncodingPass) m_pcRateCtrl->utilizeNoiseMinStats (slice->TLayer); // @ start of each GOP
+    if (rcIsEncodingPass && slice->pic->gopEntry->m_isStartOfGop) m_pcRateCtrl->utilizeNoiseMinStats(); // @ start of each GOP
 
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, &slice->pic->picVisActY, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                             (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
@@ -368,6 +368,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
     if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, rcIsEncodingPass, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                      (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
                                                      (rcIsEncodingPass ? m_pcRateCtrl->getNoiseMinStats() : (slice->pic->isPreAnalysis ? noiseMinimaStats : nullptr)),
+                                                     m_pcRateCtrl->getMinNoiseLevels(),
                                                      startCtuTsAddr, boundingCtuTsAddr, noiseMinimaMutex)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP

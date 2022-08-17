@@ -63,8 +63,9 @@ namespace vvenc {
                                  const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, std::mutex* mutex = nullptr);
     int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda, bool isEncPass,
                                  std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory, uint64_t* const noiseMinStats,
+                                 const uint8_t* minNoiseLevels,
                                  const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, std::mutex* mutex = nullptr);
-    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, uint64_t* const noiseMinStats);
+    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, uint64_t* const noiseMinStats, const uint8_t* minNoiseLevels);
     int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
                                  std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
     double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr);
