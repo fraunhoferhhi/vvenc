@@ -801,7 +801,7 @@ void RateCtrl::processGops()
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
     tgtBits[vecIdx] += float (it->numBits * ratio);
-    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
+    if (it->poc == 0 && it->isIntra) // put the first I-frame into separate GOP
     {
       vecIdx++;
     }
@@ -818,7 +818,7 @@ void RateCtrl::processGops()
     CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
-    if ( it->poc==0 && it->isIntra ) // put first I-Frame into separate gop
+    if (it->poc == 0 && it->isIntra) // put the first I-frame into separate GOP
     {
       vecIdx++;
     }
@@ -889,7 +889,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
           if ( it->refreshParameters )
           {
-            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : ( it->poc <= m_pcEncCfg->m_GOPSize && secondPassBaseQP < 32 ? 0.0625 * ( 32 - secondPassBaseQP ) : 0.0 ) );
+            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : ( it->poc <= m_pcEncCfg->m_GOPSize && ( secondPassBaseQP < 32 || !m_pcEncCfg->m_LookAhead ) ? 0.0625 * ( 32 - secondPassBaseQP ) : 0.0 ) );
             if ( !m_pcEncCfg->m_LookAhead )
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
