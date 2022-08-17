@@ -200,6 +200,11 @@ if( VVENC_ENABLE_LINK_TIME_OPT )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON )
+
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+    # enable parallel link-time optimization for GCC
+    add_link_options( $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-flto=auto> )
+  endif()
 endif()
 
 if( VVCEncoderLib_ENABLE_ITT )
