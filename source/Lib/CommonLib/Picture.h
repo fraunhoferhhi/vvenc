@@ -101,7 +101,11 @@ public:
 
   void storeBlkSize ( const Picture& pic );
   void updateMaxBT  ( const Slice& slice, const BlkStat& blkStat );
+#if REDUCE_MTT
+  void setSliceMaxBT(Slice& slice, const VVEncCfg* m_pcEncCfg);
+#else
   void setSliceMaxBT( Slice& slice );
+#endif
 
 protected:
   uint32_t m_uiBlkSize[NUM_AMAXBT_LAYER];

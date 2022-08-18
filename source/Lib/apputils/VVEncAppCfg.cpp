@@ -759,6 +759,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("MaxMTTDepthI",                                    c->m_maxMTTDepthI,                                   "maxMTTDepthI")
     ("MaxMTTDepthISliceL",                              c->m_maxMTTDepthI,                                   "maxMTTDepthISliceL")
     ("MaxMTTDepthISliceC",                              c->m_maxMTTDepthIChroma,                             "maxMTTDepthISliceC")
+#if 1 //REDUCE_MTT
+    ("ReduceMttDepthLastTLayers",                       c->m_ReduceMttDepthLastTLayers,                      "ReduceMttDepthLastTLayers")
+#endif 
     // --> deprecated
     ("MaxMTTHierarchyDepth",                            c->m_maxMTTDepth,                                    "maxMTTDepth")
     ("MaxMTTHierarchyDepthI",                           c->m_maxMTTDepthI,                                   "maxMTTDepthI")

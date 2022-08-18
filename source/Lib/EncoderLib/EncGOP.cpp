@@ -1624,7 +1624,11 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
 
   if ( m_pcEncCfg->m_useAMaxBT )
   {
+#if REDUCE_MTT
+    m_BlkStat.setSliceMaxBT( *slice, m_pcEncCfg );
+#else
     m_BlkStat.setSliceMaxBT( *slice );
+#endif
 
     bool identicalToSPS=true;
     const SPS* sps =slice->sps;

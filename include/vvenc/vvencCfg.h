@@ -539,6 +539,9 @@ typedef struct vvenc_config
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
   unsigned            m_maxMTTDepthIChroma;
+#if 1 //REDUCE_MTT
+  unsigned            m_ReduceMttDepthLastTLayers;
+#endif 
   unsigned            m_maxBT[3];
   unsigned            m_maxTT[3];
   bool                m_dualITree;
