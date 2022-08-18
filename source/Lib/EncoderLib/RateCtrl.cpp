@@ -312,18 +312,19 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 RateCtrl::RateCtrl(MsgLog& logger)
 : msg ( logger )
 {
-  m_pcEncCfg    = nullptr;
-  encRCSeq      = NULL;
-  encRCPic      = NULL;
-  flushPOC      = -1;
-  rcPass        = 0;
-  rcIsFinalPass = true;
+  m_pcEncCfg           = nullptr;
+  encRCSeq             = NULL;
+  encRCPic             = NULL;
+  flushPOC             = -1;
+  rcPass               = 0;
+  rcIsFinalPass        = true;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
-  m_pqpaStatsWritten = 0;
+  m_pqpaStatsWritten   = 0;
 #endif
-  m_numPicStatsTotal  = 0;
-  m_numPicAddedToList = 0;
-  m_updateNoisePoc    = -1;
+  m_numPicStatsTotal   = 0;
+  m_numPicAddedToList  = 0;
+  m_updateNoisePoc     = -1;
+  m_resetNoise         = true;
   std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 }
 
@@ -669,6 +670,7 @@ void RateCtrl::xProcessFirstPassData( bool flush, int poc )
   processGops();
 
   if( m_pcEncCfg->m_GOPSize > 8
+      && m_pcEncCfg->m_IntraPeriod >= m_pcEncCfg->m_GOPSize
       && m_pcEncCfg->m_usePerceptQPA
       && m_pcEncCfg->m_RCNumPasses == 1 )
   {
@@ -832,17 +834,14 @@ void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
-  const int lastPoc      = m_updateNoisePoc;
-  auto lastItr           = find_if( m_listRCFirstPassStats.begin(), m_listRCFirstPassStats.end(),  [ lastPoc ]( const auto& stat ) { return stat.poc == lastPoc; } );
-  CHECK( lastItr == m_listRCFirstPassStats.end(), "poc not found in first pass statistics" );
-  const auto& lastStats  = *lastItr;
   const bool bIncomplete = ( poc - m_updateNoisePoc ) < m_pcEncCfg->m_GOPSize;
 
   // reset only if full gop pics available or previous gop ends with intra frame
-  if( ! bIncomplete || lastStats.isIntra )
+  if( ! bIncomplete || m_resetNoise )
   {
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
   }
+  m_resetNoise = true;
 
   // currently disabled for last incomplete gop (TODO: check)
   if( bIncomplete && flush )
@@ -864,6 +863,7 @@ void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
     const auto& stat = *itr;
     if( stat.poc > poc )
     {
+      m_resetNoise = stat.isIntra; // in case last update poc is intra, we cannot reuse the old noise levels for the next gop
       break;
     }
     for( int i = 0; i < QPA_MAX_NOISE_LEVELS; i++ )

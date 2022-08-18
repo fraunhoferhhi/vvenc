@@ -210,6 +210,7 @@ namespace vvenc {
     int                     m_numPicStatsTotal;
     int                     m_numPicAddedToList;
     int                     m_updateNoisePoc;
+    bool                    m_resetNoise;
     uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
   };
 
