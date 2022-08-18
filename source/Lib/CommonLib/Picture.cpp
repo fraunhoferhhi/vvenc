@@ -96,22 +96,11 @@ void BlkStat::updateMaxBT( const Slice& slice, const BlkStat& blkStat )
   }
 }
 
-#if REDUCE_MTT
-void BlkStat::setSliceMaxBT( Slice& slice, const VVEncCfg* m_pcEncCfg )
-#else
 void BlkStat::setSliceMaxBT( Slice& slice )
-#endif
 {
   if( ! slice.isIRAP() )
   {
     const int refLayer = std::min<int>( slice.TLayer, NUM_AMAXBT_LAYER - 1 );
-#if REDUCE_MTT
-    if (m_pcEncCfg->m_ReduceMttDepthLastTLayers > 0 && slice.TLayer >= m_pcEncCfg->m_maxTLayer - m_pcEncCfg->m_ReduceMttDepthLastTLayers + 1)
-    {
-      slice.picHeader->splitConsOverride = true;
-      slice.picHeader->maxMTTDepth[1] = slice.picHeader->maxMTTDepth[1] - 1;
-    }
-#endif
     if( m_bResetAMaxBT && slice.poc > m_uiPrevISlicePOC )
     {
       ::memset( m_uiBlkSize, 0, sizeof( m_uiBlkSize ) );
