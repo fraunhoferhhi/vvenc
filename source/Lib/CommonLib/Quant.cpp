@@ -129,7 +129,7 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 // ====================================================================================================================
 // Quant class member functions
 // ====================================================================================================================
-static void QuantCore(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum )
+static void QuantCore(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum ,const bool signHiding)
 {
   const int qBits8 = iQBits - 8;
  printf("QuantCore\n");
@@ -683,8 +683,10 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     //printf("maxNumberOfCoeffs %d enableScalingLists %d defaultQuantisationCoefficient %d \n",maxNumberOfCoeffs,enableScalingLists,defaultQuantisationCoefficient);
 
 #if 1
-    xQuant (piCoef,piQCoef,uiAbsSum,deltaU,maxNumberOfCoeffs,defaultQuantisationCoefficient,iQBits,iAdd,entropyCodingMinimum,entropyCodingMaximum );
-
+    if (!enableScalingLists)
+      xQuant (piCoef,piQCoef,uiAbsSum,deltaU,maxNumberOfCoeffs,defaultQuantisationCoefficient,iQBits,iAdd,entropyCodingMinimum,entropyCodingMaximum,cctx.signHiding() );
+    else
+    {
 #else
     piQCoef.memset( 0 );
     for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
@@ -702,7 +704,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
       piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     } // for n
 #endif
-
+    }
     if (tu.cu->bdpcmM[toChannelType(compID)])
     {
       fwdResDPCM( tu, compID );
