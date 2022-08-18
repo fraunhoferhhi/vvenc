@@ -166,8 +166,6 @@ namespace vvenc {
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
     void processFirstPassData( const bool flush, const int poc = -1 );
-    void prepareNoiseMinStats(const uint64_t* const inputNoiseMinStats);
-    void utilizeNoiseMinStats();
     void processGops();
     void updateMinNoiseLevelsGop( int flush, int poc );
     double getAverageBitsFromFirstPass();
@@ -178,7 +176,6 @@ namespace vvenc {
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
     std::vector<uint8_t>*    getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
-    uint64_t* const          getNoiseMinStats()  { return m_noiseMinStats; }
     const uint8_t*           getMinNoiseLevels() { return m_minNoiseLevels; }
     int                      lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
@@ -214,8 +211,6 @@ namespace vvenc {
     int                     m_numPicAddedToList;
     int                     m_updateNoisePoc;
     uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
-    unsigned                m_noiseMinStatsCnt;
-    uint64_t                m_noiseMinStats[4];
   };
 
 }

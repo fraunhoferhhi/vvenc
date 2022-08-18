@@ -325,8 +325,6 @@ RateCtrl::RateCtrl(MsgLog& logger)
   m_numPicAddedToList = 0;
   m_updateNoisePoc    = -1;
   std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
-  m_noiseMinStatsCnt  = 0;
-  std::memset (m_noiseMinStats, 0xFF, sizeof (m_noiseMinStats)); // reset MS
 }
 
 RateCtrl::~RateCtrl()
@@ -680,27 +678,6 @@ void RateCtrl::xProcessFirstPassData( bool flush, int poc )
   encRCSeq->firstPassData = m_listRCFirstPassStats;
 }
 
-void RateCtrl::prepareNoiseMinStats (const uint64_t* const inputNoiseMinStats)
-{
-  if (inputNoiseMinStats && m_pcEncCfg->m_GOPSize > 8 && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCNumPasses != 2)
-  {
-    if (m_noiseMinStatsCnt < 3) m_noiseMinStatsCnt++;
-    m_noiseMinStats[m_noiseMinStatsCnt] = *inputNoiseMinStats;
-  }
-}
-
-void RateCtrl::utilizeNoiseMinStats()
-{
-  if( m_pcEncCfg->m_GOPSize > 8 && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCNumPasses != 2 )
-  {
-    if (m_noiseMinStatsCnt > 0) m_noiseMinStatsCnt--;
-    m_noiseMinStats[0] = m_noiseMinStats[1];
-    m_noiseMinStats[1] = m_noiseMinStats[2];
-    m_noiseMinStats[2] = m_noiseMinStats[3];
-    m_noiseMinStats[3] = MAX_UINT64; // reset MS
-  }
-}
-
 double RateCtrl::getAverageBitsFromFirstPass()
 {
   uint64_t totalBitsFirstPass = 0;
@@ -855,10 +832,14 @@ void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
+  const int lastPoc      = m_updateNoisePoc;
+  auto lastItr           = find_if( m_listRCFirstPassStats.begin(), m_listRCFirstPassStats.end(),  [ lastPoc ]( const auto& stat ) { return stat.poc == lastPoc; } );
+  CHECK( lastItr == m_listRCFirstPassStats.end(), "poc not found in first pass statistics" );
+  const auto& lastStats  = *lastItr;
   const bool bIncomplete = ( poc - m_updateNoisePoc ) < m_pcEncCfg->m_GOPSize;
 
-  // reset only if full gop pics available
-  if( ! bIncomplete )
+  // reset only if full gop pics available or previous gop ends with intra frame
+  if( ! bIncomplete || lastStats.isIntra )
   {
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
   }

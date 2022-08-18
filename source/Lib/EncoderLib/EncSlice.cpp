@@ -276,7 +276,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
 }
 
 
-void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex )
+void EncSlice::initPic( Picture* pic )
 {
   Slice* slice = pic->cs->slice;
 
@@ -294,7 +294,7 @@ void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* no
   slice->encCABACTableIdx = cabacTableIdx;
 
   // set QP and lambda values
-  xInitSliceLambdaQP( slice, noiseMinimaStats, noiseMinimaMutex );
+  xInitSliceLambdaQP( slice );
 
   for( auto* thrRsc : m_ThreadRsrc )
   {
@@ -320,7 +320,7 @@ void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* no
 
 
 
-void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex )
+void EncSlice::xInitSliceLambdaQP( Slice* slice )
 {
   // pre-compute lambda and qp
   const bool cqp = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
@@ -332,17 +332,13 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsEncodingPass = (m_pcEncCfg->m_LookAhead > 0) && !slice->pic->isPreAnalysis;
     const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCTargetBitrate == 0 && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
-    if (rcIsEncodingPass && slice->pic->gopEntry->m_isStartOfGop) m_pcRateCtrl->utilizeNoiseMinStats(); // @ start of each GOP
-
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, &slice->pic->picVisActY, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                             (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
-                                                            ((m_pcEncCfg->m_LookAhead > 0) && slice->pic->isPreAnalysis ? noiseMinimaStats : nullptr),
-                                                            startCtuTsAddr, boundingCtuTsAddr, noiseMinimaMutex); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
+                                                            startCtuTsAddr, boundingCtuTsAddr); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
 
     if ((m_pcEncCfg->m_RCNumPasses == 2) && m_pcRateCtrl->rcIsFinalPass && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (boundingCtuTsAddr > startCtuTsAddr))
     {
@@ -365,11 +361,9 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
     slice->sliceQp = iQP; // start slice QP for reference
     slice->pic->picInitialQP = iQP;
 
-    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, rcIsEncodingPass, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
+    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                      (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
-                                                     (rcIsEncodingPass ? m_pcRateCtrl->getNoiseMinStats() : (slice->pic->isPreAnalysis ? noiseMinimaStats : nullptr)),
-                                                     m_pcRateCtrl->getMinNoiseLevels(),
-                                                     startCtuTsAddr, boundingCtuTsAddr, noiseMinimaMutex)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
+                                                     m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }

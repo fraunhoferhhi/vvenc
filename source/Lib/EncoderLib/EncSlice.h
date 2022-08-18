@@ -135,7 +135,7 @@ public:
                                 NoMallocThreadPool* threadPool,
                                 WaitCounter* ctuTasksDoneCounter );
 
-  void    initPic             ( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex );
+  void    initPic             ( Picture* pic );
 
   // compress and encode slice
   void    compressSlice       ( Picture* pic );      ///< analysis stage of slices
@@ -144,7 +144,7 @@ public:
   void    finishCompressSlice ( Picture* pic, Slice& slice );
 
 private:
-  void    xInitSliceLambdaQP  ( Slice* slice, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex );
+  void    xInitSliceLambdaQP  ( Slice* slice );
   double  xCalculateLambda    ( const Slice* slice, const int depth, const double refQP, const double dQP, int& iQP );
   void    xProcessCtus        ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
   template<bool checkReadyState=false>

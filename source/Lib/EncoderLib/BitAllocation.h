@@ -58,18 +58,35 @@ namespace vvenc {
   // BitAllocation functions
   namespace BitAllocation
   {
-    int applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, uint16_t* const picVisActLuma,
-                                 std::vector<int>& ctuPumpRedQP, int* const optChromaQPOffsets, uint64_t* const noiseMinStats,
-                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, std::mutex* mutex = nullptr);
-    int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda, bool isEncPass,
-                                 std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory, uint64_t* const noiseMinStats,
+    int applyQPAdaptationChroma( const Slice* slice,
+                                 const VVEncCfg* encCfg,
+                                 const int sliceQP,
+                                 uint16_t* const picVisActLuma,
+                                 std::vector<int>& ctuPumpRedQP,
+                                 int* const optChromaQPOffsets,
+                                 const uint32_t ctuStartAddr,
+                                 const uint32_t ctuBoundingAddr );
+    int applyQPAdaptationLuma  ( const Slice* slice,
+                                 const VVEncCfg* encCfg,
+                                 const int savedQP,
+                                 const double lambda,
+                                 std::vector<int>& ctuPumpRedQP,
+                                 std::vector<uint8_t>* ctuRCQPMemory,
                                  const uint8_t* minNoiseLevels,
-                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, std::mutex* mutex = nullptr);
-    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, uint64_t* const noiseMinStats, const uint8_t* minNoiseLevels);
-    int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
-                                 std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr);
-    bool isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass);
+                                 const uint32_t ctuStartAddr,
+                                 const uint32_t ctuBoundingAddr );
+    int applyQPAdaptationSubCtu( const Slice* slice,
+                                 const VVEncCfg* encCfg,
+                                 const Area& lumaArea,
+                                 const uint8_t* minNoiseLevels );
+    int getCtuPumpingReducingQP( const Slice* slice,
+                                 const CPelBuf& origY,
+                                 const Distortion uiSadBestForQPA,
+                                 std::vector<int>& ctuPumpRedQP,
+                                 const uint32_t ctuRsAddr,
+                                 const int baseQP );
+    double getPicVisualActivity( const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr );
+    bool isTempLayer0IntraFrame( const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass );
   }
 
 } // namespace vvenc
