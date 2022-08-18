@@ -687,7 +687,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if ((!slice.isIntra() || slice.sps->IBC) && cuECtx.isBestNoSplitSkip )
   {
-    for( int i = 2; i < m_ComprCUCtxList.size(); i++ )
+    for( int i = 2; i <= m_ComprCUCtxList.size(); i++ )
     {
       if( ( m_ComprCUCtxList.end() - i )->isBestNoSplitSkip )
       {
@@ -701,7 +701,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   }
 
   const PartSplit split = getPartSplit( encTestmode );
-  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 )
+  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 || ( skipScore == 1 && m_ComprCUCtxList.size() == 2 ) )
   {
     if( split == CU_HORZ_SPLIT ) cuECtx.didHorzSplit = false;
     if( split == CU_VERT_SPLIT ) cuECtx.didVertSplit = false;
