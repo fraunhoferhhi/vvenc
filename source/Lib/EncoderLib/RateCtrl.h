@@ -190,7 +190,7 @@ namespace vvenc {
   protected:
     MsgLog&                 msg;
 
-    void xProcessFirstPassData( bool flush, int poc );
+    void xProcessFirstPassData( const bool flush, const int poc );
     void storeStatsData( const TRCPassStats& statsData );
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );

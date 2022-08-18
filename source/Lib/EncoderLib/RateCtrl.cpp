@@ -651,7 +651,7 @@ void RateCtrl::processFirstPassData( const bool flush, const int poc /*= -1*/ )
   }
 }
 
-void RateCtrl::xProcessFirstPassData( bool flush, int poc )
+void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
