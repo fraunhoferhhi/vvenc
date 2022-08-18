@@ -2531,7 +2531,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_maxMTTDepth                     = 3;
+      c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
       c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
