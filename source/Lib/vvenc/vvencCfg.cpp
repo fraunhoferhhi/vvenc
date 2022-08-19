@@ -1756,6 +1756,12 @@ static bool checkCfgParameter( vvenc_config *c )
   const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
   vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
+  if (c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth >= pow(10, (maxTLayer + 1)))
+  {
+    msg.log(VVENC_WARNING, "Warning: MaxMTTHierarchyDepth>=10 & larger than maxTLayer\n");
+  }
+  vvenc_confirmParameter(c, c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth < pow(10, maxTLayer ), "MaxMTTHierarchyDepth>=10 & not set for all TLs");
+
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
