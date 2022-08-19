@@ -865,7 +865,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noActConstraintFlag                          = false;
   ci.noLmcsConstraintFlag                         = false;
   ci.noQtbttDualTreeIntraConstraintFlag           = ! m_pcEncCfg->m_dualITree;
-  ci.noPartitionConstraintsOverrideConstraintFlag = m_pcEncCfg->m_useAMaxBT == 0;
+  ci.noPartitionConstraintsOverrideConstraintFlag = false;
   ci.noSaoConstraintFlag                          = ! m_pcEncCfg->m_bUseSAO;
   ci.noAlfConstraintFlag                          = ! m_pcEncCfg->m_alf;
   ci.noCCAlfConstraintFlag                        = ! m_pcEncCfg->m_ccalf;
