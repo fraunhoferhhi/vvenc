@@ -538,7 +538,7 @@ typedef struct vvenc_config
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
-  unsigned            m_maxMTTDepthIChroma;
+  int                 m_maxMTTDepthIChroma;
   unsigned            m_maxBT[3];
   unsigned            m_maxTT[3];
   bool                m_dualITree;
