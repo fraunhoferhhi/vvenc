@@ -981,23 +981,31 @@ private:
 
 struct CompStorage : public PelBuf
 {
-  CompStorage () { m_memory = nullptr; }
-  ~CompStorage() { if (valid()) delete [] m_memory; }
+  ~CompStorage() { if( valid() ) delete[] m_memory; }
 
+  void compactResize( const Size& size )
+  {
+    CHECK( size.area() > m_allocSize, "Resizing causes buffer overflow!" );
+    Size::operator=( size );
+    stride = size.width;
+  }
   void create( const Size& size )
   {
     CHECK( m_memory, "Trying to re-create an already initialized buffer" );
-    m_memory = new Pel [ size.area() ];
-    *static_cast<PelBuf*>(this) = PelBuf( m_memory, size );
+    m_allocSize = size.area();
+    m_memory = new Pel[m_allocSize];
+    PelBuf::operator=( PelBuf( m_memory, size ) );
   }
   void destroy()
   {
-    if (valid()) delete [] m_memory;
-    m_memory = nullptr;
+    if( valid() ) delete[] m_memory;
+    m_memory    = nullptr;
+    m_allocSize = 0;
   }
   bool valid() { return m_memory != nullptr; }
 private:
-  Pel* m_memory;
+  ptrdiff_t m_allocSize = 0;
+  Pel*      m_memory    = nullptr;
 };
 
 template<int NumEntries>

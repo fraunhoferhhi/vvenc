@@ -350,6 +350,7 @@ private:
   unsigned int      m_numBVs;
   IbcBvCand*        m_defaultCachedBvs;
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
+  CompStorage       m_orgResiCb[4], m_orgResiCr[4];   // 0:std, 1-3:jointCbCr
 
 protected:
   // interface to option
