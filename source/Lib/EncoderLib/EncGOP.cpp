@@ -257,7 +257,6 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
-  , m_noiseMinimaStats   ( MAX_UINT64 )
   , m_appliedSwitchDQP   ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
@@ -323,7 +322,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     EncPicture* picEncoder = new EncPicture;
-    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, ( encCfg.m_numThreads > 0 ? &m_noiseMinimaMutex : nullptr ), &m_noiseMinimaStats, threadPool );
+    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool );
     m_freePicEncoderList.push_back( picEncoder );
   }
 
@@ -505,11 +504,6 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
             m_pcRateCtrl->processFirstPassData( flush, pic->poc );
           }
         }
-        else if ( m_isPreAnalysis && ( m_pcEncCfg->m_GOPSize > 8 ) && ( pic->poc >= m_pcEncCfg->m_GOPSize ) &&
-                ( ( pic->slices[0]->TLayer == 0 ) || ( m_procList.empty() && flush ) ) ) // TLayer-0 or last coded POC
-        {
-          m_pcRateCtrl->prepareNoiseMinStats( picEncoder->getNoiseMinStatPtr() ); // @ end of each GOP
-        }
 
         m_freePicEncoderList.pop_front();
       }
@@ -517,11 +511,11 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
-      
+
       xEncodePicture( pic, picEncoder );
     }
   }
-  
+
   // picture/AU output
   // 
   // in lock-step mode:
@@ -2437,7 +2431,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   slice->TLayer,
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
-                                  pic->gopEntry->m_gopNum );
+                                  pic->gopEntry->m_gopNum,
+                                  pic->minNoiseLevels );
   }
 
   //===== add PSNR =====

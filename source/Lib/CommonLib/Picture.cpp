@@ -195,6 +195,7 @@ Picture::Picture()
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
+  std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 }
 
 void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder )
@@ -233,6 +234,7 @@ void Picture::reset()
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
+  std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 
   encTime.resetTimer();
 }

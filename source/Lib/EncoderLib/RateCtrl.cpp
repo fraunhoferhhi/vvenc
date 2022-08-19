@@ -312,19 +312,20 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 RateCtrl::RateCtrl(MsgLog& logger)
 : msg ( logger )
 {
-  m_pcEncCfg    = nullptr;
-  encRCSeq      = NULL;
-  encRCPic      = NULL;
-  flushPOC      = -1;
-  rcPass        = 0;
-  rcIsFinalPass = true;
+  m_pcEncCfg           = nullptr;
+  encRCSeq             = NULL;
+  encRCPic             = NULL;
+  flushPOC             = -1;
+  rcPass               = 0;
+  rcIsFinalPass        = true;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
-  m_pqpaStatsWritten = 0;
+  m_pqpaStatsWritten   = 0;
 #endif
-  m_numPicStatsTotal  = 0;
-  m_numPicAddedToList = 0;
-  m_noiseMinStatsCnt  = 0;
-  std::memset (m_noiseMinStats, 0xFF, sizeof (m_noiseMinStats)); // reset MS
+  m_numPicStatsTotal   = 0;
+  m_numPicAddedToList  = 0;
+  m_updateNoisePoc     = -1;
+  m_resetNoise         = true;
+  std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 }
 
 RateCtrl::~RateCtrl()
@@ -533,7 +534,8 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "tempLayer" ],
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
-                                                    data[ "gopNum" ]
+                                                    data[ "gopNum" ],
+                                                    statsData.minNoiseLevels
                                                     ) );
   }
   m_numPicStatsTotal++;
@@ -551,6 +553,9 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
 void RateCtrl::readStatsFile()
 {
   CHECK( ! m_rcStatsFHandle.good(), "unable to read from rate control statistics file" );
+
+  uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
+  std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 
   int lineNum = 2;
   std::string line;
@@ -581,7 +586,8 @@ void RateCtrl::readStatsFile()
                                                     data[ "tempLayer" ],
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
-                                                    data[ "gopNum" ]
+                                                    data[ "gopNum" ],
+                                                    minNoiseLevels
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
     {
@@ -597,43 +603,55 @@ void RateCtrl::readStatsFile()
 }
 #endif
 
-void RateCtrl::processFirstPassData (const bool flush, const int poc)
+void RateCtrl::processFirstPassData( const bool flush, const int poc /*= -1*/ )
 {
-  CHECK( m_firstPassCache.size() == 0, "No data available from the first pass!" );
-  CHECKD( !m_pcEncCfg->m_LookAhead, "This function should be only used in look-ahead mode" );
-
-  // fetch RC data for the next look-ahead chunk
-  // the next look-ahead chunk starts with a given POC, so find a pic for a given POC in cache
-  // NOTE!!!: pictures in cache are in coding order
-
-  auto picCacheItr = find_if( m_firstPassCache.begin(), m_firstPassCache.end(), [poc]( auto& picStat ) { return picStat.poc == poc; } );
-
-  for( int count = 0; picCacheItr != m_firstPassCache.end(); ++picCacheItr )
+  if( m_pcEncCfg->m_RCNumPasses > 1 )
   {
-    auto& picStat = *picCacheItr;
-    count++;
-    if( !picStat.addedToList )
-    {
-      picStat.addedToList = true;
-      m_numPicAddedToList++;
-      m_listRCFirstPassStats.push_back( picStat );
-      if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > encRCSeq->intraPeriod + encRCSeq->gopSize + 1 )
-      {
-        m_listRCFirstPassStats.pop_front();
-        m_firstPassCache.pop_front();
-      }
+    // two pass rc
+    CHECK( m_pcEncCfg->m_LookAhead, "two pass rc does not support look-ahead mode" );
 
-      // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
-      // in flush-mode, ensure the deterministic definition of last chunk
-      if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
-        break;
-    }
+    xProcessFirstPassData( flush, poc );
   }
-  // enable flush only in last chunk (provides correct calculation of flushPOC)
-  processFirstPassData( flush && ( m_numPicAddedToList == m_numPicStatsTotal ) );
+  else
+  {
+    // single pass rc
+    CHECK( !m_pcEncCfg->m_LookAhead,     "single pass rc should be only used in look-ahead mode" );
+    CHECK( m_firstPassCache.size() == 0, "no data available from the first pass" );
+    CHECK( poc < 0,                      "no valid poc given" );
+
+    // fetch RC data for the next look-ahead chunk
+    // the next look-ahead chunk starts with a given POC, so find a pic for a given POC in cache
+    // NOTE!!!: pictures in cache are in coding order
+
+    auto picCacheItr = find_if( m_firstPassCache.begin(), m_firstPassCache.end(), [poc]( auto& picStat ) { return picStat.poc == poc; } );
+
+    for( int count = 0; picCacheItr != m_firstPassCache.end(); ++picCacheItr )
+    {
+      auto& picStat = *picCacheItr;
+      count++;
+      if( !picStat.addedToList )
+      {
+        picStat.addedToList = true;
+        m_numPicAddedToList++;
+        m_listRCFirstPassStats.push_back( picStat );
+        if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > encRCSeq->intraPeriod + encRCSeq->gopSize + 1 )
+        {
+          m_listRCFirstPassStats.pop_front();
+          m_firstPassCache.pop_front();
+        }
+
+        // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
+        // in flush-mode, ensure the deterministic definition of last chunk
+        if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
+          break;
+      }
+    }
+    // enable flush only in last chunk (provides correct calculation of flushPOC)
+    xProcessFirstPassData( flush && ( m_numPicAddedToList == m_numPicStatsTotal ), poc );
+  }
 }
 
-void RateCtrl::processFirstPassData (const bool flush)
+void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
@@ -651,28 +669,15 @@ void RateCtrl::processFirstPassData (const bool flush)
   // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
   processGops();
 
+  if( m_pcEncCfg->m_GOPSize > 8
+      && m_pcEncCfg->m_IntraPeriod >= m_pcEncCfg->m_GOPSize
+      && m_pcEncCfg->m_usePerceptQPA
+      && m_pcEncCfg->m_RCNumPasses == 1 )
+  {
+    updateMinNoiseLevelsGop( flush, poc );
+  }
+
   encRCSeq->firstPassData = m_listRCFirstPassStats;
-}
-
-void RateCtrl::prepareNoiseMinStats (const uint64_t* const inputNoiseMinStats)
-{
-  if (inputNoiseMinStats && m_pcEncCfg->m_GOPSize > 8 && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCNumPasses != 2)
-  {
-    if (m_noiseMinStatsCnt < 3) m_noiseMinStatsCnt++;
-    m_noiseMinStats[m_noiseMinStatsCnt] = *inputNoiseMinStats;
-  }
-}
-
-void RateCtrl::utilizeNoiseMinStats (const uint32_t temporalLevel)
-{
-  if (temporalLevel == 0 && m_pcEncCfg->m_GOPSize > 8 && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCNumPasses != 2)
-  {
-    if (m_noiseMinStatsCnt > 0) m_noiseMinStatsCnt--;
-    m_noiseMinStats[0] = m_noiseMinStats[1];
-    m_noiseMinStats[1] = m_noiseMinStats[2];
-    m_noiseMinStats[2] = m_noiseMinStats[3];
-    m_noiseMinStats[3] = MAX_UINT64; // reset MS
-  }
 }
 
 double RateCtrl::getAverageBitsFromFirstPass()
@@ -825,11 +830,69 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
-                               const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
-                               const bool isStartOfIntra, const bool isStartOfGop, const int gopNum)
+void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum));
+  CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
+
+  const bool bIncomplete = ( poc - m_updateNoisePoc ) < m_pcEncCfg->m_GOPSize;
+
+  // reset only if full gop pics available or previous gop ends with intra frame
+  if( ! bIncomplete || m_resetNoise )
+  {
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+  }
+  m_resetNoise = true;
+
+  // currently disabled for last incomplete gop (TODO: check)
+  if( bIncomplete && flush )
+  {
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+    return;
+  }
+
+  // continue with stats after last used poc 
+  const int startPoc = m_updateNoisePoc + 1;
+  auto itr           = find_if( m_listRCFirstPassStats.begin(), m_listRCFirstPassStats.end(),  [ startPoc ]( const auto& stat ) { return stat.poc == startPoc; } );
+  if( itr == m_listRCFirstPassStats.end() )
+  {
+    itr = m_listRCFirstPassStats.begin();
+  }
+
+  for( ; itr != m_listRCFirstPassStats.end(); itr++ )
+  {
+    const auto& stat = *itr;
+    if( stat.poc > poc )
+    {
+      m_resetNoise = stat.isIntra; // in case last update poc is intra, we cannot reuse the old noise levels for the next gop
+      break;
+    }
+    for( int i = 0; i < QPA_MAX_NOISE_LEVELS; i++ )
+    {
+      if( stat.minNoiseLevels[ i ] < m_minNoiseLevels[ i ] )
+      {
+        m_minNoiseLevels[ i ] = stat.minNoiseLevels[ i ];
+      }
+    }
+  }
+
+  // store highest poc used for current update
+  m_updateNoisePoc = poc;
+}
+
+void RateCtrl::addRCPassStats( const int poc,
+                               const int qp,
+                               const double lambda,
+                               const uint16_t visActY,
+                               const uint32_t numBits,
+                               const double psnrY,
+                               const bool isIntra,
+                               const uint32_t tempLayer,
+                               const bool isStartOfIntra,
+                               const bool isStartOfGop,
+                               const int gopNum,
+                               const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
+{
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, minNoiseLevels));
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
