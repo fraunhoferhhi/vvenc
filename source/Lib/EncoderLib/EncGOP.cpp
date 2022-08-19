@@ -1506,9 +1506,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->picHeader->maxTTSize[i]   = sps.maxTTSize[i];
     if ((i == 1) && (m_pcEncCfg->m_maxMTTDepth > 10))
     {
-      int MTTcurTL = int(m_pcEncCfg->m_maxMTTDepth / pow(10, sps.maxTLayers - slice->TLayer - 1)) % 10;
-      CHECK(MTTcurTL > 3 || MTTcurTL < 0, "ERROR: MaxMTTHierarchyDepth>10 & maxMTTDepth_per_TL out of supported range");
-      slice->picHeader->maxMTTDepth[i] = MTTcurTL;
+      slice->picHeader->maxMTTDepth[i] = int(m_pcEncCfg->m_maxMTTDepth / pow(10, sps.maxTLayers - slice->TLayer - 1)) % 10;
       slice->picHeader->splitConsOverride = true;
     }
   }

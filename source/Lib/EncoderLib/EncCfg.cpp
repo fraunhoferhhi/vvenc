@@ -66,6 +66,7 @@ void VVEncCfg::xInitCfgMembers()
   m_stageParallelProc = m_numThreads > 0 && m_maxParallelFrames > 0;
   m_log2GopSize       = floorLog2( m_GOPSize );
   m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
+  CHECK(m_maxMTTDepth > pow( 10, (m_maxTLayer + 1) ), "ERROR: MaxMTTHierarchyDepth out of supported range");
 }
 
 }
