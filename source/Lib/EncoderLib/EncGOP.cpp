@@ -935,11 +935,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.chromaFormatIdc               = m_pcEncCfg->m_internChromaFormat;
   sps.CTUSize                       = m_pcEncCfg->m_CTUSize;
   sps.maxMTTDepth[0]                = m_pcEncCfg->m_maxMTTDepthI;
-#if REDUCE_MTT
   sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth > 10 ? 3 : m_pcEncCfg->m_maxMTTDepth;
-#else
-  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth;
-#endif
   sps.maxMTTDepth[2]                = m_pcEncCfg->m_maxMTTDepthIChroma;
   for( int i = 0; i < 3; i++)
   {
@@ -1508,16 +1504,13 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->picHeader->maxMTTDepth[i] = sps.maxMTTDepth[i];
     slice->picHeader->maxBTSize[i]   = sps.maxBTSize[i];
     slice->picHeader->maxTTSize[i]   = sps.maxTTSize[i];
-#if REDUCE_MTT
     if ((i == 1) && (m_pcEncCfg->m_maxMTTDepth > 10))
     {
       int MTTcurTL = int(m_pcEncCfg->m_maxMTTDepth / pow(10, sps.maxTLayers - slice->TLayer - 1)) % 10;
-      MTTcurTL = int(m_pcEncCfg->m_maxMTTDepth / pow(10, sps.maxTLayers - slice->TLayer - 1)) % 10;
-      CHECK(MTTcurTL > 3 || MTTcurTL < 0, "ERROR: maxMTTDepth > 10 decimal per TL");
+      CHECK(MTTcurTL > 3 || MTTcurTL < 0, "ERROR: MaxMTTHierarchyDepth>10 & maxMTTDepth_per_TL out of supported range");
       slice->picHeader->maxMTTDepth[i] = MTTcurTL;
       slice->picHeader->splitConsOverride = true;
     }
-#endif
   }
 
   slice->associatedIRAPType        = m_associatedIRAPType;
