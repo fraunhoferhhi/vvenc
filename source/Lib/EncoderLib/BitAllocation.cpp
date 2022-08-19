@@ -250,13 +250,13 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 
 void updateMinNoiseLevelsPic( Picture* pic, const int bitDepth, const unsigned avgValue, const unsigned noise )
 {
-  const unsigned idx = avgValue >> (bitDepth - 3); // one of 8 mean level regions
+  const unsigned avgIndex = avgValue >> (bitDepth - 3); // one of 8 mean level regions
 
-  CHECK( idx >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
+  CHECK( avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
 
-  if( noise < (unsigned)pic->minNoiseLevels[ idx ] )
+  if( noise < (unsigned)pic->minNoiseLevels[ avgIndex ] )
   {
-    pic->minNoiseLevels[ idx ] = (uint8_t)noise;
+    pic->minNoiseLevels[ avgIndex ] = (uint8_t)noise;
   }
 }
 
@@ -266,10 +266,7 @@ static void clipQPValToEstimatedMinimStats( const uint8_t* minNoiseLevels, const
   const unsigned avgIndex = avgValue >> (bitDepth - 3); // one of 8 mean level regions
   const int32_t dQPOffset = -9;
 
-  if (bitDepth < 6 || bitDepth > 16 || avgValue >= (1 << bitDepth))
-  {
-    return;
-  }
+  CHECK( avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
 
   int i = minNoiseLevels[avgIndex];
 
