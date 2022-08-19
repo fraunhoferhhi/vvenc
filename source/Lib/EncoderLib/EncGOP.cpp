@@ -929,7 +929,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.chromaFormatIdc               = m_pcEncCfg->m_internChromaFormat;
   sps.CTUSize                       = m_pcEncCfg->m_CTUSize;
   sps.maxMTTDepth[0]                = m_pcEncCfg->m_maxMTTDepthI;
-  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth;
+  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth > 10 ? 3 : m_pcEncCfg->m_maxMTTDepth;
   sps.maxMTTDepth[2]                = m_pcEncCfg->m_maxMTTDepthIChroma;
   for( int i = 0; i < 3; i++)
   {
@@ -1498,6 +1498,11 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->picHeader->maxMTTDepth[i] = sps.maxMTTDepth[i];
     slice->picHeader->maxBTSize[i]   = sps.maxBTSize[i];
     slice->picHeader->maxTTSize[i]   = sps.maxTTSize[i];
+    if ((i == 1) && (m_pcEncCfg->m_maxMTTDepth > 10))
+    {
+      slice->picHeader->maxMTTDepth[i] = int(m_pcEncCfg->m_maxMTTDepth / pow(10, sps.maxTLayers - slice->TLayer - 1)) % 10;
+      slice->picHeader->splitConsOverride = true;
+    }
   }
 
   slice->associatedIRAPType        = m_associatedIRAPType;
