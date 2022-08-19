@@ -67,15 +67,6 @@ class EncCu;
 class IntraSearch : public IntraPrediction
 {
 private:
-  static const int maxCuDepth = (MAX_CU_SIZE_IDX - MIN_CU_LOG2) << 1;
-
-  CodingStructure*    m_pTempCS;
-  CodingStructure*    m_pBestCS;
-  CodingStructure**   m_pSaveCS;
-  bool                m_saveCuCostInSCIPU;
-  uint8_t             m_numCuInSCIPU;
-  Area                m_cuAreaInSCIPU[NUM_INTER_CU_INFO_SAVE];
-  double              m_cuCostInSCIPU[NUM_INTER_CU_INFO_SAVE];
 
   struct ModeInfo
   {
@@ -85,10 +76,21 @@ private:
     uint8_t  ispMod;    // CU::ispMode
     uint8_t  modeId;    // CU::intraDir[CH_L]
 
-    ModeInfo() : mipFlg(false), mipTrFlg(false), mRefId(0), ispMod(NOT_INTRA_SUBPARTITIONS), modeId(0) {}
-    ModeInfo(const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode) : mipFlg(mipf), mipTrFlg(miptf), mRefId(mrid), ispMod(ispm), modeId(mode) {}
-    bool operator==(const ModeInfo cmp) const { return (0 == ::memcmp(this,&cmp,sizeof(ModeInfo))); }
+    ModeInfo() : mipFlg( false ), mipTrFlg( false ), mRefId( 0 ), ispMod( NOT_INTRA_SUBPARTITIONS ), modeId( 0 ) {}
+    ModeInfo( const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode ) : mipFlg( mipf ), mipTrFlg( miptf ), mRefId( mrid ), ispMod( ispm ), modeId( mode ) {}
+    bool operator==( const ModeInfo cmp ) const { return ( 0 == ::memcmp( this, &cmp, sizeof( ModeInfo ) ) ); }
   };
+
+  CodingStructure*    m_pTempCS;
+  CodingStructure*    m_pBestCS;
+  CodingStructure**   m_pSaveCS;
+  bool                m_saveCuCostInSCIPU;
+  uint8_t             m_numCuInSCIPU;
+  Area                m_cuAreaInSCIPU[NUM_INTER_CU_INFO_SAVE];
+  double              m_cuCostInSCIPU[NUM_INTER_CU_INFO_SAVE];
+  CompStorage         m_orgResiCb[5], m_orgResiCr[5]; // 0:std, 1-3:jointCbCr, 4:crossComp
+  std::vector<ModeInfo>
+                      m_parentCandList;
 
 protected:
   // interface to option

@@ -375,8 +375,6 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
   if( !CU::isIntra( *tu.cu ) )
   {
     int cbfMask = 3;
-    resCb[cbfMask].create( tu.blocks[COMP_Cb] );
-    resCr[cbfMask].create( tu.blocks[COMP_Cr] );
     fwdTransformICT( tu, resCb[0], resCr[0], resCb[cbfMask], resCr[cbfMask], cbfMask );
     std::vector<int> cbfMasksToTest;
     cbfMasksToTest.push_back( cbfMask );
@@ -386,23 +384,6 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
   std::pair<int64_t,int64_t> pairDist[4];
   for( int cbfMask = 0; cbfMask < 4; cbfMask++ )
   {
-    if( cbfMask )
-    {
-      if (tu.cu->lfnstIdx)
-      {
-        if (resCb[cbfMask].valid())
-        {
-          resCb[cbfMask].destroy();
-        }
-        if (resCr[cbfMask].valid())
-        {
-          resCr[cbfMask].destroy();
-        }
-      }
-      CHECK( resCb[cbfMask].valid() || resCr[cbfMask].valid(), "target components for cbfMask=" << cbfMask << " are already present" );
-      resCb[cbfMask].create( tu.blocks[COMP_Cb] );
-      resCr[cbfMask].create( tu.blocks[COMP_Cr] );
-    }
     pairDist[cbfMask] = fwdTransformICT( tu, resCb[0], resCr[0], resCb[cbfMask], resCr[cbfMask], cbfMask );
   }
 
