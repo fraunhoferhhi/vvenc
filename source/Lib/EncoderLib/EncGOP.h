@@ -162,8 +162,6 @@ private:
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
-  std::mutex                m_noiseMinimaMutex;
-  uint64_t                  m_noiseMinimaStats;
   int                       m_appliedSwitchDQP;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;

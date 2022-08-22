@@ -195,7 +195,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
-  if( m_encCfg.m_RCNumPasses > 1 || ( m_orgCfg.m_RCTargetBitrate > 0 && m_encCfg.m_LookAhead ) )
+  if( m_encCfg.m_RCNumPasses > 1 || ( m_encCfg.m_LookAhead && m_orgCfg.m_RCTargetBitrate > 0 ) )
   {
     if (!m_rateCtrl->rcIsFinalPass)
     {

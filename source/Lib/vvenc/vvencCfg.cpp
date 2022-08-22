@@ -464,7 +464,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_MinQT[2] = 4;
   c->m_maxMTTDepth                             = 3;
   c->m_maxMTTDepthI                            = 3;
-  c->m_maxMTTDepthIChroma                      = 3;
+  c->m_maxMTTDepthIChroma                      = -1;
 
   c->m_maxBT[0]=32;  c->m_maxBT[1]=128;  c->m_maxBT[2]=64;
   c->m_maxTT[0]=32;  c->m_maxTT[1]=64;  c->m_maxTT[2]=32;
@@ -798,6 +798,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_maxTT[0] = std::min( c->m_CTUSize, c->m_maxTT[0] );
   c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
   c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
+
+  if( c->m_maxMTTDepthIChroma < 0 )
+  {
+    c->m_maxMTTDepthIChroma = c->m_maxMTTDepthI;
+  }
 
   // rate control
   if( c->m_RCNumPasses < 0 )
@@ -1751,6 +1756,12 @@ static bool checkCfgParameter( vvenc_config *c )
   const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
   vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
+  if (c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth >= pow(10, (maxTLayer + 1)))
+  {
+    msg.log(VVENC_WARNING, "Warning: MaxMTTHierarchyDepth>=10 & larger than maxTLayer\n");
+  }
+  vvenc_confirmParameter(c, c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth < pow(10, maxTLayer ), "MaxMTTHierarchyDepth>=10 & not set for all TLs");
+
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -2216,7 +2227,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 16;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
@@ -2267,7 +2277,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2323,7 +2332,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
-      c->m_maxMTTDepthIChroma              = 1;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2387,7 +2395,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2405,7 +2412,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
-      c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
 
       // tools
@@ -2415,7 +2422,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
-      c->m_CIIP                            = 2;
+      c->m_CIIP                            = 0;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
@@ -2459,7 +2466,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2531,9 +2537,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_maxMTTDepth                     = 3;
+      c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2609,7 +2614,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups

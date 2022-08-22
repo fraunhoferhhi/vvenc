@@ -265,6 +265,13 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[0] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[1] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
+
+  CompArea chromaArea( COMP_Cb, cform, Area( 0, 0, encCfg.m_CTUSize, encCfg.m_CTUSize ), true );
+  for( int i = 0; i < 4; i++ )
+  {
+    m_orgResiCb[i].create( chromaArea );
+    m_orgResiCr[i].create( chromaArea );
+  }
 }
 
 void InterSearch::destroy()
@@ -3680,21 +3687,23 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         (TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_SKIP && !TU::getCbf(tu, COMP_Cb)) ||
         (TU::getCbf(tu, COMP_Cb) && tu.mtsIdx[COMP_Cb] == MTS_SKIP && TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_SKIP));
 
-      CompStorage      orgResiCb[4], orgResiCr[4];   // 0:std, 1-3:jointCbCr
       std::vector<int> jointCbfMasksToTest;
       if ( checkJointCbCr )
       {
-        orgResiCb[0].create(cbArea);
-        orgResiCr[0].create(crArea);
-        orgResiCb[0].copyFrom(orgResiBuf.Cb());
-        orgResiCr[0].copyFrom(orgResiBuf.Cr());
+        for( int i = 0; i < 4; i++ )
+        {
+          m_orgResiCb[i].compactResize(cbArea);
+          m_orgResiCr[i].compactResize(crArea);
+        }
+        m_orgResiCb[0].copyFrom(orgResiBuf.Cb());
+        m_orgResiCr[0].copyFrom(orgResiBuf.Cr());
         if (reshape)
         {
-          orgResiCb[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cb]);
-          orgResiCr[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cr]);
+          m_orgResiCb[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cb]);
+          m_orgResiCr[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cr]);
         }
 
-        jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(tu, orgResiCb, orgResiCr);
+        jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(tu, m_orgResiCb, m_orgResiCr);
 
         bestTU.copyComponentFrom(tu, COMP_Cb);
         bestTU.copyComponentFrom(tu, COMP_Cr);
@@ -3757,8 +3766,8 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           PelBuf cbResi = csFull->getResiBuf(cbArea);
           PelBuf crResi = csFull->getResiBuf(crArea);
-          cbResi.copyFrom(orgResiCb[cbfMask]);
-          crResi.copyFrom(orgResiCr[cbfMask]);
+          cbResi.copyFrom(m_orgResiCb[cbfMask]);
+          crResi.copyFrom(m_orgResiCr[cbfMask]);
 
           if (reshape)
           {

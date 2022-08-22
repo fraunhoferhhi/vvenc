@@ -257,7 +257,6 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
-  , m_noiseMinimaStats   ( MAX_UINT64 )
   , m_appliedSwitchDQP   ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
@@ -323,7 +322,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     EncPicture* picEncoder = new EncPicture;
-    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, ( encCfg.m_numThreads > 0 ? &m_noiseMinimaMutex : nullptr ), &m_noiseMinimaStats, threadPool );
+    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool );
     m_freePicEncoderList.push_back( picEncoder );
   }
 
@@ -505,11 +504,6 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
             m_pcRateCtrl->processFirstPassData( flush, pic->poc );
           }
         }
-        else if ( m_isPreAnalysis && ( m_pcEncCfg->m_GOPSize > 8 ) && ( pic->poc >= m_pcEncCfg->m_GOPSize ) &&
-                ( ( pic->slices[0]->TLayer == 0 ) || ( m_procList.empty() && flush ) ) ) // TLayer-0 or last coded POC
-        {
-          m_pcRateCtrl->prepareNoiseMinStats( picEncoder->getNoiseMinStatPtr() ); // @ end of each GOP
-        }
 
         m_freePicEncoderList.pop_front();
       }
@@ -517,11 +511,11 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
-      
+
       xEncodePicture( pic, picEncoder );
     }
   }
-  
+
   // picture/AU output
   // 
   // in lock-step mode:
@@ -871,7 +865,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noActConstraintFlag                          = false;
   ci.noLmcsConstraintFlag                         = false;
   ci.noQtbttDualTreeIntraConstraintFlag           = ! m_pcEncCfg->m_dualITree;
-  ci.noPartitionConstraintsOverrideConstraintFlag = m_pcEncCfg->m_useAMaxBT == 0;
+  ci.noPartitionConstraintsOverrideConstraintFlag = false;
   ci.noSaoConstraintFlag                          = ! m_pcEncCfg->m_bUseSAO;
   ci.noAlfConstraintFlag                          = ! m_pcEncCfg->m_alf;
   ci.noCCAlfConstraintFlag                        = ! m_pcEncCfg->m_ccalf;
@@ -935,7 +929,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.chromaFormatIdc               = m_pcEncCfg->m_internChromaFormat;
   sps.CTUSize                       = m_pcEncCfg->m_CTUSize;
   sps.maxMTTDepth[0]                = m_pcEncCfg->m_maxMTTDepthI;
-  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth;
+  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth >= 10 ? 3 : m_pcEncCfg->m_maxMTTDepth;
   sps.maxMTTDepth[2]                = m_pcEncCfg->m_maxMTTDepthIChroma;
   for( int i = 0; i < 3; i++)
   {
@@ -973,7 +967,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.MRL                           = m_pcEncCfg->m_MRL;
   sps.BdofPresent                   = m_pcEncCfg->m_BDOF;
   sps.DmvrPresent                   = m_pcEncCfg->m_DMVR;
-  sps.partitionOverrideEnabled      = m_pcEncCfg->m_useAMaxBT != 0;
+  sps.partitionOverrideEnabled      = true; // needed for the new MaxMTTDepth logic
   sps.resChangeInClvsEnabled        = m_pcEncCfg->m_resChangeInClvsEnabled;
   sps.rprEnabled                    = m_pcEncCfg->m_rprEnabledFlag != 0;
   sps.log2MinCodingBlockSize        = m_pcEncCfg->m_log2MinCodingBlockSize;
@@ -1504,6 +1498,11 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->picHeader->maxMTTDepth[i] = sps.maxMTTDepth[i];
     slice->picHeader->maxBTSize[i]   = sps.maxBTSize[i];
     slice->picHeader->maxTTSize[i]   = sps.maxTTSize[i];
+    if( ( i == 1 ) && ( m_pcEncCfg->m_maxMTTDepth >= 10 ) )
+    {
+      slice->picHeader->maxMTTDepth[i]    = int( m_pcEncCfg->m_maxMTTDepth / pow( 10, sps.maxTLayers - slice->TLayer - 1 ) ) % 10;
+      slice->picHeader->splitConsOverride = true;
+    }
   }
 
   slice->associatedIRAPType        = m_associatedIRAPType;
@@ -1622,10 +1621,12 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // update RAS
   xUpdateRasInit( slice );
 
-  if ( m_pcEncCfg->m_useAMaxBT )
+  if( m_pcEncCfg->m_useAMaxBT )
   {
     m_BlkStat.setSliceMaxBT( *slice );
+  }
 
+  {
     bool identicalToSPS=true;
     const SPS* sps =slice->sps;
     PicHeader* picHeader = slice->picHeader;
@@ -2437,7 +2438,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   slice->TLayer,
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
-                                  pic->gopEntry->m_gopNum );
+                                  pic->gopEntry->m_gopNum,
+                                  pic->minNoiseLevels );
   }
 
   //===== add PSNR =====
