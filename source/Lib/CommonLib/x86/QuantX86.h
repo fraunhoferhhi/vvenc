@@ -239,11 +239,14 @@ void print128_64(__m128i var)
            val[0], val[1]);
 }
 #define _mm_storeu_si32(p, a) (void)(*(int*)(p) = _mm_cvtsi128_si32((a)))
-
+static int MyCount=0;
 template<X86_VEXT vext>
 static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum ,const bool signHiding)
 {
   const int qBits8 = iQBits - 8;
+  int16_t tmpArray[4096];
+
+  int tmpDelta[4096];
 
   piQCoef.memset( 0 );
 #if 1
@@ -257,6 +260,8 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
     }  //AVX2
     else
     {
+     // printf("SSE maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
+      //printf("Block %d \n",MyCount++);
       __m128i vNull = _mm_set_epi32(0,0,0,0);
       __m128i vQuantCoeff = _mm_set_epi32(defaultQuantisationCoefficient,defaultQuantisationCoefficient,defaultQuantisationCoefficient,defaultQuantisationCoefficient);
       __m128i vAdd = _mm_set_epi64x(iAdd,iAdd);
@@ -264,11 +269,11 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
       __m128i vqBits8 = _mm_set_epi64x(qBits8,qBits8);
       __m128i vMin = _mm_set_epi32(entropyCodingMinimum,entropyCodingMinimum,entropyCodingMinimum,entropyCodingMinimum);
       __m128i vMax = _mm_set_epi32(entropyCodingMaximum,entropyCodingMaximum,entropyCodingMaximum,entropyCodingMaximum);
-      __m128i vMask = _mm_set_epi64x(0x0000ffff,0x0000ffff);
+      __m128i vMask = _mm_set_epi64x(0xffffffff,0xffffffff);
 
 
 
-      printf("SSE maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
+      //printf("SSE maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
       for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos+=4 )
       {
         __m128i vLevel = _mm_lddqu_si128((__m128i*)&piCoef.buf[uiBlockPos]);     // coeff3,coeff2,coeff1,coeff0,
@@ -288,7 +293,7 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         if (signHiding)
         {
 
-          printf("signHiding\n");
+         // printf("signHiding\n");
           __m128i vBS0 = _mm_sll_epi64(vTmpLevel_0,vQBits);
           __m128i vBS1 = _mm_sll_epi64(vTmpLevel_1,vQBits);
 
@@ -298,7 +303,7 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
          // print128_64<vext>(vdeltaU0);print128_64<vext>(vdeltaU1);
           vdeltaU0 = _mm_sub_epi64(vdeltaU0,vBS0);
           vdeltaU1 = _mm_sub_epi64(vdeltaU1,vBS1);
-          //print128_64<vext>(vdeltaU0);print128_64<vext>(vdeltaU1);
+          //print128_64<vext0000>(vdeltaU0);print128_64<vext>(vdeltaU1);
 
           vdeltaU0 = _mm_srl_epi64(vdeltaU0,vqBits8);
           vdeltaU1 = _mm_srl_epi64(vdeltaU1,vqBits8);
@@ -308,9 +313,9 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
           vdeltaU1 =  _mm_and_si128(vdeltaU1,vMask);
           vdeltaU1 =   _mm_slli_epi64(vdeltaU1,32);
           vdeltaU0 = _mm_or_si128(vdeltaU0,vdeltaU1);
-          _mm_storeu_si128( ( __m128i * )&deltaU[uiBlockPos],vdeltaU0);
-          print128_32<vext>(vdeltaU0);
-
+         _mm_storeu_si128( ( __m128i * )&deltaU[uiBlockPos],vdeltaU0);
+          //_mm_storeu_si128( ( __m128i * )&tmpDelta[uiBlockPos],vdeltaU0);
+          //print128_32<vext>(vdeltaU0);
         }
 
         __m128i vquantMag0 =  _mm_and_si128(vTmpLevel_0,vMask);
@@ -325,9 +330,14 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         vTmpLevel_1 =   _mm_and_si128(vTmpLevel_0,vSign);                                       // mask only neg values
         vTmpLevel_0 =   _mm_andnot_si128(vSign,vTmpLevel_0);                                 // mask only pos values
         vTmpLevel_0 =   _mm_sub_epi32(vTmpLevel_0,vTmpLevel_1);
-        vTmpLevel_0 =  _mm_min_epi32(vMax, _mm_max_epi32(vMin,vTmpLevel_0));  // clip
-        _mm_storeu_si128( ( __m128i * )&piQCoef.buf[uiBlockPos],vTmpLevel_0);
+        vTmpLevel_0 =  _mm_min_epi32(vMax, _mm_max_epi32(vMin,vTmpLevel_0));  // clip to 16 Bit
+        vTmpLevel_0 =  _mm_packs_epi32(vTmpLevel_0,vTmpLevel_0);
+       _mm_storeu_si64( ( __m128i * )&piQCoef.buf[uiBlockPos],vTmpLevel_0);
+        //_mm_storeu_si64( ( __m128i * )&tmpArray[uiBlockPos],vTmpLevel_0);
         //print128_32<vext>(vTmpLevel_0);
+        //printf("%x %x %x %x \n",tmpArray[uiBlockPos],tmpArray[uiBlockPos+1],tmpArray[uiBlockPos+2],tmpArray[uiBlockPos+3]);
+        //printf("%x %x %x %x \n",piQCoef.buf[uiBlockPos],piQCoef.buf[uiBlockPos+1],piQCoef.buf[uiBlockPos+2],piQCoef.buf[uiBlockPos+3]);
+        //exit(1);
       }
 
     }
@@ -335,15 +345,16 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
   else
     printf("scalar maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
 #else
+
   for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
   {
     const TCoeff iLevel   = piCoef.buf[uiBlockPos];
     const TCoeff iSign    = (iLevel < 0 ? -1: 1);
-    if (uiBlockPos%4 ==0 )
-      printf("\n");
+//    if (uiBlockPos%4 ==0 )
+//      printf("\n");
     const int64_t  tmpLevel = (int64_t)abs(iLevel) * defaultQuantisationCoefficient;
     const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
-    printf("%lx ",tmpLevel);
+    //printf("%lx ",tmpLevel);
 
     if (signHiding)
     {
@@ -351,7 +362,8 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
       //printf("%x ",quantisedMagnitude<<iQBits);
       //printf("%lx ",(tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) ));
 
-      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+//      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+      tmpDelta[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
       //printf("%x ",deltaU[uiBlockPos]);
 
     }
@@ -359,11 +371,31 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
     //printf("pos %d %x\n",uiBlockPos,uiAbsSum);
     const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
 
-    piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+    //piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+    tmpArray[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     //printf("%x ",piQCoef.buf[uiBlockPos] );
   } // for n
 #endif
-  exit(1);
+//exit(1);
+#if 0
+
+  for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
+  {
+    if (tmpArray[uiBlockPos] != piQCoef.buf[uiBlockPos] )
+    {
+      printf("ERROR: pos %d  %x %x \n",uiBlockPos,tmpArray[uiBlockPos],piQCoef.buf[uiBlockPos]);
+      exit(1);
+    }
+  }
+   for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
+    {
+      if (tmpDelta[uiBlockPos] != deltaU[uiBlockPos])
+      {
+        printf("Delta ERROR: pos %d %x %x \n",uiBlockPos,tmpDelta[uiBlockPos],deltaU[uiBlockPos]);
+        exit(1);
+      }
+  }
+#endif
 }
 
 template<X86_VEXT vext>
