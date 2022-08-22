@@ -1,5 +1,33 @@
 /////////////////////////////////////////
-tag 1.5.0rc1
+tag 1.5.1-rc1
+
+* libvvenc:
+  - removed library parameters:
+    - vvenc_config::m_bRestrictMESampling
+  - added library parameters:
+    - vvencMCTF::MCTFUnitSize, vvenc_config::m_alfUnitSize, vvenc_config::m_meReduceTap
+  - changed semantics of the parameters:
+    - vvenc_config::m_maxMTTDepth: if >=10, each decimal digit corresponds to the value set for frames in a specific temporal layer
+    - vvenc_config::m_maxMTTDepthIChroma: if negative, set equal to vvenc_config::m_maxMTTDepthI
+    - vvenc_config::m_motionEstimationSearchMethod: deprecated value 2
+    - vvenc_config::m_motionEstimationSearchMethodSCC: deprecated value 1
+  - speedups
+    - 15%+ for faster, fast, medium and slower
+    -  6%  for slow
+  - improvements to rate control stability, especially for single pass and high rates
+  - various improvements, cleanups and fixes
+
+* vvencapp:
+  - deprecated the gopsize parameter
+
+* vvencFFapp:
+  - removed command line parameters:
+    - RestrictMESampling
+  - added command line parameters:
+    - ReduceFilterME, ALFUnitSize, MCTFUnitSize
+
+/////////////////////////////////////////
+tag 1.5.0
 
 * libvvenc:
   - removed library paramters:
