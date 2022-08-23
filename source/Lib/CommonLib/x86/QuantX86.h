@@ -238,6 +238,30 @@ void print128_64(__m128i var)
     printf("%lx %lx\n",
            val[0], val[1]);
 }
+template<X86_VEXT vext>
+void print256_32(__m256i var)
+{
+    uint32_t val[8];
+    memcpy(val, &var, sizeof(val));
+    printf("%x %x %x %x %x %x %x %x\n",
+        val[0], val[1], val[2], val[3],val[4], val[5], val[6], val[7]);
+}
+template<X86_VEXT vext>
+void print256_16_1(__m256i var)
+{
+    uint16_t val[16];
+    memcpy(val, &var, sizeof(val));
+    printf("%x %x %x %x %x %x %x %x  \n",
+        val[0], val[1], val[2], val[3],val[4], val[5], val[6], val[7]);
+}
+template<X86_VEXT vext>
+void print256_64(__m256i var)
+{
+    uint64_t val[4];
+    memcpy(val, &var, sizeof(val));
+    printf("%lx %lx %lx %lx\n",
+        val[0], val[1],val[2], val[3]);
+}
 #define _mm_storeu_si32(p, a) (void)(*(int*)(p) = _mm_cvtsi128_si32((a)))
 static int MyCount=0;
 template<X86_VEXT vext>
@@ -249,18 +273,99 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
   int tmpDelta[4096];
 
   piQCoef.memset( 0 );
-#if 1
+//#if 1
   if( maxNumberOfCoeffs >= 8 )
   {
     if( vext >= AVX2 )
     {
 #ifdef USE_AVX2
-      printf("AVX2 maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
+      __m256i vNull = _mm256_set1_epi32(0);
+      __m256i vQuantCoeff = _mm256_set1_epi32(defaultQuantisationCoefficient);
+      __m256i vAdd = _mm256_set_epi64x(iAdd,iAdd,iAdd,iAdd);
+      __m128i vQBits = _mm_set_epi64x(iQBits,iQBits);
+      __m256i vMask = _mm256_set_epi64x(0xffffffff,0xffffffff,0xffffffff,0xffffffff);
+      __m256i vMax = _mm256_set1_epi32(entropyCodingMaximum);
+      __m256i vMin = _mm256_set1_epi32(entropyCodingMinimum);
+      __m128i vqBits8 = _mm_set_epi64x(qBits8,qBits8);
+
+      //printf("AVX2 maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
+      for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos+=8 )
+      {
+        __m256i  vLevel = _mm256_loadu_si256((__m256i *)&piCoef.buf[uiBlockPos]);     // coeff7,coeff6,coeff5,coeff4,coeff3,coeff2,coeff1,coeff0,
+        __m256i vSign = _mm256_cmpgt_epi32 (vNull,vLevel);                                            // sign3,sign2,sign1,sign0 FFFF or 0000
+        vLevel = _mm256_abs_epi32 (vLevel);
+        __m256i vdeltaU0 = _mm256_mul_epu32(vLevel,vQuantCoeff);                      // Tmp2,Tmp0
+        __m256i  vdeltaU1 = _mm256_srli_si256(vLevel,4);                                            // abs(0,vLevel3,vLevel2,vLevel1)
+        vdeltaU1 = _mm256_mul_epu32(vdeltaU1,vQuantCoeff);                          // Tmp3,Tmp1
+        __m256i vTmpLevel_0 = _mm256_add_epi64(vdeltaU0,vAdd);
+        __m256i vTmpLevel_1 = _mm256_add_epi64(vdeltaU1,vAdd);
+        vTmpLevel_0 = _mm256_srl_epi64 (vTmpLevel_0,vQBits);                                         // Int32 Tmp2,Tmp0
+        vTmpLevel_1 = _mm256_srl_epi64 (vTmpLevel_1,vQBits);                                         // Int32 Tmp3,Tmp1
+        //printf("\n");
+        //print256_64<vext>(vTmpLevel_0);print256_64<vext>(vTmpLevel_1);
+
+        if (signHiding)
+        {
+         // printf("signHiding\n");
+          __m256i vBS0 = _mm256_sll_epi64(vTmpLevel_0,vQBits);
+          __m256i vBS1 = _mm256_sll_epi64(vTmpLevel_1,vQBits);
+
+          //print128_32<vext>(vTmpLevel_0);print128_32<vext>(vTmpLevel_1);
+
+          //print128_64<vext>(vBS0);print128_64<vext>(vBS1);
+         // print128_64<vext>(vdeltaU0);print128_64<vext>(vdeltaU1);
+          vdeltaU0 = _mm256_sub_epi64(vdeltaU0,vBS0);
+          vdeltaU1 = _mm256_sub_epi64(vdeltaU1,vBS1);
+          //print128_64<vext0000>(vdeltaU0);print128_64<vext>(vdeltaU1);
+
+          vdeltaU0 = _mm256_srl_epi64(vdeltaU0,vqBits8);
+          vdeltaU1 = _mm256_srl_epi64(vdeltaU1,vqBits8);
+          //print128_64<vext>(vdeltaU0);print128_64<vext>(vdeltaU1);
+
+          vdeltaU0 =  _mm256_and_si256(vdeltaU0,vMask);
+          vdeltaU1 =  _mm256_and_si256(vdeltaU1,vMask);
+          vdeltaU1 =   _mm256_slli_epi64(vdeltaU1,32);
+          vdeltaU0 = _mm256_or_si256(vdeltaU0,vdeltaU1);
+          //print256_32<vext>(vdeltaU0);
+          _mm256_storeu_si256( ( __m256i * )&deltaU[uiBlockPos],vdeltaU0);
+          //_mm256_storeu_si256( ( __m256i * )&tmpDelta[uiBlockPos],vdeltaU0);
+          //_mm_storeu_si128( ( __m128i * )&tmpDelta[upiQCoef.bufiBlockPos],vdeltaU0);
+          //print128_32<vext>(vdeltaU0);
+        }
+        __m256i vquantMag0 =  _mm256_and_si256(vTmpLevel_0,vMask);
+        __m256i vquantMag1 =  _mm256_and_si256(vTmpLevel_1,vMask);
+        vquantMag1 =   _mm256_slli_epi64(vquantMag1,32);
+        vTmpLevel_0 = _mm256_or_si256(vquantMag0,vquantMag1);
+        //print128_32<vext>(vTmpLevel_0);
+        __m256i vAbsSum = _mm256_hadd_epi32(vTmpLevel_0,vTmpLevel_0);
+        //print256_32<vext>(vAbsSum);
+        vAbsSum = _mm256_hadd_epi32(vAbsSum,vAbsSum);
+        //print256_32<vext>(vAbsSum);
+
+        uiAbsSum+=_mm256_extract_epi32(vAbsSum,0);
+        //printf("sum %x \n",uiAbsSum);
+        uiAbsSum+=_mm256_extract_epi32(vAbsSum,4);
+
+        //printf("pos %d %x\n",uiBlockPos+7,uiAbsSum);
+        vTmpLevel_1 =   _mm256_and_si256(vTmpLevel_0,vSign);                                       // mask only neg values
+        vTmpLevel_0 =   _mm256_andnot_si256(vSign,vTmpLevel_0);                                 // mask only pos values
+        vTmpLevel_0 =   _mm256_sub_epi32(vTmpLevel_0,vTmpLevel_1);
+        vTmpLevel_0 =  _mm256_min_epi32(vMax, _mm256_max_epi32(vMin,vTmpLevel_0));  // clip to 16 Bit
+        vTmpLevel_0 =  _mm256_packs_epi32(vTmpLevel_0,vTmpLevel_0);
+        //print256_16<vext>(vTmpLevel_0);
+        vTmpLevel_0 =   _mm256_insert_epi64 ( vTmpLevel_0 , _mm256_extract_epi64(vTmpLevel_0, 2),1);
+        _mm_storeu_si128( ( __m128i * )&piQCoef.buf[uiBlockPos],_mm256_castsi256_si128(vTmpLevel_0));
+        //_mm_storeu_si128( ( __m128i * )&tmpArray[uiBlockPos],_mm256_castsi256_si128(vTmpLevel_0));
+        //print256_16_1<vext>(vTmpLevel_0);
+       //printf("%x %x %x %x   %x %x %x %x \n",piQCoef.buf[uiBlockPos],piQCoef.buf[uiBlockPos+1],piQCoef.buf[uiBlockPos+2],piQCoef.buf[uiBlockPos+3],piQCoef.buf[uiBlockPos+4],piQCoef.buf[uiBlockPos+5],piQCoef.buf[uiBlockPos+6],piQCoef.buf[uiBlockPos+7]);
+
+
+      }
 #endif
     }  //AVX2
     else
     {
-     // printf("SSE maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
+      printf("SSE maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
       //printf("Block %d \n",MyCount++);
       __m128i vNull = _mm_set_epi32(0,0,0,0);
       __m128i vQuantCoeff = _mm_set_epi32(defaultQuantisationCoefficient,defaultQuantisationCoefficient,defaultQuantisationCoefficient,defaultQuantisationCoefficient);
@@ -289,7 +394,10 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         __m128i vTmpLevel_1 = _mm_add_epi64(vdeltaU1,vAdd);
         vTmpLevel_0 = _mm_srl_epi64(vTmpLevel_0,vQBits);                                         // Int32 Tmp2,Tmp0
         vTmpLevel_1 = _mm_srl_epi64(vTmpLevel_1,vQBits);                                         // Int32 Tmp3,Tmp1
-        //print128_64<vext>(vTmpLevel_0);print128_64<vext>(vTmpLevel_1);
+        //if (uiBlockPos%8 ==0 )
+        //      printf("\n");
+       // print128_64<vext>(vTmpLevel_0);print128_64<vext>(vTmpLevel_1);
+
         if (signHiding)
         {
 
@@ -324,9 +432,9 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         vTmpLevel_0 = _mm_or_si128(vquantMag0,vquantMag1);
         //print128_32<vext>(vTmpLevel_0);
         __m128i vAbsSum = _mm_hadd_epi32(vTmpLevel_0,vTmpLevel_0);
-        vAbsSum = _mm_hadd_epi32(vAbsSum,vAbsSum);
+        vAbsSum += _mm_hadd_epi32(vAbsSum,vAbsSum);
         uiAbsSum+=_mm_extract_epi32(vAbsSum,0);
-        //printf("pos %d %x\n",uiBlockPos+3,uiAbsSum);
+        //printf("tmpDeltapos %d %x\n",uiBlockPos+3,uiAbsSum);
         vTmpLevel_1 =   _mm_and_si128(vTmpLevel_0,vSign);                                       // mask only neg values
         vTmpLevel_0 =   _mm_andnot_si128(vSign,vTmpLevel_0);                                 // mask only pos values
         vTmpLevel_0 =   _mm_sub_epi32(vTmpLevel_0,vTmpLevel_1);
@@ -334,7 +442,7 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         vTmpLevel_0 =  _mm_packs_epi32(vTmpLevel_0,vTmpLevel_0);
        _mm_storeu_si64( ( __m128i * )&piQCoef.buf[uiBlockPos],vTmpLevel_0);
         //_mm_storeu_si64( ( __m128i * )&tmpArray[uiBlockPos],vTmpLevel_0);
-        //print128_32<vext>(vTmpLevel_0);
+        //print128_16<vext>(vTmpLevel_0);
         //printf("%x %x %x %x \n",tmpArray[uiBlockPos],tmpArray[uiBlockPos+1],tmpArray[uiBlockPos+2],tmpArray[uiBlockPos+3]);
         //printf("%x %x %x %x \n",piQCoef.buf[uiBlockPos],piQCoef.buf[uiBlockPos+1],piQCoef.buf[uiBlockPos+2],piQCoef.buf[uiBlockPos+3]);
         //exit(1);
@@ -344,7 +452,7 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
   }
   else
     printf("scalar maxNumberOfCoeffs %d \n",maxNumberOfCoeffs);
-#else
+//#else
 
   for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
   {
@@ -362,21 +470,20 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
       //printf("%x ",quantisedMagnitude<<iQBits);
       //printf("%lx ",(tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) ));
 
-//      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
-      tmpDelta[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+      //deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+      //tmpDelta[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
       //printf("%x ",deltaU[uiBlockPos]);
 
     }
-    uiAbsSum += quantisedMagnitude;
+    //uiAbsSum += quantisedMagnitude;
     //printf("pos %d %x\n",uiBlockPos,uiAbsSum);
     const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
 
     //piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
-    tmpArray[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+    //tmpArray[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     //printf("%x ",piQCoef.buf[uiBlockPos] );
   } // for n
-#endif
-//exit(1);
+//#endif
 #if 0
 
   for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
