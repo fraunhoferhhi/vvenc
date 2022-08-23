@@ -573,7 +573,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
 
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("QP,q",                                            c->m_QP,                                             "Qp value (0-63)")
     ;
@@ -689,15 +689,15 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("PerceptQPATempFiltIPic",                          c->m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
     ;
 
-    // Coding structure paramters
-    opts.setSubSection("Coding structure paramters");
+    // Coding structure parameters
+    opts.setSubSection("Coding structure parameters");
     opts.addOptions()
     ("ReWriteParamSets",                                c->m_rewriteParamSets,                               "Enable rewriting of Parameter sets before every (intra) random access point")
     ("IDRRefParamList",                                 c->m_idrRefParamList,                                "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
     ;
 
     /* Quantization parameters */
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("SameCQPTablesForAllChroma",                       c->m_useSameChromaQPTables,                          "0: Different tables for Cb, Cr and joint Cb-Cr components, 1 (default): Same tables for all three chroma components")
     ("IntraQPOffset",                                   c->m_intraQPOffset,                                  "Qp offset value for intra slice, typically determined based on GOP size")
