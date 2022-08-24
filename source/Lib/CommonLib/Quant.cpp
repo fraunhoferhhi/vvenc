@@ -132,7 +132,6 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 static void QuantCore(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum ,const bool signHiding)
 {
   const int qBits8 = iQBits - 8;
- printf("QuantCore\n");
   piQCoef.memset( 0 );
   for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
   {
@@ -185,7 +184,6 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
 
 Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
 {
-  printf("Quant::Quant useScalingLists %d \n",useScalingLists);
   xInitScalingList( other, useScalingLists );
   DeQuant=DeQuantCore;
   xQuant=QuantCore;
@@ -680,30 +678,26 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
     const uint32_t lfnstIdx = tu.cu->lfnstIdx;
     const int maxNumberOfCoeffs = lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
-    //printf("maxNumberOfCoeffs %d enableScalingLists %d defaultQuantisationCoefficient %d \n",maxNumberOfCoeffs,enableScalingLists,defaultQuantisationCoefficient);
 
-#if 1
     if (!enableScalingLists)
       xQuant (piCoef,piQCoef,uiAbsSum,deltaU,maxNumberOfCoeffs,defaultQuantisationCoefficient,iQBits,iAdd,entropyCodingMinimum,entropyCodingMaximum,cctx.signHiding() );
     else
     {
-#else
-    piQCoef.memset( 0 );
-    for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
-    {
-      const TCoeff iLevel   = piCoef.buf[uiBlockPos];
-      const TCoeff iSign    = (iLevel < 0 ? -1: 1);
+      piQCoef.memset( 0 );
+      for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
+      {
+        const TCoeff iLevel   = piCoef.buf[uiBlockPos];
+        const TCoeff iSign    = (iLevel < 0 ? -1: 1);
 
-      const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
-      const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
-      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+        const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+        const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+        deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
 
-      uiAbsSum += quantisedMagnitude;
-      const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+        uiAbsSum += quantisedMagnitude;
+        const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
 
-      piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
-    } // for n
-#endif
+        piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+      } // for n
     }
     if (tu.cu->bdpcmM[toChannelType(compID)])
     {
@@ -717,12 +711,16 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
       }
     }
     int lastScanPos = -1;
-    for( int scanPos = 0; scanPos < cctx.maxNumCoeff(); scanPos++)
+    if (uiAbsSum)
     {
-      unsigned blkPos = cctx.blockPos( scanPos );
-      if( piQCoef.buf[blkPos] )
+      for( int scanPos =  cctx.maxNumCoeff()-1; scanPos >=0; scanPos--)
       {
-        lastScanPos = scanPos;
+        unsigned blkPos = cctx.blockPos( scanPos );
+        if( piQCoef.buf[blkPos] )
+        {
+          lastScanPos = scanPos;
+          break;
+        }
       }
     }
     tu.lastPos[compID] = lastScanPos;
