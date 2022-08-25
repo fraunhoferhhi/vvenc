@@ -3918,19 +3918,22 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
     {
       const int maxFilterSamples = 4;
 
-      int clipTopRow = -maxFilterSamples;
-      int clipBotRow =  maxFilterSamples;
+      int clipTopRow[4] = { -maxFilterSamples, -maxFilterSamples, -maxFilterSamples, -maxFilterSamples };
+      int clipBotRow[4] = {  maxFilterSamples,  maxFilterSamples,  maxFilterSamples,  maxFilterSamples };
 
-      int vbDistance = ((areaDst.y + i) % vbCTUHeight) - vbPos;
-      if( vbDistance >= -3 && vbDistance < 0 )
+      for( int ii = 0; ii < 4; ii++ )
       {
-        clipBotRow = -vbDistance - 1;
-        clipTopRow = -clipBotRow; // symmetric
-      }
-      else if( vbDistance >= 0 && vbDistance < 3 )
-      {
-        clipTopRow = -vbDistance;
-        clipBotRow = -clipTopRow; // symmetric
+        int vbDistance = ( ( areaDst.y + i + ii ) % vbCTUHeight ) - vbPos;
+        if( vbDistance >= -3 && vbDistance < 0 )
+        {
+          clipBotRow[ii] = -vbDistance - 1;
+          clipTopRow[ii] = -clipBotRow[ii]; // symmetric
+        }
+        else if( vbDistance >= 0 && vbDistance < 3 )
+        {
+          clipTopRow[ii] = -vbDistance;
+          clipBotRow[ii] = -clipTopRow[ii]; // symmetric
+        }
       }
 
       for( int j = 0; j < area.width; j += 4 )
@@ -3948,12 +3951,26 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         }
 
         Pel ELocal[MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 )];
-        //      std::memset( ELocal, 0, sizeof( ELocal ) );
-        //calcCovariance4( ELocal, rec + j, recStride, filterPattern, halfFilterLength, transposeIdx, channel, vbDistance );
 
-        for( int ii = 0; ii < 4; ii++ )
+        if( useSimd )
         {
-          calcCovariance4( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, channel, vbDistance );
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            if( clipBotRow[ii] == 4 )
+              calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+          }
+        }
+        else
+        {
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            if( clipBotRow[ii] == 4 )
+              calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+          }
         }
 
 
@@ -4527,21 +4544,9 @@ template void EncAdaptiveLoopFilter::calcLinCovariance4<false, false>( Pel* ELoc
 template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance4<false, true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 
-void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, const ChannelType channel, int vbDistance )
+template<bool clipToBdry, bool simd>
+void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow )
 {
-  int clipTopRow = -4;
-  int clipBotRow = 4;
-  if( vbDistance >= -3 && vbDistance < 0 )
-  {
-    clipBotRow = -vbDistance - 1;
-    clipTopRow = -clipBotRow; // symmetric
-  }
-  else if( vbDistance >= 0 && vbDistance < 3 )
-  {
-    clipTopRow = -vbDistance;
-    clipBotRow = -clipTopRow; // symmetric
-  }
-
   const Pel *clip = m_alfClippingValues[channel];
   constexpr int numBins = AlfNumClippingValues;
 
@@ -4556,8 +4561,8 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
     {
       for( int i = -halfFilterLength; i < 0; i++ )
       {
-        const Pel *rec0 = rec + std::max( i, clipTopRow ) * stride;
-        const Pel *rec1 = rec - std::max( i, -clipBotRow ) * stride;
+        const Pel *rec0 = rec + clipIdx<clipToBdry>( i , clipTopRow ) * stride;
+        const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
         for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
         {
           const int val0 = rec0[j] - curr;
@@ -4586,8 +4591,11 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
         const Pel *rec1 = rec - j;
         for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
         {
-          const int val0 = rec0[std::max( i, clipTopRow ) * stride] - curr;
-          const int val1 = rec1[-std::max( i, -clipBotRow ) * stride] - curr;
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const int val0 = rec0[off0] - curr;
+          const int val1 = rec1[off1] - curr;
           for( int b = 0; b < numBins; b++ )
           {
             GET_NL_COVAR( ELocal, b, filterPattern[k], x ) = clipALF( clip[b], val0, val1 );
@@ -4596,8 +4604,11 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
       }
       for( int i = -halfFilterLength; i < 0; i++, k++ )
       {
-        const int val0 = rec[std::max( i, clipTopRow ) * stride] - curr;
-        const int val1 = rec[-std::max( i, -clipBotRow ) * stride] - curr;
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const int val0 = rec[off0] - curr;
+        const int val1 = rec[off1] - curr;
         for( int b = 0; b < numBins; b++ )
         {
           GET_NL_COVAR( ELocal, b, filterPattern[k], x ) = clipALF( clip[b], val0, val1 );
@@ -4608,8 +4619,8 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
     {
       for( int i = -halfFilterLength; i < 0; i++ )
       {
-        const Pel *rec0 = rec + std::max( i, clipTopRow ) * stride;
-        const Pel *rec1 = rec - std::max( i, -clipBotRow ) * stride;
+        const Pel *rec0 = rec + clipIdx<clipToBdry>( i , clipTopRow ) * stride;
+        const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
         for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
         {
@@ -4639,8 +4650,11 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
         const Pel *rec1 = rec - j;
         for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
         {
-          const int val0 = rec0[std::max( i, clipTopRow ) * stride] - curr;
-          const int val1 = rec1[-std::max( i, -clipBotRow ) * stride] - curr;
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const int val0 = rec0[off0] - curr;
+          const int val1 = rec1[off1] - curr;
           for( int b = 0; b < numBins; b++ )
           {
             GET_NL_COVAR( ELocal, b, filterPattern[k], x ) = clipALF( clip[b], val0, val1 );
@@ -4649,8 +4663,11 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
       }
       for( int i = -halfFilterLength; i < 0; i++, k++ )
       {
-        const int val0 = rec[std::max( i, clipTopRow ) * stride] - curr;
-        const int val1 = rec[-std::max( i, -clipBotRow ) * stride] - curr;
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const int val0 = rec[off0] - curr;
+        const int val1 = rec[off1] - curr;
         for( int b = 0; b < numBins; b++ )
         {
           GET_NL_COVAR( ELocal, b, filterPattern[k], x ) = clipALF( clip[b], val0, val1 );
@@ -4663,6 +4680,12 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec0, const
     }
   }
 }
+
+
+template void EncAdaptiveLoopFilter::calcCovariance4<false, false>( Pel *ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<false, true >( Pel *ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<true , false>( Pel *ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<true , true >( Pel *ELocal, const Pel *rec0, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
 
 void EncAdaptiveLoopFilter::setEnableFlag( AlfParam& alfSlicePara, ChannelType channel, bool val )
 {
