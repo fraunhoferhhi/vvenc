@@ -424,11 +424,9 @@ private:
   void   getFrameStats           ( ChannelType channel, int iShapeIdx );
   void   getFrameStat            ( AlfCovariance* frameCov, AlfCovariance** ctbCov, uint8_t* ctbEnableFlags, uint8_t* ctbAltIdx, const int numClasses, int altIdx );
   void   getPreBlkStats          ( AlfCovariance* alfCovariace, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos);
-  void   calcCovariance          ( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance);
+  void   calcCovariance4         ( Pel ELocal[MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 )], const Pel* rec, const int stride, const int *filterPattern, const int halfFilterLength, const int transposeIdx, const ChannelType channel, int vbDistance);
   template < bool clipToBdry, bool simd >
   void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
-  template < bool clipToBdry >
-  void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
   void   getBlkStatsCcAlf        ( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const PelUnitBuf& orgYuv,
                                    const PelUnitBuf &recYuv, const UnitArea &areaDst, const UnitArea &area,
                                    const ComponentID compID, const int yPos);
