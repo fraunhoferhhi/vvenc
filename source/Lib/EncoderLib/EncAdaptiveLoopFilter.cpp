@@ -3369,11 +3369,11 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
   }
 }
 
-#define bstride ( MAX_NUM_ALF_LUMA_COEFF << 4 )
-#define kstride ( 1 << 4 )
-#define xstride ( 1 )
-#define GET_NL_COVAR( elocal, b, k, x ) elocal[ b * bstride + k * kstride + x ]
-#define SET_NL_COVAR( elocal, b, k, x, v ) GET_NL_COVAR( elocal, b, k, x, v ) = v
+#define NL_COVAR_bstride ( MAX_NUM_ALF_LUMA_COEFF << 4 )
+#define NL_COVAR_kstride ( 1 << 4 )
+#define NL_COVAR_xstride ( 1 )
+#define GET_NL_COVAR( elocal, b, k, x ) elocal[ b * NL_COVAR_bstride + k * NL_COVAR_kstride + x * NL_COVAR_xstride ]
+#define SET_NL_COVAR( elocal, b, k, x, v ) GET_NL_COVAR( elocal, b, k, x ) = v
 
 void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos)
 {
