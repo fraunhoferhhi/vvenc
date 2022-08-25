@@ -232,6 +232,7 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
+  int16_t                       picMemorySTA;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
   double                        psnr[MAX_NUM_COMP];
@@ -251,6 +252,7 @@ public:
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
+  uint8_t                       minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

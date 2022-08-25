@@ -687,7 +687,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if ((!slice.isIntra() || slice.sps->IBC) && cuECtx.isBestNoSplitSkip )
   {
-    for( int i = 2; i < m_ComprCUCtxList.size(); i++ )
+    for( int i = 2; i <= m_ComprCUCtxList.size(); i++ )
     {
       if( ( m_ComprCUCtxList.end() - i )->isBestNoSplitSkip )
       {
@@ -701,7 +701,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   }
 
   const PartSplit split = getPartSplit( encTestmode );
-  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 )
+  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 || ( skipScore == 1 && m_ComprCUCtxList.size() == 2 ) )
   {
     if( split == CU_HORZ_SPLIT ) cuECtx.didHorzSplit = false;
     if( split == CU_VERT_SPLIT ) cuECtx.didVertSplit = false;
@@ -991,7 +991,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     if( cuECtx.bestCS && cuECtx.bestCU && cuECtx.interHad )
     {
       // Get SATD threshold from best Inter-CU
-      if (!cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast && !cs.slice->disableSATDForRd)
+      if( !cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast )
       {
         const DFunc dfunc = DF_HAD;
         DistParam distParam = m_pcRdCost->setDistParam( cs.getOrgBuf( COMP_Y ), cuECtx.bestCS->getPredBuf( COMP_Y ), cs.sps->bitDepths[ CH_L ], dfunc );

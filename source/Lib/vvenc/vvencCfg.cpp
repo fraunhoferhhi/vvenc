@@ -312,6 +312,7 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->MCTFFutureReference = true;
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
+  vvencMCTF->MCTFUnitSize = -1;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
@@ -463,7 +464,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_MinQT[2] = 4;
   c->m_maxMTTDepth                             = 3;
   c->m_maxMTTDepthI                            = 3;
-  c->m_maxMTTDepthIChroma                      = 3;
+  c->m_maxMTTDepthIChroma                      = -1;
 
   c->m_maxBT[0]=32;  c->m_maxBT[1]=128;  c->m_maxBT[2]=64;
   c->m_maxTT[0]=32;  c->m_maxTT[1]=64;  c->m_maxTT[2]=32;
@@ -488,7 +489,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
-  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_MODE3;
   c->m_useEarlyCU                              = 0;
   c->m_useFastDecisionForMerge                 = true;
 
@@ -516,7 +517,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
   c->m_motionEstimationSearchMethodSCC         = 0;
-  c->m_bRestrictMESampling                     = false;
   c->m_SearchRange                             = 96;
   c->m_bipredSearchRange                       = 4;
   c->m_minSearchWindow                         = 8;
@@ -524,6 +524,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
   c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
+  c->m_meReduceTap                             = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
   c->m_LMChroma                                = false;
@@ -617,6 +618,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ccalf                                   = false;
   c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;
+  c->m_alfUnitSize                             = -1;
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
@@ -797,6 +799,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
   c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
 
+  if( c->m_maxMTTDepthIChroma < 0 )
+  {
+    c->m_maxMTTDepthIChroma = c->m_maxMTTDepthI;
+  }
+
   // rate control
   if( c->m_RCNumPasses < 0 )
   {
@@ -825,6 +832,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
   }
 
+  if( c->m_alfUnitSize < 0 )
+    c->m_alfUnitSize = c->m_CTUSize;
+
   // quantization threshold
   if( c->m_quantThresholdVal < 0 )
   {
@@ -832,25 +842,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   /* rules for input, output and internal bitdepths as per help text */
-  if (c->m_MSBExtendedBitDepth[0  ] == 0)
-    c->m_MSBExtendedBitDepth[0  ] = c->m_inputBitDepth      [0  ];
+  if (c->m_MSBExtendedBitDepth[0] == 0)
+    c->m_MSBExtendedBitDepth  [0] = c->m_inputBitDepth      [0];
   if (c->m_MSBExtendedBitDepth[1] == 0)
-    c->m_MSBExtendedBitDepth[1] = c->m_MSBExtendedBitDepth[0  ];
-  if (c->m_internalBitDepth   [0  ] == 0)
-    c->m_internalBitDepth   [0  ] = c->m_MSBExtendedBitDepth[0  ];
+    c->m_MSBExtendedBitDepth  [1] = c->m_MSBExtendedBitDepth[0];
+  if (c->m_internalBitDepth   [0] == 0)
+    c->m_internalBitDepth     [0] = c->m_MSBExtendedBitDepth[0];
   if (c->m_internalBitDepth   [1] == 0)
-    c->m_internalBitDepth   [1] = c->m_internalBitDepth   [0  ];
+    c->m_internalBitDepth     [1] = c->m_internalBitDepth   [0];
   if (c->m_inputBitDepth      [1] == 0)
-    c->m_inputBitDepth      [1] = c->m_inputBitDepth      [0  ];
-  if (c->m_outputBitDepth     [0  ] == 0)
-    c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
+    c->m_inputBitDepth        [1] = c->m_inputBitDepth      [0];
+  if (c->m_outputBitDepth     [0] == 0)
+    c->m_outputBitDepth       [0] = c->m_internalBitDepth   [0];
   if (c->m_outputBitDepth     [1] == 0)
-    c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
-
-  if( c->m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
-  {
-    c->m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
-  }
+    c->m_outputBitDepth       [1] = c->m_outputBitDepth     [0];
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
      (( c->m_masteringDisplay[0] != 0 && c->m_masteringDisplay[1] != 0 && c->m_masteringDisplay[8] != 0 && c->m_masteringDisplay[9] != 0 ) ||
@@ -1212,7 +1217,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_leadFrames > 0 && c->m_temporalSubsampleRatio > 1, "Use of leading frames not supported in combination with temporal subsampling" );
-  vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0,    "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
+  vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
 
   //
   // do some check and set of parameters next
@@ -1226,6 +1231,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400 ) )
   {
     c->m_JointCbCrMode = false;
+  }
+
+  if( c->m_vvencMCTF.MCTFUnitSize == -1 )
+  {
+    c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
   }
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
@@ -1456,9 +1466,13 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,    "Error: FastInterSearchMode parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_OFF || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,     "Error: FastInterSearchMode parameter out of range [0...3]" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0
+                          || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS
+                          || c->m_motionEstimationSearchMethod == VVENC_MESEARCH_DEPRECATED,                                                 "Error: FastSearch parameter out of range [0,1,3,4]");
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0
+                          || c->m_motionEstimationSearchMethodSCC == 1
+                          || c->m_motionEstimationSearchMethodSCC > 3,                                                                       "Error: FastSearchSCC parameter out of range [0,2,3]" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
   vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
@@ -1598,8 +1612,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 3,      "MCTFSpeed exceeds supported range (0..3)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,                "MCTF parameter list sizes differ" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4,          "MCTFSpeed exceeds supported range (0..4)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8,                                       "MCTFUnitSize is smaller than 8" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > 64,                                      "MCTFUnitSize is larger than 64" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize & ( c->m_vvencMCTF.MCTFUnitSize - 1 ),     "MCTFUnitSize is not a power of 2" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
@@ -1667,6 +1684,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 3,   "FastMIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_meReduceTap < 0 || c->m_meReduceTap > 2, "ReduceFilterME out of range [0..2]" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
@@ -1738,6 +1756,12 @@ static bool checkCfgParameter( vvenc_config *c )
   const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
   vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
+  if (c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth >= pow(10, (maxTLayer + 1)))
+  {
+    msg.log(VVENC_WARNING, "Warning: MaxMTTHierarchyDepth>=10 & larger than maxTLayer\n");
+  }
+  vvenc_confirmParameter(c, c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth < pow(10, maxTLayer ), "MaxMTTHierarchyDepth>=10 & not set for all TLs");
+
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -1755,6 +1779,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
+
+  vvenc_confirmParameter(c, c->m_alfUnitSize < c->m_CTUSize,                                      "ALF Unit Size must be greater than or equal to CTUSize");
+  vvenc_confirmParameter(c, c->m_alfUnitSize % c->m_CTUSize != 0,                                 "ALF Unit Size must be a multiple of CTUSize");
+
   vvenc_confirmParameter(c, maxTLayer > 0 && maxTLayer - c->m_alfSpeed <= 0,                      "ALFSpeed disables ALF for this temporal configuration. Disable ALF if intended, or turn off ALFSpeed!");
   vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
@@ -2188,7 +2216,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2199,7 +2227,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 16;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
@@ -2218,13 +2245,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 3;
+      c->m_vvencMCTF.MCTFSpeed             = 4;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -2238,7 +2266,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2249,7 +2277,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2268,17 +2295,19 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
+      c->m_alfUnitSize                     = 128;
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 3;
+      c->m_vvencMCTF.MCTFSpeed             = 4;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -2292,7 +2321,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT10
@@ -2303,7 +2332,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
-      c->m_maxMTTDepthIChroma              = 1;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2322,11 +2350,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
+      c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
@@ -2337,7 +2367,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MMVD                            = 3;
       c->m_MTSImplicit                     = 1;
       c->m_PROF                            = 1;
@@ -2354,7 +2384,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -2365,7 +2395,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2377,13 +2406,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
-      c->m_FastIntraTools                  = 0;
+      c->m_FastIntraTools                  = 1;
       c->m_FIMMode                         = 0;
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2392,6 +2422,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_CIIP                            = 0;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
@@ -2403,7 +2434,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 3;
       c->m_MMVD                            = 3;
@@ -2424,7 +2455,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT32
@@ -2435,7 +2466,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2454,6 +2484,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -2497,7 +2528,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND;
 
       // partitioning: CTUSize128 QT44MTT33
@@ -2506,9 +2537,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_maxMTTDepth                     = 3;
+      c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2527,6 +2557,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 1;
@@ -2572,7 +2603,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -2583,7 +2614,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
@@ -2602,6 +2632,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2793,7 +2824,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "RDQTS:" << c->m_useRDOQTS << " ";
     css << "ASR:" << c->m_bUseASR << " ";
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
-    css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
 
@@ -2826,6 +2856,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
     css << "IntegerET:" << c->m_bIntegerET << " ";
     css << "FastSubPel:" << c->m_fastSubPel << " ";
+    css << "ReduceFilterME:" << c->m_meReduceTap << " ";
     css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
     css << "FastTTSplit:" << c->m_fastTTSplit << " ";
     if( c->m_IBCMode )

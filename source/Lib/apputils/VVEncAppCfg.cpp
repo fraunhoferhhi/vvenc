@@ -573,7 +573,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
 
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("QP,q",                                            c->m_QP,                                             "Qp value (0-63)")
     ;
@@ -617,9 +617,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("vuiparameterspresent,-vui",                       toVui,                                              "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
     ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "Emit VUI HRD information (0: off, 1: on; default: 1)")
     ("decodedpicturehash,-dph",                         toHashType,                                         "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
-    // --> deprecated
-    ("gopsize,g",                                       c->m_GOPSize,                                       "GOP size of temporal structure (16,32) (deprecated)")
-    // <-- deprecated
     ;
   }
 
@@ -689,15 +686,15 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("PerceptQPATempFiltIPic",                          c->m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
     ;
 
-    // Coding structure paramters
-    opts.setSubSection("Coding structure paramters");
+    // Coding structure parameters
+    opts.setSubSection("Coding structure parameters");
     opts.addOptions()
     ("ReWriteParamSets",                                c->m_rewriteParamSets,                               "Enable rewriting of Parameter sets before every (intra) random access point")
     ("IDRRefParamList",                                 c->m_idrRefParamList,                                "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
     ;
 
     /* Quantization parameters */
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("SameCQPTablesForAllChroma",                       c->m_useSameChromaQPTables,                          "0: Different tables for Cb, Cr and joint Cb-Cr components, 1 (default): Same tables for all three chroma components")
     ("IntraQPOffset",                                   c->m_intraQPOffset,                                  "Qp offset value for intra slice, typically determined based on GOP size")
@@ -750,28 +747,28 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
     opts.setSubSection("Low-level QT-BTT partitioning options");
     opts.addOptions()
-    ("CTUSize",                                         c->m_CTUSize,                                        "CTUSize")
-    ("MinQTISlice",                                     c->m_MinQT[0],                                       "MinQTISlice")
-    ("MinQTLumaISlice",                                 c->m_MinQT[0],                                       "MinQTLumaISlice")
-    ("MinQTNonISlice",                                  c->m_MinQT[1],                                       "MinQTNonISlice")
-    ("MinQTChromaISliceInChromaSamples",                c->m_MinQT[2],                                       "MinQTChromaISlice")
-    ("MaxMTTDepth",                                     c->m_maxMTTDepth,                                    "maxMTTDepth")
-    ("MaxMTTDepthI",                                    c->m_maxMTTDepthI,                                   "maxMTTDepthI")
-    ("MaxMTTDepthISliceL",                              c->m_maxMTTDepthI,                                   "maxMTTDepthISliceL")
-    ("MaxMTTDepthISliceC",                              c->m_maxMTTDepthIChroma,                             "maxMTTDepthISliceC")
+    ("CTUSize",                                         c->m_CTUSize,                                        "CTU size")
+    ("MinQTISlice",                                     c->m_MinQT[0],                                       "Min QT size for (luma in) I slices")
+    ("MinQTLumaISlice",                                 c->m_MinQT[0],                                       "Min QT size for (luma in) I slices")
+    ("MinQTNonISlice",                                  c->m_MinQT[1],                                       "Min QT size for P/B slices")
+    ("MinQTChromaISliceInChromaSamples",                c->m_MinQT[2],                                       "Min QT size for chroma in I slices (in chroma samples, i.e. inclusive subsampling)")
+    ("MaxMTTDepth",                                     c->m_maxMTTDepth,                                    "Max MTT depth for P/B slices (<10: apply for all temporal layers, >=10: each decimal digit specifies the depth for a temporal layer, last digit applying to the highest TL)")
+    ("MaxMTTDepthI",                                    c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
+    ("MaxMTTDepthISliceL",                              c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
+    ("MaxMTTDepthISliceC",                              c->m_maxMTTDepthIChroma,                             "Max MTT depth for chroma in I slices")
     // --> deprecated
-    ("MaxMTTHierarchyDepth",                            c->m_maxMTTDepth,                                    "maxMTTDepth")
-    ("MaxMTTHierarchyDepthI",                           c->m_maxMTTDepthI,                                   "maxMTTDepthI")
-    ("MaxMTTHierarchyDepthISliceL",                     c->m_maxMTTDepthI,                                   "maxMTTDepthISliceL")
-    ("MaxMTTHierarchyDepthISliceC",                     c->m_maxMTTDepthIChroma,                             "maxMTTDepthISliceC")
+    ("MaxMTTHierarchyDepth",                            c->m_maxMTTDepth,                                    "(deprecated) Same as MaxMTTDepth")
+    ("MaxMTTHierarchyDepthI",                           c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthI")
+    ("MaxMTTHierarchyDepthISliceL",                     c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthISliceL")
+    ("MaxMTTHierarchyDepthISliceC",                     c->m_maxMTTDepthIChroma,                             "(deprecated) Same as MaxMTTDepthISliceC")
     // <-- deprecated
-    ("MaxBTLumaISlice",                                 c->m_maxBT[0],                                       "MaxBTLumaISlice")
-    ("MaxBTChromaISlice",                               c->m_maxBT[2],                                       "MaxBTChromaISlice")
-    ("MaxBTNonISlice",                                  c->m_maxBT[1],                                       "MaxBTNonISlice")
-    ("MaxTTLumaISlice",                                 c->m_maxTT[0],                                       "MaxTTLumaISlice")
-    ("MaxTTChromaISlice",                               c->m_maxTT[2],                                       "MaxTTChromaISlice")
-    ("MaxTTNonISlice",                                  c->m_maxTT[1],                                       "MaxTTNonISlice")
-    ("DualITree",                                       c->m_dualITree,                                      "Use separate luma and chroma QTBT trees for intra slice")
+    ("MaxBTLumaISlice",                                 c->m_maxBT[0],                                       "Max BT size for (luma in) I slices")
+    ("MaxBTChromaISlice",                               c->m_maxBT[2],                                       "Max BT size for chroma in I slices")
+    ("MaxBTNonISlice",                                  c->m_maxBT[1],                                       "Max BT size for P/B slices")
+    ("MaxTTLumaISlice",                                 c->m_maxTT[0],                                       "Max TT size for (luma in) I slices")
+    ("MaxTTChromaISlice",                               c->m_maxTT[2],                                       "Max TT size for chroma in I slices")
+    ("MaxTTNonISlice",                                  c->m_maxTT[1],                                       "Max TT size for P/B slices")
+    ("DualITree",                                       c->m_dualITree,                                      "Use separate luma and chroma QTBTT trees for intra slice (if off, luma constraint apply to all channels)")
     ("Log2MaxTbSize",                                   c->m_log2MaxTbSize,                                  "Maximum transform block size in logarithm base 2")
     ("Log2MinCodingBlockSize",                          c->m_log2MinCodingBlockSize,                         "Minimum coding block size in logarithm base 2")
     ;
@@ -820,9 +817,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     // motion search options
     opts.setSubSection("Motion search options");
     opts.addOptions()
-    ("FastSearch",                                      c->m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond 4: FastDiamond)")
-    ("FastSearchSCC",                                   c->m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Selective 2:DiamondSCC 3:FastDiamondSCC)")
-    ("RestrictMESampling",                              c->m_bRestrictMESampling,                            "Enable restrict ME Sampling for selective inter motion search")
+    ("FastSearch",                                      c->m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Deprecated 3:Enhanced Diamond 4: FastDiamond)")
+    ("FastSearchSCC",                                   c->m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Deprecated 2:DiamondSCC 3:FastDiamondSCC)")
     ("SearchRange,-sr",                                 c->m_SearchRange,                                    "Motion search range")
     ("BipredSearchRange",                               c->m_bipredSearchRange,                              "Motion search range for bipred refinement")
     ("MinSearchWindow",                                 c->m_minSearchWindow,                                "Minimum motion search window size for the adaptive window ME")
@@ -830,6 +826,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FastMEAssumingSmootherMVEnabled",                 c->m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
     ("IntegerET",                                       c->m_bIntegerET,                                     "Enable early termination for integer motion search")
     ("FastSubPel",                                      c->m_fastSubPel,                                     "Enable fast sub-pel ME (1: enable fast sub-pel ME, 2: completely disable sub-pel ME)")
+    ("ReduceFilterME",                                  c->m_meReduceTap,                                    "Use reduced filter taps during subpel refinement (0 - use 8-tap; 1 - 6-tap; 2 - 4-tap)")
     ;
 
     // Deblocking filter parameters
@@ -889,20 +886,20 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
 
 
-    ("MasteringDisplayColourVolume",                    toMasteringDisplay,                               "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
-                                                                                                          "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
-                                                                                                          "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
-    ("MaxContentLightLevel",                            toContentLightLevel,                              "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
-                                                                                                          "max. frame average light level, range: 1 <= cll,fall <= 65535'")
-    ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                    "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
-                                                                                                          "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
-                                                                                                          "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
+    ("MasteringDisplayColourVolume",                    toMasteringDisplay,                                  "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
+                                                                                                             "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
+                                                                                                             "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
+    ("MaxContentLightLevel",                            toContentLightLevel,                                 "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
+                                                                                                             "max. frame average light level, range: 1 <= cll,fall <= 65535'")
+    ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                       "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                                             "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                                                                             "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
     ;
 
-    opts.setSubSection("Summary options (debugging)");
-    opts.addOptions()
-    ("SummaryOutFilename",                              toSummaryOutFilename,                             "Filename to use for producing summary output file. If empty, do not produce a file.")
-    ("SummaryPicFilenameBase",                          toSummaryPicFilenameBase,                         "Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended. If empty, do not produce a file.")
+    opts.setSubSection("Summary options (debugging)");                                                      
+    opts.addOptions()                                                                                       
+    ("SummaryOutFilename",                              toSummaryOutFilename,                                "Filename to use for producing summary output file. If empty, do not produce a file.")
+    ("SummaryPicFilenameBase",                          toSummaryPicFilenameBase,                            "Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended. If empty, do not produce a file.")
     ("SummaryVerboseness",                              c->m_summaryVerboseness,                             "Specifies the level of the verboseness of the text output")
     ;
 
@@ -938,8 +935,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LMCS",                                            c->m_lumaReshapeEnable,                              "Enable LMCS luma mapping with chroma scaling (0:off 1:on 2:use SCC detection to disable for screen coded content)")
     ("LMCSSignalType",                                  c->m_reshapeSignalType,                              "Input signal type (0:SDR, 1:HDR-PQ, 2:HDR-HLG)")
     ("LMCSUpdateCtrl",                                  c->m_updateCtrl,                                     "LMCS model update control (0:RA, 1:AI, 2:LDB/LDP)")
-    ("LMCSAdpOption",                                   c->m_adpOption,                                      "LMCS adaptation options: 0:automatic,"
-                                                                                                               "1: rsp both (CW66 for QP<=22), 2: rsp TID0 (for all QP),"
+    ("LMCSAdpOption",                                   c->m_adpOption,                                      "LMCS adaptation options: 0:automatic, "
+                                                                                                               "1: rsp both (CW66 for QP<=22), 2: rsp TID0 (for all QP), "
                                                                                                                "3: rsp inter(CW66 for QP<=22), 4: rsp inter(for all QP).")
     ("LMCSInitialCW",                                   c->m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
     ("LMCSOffset",                                      c->m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
@@ -951,6 +948,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("UseNonLinearAlfChroma",                           c->m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
     ("MaxNumAlfAlternativesChroma",                     c->m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
     ("ALFTempPred",                                     c->m_alfTempPred,                                    "Enable usage of ALF temporal prediction for filter data\n" )
+    ("ALFUnitSize",                                     c->m_alfUnitSize,                                    "Size of ALF Search Unit [-1:default size(CTU)]\n" )
     ("PROF",                                            c->m_PROF,                                           "Enable prediction refinement with optical flow for affine mode")
     ("Affine",                                          c->m_Affine,                                         "Enable affine prediction")
     ("AffineType",                                      c->m_AffineType,                                     "Enable affine type prediction")
@@ -959,6 +957,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("AllowDisFracMMVD",                                c->m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
     ("MCTF",                                            c->m_vvencMCTF.MCTF,                                 "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
     ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 3:fastest operation)")
+    ("MCTFUnitSize",                                    c->m_vvencMCTF.MCTFUnitSize,                         "Size of MCTF operation area (block size for motion compensation).")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
@@ -1020,8 +1019,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     opts.setSubSection( "Tracing" );
     opts.addOptions()
     ("tracechannellist",              c->m_listTracingChannels,  "List all available tracing channels")
-    ("tracerule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("tracefile",                     toTraceFile,            "Tracing file")
+    ("tracerule",                     toTraceRule,               "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("tracefile",                     toTraceFile,               "Tracing file")
     ;
   }
 
@@ -1034,12 +1033,12 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), c->m_GOPList[i] );
   }
-  opts.addOptions()("decode",                           m_decode,                                           "decode only");
+  opts.addOptions()("decode",                           m_decode,                                            "Decode only");
 
   if( !m_easyMode )
   {
     // enable access to easy app param names as hidden option (usable for e.g. vvenc_set_param(c,"bitrate", 500000) )
-    opts.setSubSection("extra");
+    opts.setSubSection("Extra");
     opts.addOptions()
     ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
     ("framerate,r",                                     c->m_FrameRate,                                      "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
@@ -1139,22 +1138,17 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       }
     }
 
-    if( m_easyMode && c->m_GOPSize != 32 )
-    {
-      err.warn( "deprecated option" ) << "--gopsize option is deprecated as it is not needed anymore (auto adapted by arbitrary intra period)\n";
-    }
-
     for( auto& a : argv_unhandled )
     {
       rcOstr << "Unknown argument: '" << a << "'\n";
-      ret = -1;
+      ret = warnUnknowParameter ? 2 : -1;
     }
 
     if( err.is_errored )
     {
       rcOstr << err.outstr.str();
       if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
-      else            return -1;
+      else            return warnUnknowParameter ? 2 : -1;
     }
     else if( err.is_warning )
     {

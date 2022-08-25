@@ -314,14 +314,11 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
     const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
     const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
 
-    int filterIdx =
-      ( filterControl == nullptr )
-      ? -1/*selectedFilterIdx*/
-      : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
     bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
     if( !skipFiltering )
     {
-
       const ClpRngs& clpRngs      = cs.slice->clpRngs;
       const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
       const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
@@ -383,8 +380,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
             const Area blkSrc( 0, 0, w, h );
 
             const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
-            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-              m_alfVBLumaPos );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
 
             xStart = xEnd;
           }
@@ -397,8 +393,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
         Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
         Area blkSrc( xPos, yPos, width, height );
 
-        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-          m_alfVBLumaPos );
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
     }
   }
@@ -528,7 +523,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
                 coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
                 clip = m_clipDefault;
               }
-              m_filter7x7Blk[1](m_classifier, recYuv, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+              m_filter7x7Blk[1]( m_classifier, recYuv, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
             }
 
             for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
@@ -542,8 +537,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
                 const Area blkSrc( 0, 0, w >> chromaScaleX, h >> chromaScaleY );
                 const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
                 uint8_t alt_num = m_ctuAlternative[compIdx][ctuIdx];
-                m_filter5x5Blk[1](m_classifier, recYuv, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx],
-                                  cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos);
+                m_filter5x5Blk[1]( m_classifier, recYuv, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
               }
               if (cu->slice->ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
               {
@@ -556,8 +550,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 
                   const int16_t *filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1][filterIdx - 1];
 
-                  m_filterCcAlf(recYuv.get(compID), buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs,
-                                m_alfVBLumaCTUHeight, m_alfVBLumaPos);
+                  m_filterCcAlf( recYuv.get( compID ), buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
                 }
               }
 
@@ -589,8 +582,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
             coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
             clip  = m_clipDefault;
           }
-          m_filter7x7Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs,
-                             m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+          m_filter7x7Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
         }
 
         for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
@@ -603,8 +595,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
           {
             Area blk( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
             uint8_t alt_num = m_ctuAlternative[compIdx][ctuIdx];
-            m_filter5x5Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num],
-                               clpRngs.comp[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos);
+            m_filter5x5Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
           }
           if (cu->slice->ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
           {
@@ -617,8 +608,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 
               const int16_t *filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1][filterIdx - 1];
 
-              m_filterCcAlf(recYuv.get(compID), tmpYuv, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs,
-                            m_alfVBLumaCTUHeight, m_alfVBLumaPos);
+              m_filterCcAlf( recYuv.get( compID ), tmpYuv, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
             }
           }
         }
@@ -1374,10 +1364,10 @@ void AdaptiveLoopFilter::filterBlkCcAlf(const PelBuf &dstBuf, const CPelUnitBuf 
           sum += filterCoeff[6] * (srcCross[offset3 + jj2    ] - currSrcCross);
 
           sum = (sum + ((1 << m_scaleBits ) >> 1)) >> m_scaleBits;
-          const int offset = 1 << clpRngs.comp[compId].bd >> 1;
-          sum = ClipPel(sum + offset, clpRngs.comp[compId]) - offset;
+          const int offset = 1 << clpRngs[compId].bd >> 1;
+          sum = ClipPel(sum + offset, clpRngs[compId]) - offset;
           sum += srcSelf[jj];
-          srcSelf[jj] = ClipPel(sum, clpRngs.comp[compId]);
+          srcSelf[jj] = ClipPel(sum, clpRngs[compId]);
         }
       }
     }

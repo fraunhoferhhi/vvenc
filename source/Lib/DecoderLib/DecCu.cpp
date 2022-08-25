@@ -406,7 +406,7 @@ void DecCu::xReconInter(CodingUnit &cu)
   {
     if (LumaOnly)
     {
-      cs.getResiBuf(cu.Y()).reconstruct(predBuf.Y(), cs.getResiBuf(cu.Y()), cs.slice->clpRngs.comp[COMP_Y]);
+      cs.getResiBuf(cu.Y()).reconstruct(predBuf.Y(), cs.getResiBuf(cu.Y()), cs.slice->clpRngs[COMP_Y]);
       cs.getRecoBuf(cu.Y()).copyFrom(cs.getResiBuf(cu.Y()));
     }
     else
@@ -419,7 +419,7 @@ void DecCu::xReconInter(CodingUnit &cu)
   {
     if (LumaOnly)
     {
-      cs.getRecoBuf(cu.Y()).copyClip(predBuf.Y(), cs.slice->clpRngs.comp[COMP_Y]);
+      cs.getRecoBuf(cu.Y()).copyClip(predBuf.Y(), cs.slice->clpRngs[COMP_Y]);
     }
     else
     {
