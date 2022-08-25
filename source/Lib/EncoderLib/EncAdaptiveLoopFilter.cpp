@@ -1157,10 +1157,10 @@ alf_float_t AlfCovariance::calculateError( const int *clip ) const
 //Find filter coeff related
 int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
 {
-  Ty invDiag;  /* Vector of the inverse of diagonal entries of outMatr */
-
   for( int i = 0; i < numEq; i++ )
   {
+    alf_float_t invDiag;  /* Vector of the inverse of diagonal entries of outMatr */
+
     for( int j = i; j < numEq; j++ )
     {
       /* Compute the scaling factor */
@@ -1180,13 +1180,13 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
         {
           return 0;
         }
-        else              /* Normal operation */
-          invDiag[i] = 1.0 / ( outMatr[i][i] = sqrt( scale ) );
+        else            /* Normal operation */
+          invDiag = 1.0 / ( outMatr[i][i] = sqrt( scale ) );
       }
       else
       {
-        outMatr[i][j] = scale * invDiag[i]; /* Upper triangular part          */
-        outMatr[j][i] = 0.0;              /* Lower triangular part set to 0 */
+        outMatr[i][j] = scale * invDiag; /* Upper triangular part          */
+        outMatr[j][i] = 0.0;             /* Lower triangular part set to 0 */
       }
     }
   }
