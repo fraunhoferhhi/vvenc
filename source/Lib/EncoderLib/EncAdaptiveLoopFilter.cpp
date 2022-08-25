@@ -1180,13 +1180,16 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
         {
           return 0;
         }
-        else            /* Normal operation */
-          invDiag = 1.0 / ( outMatr[i][i] = sqrt( scale ) );
+        else
+        {
+          /* Normal operation */
+          invDiag = alf_float_t( 1.0 ) / ( outMatr[i][i] = sqrt( scale ) );
+        }
       }
       else
       {
         outMatr[i][j] = scale * invDiag; /* Upper triangular part          */
-        outMatr[j][i] = 0.0;             /* Lower triangular part set to 0 */
+        outMatr[j][i] = alf_float_t( 0.0 );             /* Lower triangular part set to 0 */
       }
     }
   }
