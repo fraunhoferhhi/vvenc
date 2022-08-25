@@ -1326,6 +1326,24 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
   m_CABACEstimator = &cabacEstimator;
   m_CtxCache = &ctxCache;
 
+  m_maxAsuWidth   = encCfg.m_alfUnitSize;
+  m_maxAsuHeight  = encCfg.m_alfUnitSize;
+
+  m_numAsusInWidth  = ( m_picWidth / m_maxAsuWidth ) + ( ( m_picWidth % m_maxAsuWidth ) ? 1 : 0 );
+  m_numAsusInHeight = ( m_picHeight / m_maxAsuHeight ) + ( ( m_picHeight % m_maxAsuHeight ) ? 1 : 0 );
+  m_numAsusInPic    = m_numAsusInHeight * m_numAsusInWidth;
+  m_numCtusInAsuWidth  = m_maxAsuWidth  / m_maxCUWidth;
+  m_numCtusInAsuHeight = m_maxAsuHeight / m_maxCUHeight;
+  m_numCtusInAsu.resize( m_numAsusInPic );
+  for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
+  {
+    int ctuX, ctuY;
+    getAsuCtuXY( asuIdx, ctuX, ctuY );
+    int ctuMaxX = getAsuMaxCtuX( ctuX );
+    int ctuMaxY = getAsuMaxCtuY( ctuY );
+    m_numCtusInAsu[asuIdx] = ( ctuMaxX - ctuX ) * ( ctuMaxY - ctuY );
+  }
+
   const int numBins = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma ? MaxAlfNumClippingValues : 1;
 
   for( int channelIdx = 0; channelIdx < MAX_NUM_CH; channelIdx++ )
@@ -1363,8 +1381,8 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
 
     for( int i = 0; i != m_filterShapes[chType].size(); i++ )
     {
-      m_alfCovariance[compIdx][i] = new AlfCovariance*[m_numCTUsInPic];
-      for( int j = 0; j < m_numCTUsInPic; j++ )
+      m_alfCovariance[compIdx][i] = new AlfCovariance*[m_numAsusInPic];
+      for( int j = 0; j < m_numAsusInPic; j++ )
       {
         m_alfCovariance[compIdx][i][j] = new AlfCovariance[numClasses];
         for( int k = 0; k < numClasses; k++ )
@@ -1499,7 +1517,7 @@ void EncAdaptiveLoopFilter::destroy()
 
       for( int i = 0; i != m_filterShapes[chType].size(); i++ )
       {
-        for( int j = 0; j < m_numCTUsInPic; j++ )
+        for( int j = 0; j < m_numAsusInPic; j++ )
         {
           for( int k = 0; k < numClasses; k++ )
           {
@@ -1738,13 +1756,64 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
 
 void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
-
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
     return;
   }
 
+  const PreCalcValues& pcv = *cs.pcv;
+  const int xC = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int yC = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int wC = std::min( m_maxCUWidth,  m_picWidth  - xC );
+  const int hC = std::min( m_maxCUHeight, m_picHeight - yC );
+
+  // get statistics ASU-wise
+  const int xA = xC & ~(m_maxAsuWidth - 1);
+  const int yA = yC & ~(m_maxAsuHeight - 1);
+  const int wA = std::min( m_maxAsuWidth,  m_picWidth  - xA );
+  const int hA = std::min( m_maxAsuHeight, m_picHeight - yA );
+
+  // bottom-right CTU in ASU?
+  if( xA + wA == xC + wC && yA + hA == yC + hC )
+  {
+    getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC );
+  }
+  else
+  {
+    return;
+  }
+}
+
+void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC )
+{
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
+  // init ASU stats buffer
+  const int asuRsAddr = ( yA / m_maxAsuHeight ) * m_numAsusInWidth + xA / m_maxAsuWidth;
+  for( int compIdx = 0; compIdx < getNumberValidComponents( m_chromaFormat ); compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    const int numClasses = isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1;
+
+    for( int shape = 0; shape != m_filterShapes[toChannelType( compID )].size(); shape++ )
+    {
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+      {
+        m_alfCovariance[compIdx][shape][asuRsAddr][classIdx].reset();
+      }
+    }
+  }
+  
+  for( int y = yA; y <= yC; y += m_maxCUHeight )
+  {
+    for( int x = xA; x <= xC; x += m_maxCUWidth )
+    {
+      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr );
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr )
+{
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
 
@@ -1755,30 +1824,9 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
   int horVirBndryPos[] = { 0, 0, 0 };
   int verVirBndryPos[] = { 0, 0, 0 };
 
-//  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-
-  // init CTU stats buffers
   const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-  for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
-  {
-    const ComponentID compID = ComponentID( compIdx );
-    const int numClasses = isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1;
 
-    for( int shape = 0; shape != m_filterShapes[toChannelType( compID )].size(); shape++ )
-    {
-//      for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
-      {
-        for( int classIdx = 0; classIdx < numClasses; classIdx++ )
-        {
-          m_alfCovariance[compIdx][shape][ctuRsAddr][classIdx].reset();
-        }
-      }
-    }
-  }
-
-  const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
-  const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
-
+  int ctuRsAddr = getCtuAddr( Position( xPos, yPos ), pcv );
   const int width = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
   const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
 
@@ -1844,7 +1892,7 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
           for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
           {
             const CompArea& compAreaDst = areaDst.block( compID );
-            getPreBlkStats( m_alfCovariance[compIdx][shape][ctuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, compArea, chType
+            getPreBlkStats( m_alfCovariance[compIdx][shape][asuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, compArea, chType
               , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
               , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
             );
@@ -1879,31 +1927,41 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 
       for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
       {
-        getPreBlkStats( m_alfCovariance[compIdx][shape][ctuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, compArea, chType
+        getPreBlkStats( m_alfCovariance[compIdx][shape][asuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, compArea, chType
           , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
           , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
         );
       }
     }
-  }
+  }  
 }
 
-void EncAdaptiveLoopFilter::copyCTUForCCALF( CodingStructure& cs, int ctuPosX, int ctuPosY )
+void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPosX, int ctuPosY )
 {
-  UnitArea   ctuArea   = UnitArea( m_chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
-  PelUnitBuf ctuBufSrc = cs.getRecoBuf( ctuArea );
-  PelUnitBuf ctuBufDst  = m_tempBuf.getBuf( ctuArea );
-  ctuBufDst.get( COMP_Cb ).copyFrom( ctuBufSrc.get( COMP_Cb ) );
-  ctuBufDst.get( COMP_Cr ).copyFrom( ctuBufSrc.get( COMP_Cr ) );
-}
-
-void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& cs )
-{
-  PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-  resetFrameStats( cs.slice->sps->ccalfEnabled );
-  for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
+  // copy unfiltered reco (including padded / extented area)
+  const ChromaFormat chromaFormat = cs.area.chromaFormat;
+  UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
+  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
   {
-    getStatisticsCTU( pic, cs, recoBuf, ctuRsAddr );
+    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
+    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
+    CompArea cpyArea = ctuArea.blocks[ i ];
+    cpyArea.x += extX;
+    cpyArea.y += extY;
+    if( ctuPosX == 0 )
+    {
+      cpyArea.x     -= 2 * extX;
+      cpyArea.width += 2 * extX;
+    }
+    if( ctuPosY == 0 )
+    {
+      cpyArea.y      -= 2 * extY;
+      cpyArea.height += 2 * extY;
+    }
+           PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
+    const CPelBuf srcBuf = cs.getRecoBuf( cpyArea.compID ).subBuf( cpyArea.pos(), cpyArea.size() );
+    dstBuf.copyFrom( srcBuf );
   }
 }
 
@@ -1911,9 +1969,8 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
-    memset( cs.slice->alfEnabled, 0, sizeof( cs.slice->alfEnabled ) );
     return;
   }
 
@@ -1951,11 +2008,11 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
     const ChannelType chType = toChannelType( compID );
     for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
     {
-      for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
+      for( int asuRsAddr = 0; asuRsAddr < m_numAsusInPic; asuRsAddr++ )
       {
         for( int classIdx = 0; classIdx < ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 ); classIdx++ )
         {
-          m_alfCovarianceFrame[chType][shape][isLuma( compID ) ? classIdx : 0] += m_alfCovariance[compIdx][shape][ctuRsAddr][classIdx];
+          m_alfCovarianceFrame[chType][shape][isLuma( compID ) ? classIdx : 0] += m_alfCovariance[compIdx][shape][asuRsAddr][classIdx];
 #if ENABLE_TRACING
           m_alfCovarianceFrame[chType][shape][isLuma( compID ) ? classIdx : 0].trace();
 #endif
@@ -2017,7 +2074,7 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
 
-  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  if( isSkipAlfForFrame( pic ) )
   {
     return;
   }
@@ -2028,28 +2085,6 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
   // copy unfiltered reco (including padded / extented area)
   const ChromaFormat chromaFormat = cs.area.chromaFormat;
   UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( nCtuX, nCtuY ) );
-  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
-  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
-  {
-    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
-    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
-    CompArea cpyArea = ctuArea.blocks[ i ];
-    cpyArea.x += extX;
-    cpyArea.y += extY;
-    if ( nCtuX == 0 )
-    {
-      cpyArea.x     -= 2 * extX;
-      cpyArea.width += 2 * extX;
-    }
-    if ( nCtuY == 0 )
-    {
-      cpyArea.y      -= 2 * extY;
-      cpyArea.height += 2 * extY;
-    }
-    PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
-    PelBuf srcBuf = pic.getRecoBuf( cpyArea );
-    dstBuf.copyFrom( srcBuf );
-  }
 
   // Perform filtering
   PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
@@ -2179,10 +2214,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
               clip = m_clipDefault;
             }
-            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-              , m_alfVBLumaCTUHeight
-              , m_alfVBLumaPos
-              );
+            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
           }
 
           for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
@@ -2195,10 +2227,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               const Area blkSrc( 0, 0, w >> chromaScaleX, h >> chromaScaleY );
               const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
               const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-                , m_alfVBChmaCTUHeight
-                , m_alfVBChmaPos
-                );
+              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
             }
           }
 
@@ -2228,10 +2257,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
           clip = m_clipDefault;
         }
-        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-          , m_alfVBLumaCTUHeight
-          , m_alfVBLumaPos
-          );
+        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
 
       for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
@@ -2244,10 +2270,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           Area blk( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
           const Area blkSrc( 0, 0, width >> chromaScaleX, height >> chromaScaleY );
           const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-            , m_alfVBChmaCTUHeight
-            , m_alfVBChmaPos
-            );
+          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
         }
       }
     }
@@ -2314,6 +2337,80 @@ void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
   }
 }
 
+void EncAdaptiveLoopFilter::xStoreAlfAsuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuEnableFlag[compIdx][curCtuIdx] = flag;
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xStoreAlfAsuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuAlternative[compIdx][curCtuIdx] = alt;
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xStoreAlfAsuFilterIdx( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      alfCtbFilterSetIndex[curCtuIdx] = fltIdx;
+    }
+  }
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuEnabledFlag( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compIdx, alfParam );
+  return ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuLumaFilterIdx( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->resetBits();
+  m_CABACEstimator->codeAlfCtuFilterIndex( cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y] );
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuAlternative( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compIdx, alfParam );
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+bool EncAdaptiveLoopFilter::isSkipAlfForFrame( const Picture& pic ) const
+{
+  if( !pic.cs->sps->alfEnabled || ( pic.cs->sps->maxTLayers > 1 && pic.cs->sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer ) )
+  {
+    return true;
+  }
+
+  return false;
+}
+
 double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, const int iShapeIdx, ChannelType channel, const double chromaWeight,
                                                            const int numClasses, const int numCoeff, double& distUnfilter )
 {
@@ -2344,31 +2441,32 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
     }
   }
 
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+  for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
   {
+    int ctuX, ctuY;
+    getAsuCtuXY( asuIdx, ctuX, ctuY );
+    int ctuIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
     for( int compID = compIDFirst; compID <= compIDLast; compID++ )
     {
       const double ctuLambda = chromaWeight > 0.0 ? (isLuma (channel) ? cs.picture->ctuQpaLambda[ctuIdx] : cs.picture->ctuQpaLambda[ctuIdx] * chromaWeight) : m_lambda[compID];
-      double distUnfilterCtu = getUnfilteredDistortion( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses );
+      double distUnfilterCtu = getUnfilteredDistortion( m_alfCovariance[compID][iShapeIdx][asuIdx], numClasses );
 
       ctxTempStart = AlfCtx( m_CABACEstimator->getCtx() );
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 1;
-      m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp );
+      double costOn = distUnfilterCtu;
+      costOn += xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
       if( isLuma( channel ) )
       {
-        // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
-        assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
-        assert( cs.slice->numAps == 1 );
-        m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
+        costOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctuIdx, &m_alfParamTemp, ctuLambda );
       }
-      double costOn = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
 
       ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
       if( isLuma( channel ) )
       {
-        costOn += doClip ? getFilteredDistortion<true >( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff )
-                         : getFilteredDistortion<false>( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff );;
+        costOn += doClip ? getFilteredDistortion<true >( m_alfCovariance[compID][iShapeIdx][asuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff )
+                         : getFilteredDistortion<false>( m_alfCovariance[compID][iShapeIdx][asuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff );;
       }
       else
       {
@@ -2381,12 +2479,10 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compID][ctuIdx] = altIdx;
-          m_CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compID, &m_alfParamTemp );
-          double r_altCost = ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
           double altDist = 0.;
-          altDist += doClip ? m_alfCovariance[compID][iShapeIdx][ctuIdx][0].calcErrorForCoeffs<true >( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor )
-                            : m_alfCovariance[compID][iShapeIdx][ctuIdx][0].calcErrorForCoeffs<false>( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor );
+          altDist += doClip ? m_alfCovariance[compID][iShapeIdx][asuIdx][0].calcErrorForCoeffs<true >( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor )
+                            : m_alfCovariance[compID][iShapeIdx][asuIdx][0].calcErrorForCoeffs<false>( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor );
 
           double altCost = altDist + r_altCost;
           if( altCost < bestAltCost )
@@ -2396,28 +2492,28 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
             ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
           }
         }
-        m_ctuAlternative[compID][ctuIdx] = bestAltIdx;
+        xStoreAlfAsuAlternative( cs, ctuX, ctuY, ctuIdx, compID, bestAltIdx );
         costOn += bestAltCost;
       }
 
       m_CABACEstimator->getCtx() = AlfCtx( ctxTempStart );
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 0;
-      m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp);
-      double costOff = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+      double costOff = distUnfilterCtu + xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
 
+      uint8_t enable = 0;
       if( costOn < costOff )
       {
         cost += costOn;
         m_CABACEstimator->getCtx() = AlfCtx( ctxTempBest );
-        m_ctuEnableFlag[compID][ctuIdx] = 1;
+        enable = 1;
       }
       else
       {
         cost += costOff;
-        m_ctuEnableFlag[compID][ctuIdx] = 0;
         distUnfilter += distUnfilterCtu;
       }
+      xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctuIdx, compID, enable );
     }
   }
 
@@ -2504,8 +2600,11 @@ void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam,
           {
             m_CABACEstimator->getCtx() = AlfCtx(ctxStart);
             cost = m_lambda[channel] * uiCoeffBits;
+            //DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, cofBitsCost=%.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, iter, cost );
             cost += deriveCtbAlfEnableFlags(cs, iShapeIdx, channel, lambdaChromaWeight,
                                             numClasses, alfFilterShape[iShapeIdx].numCoeff, distUnfilter);
+
+            DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f, cost = %.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, numAlternatives, iter, costMin, cost );
             if (cost < costMin)
             {
               m_bitsNewFilter[channel] = uiCoeffBits;
@@ -2528,6 +2627,7 @@ void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam,
             // unfiltered distortion is added due to some CTBs may not use filter
             // no need to reset CABAC here, since uiCoeffBits is not affected
             /*cost = */getFilterCoeffAndCost( cs, distUnfilter, channel, true, iShapeIdx, uiCoeffBits );
+            DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, numAlternatives, iter, costMin );
           }
         }//for iter
         // Decrease number of alternatives and reset ctu params and filters
@@ -3240,7 +3340,7 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
 {
   if( !ctbAltIdx )
   {
-    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+    for( int ctuIdx = 0; ctuIdx < m_numAsusInPic; ctuIdx++ )
     {
       if( ctbEnableFlags[ctuIdx] )
       {
@@ -3253,13 +3353,16 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
   }
   else
   {
-    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
     {
+      int ctuX, ctuY;
+      getAsuCtuXY( asuIdx, ctuX, ctuY );
+      int ctuIdx = ctuY * m_numCTUsInWidth/*cs.pcv->widthInCtus*/ + ctuX;
       if( ctbEnableFlags[ctuIdx]  && ( altIdx == ctbAltIdx[ctuIdx] ))
       {
         for( int classIdx = 0; classIdx < numClasses; classIdx++ )
         {
-          frameCov[altIdx] += ctbCov[ctuIdx][classIdx];
+          frameCov[altIdx] += ctbCov[asuIdx][classIdx];
         }
       }
     }
@@ -4720,9 +4823,9 @@ void  EncAdaptiveLoopFilter::initDistortion()
 {
   for (int comp = 0; comp < MAX_NUM_COMP; comp++)
   {
-    for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
     {
-      m_ctbDistortionUnfilter[comp][ctbIdx] = getUnfilteredDistortion(m_alfCovariance[comp][0][ctbIdx], comp == 0 ? MAX_NUM_ALF_CLASSES : 1);
+      m_ctbDistortionUnfilter[comp][asuIdx] = getUnfilteredDistortion(m_alfCovariance[comp][0][asuIdx], comp == 0 ? MAX_NUM_ALF_CLASSES : 1);
     }
   }
 }
@@ -4811,17 +4914,26 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         {
           double dDistOrgNewFilter = 0;
           int blocksUsingNewFilter = 0;
-          for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+          for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
           {
+            int ctuX, ctuY;
+            getAsuCtuXY( asuIdx, ctuX, ctuY );
+            int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
             if (m_ctuEnableFlag[COMP_Y][ctbIdx] && alfCtbFilterSetIndex[ctbIdx] != NUM_FIXED_FILTER_SETS)
             {
-              m_ctuEnableFlag[COMP_Y][ctbIdx] = 0;
+              xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, COMP_Y, 0 );
             }
             else if (m_ctuEnableFlag[COMP_Y][ctbIdx] && alfCtbFilterSetIndex[ctbIdx] == NUM_FIXED_FILTER_SETS)
             {
-              DTRACE( g_trace_ctx, D_MISC, "\t\t\t\t re-derive ctbIdx=%d\n", ctbIdx );
-              blocksUsingNewFilter++;
-              dDistOrgNewFilter += m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
+              DTRACE( g_trace_ctx, D_MISC, "\t\t\t\t re-derive ctbIdx=%d\n", asuIdx );
+              int ctuMaxX = getAsuMaxCtuX( ctuX );
+              int ctuMaxY = getAsuMaxCtuY( ctuY );
+              for( int cY = ctuY; cY < ctuMaxY; cY++ )
+              for( int cX = ctuX; cX < ctuMaxX; cX++ )
+                blocksUsingNewFilter++;
+
+              dDistOrgNewFilter += m_ctbDistortionUnfilter[COMP_Y][asuIdx];
               for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
               {
                 short* pCoeff = m_coeffFinal;
@@ -4831,8 +4943,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
-                dDistOrgNewFilter += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                            : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
+                dDistOrgNewFilter += doClip ? m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                            : m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
             }
           } //for(ctbIdx)
@@ -4880,14 +4992,18 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           {
             continue;
           }
-        }
+        }// if iter > 0
 
         m_CABACEstimator->getCtx() = ctxStart;
-        for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+        for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
         {
-          DTRACE( g_trace_ctx, D_MISC, "\t\t\t ctbIdx=%d\n", ctbIdx );
+          int ctuX, ctuY;
+          getAsuCtuXY( asuIdx, ctuX, ctuY );
+          int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
+          DTRACE( g_trace_ctx, D_MISC, "\t\t\t ctbIdx=%d\n", asuIdx );
           const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] : m_lambda[COMP_Y];
-          const double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
+          const double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][asuIdx];
           //ctb on
           m_ctuEnableFlag[COMP_Y][ctbIdx] = 1;
           double         costOn = MAX_DOUBLE;
@@ -4899,10 +5015,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             //rate
             m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
             m_CABACEstimator->resetBits();
-            m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, &m_alfParamTemp);
+            double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
-            m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctbIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
-            double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+            rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, &m_alfParamTemp, ctuLambda );
             //distortion
             double dist = distUnfilterCtb;
 
@@ -4913,9 +5028,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                 // fixed filter set
                 int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
 
-                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
+                if( !m_alfCovariance[COMP_Y][0][asuIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
               else
               {
@@ -4945,14 +5060,18 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
 
-                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
-                  dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                 : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
+                if( !m_alfCovariance[COMP_Y][0][asuIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][0][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
             } //for(classIdx)
             //cost
-            const double costOnTmp = dist + ctuLambda * rateOn;
-            DTRACE( g_trace_ctx, D_MISC, "\t cost = %.2f, rate = %.2f, dist = %.2f", costOnTmp, rateOn, dist );
+            const double costOnTmp = dist + rateOn;
+#if ENABLE_TRACING
+            const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] : m_lambda[COMP_Y];
+            DTRACE( g_trace_ctx, D_MISC, "\t cost = %.2f, rate = %.2f, dist = %.2f", costOnTmp, rateOn/ctuLambda, dist );
+#endif
+            DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_LumaFlt: POC%d, asu_%d, flt_%d, cost=%.2f, rate=%.2f, dist=%.2f\n", cs.slice->poc, asuIdx, filterSetIdx, costOnTmp, rateOn/ctuLambda, dist );
 
             if (costOnTmp < costOn)
             {
@@ -4969,26 +5088,29 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           //rate
           m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
           m_CABACEstimator->resetBits();
-          m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, &m_alfParamTemp);
+          double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
           //cost
-          const double costOff = distUnfilterCtb + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+          const double costOff = distUnfilterCtb + rateCost;
           DTRACE( g_trace_ctx, D_MISC, "\t\t\t costOff=%.2f\n", costOff );
 
+          uint8_t enable = 0;
           if (costOn < costOff)
           {
             m_CABACEstimator->getCtx() = AlfCtx(ctxTempBest);
-            m_ctuEnableFlag[COMP_Y][ctbIdx] = 1;
-            alfCtbFilterSetIndex[ctbIdx] = iBestFilterSetIdx;
+            xStoreAlfAsuFilterIdx( cs, ctuX, ctuY, ctbIdx, iBestFilterSetIdx, alfCtbFilterSetIndex );
+            enable = 1;
             curCost += costOn;
           }
           else
           {
-            m_ctuEnableFlag[COMP_Y][ctbIdx] = 0;
             curCost += costOff;
           }
+          xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, COMP_Y, enable );
+          DTRACE( g_trace_ctx, D_ALF_EST, "\n" );
         } //for(ctbIdx)
         int tmpBits = bitsNewFilter + 3 * (numFilterSet - NUM_FIXED_FILTER_SETS);
         curCost += tmpBits * m_lambda[COMP_Y];
+        DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Luma: POC%d, numFilt_%d, newFilt_%d, TempAps_%d, iter_%d, costMin=%.2f, Cost=%.2f\n", cs.slice->poc, numFilterSet, useNewFilter, numTemporalAps, iter, (costMin != MAX_DOUBLE ? costMin: 0.0), curCost );
         if (curCost < costMin)
         {
           costMin = curCost;
@@ -5133,10 +5255,14 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
     for (int compId = 1; compId < MAX_NUM_COMP; compId++)
     {
       m_alfParamTemp.alfEnabled[compId] = true;
-      for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+      for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
       {
+        int ctuX, ctuY;
+        getAsuCtuXY( asuIdx, ctuX, ctuY );
+        int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
         const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] * lambdaChromaWeight : m_lambda[compId];
-        double distUnfilterCtu = m_ctbDistortionUnfilter[compId][ctbIdx];
+        double distUnfilterCtu = m_ctbDistortionUnfilter[compId][asuIdx];
         //cost on
         m_ctuEnableFlag[compId][ctbIdx] = 1;
         ctxTempStart = AlfCtx(m_CABACEstimator->getCtx());
@@ -5144,12 +5270,11 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
         //ctb flag
-        m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, compId, &m_alfParamTemp);
-        double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+        double rateCostOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
         double dist = MAX_DOUBLE;
         int numAlts = m_alfParamTemp.numAlternativesChroma;
         ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
-        double bestAltRate = 0;
+        double bestRateAltCost = 0;
         double bestAltCost = MAX_DOUBLE;
         int bestAltIdx = -1;
         ctxTempAltStart = AlfCtx( ctxTempBest );
@@ -5159,9 +5284,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compId][ctbIdx] = altIdx;
-          m_CABACEstimator->codeAlfCtuAlternative( cs, ctbIdx, compId, &m_alfParamTemp );
-          double altRate   = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-          double r_altCost = ctuLambda * altRate;
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
 
           //distortion
           for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
@@ -5169,47 +5292,54 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_filterTmp[i] = m_chromaCoeffFinal[altIdx][i];
             m_clipTmp[i]   = m_chromaClippFinal[altIdx][i];
           }
-          double altDist = doClip ? m_alfCovariance[compId][0][ctbIdx][0].calcErrorForCoeffs<true >( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor )
-                                  : m_alfCovariance[compId][0][ctbIdx][0].calcErrorForCoeffs<false>( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor );
+          double altDist = doClip ? m_alfCovariance[compId][0][asuIdx][0].calcErrorForCoeffs<true >( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor )
+                                  : m_alfCovariance[compId][0][asuIdx][0].calcErrorForCoeffs<false>( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor );
           double altCost = altDist + r_altCost;
+          //DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, numalt=%d, bestAltCost=%.2f, altCost=%.2f\n", cs.slice->poc, compId, asuIdx, altIdx, bestAltCost, altCost );
           if( altCost < bestAltCost )
           {
             bestAltCost = altCost;
             bestAltIdx = altIdx;
-            bestAltRate = altRate;
+            bestRateAltCost = r_altCost;
             ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
             dist = altDist;
           }
         }
-        m_ctuAlternative[compId][ctbIdx] = bestAltIdx;
-        rateOn += bestAltRate;
+        xStoreAlfAsuAlternative( cs, ctuX, ctuY, ctbIdx, compId, bestAltIdx );
+        rateCostOn += bestRateAltCost;
         dist += distUnfilterCtu;
         //cost
-        const double costOn = dist + ctuLambda * rateOn;
+        const double costOn = dist + rateCostOn;
         //cost off
         m_ctuEnableFlag[compId][ctbIdx] = 0;
         //rate
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
-        m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, compId, &m_alfParamTemp);
+        double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
         //cost
-        const double costOff = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-
+        const double costOff = distUnfilterCtu + rateCost;
+        DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, costOff=%.2f[distUnf=%2.f,rateCost=%2.f], CostOn=%.2f\n", cs.slice->poc, compId, asuIdx, costOff, distUnfilterCtu, rateCost, costOn );
+        
+        uint8_t enable = 0;
         if (costOn < costOff)
         {
           m_CABACEstimator->getCtx() = AlfCtx(ctxTempBest);
-          m_ctuEnableFlag[compId][ctbIdx] = 1;
+          enable = 1;
           curCost += costOn;
         }
         else
         {
-          m_ctuEnableFlag[compId][ctbIdx] = 0;
           curCost += costOff;
         }
+        xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, compId, enable );
+
       } //for(ctbIdx)
     }
     //chroma idc
     setEnableFlag(m_alfParamTemp, CH_C, m_ctuEnableFlag);
+
+    DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, APSId_%d, costMin=%.2f, Cost=%.2f\n", cs.slice->poc, curApsId, curApsId, (costMin != MAX_DOUBLE ? costMin: 0.0), curCost );
+    DTRACE( g_trace_ctx, D_ALF_EST, "\n" );
 
     if (curCost < costMin)
     {
@@ -5284,18 +5414,36 @@ void EncAdaptiveLoopFilter::setCtuAlternativeChroma( uint8_t* ctuAlts[MAX_NUM_CO
 void EncAdaptiveLoopFilter::initCtuAlternativeChroma( uint8_t* ctuAlts[MAX_NUM_COMP] )
 {
   uint8_t altIdx = 0;
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+  if( m_numAsusInPic == m_numCTUsInPic )
   {
-    ctuAlts[COMP_Cb][ctuIdx] = altIdx;
-    if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
-      ++altIdx;
+    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+    {
+      ctuAlts[COMP_Cb][ctuIdx] = altIdx;
+      ctuAlts[COMP_Cr][ctuIdx] = altIdx;
+      if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
+        ++altIdx;
+    }
   }
-  altIdx = 0;
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+  else
   {
-    ctuAlts[COMP_Cr][ctuIdx] = altIdx;
-    if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
-      ++altIdx;
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
+    {
+      int ctuX, ctuY;
+      getAsuCtuXY( asuIdx, ctuX, ctuY );
+      int ctuMaxX = getAsuMaxCtuX( ctuX );
+      int ctuMaxY = getAsuMaxCtuY( ctuY );
+      for( int cY = ctuY; cY < ctuMaxY; cY++ )
+      {
+        for( int cX = ctuX; cX < ctuMaxX; cX++ )
+        {
+          int ctuIdx = cY * m_numCTUsInWidth + cX;
+          ctuAlts[COMP_Cb][ctuIdx] = altIdx;
+          ctuAlts[COMP_Cr][ctuIdx] = altIdx;
+        }
+      }
+      if( (asuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numAsusInPic )
+        ++altIdx;
+    }
   }
 }
 
@@ -5332,7 +5480,7 @@ int EncAdaptiveLoopFilter::getCoeffRateCcAlf(short chromaCoeff[MAX_NUM_CC_ALF_FI
   return bits;
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const PelUnitBuf& recYuv, const PelUnitBuf& recYuvExt, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
+void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
 {
   int forward_tab[CCALF_CANDS_COEFF_NR * 2 - 1] = {0};
   for (int i = 0; i < CCALF_CANDS_COEFF_NR; i++)
@@ -5685,19 +5833,18 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( Picture& pic, CodingStructure& cs
 
   const TempCtx ctxStartCcAlf( m_CtxCache, SubCtx( Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx() ) );
   const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
-  const PelUnitBuf tmpYuv = m_tempBuf.getBuf( cs.area );
   const PelUnitBuf recYuv = cs.getRecoBuf();
 
   m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
-  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, tmpYuv, recYuv );
+  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, recYuv );
 
   m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
-  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, tmpYuv, recYuv );
+  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, recYuv );
 
   xSetupCcAlfAPS( cs );
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& tempDecYuvBuf, const PelUnitBuf& dstYuv )
+void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& dstYuv )
 {
   if (!cs.slice->alfEnabled[COMP_Y])
   {
@@ -5843,7 +5990,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
             if (!referencingExistingAps)
             {
               getFrameStatsCcalf(compID, (filterIdx + 1));
-              deriveCcAlfFilterCoeff(compID, dstYuv, tempDecYuvBuf, ccAlfFilterCoeff, filterIdx);
+              deriveCcAlfFilterCoeff(compID, ccAlfFilterCoeff, filterIdx);
             }
             const int numCoeff  = m_filterShapesCcAlf[compID - 1][0].numCoeff - 1;
             int log2BlockWidth  = cs.pcv->maxCUSizeLog2 - scaleX;

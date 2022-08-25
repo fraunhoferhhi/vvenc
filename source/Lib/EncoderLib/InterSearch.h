@@ -350,6 +350,7 @@ private:
   unsigned int      m_numBVs;
   IbcBvCand*        m_defaultCachedBvs;
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
+  CompStorage       m_orgResiCb[4], m_orgResiCr[4];   // 0:std, 1-3:jointCbCr
 
 protected:
   // interface to option
@@ -437,7 +438,7 @@ public:
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
   /// sub-function for motion vector refinement used in fractional-pel accuracy
-  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, bool bAllowUseOfHadamard, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
+  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
 
    typedef struct
    {
@@ -445,7 +446,7 @@ private:
      int right;
      int top;
      int bottom;
-   }SearchRange;
+   } SearchRange;
 
   typedef struct
   {
@@ -462,14 +463,13 @@ private:
     int             subShiftMode;
     unsigned        imvShift;
     bool            useAltHpelIf;
-    bool            inCtuSearch;
     bool            zeroMV;
   } TZSearchStruct;
 
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
-  inline void xTZ4PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
+  inline void xTZ4PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointDiamondSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist, const bool bCheckCornersAtDist1 );
 
@@ -509,18 +509,8 @@ private:
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
                                     Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred,
                                     const bool            bExtendedSettings,
                                     const bool            bFastSettings = false
-                                  );
-
-  void xTZSearchSelective         ( const CodingUnit&     cu,
-                                    RefPicList            refPicList,
-                                    int                   iRefIdxPred,
-                                    TZSearchStruct&       cStruct,
-                                    Mv&                   rcMv,
-                                    Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred
                                   );
 
   void xSetSearchRange            ( const CodingUnit&     cu,
@@ -534,8 +524,7 @@ private:
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
-                                    Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred
+                                    Distortion&           ruiSAD
                                   );
 
   void xPatternSearch             ( TZSearchStruct&       cStruct,

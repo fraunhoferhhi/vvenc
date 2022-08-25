@@ -276,7 +276,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
 }
 
 
-void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex )
+void EncSlice::initPic( Picture* pic )
 {
   Slice* slice = pic->cs->slice;
 
@@ -294,7 +294,7 @@ void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* no
   slice->encCABACTableIdx = cabacTableIdx;
 
   // set QP and lambda values
-  xInitSliceLambdaQP( slice, noiseMinimaStats, noiseMinimaMutex );
+  xInitSliceLambdaQP( slice );
 
   for( auto* thrRsc : m_ThreadRsrc )
   {
@@ -320,7 +320,7 @@ void EncSlice::initPic( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* no
 
 
 
-void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex )
+void EncSlice::xInitSliceLambdaQP( Slice* slice )
 {
   // pre-compute lambda and qp
   const bool cqp = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
@@ -332,17 +332,13 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsEncodingPass = (m_pcEncCfg->m_LookAhead > 0) && !slice->pic->isPreAnalysis;
     const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCTargetBitrate == 0 && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
-    if (rcIsEncodingPass) m_pcRateCtrl->utilizeNoiseMinStats (slice->TLayer); // @ start of each GOP
-
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, &slice->pic->picVisActY, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                             (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
-                                                            ((m_pcEncCfg->m_LookAhead > 0) && slice->pic->isPreAnalysis ? noiseMinimaStats : nullptr),
-                                                            startCtuTsAddr, boundingCtuTsAddr, noiseMinimaMutex); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
+                                                            startCtuTsAddr, boundingCtuTsAddr); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
 
     if ((m_pcEncCfg->m_RCNumPasses == 2) && m_pcRateCtrl->rcIsFinalPass && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (boundingCtuTsAddr > startCtuTsAddr))
     {
@@ -365,10 +361,9 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, uint64_t* noiseMinimaStats, std
     slice->sliceQp = iQP; // start slice QP for reference
     slice->pic->picInitialQP = iQP;
 
-    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, rcIsEncodingPass, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
+    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                      (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
-                                                     (rcIsEncodingPass ? m_pcRateCtrl->getNoiseMinStats() : (slice->pic->isPreAnalysis ? noiseMinimaStats : nullptr)),
-                                                     startCtuTsAddr, boundingCtuTsAddr, noiseMinimaMutex)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
+                                                     m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }
@@ -837,7 +832,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     {
       for( auto& ctuEncParam : ctuEncParams )
       {
-        EncSlice::xProcessCtuTask<false>( 0, &ctuEncParam );
+        if( m_processStates[ctuEncParam.ctuRsAddr] != PROCESS_DONE )
+          EncSlice::xProcessCtuTask<false>( 0, &ctuEncParam );
       }
       DTRACE_PIC_COMP_COND( m_processStates[ 0 ] == SAO_FILTER && m_processStates[ boundingCtuTsAddr - 1 ] == SAO_FILTER, D_REC_CB_LUMA_LF,   cs, cs.getRecoBuf(), COMP_Y  );
       DTRACE_PIC_COMP_COND( m_processStates[ 0 ] == SAO_FILTER && m_processStates[ boundingCtuTsAddr - 1 ] == SAO_FILTER, D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb );
@@ -1064,7 +1060,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         }
 
         // ALF border extension
-        if( slice.sps->alfEnabled )
+        if( cs.sps->alfEnabled )
         {
           // we have to do some kind of position aware boundary padding
           // it's done here because the conditions are readable
@@ -1081,7 +1077,15 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );
 
-        processStates[ ctuRsAddr ] = ALF_GET_STATISTICS;
+        if( ctuPosX+1 == pcv.widthInCtus )
+        {
+          processStates[ctuRsAddr] = ALF_GET_STATISTICS;
+        }
+        else
+        {
+          processStates[ctuRsAddr] = PROCESS_DONE;
+          return true;
+        }
       }
       break;
 
@@ -1089,11 +1093,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // ensure all surrounding ctu's are filtered (ALF will use pixels of adjacent CTU's)
         // due to wpp condition above in SAO_FILTER, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
-          return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
-          return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
+        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ctuRsAddr + ctuStride] <= SAO_FILTER )
           return false;
 
         if( checkReadyState )
@@ -1106,7 +1106,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-          encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctuRsAddr );
+          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
+          {
+            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu );
+            encSlice->m_pALF->copyCTUforALF   ( cs, ctu - firstCtuInRow, ctuPosY );
+          }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
@@ -1123,8 +1128,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
 
         // ensure statistics from all previous ctu's have been collected
-        for( int i = 0; i < ctuRsAddr; i++ )
-          if( processStates[ i ] <= ALF_GET_STATISTICS )
+        for( int i = pcv.widthInCtus - 1; i < ctuRsAddr; i += pcv.widthInCtus )
+          if( processStates[i] <= ALF_GET_STATISTICS )
             return false;
 
         if( checkReadyState )
@@ -1152,10 +1157,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
 
         // start alf reconstruct, when derive filter is done
-        if( processStates[ deriveFilterCtu ] < ALF_RECONSTRUCT )
-          return false;
-
-        if( ctuPosY > 0 && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
+        if( processStates[deriveFilterCtu] < ALF_RECONSTRUCT )
           return false;
 
         if( checkReadyState )
@@ -1166,25 +1168,22 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->alfEnabled )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
-          encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctuRsAddr );
+          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
+          {
+            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu );
+          }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_recon );
         processStates[ctuRsAddr] = CCALF_GET_STATISTICS;
       }
-      break;
+      // dont break, no additional deps, can continue straigt away!
+      //break;
+
     case CCALF_GET_STATISTICS:
       {
-        // ensure all surrounding ctu's are filtered (ALF will use pixels of adjacent CTU's)
-        // due to wpp condition above in ALF_RECONSTRUCT, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus && processStates[ctuRsAddr + 1] <= ALF_RECONSTRUCT )
-          return false;
-        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ctuRsAddr + ctuStride] <= ALF_RECONSTRUCT )
-          return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ctuRsAddr + 1 + ctuStride] <= ALF_RECONSTRUCT )
-          return false;
-
         if( checkReadyState )
           return true;
 
@@ -1194,9 +1193,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->ccalfEnabled )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L);
-          encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctuRsAddr );
-          encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctuRsAddr );
-          encSlice->m_pALF->copyCTUForCCALF( cs, ctuPosX, ctuPosY );
+          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
+          {
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu );
+          }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
@@ -1213,7 +1215,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
 
         // ensure statistics from all previous ctu's have been collected
-        for( int i = 0; i < ctuRsAddr; i++ )
+        for( int i = pcv.widthInCtus - 1; i < ctuRsAddr; i += pcv.widthInCtus )
           if( processStates[i] <= CCALF_GET_STATISTICS )
             return false;
 
@@ -1249,8 +1251,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         if( slice.sps->ccalfEnabled )
         {
-          encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctuRsAddr );
-          encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctuRsAddr );
+          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
+          {
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu );
+          }
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );

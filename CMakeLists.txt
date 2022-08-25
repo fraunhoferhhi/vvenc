@@ -10,10 +10,10 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.5.0 )
+project( vvenc VERSION 1.6.0 )
 
 # set alternative version numbering for release candidates
-#set( PROJECT_VERSION_RC rc1 )
+set( PROJECT_VERSION_RC rc1 )
 if( PROJECT_VERSION_RC )
     set( PROJECT_VERSION "${PROJECT_VERSION}-rc${PROJECT_VERSION_RC}" )
 endif()
@@ -200,6 +200,11 @@ if( VVENC_ENABLE_LINK_TIME_OPT )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON )
   set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON )
+
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+    # enable parallel link-time optimization for GCC
+    add_link_options( $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-flto=auto> )
+  endif()
 endif()
 
 if( VVCEncoderLib_ENABLE_ITT )

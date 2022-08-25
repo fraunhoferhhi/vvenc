@@ -202,8 +202,8 @@ static inline void xPelFilterLumaLoopVer( Pel* piSrc, const ptrdiff_t step, cons
 template<X86_VEXT vext>
 static inline void xPelFilterLumaWeakCore( __m128i &vm1, __m128i &vm2, __m128i &vm3, __m128i &vm4, __m128i &vm5, __m128i &vm6, const int tc, const int iThrCut, const bool bFilterSecondP, const bool bFilterSecondQ, const ClpRng& clpRng )
 {
-  __m128i vmin = _mm_set1_epi16( clpRng.min );
-  __m128i vmax = _mm_set1_epi16( clpRng.max );
+  __m128i vmin = _mm_set1_epi16( clpRng.min() );
+  __m128i vmax = _mm_set1_epi16( clpRng.max() );
 
   __m128i vtmp0 = _mm_sub_epi16( vm4, vm3 );
   __m128i vtmp1 = _mm_sub_epi16( vm5, vm2 );

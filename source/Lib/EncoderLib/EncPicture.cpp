@@ -69,8 +69,6 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
-                       std::mutex* const noiseMinimaMutex,
-                       uint64_t* const noiseMinimaStats,
                        NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg = &encCfg;
@@ -80,8 +78,6 @@ void EncPicture::init( const VVEncCfg& encCfg,
 
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
-  m_noiseMinMutex = noiseMinimaMutex;
-  m_noiseMinStats = noiseMinimaStats;
 }
 
 
@@ -265,7 +261,7 @@ void EncPicture::xInitPicEncoder( Picture& pic )
     m_pcRateCtrl->initRateControlPic( pic, slice, pic.picInitialQP, pic.picInitialLambda );
   }
 
-  m_SliceEncoder.initPic( &pic, m_noiseMinStats, m_noiseMinMutex );
+  m_SliceEncoder.initPic( &pic );
 
   xInitSliceColFromL0Flag( slice );
   xInitSliceCheckLDC     ( slice );

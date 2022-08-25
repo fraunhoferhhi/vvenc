@@ -164,7 +164,7 @@ public:
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
-  void useSubStructure (      CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
+  void useSubStructure (      CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyRecoToPic = true);
 
   void clearTUs( bool force = false );
   void clearCUs( bool force = false );
