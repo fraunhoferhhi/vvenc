@@ -1159,7 +1159,7 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
 {
   for( int i = 0; i < numEq; i++ )
   {
-    alf_float_t invDiag = 0.0f;  /* Vector of the inverse of diagonal entries of outMatr */
+    alf_float_t invDiag = 0.0f;
 
     for( int j = i; j < numEq; j++ )
     {
