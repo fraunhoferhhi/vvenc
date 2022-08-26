@@ -1159,7 +1159,7 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
 {
   for( int i = 0; i < numEq; i++ )
   {
-    alf_float_t invDiag;  /* Vector of the inverse of diagonal entries of outMatr */
+    alf_float_t invDiag = 0.0f;  /* Vector of the inverse of diagonal entries of outMatr */
 
     for( int j = i; j < numEq; j++ )
     {
@@ -4106,8 +4106,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         alfCovariance[classIdx].all0 = false;
       }
 
-      org += orgStride;
-      rec += recStride;
+      org += ( orgStride << 2 );
+      rec += ( recStride << 2 );
     }
   }
 
