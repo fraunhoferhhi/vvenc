@@ -220,6 +220,8 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
 {
   const int qBits8 = iQBits - 8;
   piQCoef.memset( 0 );
+  TCoeff sum;
+
   if( maxNumberOfCoeffs >= 8 )
   {
     if( vext >= AVX2 )
@@ -267,8 +269,10 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         vTmpLevel_0 = _mm256_or_si256(vquantMag0,vquantMag1);
         __m256i vAbsSum = _mm256_hadd_epi32(vTmpLevel_0,vTmpLevel_0);
         vAbsSum = _mm256_hadd_epi32(vAbsSum,vAbsSum);
-        uiAbsSum+=_mm256_extract_epi32(vAbsSum,0);
-        uiAbsSum+=_mm256_extract_epi32(vAbsSum,4);
+        sum = _mm256_extract_epi32(vAbsSum,0);
+        uiAbsSum+=sum;
+        sum =_mm256_extract_epi32(vAbsSum,4);
+        uiAbsSum+=sum;
         vTmpLevel_1 =   _mm256_and_si256(vTmpLevel_0,vSign);                                       // mask only neg values
         vTmpLevel_0 =   _mm256_andnot_si256(vSign,vTmpLevel_0);                                 // mask only pos values
         vTmpLevel_0 =   _mm256_sub_epi32(vTmpLevel_0,vTmpLevel_1);
@@ -292,12 +296,12 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
 
       for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos+=4 )
       {
-        __m128i vLevel = _mm_lddqu_si128((__m128i*)&piCoef.buf[uiBlockPos]);     // coeff3,coeff2,coeff1,coeff0,
+        __m128i vLevel = _mm_lddqu_si128((__m128i*)&piCoef.buf[uiBlockPos]);      // coeff3,coeff2,coeff1,coeff0,
         __m128i vSign = _mm_cmpgt_epi32 (vNull,vLevel);                                            // sign3,sign2,sign1,sign0 FFFF or 0000
-        vLevel = _mm_abs_epi32 (vLevel);                                                                        // abs(vLevel3,vLevel2,vLevel1,vLevel0)
-        __m128i vdeltaU0 = _mm_mul_epu32(vLevel,vQuantCoeff);                      // Tmp2,Tmp0
-        __m128i vdeltaU1 = _mm_bsrli_si128(vLevel,4);                                            // abs(0,vLevel3,vLevel2,vLevel1)
-        vdeltaU1 = _mm_mul_epu32(vdeltaU1,vQuantCoeff);                          // Tmp3,Tmp1
+        vLevel = _mm_abs_epi32 (vLevel);                                                                         // abs(vLevel3,vLevel2,vLevel1,vLevel0)
+        __m128i vdeltaU0 = _mm_mul_epu32(vLevel,vQuantCoeff);                             // Tmp2,Tmp0
+        __m128i vdeltaU1 = _mm_bsrli_si128(vLevel,4);                                                  // abs(0,vLevel3,vLevel2,vLevel1)
+        vdeltaU1 = _mm_mul_epu32(vdeltaU1,vQuantCoeff);                                       // Tmp3,Tmp1
         __m128i vTmpLevel_0 = _mm_add_epi64(vdeltaU0,vAdd);
         __m128i vTmpLevel_1 = _mm_add_epi64(vdeltaU1,vAdd);
         vTmpLevel_0 = _mm_srl_epi64(vTmpLevel_0,vQBits);                                         // Int32 Tmp2,Tmp0
@@ -321,14 +325,15 @@ static void QuantCoreSIMD(const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &u
         vquantMag1 =   _mm_slli_epi64(vquantMag1,32);
         vTmpLevel_0 = _mm_or_si128(vquantMag0,vquantMag1);
         __m128i vAbsSum = _mm_hadd_epi32(vTmpLevel_0,vTmpLevel_0);
-        vAbsSum += _mm_hadd_epi32(vAbsSum,vAbsSum);
-        uiAbsSum+=_mm_extract_epi32(vAbsSum,0);
+        vAbsSum = _mm_hadd_epi32(vAbsSum,vAbsSum);
+        sum = _mm_extract_epi32(vAbsSum,0);
+        uiAbsSum+=sum;
         vTmpLevel_1 =   _mm_and_si128(vTmpLevel_0,vSign);                                       // mask only neg values
         vTmpLevel_0 =   _mm_andnot_si128(vSign,vTmpLevel_0);                                 // mask only pos values
         vTmpLevel_0 =   _mm_sub_epi32(vTmpLevel_0,vTmpLevel_1);
         vTmpLevel_0 =  _mm_min_epi32(vMax, _mm_max_epi32(vMin,vTmpLevel_0));  // clip to 16 Bit
         vTmpLevel_0 =  _mm_packs_epi32(vTmpLevel_0,vTmpLevel_0);
-       _mm_storeu_si64( ( __m128i * )&piQCoef.buf[uiBlockPos],vTmpLevel_0);
+        _mm_storel_epi64( ( __m128i * )&piQCoef.buf[uiBlockPos],vTmpLevel_0);
       }
     }
   }
