@@ -423,7 +423,8 @@ private:
 
   void   getFrameStats           ( ChannelType channel, int iShapeIdx );
   void   getFrameStat            ( AlfCovariance* frameCov, AlfCovariance** ctbCov, uint8_t* ctbEnableFlags, uint8_t* ctbAltIdx, const int numClasses, int altIdx );
-  void   getPreBlkStats( AlfCovariance *alfCovariace, const AlfFilterShape &shape, AlfClassifier *classifier, Pel *org, const int orgStride, Pel *rec, const int recStride, const CompArea &areaDst, const CompArea &area, const ChannelType channel, int vbCTUHeight, int vbPos );
+  void   getPreBlkStats          ( AlfCovariance *alfCovariace, const AlfFilterShape &shape, AlfClassifier *classifier, Pel *org, const int orgStride, Pel *rec, const int recStride,
+                                   const CompArea &areaDst, const CompArea &area, const ChannelType channel, int vbCTUHeight, int vbPos );
   template<bool clipToBdry, bool simd>
   void   calcCovariance4         ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
   template<bool clipToBdry, bool simd>
