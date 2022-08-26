@@ -83,8 +83,8 @@ static inline void addBIOAvg4_SSE(const int16_t* src0, const int16_t* src1, int1
 
   __m128i mm_tmpx    = _mm_set1_epi32( ( tmpx & 0xffff ) | ( tmpy << 16 ) );
   __m128i mm_offset  = _mm_set1_epi32( offset );
-  __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
   __m128i mm_a;
   __m128i mm_b;
   __m128i mm_sum;
@@ -113,8 +113,8 @@ static inline void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, 
 
   __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 * ( 1 << 16 )) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 * ( 1 << 16 )) ), 1 );
   __m256i mm_offset  = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi32( clpRng.min );
-  __m256i vibdimax   = _mm256_set1_epi32( clpRng.max );
+  __m256i vibdimin   = _mm256_set1_epi32( clpRng.min() );
+  __m256i vibdimax   = _mm256_set1_epi32( clpRng.max() );
   __m256i mm_a;
   __m256i mm_b;
   __m256i mm_sum;
@@ -524,8 +524,8 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #if USE_AVX2
   __m256i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0, mm_src;
   __m256i mm_offset = _mm256_set1_epi16( offset );
-  __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+  __m256i vibdimin  = _mm256_set1_epi16( clpRng.min() );
+  __m256i vibdimax  = _mm256_set1_epi16( clpRng.max() );
   __m256i mm_dimin  = _mm256_set1_epi32( -dILimit );
   __m256i mm_dimax  = _mm256_set1_epi32( dILimit - 1 );
 
@@ -585,8 +585,8 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #else
   __m128i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0;
   __m128i mm_offset = _mm_set1_epi16( offset );
-  __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
   __m128i mm_dimin  = _mm_set1_epi32( -dILimit );
   __m128i mm_dimax  = _mm_set1_epi32( dILimit - 1 );
 

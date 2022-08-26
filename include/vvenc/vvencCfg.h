@@ -395,7 +395,7 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 mctfUnused1;                                                       // TODO: remove unused memory from configuration
+  int                 MCTFUnitSize;
   int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
 
   int                 numFrames;
@@ -538,7 +538,7 @@ typedef struct vvenc_config
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
-  unsigned            m_maxMTTDepthIChroma;
+  int                 m_maxMTTDepthIChroma;
   unsigned            m_maxBT[3];
   unsigned            m_maxTT[3];
   bool                m_dualITree;
@@ -590,7 +590,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
+  bool                m_cfgUnused12;
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME
@@ -737,7 +737,8 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[4];
+  int                 m_reservedInt[3];
+  int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
   int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
   int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0

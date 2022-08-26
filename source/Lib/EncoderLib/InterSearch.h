@@ -350,6 +350,7 @@ private:
   unsigned int      m_numBVs;
   IbcBvCand*        m_defaultCachedBvs;
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
+  CompStorage       m_orgResiCb[4], m_orgResiCr[4];   // 0:std, 1-3:jointCbCr
 
 protected:
   // interface to option
@@ -437,7 +438,7 @@ public:
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
   /// sub-function for motion vector refinement used in fractional-pel accuracy
-  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, bool bAllowUseOfHadamard, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
+  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
 
    typedef struct
    {
@@ -508,7 +509,6 @@ private:
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
                                     Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred,
                                     const bool            bExtendedSettings,
                                     const bool            bFastSettings = false
                                   );
@@ -524,8 +524,7 @@ private:
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
-                                    Distortion&           ruiSAD,
-                                    const Mv* const       pIntegerMv2Nx2NPred
+                                    Distortion&           ruiSAD
                                   );
 
   void xPatternSearch             ( TZSearchStruct&       cStruct,

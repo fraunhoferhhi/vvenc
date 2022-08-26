@@ -102,6 +102,13 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_pSaveCS[ layer ]->create( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ), false );
     m_pSaveCS[ layer ]->initStructData();
   }
+
+  CompArea chromaArea( COMP_Cb, chrFormat, area, true );
+  for( int i = 0; i < 5; i++ )
+  {
+    m_orgResiCb[i].create( chromaArea );
+    m_orgResiCr[i].create( chromaArea );
+  }
 }
 
 void IntraSearch::destroy()
@@ -222,8 +229,8 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
   const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
 
-  std::vector<ModeInfo> parentCandList;
-  parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
+  m_parentCandList.resize( 0 );
+  m_parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
 
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
@@ -233,14 +240,14 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       continue;
     }
 
-    parentCandList.push_back( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ) );
+    m_parentCandList.push_back( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ) );
   }
    
   for( int decDst = 1 << m_pcEncCfg->m_IntraEstDecBit; decDst > 0; decDst >>= 1 )
   {
-    for( unsigned idx = 0; idx < parentCandList.size(); idx++ )
+    for( unsigned idx = 0; idx < m_parentCandList.size(); idx++ )
     {
-      int modeParent = parentCandList[idx].modeId;
+      int modeParent = m_parentCandList[idx].modeId;
 
       int off = decDst & decMsk;
       int inc = decDst << 1;
@@ -286,8 +293,8 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       }
     }
 
-    parentCandList.resize( RdModeList.size() );
-    std::copy( RdModeList.cbegin(), RdModeList.cend(), parentCandList.begin() );
+    m_parentCandList.resize( RdModeList.size() );
+    std::copy( RdModeList.cbegin(), RdModeList.cend(), m_parentCandList.begin() );
   }
 
   const bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
@@ -466,7 +473,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   CHECK( (size_t)numModesForFullRD != RdModeList.size(), "Inconsistent state!" );
 
   // after this point, don't use numModesForFullRD
-  if( m_pcEncCfg->m_usePbIntraFast && !cs.slice->isIntra() && RdModeList.size() < numModesAvailable && !cs.slice->disableSATDForRd )
+  if( m_pcEncCfg->m_usePbIntraFast && !cs.slice->isIntra() && RdModeList.size() < numModesAvailable )
   {
     double pbintraRatio = m_pcEncCfg->m_usePbIntraFast == 1 && ( cs.area.lwidth() >= 16 && cs.area.lheight() >= 16 ) ? 1.2 : PBINTRA_RATIO;
 
@@ -686,9 +693,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     m_ispTestedModes[0].bestIntraMode = bestMode;
   }
   cu.ispMode = bestISP;
-  if (validReturn)
+  if( validReturn )
   {
-    cs.useSubStructure(*csBest, partitioner.chType, TREE_D, cu.singleChan(CH_L), true);
+    cs.useSubStructure( *csBest, partitioner.chType, TREE_D, cu.singleChan( CH_L ), true );
     const ReshapeData& reshapeData = cs.picture->reshapeData;
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
@@ -2058,19 +2065,21 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     }
 
     //===== store original residual signals (std and crossCompPred) =====
-    CompStorage  orgResiCb[5], orgResiCr[5]; // 0:std, 1-3:jointCbCr (placeholder at this stage), 4:crossComp
+    for( int k = 0; k < 5; k++ )
+    {
+      m_orgResiCb[k].compactResize( cbArea );
+      m_orgResiCr[k].compactResize( crArea );
+    }
     for (int k = 0; k < 1; k += 4)
     {
-      orgResiCb[k].create(cbArea);
-      orgResiCr[k].create(crArea);
-      orgResiCb[k].copyFrom(resiCb);
-      orgResiCr[k].copyFrom(resiCr);
+      m_orgResiCb[k].copyFrom(resiCb);
+      m_orgResiCr[k].copyFrom(resiCr);
 
       if (doReshaping)
       {
         int cResScaleInv = currTU.chromaAdj;
-        orgResiCb[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cb]);
-        orgResiCr[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cr]);
+        m_orgResiCb[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cb]);
+        m_orgResiCr[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cr]);
       }
     }
 
@@ -2181,8 +2190,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         {
           if (doReshaping || lfnstIdx || modeId)
           {
-            resiCb.copyFrom(orgResiCb[0]);
-            resiCr.copyFrom(orgResiCr[0]);
+            resiCb.copyFrom(m_orgResiCb[0]);
+            resiCr.copyFrom(m_orgResiCr[0]);
           }
           if (modeId == 0)
           {
@@ -2375,7 +2384,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         std::vector<int> jointCbfMasksToTest;
         if (TU::getCbf(tmpTU, COMP_Cb) || TU::getCbf(tmpTU, COMP_Cr))
         {
-          jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, orgResiCb, orgResiCr);
+          jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, m_orgResiCb, m_orgResiCr);
         }
         for (int cbfMask : jointCbfMasksToTest)
         {
@@ -2415,8 +2424,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
             m_CABACEstimator->getCtx() = ctxStartTU;
 
-            resiCb.copyFrom(orgResiCb[cbfMask]);
-            resiCr.copyFrom(orgResiCr[cbfMask]);
+            resiCb.copyFrom(m_orgResiCb[cbfMask]);
+            resiCr.copyFrom(m_orgResiCr[cbfMask]);
             if ((modeId == 0) && (numTransformCands > 1))
             {
               xPreCheckMTS(currTU, &trModes, m_pcEncCfg->m_MTSIntraMaxCand, 0, COMP_Cb);

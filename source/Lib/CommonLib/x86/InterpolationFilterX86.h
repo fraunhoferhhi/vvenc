@@ -90,8 +90,8 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
 
-  __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
   __m128i vsrc, vsum;
 
   for( int row = 0; row < height; row++ )
@@ -150,8 +150,8 @@ static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t 
   int offset   = IF_INTERNAL_OFFS;
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
-  __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
   __m128i vsrc, vsum;
 
@@ -209,8 +209,8 @@ static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStrid
   __m256i vinternal_offset = _mm256_set1_epi16( internal_offset );
   __m256i vheadroom_offset = _mm256_set1_epi16( offset );
 
-  __m256i vibdimin = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax = _mm256_set1_epi16( clpRng.max );
+  __m256i vibdimin = _mm256_set1_epi16( clpRng.min() );
+  __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
   __m256i vsrc, vsum;
 
 
@@ -305,8 +305,8 @@ static void simdInterpolateHorM4( const int16_t* src, int srcStride, int16_t *ds
 {
   cond_mm_prefetch( (const char*)src + srcStride, _MM_HINT_T0 );
   __m128i voffset = _mm_set1_epi32( offset );
-  __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
   __m128i vcoeffh = _mm_lddqu_si128( ( __m128i const * )coeff );
 
   __m128i vzero, vshufc0, vshufc1;
@@ -377,8 +377,8 @@ static void simdInterpolateHorM8( const int16_t* src, int srcStride, int16_t *ds
   cond_mm_prefetch( (const char*)( src+width+filterSpan+srcStride ), _MM_HINT_T0 );
 
   __m128i voffset    = _mm_set1_epi32( offset );
-  __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
   __m128i vzero      = _mm_setzero_si128();
   __m128i vsum, vsuma, vsumb;
 
@@ -481,8 +481,8 @@ static void simdInterpolateHor_N8_singleCol(const int16_t* src, int srcStride, i
 
   __m128i vcoeffh  = _mm_loadu_si128((__m128i const*)coeff);
   __m128i voffset  = _mm_set1_epi32(offset);
-  __m128i vibdimin = _mm_set1_epi16(clpRng.min);
-  __m128i vibdimax = _mm_set1_epi16(clpRng.max);
+  __m128i vibdimin = _mm_set1_epi16(clpRng.min());
+  __m128i vibdimax = _mm_set1_epi16(clpRng.max());
 
   int row = 0;
 
@@ -556,8 +556,8 @@ static void simdInterpolateHor_N4_singleCol(const int16_t* src, int srcStride, i
   __m128i vcoeffh  = _mm_loadl_epi64((__m128i const*)coeff);
           vcoeffh  = _mm_unpacklo_epi64(vcoeffh, vcoeffh);
   __m128i voffset  = _mm_set1_epi32(offset);
-  __m128i vibdimin = _mm_set1_epi16(clpRng.min);
-  __m128i vibdimax = _mm_set1_epi16(clpRng.max);
+  __m128i vibdimin = _mm_set1_epi16(clpRng.min());
+  __m128i vibdimax = _mm_set1_epi16(clpRng.max());
 
   for (int row = 0; row < height; row += 4)
   {
@@ -606,8 +606,8 @@ static void simdInterpolateHorM8_AVX2( const int16_t* src, int srcStride, int16_
   cond_mm_prefetch( (const char*)( src+width+filterSpan+srcStride ), _MM_HINT_T0 );
 
   __m256i voffset    = _mm256_set1_epi32( offset );
-  __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
 
   __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
                                     0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
@@ -716,8 +716,8 @@ static void simdInterpolateHorM16_AVX2( const int16_t* src, int srcStride, int16
   cond_mm_prefetch( (const char*)( src+width+filterSpan+3*srcStride ), _MM_HINT_T0 );
 
   __m256i voffset    = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax   = _mm256_set1_epi16( clpRng.max );
+  __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
+  __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
   __m256i vzero      = _mm256_setzero_si256();
   __m256i vsum, vsuma, vsumb;
 
@@ -848,8 +848,8 @@ static void simdInterpolateVerM4( const int16_t *src, int srcStride, int16_t *ds
   __m128i vcoeff[N / 2], vsrc[N];
   __m128i vzero = _mm_setzero_si128();
   __m128i voffset = _mm_set1_epi32( offset );
-  __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
   __m128i vsum;
 
@@ -930,8 +930,8 @@ static void simdInterpolateVerM8( const int16_t *src, int srcStride, int16_t *ds
   __m128i vcoeff[N / 2], vsrc[N];
   __m128i vzero = _mm_setzero_si128();
   __m128i voffset = _mm_set1_epi32( offset );
-  __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
   __m128i vsum, vsuma, vsumb;
 
@@ -1016,8 +1016,8 @@ static void simdInterpolateVerM8_AVX2( const int16_t *src, int srcStride, int16_
   }
 
   __m256i voffset    = _mm256_set1_epi32( offset );
-  __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
 
   __m256i vsum;
   __m128i vsrc[N];
@@ -1099,10 +1099,9 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
     cond_mm_prefetch( (const char *) &src[7 * srcStride], _MM_HINT_T0 );
   }
 
-  __m256i voffset    = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax   = _mm256_set1_epi16( clpRng.max );
-  __m256i vzero      = _mm256_setzero_si256();
+  const __m256i voffset    = _mm256_set1_epi32( offset );
+  const __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
+  const __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
   __m256i vsum, vsuma, vsumb;
 
   __m256i vsrc[N];
@@ -1127,7 +1126,7 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
       cond_mm_prefetch( (const char *) &src[col + ( N + 1 ) * srcStride], _MM_HINT_T0 );
 
       vsrc[N-1]= _mm256_loadu_si256( ( const __m256i * )&src[col + ( N-1 ) * srcStride] );
-      vsuma = vsumb = vzero;
+      vsuma = vsumb = voffset;
       for( int i=0; i<N; i+=2 )
       {
         __m256i vsrca = _mm256_unpacklo_epi16( vsrc[i], vsrc[i+1] );
@@ -1140,8 +1139,6 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
         vsrc[i] = vsrc[i+1];
       }
 
-      vsuma = _mm256_add_epi32  ( vsuma, voffset );
-      vsumb = _mm256_add_epi32  ( vsumb, voffset );
       vsuma = _mm256_srai_epi32 ( vsuma, shift );
       vsumb = _mm256_srai_epi32 ( vsumb, shift );
 
@@ -1255,8 +1252,8 @@ static void simdInterpolateN2_M8( const int16_t* src, int srcStride, int16_t *ds
   int row, col;
   __m128i mmOffset = _mm_set1_epi32( offset );
   __m128i mmCoeff[2];
-  __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  __m128i mmMax = _mm_set1_epi16( clpRng.max() );
   for( int n = 0; n < 2; n++ )
     mmCoeff[n] = _mm_set1_epi16( c[n] );
   for( row = 0; row < height; row++ )
@@ -1281,8 +1278,8 @@ static void simdInterpolateN2_M4( const int16_t* src, int srcStride, int16_t *ds
   int row, col;
   __m128i mmOffset = _mm_set1_epi32( offset );
   __m128i mmCoeff[8];
-  __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  __m128i mmMax = _mm_set1_epi16( clpRng.max() );
   for( int n = 0; n < 2; n++ )
     mmCoeff[n] = _mm_set1_epi16( c[n] );
   for( row = 0; row < height; row++ )
@@ -1805,8 +1802,8 @@ void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     if( isLast )
     {
-      __m256i vmin = _mm256_set1_epi32( clpRng.min );
-      __m256i vmax = _mm256_set1_epi32( clpRng.max );
+      __m256i vmin = _mm256_set1_epi32( clpRng.min() );
+      __m256i vmax = _mm256_set1_epi32( clpRng.max() );
 
       _dst0 = _mm256_max_epi32( _mm256_min_epi32( _dst0, vmax ), vmin );
       _dst2 = _mm256_max_epi32( _mm256_min_epi32( _dst2, vmax ), vmin );
@@ -1885,8 +1882,8 @@ void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     if( isLast )
     {
-      __m128i vmin = _mm_set1_epi32( clpRng.min );
-      __m128i vmax = _mm_set1_epi32( clpRng.max );
+      __m128i vmin = _mm_set1_epi32( clpRng.min() );
+      __m128i vmax = _mm_set1_epi32( clpRng.max() );
 
       _dst0x = _mm_max_epi32( _mm_min_epi32( _dst0x, vmax ), vmin );
       _dst1x = _mm_max_epi32( _mm_min_epi32( _dst1x, vmax ), vmin );
@@ -2081,8 +2078,8 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     if( isLast )
     {
-      __m256i vmin = _mm256_set1_epi32( clpRng.min );
-      __m256i vmax = _mm256_set1_epi32( clpRng.max );
+      __m256i vmin = _mm256_set1_epi32( clpRng.min() );
+      __m256i vmax = _mm256_set1_epi32( clpRng.max() );
 
       _dst0 = _mm256_max_epi32( _mm256_min_epi32( _dst0, vmax ), vmin );
       _dst2 = _mm256_max_epi32( _mm256_min_epi32( _dst2, vmax ), vmin );
@@ -2158,8 +2155,8 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     if( isLast )
     {
-      __m128i vmin = _mm_set1_epi32( clpRng.min );
-      __m128i vmax = _mm_set1_epi32( clpRng.max );
+      __m128i vmin = _mm_set1_epi32( clpRng.min() );
+      __m128i vmax = _mm_set1_epi32( clpRng.max() );
 
       _dst0x = _mm_max_epi32( _mm_min_epi32( _dst0x, vmax ), vmin );
       _dst1x = _mm_max_epi32( _mm_min_epi32( _dst1x, vmax ), vmin );
@@ -2231,8 +2228,8 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     static const int filterSpan = 8;
 
     __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    __m256i vibdimin   = _mm256_set1_epi16( clpRng.min );
-    __m256i vibdimax   = _mm256_set1_epi16( clpRng.max );
+    __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
+    __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
     __m256i vsum, vsuma, vsumb;
 
     __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
@@ -2242,7 +2239,7 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 
     int vcoeffh[4];
     int vcoeffv[4];
-    
+
     __m256i vsrcv  [8];
 
     for( int i = 0; i < 8; i += 2 )
@@ -2295,12 +2292,13 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
         
         vsuma = _mm256_set1_epi32( offset2nd );
         vsumb = _mm256_set1_epi32( offset2nd );
-        for( int i=0; i<8; i+=2 )
+
+        for( int i = 0; i < 8; i += 2 )
         {
-          __m256i vsrca = _mm256_unpacklo_epi16( vsrcv[i], vsrcv[i+1] );
-          __m256i vsrcb = _mm256_unpackhi_epi16( vsrcv[i], vsrcv[i+1] );
-          vsuma  = _mm256_add_epi32( vsuma, _mm256_madd_epi16( vsrca, _mm256_set1_epi32( vcoeffv[i/2] ) ) );
-          vsumb  = _mm256_add_epi32( vsumb, _mm256_madd_epi16( vsrcb, _mm256_set1_epi32( vcoeffv[i/2] ) ) );
+          __m256i vsrca = _mm256_unpacklo_epi16( vsrcv[i], vsrcv[i + 1] );
+          __m256i vsrcb = _mm256_unpackhi_epi16( vsrcv[i], vsrcv[i + 1] );
+          vsuma = _mm256_add_epi32( vsuma, _mm256_madd_epi16( vsrca, _mm256_set1_epi32( vcoeffv[i / 2] ) ) );
+          vsumb = _mm256_add_epi32( vsumb, _mm256_madd_epi16( vsrcb, _mm256_set1_epi32( vcoeffv[i / 2] ) ) );
         }
 
         vsuma = _mm256_srai_epi32 ( vsuma, shift2nd );
@@ -2332,8 +2330,8 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     _mm_prefetch( ( const char* ) src + width + filterSpan + srcStride, _MM_HINT_T0 );
 
     const __m128i voffset1 = _mm_set1_epi32( offset1st );
-    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
     const __m128i vshuf0   = _mm_set_epi8  ( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
     const __m128i vshuf1   = _mm_set_epi8  ( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
 
@@ -2516,8 +2514,8 @@ void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     static const int filterSpan = 8;
 
     __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    __m128i xbdimin    = _mm_set1_epi16( clpRng.min );
-    __m128i xbdimax    = _mm_set1_epi16( clpRng.max );
+    __m128i xbdimin    = _mm_set1_epi16( clpRng.min() );
+    __m128i xbdimax    = _mm_set1_epi16( clpRng.max() );
     __m256i vsum;
 
     __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
@@ -2618,8 +2616,8 @@ void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     const __m128i voffset1 = _mm_set1_epi32( offset1st );
     const __m128i voffset2 = _mm_set1_epi32( offset2nd );
-    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
     const __m128i vshuf0 = _mm_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
     const __m128i vshuf1 = _mm_set_epi8( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
@@ -2750,17 +2748,18 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 #if USE_AVX2
   if( vext >= AVX2 )
   {
-    static const int width      = 8;
-    static const int N          = 4;
-    static const int filterSpan = N - 1;
+    GCC_WARNING_DISABLE_maybe_uninitialized
+    static constexpr int width      = 8;
+    static constexpr int N          = 4;
+    static constexpr int filterSpan = N - 1;
 
     _mm_prefetch( ( const char* ) ( src + srcStride ), _MM_HINT_T0 );
     _mm_prefetch( ( const char* ) ( src + ( width >> 1 ) + srcStride ), _MM_HINT_T0 );
     _mm_prefetch( ( const char* ) ( src + width + filterSpan + srcStride ), _MM_HINT_T0 );
 
     __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+    __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+    __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
 
     __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
                                       0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
@@ -2770,7 +2769,11 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     int vcoeffh[2];
     int vcoeffv[2];
 
-    __m128i vsrcv  [4];
+#ifdef _DEBUG
+    __m128i vsrcv0 = _mm_setzero_si128(), vsrcv1 = _mm_setzero_si128(), vsrcv2 = _mm_setzero_si128(), vsrcv3 = _mm_setzero_si128();
+#else
+    __m128i vsrcv0, vsrcv1, vsrcv2, vsrcv3;
+#endif
 
     for( int i = 0; i < 4; i += 2 )
     {
@@ -2805,42 +2808,50 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
       if( row < 3 )
       {
-        vsrcv[row + 1] = vsump;
+        vsrcv1 = vsrcv2;
+        vsrcv2 = vsrcv3;
+        vsrcv3 = vsump;
       }
       else
       {
-        for( int i = 0; i < 3; i++ )
-        {
-          vsrcv[i] = vsrcv[i + 1];
-        }
-        vsrcv[3] = vsump;
+        vsrcv0 = vsrcv1;
+        vsrcv1 = vsrcv2;
+        vsrcv2 = vsrcv3;
+        vsrcv3 = vsump;
 
-        vsum = _mm256_set1_epi32( offset2nd );
+        __m128i vsum1 = _mm_set1_epi32( offset2nd );
+        __m128i vsum2 = vsum1;
 
-        for( int i=0; i<N; i+=2 )
-        {
-          __m128i vsrc0 = _mm_unpacklo_epi16( vsrcv[i], vsrcv[i+1] );
-          __m128i vsrc1 = _mm_unpackhi_epi16( vsrcv[i], vsrcv[i+1] );
-          __m256i vsrc  = _mm256_inserti128_si256( _mm256_castsi128_si256( vsrc0 ), vsrc1, 1 );
-          vsum  = _mm256_add_epi32( vsum, _mm256_madd_epi16( vsrc, _mm256_set1_epi32( vcoeffv[i/2] ) ) );
-        }
+        __m128i vsrc0 = _mm_unpacklo_epi16( vsrcv0, vsrcv1 );
+        __m128i vsrc1 = _mm_unpackhi_epi16( vsrcv0, vsrcv1 );
+        __m128i vtmp  = _mm_set1_epi32( vcoeffv[0] );
+        vsum1  = _mm_add_epi32( vsum1, _mm_madd_epi16( vsrc0, vtmp ) );
+        vsum2  = _mm_add_epi32( vsum2, _mm_madd_epi16( vsrc1, vtmp ) );
 
-        vsum = _mm256_srai_epi32( vsum, shift2nd );
+        vsrc0 = _mm_unpacklo_epi16( vsrcv2, vsrcv3 );
+        vsrc1 = _mm_unpackhi_epi16( vsrcv2, vsrcv3 );
+        vtmp  = _mm_set1_epi32( vcoeffv[1] );
+        vsum1 = _mm_add_epi32( vsum1, _mm_madd_epi16( vsrc0, vtmp ) );
+        vsum2 = _mm_add_epi32( vsum2, _mm_madd_epi16( vsrc1, vtmp ) );
 
-        vsump = _mm256_cvtepi32_epi16x( vsum );
+        vsum1 = _mm_srai_epi32( vsum1, shift2nd );
+        vsum2 = _mm_srai_epi32( vsum2, shift2nd );
+
+        vsump = _mm_packs_epi32( vsum1, vsum2 );
 
         if( isLast )
         { //clip
           vsump = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsump ) );
         }
 
-        _mm_storeu_si128( ( __m128i * ) dst, vsump );
+        _mm_storeu_si128( ( __m128i* ) dst, vsump );
 
         dst += dstStride;
       }
 
       src += srcStride;
     }
+    GCC_WARNING_RESET
   }
   else
 #endif
@@ -2855,8 +2866,8 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
     const __m128i voffset1 = _mm_set1_epi32( offset1st );
     const __m128i voffset2 = _mm_set1_epi32( offset2nd );
-    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
     const __m128i vshuf0   = _mm_set_epi8  ( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
     const __m128i vshuf1   = _mm_set_epi8  ( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
     
@@ -2971,7 +2982,7 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
   int32_t strideSrc1 = predSrc1.get(compIdx).stride;
 
   const char log2WeightBase = 3;
-  const int32_t shiftWeighted  = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.comp[compIdx].bd)) + log2WeightBase;
+  const int32_t shiftWeighted  = std::max<int>(2, (IF_INTERNAL_PREC - clpRng[compIdx].bd)) + log2WeightBase;
   const int32_t offsetWeighted = (1 << (shiftWeighted - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);
 
   int16_t wIdx = floorLog2(cu.lwidth()) - GEO_MIN_CU_LOG2;
@@ -3004,8 +3015,8 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
   const __m128i mmEight = _mm_set1_epi16(8);
   const __m128i mmOffset = _mm_set1_epi32(offsetWeighted);
   const __m128i mmShift = _mm_cvtsi32_si128(shiftWeighted);
-  const __m128i mmMin    = _mm_set1_epi16(clpRng.comp[compIdx].min);
-  const __m128i mmMax    = _mm_set1_epi16(clpRng.comp[compIdx].max);
+  const __m128i mmMin    = _mm_set1_epi16(clpRng[compIdx].min());
+  const __m128i mmMax    = _mm_set1_epi16(clpRng[compIdx].max());
 
   if (compIdx != COMP_Y && cu.chromaFormat == CHROMA_420)
     stepY*= 2;
@@ -3047,8 +3058,8 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
   {
     const __m256i mmEightAVX2 = _mm256_set1_epi16(8);
     const __m256i mmOffsetAVX2 = _mm256_set1_epi32(offsetWeighted);
-    const __m256i mmMinAVX2    = _mm256_set1_epi16(clpRng.comp[compIdx].min);
-    const __m256i mmMaxAVX2    = _mm256_set1_epi16(clpRng.comp[compIdx].max);
+    const __m256i mmMinAVX2    = _mm256_set1_epi16(clpRng[compIdx].min());
+    const __m256i mmMaxAVX2    = _mm256_set1_epi16(clpRng[compIdx].max());
     for (int y = 0; y < height; y++)
     {
       for (int x = 0; x < width; x += 16)
