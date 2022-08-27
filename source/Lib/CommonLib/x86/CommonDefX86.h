@@ -328,7 +328,7 @@ static inline void TRANSPOSE8x8_32b_AVX2(__m256i T[8])
 
 #ifdef USE_AVX512
 
-ALWAYS_INLINE inline __m512i
+ALWAYS_INLINE __m512i
 _mm512_set_epi16( int16_t x31, int16_t x30, int16_t x29, int16_t x28,
                   int16_t x27, int16_t x26, int16_t x25, int16_t x24,
                   int16_t x23, int16_t x22, int16_t x21, int16_t x20,
