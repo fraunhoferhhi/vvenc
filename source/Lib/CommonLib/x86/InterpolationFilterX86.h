@@ -2247,7 +2247,7 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     const __m256i vcoeffv45 = _mm256_set1_epi32( ( coeffV[4] & 0xffff ) | ( coeffV[5] * ( 1 << 16 ) ) );
     const __m256i vcoeffv67 = _mm256_set1_epi32( ( coeffV[6] & 0xffff ) | ( coeffV[7] * ( 1 << 16 ) ) );
 
-#if !NDEBUG
+#ifndef NDEBUG
     __m256i
       vsrcv0 = _mm256_setzero_si256(), vsrcv1 = _mm256_setzero_si256(),
       vsrcv2 = _mm256_setzero_si256(), vsrcv3 = _mm256_setzero_si256(),
@@ -2801,10 +2801,12 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     int vcoeffh[2];
     int vcoeffv[2];
 
-#ifdef _DEBUG
-    __m128i vsrcv0 = _mm_setzero_si128(), vsrcv1 = _mm_setzero_si128(), vsrcv2 = _mm_setzero_si128(), vsrcv3 = _mm_setzero_si128();
-#else
+#ifndef NDEBUG
     __m128i vsrcv0, vsrcv1, vsrcv2, vsrcv3;
+#else
+    __m128i
+      vsrcv0 = _mm_setzero_si128(), vsrcv1 = _mm_setzero_si128(),
+      vsrcv2 = _mm_setzero_si128(), vsrcv3 = _mm_setzero_si128();
 #endif
 
     for( int i = 0; i < 4; i += 2 )
