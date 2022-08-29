@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdio.h>
 #include <string>
+#include <sstream>
 #include <fstream>
 #include <cstring>
 #include <ctime>
@@ -59,7 +60,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "apputils/ParseArg.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
