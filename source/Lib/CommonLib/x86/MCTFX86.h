@@ -455,7 +455,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
       const Pel* origRow  = origCol;
       const Pel* rowStart = sourceCol;
 
-      __m256i xsrc[4];
+      __m256i vsrc0, vsrc1, vsrc2, vsrc3;
 
       for( int y1 = 0; y1 < h + 3; y1++, rowStart += buffStride )
       {
@@ -483,19 +483,19 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
         if( y1 >= 3 )
         {
-          xsrc[0] = xsrc[1];
-          xsrc[1] = xsrc[2];
-          xsrc[2] = xsrc[3];
-          xsrc[3] = xsum;
+          vsrc0 = vsrc1;
+          vsrc1 = vsrc2;
+          vsrc2 = vsrc3;
+          vsrc3 = xsum;
         
           xsum0 = _mm256_set1_epi32( 1 << 5 );
           xsum1 = _mm256_set1_epi32( 1 << 5 );
 
-          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt12, _mm256_unpacklo_epi16( xsrc[0], xsrc[1] ) ) );
-          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt12, _mm256_unpackhi_epi16( xsrc[0], xsrc[1] ) ) );
+          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt12, _mm256_unpacklo_epi16( vsrc0, vsrc1 ) ) );
+          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt12, _mm256_unpackhi_epi16( vsrc0, vsrc1 ) ) );
 
-          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt34, _mm256_unpacklo_epi16( xsrc[2], xsrc[3] ) ) );
-          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt34, _mm256_unpackhi_epi16( xsrc[2], xsrc[3] ) ) );
+          xsum0 = _mm256_add_epi32( xsum0, _mm256_madd_epi16( yfilt34, _mm256_unpacklo_epi16( vsrc2, vsrc3 ) ) );
+          xsum1 = _mm256_add_epi32( xsum1, _mm256_madd_epi16( yfilt34, _mm256_unpackhi_epi16( vsrc2, vsrc3 ) ) );
         
           xsum0 = _mm256_srai_epi32( xsum0, 6 );
           xsum1 = _mm256_srai_epi32( xsum1, 6 );
@@ -509,10 +509,10 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
           xsum = _mm256_sub_epi16( xsum, xorg );
           xsum = _mm256_madd_epi16( xsum, xsum );
-          xsum = _mm256_hadd_epi32( xsum, xsum );
 
           __m128i
           ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
+          ysum = _mm_hadd_epi32( ysum, ysum );
 
           error += _mm_extract_epi32( ysum, 0 );
           error += _mm_extract_epi32( ysum, 1 );
@@ -524,7 +524,9 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
         }
         else
         {
-          xsrc[y1 + 1] = xsum;
+          vsrc1 = vsrc2;
+          vsrc2 = vsrc3;
+          vsrc3 = xsum;
         }
       }
     }
