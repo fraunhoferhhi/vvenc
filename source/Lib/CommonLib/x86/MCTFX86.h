@@ -435,6 +435,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 #if USE_AVX2
   if( vext >= AVX2 && ( w & 15 ) == 0 )
   {
+    GCC_WARNING_DISABLE_maybe_uninitialized
     const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
     const __m256i yfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[0] ), _mm256_set1_epi16( yFilter[1] ) );
@@ -455,7 +456,13 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
       const Pel* origRow  = origCol;
       const Pel* rowStart = sourceCol;
 
+#ifdef NDEBUG
       __m256i vsrc0, vsrc1, vsrc2, vsrc3;
+#else
+      __m256i
+        vsrc0 = _mm256_setzero_si256(), vsrc1 = _mm256_setzero_si256(),
+        vsrc2 = _mm256_setzero_si256(), vsrc3 = _mm256_setzero_si256();
+#endif
 
       for( int y1 = 0; y1 < h + 3; y1++, rowStart += buffStride )
       {
@@ -531,6 +538,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
       }
     }
 
+    GCC_WARNING_RESET
     return error;
   }
 #endif 
