@@ -1,0 +1,35 @@
+name: Build executables for Windows
+on:
+  push:
+    branches: [ master, develop, build ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  build:
+
+    runs-on: windows-2019
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Build vvenc
+      shell: cmd
+      run: make install-release
+
+    - name: Move executables to root directory
+      shell: cmd
+      run: move bin\release-static\*.exe .
+
+    - name: Run tests
+      shell: cmd
+      run: vvenclibtest.exe
+
+    - name: Upload standalone executable artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: vvenc_win64
+        path: |
+          vvencapp.exe
+          vvencFFapp.exe
+          LICENSE.txt
