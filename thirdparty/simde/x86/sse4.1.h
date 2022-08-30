@@ -1237,8 +1237,8 @@ simde_mm_extract_epi32 (simde__m128i a, const int imm8)
 #  define simde_mm_extract_epi32(a, imm8) _mm_extract_epi32(a, imm8)
 #elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
 #  define simde_mm_extract_epi32(a, imm8) vgetq_lane_s32(simde__m128i_to_private(a).neon_i32, imm8)
-#elif defined(SIMDE_POWER_ALTIVEC_P6_NATIVE)
-#  define simde_mm_extract_epi32(a, imm8) HEDLEY_STATIC_CAST(int32_t, vec_extract(simde__m128i_to_private(a).altivec_i32, imm8))
+//#elif defined(SIMDE_POWER_ALTIVEC_P6_NATIVE)
+//#  define simde_mm_extract_epi32(a, imm8) HEDLEY_STATIC_CAST(int32_t, vec_extract(simde__m128i_to_private(a).altivec_i32, imm8))
 #endif
 #if defined(SIMDE_X86_SSE4_1_ENABLE_NATIVE_ALIASES)
   #undef _mm_extract_epi32
