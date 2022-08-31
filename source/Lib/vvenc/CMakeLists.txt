@@ -61,6 +61,13 @@ endif()
 source_group( "Header Files"          FILES ${PUBLIC_INC_FILES} )
 source_group( "Header Files\\private" FILES ${PRIVATE_INC_FILES} )
 
+# don't export all symbols from shared libraries by default (gcc: -fvisibility=hidden), only those marked as VVENC_DECL
+#  behavior similar to __declspec(dllexport) on windows
+set( CMAKE_C_VISIBILITY_PRESET hidden )
+set( CMAKE_CXX_VISIBILITY_PRESET hidden )
+
+set( CMAKE_VISIBILITY_INLINES_HIDDEN TRUE )
+
 if( VVENC_ENABLE_X86_SIMD )
   # set needed compile definitions
   set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_SSE41 )
@@ -87,7 +94,7 @@ endif()
 add_library( ${LIB_NAME} ${SRC_FILES} ${INC_FILES} ${NATVIS_FILES} ${RESOURCE_FILE} )
 
 target_compile_definitions( ${LIB_NAME} PRIVATE ${LIB_NAME_UC}_SOURCE )
-target_compile_definitions( ${LIB_NAME} PUBLIC $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${LIB_NAME},TYPE>,SHARED_LIBRARY>>:${LIB_NAME_UC}_DYN_LINK> )
+target_compile_definitions( ${LIB_NAME} PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:${LIB_NAME},TYPE>,SHARED_LIBRARY>:${LIB_NAME_UC}_DYN_LINK> )
 
 target_compile_options( ${LIB_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Werror -Wno-deprecated-register -Wno-unused-const-variable -Wno-unknown-attributes>
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -Wno-unused-function  -Wno-unused-variable  -Wno-sign-compare  -fdiagnostics-show-option -Wno-ignored-attributes>
