@@ -68,7 +68,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
 using namespace std;
-namespace po = apputils::df::program_options_lite;
+namespace po = apputils::program_options;
 
 namespace apputils {
 
@@ -1899,7 +1899,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       return 2;
     }
   }
-  catch( df::program_options_lite::ParseFailure &e )
+  catch( program_options::ParseFailure &e )
   {
     rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\".\n";
     if( argc == 2 )
