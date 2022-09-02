@@ -279,8 +279,6 @@ void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
 // To minimize the distortion only. No rate is considered.
 void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int& lastScanPos, const int maxLog2TrDynamicRange )
 {
-  const uint32_t width     = cctx.width();
-  const uint32_t height    = cctx.height();
   const uint32_t groupSize = 1 << cctx.log2CGSize();
 
   const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
