@@ -10,12 +10,12 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.5.1 )
+project( vvenc VERSION 1.6.0 )
 
 # set alternative version numbering for release candidates
-set( PROJECT_VERSION_RC rc1 )
+#set( PROJECT_VERSION_RC rc1 )
 if( PROJECT_VERSION_RC )
-    set( PROJECT_VERSION "${PROJECT_VERSION}-rc${PROJECT_VERSION_RC}" )
+    set( PROJECT_VERSION "${PROJECT_VERSION}-${PROJECT_VERSION_RC}" )
 endif()
 
 set( VVENC_ENABLE_X86_SIMD TRUE )

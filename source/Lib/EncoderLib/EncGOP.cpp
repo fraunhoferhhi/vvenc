@@ -2426,7 +2426,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-  if( (m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || ! m_pcRateCtrl->rcIsFinalPass)
+  if (m_isPreAnalysis || !m_pcRateCtrl->rcIsFinalPass)
   {
     m_pcRateCtrl->addRCPassStats( slice->poc,
                                   slice->sliceQp,

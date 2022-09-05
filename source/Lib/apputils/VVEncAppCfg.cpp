@@ -573,7 +573,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
 
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("QP,q",                                            c->m_QP,                                             "Qp value (0-63)")
     ;
@@ -617,9 +617,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("vuiparameterspresent,-vui",                       toVui,                                              "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
     ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "Emit VUI HRD information (0: off, 1: on; default: 1)")
     ("decodedpicturehash,-dph",                         toHashType,                                         "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
-    // --> deprecated
-    ("gopsize,g",                                       c->m_GOPSize,                                       "GOP size of temporal structure (16,32) (deprecated)")
-    // <-- deprecated
     ;
   }
 
@@ -689,15 +686,15 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("PerceptQPATempFiltIPic",                          c->m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
     ;
 
-    // Coding structure paramters
-    opts.setSubSection("Coding structure paramters");
+    // Coding structure parameters
+    opts.setSubSection("Coding structure parameters");
     opts.addOptions()
     ("ReWriteParamSets",                                c->m_rewriteParamSets,                               "Enable rewriting of Parameter sets before every (intra) random access point")
     ("IDRRefParamList",                                 c->m_idrRefParamList,                                "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
     ;
 
     /* Quantization parameters */
-    opts.setSubSection("Quantization paramters");
+    opts.setSubSection("Quantization parameters");
     opts.addOptions()
     ("SameCQPTablesForAllChroma",                       c->m_useSameChromaQPTables,                          "0: Different tables for Cb, Cr and joint Cb-Cr components, 1 (default): Same tables for all three chroma components")
     ("IntraQPOffset",                                   c->m_intraQPOffset,                                  "Qp offset value for intra slice, typically determined based on GOP size")
@@ -1139,11 +1136,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
-    }
-
-    if( m_easyMode && c->m_GOPSize != 32 )
-    {
-      err.warn( "deprecated option" ) << "--gopsize option is deprecated as it is not needed anymore (auto adapted by arbitrary intra period)\n";
     }
 
     for( auto& a : argv_unhandled )

@@ -56,7 +56,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #     define VVENC_DECL __declspec(dllimport)
 #   endif  // VVENC_SOURCE
 # endif // VVENC_DYN_LINK
-#endif // _WIN32
+#elif defined( __GNUC__ )
+# define VVENC_DECL __attribute__( ( visibility( "default" ) ) )
+#endif // __GNUC__
 
 #if !defined( VVENC_DECL )
 # define VVENC_DECL

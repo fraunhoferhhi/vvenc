@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.5.1-rc1
+tag 1.6.0
 
 * libvvenc:
   - removed library parameters:
@@ -18,7 +18,7 @@ tag 1.5.1-rc1
   - various improvements, cleanups and fixes
 
 * vvencapp:
-  - deprecated the gopsize parameter
+  - remove deprecated gopsize parameter
 
 * vvencFFapp:
   - removed command line parameters:
