@@ -1199,7 +1199,7 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
 void AlfCovariance::gnsTransposeBacksubstitution( TE U, alf_float_t* rhs, alf_float_t* x, int order ) const
 {
 
-#ifdef __GNUC__
+#if __GNUC__ == 7
   _Pragma( "GCC diagnostic push" );
   _Pragma( "GCC diagnostic ignored \"-Wmaybe-uninitialized\"" );
 #endif
@@ -1217,7 +1217,7 @@ void AlfCovariance::gnsTransposeBacksubstitution( TE U, alf_float_t* rhs, alf_fl
 
     x[i] = ( rhs[i] - sum ) / U[i][i];       /* i'th component of solution vect.  */
   }
-#ifdef __GNUC__
+#if __GNUC__ == 7
   _Pragma( "GCC diagnostic pop" );
 #endif
 }
