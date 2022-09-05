@@ -250,7 +250,7 @@ namespace program_options
 
 
     class OptionSpecific;
-    class Options;
+    struct Options;
 
 
     /** Option class for argument handling using a user provided function */
