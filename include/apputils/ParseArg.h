@@ -41,8 +41,6 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 #pragma once
 
-#include "apputils/apputilsDecl.h"
-
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -77,7 +75,7 @@ namespace program_options
       const char* what() const throw() { return "Option Parse Failure"; }
     };
 
-    struct APPUTILS_DECL ErrorReporter
+    struct ErrorReporter
     {
       ErrorReporter() : is_errored(0) {}
       virtual ~ErrorReporter() {}
@@ -102,7 +100,7 @@ namespace program_options
 
     static ErrorReporter default_error_reporter;
 
-    struct APPUTILS_DECL SilentReporter : ErrorReporter
+    struct SilentReporter : ErrorReporter
     {
       SilentReporter() { }
       virtual ~SilentReporter() { }
@@ -282,7 +280,7 @@ namespace program_options
 
 
 
-    struct APPUTILS_DECL Options
+    struct Options
     {
       ~Options()
       {
@@ -292,7 +290,7 @@ namespace program_options
         }
       }
 
-      OptionSpecific addOptions();
+      inline OptionSpecific addOptions();
 
       struct Names
       {
@@ -393,7 +391,7 @@ namespace program_options
 
    
     /* Class with templated overloaded operator(), for use by Options::addOptions() */
-    class APPUTILS_DECL OptionSpecific
+    class OptionSpecific
     {
     public:
       OptionSpecific(Options& parent_) : parent(parent_) {}
@@ -669,7 +667,7 @@ namespace program_options
     }
 
     /* format the help text */
-    inline void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120)
+    inline void doHelp(std::ostream& out, Options& opts, unsigned columns  = 120)
     {
       const unsigned pad_short = 3;
       /* first pass: work out the longest option name */
@@ -724,7 +722,7 @@ namespace program_options
     }
 
     /* prints a formated configuration of Options into a ostream */
-    inline void APPUTILS_DECL saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns = 240 )
+    inline void saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns = 240 )
     {
       /* first pass: work out the longest option name */
       unsigned max_width_optname = 0;
@@ -1085,7 +1083,7 @@ namespace program_options
 
 
 
-    inline std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter)
+    inline std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter)
     {
       ArgvParser avp(opts, error_reporter);
 
@@ -1134,7 +1132,7 @@ namespace program_options
 
     /* for all options in opts, set their storage to their specified
      * default value */
-    inline void APPUTILS_DECL setDefaults(Options& opts)
+    inline void setDefaults(Options& opts)
     {
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
@@ -1142,7 +1140,7 @@ namespace program_options
       }
     }
     
-    inline void APPUTILS_DECL parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter)
+    inline void parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter)
     {
       std::ifstream cfgstream(filename.c_str(), std::ifstream::in);
       if (!cfgstream)
@@ -1156,6 +1154,8 @@ namespace program_options
 } /* namespace: df */
 
 } // namespace
+
+#include "ParseArg.inl"
 
 //! \}
 

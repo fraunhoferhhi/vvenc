@@ -43,13 +43,11 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #pragma once
-#include "apputils/apputilsDecl.h"
 
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
 #include "apputils/ParseArg.h"
-#include "apputils/VVEncAppCfg.h"
 #include "apputils/YuvFileIO.h"
 
 
@@ -75,6 +73,8 @@ namespace apputils {
 //! \ingroup apputils
 //! \{
 
+
+class VVEncAppCfg;
 
 // IStreamIO stuff
 template<typename E>
@@ -1068,7 +1068,7 @@ static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cf
 // ====================================================================================================================
 
 /// application params and parser class for app+lib options
-class APPUTILS_DECL VVEncAppCfg
+class VVEncAppCfg
 {
 public:
   typedef std::function<void( vvenc_config*, vvencPresetMode ) > presetChangeCallback;
@@ -1867,7 +1867,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     // check for y4m input
     if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
     {
-      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, *this ))
+      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
         rcOstr << "cannot parse y4m metadata\n";
         ret = -1;

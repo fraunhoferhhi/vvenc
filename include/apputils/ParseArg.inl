@@ -41,16 +41,12 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-#include "apputils/ParseArg.h"
-
-
 //! \ingroup Interface
 //! \{
 
 namespace apputils {
 
-namespace program_options
-{
+namespace program_options {
 
 
 /* Helper method to initiate adding options to Options */
@@ -60,9 +56,9 @@ OptionSpecific Options::addOptions()
   return OptionSpecific(*this);
 }
 
-}
+}  // namespace program_options
 
-} // namespace VVCEncoderFFApp
+} // namespace apputils
 
 //! \}
 
