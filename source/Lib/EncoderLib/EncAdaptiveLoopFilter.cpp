@@ -1354,7 +1354,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     ChannelType chType = (ChannelType)channelIdx;
     int numClasses = channelIdx ? VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
     m_alfCovarianceFrame[chType] = new AlfCovariance*[m_filterShapes[chType].size()];
-    for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+    for( int i = 0; i < ( int ) m_filterShapes[chType].size(); i++ )
     {
       m_alfCovarianceFrame[chType][i] = new AlfCovariance[numClasses];
       for( int k = 0; k < numClasses; k++ )
@@ -1382,7 +1382,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
 
     m_alfCovariance[compIdx] = new AlfCovariance**[m_filterShapes[chType].size()];
 
-    for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+    for( int i = 0; i < ( int ) m_filterShapes[chType].size(); i++ )
     {
       m_alfCovariance[compIdx][i] = new AlfCovariance*[m_numAsusInPic];
       for( int j = 0; j < m_numAsusInPic; j++ )
@@ -1396,7 +1396,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     }
   }
 
-  for( int i = 0; i != m_filterShapes[COMP_Y].size(); i++ )
+  for( int i = 0; i < ( int ) m_filterShapes[COMP_Y].size(); i++ )
   {
     for (int j = 0; j <= MAX_NUM_ALF_CLASSES + 1; j++)
     {
@@ -1430,7 +1430,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     int numFilters = MAX_NUM_CC_ALF_FILTERS;
     m_alfCovarianceCcAlf[compIdx-1] = new AlfCovariance**[m_filterShapesCcAlf[compIdx-1].size()];
     m_alfCovarianceFrameCcAlf[compIdx-1] = new AlfCovariance*[m_filterShapesCcAlf[compIdx-1].size()];
-    for( int i = 0; i < (int) m_filterShapesCcAlf[compIdx-1].size(); i++ )
+    for( int i = 0; i < ( int ) m_filterShapesCcAlf[compIdx - 1].size(); i++ )
     {
       m_alfCovarianceFrameCcAlf[compIdx - 1][i] = new AlfCovariance[numFilters];
       for (int k = 0; k < numFilters; k++)
