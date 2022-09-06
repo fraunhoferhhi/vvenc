@@ -308,6 +308,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
+  const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
   const PreCalcValues&    pcv = *pic->cs->pcv;
 
@@ -356,7 +357,11 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       const int adaptChromaQPOffset = 2.0 * hpEner[comp] <= hpEner[0] ? 0 : apprI3Log2 (2.0 * hpEner[comp] / hpEner[0]);
 
-      if (savedLumaQP < 0)
+      if ((encCfg->m_RCTargetBitrate > 0 && savedLumaQP < 0) && useFrameWiseQPA)  // rate control
+      {
+        savedLumaQP = Clip3 (0, MAX_QP, sliceQP - 1); // 1 will be added in applyQPAdaptationLuma
+      }
+      else if (savedLumaQP < 0)
       {
         int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
