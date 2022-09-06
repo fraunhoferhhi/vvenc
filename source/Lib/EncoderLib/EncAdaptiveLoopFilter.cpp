@@ -1430,7 +1430,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     int numFilters = MAX_NUM_CC_ALF_FILTERS;
     m_alfCovarianceCcAlf[compIdx-1] = new AlfCovariance**[m_filterShapesCcAlf[compIdx-1].size()];
     m_alfCovarianceFrameCcAlf[compIdx-1] = new AlfCovariance*[m_filterShapesCcAlf[compIdx-1].size()];
-    for( int i = 0; i != m_filterShapesCcAlf[compIdx-1].size(); i++ )
+    for( int i = 0; i < (int) m_filterShapesCcAlf[compIdx-1].size(); i++ )
     {
       m_alfCovarianceFrameCcAlf[compIdx - 1][i] = new AlfCovariance[numFilters];
       for (int k = 0; k < numFilters; k++)
