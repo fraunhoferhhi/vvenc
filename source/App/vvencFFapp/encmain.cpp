@@ -51,7 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <ctime>
 
 #include "../vvencFFapp/EncApp.h"
-#include "apputils/Options.h"
+#include "apputils/ParseArg.h"
 
 #include "vvenc/vvenc.h"
 
