@@ -72,7 +72,6 @@ namespace apputils {
 
 typedef int16_t LPel;
 
-
 // ====================================================================================================================
 
 static bool readYuvPlane( std::istream&       fd,

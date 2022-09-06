@@ -252,7 +252,6 @@ namespace program_options
     class OptionSpecific;
     struct Options;
 
-
     /** Option class for argument handling using a user provided function */
     struct OptionFunc : public OptionBase
     {
@@ -276,8 +275,6 @@ namespace program_options
       Options& parent;
       Func* func;
     };
-
-
 
 
     struct Options
@@ -386,10 +383,7 @@ namespace program_options
 
       bool useLowerNamesOnly = false; // if true, option names are always set to lower case
     };
-    
 
-
-   
     /* Class with templated overloaded operator(), for use by Options::addOptions() */
     class OptionSpecific
     {
@@ -438,10 +432,6 @@ namespace program_options
     private:
       Options& parent;
     };
-
-
-
-
 
     static void setOptions(Options::NamesPtrList& opt_list, const std::string& value, ErrorReporter& error_reporter)
     {
