@@ -60,7 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cstdarg>
 
 #include "apputils/IStreamIO.h"
-#include "apputils/ParseArg.h"
+#include "apputils/Options.h"
 #include "apputils/YuvFileIO.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
