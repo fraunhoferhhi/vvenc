@@ -705,7 +705,19 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
   vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                 "TicksPerSecond must be in range from 1 to 27000000" );
-  vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+
+  if ( c->m_FrameScale == 1001 )
+  {
+    int rounded = c->m_FrameRate / (double)c->m_FrameScale + 0.5; // workaround when ticks per frame = fps (e.g. fps=60000/1001 and tickspersecond=60)
+    if(  rounded != c->m_TicksPerSecond )
+    {
+      vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+    }
+  } 
+  else
+  {
+    vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  }
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
