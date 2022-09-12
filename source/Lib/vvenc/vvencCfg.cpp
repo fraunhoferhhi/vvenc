@@ -708,8 +708,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_FrameScale == 1001 )
   {
-    int rounded = c->m_FrameRate / (double)c->m_FrameScale + 0.5; // workaround when ticks per frame = fps (e.g. fps=60000/1001 and tickspersecond=60)
-    if(  rounded != c->m_TicksPerSecond )
+    int roundedUp = c->m_FrameRate / (double)c->m_FrameScale + 0.5; // workaround when ticks per frame = fps (e.g. fps=60000/1001 and tickspersecond=60)
+    if(  roundedUp != c->m_TicksPerSecond )
     {
       vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
     }
