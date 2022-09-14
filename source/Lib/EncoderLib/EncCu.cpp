@@ -567,20 +567,20 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
-  if( ( m_pcEncCfg->m_usePerceptQPA || ( m_pcEncCfg->m_blockImportanceMapping && !slice.pic->ctuBimQpMap.empty() ) ) && pps.useDQP && isLuma( partitioner.chType ) && partitioner.currQgEnable() )
+  if( ( m_pcEncCfg->m_usePerceptQPA || ( m_pcEncCfg->m_blockImportanceMapping && !slice.pic->ctuBimQpOffset.empty() ) ) && pps.useDQP && isLuma( partitioner.chType ) && partitioner.currQgEnable() )
   {
     const PreCalcValues& pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
     const uint32_t ctuRsAddr = getCtuAddr( partitioner.currQgPos, pcv );
     //int bimQpOffset = 0;
     //
-    //if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpMap.empty() )
+    //if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpOffset.empty() )
     //{
     //  const Position& pos = partitioner.currQgPos;
     //  const int ctuSize   = pcv.maxCUSize;
     //  const int ctuId     = ( pos.y / ctuSize ) * pcv.widthInCtus + ( pos.x / ctuSize );
     //
-    //  bimQpOffset = pic->ctuBimQpMap[ctuRsAddr];
+    //  bimQpOffset = pic->ctuBimQpOffset[ctuRsAddr];
     //}
 
     // TODO (CH): apply bimQpOffset

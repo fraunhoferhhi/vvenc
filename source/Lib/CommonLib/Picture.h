@@ -229,7 +229,7 @@ public:
 
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
-  std::vector<int>              ctuBimQpMap;
+  std::vector<int>              ctuBimQpOffset;
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
