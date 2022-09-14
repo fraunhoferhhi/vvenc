@@ -706,8 +706,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         frameIdx++;
       }
 
-      // TODO (JB): AIP
-      double weight = ( receivedPoc % 16 ) ? 0.6 : 1;
+      double weight = pic->TLayer > 1 ? 0.6 : 1;
       const double center = 45.0;
 
       for( int i = 0; i < numCtu; i++ )
