@@ -118,7 +118,8 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
-const int MCTF::m_cuTreeThresh[4] = { 75, 60, 30, 15 };
+const int    MCTF::m_cuTreeThresh[4] = { 75, 60,     30, 15 };
+const double MCTF::m_cuTreeCenter    =           45;
 
 int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
@@ -703,14 +704,13 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
         double weight = pic->TLayer > 1 ? 0.6 : 1;
-        const double center = 45.0;
 
         for( int i = 0; i < numCtu; i++ )
         {
           const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
           const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
           int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
-          weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * center );
+          weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * m_cuTreeCenter );
 
           int qpOffset = 0;
 
