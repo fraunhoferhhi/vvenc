@@ -106,7 +106,7 @@ endif()
 
 target_include_directories( ${LIB_NAME} PRIVATE           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
                                         SYSTEM INTERFACE  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
-target_include_directories( ${LIB_NAME} PRIVATE . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 )
+target_include_directories( ${LIB_NAME} PRIVATE . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../apputils )
 
 if( VVENC_ENABLE_THIRDPARTY_JSON )
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )

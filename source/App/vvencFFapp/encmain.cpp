@@ -50,8 +50,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <ctime>
 
-#include "../vvencFFapp/EncApp.h"
-#include "../../Lib/apputils/ParseArg.h"
+#include "EncApp.h"
+#include "apputils/ParseArg.h"
 
 #include "vvenc/vvenc.h"
 

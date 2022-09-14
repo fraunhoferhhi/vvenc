@@ -60,8 +60,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "../../Lib/apputils/YuvFileIO.h"
-#include "../../Lib/apputils/VVEncAppCfg.h"
+#include "apputils/YuvFileIO.h"
+#include "apputils/VVEncAppCfg.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
