@@ -576,10 +576,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     //
     //if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpOffset.empty() )
     //{
-    //  const Position& pos = partitioner.currQgPos;
-    //  const int ctuSize   = pcv.maxCUSize;
-    //  const int ctuId     = ( pos.y / ctuSize ) * pcv.widthInCtus + ( pos.x / ctuSize );
-    //
     //  bimQpOffset = pic->ctuBimQpOffset[ctuRsAddr];
     //}
 
