@@ -50,8 +50,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvenc.h"
 #include "vvenc/vvencCfg.h"
-#include "apputils/YuvFileIO.h"
-#include "apputils/VVEncAppCfg.h"
+#include "../../Lib/apputils/YuvFileIO.h"
+#include "../../Lib/apputils/VVEncAppCfg.h"
 
 
 //! \ingroup EncoderApp

@@ -49,7 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <algorithm>
 
-#include "apputils/VVEncAppCfg.h"
+#include "VVEncAppCfg.h"
 #include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface

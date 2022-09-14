@@ -15,7 +15,7 @@ endif()
 file( GLOB BASE_SRC_FILES "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" "../DecoderLib/*.cpp" "../EncoderLib/*.cpp" )
 
 # get include files
-file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" )
+file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" "../apputils/*.h" )
 
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
@@ -115,9 +115,9 @@ if( VVENC_ENABLE_THIRDPARTY_JSON )
 endif()
 
 if( TARGET INTEL_ITT)
-  target_link_libraries( ${LIB_NAME} PRIVATE INTEL_ITT Threads::Threads apputils )
+  target_link_libraries( ${LIB_NAME} PRIVATE INTEL_ITT Threads::Threads )
 else()
-  target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads apputils )
+  target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads )
 endif()
 
 # set the folder where to place the projects

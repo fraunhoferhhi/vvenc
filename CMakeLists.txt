@@ -64,10 +64,6 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
 
-  if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
-    list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
-  endif()
-
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
   list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvenc" )
   list( REMOVE_DUPLICATES ${PROJECT_NAME}_ADD_SUBDIRECTORIES )
@@ -299,7 +295,6 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
-add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )

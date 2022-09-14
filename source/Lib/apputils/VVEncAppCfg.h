@@ -59,9 +59,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <cstdarg>
 
-#include "apputils/IStreamIO.h"
-#include "apputils/ParseArg.h"
-#include "apputils/YuvFileIO.h"
+#include "IStreamIO.h"
+#include "ParseArg.h"
+#include "YuvFileIO.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
