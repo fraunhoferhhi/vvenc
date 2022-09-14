@@ -644,17 +644,17 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         PelStorage bufferSub2;
         PelStorage bufferSub4;
 
-        subsampleLuma(srcPic.picBuffer, bufferSub2);
-        subsampleLuma(bufferSub2, bufferSub4);
+        subsampleLuma( srcPic.picBuffer, bufferSub2 );
+        subsampleLuma( bufferSub2,       bufferSub4 );
 
-        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize );
-        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * m_mctfUnitSize, &mv_0, 2);
-        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2);
+        motionEstimationLuma( mv_0, origSubsampled4, bufferSub4,       2 * m_mctfUnitSize );
+        motionEstimationLuma( mv_1, origSubsampled2, bufferSub2,       2 * m_mctfUnitSize, &mv_0, 2 );
+        motionEstimationLuma( mv_2, origBuf,         srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2 );
 
-        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, m_mctfUnitSize, &mv_2, 1, true);
+        motionEstimationLuma( srcPic.mvs, origBuf,   srcPic.picBuffer,     m_mctfUnitSize, &mv_2, 1, true );
       }
 
-      srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
+      srcPic.index = std::min( 3, std::abs( curPic->poc - m_filterPoc ) - 1 );
     }
 
     // filter
