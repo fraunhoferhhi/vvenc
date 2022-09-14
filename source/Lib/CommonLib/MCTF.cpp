@@ -663,11 +663,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     if( m_encCfg->m_blockImportanceMapping )
     {
-      const PreCalcValues& pcv = *pic->cs->pcv;
-      const int numCtu         = pcv.sizeInCtus;
-      const int ctuSize        = pcv.maxCUSize;
+      const int ctuSize        = m_encCfg->m_CTUSize;
+      const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
+      const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
+      const int numCtu         = widthInCtus * heightInCtus;
       const int ctuBlocks      = ctuSize / m_mctfUnitSize;
-      const int ctuWidth       = pcv.widthInCtus;
 
       pic->ctuBimQpMap.resize( numCtu, 0 );
 
@@ -692,7 +692,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           {
             const int ctuX    = x / ctuBlocks;
             const int ctuY    = y / ctuBlocks;
-            const int ctuId   = ctuY * ctuWidth + ctuX;
+            const int ctuId   = ctuY * widthInCtus + ctuX;
             const auto& mvBlk = srcPic.mvs.get( x, y );
             sumError[dist * numCtu + ctuId] += mvBlk.error;
             blkCount[dist * numCtu + ctuId] += mvBlk.overlap;

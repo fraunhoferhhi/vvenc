@@ -572,16 +572,16 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     const PreCalcValues& pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
     const uint32_t ctuRsAddr = getCtuAddr( partitioner.currQgPos, pcv );
-    int bimQpOffset = 0;
-
-    if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpMap.empty() )
-    {
-      const Position& pos = partitioner.currQgPos;
-      const int ctuSize   = pcv.maxCUSize;
-      const int ctuId     = ( pos.y / ctuSize ) * pcv.widthInCtus + ( pos.x / ctuSize );
-
-      bimQpOffset = pic->ctuBimQpMap[ctuRsAddr];
-    }
+    //int bimQpOffset = 0;
+    //
+    //if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpMap.empty() )
+    //{
+    //  const Position& pos = partitioner.currQgPos;
+    //  const int ctuSize   = pcv.maxCUSize;
+    //  const int ctuId     = ( pos.y / ctuSize ) * pcv.widthInCtus + ( pos.x / ctuSize );
+    //
+    //  bimQpOffset = pic->ctuBimQpMap[ctuRsAddr];
+    //}
 
     // TODO (CH): apply bimQpOffset
 
