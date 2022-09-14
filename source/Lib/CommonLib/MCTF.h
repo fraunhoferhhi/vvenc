@@ -64,6 +64,7 @@ struct MotionVector
 {
   int x, y;
   int error;
+  double overlap;
   //int noise;
   MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
 

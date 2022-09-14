@@ -628,11 +628,14 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       srcFrameInfo.push_back( TemporalFilterSourcePicInfo() );
       TemporalFilterSourcePicInfo &srcPic = srcFrameInfo.back();
 
+      const int wInBlks = ( m_area.width  + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+      const int hInBlks = ( m_area.height + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+
       srcPic.picBuffer.createFromBuf( curPic->getOrigBuf() );
-      srcPic.mvs.allocate( m_area.width / 4, m_area.height / 4 );
+      srcPic.mvs.allocate( wInBlks, hInBlks );
 
       {
-        const int width = m_area.width;
+        const int width  = m_area.width;
         const int height = m_area.height;
         Array2D<MotionVector> mv_0( width / ( m_mctfUnitSize * 8 ) + 1, height / ( m_mctfUnitSize * 8 ) + 1 );
         Array2D<MotionVector> mv_1( width / ( m_mctfUnitSize * 4 ) + 1, height / ( m_mctfUnitSize * 4 ) + 1 );
@@ -664,78 +667,77 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       const int numCtu         = pcv.sizeInCtus;
       const int ctuSize        = pcv.maxCUSize;
       const int ctuBlocks      = ctuSize / m_mctfUnitSize;
+      const int ctuWidth       = pcv.widthInCtus;
 
       pic->ctuBimQpMap.resize( numCtu, 0 );
 
       std::vector<double> sumError( numCtu * 2, 0 );
-      std::vector<int>    blkCount( numCtu * 2, 0 );
+      std::vector<double> blkCount( numCtu * 2, 0 );
 
       int distFactor[2] = { 3,3 };
       int frameIdx      = 0;
 
-      for( int i = dropFramesFront; i < picFifo.size() - dropFramesBack; i++ )
+      for( auto& srcPic : srcFrameInfo )
       {
-        Picture* curPic = picFifo[i];
-        if( curPic->poc == m_filterPoc )
-        {
-          continue;
-        }
-        if( std::abs( curPic->poc - m_filterPoc ) > 2 )
+        if( srcPic.index >= 2 )
         {
           continue;
         }
 
-        int dist = std::abs( curPic->poc - m_filterPoc ) - 1;
+        int dist = srcPic.index;
         distFactor[dist]--;
-        // TODO: get correct source frame!
-        TemporalFilterSourcePicInfo& srcPic = srcFrameInfo.at( frameIdx );
 
-        for( int y = 0; y < srcPic.mvs.h() / 2; y++ ) // going over in block steps
+        for( int y = 0; y < srcPic.mvs.h(); y++ ) // going over in block steps
         {
-          for( int x = 0; x < srcPic.mvs.w() / 2; x++ )
+          for( int x = 0; x < srcPic.mvs.w(); x++ )
           {
-            const int blocksPerRow = ( srcPic.mvs.w() / 2 + ( ctuBlocks - 1 ) ) / ( ctuBlocks );
-            const int ctuX = x / ( ctuBlocks );
-            const int ctuY = y / ( ctuBlocks );
-            const int ctuId = ctuY * blocksPerRow + ctuX;
-            sumError[dist * numCtu + ctuId] += srcPic.mvs.get(x, y).error;
-            blkCount[dist * numCtu + ctuId] += 1;
+            const int ctuX    = x / ctuBlocks;
+            const int ctuY    = y / ctuBlocks;
+            const int ctuId   = ctuY * ctuWidth + ctuX;
+            const auto& mvBlk = srcPic.mvs.get( x, y );
+            sumError[dist * numCtu + ctuId] += mvBlk.error;
+            blkCount[dist * numCtu + ctuId] += mvBlk.overlap;
           }
         }
-
-        frameIdx++;
       }
 
-      double weight = pic->TLayer > 1 ? 0.6 : 1;
-      const double center = 45.0;
-
-      for( int i = 0; i < numCtu; i++ )
+      if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
-        const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
-        const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
-        int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
-        weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * center );
+        double weight = pic->TLayer > 1 ? 0.6 : 1;
+        const double center = 45.0;
 
-        int qpOffset = 0;
+        for( int i = 0; i < numCtu; i++ )
+        {
+          const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
+          const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
+          int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
+          weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * center );
 
-        if( weightedErr > m_cuTreeThresh[0] )
-        {
-          qpOffset = 2;
-        }
-        else if( weightedErr > m_cuTreeThresh[1] )
-        {
-          qpOffset = 1;
-        }
-        else if( weightedErr < m_cuTreeThresh[3] )
-        {
-          qpOffset = -2;
-        }
-        else if( weightedErr < m_cuTreeThresh[2] )
-        {
-          qpOffset = -1;
-        }
+          int qpOffset = 0;
 
-        pic->ctuBimQpMap[i] = qpOffset;
+          if( weightedErr > m_cuTreeThresh[0] )
+          {
+            qpOffset = 2;
+          }
+          else if( weightedErr > m_cuTreeThresh[1] )
+          {
+            qpOffset = 1;
+          }
+          else if( weightedErr < m_cuTreeThresh[3] )
+          {
+            qpOffset = -2;
+          }
+          else if( weightedErr < m_cuTreeThresh[2] )
+          {
+            qpOffset = -1;
+          }
+
+          pic->ctuBimQpMap[i] = qpOffset;
+        }
+      }
+      else
+      {
+        std::fill( pic->ctuBimQpMap.begin(), pic->ctuBimQpMap.end(), 0 );
       }
     }
   }
@@ -1004,6 +1006,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
     best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
+    best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }
