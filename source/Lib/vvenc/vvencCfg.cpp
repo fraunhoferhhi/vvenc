@@ -1265,6 +1265,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_blockImportanceMapping != 0 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping != 0 && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
