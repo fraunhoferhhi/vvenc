@@ -622,6 +622,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
+  c->m_blockImportanceMapping                  = -1;
+
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
@@ -1256,6 +1258,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
+
+  if( c->m_blockImportanceMapping == -1 )
+  {
+    c->m_blockImportanceMapping = !!c->m_vvencMCTF.MCTF ? 1 : 0;
+  }
+
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping != 0 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
@@ -2826,6 +2835,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
+    css << "BIM:" << c->m_blockImportanceMapping << " ";
 
     css << "\nPRE-ANALYSIS CFG: ";
     css << "STA:" << c->m_sliceTypeAdapt << " ";

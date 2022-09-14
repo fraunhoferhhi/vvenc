@@ -118,6 +118,8 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
+const int MCTF::m_cuTreeThresh[4] = { 75, 60, 30, 15 };
+
 int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
   int error = 0;
@@ -655,6 +657,88 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     // filter
     fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
     bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+
+    if( m_encCfg->m_blockImportanceMapping )
+    {
+      const PreCalcValues& pcv = *pic->cs->pcv;
+      const int numCtu         = pcv.sizeInCtus;
+      const int ctuSize        = pcv.maxCUSize;
+      const int ctuBlocks      = ctuSize / m_mctfUnitSize;
+
+      pic->ctuBimQpMap.resize( numCtu, 0 );
+
+      std::vector<double> sumError( numCtu * 2, 0 );
+      std::vector<int>    blkCount( numCtu * 2, 0 );
+
+      int distFactor[2] = { 3,3 };
+      int frameIdx      = 0;
+
+      for( int i = dropFramesFront; i < picFifo.size() - dropFramesBack; i++ )
+      {
+        Picture* curPic = picFifo[i];
+        if( curPic->poc == m_filterPoc )
+        {
+          continue;
+        }
+        if( std::abs( curPic->poc - m_filterPoc ) > 2 )
+        {
+          continue;
+        }
+
+        int dist = std::abs( curPic->poc - m_filterPoc ) - 1;
+        distFactor[dist]--;
+        // TODO: get correct source frame!
+        TemporalFilterSourcePicInfo& srcPic = srcFrameInfo.at( frameIdx );
+
+        for( int y = 0; y < srcPic.mvs.h() / 2; y++ ) // going over in block steps
+        {
+          for( int x = 0; x < srcPic.mvs.w() / 2; x++ )
+          {
+            const int blocksPerRow = ( srcPic.mvs.w() / 2 + ( ctuBlocks - 1 ) ) / ( ctuBlocks );
+            const int ctuX = x / ( ctuBlocks );
+            const int ctuY = y / ( ctuBlocks );
+            const int ctuId = ctuY * blocksPerRow + ctuX;
+            sumError[dist * numCtu + ctuId] += srcPic.mvs.get(x, y).error;
+            blkCount[dist * numCtu + ctuId] += 1;
+          }
+        }
+
+        frameIdx++;
+      }
+
+      // TODO (JB): AIP
+      double weight = ( receivedPoc % 16 ) ? 0.6 : 1;
+      const double center = 45.0;
+
+      for( int i = 0; i < numCtu; i++ )
+      {
+        const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
+        const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
+        int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
+        weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * center );
+
+        int qpOffset = 0;
+
+        if( weightedErr > m_cuTreeThresh[0] )
+        {
+          qpOffset = 2;
+        }
+        else if( weightedErr > m_cuTreeThresh[1] )
+        {
+          qpOffset = 1;
+        }
+        else if( weightedErr < m_cuTreeThresh[3] )
+        {
+          qpOffset = -2;
+        }
+        else if( weightedErr < m_cuTreeThresh[2] )
+        {
+          qpOffset = -1;
+        }
+
+        pic->ctuBimQpMap[i] = qpOffset;
+      }
+    }
   }
 }
 

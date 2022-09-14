@@ -175,7 +175,7 @@ private:
   PelStorage            m_pRspBuffer[maxCuDepth];
 
   //  Access channel
-  const VVEncCfg*   m_pcEncCfg;
+  const VVEncCfg*       m_pcEncCfg;
   IntraSearch           m_cIntraSearch;
   InterSearch           m_cInterSearch;
   RdCost                m_cRdCost;
@@ -189,7 +189,8 @@ private:
   PelStorage            m_aTmpStorageLCU[MAX_TMP_BUFS];     ///< used with CIIP, EDO, GEO
   PelStorage            m_acMergeTmpBuffer[MRG_MAX_NUM_CANDS];
 
-  SortedPelUnitBufs<SORTED_BUFS> m_SortedPelUnitBufs;
+  SortedPelUnitBufs<SORTED_BUFS>
+                        m_SortedPelUnitBufs;
   FastGeoCostList       m_GeoCostList;
   double                m_AFFBestSATDCost;
   static const uint8_t  m_GeoModeTest[GEO_MAX_NUM_CANDS][2];

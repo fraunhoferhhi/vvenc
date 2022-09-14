@@ -228,7 +228,8 @@ public:
   PelStorage*                   m_bufsOrigPrev[ NUM_PREV_FRAMES ];
 
   std::vector<double>           ctuQpaLambda;
-  std::vector<Pel>              ctuAdaptedQP;
+  std::vector<int>              ctuAdaptedQP;
+  std::vector<int>              ctuBimQpMap;
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;

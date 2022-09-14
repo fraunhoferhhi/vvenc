@@ -567,32 +567,44 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
-  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
+  if( ( m_pcEncCfg->m_usePerceptQPA || ( m_pcEncCfg->m_blockImportanceMapping && !slice.pic->ctuBimQpMap.empty() ) ) && pps.useDQP && isLuma( partitioner.chType ) && partitioner.currQgEnable() )
   {
-    const PreCalcValues &pcv = *pps.pcv;
+    const PreCalcValues& pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
-    const uint32_t ctuRsAddr = getCtuAddr (partitioner.currQgPos, pcv);
+    const uint32_t ctuRsAddr = getCtuAddr( partitioner.currQgPos, pcv );
+    int bimQpOffset = 0;
 
-    if (partitioner.currSubdiv == 0) // CTU-level QP adaptation
+    if( m_pcEncCfg->m_blockImportanceMapping && !pic->ctuBimQpMap.empty() )
     {
-      if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+      const Position& pos = partitioner.currQgPos;
+      const int ctuSize   = pcv.maxCUSize;
+      const int ctuId     = ( pos.y / ctuSize ) * pcv.widthInCtus + ( pos.x / ctuSize );
+
+      bimQpOffset = pic->ctuBimQpMap[ctuRsAddr];
+    }
+
+    // TODO (CH): apply bimQpOffset
+
+    if( partitioner.currSubdiv == 0 ) // CTU-level QP adaptation
+    {
+      if( m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2 )
       {
-        m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
+        m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels() );
       }
 
-      if ((!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU behavior, Museum fix
-          (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
-          (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
+      if( ( !slice.isIntra() ) && ( pcv.maxCUSize > 64 ) && // sub-CTU behavior, Museum fix
+          ( uiLPelX + ( pcv.maxCUSize >> 1 ) < ( m_pcEncCfg->m_PadSourceWidth ) ) &&
+          ( uiTPelY + ( pcv.maxCUSize >> 1 ) < ( m_pcEncCfg->m_PadSourceHeight ) ) )
       {
         const uint32_t h = lumaArea.height >> 1;
         const uint32_t w = lumaArea.width  >> 1;
-        const int adQPTL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPTR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPBL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPBR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
+        const int adQPTL = BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, Area( uiLPelX + 0, uiTPelY + 0, w, h ), m_pcRateCtrl->getMinNoiseLevels() );
+        const int adQPTR = BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, Area( uiLPelX + w, uiTPelY + 0, w, h ), m_pcRateCtrl->getMinNoiseLevels() );
+        const int adQPBL = BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, Area( uiLPelX + 0, uiTPelY + h, w, h ), m_pcRateCtrl->getMinNoiseLevels() );
+        const int adQPBR = BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, Area( uiLPelX + w, uiTPelY + h, w, h ), m_pcRateCtrl->getMinNoiseLevels() );
 
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min( std::min( adQPTL, adQPTR ), std::min( adQPBL, adQPBR ) );
 
         if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
         {
@@ -601,10 +613,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           {
             m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus); // copy the pumping reducing QP offset from the top CTU neighbor
             tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-            bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at (ctuRsAddr);
+            bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at( ctuRsAddr );
           }
           tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-          bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
+          bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( 0, MAX_QP, tempCS->baseQP + m_tempQpDiff );
         }
       }
       else
@@ -612,27 +624,27 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
       }
-      setUpLambda ( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
+      setUpLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
     }
-    else if (slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
+    else if( slice.isIntra() ) // currSubdiv 2 - use sub-CTU QPA
     {
-      CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
-      tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
+      CHECK( ( partitioner.currArea().lwidth() >= pcv.maxCUSize ) || ( partitioner.currArea().lheight() >= pcv.maxCUSize ), "sub-CTU delta-QP error" );
+      tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu( &slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels() );
 
-      if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+      if( m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2 )
       {
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3( 0, MAX_QP, tempCS->baseQP + m_tempQpDiff );
       }
 
-      updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
+      updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true );
     }
   }
 
-  if (partitioner.currQtDepth == 0)
+  if( partitioner.currQtDepth == 0 )
   {
     m_MergeSimpleFlag = 0;
   }
-  m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
+  m_modeCtrl.initCULevel( partitioner, *tempCS, m_MergeSimpleFlag );
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
