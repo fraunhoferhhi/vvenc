@@ -675,7 +675,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       std::vector<double> blkCount( numCtu * 2, 0 );
 
       int distFactor[2] = { 3,3 };
-      int frameIdx      = 0;
 
       for( auto& srcPic : srcFrameInfo )
       {
