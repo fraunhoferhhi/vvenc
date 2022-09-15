@@ -1242,7 +1242,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    msg.log( VVENC_WARNING, "disabling MCTF, becuase QP < 17\n" );
+    msg.log( VVENC_WARNING, "disabling MCTF, because QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
   if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
