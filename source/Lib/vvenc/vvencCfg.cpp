@@ -1408,6 +1408,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     else
     {
+      msg.log( VVENC_WARNING, "AddGOP32refPics is enabled and the gop configuration will be overwritten for GOPSize 32!\n" );
+
         //overwrite GOPEntries
         c->m_GOPList[  0 ] = vvenc::GOPEntry(  'B',   32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48, 40, 36 },       1,   {  32, 48                 } );
         c->m_GOPList[  1 ] = vvenc::GOPEntry(  'B',   16,    0,       -4.9309,  0.2265,  1.0,         1,             3,   { 16, 32, 48, 24, 20 },       1,   { -16                     } );
