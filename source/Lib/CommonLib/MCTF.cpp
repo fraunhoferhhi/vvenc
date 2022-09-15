@@ -1112,17 +1112,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
     const int blkSizeY = m_mctfUnitSize >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
     const int blkSizeX = m_mctfUnitSize >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
-    const int yOut     = yStart         >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
-          Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
+    const int yOut     = yStart         >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
 
-    for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
+    for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++ )
     {
-      const Pel* srcPel  = srcPelRow;
-            Pel* dstPel  = dstPelRow;
       const int h = std::min( blkSizeY, height - by );
 
-      for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++, srcPel += blkSizeX, dstPel += blkSizeX )
+      for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++ )
       {
         const int w = std::min( blkSizeX, width - bx );
 
