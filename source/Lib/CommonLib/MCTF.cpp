@@ -1103,8 +1103,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const ComponentID compID = ( ComponentID ) c;
     const int height    = orgPic.bufs[c].height;
     const int width     = orgPic.bufs[c].width;
-    const int srcStride = orgPic.bufs[c].stride;
-    const int dstStride = newOrgPic.bufs[c].stride;
 
     const double sigmaSq = sigmaSqCh[ toChannelType( compID) ];
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
