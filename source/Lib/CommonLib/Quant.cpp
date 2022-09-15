@@ -129,6 +129,120 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 // ====================================================================================================================
 // Quant class member functions
 // ====================================================================================================================
+static void QuantCore(const TransformUnit tu, const ComponentID compID, const CCoeffBuf& piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum, int &lastScanPos,TCoeff *deltaU,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum,const bool signHiding, const TCoeff m_thrVal)
+{
+  CoeffCodingContext cctx( tu, compID, signHiding );
+
+  const SPS &sps            = *tu.cs->sps;
+  const CompArea &rect      = tu.blocks[compID];
+  const uint32_t uiWidth    = rect.width;
+  const uint32_t uiHeight   = rect.height;
+  const ChannelType chType  = toChannelType( compID );
+  const int channelBitDepth = sps.bitDepths[ chType ];
+
+  const bool extendedPrecision     = sps.spsRExt.extendedPrecisionProcessing;
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
+
+  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+  * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+  * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+  * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+  */
+
+  // Represents scaling through forward transform
+  int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
+
+  if (tu.mtsIdx[compID]==MTS_SKIP && extendedPrecision)
+  {
+    iTransformShift = std::max<int>(0, iTransformShift);
+  }
+
+  const uint32_t log2CGSize         = cctx.log2CGSize();
+
+  uiAbsSum = 0;
+
+  const int iCGSize   = 1 << log2CGSize;
+
+  const uint32_t lfnstIdx = tu.cu->lfnstIdx;
+  const int iCGNum   = lfnstIdx > 0 ? 1 : std::min<int>(JVET_C0024_ZERO_OUT_TH, uiWidth) * std::min<int>(JVET_C0024_ZERO_OUT_TH, uiHeight) >> cctx.log2CGSize();
+  int       iScanPos = ( iCGNum << log2CGSize ) - 1;
+
+  if( lfnstIdx > 0 && ( ( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8 ) ) )
+  {
+    iScanPos = 7;
+  }
+
+  // Find first non-zero coeff
+  for( ; iScanPos > 0; iScanPos-- )
+  {
+    uint32_t uiBlkPos = cctx.blockPos( iScanPos );
+    if( piCoef.buf[uiBlkPos] )
+      break;
+  }
+
+  //////////////////////////////////////////////////////////////////////////
+  //  Loop over sub-sets (coefficient groups)
+  //////////////////////////////////////////////////////////////////////////
+  
+  TCoeff thres = 0, useThres = 0;
+  
+  if( iQBits )
+    thres = TCoeff( ( int64_t( m_thrVal ) << ( iQBits - 1 ) ) );
+  else
+    thres = TCoeff( ( int64_t( m_thrVal >> 1 ) << iQBits ) );
+
+  useThres = thres / ( defaultQuantisationCoefficient << 2 );
+
+  const bool is4x4sbb = log2CGSize == 4 && cctx.log2CGWidth() == 2;
+
+  int subSetId = iScanPos >> log2CGSize;
+  for( ; subSetId >= 1; subSetId-- )
+  {
+    if( is4x4sbb && iScanPos >= 16 )
+    {
+      int  iScanPosinCG = iScanPos & ( iCGSize - 1 );
+      bool allSmaller   = true;
+
+      for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
+      {
+        const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
+        allSmaller &= abs( piCoef.buf[uiBlkPos] ) <= useThres;
+      }
+
+      if( allSmaller )
+      {
+        iScanPos    -= iScanPosinCG + 1;
+        continue;
+      }
+      else
+      {
+        break;
+      }
+    }
+  }
+
+  const int qBits8 = iQBits - 8;
+  piQCoef.memset( 0 );
+
+  for( int currPos = 0; currPos <= iScanPos; currPos++ )
+  {
+    const int uiBlockPos  = cctx.blockPos( currPos );
+    const TCoeff iLevel   = piCoef.buf[uiBlockPos];
+    const TCoeff iSign    = (iLevel < 0 ? -1: 1);
+
+    const int64_t  tmpLevel = (int64_t)abs(iLevel) * defaultQuantisationCoefficient;
+    const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+    deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+
+    uiAbsSum += quantisedMagnitude;
+    const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+
+    piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+  } // for n
+
+  lastScanPos = iScanPos;
+}
+
 static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoeffSig* const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
 {
   const int inputMinimum = -(inputMaximum+1);
@@ -164,7 +278,8 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
 Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other, useScalingLists );
-  DeQuant=DeQuantCore;
+  xDeQuant=DeQuantCore;
+  xQuant  =QuantCore;
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   initQuantX86();
 #endif
@@ -255,10 +370,8 @@ void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
 }
 
 // To minimize the distortion only. No rate is considered.
-void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange )
+void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int& lastScanPos, const int maxLog2TrDynamicRange )
 {
-  const uint32_t width     = cctx.width();
-  const uint32_t height    = cctx.height();
   const uint32_t groupSize = 1 << cctx.log2CGSize();
 
   const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
@@ -268,7 +381,7 @@ void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* d
   int absSum = 0 ;
   int n ;
 
-  for( int subSet = (width*height-1) >> cctx.log2CGSize(); subSet >= 0; subSet-- )
+  for( int subSet = lastScanPos >> cctx.log2CGSize(); subSet >= 0; subSet-- )
   {
     int  subPos = subSet << cctx.log2CGSize();
     int  firstNZPosInCG=groupSize , lastNZPosInCG=-1 ;
@@ -309,7 +422,7 @@ void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* d
       {
         TCoeff curCost    = std::numeric_limits<TCoeff>::max();
         TCoeff minCostInc = std::numeric_limits<TCoeff>::max();
-        int minPos =-1, finalChange=0, curChange=0;
+        int minPos =-1, finalChange=0, curChange=0, minScanPos = -1;
 
         for( n = (lastCG==1?lastNZPosInCG:groupSize-1) ; n >= 0; --n )
         {
@@ -361,7 +474,8 @@ void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* d
           {
             minCostInc = curCost ;
             finalChange = curChange ;
-            minPos = blkPos ;
+            minPos = blkPos;
+            minScanPos = n + subPos;
           }
         } //CG loop
 
@@ -377,6 +491,16 @@ void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* d
         else
         {
           pQCoef[minPos] -= finalChange ;
+        }
+
+        // if changing lastScanPos element to 0, move the pointer to the new lastScanPos element
+        if( minScanPos == lastScanPos && pQCoef[minPos] == 0 )
+        {
+          for( ; lastScanPos >= 0 && pQCoef[cctx.blockPos( lastScanPos )] == 0; lastScanPos-- );
+        }
+        else if( minScanPos > lastScanPos && pQCoef[minPos] != 0 )
+        {
+          lastScanPos = minPos;
         }
       } // Hide
     }
@@ -478,7 +602,7 @@ void Quant::dequant(const TransformUnit& tu,
     //(sizeof(Intermediate_Int) * 8)  =                    inputBitDepth   + scaleBits      - rightShift
     const uint32_t             targetInputBitDepth = std::min<uint32_t>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
-    DeQuant(uiWidth-1,uiHeight-1,scale,piQCoef,piStride,piCoef,rightShift,inputMaximum,transformMaximum);
+    xDeQuant(uiWidth-1,uiHeight-1,scale,piQCoef,piStride,piCoef,rightShift,inputMaximum,transformMaximum);
   }
 }
 
@@ -654,44 +778,58 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     const int64_t iAdd = int64_t(tu.cs->slice->isIRAP() ? 171 : 85) << int64_t(iQBits - 9);
     const int qBits8 = iQBits - 8;
 
-    const uint32_t lfnstIdx = tu.cu->lfnstIdx;
-    const int maxNumberOfCoeffs = lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
-    piQCoef.memset( 0 );
-    for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
+    int lastScanPos = -1;
+
+    if (!enableScalingLists)
+      xQuant(tu,compID,piCoef,piQCoef,uiAbsSum,lastScanPos,deltaU,defaultQuantisationCoefficient,iQBits,iAdd,entropyCodingMinimum,entropyCodingMaximum,cctx.signHiding(),m_thrVal);
+    else
     {
-      const TCoeff iLevel   = piCoef.buf[uiBlockPos];
-      const TCoeff iSign    = (iLevel < 0 ? -1: 1);
+      const uint32_t lfnstIdx = tu.cu->lfnstIdx;
+      const int maxNumberOfCoeffs = lfnstIdx > 0 ? ( ( ( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8 ) ) ? 8 : 16 ) : piQCoef.area();
 
-      const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+      piQCoef.memset( 0 );
+      for (int uiScanPos = 0; uiScanPos < maxNumberOfCoeffs; uiScanPos++ )
+      {
+        const int uiBlockPos  = cctx.blockPos( uiScanPos );
+        const TCoeff iLevel   = piCoef.buf[uiBlockPos];
+        const TCoeff iSign    = (iLevel < 0 ? -1: 1);
 
-      const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
-      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
+        const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+        const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+        deltaU[uiBlockPos] = (TCoeff)((tmpLevel - ((int64_t)quantisedMagnitude<<iQBits) )>> qBits8);
 
-      uiAbsSum += quantisedMagnitude;
-      const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+        uiAbsSum += quantisedMagnitude;
+        const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
 
-      piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
-    } // for n
+        piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+      } // for n
+    }
     if (tu.cu->bdpcmM[toChannelType(compID)])
     {
       fwdResDPCM( tu, compID );
     }
-    if( cctx.signHiding() )
+
+    if( uiAbsSum )
     {
-      if(uiAbsSum >= 2) //this prevents TUs with only one coefficient of value 1 from being tested
+      for( int scanPos = lastScanPos; scanPos >= 0; scanPos-- )
       {
-        xSignBitHidingHDQ(piQCoef.buf, piCoef.buf, deltaU, cctx, maxLog2TrDynamicRange);
+        unsigned blkPos = cctx.blockPos( scanPos );
+        if( piQCoef.buf[blkPos] )
+        {
+          lastScanPos = scanPos;
+          break;
+        }
+      }
+
+      if( cctx.signHiding() )
+      {
+        if( uiAbsSum >= 2 ) //this prevents TUs with only one coefficient of value 1 from being tested
+        {
+          xSignBitHidingHDQ( piQCoef.buf, piCoef.buf, deltaU, cctx, lastScanPos, maxLog2TrDynamicRange );
+        }
       }
     }
-    int lastScanPos = -1;
-    for( int scanPos = 0; scanPos < cctx.maxNumCoeff(); scanPos++)
-    {
-      unsigned blkPos = cctx.blockPos( scanPos );
-      if( piQCoef.buf[blkPos] )
-      {
-        lastScanPos = scanPos;
-      }
-    }
+
     tu.lastPos[compID] = lastScanPos;
   } //if RDOQ
   //return;

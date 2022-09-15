@@ -33,7 +33,8 @@ target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CX
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -fdiagnostics-show-option>
                                             $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4100 /wd4244 /wd4251 /wd4459 /wd4996>)
 
-target_link_libraries( ${EXE_NAME} Threads::Threads vvenc apputils )
+target_include_directories( ${EXE_NAME} PRIVATE ../../Lib )
+target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
 
 # example: place header files in different folders
 source_group( "Header Files"   FILES ${INC_FILES} )
