@@ -909,6 +909,7 @@ int checkTimestampsDefault()
   //framerates.push_back(std::make_tuple( 50,1) );
   framerates.push_back(std::make_tuple( 60,1) );
   //framerates.push_back(std::make_tuple( 120,1) );
+  framerates.push_back(std::make_tuple( 25000,1001) );
   framerates.push_back(std::make_tuple( 30000,1001) );
   framerates.push_back(std::make_tuple( 60000,1001) );
   framerates.push_back(std::make_tuple( 120000,1001) );
@@ -925,14 +926,16 @@ int checkTimestampsDefault()
       vvenc_init_default( &c, 176,144, 60, 0, 47, vvencPresetMode::VVENC_FASTER );
       c.m_internChromaFormat = VVENC_CHROMA_420;
 
-      c.m_TicksPerSecond = tickspersec;
       c.m_FrameRate  = std::get<0>(fps);
       c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      if( tickspersec > 0 && ( c.m_FrameRate >= 25000))
+        c.m_TicksPerSecond  = 27000000;
 
       uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
 
-      uint64_t ctsDiff = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate : 1;
-      uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond : c.m_FrameRate/c.m_FrameScale; // start with offset 1sec, to generate  cts/dts > 0
+      uint64_t ctsDiff = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate : 1;
+      uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond : (uint64_t)c.m_FrameRate/(uint64_t)c.m_FrameScale; // start with offset 1sec, to generate  cts/dts > 0
       //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << 
       //             " ctsDiff " << ctsDiff << " framesToEncode " << frames  << std::endl;
       vvencEncoder *enc = vvenc_encoder_create();
@@ -957,7 +960,7 @@ int checkTimestampsDefault()
       bool encodeDone = false;
       for( uint64_t f = 0; f < frames; f++ )
       {
-        pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate)) : (ctsOffset + f);
+        pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + f);
         pcYuvPicture->ctsValid = true;
 
         if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
@@ -985,24 +988,11 @@ int checkTimestampsDefault()
               //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
               err=1;
             }
-            if ( c.m_FrameScale == 1 && ( AU->dts != (lastDts + ctsDiff) )) 
+            else
             {
               //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
               err=1;
             }
-            else if ( c.m_FrameScale == 1001 && ( AU->dts != (lastDts + ctsDiff) && AU->dts != (lastDts + ctsDiff + 1) && AU->dts != (lastDts + ctsDiff -1) )) 
-            {
-              if ( c.m_FrameRate > 60000 && ( AU->dts == (lastDts + ctsDiff + 2) || AU->dts != (lastDts + ctsDiff -2) ))
-              {
-                err=0;
-              }
-              else
-              {
-                //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " +/-1" << " lastDts " << lastDts << std::endl;
-                err=1;
-              }
-            }
-
             if ( err )
             {
               vvenc_YUVBuffer_free( pcYuvPicture, true );
@@ -1011,6 +1001,14 @@ int checkTimestampsDefault()
             }
           }
           lastDts = AU->dts;
+        }
+
+        if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
+        {
+          //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
+          vvenc_YUVBuffer_free( pcYuvPicture, true );
+          vvenc_accessUnit_free( AU, true );
+          return -1;
         }
       }
 
@@ -1040,25 +1038,11 @@ int checkTimestampsDefault()
               //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
               err=1;
             }
-
-            if ( c.m_FrameScale == 1 && ( AU->dts != (lastDts + ctsDiff) )) 
+            else
             {
-               //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
-               err=1;
+              //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+              err=1;
             }
-            else if ( c.m_FrameScale == 1001 && ( AU->dts != (lastDts + ctsDiff) && AU->dts != (lastDts + ctsDiff + 1) && AU->dts != (lastDts + ctsDiff -1) )) 
-            {
-              if ( c.m_FrameRate > 60000 && ( AU->dts == (lastDts + ctsDiff + 2) || AU->dts != (lastDts + ctsDiff -2) ))
-              {
-                err=0;
-              }
-              else
-              {
-                //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " +/-1" << " lastDts " << lastDts << std::endl;
-                err=1;
-              }
-            }
-
             if ( err )
             {
               vvenc_YUVBuffer_free( pcYuvPicture, true );
@@ -1067,6 +1051,13 @@ int checkTimestampsDefault()
             }
           }
           lastDts = AU->dts;
+        }
+        if ( !encodeDone && auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
+        {
+          //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
+          vvenc_YUVBuffer_free( pcYuvPicture, true );
+          vvenc_accessUnit_free( AU, true );
+          return -1;
         }
       }
 
