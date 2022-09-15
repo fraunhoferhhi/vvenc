@@ -331,7 +331,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
 
-  if( m_pcEncCfg->m_FrameRate )
+  if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
   {
     m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)m_pcEncCfg->m_FrameScale/(int64_t)m_pcEncCfg->m_FrameRate);
   }
@@ -2021,7 +2021,10 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     const int64_t iDiffFrames = m_numPicsCoded - pic.poc;
     au.cts      = pic.cts;
     au.ctsValid = pic.ctsValid;
-    au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    if( m_pcEncCfg->m_TicksPerSecond > 0 )
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    else
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer )) + au.cts;
     au.dtsValid = pic.ctsValid;
   }
 

@@ -368,11 +368,11 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = iSeqNumber * vvenccfg.m_TicksPerSecond * vvenccfg.m_FrameScale / vvenccfg.m_FrameRate;
+          cYUVInputBuffer.cts             = (vvenccfg.m_TicksPerSecond > 0) ? iSeqNumber * vvenccfg.m_TicksPerSecond * vvenccfg.m_FrameScale / vvenccfg.m_FrameRate : iSeqNumber;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;
-          //std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
+          std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
         }
         else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
         {
@@ -393,7 +393,7 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
-        //std::cout << "processed au POC " << AU.poc << " cts " << AU.cts << " dts " << AU.dts << std::endl;       
+        std::cout << "processed au POC " << AU.poc << " cts " << AU.cts << " dts " << AU.dts << std::endl;       
         if( cOutBitstream.is_open() )
         {
           // write output

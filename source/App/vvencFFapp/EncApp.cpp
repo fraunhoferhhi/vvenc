@@ -339,7 +339,7 @@ int EncApp::encode()
         {
           if( vvencCfg.m_FrameRate > 0 )
           {
-            yuvInBuf.cts      = framesRcvd * vvencCfg.m_TicksPerSecond * vvencCfg.m_FrameScale / vvencCfg.m_FrameRate;
+            yuvInBuf.cts      = (vvencCfg.m_TicksPerSecond > 0) ? framesRcvd * vvencCfg.m_TicksPerSecond * vvencCfg.m_FrameScale / vvencCfg.m_FrameRate : framesRcvd;
             yuvInBuf.ctsValid = true;
           }
           framesRcvd += 1;
