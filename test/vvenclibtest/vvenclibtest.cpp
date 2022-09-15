@@ -70,7 +70,8 @@ int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
-int testStringApiInterface(); // check behaviour when using in sdk by using string api
+int testStringApiInterface();  // check behaviour when using in sdk by using string api
+int testTimestamps();          // check behaviour when using in sdk by using string api
 
 int main( int argc, char* argv[] )
 {
@@ -85,7 +86,7 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 5 );
+      printHelp = ( testId < 1 || testId > 6 );
     }
 
     if( printHelp )
@@ -126,12 +127,18 @@ int main( int argc, char* argv[] )
     testStringApiInterface();
     break;
   }
+  case 6:
+  {
+    testTimestamps();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
     testSDKDefaultBehaviour();
     testStringApiInterface();
+    testTimestamps();
     break;
   }
 
@@ -313,8 +320,8 @@ int testLibParameterRanges()
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { 0,1,2,64 } );
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { -1,65 }, true );
 
-  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { 90000,27000000,60,120 } );
-  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
+  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { 90000,27000000,60,120,-1 } );
+  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -2,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
   testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 0, 1 } );
@@ -894,6 +901,185 @@ int checkSDKStringApiInvalid()
   return ret;
 }
 
+int checkTimestampsDefault()
+{
+  std::vector <std::tuple<int,int>> framerates;
+  //framerates.push_back(std::make_tuple( 25,1) );
+  //framerates.push_back(std::make_tuple( 30,1) );
+  //framerates.push_back(std::make_tuple( 50,1) );
+  framerates.push_back(std::make_tuple( 60,1) );
+  //framerates.push_back(std::make_tuple( 120,1) );
+  framerates.push_back(std::make_tuple( 30000,1001) );
+  framerates.push_back(std::make_tuple( 60000,1001) );
+  framerates.push_back(std::make_tuple( 120000,1001) );
+
+  std::vector <int> tickspersecVec;
+  tickspersecVec.push_back(90000);
+  tickspersecVec.push_back(-1);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 47, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+
+      c.m_TicksPerSecond = tickspersec;
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      uint64_t ctsDiff = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate : 1;
+      uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond : c.m_FrameRate/c.m_FrameScale; // start with offset 1sec, to generate  cts/dts > 0
+      //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << 
+      //             " ctsDiff " << ctsDiff << " framesToEncode " << frames  << std::endl;
+      vvencEncoder *enc = vvenc_encoder_create();
+      if( nullptr == enc )
+        return -1;
+
+      if( 0 != vvenc_encoder_open( enc, &c ) )
+      {
+        vvenc_encoder_close( enc );
+        return -1;
+      }
+
+      vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+      vvenc_accessUnit_alloc_payload( AU, c.m_SourceWidth*c.m_SourceHeight );
+
+      vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+      vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
+      fillInputPic( pcYuvPicture );
+      
+      uint64_t lastDts=0;
+      uint64_t auCount=0;
+      bool encodeDone = false;
+      for( uint64_t f = 0; f < frames; f++ )
+      {
+        pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate)) : (ctsOffset + f);
+        pcYuvPicture->ctsValid = true;
+
+        if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
+        {
+          vvenc_YUVBuffer_free( pcYuvPicture, true );
+          vvenc_accessUnit_free( AU, true );
+          return -1;
+        }
+
+        if( AU && AU->payloadUsedSize > 0 )
+        {
+          auCount++;
+          if ( !AU->ctsValid || !AU->dtsValid )
+          {
+            vvenc_YUVBuffer_free( pcYuvPicture, true );
+            vvenc_accessUnit_free( AU, true );
+            return -1;
+          } 
+          //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
+          if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
+          {
+            int err=0;
+            if ( AU->dts <= lastDts )
+            {
+              //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
+              err=1;
+            }
+            if ( c.m_FrameScale == 1 && ( AU->dts != (lastDts + ctsDiff) )) 
+            {
+              //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+              err=1;
+            }
+            else if ( c.m_FrameScale == 1001 && ( AU->dts != (lastDts + ctsDiff) && AU->dts != (lastDts + ctsDiff + 1) && AU->dts != (lastDts + ctsDiff -1) )) 
+            {
+              if ( c.m_FrameRate > 60000 && ( AU->dts == (lastDts + ctsDiff + 2) || AU->dts != (lastDts + ctsDiff -2) ))
+              {
+                err=0;
+              }
+              else
+              {
+                //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " +/-1" << " lastDts " << lastDts << std::endl;
+                err=1;
+              }
+            }
+
+            if ( err )
+            {
+              vvenc_YUVBuffer_free( pcYuvPicture, true );
+              vvenc_accessUnit_free( AU, true );
+              return -1;
+            }
+          }
+          lastDts = AU->dts;
+        }
+      }
+
+      while ( !encodeDone )
+      {
+        if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+        {
+          vvenc_YUVBuffer_free( pcYuvPicture, true );
+          vvenc_accessUnit_free( AU, true );
+          return -1;
+        }
+
+        if( AU && AU->payloadUsedSize > 0 )
+        {
+          auCount++;
+          if ( !AU->ctsValid || !AU->dtsValid )
+          {
+            vvenc_YUVBuffer_free( pcYuvPicture, true );
+            vvenc_accessUnit_free( AU, true );
+            return -1;
+          } 
+          if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
+          {
+            int err=0;
+            if ( AU->dts <= lastDts )
+            {
+              //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
+              err=1;
+            }
+
+            if ( c.m_FrameScale == 1 && ( AU->dts != (lastDts + ctsDiff) )) 
+            {
+               //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+               err=1;
+            }
+            else if ( c.m_FrameScale == 1001 && ( AU->dts != (lastDts + ctsDiff) && AU->dts != (lastDts + ctsDiff + 1) && AU->dts != (lastDts + ctsDiff -1) )) 
+            {
+              if ( c.m_FrameRate > 60000 && ( AU->dts == (lastDts + ctsDiff + 2) || AU->dts != (lastDts + ctsDiff -2) ))
+              {
+                err=0;
+              }
+              else
+              {
+                //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " +/-1" << " lastDts " << lastDts << std::endl;
+                err=1;
+              }
+            }
+
+            if ( err )
+            {
+              vvenc_YUVBuffer_free( pcYuvPicture, true );
+              vvenc_accessUnit_free( AU, true );
+              return -1;
+            }
+          }
+          lastDts = AU->dts;
+        }
+      }
+
+      if( auCount != frames )
+      {
+        //std::cout << "expecting " << frames << " au, but only encoded " << auCount << std::endl;
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
 
 int testLibCallingOrder()
 {
@@ -921,6 +1107,14 @@ int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+
+  return 0;
+}
+
+int testTimestamps()
+{
+  testfunc( "checkTimestampsDefault", &checkTimestampsDefault, false );
+  //testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
 
   return 0;
 }
