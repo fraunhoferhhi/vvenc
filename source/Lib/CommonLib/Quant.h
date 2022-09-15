@@ -137,7 +137,13 @@ private:
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
   void    xSignBitHidingHDQ       ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int &lastPos, const int maxLog2TrDynamicRange);
   void    ( *xDeQuant)            (const int maxX,const int maxY,const int scale,const TCoeffSig*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum);
-  void    ( *xQuant)              (const CCoeffBuf&  piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum,TCoeff *deltaU,const int maxNumberOfCoeffs,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum,const bool signHiding);
+  void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
+                                    const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
+                                    TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
+                                    const int defaultQuantisationCoefficient, const int iQBits, const int64_t iAdd,
+                                    const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
+                                    const bool signHiding,
+                                    const TCoeff m_thrVal );
 
 #ifdef TARGET_SIMD_X86
   void initQuantX86();
