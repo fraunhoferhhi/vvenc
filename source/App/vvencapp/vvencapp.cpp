@@ -368,7 +368,7 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = (vvenccfg.m_TicksPerSecond > 0) ? iSeqNumber * vvenccfg.m_TicksPerSecond * vvenccfg.m_FrameScale / vvenccfg.m_FrameRate : iSeqNumber;
+          cYUVInputBuffer.cts             = (vvenccfg.m_TicksPerSecond > 0) ? iSeqNumber * (int64_t)vvenccfg.m_TicksPerSecond * (int64_t)vvenccfg.m_FrameScale / (int64_t)vvenccfg.m_FrameRate : iSeqNumber;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;

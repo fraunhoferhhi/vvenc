@@ -254,7 +254,7 @@ int EncApp::encode()
   vvenc_accessUnit_alloc_payload( &au, auSizeScale * vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight + 1024 );
 
   // main loop
-  int framesRcvd  = 0;
+  int64_t framesRcvd  = 0;
   const int start = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass - 1 : 0;
   const int end   = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass     : vvencCfg.m_RCNumPasses;
   for( int pass = start; pass < end; pass++ )
@@ -339,7 +339,7 @@ int EncApp::encode()
         {
           if( vvencCfg.m_FrameRate > 0 )
           {
-            yuvInBuf.cts      = (vvencCfg.m_TicksPerSecond > 0) ? framesRcvd * vvencCfg.m_TicksPerSecond * vvencCfg.m_FrameScale / vvencCfg.m_FrameRate : framesRcvd;
+            yuvInBuf.cts      = (vvencCfg.m_TicksPerSecond > 0) ? framesRcvd * (int64_t)vvencCfg.m_TicksPerSecond * (int64_t)vvencCfg.m_FrameScale / (int64_t)vvencCfg.m_FrameRate : framesRcvd;
             yuvInBuf.ctsValid = true;
           }
           framesRcvd += 1;
