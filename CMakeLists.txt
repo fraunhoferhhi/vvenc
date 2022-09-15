@@ -383,6 +383,8 @@ add_test( NAME Test_compare_output-medium_rc2p_statsFile_easy COMMAND ${CMAKE_CO
 
 add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc stats.json )
 
+get_directory_property( ALL_TESTS TESTS )
+set_tests_properties( ${ALL_TESTS} PROPERTIES RUN_SERIAL TRUE )
 
 if( VVENC_ENABLE_INSTALL )
   # include installer
