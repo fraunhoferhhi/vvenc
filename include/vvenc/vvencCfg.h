@@ -187,7 +187,7 @@ typedef enum
 /// supported IDR types
 typedef enum
 {
-  VVENC_DRT_NONE = 0,
+  VVENC_DRT_NONE               = 0,
   VVENC_DRT_CRA                = 1,
   VVENC_DRT_IDR                = 2,
   VVENC_DRT_RECOVERY_POINT_SEI = 3,
@@ -483,7 +483,7 @@ typedef struct vvenc_config
   vvencRPLEntry       m_cfgUnused2[ 64 ];                                                // TODO: remove unused memory from configuration
   vvencRPLEntry       m_cfgUnused3[ 64 ];                                                // TODO: remove unused memory from configuration
 
-  vvencGOPEntry       m_GOPList [ VVENC_MAX_GOP ];                                       // the coding structure entries from the config file
+  vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
 
   int                 m_cfgUnused4[ 7 ];                                                 // TODO: remove unused memory from configuration
   int                 m_cfgUnused5[ 7 ];                                                 // TODO: remove unused memory from configuration

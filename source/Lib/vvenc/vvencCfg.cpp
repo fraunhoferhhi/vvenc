@@ -843,20 +843,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   /* rules for input, output and internal bitdepths as per help text */
-  if (c->m_MSBExtendedBitDepth[0  ] == 0)
-    c->m_MSBExtendedBitDepth[0  ] = c->m_inputBitDepth      [0  ];
+  if (c->m_MSBExtendedBitDepth[0] == 0)
+    c->m_MSBExtendedBitDepth  [0] = c->m_inputBitDepth      [0];
   if (c->m_MSBExtendedBitDepth[1] == 0)
-    c->m_MSBExtendedBitDepth[1] = c->m_MSBExtendedBitDepth[0  ];
-  if (c->m_internalBitDepth   [0  ] == 0)
-    c->m_internalBitDepth   [0  ] = c->m_MSBExtendedBitDepth[0  ];
+    c->m_MSBExtendedBitDepth  [1] = c->m_MSBExtendedBitDepth[0];
+  if (c->m_internalBitDepth   [0] == 0)
+    c->m_internalBitDepth     [0] = c->m_MSBExtendedBitDepth[0];
   if (c->m_internalBitDepth   [1] == 0)
-    c->m_internalBitDepth   [1] = c->m_internalBitDepth   [0  ];
+    c->m_internalBitDepth     [1] = c->m_internalBitDepth   [0];
   if (c->m_inputBitDepth      [1] == 0)
-    c->m_inputBitDepth      [1] = c->m_inputBitDepth      [0  ];
-  if (c->m_outputBitDepth     [0  ] == 0)
-    c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
+    c->m_inputBitDepth        [1] = c->m_inputBitDepth      [0];
+  if (c->m_outputBitDepth     [0] == 0)
+    c->m_outputBitDepth       [0] = c->m_internalBitDepth   [0];
   if (c->m_outputBitDepth     [1] == 0)
-    c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
+    c->m_outputBitDepth       [1] = c->m_outputBitDepth     [0];
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
      (( c->m_masteringDisplay[0] != 0 && c->m_masteringDisplay[1] != 0 && c->m_masteringDisplay[8] != 0 && c->m_masteringDisplay[9] != 0 ) ||
