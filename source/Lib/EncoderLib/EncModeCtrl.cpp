@@ -431,8 +431,8 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& 
   BestEncodingInfo& encInfo = *m_bestEncInfo[idx1][idx2][idx3][idx4];
 
   encInfo.poc            =  cs.picture->poc;
-  encInfo.cu.repositionTo( *cs.cus.front() );
-  encInfo.tu.repositionTo( *cs.tus.front() );
+  encInfo.cu.UnitArea::operator= ( *cs.cus.front() );
+  encInfo.tu.UnitArea::operator= ( *cs.tus.front() );
   encInfo.cu             = *cs.cus.front();
   for( auto &blk : cs.tus.front()->blocks )
   {
