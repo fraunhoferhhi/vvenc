@@ -1575,6 +1575,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   {
     for( int comp = 0; comp < MAX_NUM_COMP; comp++)
     {
+      //TODO: gopEntry.m_tcOffsetDiv2 and gopEntry.m_betaOffsetDiv2 are set with the luma value also for the chroma components (currently not used or all values are equal)
       slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = gopEntry.m_tcOffsetDiv2   + m_pcEncCfg->m_loopFilterTcOffsetDiv2[comp];
       slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = gopEntry.m_betaOffsetDiv2 +   m_pcEncCfg->m_loopFilterBetaOffsetDiv2[comp];
     }

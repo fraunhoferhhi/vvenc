@@ -788,6 +788,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
+    
+    ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
     ;
 
     opts.setSubSection("Low-level QT-BTT partitioning options");

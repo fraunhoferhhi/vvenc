@@ -745,9 +745,10 @@ typedef struct vvenc_config
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-
+  
   bool                m_picReordering;
-  bool                m_reservedFlag[6];
+  bool                m_reservedFlag[5];
+  bool                m_addGOP32refPics;
   bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
