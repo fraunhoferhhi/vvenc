@@ -432,15 +432,17 @@ int callingOrderNoInit()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegular()
@@ -473,9 +475,7 @@ int callingOrderRegular()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
@@ -483,30 +483,28 @@ int callingOrderRegular()
     vvencYUVBuffer* pcYUVBufferFlush = nullptr;
     if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( !encodeDone )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderNotRegular()
@@ -536,39 +534,36 @@ int callingOrderNotRegular()
   fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
+  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
-  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
   if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegularInitPass()
@@ -597,31 +592,29 @@ int callingOrderRegularInitPass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
   fillInputPic( pcYuvPicture );
+  bool encodeDone = false;
+
   if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_encoder_close( enc );
-    return -1;
+    goto fail;
   }
-  bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    vvenc_encoder_close( enc );
-    return -1;
+    goto fail;
   }
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegularInit2Pass()
@@ -662,56 +655,48 @@ int callingOrderRegularInit2Pass()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( 0 != vvenc_init_pass( enc, 1, nullptr ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( 0 != vvenc_encoder_close( enc ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 
@@ -746,9 +731,7 @@ int checkSDKDefaultBehaviourRC()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( AU && AU->payloadUsedSize > 0 )
@@ -760,9 +743,7 @@ int checkSDKDefaultBehaviourRC()
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
 
     if( AU && AU->payloadUsedSize > 0 )
@@ -773,23 +754,23 @@ int checkSDKDefaultBehaviourRC()
 
   if( 0 != vvenc_encoder_close( enc ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
 
   if( validAUs != 1 )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int checkSDKStringApiDefault()
@@ -919,19 +900,27 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
   vvencAccessUnit* AU = vvenc_accessUnit_alloc();
   vvenc_accessUnit_alloc_payload( AU, c.m_SourceWidth*c.m_SourceHeight );
 
-  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
-  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
-  fillInputPic( pcYuvPicture );
+  vvencYUVBuffer *yuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( yuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
+  fillInputPic( yuvPicture );
   
   uint64_t lastDts=0;
   uint64_t auCount=0;
+  bool eof       = false;
   bool encodeDone = false;
-  for( uint64_t f = 0; f < framesToEncode; f++ )
+  uint64_t framesRcvd = 0;
+  while( !eof || !encodeDone )
   {
-    pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + f);
-    pcYuvPicture->ctsValid = true;
+    vvencYUVBuffer* inputPtr = nullptr;
+    if ( ! eof )
+    {
+      inputPtr             = yuvPicture;
+      yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + framesRcvd);
+      yuvPicture->ctsValid = true;
+      framesRcvd++;
+    }
 
-    if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
+    if( 0 != vvenc_encode( enc, inputPtr, AU, &encodeDone ))
     {
       goto fail;
     }
@@ -961,55 +950,27 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
       goto fail;
     }
-  }
 
-  while ( !encodeDone )
-  {
-    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    if( framesRcvd >= framesToEncode )
     {
-      goto fail;
-    }
-
-    if( AU && AU->payloadUsedSize > 0 )
-    {
-      auCount++;
-      if ( !AU->ctsValid || !AU->dtsValid )
-      {
-        goto fail;
-      } 
-      //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
-      if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
-      {
-        if ( AU->dts <= lastDts ){
-          //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;
-        }else{
-          //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
-        }
-        goto fail;
-      }
-      lastDts = AU->dts;
-    }
-    if ( !encodeDone && auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
-    {
-      //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
-      goto fail;
+      eof = true;
     }
   }
 
   if( auCount != framesToEncode )
   {
-    //std::cout << "expecting " << frames << " au, but only encoded " << auCount << std::endl;
+    //std::cout << "expecting " << framesToEncode << " au, but only encoded " << auCount << std::endl;
     goto fail;
   }
 
-  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_YUVBuffer_free( yuvPicture, true );
   vvenc_accessUnit_free( AU, true );
   return 0;
 
-  fail:
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+fail:
+  vvenc_YUVBuffer_free( yuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int checkTimestampsDefault()
@@ -1077,6 +1038,37 @@ int checkTimestampsDefault()
   return 0;
 }
 
+int checkTimestampsInvalid()
+{
+  std::vector <std::tuple<int,int>> framerates;
+  framerates.push_back(std::make_tuple( 60000,1001) );
+
+  std::vector <int> tickspersecVec;
+  tickspersecVec.push_back(90000);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames) )
+      {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
 int testLibCallingOrder()
 {
   testfunc( "callingOrderInvalidUninit",    &callingOrderInvalidUninit,    true  );
@@ -1110,7 +1102,7 @@ int testStringApiInterface()
 int testTimestamps()
 {
   testfunc( "checkTimestampsDefault", &checkTimestampsDefault, false );
-  //testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+  testfunc( "checkTimestampsDefaultInvalid", &checkTimestampsInvalid, true );
 
   return 0;
 }
