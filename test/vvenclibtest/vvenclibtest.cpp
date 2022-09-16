@@ -933,9 +933,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
 
     if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
 
     if( AU && AU->payloadUsedSize > 0 )
@@ -943,9 +941,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       auCount++;
       if ( !AU->ctsValid || !AU->dtsValid )
       {
-        vvenc_YUVBuffer_free( pcYuvPicture, true );
-        vvenc_accessUnit_free( AU, true );
-        return -1;
+        goto fail;
       } 
       //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
       if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
@@ -955,9 +951,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
         }else{
           //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
         }
-        vvenc_YUVBuffer_free( pcYuvPicture, true );
-        vvenc_accessUnit_free( AU, true );
-        return -1;
+        goto fail;
       }
       lastDts = AU->dts;
     }
@@ -965,9 +959,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
     if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
     {
       //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
@@ -975,9 +967,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
 
     if( AU && AU->payloadUsedSize > 0 )
@@ -985,9 +975,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       auCount++;
       if ( !AU->ctsValid || !AU->dtsValid )
       {
-        vvenc_YUVBuffer_free( pcYuvPicture, true );
-        vvenc_accessUnit_free( AU, true );
-        return -1;
+        goto fail;
       } 
       //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
       if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
@@ -997,28 +985,31 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
         }else{
           //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
         }
-        vvenc_YUVBuffer_free( pcYuvPicture, true );
-        vvenc_accessUnit_free( AU, true );
-        return -1;
+        goto fail;
       }
       lastDts = AU->dts;
     }
     if ( !encodeDone && auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
     {
       //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( auCount != framesToEncode )
   {
     //std::cout << "expecting " << frames << " au, but only encoded " << auCount << std::endl;
-    return -1;
+    goto fail;
   }
 
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
   return 0;
+
+  fail:
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    return -1;
 }
 
 int checkTimestampsDefault()
@@ -1063,7 +1054,6 @@ int checkTimestampsDefault()
 
   tickspersecVec.push_back(27000000);
   tickspersecVec.push_back(-1);
-
 
   for( auto & tickspersec : tickspersecVec )
   {
