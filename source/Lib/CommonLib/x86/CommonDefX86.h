@@ -48,27 +48,38 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef TARGET_SIMD_X86
 
-#include <immintrin.h>
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#endif
+#  if REAL_TARGET_X86 || REAL_TARGET_WASM
+#    ifdef _WIN32
+#      include <intrin.h>
+#    else
+#      include <immintrin.h>
+#    endif
+#  else    // !REAL_TARGET_X86 && !REAL_TARGET_WASM
+#    define SIMDE_ENABLE_NATIVE_ALIASES
+#  endif   // !REAL_TARGET_X86 && !REAL_TARGET_WASM
 
 //! \ingroup CommonLib
 //! \{
 
-namespace vvenc {
 
-#ifdef USE_AVX512
-#define SIMDX86 AVX512
-#elif defined USE_AVX2
-#define SIMDX86 AVX2
-#elif defined USE_AVX
-#define SIMDX86 AVX
-#elif defined USE_SSE42
-#define SIMDX86 SSE42
-#elif defined USE_SSE41
-#define SIMDX86 SSE41
-#endif
+#  ifdef USE_AVX512
+#    define SIMDX86 AVX512
+#    include <simde/x86/avx512.h>
+#  elif defined USE_AVX2
+#    define SIMDX86 AVX2
+#    include <simde/x86/avx2.h>
+#  elif defined USE_AVX
+#    define SIMDX86 AVX
+#    include <simde/x86/avx.h>
+#  elif defined USE_SSE42
+#    define SIMDX86 SSE42
+#    include <simde/x86/sse4.2.h>
+#  elif defined USE_SSE41
+#    define SIMDX86 SSE41
+#    include <simde/x86/sse4.1.h>
+#  endif
+
+namespace vvenc {
 
 #if defined( _MSC_VER ) && _MSC_VER <= 1900
 #define _mm_bsrli_si128 _mm_srli_si128

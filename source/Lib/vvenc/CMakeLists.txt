@@ -70,6 +70,7 @@ add_compile_definitions( ${LIB_NAME_UC}_SOURCE )
 # set PRIVATE include directories for all targets in this directory
 include_directories( $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
 include_directories( . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../apputils )
+include_directories( SYSTEM ../../../thirdparty )
 
 # set common warning flags
 add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall;-Werror;-Wno-deprecated-register;-Wno-unused-const-variable;-Wno-unknown-attributes>" )

@@ -93,6 +93,14 @@ POSSIBILITY OF SUCH DAMAGE.
 # define GCC_WARNING_RESET
 #endif
 
+#if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
+# define REAL_TARGET_X86 1
+#elif defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+# define REAL_TARGET_ARM 1
+#elif defined( __wasm__ ) || defined( __wasm32__ )
+# define REAL_TARGET_WASM 1
+#endif
+
 #ifdef TARGET_SIMD_X86
 #if ENABLE_SIMD_OPT
 #define SIMD_PREFETCH_T0(_s)  _mm_prefetch( (char*)(_s), _MM_HINT_T0 )
