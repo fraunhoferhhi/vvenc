@@ -901,18 +901,134 @@ int checkSDKStringApiInvalid()
   return ret;
 }
 
+static int runEncoder( vvenc_config& c, uint64_t framesToEncode ) 
+{
+  uint64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate : 1;  // expected cts diff between frames
+  uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond : (uint64_t)c.m_FrameRate/(uint64_t)c.m_FrameScale;        // start with offset 1sec, to generate  cts/dts > 0
+  //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << " ctsDiff " << ctsDiff << " framesToEncode " << framesToEncode  << std::endl;
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
+    return -1;
+
+  if( 0 != vvenc_encoder_open( enc, &c ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, c.m_SourceWidth*c.m_SourceHeight );
+
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
+  
+  uint64_t lastDts=0;
+  uint64_t auCount=0;
+  bool encodeDone = false;
+  for( uint64_t f = 0; f < framesToEncode; f++ )
+  {
+    pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + f);
+    pcYuvPicture->ctsValid = true;
+
+    if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+
+    if( AU && AU->payloadUsedSize > 0 )
+    {
+      auCount++;
+      if ( !AU->ctsValid || !AU->dtsValid )
+      {
+        vvenc_YUVBuffer_free( pcYuvPicture, true );
+        vvenc_accessUnit_free( AU, true );
+        return -1;
+      } 
+      //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
+      if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
+      {
+        if ( AU->dts <= lastDts ){
+          //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;
+        }else{
+          //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+        }
+        vvenc_YUVBuffer_free( pcYuvPicture, true );
+        vvenc_accessUnit_free( AU, true );
+        return -1;
+      }
+      lastDts = AU->dts;
+    }
+
+    if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
+    {
+      //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+  }
+
+  while ( !encodeDone )
+  {
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+
+    if( AU && AU->payloadUsedSize > 0 )
+    {
+      auCount++;
+      if ( !AU->ctsValid || !AU->dtsValid )
+      {
+        vvenc_YUVBuffer_free( pcYuvPicture, true );
+        vvenc_accessUnit_free( AU, true );
+        return -1;
+      } 
+      //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
+      if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
+      {
+        if ( AU->dts <= lastDts ){
+          //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;
+        }else{
+          //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+        }
+        vvenc_YUVBuffer_free( pcYuvPicture, true );
+        vvenc_accessUnit_free( AU, true );
+        return -1;
+      }
+      lastDts = AU->dts;
+    }
+    if ( !encodeDone && auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
+    {
+      //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+  }
+
+  if( auCount != framesToEncode )
+  {
+    //std::cout << "expecting " << frames << " au, but only encoded " << auCount << std::endl;
+    return -1;
+  }
+
+  return 0;
+}
+
 int checkTimestampsDefault()
 {
   std::vector <std::tuple<int,int>> framerates;
-  //framerates.push_back(std::make_tuple( 25,1) );
-  //framerates.push_back(std::make_tuple( 30,1) );
-  //framerates.push_back(std::make_tuple( 50,1) );
+  framerates.push_back(std::make_tuple( 25,1) );
+  framerates.push_back(std::make_tuple( 30,1) );
+  framerates.push_back(std::make_tuple( 50,1) );
   framerates.push_back(std::make_tuple( 60,1) );
-  //framerates.push_back(std::make_tuple( 120,1) );
-  framerates.push_back(std::make_tuple( 25000,1001) );
-  framerates.push_back(std::make_tuple( 30000,1001) );
-  framerates.push_back(std::make_tuple( 60000,1001) );
-  framerates.push_back(std::make_tuple( 120000,1001) );
+  framerates.push_back(std::make_tuple( 120,1) );
 
   std::vector <int> tickspersecVec;
   tickspersecVec.push_back(90000);
@@ -923,147 +1039,46 @@ int checkTimestampsDefault()
     for( auto & fps : framerates )
     {
       vvenc_config c;
-      vvenc_init_default( &c, 176,144, 60, 0, 47, vvencPresetMode::VVENC_FASTER );
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
       c.m_internChromaFormat = VVENC_CHROMA_420;
 
       c.m_FrameRate  = std::get<0>(fps);
       c.m_FrameScale = std::get<1>(fps);
       c.m_TicksPerSecond = tickspersec;
-      if( tickspersec > 0 && ( c.m_FrameRate >= 25000))
-        c.m_TicksPerSecond  = 27000000;
-
       uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
 
-      uint64_t ctsDiff = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate : 1;
-      uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond : (uint64_t)c.m_FrameRate/(uint64_t)c.m_FrameScale; // start with offset 1sec, to generate  cts/dts > 0
-      //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << 
-      //             " ctsDiff " << ctsDiff << " framesToEncode " << frames  << std::endl;
-      vvencEncoder *enc = vvenc_encoder_create();
-      if( nullptr == enc )
-        return -1;
-
-      if( 0 != vvenc_encoder_open( enc, &c ) )
+      if( 0 != runEncoder(c,frames) )
       {
-        vvenc_encoder_close( enc );
         return -1;
       }
+    }
+  }
 
-      vvencAccessUnit* AU = vvenc_accessUnit_alloc();
-      vvenc_accessUnit_alloc_payload( AU, c.m_SourceWidth*c.m_SourceHeight );
+  framerates.clear();
+  tickspersecVec.clear();
+  framerates.push_back(std::make_tuple( 25000,1001) );
+  framerates.push_back(std::make_tuple( 30000,1001) );
+  framerates.push_back(std::make_tuple( 60000,1001) );
+  framerates.push_back(std::make_tuple( 120000,1001) );
 
-      vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
-      vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
-      fillInputPic( pcYuvPicture );
-      
-      uint64_t lastDts=0;
-      uint64_t auCount=0;
-      bool encodeDone = false;
-      for( uint64_t f = 0; f < frames; f++ )
+  tickspersecVec.push_back(27000000);
+  tickspersecVec.push_back(-1);
+
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames) )
       {
-        pcYuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (f * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + f);
-        pcYuvPicture->ctsValid = true;
-
-        if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
-        {
-          vvenc_YUVBuffer_free( pcYuvPicture, true );
-          vvenc_accessUnit_free( AU, true );
-          return -1;
-        }
-
-        if( AU && AU->payloadUsedSize > 0 )
-        {
-          auCount++;
-          if ( !AU->ctsValid || !AU->dtsValid )
-          {
-            vvenc_YUVBuffer_free( pcYuvPicture, true );
-            vvenc_accessUnit_free( AU, true );
-            return -1;
-          } 
-          //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
-          if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
-          {
-            int err=0;
-            if ( AU->dts <= lastDts )
-            {
-              //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
-              err=1;
-            }
-            else
-            {
-              //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
-              err=1;
-            }
-            if ( err )
-            {
-              vvenc_YUVBuffer_free( pcYuvPicture, true );
-              vvenc_accessUnit_free( AU, true );
-              return -1;
-            }
-          }
-          lastDts = AU->dts;
-        }
-
-        if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
-        {
-          //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
-          vvenc_YUVBuffer_free( pcYuvPicture, true );
-          vvenc_accessUnit_free( AU, true );
-          return -1;
-        }
-      }
-
-      while ( !encodeDone )
-      {
-        if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
-        {
-          vvenc_YUVBuffer_free( pcYuvPicture, true );
-          vvenc_accessUnit_free( AU, true );
-          return -1;
-        }
-
-        if( AU && AU->payloadUsedSize > 0 )
-        {
-          auCount++;
-          if ( !AU->ctsValid || !AU->dtsValid )
-          {
-            vvenc_YUVBuffer_free( pcYuvPicture, true );
-            vvenc_accessUnit_free( AU, true );
-            return -1;
-          } 
-          if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
-          {
-            int err=0;
-            if ( AU->dts <= lastDts )
-            {
-              //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;  
-              err=1;
-            }
-            else
-            {
-              //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
-              err=1;
-            }
-            if ( err )
-            {
-              vvenc_YUVBuffer_free( pcYuvPicture, true );
-              vvenc_accessUnit_free( AU, true );
-              return -1;
-            }
-          }
-          lastDts = AU->dts;
-        }
-        if ( !encodeDone && auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
-        {
-          //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
-          vvenc_YUVBuffer_free( pcYuvPicture, true );
-          vvenc_accessUnit_free( AU, true );
-          return -1;
-        }
-      }
-
-      if( auCount != frames )
-      {
-        //std::cout << "expecting " << frames << " au, but only encoded " << auCount << std::endl;
         return -1;
       }
     }
