@@ -40,7 +40,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 #pragma once
-#include "apputils/apputilsDecl.h"
 
 #include <iostream>
 #include <sstream>
@@ -50,7 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <algorithm>
 
-#include "apputils/VVEncAppCfg.h"
+#include "VVEncAppCfg.h"
 #include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface
@@ -59,7 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace apputils {
 
 template<typename E>
-struct APPUTILS_DECL SVPair
+struct SVPair
 {
   const char* str;
   E           value;
@@ -70,7 +69,7 @@ struct APPUTILS_DECL SVPair
 // ====================================================================================================================
 
 template<typename T>
-class APPUTILS_DECL IStreamToRefVec
+class IStreamToRefVec
 {
   public:
     IStreamToRefVec( std::vector<T*> v, bool _allRequired, char _sep = 'x' )
@@ -170,7 +169,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<T>& t
 // ====================================================================================================================
 
 template<typename E>
-class APPUTILS_DECL IStreamToEnum
+class IStreamToEnum
 {
   public:
     IStreamToEnum( E* d, const std::vector<SVPair<E>>* m )
@@ -248,11 +247,11 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 // string <-> function
 // ====================================================================================================================
 
-
+class VVEncAppCfg;
 typedef void (*setParamFunc) (VVEncAppCfg*, vvenc_config*, int);
 
 template<typename E>
-class APPUTILS_DECL IStreamToFunc
+class IStreamToFunc
 {
   public:
     IStreamToFunc( setParamFunc func, VVEncAppCfg* appCfg, vvenc_config* encCfg, const std::vector<SVPair<E>>* m, const E _default )
@@ -330,7 +329,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToFunc<F>& toE
 // ====================================================================================================================
 
 template<typename T>
-class APPUTILS_DECL IStreamToVec
+class IStreamToVec
 {
   public:
     IStreamToVec( std::vector<T>* v )
@@ -430,7 +429,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 // ====================================================================================================================
 
 template<typename T>
-class APPUTILS_DECL IStreamToArr
+class IStreamToArr
 {
   public:
     IStreamToArr( T* v, size_t maxSize )
@@ -611,7 +610,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& t
 
 // T: value type, A abbreviation value type
 template<typename T, typename A>
-class APPUTILS_DECL IStreamToAbbr
+class IStreamToAbbr
 {
   public:
     IStreamToAbbr( T* v, const std::vector<SVPair<A>>* m  )

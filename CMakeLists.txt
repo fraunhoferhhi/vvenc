@@ -64,10 +64,6 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
 
-  if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
-    list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
-  endif()
-
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
   list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvenc" )
   list( REMOVE_DUPLICATES ${PROJECT_NAME}_ADD_SUBDIRECTORIES )
@@ -267,6 +263,12 @@ if( CCACHE_FOUND )
   set_property( GLOBAL PROPERTY RULE_LAUNCH_LINK ccache )
 endif()
 
+
+if( VVENC_ENABLE_THIRDPARTY_JSON )
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
+endif()
+
 # handle rpath correctly
 if( VVENC_ENABLE_INSTALL )
   if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
@@ -293,7 +295,6 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
-add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
@@ -383,6 +384,8 @@ add_test( NAME Test_compare_output-medium_rc2p_statsFile_easy COMMAND ${CMAKE_CO
 
 add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc stats.json )
 
+get_directory_property( ALL_TESTS TESTS )
+set_tests_properties( ${ALL_TESTS} PROPERTIES RUN_SERIAL TRUE )
 
 if( VVENC_ENABLE_INSTALL )
   # include installer
