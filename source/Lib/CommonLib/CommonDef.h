@@ -102,18 +102,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef TARGET_SIMD_X86
-#if ENABLE_SIMD_OPT
-#define SIMD_PREFETCH_T0(_s)  _mm_prefetch( (char*)(_s), _MM_HINT_T0 )
-#else
-#define SIMD_PREFETCH_T0(_s)
-#endif //ENABLE_SIMD_OPT
-
-#if defined( _WIN32 )
-# include <intrin.h>
-#else
-# include <x86intrin.h>
-#endif
-#endif
+# if ENABLE_SIMD_OPT
+#  define SIMD_PREFETCH_T0( _s ) _mm_prefetch( (char*) ( _s ), _MM_HINT_T0 )
+# else
+#  define SIMD_PREFETCH_T0( _s )
+# endif   // ENABLE_SIMD_OPT
+#endif    // TARGET_SIMD_X86
 
 //! \ingroup CommonLib
 //! \{

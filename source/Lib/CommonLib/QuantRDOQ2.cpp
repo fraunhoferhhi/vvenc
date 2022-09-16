@@ -55,6 +55,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <memory.h>
 
+#if defined( TARGET_SIMD_X86 )
+#  include <simde/x86/sse2.h>
+#endif
+
 //! \ingroup CommonLib
 //! \{
 

@@ -57,12 +57,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
 
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#else
-#include <immintrin.h>
-#endif
-
 namespace vvenc {
 
 #if _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )

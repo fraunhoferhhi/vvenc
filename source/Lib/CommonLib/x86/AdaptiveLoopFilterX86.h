@@ -45,11 +45,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef TARGET_SIMD_X86
 #if ENABLE_SIMD_OPT_ALF
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#else
-#include <x86intrin.h>
-#endif
 
 namespace vvenc
 {
@@ -1467,5 +1462,5 @@ template void AdaptiveLoopFilter::_initAdaptiveLoopFilterX86<SIMDX86>();
 } // namespace vvenc
 
 //! \}
-#endif
+#endif // ENABLE_SIMD_OPT_ALF
 #endif // TARGET_SIMD_X86

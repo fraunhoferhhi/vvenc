@@ -54,12 +54,6 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#else
-#include <immintrin.h>
-#endif
-
 namespace vvenc {
 
 template<X86_VEXT vext>

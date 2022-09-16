@@ -55,10 +55,14 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <string>
 
-#if defined( _WIN32 ) && !defined( __MINGW32__ )
-#include <intrin.h>
-#else
-#include <cpuid.h>
+
+#ifdef REAL_TARGET_X86
+# if defined( _WIN32 ) && !defined( __MINGW32__ )
+#  include <intrin.h>
+# else
+#  include <x86intrin.h>  // needed for _xgetbv, which is not provided by simd-everywhere
+#  include <cpuid.h>
+# endif
 #endif
 
 #ifdef TARGET_SIMD_X86
