@@ -17,6 +17,11 @@ file( GLOB BASE_SRC_FILES "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" ".
 # get include files
 file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" "../apputils/*.h" )
 
+
+if( NOT DEFINED VVENC_ENABLE_X86_SIMD )
+  message( FATAL_ERROR "VVENC_ENABLE_X86_SIMD is not defined. Please include TopLevel CMakeLists.txt file of vvenc to set all dependencies!" )
+endif()
+
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
   file( GLOB X86_SRC_FILES "../CommonLib/x86/*.cpp" )
@@ -35,15 +40,13 @@ if( VVENC_ENABLE_X86_SIMD )
 
   # get sse4.2 source files
   file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
-
-  # get all source files
-  set( SRC_FILES ${BASE_SRC_FILES} ${X86_SRC_FILES} )
-else()
-  set( SRC_FILES ${BASE_SRC_FILES} )
 endif()
 
 # get public/extern include files
 file( GLOB PUBLIC_INC_FILES  "../../../include/${LIB_NAME}/*.h" )
+
+# get all source files
+set( SRC_FILES ${BASE_SRC_FILES} ${X86_SRC_FILES} )
 
 # get all include files
 file( GLOB PRIVATE_INC_FILES ${BASE_INC_FILES} ${X86_INC_FILES}  )
@@ -106,8 +109,6 @@ if( VVENC_ENABLE_X86_SIMD )
                                               INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
 
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES FOLDER lib )
-else()
-  add_library( ${LIB_NAME}_x86_simd OBJECT )
 endif()
 
 # set resource file for MSVC compilers
@@ -119,12 +120,12 @@ add_library( ${LIB_NAME} ${SRC_FILES} $<$<TARGET_EXISTS:${LIB_NAME}_x86_simd>:$<
 
 target_compile_definitions( ${LIB_NAME} PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:${LIB_NAME},TYPE>,SHARED_LIBRARY>:${LIB_NAME_UC}_DYN_LINK> )
 
+target_include_directories( ${LIB_NAME} SYSTEM INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
 
 if( CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0 )
   target_compile_options( ${LIB_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU>: -Wno-array-bounds> )
 endif()
 
-target_include_directories( ${LIB_NAME} SYSTEM INTERFACE  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
 
 if( VVENC_ENABLE_THIRDPARTY_JSON )
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
