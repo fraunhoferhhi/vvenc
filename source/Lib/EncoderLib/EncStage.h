@@ -50,6 +50,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/Nal.h"
 
+#include <vector>
+
 //! \ingroup EncoderLib
 //! \{
 
@@ -109,6 +111,7 @@ public:
     m_isLead      = poc < 0;
     m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
     m_ctsValid    = yuvInBuf->ctsValid;
+    m_ctuBimQpOffset.resize( 0 );
     std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
   }
 
@@ -170,6 +173,8 @@ public:
   GOPEntry   m_gopEntry;
   bool       m_isSccWeak;
   bool       m_isSccStrong;
+  std::vector<int>             
+             m_ctuBimQpOffset;
 
 private:
   PelStorage m_origBuf;

@@ -670,7 +670,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       const int numCtu         = widthInCtus * heightInCtus;
       const int ctuBlocks      = ctuSize / m_mctfUnitSize;
 
-      pic->ctuBimQpOffset.resize( numCtu, 0 );
+      pic->m_picShared->m_ctuBimQpOffset.resize( numCtu, 0 );
 
       std::vector<double> sumError( numCtu * 2, 0 );
       std::vector<double> blkCount( numCtu * 2, 0 );
@@ -731,14 +731,18 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             qpOffset = -1;
           }
 
-          pic->ctuBimQpOffset[i] = qpOffset;
+          pic->m_picShared->m_ctuBimQpOffset[i] = qpOffset;
         }
       }
       else
       {
-        std::fill( pic->ctuBimQpOffset.begin(), pic->ctuBimQpOffset.end(), 0 );
+        std::fill( pic->m_picShared->m_ctuBimQpOffset.begin(), pic->m_picShared->m_ctuBimQpOffset.end(), 0 );
       }
     }
+  }
+  else
+  {
+    pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }
 }
 

@@ -236,8 +236,6 @@ void Picture::reset()
   std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
   std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 
-  ctuBimQpOffset.resize( 0 );
-
   encTime.resetTimer();
 }
 
@@ -269,8 +267,6 @@ void Picture::destroy( bool bPicHeader )
   {
     delete psei;
   }
-
-  std::vector<int>().swap( ctuBimQpOffset );
 
   SEIs.clear();
 }
