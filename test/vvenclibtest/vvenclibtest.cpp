@@ -70,7 +70,8 @@ int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
-int testStringApiInterface(); // check behaviour when using in sdk by using string api
+int testStringApiInterface();  // check behaviour when using in sdk by using string api
+int testTimestamps();          // check behaviour when using in sdk by using string api
 
 int main( int argc, char* argv[] )
 {
@@ -85,7 +86,7 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 5 );
+      printHelp = ( testId < 1 || testId > 6 );
     }
 
     if( printHelp )
@@ -126,12 +127,18 @@ int main( int argc, char* argv[] )
     testStringApiInterface();
     break;
   }
+  case 6:
+  {
+    testTimestamps();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
     testSDKDefaultBehaviour();
     testStringApiInterface();
+    testTimestamps();
     break;
   }
 
@@ -313,8 +320,8 @@ int testLibParameterRanges()
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { 0,1,2,64 } );
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { -1,65 }, true );
 
-  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { 90000,27000000,60,120 } );
-  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
+  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { 90000,27000000,60,120,-1 } );
+  testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -2,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
   testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 0, 1 } );
@@ -425,15 +432,17 @@ int callingOrderNoInit()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegular()
@@ -466,9 +475,7 @@ int callingOrderRegular()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
@@ -476,30 +483,28 @@ int callingOrderRegular()
     vvencYUVBuffer* pcYUVBufferFlush = nullptr;
     if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( !encodeDone )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderNotRegular()
@@ -529,39 +534,36 @@ int callingOrderNotRegular()
   fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
+  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
-  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
   if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegularInitPass()
@@ -590,31 +592,29 @@ int callingOrderRegularInitPass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
   fillInputPic( pcYuvPicture );
+  bool encodeDone = false;
+
   if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_encoder_close( enc );
-    return -1;
+    goto fail;
   }
-  bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    vvenc_encoder_close( enc );
-    return -1;
+    goto fail;
   }
   if( 0 != vvenc_encoder_close( enc ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int callingOrderRegularInit2Pass()
@@ -655,56 +655,48 @@ int callingOrderRegularInit2Pass()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( 0 != vvenc_init_pass( enc, 1, nullptr ) )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   while( ! encodeDone )
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
   }
 
   if( 0 != vvenc_encoder_close( enc ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 
@@ -739,9 +731,7 @@ int checkSDKDefaultBehaviourRC()
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   if( AU && AU->payloadUsedSize > 0 )
@@ -753,9 +743,7 @@ int checkSDKDefaultBehaviourRC()
   {
     if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
-      vvenc_YUVBuffer_free( pcYuvPicture, true );
-      vvenc_accessUnit_free( AU, true );
-      return -1;
+      goto fail;
     }
 
     if( AU && AU->payloadUsedSize > 0 )
@@ -766,23 +754,23 @@ int checkSDKDefaultBehaviourRC()
 
   if( 0 != vvenc_encoder_close( enc ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
 
   if( validAUs != 1 )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    goto fail;
   }
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
-
   return 0;
+
+fail:
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
 }
 
 int checkSDKStringApiDefault()
@@ -894,6 +882,192 @@ int checkSDKStringApiInvalid()
   return ret;
 }
 
+static int runEncoder( vvenc_config& c, uint64_t framesToEncode ) 
+{
+  uint64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate : 1;  // expected cts diff between frames
+  uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond : (uint64_t)c.m_FrameRate/(uint64_t)c.m_FrameScale;        // start with offset 1sec, to generate  cts/dts > 0
+  //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << " ctsDiff " << ctsDiff << " framesToEncode " << framesToEncode  << std::endl;
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
+    return -1;
+
+  if( 0 != vvenc_encoder_open( enc, &c ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, c.m_SourceWidth*c.m_SourceHeight );
+
+  vvencYUVBuffer *yuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( yuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
+  fillInputPic( yuvPicture );
+  
+  uint64_t lastDts=0;
+  uint64_t auCount=0;
+  bool eof       = false;
+  bool encodeDone = false;
+  uint64_t framesRcvd = 0;
+  while( !eof || !encodeDone )
+  {
+    vvencYUVBuffer* inputPtr = nullptr;
+    if ( ! eof )
+    {
+      inputPtr             = yuvPicture;
+      yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + framesRcvd);
+      yuvPicture->ctsValid = true;
+      framesRcvd++;
+    }
+
+    if( 0 != vvenc_encode( enc, inputPtr, AU, &encodeDone ))
+    {
+      goto fail;
+    }
+
+    if( AU && AU->payloadUsedSize > 0 )
+    {
+      auCount++;
+      if ( !AU->ctsValid || !AU->dtsValid )
+      {
+        goto fail;
+      } 
+      //std::cout << " AU dts " << AU->dts << " lastDts " << lastDts  << " diff " << AU->dts - lastDts << std::endl;
+      if ( lastDts > 0 && (AU->dts != lastDts + ctsDiff || AU->dts <= lastDts) )
+      {
+        if ( AU->dts <= lastDts ){
+          //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;
+        }else{
+          //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+        }
+        goto fail;
+      }
+      lastDts = AU->dts;
+    }
+
+    if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
+    {
+      //std::cout << " no valid AU received. encoder must always return an AU" << std::endl;
+      goto fail;
+    }
+
+    if( framesRcvd >= framesToEncode )
+    {
+      eof = true;
+    }
+  }
+
+  if( auCount != framesToEncode )
+  {
+    //std::cout << "expecting " << framesToEncode << " au, but only encoded " << auCount << std::endl;
+    goto fail;
+  }
+
+  vvenc_YUVBuffer_free( yuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return 0;
+
+fail:
+  vvenc_YUVBuffer_free( yuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+  return -1;
+}
+
+int checkTimestampsDefault()
+{
+  std::vector <std::tuple<int,int>> framerates;
+  framerates.push_back(std::make_tuple( 25,1) );
+  framerates.push_back(std::make_tuple( 30,1) );
+  framerates.push_back(std::make_tuple( 50,1) );
+  framerates.push_back(std::make_tuple( 60,1) );
+  framerates.push_back(std::make_tuple( 120,1) );
+
+  std::vector <int> tickspersecVec;
+  tickspersecVec.push_back(90000);
+  tickspersecVec.push_back(-1);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames) )
+      {
+        return -1;
+      }
+    }
+  }
+
+  framerates.clear();
+  tickspersecVec.clear();
+  framerates.push_back(std::make_tuple( 25000,1001) );
+  framerates.push_back(std::make_tuple( 30000,1001) );
+  framerates.push_back(std::make_tuple( 60000,1001) );
+  framerates.push_back(std::make_tuple( 120000,1001) );
+
+  tickspersecVec.push_back(27000000);
+  tickspersecVec.push_back(-1);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames) )
+      {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int checkTimestampsInvalid()
+{
+  std::vector <std::tuple<int,int>> framerates;
+  framerates.push_back(std::make_tuple( 60000,1001) );
+
+  std::vector <int> tickspersecVec;
+  tickspersecVec.push_back(90000);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+    for( auto & fps : framerates )
+    {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+
+      c.m_FrameRate  = std::get<0>(fps);
+      c.m_FrameScale = std::get<1>(fps);
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames) )
+      {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
 
 int testLibCallingOrder()
 {
@@ -921,6 +1095,14 @@ int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+
+  return 0;
+}
+
+int testTimestamps()
+{
+  testfunc( "checkTimestampsDefault", &checkTimestampsDefault, false );
+  testfunc( "checkTimestampsDefaultInvalid", &checkTimestampsInvalid, true );
 
   return 0;
 }

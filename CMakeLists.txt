@@ -311,6 +311,7 @@ add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-sdk_default COMMAND vvenclibtest 4 )
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
+add_test( NAME Test_vvenclibtest-timestamps COMMAND vvenclibtest 6 )
 
 add_test( NAME Test_vvencapp-tooltest COMMAND vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o out.vvc )
 set_tests_properties( Test_vvencapp-tooltest PROPERTIES TIMEOUT 90 )
