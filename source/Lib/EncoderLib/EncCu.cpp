@@ -619,7 +619,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if (isBimEnabled)
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
 
         updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
       }
@@ -633,7 +633,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
-
+      if (isBimEnabled)
+      {
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+      }
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
   }
