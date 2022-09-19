@@ -60,8 +60,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/YuvFileIO.h"
+#include "apputils/LogoOverlay.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -315,6 +316,24 @@ int main( int argc, char* argv[] )
       vvenc_encoder_close( enc );
       return -1;
     }
+    
+    apputils::LogoOverlayRenderer cLogoOverlayRenderer;
+    if( !vvencappCfg.m_LogoFileName.empty() )
+    {
+      std::stringstream strstr;
+      if ( 0 != cLogoOverlayRenderer.init( vvencappCfg.m_LogoFileName, strstr ) )
+      {
+        if( !strstr.str().empty() )
+          msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: %s", strstr.str().c_str() );
+        else
+          msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open Logo overlay renderer\n" );
+
+        vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+        vvenc_accessUnit_free_payload( &AU );
+        vvenc_encoder_close( enc );
+        return -1;
+      }
+    }
 
     const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_leadFrames;
     if( iRemSkipFrames < 0 )
@@ -408,6 +427,10 @@ int main( int argc, char* argv[] )
     }
 
     cYuvFileInput.close();
+    if( cLogoOverlayRenderer.isInitialized() )
+    {
+      cLogoOverlayRenderer.uninit();
+    }
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
