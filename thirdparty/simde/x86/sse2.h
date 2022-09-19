@@ -5965,7 +5965,7 @@ simde_mm_slli_epi32 (simde__m128i a, const int imm8)
 SIMDE_FUNCTION_ATTRIBUTES
 simde__m128i
 simde_mm_slli_epi64 (simde__m128i a, const int imm8)
-    SIMDE_REQUIRE_CONSTANT_RANGE(imm8, 0, 255)  {
+    SIMDE_REQUIRE_RANGE(imm8, 0, 255)  {
   if (HEDLEY_UNLIKELY((imm8 > 63))) {
     return simde_mm_setzero_si128();
   }
@@ -5986,14 +5986,14 @@ simde_mm_slli_epi64 (simde__m128i a, const int imm8)
 }
 #if defined(SIMDE_X86_SSE2_NATIVE)
   #define simde_mm_slli_epi64(a, imm8) _mm_slli_epi64(a, imm8)
-#elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
-  #define simde_mm_slli_epi64(a, imm8) \
-    (((imm8) <= 0) ? \
-      (a) : \
-      simde__m128i_from_neon_i64( \
-        ((imm8) > 63) ? \
-          vandq_s64(simde__m128i_to_neon_i64(a), vdupq_n_s64(0)) : \
-          vshlq_n_s64(simde__m128i_to_neon_i64(a), ((imm8) & 63))))
+//#elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
+//  #define simde_mm_slli_epi64(a, imm8) \
+//    (((imm8) <= 0) ? \
+//      (a) : \
+//      simde__m128i_from_neon_i64( \
+//        ((imm8) > 63) ? \
+//          vandq_s64(simde__m128i_to_neon_i64(a), vdupq_n_s64(0)) : \
+//          vshlq_n_s64(simde__m128i_to_neon_i64(a), ((imm8) & 63))))
 #elif defined(SIMDE_WASM_SIMD128_NATIVE)
   #define simde_mm_slli_epi64(a, imm8) \
     ((imm8 < 64) ? wasm_i64x2_shl(simde__m128i_to_private(a).wasm_v128, imm8) : wasm_i64x2_const(0,0))
@@ -6103,7 +6103,7 @@ simde_mm_srli_epi32 (simde__m128i a, const int imm8)
 SIMDE_FUNCTION_ATTRIBUTES
 simde__m128i
 simde_mm_srli_epi64 (simde__m128i a, const int imm8)
-    SIMDE_REQUIRE_CONSTANT_RANGE(imm8, 0, 255)  {
+    SIMDE_REQUIRE_RANGE(imm8, 0, 255)  {
   simde__m128i_private
     r_,
     a_ = simde__m128i_to_private(a);
@@ -6128,14 +6128,14 @@ simde_mm_srli_epi64 (simde__m128i a, const int imm8)
 }
 #if defined(SIMDE_X86_SSE2_NATIVE)
   #define simde_mm_srli_epi64(a, imm8) _mm_srli_epi64(a, imm8)
-#elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
-  #define simde_mm_srli_epi64(a, imm8) \
-    (((imm8) <= 0) ? \
-      (a) : \
-      simde__m128i_from_neon_u64( \
-        ((imm8) > 63) ? \
-          vandq_u64(simde__m128i_to_neon_u64(a), vdupq_n_u64(0)) : \
-          vshrq_n_u64(simde__m128i_to_neon_u64(a), ((imm8) & 63) | (((imm8) & 63) == 0))))
+//#elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
+//  #define simde_mm_srli_epi64(a, imm8) \
+//    (((imm8) <= 0) ? \
+//      (a) : \
+//      simde__m128i_from_neon_u64( \
+//        ((imm8) > 63) ? \
+//          vandq_u64(simde__m128i_to_neon_u64(a), vdupq_n_u64(0)) : \
+//          vshrq_n_u64(simde__m128i_to_neon_u64(a), ((imm8) & 63) | (((imm8) & 63) == 0))))
 #elif defined(SIMDE_WASM_SIMD128_NATIVE)
   #define simde_mm_srli_epi64(a, imm8) \
     ((imm8 < 64) ? wasm_u64x2_shr(simde__m128i_to_private(a).wasm_v128, imm8) : wasm_i64x2_const(0,0))

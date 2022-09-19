@@ -62,7 +62,9 @@ static inline void _mm256_zeroupper() {}  // NOOP
 //! \ingroup CommonLib
 //! \{
 
-#  include <simde/x86/sse2.h>
+//#  include <simde/x86/sse2.h>
+#  include "FixMissingIntrin.h"
+
 
 #  ifdef USE_AVX512
 #    define SIMDX86 AVX512
