@@ -59,8 +59,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )
-inline uint32_t _mm256_extract_epi32(__m256i vec, const int i )
+#if USE_AVX2 && _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )
+static inline uint32_t _mm256_extract_epi32(__m256i vec, const int i )
 {   
   __m128i indx = _mm_cvtsi32_si128(i);
   __m256i val  = _mm256_permutevar8x32_epi32(vec, _mm256_castsi128_si256(indx));
@@ -965,7 +965,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
       vnewv = _mm_div_ps( vnewv, vtws );
       //newVal /= temporalWeightSum;
       vnewv = _mm_add_ps( vnewv, _mm_set1_ps( 0.5f ) );
-      vnewv = _mm_round_ps( vnewv, ( _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC ) );
+      vnewv = _mm_round_ps( vnewv, ( SIMDE_MM_FROUND_TO_ZERO | SIMDE_MM_FROUND_NO_EXC ) );
       //Pel sampleVal = ( Pel ) ( newVal + 0.5 );
       __m128i vnewi = _mm_cvtps_epi32( vnewv );
 

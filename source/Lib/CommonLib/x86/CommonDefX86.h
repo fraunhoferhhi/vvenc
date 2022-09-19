@@ -56,11 +56,13 @@ POSSIBILITY OF SUCH DAMAGE.
 #    endif
 #  else    // !REAL_TARGET_X86 && !REAL_TARGET_WASM
 #    define SIMDE_ENABLE_NATIVE_ALIASES
+static inline void _mm256_zeroupper() {}  // NOOP
 #  endif   // !REAL_TARGET_X86 && !REAL_TARGET_WASM
 
 //! \ingroup CommonLib
 //! \{
 
+#  include <simde/x86/sse2.h>
 
 #  ifdef USE_AVX512
 #    define SIMDX86 AVX512
