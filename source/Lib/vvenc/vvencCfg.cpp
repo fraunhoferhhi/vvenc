@@ -622,8 +622,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
-  c->m_blockImportanceMapping                  = -1;
-
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
@@ -1259,13 +1257,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
 
-  if( c->m_blockImportanceMapping == -1 )
+  if( c->m_vvencMCTF.MCTF == 2 || c->m_vvencMCTF.MCTF == 4 )
   {
-    c->m_blockImportanceMapping = !!c->m_vvencMCTF.MCTF ? 1 : 0;
+    vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if MCTF based QP offseting is enabled!" );
   }
-
-  vvenc_confirmParameter( c, c->m_blockImportanceMapping != 0 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
-  vvenc_confirmParameter( c, c->m_blockImportanceMapping != 0 && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
@@ -1653,7 +1648,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_CIIP < 0 || c->m_CIIP > 3,                  "CIIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_SBT  < 0 || c->m_SBT  > 3,                  "SBT out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF < 0 || c->m_vvencMCTF.MCTF > 2,  "MCTF out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF < 0 || c->m_vvencMCTF.MCTF > 4,  "MCTF out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_ISP  < 0 || c->m_ISP > 3,                    "ISP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_TS   < 0 || c->m_TS > 2,                     "TS out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_TSsize < 2 || c->m_TSsize > 5,               "TSsize out of range [2..5]" );
@@ -1889,7 +1884,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_fastLocalDualTreeMode < 0 || c->m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
 
-  vvenc_confirmParameter(c,  c->m_vvencMCTF.MCTF > 2 || c->m_vvencMCTF.MCTF < 0, "MCTF out of range" );
+  vvenc_confirmParameter(c,  c->m_vvencMCTF.MCTF > 4 || c->m_vvencMCTF.MCTF < 0, "MCTF out of range" );
 
   if( c->m_vvencMCTF.MCTF )
   {
@@ -2261,7 +2256,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 4;
       c->m_MTSImplicit                     = 1;
       // scc
@@ -2316,7 +2311,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 4;
       c->m_MTSImplicit                     = 1;
       // scc
@@ -2376,7 +2371,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MMVD                            = 3;
       c->m_MTSImplicit                     = 1;
@@ -2443,7 +2438,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 3;
@@ -2515,7 +2510,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
@@ -2588,7 +2583,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
@@ -2663,7 +2658,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
-      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTF                  = 4;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 3;
@@ -2836,7 +2831,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-    css << "BIM:" << c->m_blockImportanceMapping << " ";
+    if( c->m_vvencMCTF.MCTF == 2 || c->m_vvencMCTF.MCTF == 4 )
+    {
+      css << "(with BIM) ";
+    }
 
     css << "\nPRE-ANALYSIS CFG: ";
     css << "STA:" << c->m_sliceTypeAdapt << " ";
