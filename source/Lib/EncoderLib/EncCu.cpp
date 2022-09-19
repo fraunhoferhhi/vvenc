@@ -613,15 +613,33 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
       }
-      // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
-      setUpLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true);
 
-      if (isBimEnabled)
+      // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
+      if( m_pcEncCfg->m_usePerceptQPA )
       {
+        setUpLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
+      }
+      else
+      {
+        setUpLambda( slice, slice.getLambdas()[0], tempCS->baseQP, false, true );
+      }
+
+      if( isBimEnabled )
+      {
+        const int baseQp = tempCS->baseQP;
+
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
 
-        updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
+        // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
+        if( m_pcEncCfg->m_usePerceptQPA )
+        {
+          updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true );
+        }
+        else
+        {
+          updateLambda( slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true );
+        }
       }
     }
     else if (m_pcEncCfg->m_usePerceptQPA && slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
