@@ -735,18 +735,30 @@ void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
-  const char* simdSet = NULL;
 #if defined( TARGET_SIMD_X86 )
-  std::string cSimdId ( simdId );
-  simdSet = read_x86_extension( cSimdId );
-#if ENABLE_SIMD_OPT_BUFFER
+  typedef std::map<std::string, X86_VEXT> translate;
+  const static translate                  m{ { "", UNDEFINED }, { "SCALAR", SCALAR }, { "SSE41", SSE41 }, { "SSE42", SSE42 }, { "AVX", AVX }, { "AVX2", AVX2 }, { "AVX512", AVX512 } };
+  translate::const_iterator               search = m.find( simdId );
+  if( search != m.end() )
+  {
+    X86_VEXT ext_flags = search->second;
+    read_x86_extension_flags( ext_flags );
+  }
+  else
+  {
+    THROW( "SIMD Mode not supported: " << simdId << "\n" );
+  }
+  static std::string currSimdName( read_simd_extension_name() );
+
+#  if ENABLE_SIMD_OPT_BUFFER
   g_pelBufOP.initPelBufOpsX86();
 #endif
 #if ENABLE_SIMD_TRAFO
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 #endif
-  return simdSet;
+
+  return currSimdName.c_str();
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
@@ -761,17 +773,11 @@ std::string VVEncImpl::getCompileInfoString()
 }
 
 std::string VVEncImpl::createEncoderInfoStr()
-{
-  std::string cInfoStr;
-
-    // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string curSimd;
-  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
-  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
-
+{ 
   std::stringstream cssCap;
-  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  cssCap << getCompileInfoString() << "[SIMD=" << read_simd_extension_name() <<"]";
 
+  std::string cInfoStr;
   cInfoStr  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
   cInfoStr += " ";
   cInfoStr += cssCap.str();

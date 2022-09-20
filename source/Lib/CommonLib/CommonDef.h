@@ -624,7 +624,9 @@ T* aligned_malloc(size_t len, size_t alignement) {
 #endif
 
 #ifdef TARGET_SIMD_X86
-typedef enum {
+typedef enum
+{
+  UNDEFINED = -1,
   SCALAR = 0,
   SSE41,
   SSE42,
@@ -633,8 +635,8 @@ typedef enum {
   AVX512
 } X86_VEXT;
 
-X86_VEXT read_x86_extension_flags(const std::string &extStrId = std::string());
-const char* read_x86_extension(const std::string &extStrId);
+X86_VEXT    read_x86_extension_flags( X86_VEXT request = UNDEFINED );
+std::string read_simd_extension_name();
 #endif
 
 template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
