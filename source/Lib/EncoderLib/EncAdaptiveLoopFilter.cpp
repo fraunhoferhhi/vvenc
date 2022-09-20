@@ -58,6 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if defined( TARGET_SIMD_X86 )
 #  include "CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
 #endif
 
 //! \ingroup EncoderLib

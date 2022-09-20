@@ -58,7 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef TARGET_SIMD_X86
 #  include "x86/CommonDefX86.h"
-#  include <simde/x86/sse2.h>
+#  include <simde/x86/sse4.1.h>
 #endif
 
 namespace vvenc {
