@@ -51,58 +51,162 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 #include <string>
 #include <algorithm>
+#include <optional>
+
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
 #include "../../../thirdparty/nlohmann_json/single_include/nlohmann/json.hpp"
+using nlohmann::json;
 #endif
-
 
 //! \ingroup Interface
 //! \{
 
-struct vvencYUVBuffer;
-
 namespace apputils {
-
 
 // ====================================================================================================================
 
-
-
-class LogoOverlay
-{
-public:
-
-  std::string          m_cVersion     = VVENC_VERSION;
-
-  class InputOptions
-  {
-    public:
-    std::string          m_cLogoFilename;
-    int                  m_SourceWidth  = 0;
-    int                  m_SourceHeight = 0;    
-    int                  m_Bitdepth     = 10;
-    int                  m_BgColorMin   = -1;
-    int                  m_BgColorMax   = -1;    
-  };
-
-  class RenderOptions
-  {
-    public:
-    int           m_TopLeftX        = 0;
-    int           m_TopLeftY        = 0;
-    int           m_ScaledWidth     = 0;
-    int           m_ScaledHeight    = 0;
-    bool          m_KeepAspectRatio = true;
-    int           m_Opacity         = 0;
-  };
-
-InputOptions   m_InputOpts;
-RenderOptions  m_RenderOpts;
+struct Event {
+    std::string content{};
+    std::string type{};
 };
+
+struct Key {
+    std::string test_key{};
+    //std::string random_data{};
+};
+
+inline void from_json(const json& obj, Key& k) {
+    k.test_key = obj.at("test_key").get<std::string>();
+    //k.random_data = obj.at( "random_data").get<std::string>();
+}
+
+inline  void from_json(const json& obj, Event& event) {
+    event.content = obj.at("content").get<std::string>();
+    event.type = obj.at("type").get<std::string>();
+}
+
+// struct LogoInputOptions
+// {
+//   std::string  logoFilename;
+//   int          sourceWidth   = 0;
+//   int          sourceHeight  = 0; 
+//   int          bitdepth      = 10;
+//   int          bgColorMin    = -1;
+//   int          bgColorMax    = -1;
+// };
+
+// struct LogoRenderOptions
+// {
+//   int           topLeftX        = 0;
+//   int           topLeftY        = 0;
+//   int           scaledWidth     = 0;
+//   int           scaledHeight    = 0;
+//   bool          keepAspectRatio = true;
+//   int           opacity         = 0;
+// };
+
+struct LogoOverlay
+{
+  std::string       version  = VVENC_VERSION;
+  std::string  logoFilename;
+  int          sourceWidth   = 0;
+  int          sourceHeight  = 0; 
+  int          bitdepth      = 10;
+  int          bgColorMin    = -1;
+  int          bgColorMax    = -1;
+  int           topLeftX        = 0;
+  int           topLeftY        = 0;
+  int           scaledWidth     = 0;
+  int           scaledHeight    = 0;
+  bool          keepAspectRatio = true;
+  int           opacity         = 0;
+};
+
+// inline void to_json( json& j, const LogoInputOptions& l)
+// {
+//     j = json{
+//       { "LogoFilename",  l.logoFilename },
+//       { "SourceWidth",   l.sourceWidth },
+//       { "SourceHeight",  l.sourceHeight },
+//       { "InputBitDepth", l.bitdepth },
+//       { "BgColorMin",    l.bgColorMin },
+//       { "BgColorMax",    l.bgColorMax }
+//     };
+// }
+
+// inline void to_json( json& j, const LogoRenderOptions& r)
+// {
+//     j = json{
+//       { "TopLeftX",        r.topLeftX },
+//       { "TopLeftY",        r.topLeftY },
+//       { "ScaledWidth",     r.scaledWidth },
+//       { "ScaledHeight",    r.scaledHeight },
+//       { "KeepAspectRatio", r.keepAspectRatio },
+//       { "Opacity",         r.opacity }
+//     };
+// }
+
+inline void to_json( json& j, const LogoOverlay& l)
+{
+    j = json{
+      { "version",    l.version  },
+      { "LogoFilename",  l.logoFilename },
+      { "SourceWidth",   l.sourceWidth },
+      { "SourceHeight",  l.sourceHeight },
+      { "InputBitDepth", l.bitdepth },
+      { "BgColorMin",    l.bgColorMin },
+      { "BgColorMax",    l.bgColorMax },
+      { "TopLeftX",        l.topLeftX },
+      { "TopLeftY",        l.topLeftY },
+      { "ScaledWidth",     l.scaledWidth },
+      { "ScaledHeight",    l.scaledHeight },
+      { "KeepAspectRatio", l.keepAspectRatio },
+      { "Opacity",         l.opacity }
+    };
+}
+
+// inline void from_json(const json& j, LogoInputOptions& i)
+// {
+//   j.at("BgColorMax").get_to(i.bgColorMax);
+//   j.at("BgColorMin").get_to(i.bgColorMin);
+//   j.at("InputBitDepth").get_to(i.bitdepth);
+//   j.at("LogoFilename").get_to(i.logoFilename);
+//   j.at("SourceHeight").get_to(i.sourceHeight);
+//   j.at("SourceWidth").get_to(i.sourceWidth);
+// }
+
+// inline void from_json(const json& j, LogoRenderOptions& r )
+// {
+//   j.at("BgColorMax").get_to(i.bgColorMax);
+//   j.at("BgColorMin").get_to(i.bgColorMin);
+//   j.at("InputBitDepth").get_to(i.bitdepth);
+//   j.at("LogoFilename").get_to(i.logoFilename);
+//   j.at("SourceHeight").get_to(i.sourceHeight);
+//   j.at("SourceWidth").get_to(i.sourceWidth);
+// }
+
+inline void from_json(const json& j, LogoOverlay& l )
+{
+  // j.at("input_opts").get_to(l.inputOpts);
+  // j.at("render_opts").get_to(l.renderOpts);
+  j.at("version").get_to(l.version);
+    j.at("BgColorMax").get_to(l.bgColorMax);
+  j.at("BgColorMin").get_to(l.bgColorMin);
+  j.at("InputBitDepth").get_to(l.bitdepth);
+  j.at("LogoFilename").get_to(l.logoFilename);
+  j.at("SourceHeight").get_to(l.sourceHeight);
+  j.at("SourceWidth").get_to(l.sourceWidth);
+    j.at("BgColorMax").get_to(l.bgColorMax);
+  j.at("BgColorMin").get_to(l.bgColorMin);
+  j.at("InputBitDepth").get_to(l.bitdepth);
+  j.at("LogoFilename").get_to(l.logoFilename);
+  j.at("SourceHeight").get_to(l.sourceHeight);
+  j.at("SourceWidth").get_to(l.sourceWidth);
+}
 
 
 class LogoOverlayRenderer
@@ -136,10 +240,15 @@ public:
       rcOstr << "error: cannot open logo overlay file '" << fileName << "'." << std::endl;
       return -1;
     }
-
     
-    writeLogoFile();
+    if( readLogoFile( rcOstr ) )
+    {
+      return -1;
+    }
     
+    vvenc_YUVBuffer_default( &m_cYuvBufLogo );
+    vvenc_YUVBuffer_alloc_buffer( &m_cYuvBufLogo, VVENC_CHROMA_420, m_cLogoOverlay.sourceWidth, m_cLogoOverlay.sourceHeight );
+        
     return 0;
   }
 
@@ -152,96 +261,85 @@ public:
 
     if( isOpen() )
       m_rcLogoFHandle.close();
-
+    
+    vvenc_YUVBuffer_free_buffer( &m_cYuvBufLogo );
+    
     return 0;
   }
 
-  bool  isInitialized()  { return m_bInitialized; }
-  bool  isOpen()  { return m_rcLogoFHandle.is_open(); }
-  bool  isEof()   { return m_rcLogoFHandle.eof();     }
-  bool  isFail()  { return m_rcLogoFHandle.fail();    }
+bool  isInitialized()  { return m_bInitialized; }
+bool  isOpen()  { return m_rcLogoFHandle.is_open(); }
+bool  isEof()   { return m_rcLogoFHandle.eof();     }
+bool  isFail()  { return m_rcLogoFHandle.fail();    }
 
+LogoOverlay getLogoInputOptions() { return m_cLogoOverlay; }
+vvencYUVBuffer* getLogoYuvBuffer()     { return &m_cYuvBufLogo; }
 
 void writeLogoFile()
 {
- //#ifdef VVENC_ENABLE_THIRDPARTY_JSON
-     // create a JSON object
-    nlohmann::json j =
-    {
-        {"version", VVENC_VERSION},
-        {
-            "input_opts", {
-                {"//input_comment1", "set logo input options. if BgColorRange >0 px value range of background color (Y), that is removed"},
-                {"LogoFilename",     m_cLogoOverlay.m_InputOpts.m_cLogoFilename},
-                {"SourceWidth",  m_cLogoOverlay.m_InputOpts.m_SourceWidth},
-                {"SourceHeight", m_cLogoOverlay.m_InputOpts.m_SourceHeight},
-                {"Bitdepth",     m_cLogoOverlay.m_InputOpts.m_Bitdepth},
-                {"//BGColor_comment", "if BgColorMin & BgColorMax >=0 px value range defines background range(Y) that is removed"},
-                {"BgColorMin",   m_cLogoOverlay.m_InputOpts.m_BgColorMin},
-                {"BgColorMax",   m_cLogoOverlay.m_InputOpts.m_BgColorMax},
-            }
-        },
-        {
-            "render_opts", {
-                {"//render_comment",    "set logo render options."},
-                {"TopLeftX",        m_cLogoOverlay.m_RenderOpts.m_TopLeftX},
-                {"TopLeftY",        m_cLogoOverlay.m_RenderOpts.m_TopLeftY},
-                {"//Scaling_comment",    "if ScaledWidth >0 or ScaledHeight >0, the logo is resized"},
-                {"ScaledWidth",     m_cLogoOverlay.m_RenderOpts.m_ScaledWidth},
-                {"ScaledHeight",    m_cLogoOverlay.m_RenderOpts.m_ScaledHeight},
-                {"KeepAspectRatio", m_cLogoOverlay.m_RenderOpts.m_KeepAspectRatio},
-                {"Opacity",         m_cLogoOverlay.m_RenderOpts.m_Opacity},
-            }
-        }
-    };
- 
-    m_rcLogoFHandleOut.open( "sample.json", std::ios::out );
-    if ( m_rcLogoFHandleOut.fail() )
-    {
-      return;
-    }
+ #ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  const json j { m_cLogoOverlay }; 
+  m_rcLogoFHandleOut.open( "sample.json", std::ios::out );
+  if ( m_rcLogoFHandleOut.fail() )
+  {
+    return;
+  }
   m_rcLogoFHandleOut << std::setw(4) << j << std::endl;
-//#endif
+#endif
 }
 
-void readLogoFile()
+int readLogoFile( std::ostream& rcOstr )
 {
-// #ifdef VVENC_ENABLE_THIRDPARTY_JSON
-//   std::string line;
-//   if( ! std::getline( m_rcStatsFHandle, line ) )
-//   {
-//     THROW( "unable to read header from rate control statistics file" );
-//   }
-//   nlohmann::json header = nlohmann::json::parse( line );
-//   if( header.find( "version" )         == header.end() || ! header[ "version" ].is_string()
-//       || header.find( "SourceWidth" )  == header.end() || ! header[ "SourceWidth" ].is_number()
-//       || header.find( "SourceHeight" ) == header.end() || ! header[ "SourceHeight" ].is_number()
-//       || header.find( "CTUSize" )      == header.end() || ! header[ "CTUSize" ].is_number()
-//       || header.find( "GOPSize" )      == header.end() || ! header[ "GOPSize" ].is_number()
-//       || header.find( "IntraPeriod" )  == header.end() || ! header[ "IntraPeriod" ].is_number()
-//       || header.find( "PQPA" )         == header.end() || ! header[ "PQPA" ].is_boolean()
-//       || header.find( "QP" )           == header.end() || ! header[ "QP" ].is_number()
-//       || header.find( "RCInitialQP" )  == header.end() || ! header[ "RCInitialQP" ].is_number()
-//     )
-//   {
-//     THROW( "header line in rate control statistics file not recognized" );
-//   }
-//   if( header[ "version" ]      != VVENC_VERSION )              msg.log( VVENC_WARNING, "WARNING: wrong version in rate control statistics file\n" );
-//   if( header[ "SourceWidth" ]  != m_pcEncCfg->m_SourceWidth )  msg.log( VVENC_WARNING, "WARNING: wrong frame width in rate control statistics file\n" );
-//   if( header[ "SourceHeight" ] != m_pcEncCfg->m_SourceHeight ) msg.log( VVENC_WARNING, "WARNING: wrong frame height in rate control statistics file\n" );
-//   if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      msg.log( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
-//   if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg.log( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
-//   if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg.log( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
-// #endif
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+//  std::string line;
+//  std::string s;
+//  while( std::getline( m_rcLogoFHandle, line ) )
+//  {
+//    line.erase(remove_if(line.begin(), line.end(), isspace), line.end());
+//    s.append(line);
+//  }
+  
+ try
+ {
+   json j;
+   m_rcLogoFHandle >> j;
+   std::vector<LogoOverlay> logoInput = j.get<std::vector<LogoOverlay>>();
+   m_cLogoOverlay = logoInput.at(0);
+ }
+ catch (std::exception& e)
+ {
+   rcOstr << "logo json parsing error: " << e.what() << "\n";
+   return -1;
+ }
+    
+    // json j={{"content",{{"test_key","test"}}},{"sender","alice"},{"type","key_type"}};
+
+    // try {
+    //     auto event_instance = j.get<Event>();
+    //     std::cout << event_instance.content.test_key << '\n';
+    //     std::cout << event_instance.type << '\n';
+    // } catch(const json::exception& e) {
+    //     std::cerr << e.what() << std::endl;
+    // }    
+    
+    // m_rcLogoFHandleOut.open( "sample.json", std::ios::out );
+    // if ( m_rcLogoFHandleOut.fail() )
+    // {
+    //   return -1;
+    // }
+    // m_rcLogoFHandleOut << std::setw(4) << j << std::endl;
+    
+#endif
+    
+  return 0;
 }
-
-
   private:
   bool            m_bInitialized = false;
   std::fstream    m_rcLogoFHandle;
   std::fstream    m_rcLogoFHandleOut;
 
   LogoOverlay     m_cLogoOverlay;
+  vvencYUVBuffer  m_cYuvBufLogo;
 
 };
 

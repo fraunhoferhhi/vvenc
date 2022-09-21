@@ -62,7 +62,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/VVEncAppCfg.h"
 #include "apputils/YuvFileIO.h"
-#include "apputils/LogoOverlay.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -308,33 +307,18 @@ int main( int argc, char* argv[] )
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvenccfg.m_inputBitDepth[0], vvenccfg.m_MSBExtendedBitDepth[0], vvenccfg.m_internalBitDepth[0],
                                  vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput,
-                                 vvencappCfg.m_forceY4mInput ) )
+                                 vvencappCfg.m_forceY4mInput, vvencappCfg.m_LogoFileName ) )
     {
-      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
+      if( ! vvencappCfg.m_LogoFileName.empty() )
+        msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: %s\n",cYuvFileInput.getLastError().c_str() );
+      else
+        msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );
       return -1;
     }
     
-    apputils::LogoOverlayRenderer cLogoOverlayRenderer;
-    if( !vvencappCfg.m_LogoFileName.empty() )
-    {
-      std::stringstream strstr;
-      if ( 0 != cLogoOverlayRenderer.init( vvencappCfg.m_LogoFileName, strstr ) )
-      {
-        if( !strstr.str().empty() )
-          msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: %s", strstr.str().c_str() );
-        else
-          msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open Logo overlay renderer\n" );
-
-        vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-        vvenc_accessUnit_free_payload( &AU );
-        vvenc_encoder_close( enc );
-        return -1;
-      }
-    }
-
     const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_leadFrames;
     if( iRemSkipFrames < 0 )
     {
@@ -427,10 +411,6 @@ int main( int argc, char* argv[] )
     }
 
     cYuvFileInput.close();
-    if( cLogoOverlayRenderer.isInitialized() )
-    {
-      cLogoOverlayRenderer.uninit();
-    }
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();

@@ -53,10 +53,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <regex>
 
-
-
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
+
+#include "LogoOverlay.h"
 
 #if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
 #include <io.h>
@@ -528,11 +528,13 @@ private:
   bool                m_readStdin           = false;            ///< read input from stdin
   bool                m_y4mMode             = false;            ///< use/force y4m file format
   size_t              m_packetCount         = 0;
+  LogoOverlayRenderer m_cLogoOverlayRenderer;
 
 public:
 
   int open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
-            vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode, bool y4mMode )
+            vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode, bool y4mMode,
+            std::string cLogoFilename = "" )
   {
     //NOTE: files cannot have bit depth greater than 16
     m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );
@@ -604,6 +606,70 @@ public:
         getline(inStream, headerline);  // jump over y4m header
         m_y4mMode   = true;
       }
+
+      if( !cLogoFilename.empty() )
+      {
+        std::stringstream strstr;
+        if ( 0 != m_cLogoOverlayRenderer.init( cLogoFilename, strstr ) )
+        {
+          if( !strstr.str().empty() )
+            m_lastError = strstr.str();
+          else
+            m_lastError = "failed to open Logo overlay renderer";
+          return -1;
+        }
+        
+        LogoOverlay cLogo = m_cLogoOverlayRenderer.getLogoInputOptions();
+        
+        std::string cErr;       
+        if( !checkInputFile( cLogo.logoFilename, cErr ) )
+        {
+          m_lastError = "Logo input file error: " + cErr;
+          return -1; 
+        }
+        
+        if( cLogo.sourceWidth <= 0 || cLogo.sourceHeight <= 0 )
+        {
+          std::stringstream css;
+          css << cLogo.sourceWidth  << "x" << cLogo.sourceHeight;
+          m_lastError = "Logo input file error: invalid size " + css.str();
+          return -1; 
+        }
+        
+        std::fstream cLogoHandle;
+        cLogoHandle.open( cLogo.logoFilename.c_str(), std::ios::binary | std::ios::in );
+        if( cLogoHandle.fail() )
+        {
+          m_lastError = "Failed to open logo overlay file:  " + cLogo.logoFilename;
+          return -1;
+        }
+        
+        bool is16bit = cLogo.bitdepth > 8 ? true : false;
+        vvencChromaFormat   logoChrFmt       = VVENC_CHROMA_420;
+        vvencChromaFormat   logoBufferChrFmt = VVENC_CHROMA_420;
+        vvencYUVBuffer* yuvBufLogo = m_cLogoOverlayRenderer.getLogoYuvBuffer();
+        for( int comp = 0; comp < 3; comp++ )
+        {
+          vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   
+          if ( readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
+          {
+            m_lastError = "Failed to read plane from logo overlay file:  " + cLogo.logoFilename;
+            return -1;
+          }
+    
+          if ( logoBufferChrFmt == VVENC_CHROMA_400 && comp)
+            continue;
+    
+          if ( ! verifyYuvPlane( yuvPlane, cLogo.bitdepth ) )
+          {
+            m_lastError = "Logo image contains values outside the specified bit range!";
+            return -1;
+          }
+    
+          scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, 0, 255 );
+        }
+        
+      }
     }
     return 0;
   }
@@ -612,6 +678,11 @@ public:
   {
     if( !m_readStdin )
       m_cHandle.close();
+
+    if( m_cLogoOverlayRenderer.isInitialized() )
+    {
+      m_cLogoOverlayRenderer.uninit();
+    }
   }
 
   bool  isOpen()  { return m_cHandle.is_open(); }
