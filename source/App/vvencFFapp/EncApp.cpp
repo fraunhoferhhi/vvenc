@@ -262,7 +262,7 @@ int EncApp::encode()
 
     if( m_yuvInputFile.open( appCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
                              appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput,
-                             appCfg.m_forceY4mInput ))
+                             appCfg.m_forceY4mInput, appCfg.m_LogoFileName ))
     {
       msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );

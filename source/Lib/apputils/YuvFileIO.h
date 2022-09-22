@@ -170,66 +170,10 @@ public:
 
       if( !cLogoFilename.empty() )
       {
-        std::stringstream strstr;
-        if ( 0 != m_cLogoOverlayRenderer.init( cLogoFilename, strstr ) )
+        if( 0 != initLogoOverlayRenderer( cLogoFilename ) )
         {
-          if( !strstr.str().empty() )
-            m_lastError = strstr.str();
-          else
-            m_lastError = "failed to open Logo overlay renderer";
           return -1;
         }
-        
-        LogoOverlay cLogo = m_cLogoOverlayRenderer.getLogoInputOptions();
-        
-        std::string cErr;       
-        if( !checkInputFile( cLogo.logoFilename, cErr ) )
-        {
-          m_lastError = "Logo input file error: " + cErr;
-          return -1; 
-        }
-        
-        if( cLogo.sourceWidth <= 0 || cLogo.sourceHeight <= 0 )
-        {
-          std::stringstream css;
-          css << cLogo.sourceWidth  << "x" << cLogo.sourceHeight;
-          m_lastError = "Logo input file error: invalid size " + css.str();
-          return -1; 
-        }
-        
-        std::fstream cLogoHandle;
-        cLogoHandle.open( cLogo.logoFilename.c_str(), std::ios::binary | std::ios::in );
-        if( cLogoHandle.fail() )
-        {
-          m_lastError = "Failed to open logo overlay file:  " + cLogo.logoFilename;
-          return -1;
-        }
-        
-        bool is16bit = cLogo.bitdepth > 8 ? true : false;
-        vvencChromaFormat   logoChrFmt       = VVENC_CHROMA_420;
-        vvencChromaFormat   logoBufferChrFmt = VVENC_CHROMA_420;
-        vvencYUVBuffer* yuvBufLogo = m_cLogoOverlayRenderer.getLogoYuvBuffer();
-        for( int comp = 0; comp < 3; comp++ )
-        {
-          vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   
-          if ( ! readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
-          {
-            m_lastError = "Failed to read plane from logo overlay file:  " + cLogo.logoFilename;
-            return -1;
-          }
-    
-          if ( logoBufferChrFmt == VVENC_CHROMA_400 && comp)
-            continue;
-    
-          if ( ! verifyYuvPlane( yuvPlane, cLogo.bitdepth ) )
-          {
-            m_lastError = "Logo image contains values outside the specified bit range!";
-            return -1;
-          }
-    
-          scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, 0, 255 );
-        }
-        
       }
     }
     return 0;
@@ -394,6 +338,19 @@ public:
       }
 
       scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
+    }
+    
+    if( m_cLogoOverlayRenderer.isInitialized() )
+    {
+      std::stringstream strstr;
+      if( 0 != m_cLogoOverlayRenderer.renderLogo( yuvInBuf, numComp, strstr ) )
+      {
+        if( !strstr.str().empty() )
+          m_lastError = strstr.str();
+        else
+          m_lastError = "failed to render Logo";
+        return -1;
+      }
     }
     
     m_packetCount++;
@@ -1133,6 +1090,74 @@ private:
         }
       }
     }
+  }
+  
+  int initLogoOverlayRenderer( std::string cLogoFilename )
+  {
+    std::stringstream strstr;
+    if ( 0 != m_cLogoOverlayRenderer.init( cLogoFilename, m_bufferChrFmt, strstr ) )
+    {
+      if( !strstr.str().empty() )
+        m_lastError = strstr.str();
+      else
+        m_lastError = "failed to open Logo overlay renderer";
+      return -1;
+    }
+    
+    LogoOverlay cLogo = m_cLogoOverlayRenderer.getLogoInputOptions();
+    
+    std::string cErr;       
+    if( !checkInputFile( cLogo.logoFilename, cErr ) )
+    {
+      m_lastError = "Logo input file error: " + cErr;
+      return -1; 
+    }
+    
+    if( cLogo.sourceWidth <= 0 || cLogo.sourceHeight <= 0 )
+    {
+      std::stringstream css;
+      css << cLogo.sourceWidth  << "x" << cLogo.sourceHeight;
+      m_lastError = "Logo input file error: invalid size " + css.str();
+      return -1; 
+    }
+    
+    
+    
+    std::fstream cLogoHandle;
+    cLogoHandle.open( cLogo.logoFilename.c_str(), std::ios::binary | std::ios::in );
+    if( cLogoHandle.fail() )
+    {
+      m_lastError = "Failed to open logo overlay file:  " + cLogo.logoFilename;
+      return -1;
+    }
+    
+    bool is16bit = cLogo.bitdepth > 8 ? true : false;
+    vvencChromaFormat   logoChrFmt       = VVENC_CHROMA_420;
+    vvencChromaFormat   logoBufferChrFmt = VVENC_CHROMA_420;
+    const LPel maxVal = ( 1 << cLogo.bitdepth ) - 1;
+    vvencYUVBuffer* yuvBufLogo = m_cLogoOverlayRenderer.getLogoYuvBuffer();
+    for( int comp = 0; comp < 3; comp++ )
+    {
+      vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   
+      if ( ! readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
+      {
+        m_lastError = "Failed to read plane from logo overlay file:  " + cLogo.logoFilename;
+        return -1;
+      }
+  
+      if ( logoBufferChrFmt == VVENC_CHROMA_400 && comp)
+        continue;
+  
+      if ( ! verifyYuvPlane( yuvPlane, cLogo.bitdepth ) )
+      {
+        m_lastError = "Logo image contains values outside the specified bit range!";
+        return -1;
+      }
+  
+      scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, 0, maxVal );
+    }
+    
+    return 0;
   }
 
 };
