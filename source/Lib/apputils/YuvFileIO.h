@@ -56,7 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
-#include "LogoOverlay.h"
+#include "LogoRenderer.h"
 
 #if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
 #include <io.h>
@@ -89,7 +89,7 @@ private:
   bool                m_readStdin           = false;            ///< read input from stdin
   bool                m_y4mMode             = false;            ///< use/force y4m file format
   size_t              m_packetCount         = 0;
-  LogoOverlayRenderer m_cLogoOverlayRenderer;
+  LogoRenderer        m_cLogoRenderer;
 
 public:
 
@@ -184,9 +184,9 @@ public:
     if( !m_readStdin )
       m_cHandle.close();
 
-    if( m_cLogoOverlayRenderer.isInitialized() )
+    if( m_cLogoRenderer.isInitialized() )
     {
-      m_cLogoOverlayRenderer.uninit();
+      m_cLogoRenderer.uninit();
     }
   }
 
@@ -340,10 +340,10 @@ public:
       scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
     }
     
-    if( m_cLogoOverlayRenderer.isInitialized() )
+    if( m_cLogoRenderer.isInitialized() )
     {
       std::stringstream strstr;
-      if( 0 != m_cLogoOverlayRenderer.renderLogo( yuvInBuf, numComp, strstr ) )
+      if( 0 != m_cLogoRenderer.renderLogo( yuvInBuf, numComp, strstr ) )
       {
         if( !strstr.str().empty() )
           m_lastError = strstr.str();
@@ -1095,7 +1095,7 @@ private:
   int initLogoOverlayRenderer( std::string cLogoFilename )
   {
     std::stringstream strstr;
-    if ( 0 != m_cLogoOverlayRenderer.init( cLogoFilename, m_bufferChrFmt, strstr ) )
+    if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, strstr ) )
     {
       if( !strstr.str().empty() )
         m_lastError = strstr.str();
@@ -1104,7 +1104,7 @@ private:
       return -1;
     }
     
-    LogoOverlay cLogo = m_cLogoOverlayRenderer.getLogoInputOptions();
+    LogoOverlay cLogo = m_cLogoRenderer.getLogoInputOptions();
     
     std::string cErr;       
     if( !checkInputFile( cLogo.logoFilename, cErr ) )
@@ -1135,7 +1135,7 @@ private:
     vvencChromaFormat   logoChrFmt       = VVENC_CHROMA_420;
     vvencChromaFormat   logoBufferChrFmt = VVENC_CHROMA_420;
     const LPel maxVal = ( 1 << cLogo.bitdepth ) - 1;
-    vvencYUVBuffer* yuvBufLogo = m_cLogoOverlayRenderer.getLogoYuvBuffer();
+    vvencYUVBuffer* yuvBufLogo = m_cLogoRenderer.getLogoYuvBuffer();
     for( int comp = 0; comp < 3; comp++ )
     {
       vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   

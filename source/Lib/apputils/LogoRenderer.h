@@ -39,8 +39,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     YuvFileIO.h
-    \brief    yuv file I/O class (header)
+/** \file     LogoRenderer.h
+    \brief    yuv logo renderer class (header)
 */
 
 #pragma once
@@ -210,16 +210,16 @@ inline void from_json(const json& j, LogoOverlay& l )
 }
 
 
-class LogoOverlayRenderer
+class LogoRenderer
 {
 public:
 
-  LogoOverlayRenderer()
+  LogoRenderer()
   {
 
   }
 
-  ~LogoOverlayRenderer()
+  ~LogoRenderer()
   {
     if( m_bInitialized ){ uninit(); }
   }
