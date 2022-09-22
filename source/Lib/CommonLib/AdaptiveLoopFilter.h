@@ -167,9 +167,9 @@ protected:
   int                          m_maxCUWidth;
   int                          m_maxCUHeight;
   int                          m_maxCUDepth;
-  int                          m_numCTUsInWidth;
-  int                          m_numCTUsInHeight;
-  int                          m_numCTUsInPic;
+  uint32_t                     m_numCTUsInWidth;
+  uint32_t                     m_numCTUsInHeight;
+  uint32_t                     m_numCTUsInPic;
   int                          m_alfVBLumaPos;
   int                          m_alfVBChmaPos;
   int                          m_alfVBLumaCTUHeight;

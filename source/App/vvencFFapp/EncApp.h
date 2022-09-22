@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvenc.h"
 #include "vvenc/vvencCfg.h"
+
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
