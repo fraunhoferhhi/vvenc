@@ -737,8 +737,7 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[2];
-  int                 m_blockImportanceMapping;                                          // Block importance mapping (JVET-Y0077)
+  int                 m_reservedInt[3];
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
   int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
@@ -749,6 +748,7 @@ typedef struct vvenc_config
 
   bool                m_picReordering;
   bool                m_reservedFlag[6];
+  bool                m_blockImportanceMapping;                                          // Block importance mapping (JVET-Y0077)
   bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
