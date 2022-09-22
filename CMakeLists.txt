@@ -10,10 +10,10 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.6.0 )
+project( vvenc VERSION 1.6.1 )
 
 # set alternative version numbering for release candidates
-#set( PROJECT_VERSION_RC rc1 )
+set( PROJECT_VERSION_RC rc1 )
 if( PROJECT_VERSION_RC )
     set( PROJECT_VERSION "${PROJECT_VERSION}-${PROJECT_VERSION_RC}" )
 endif()
@@ -63,10 +63,6 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
 
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
-
-  if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
-    list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
-  endif()
 
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
   list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvenc" )
@@ -267,6 +263,12 @@ if( CCACHE_FOUND )
   set_property( GLOBAL PROPERTY RULE_LAUNCH_LINK ccache )
 endif()
 
+
+if( VVENC_ENABLE_THIRDPARTY_JSON )
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
+endif()
+
 # handle rpath correctly
 if( VVENC_ENABLE_INSTALL )
   if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
@@ -293,7 +295,6 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
-add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
@@ -310,6 +311,7 @@ add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-sdk_default COMMAND vvenclibtest 4 )
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
+add_test( NAME Test_vvenclibtest-timestamps COMMAND vvenclibtest 6 )
 
 add_test( NAME Test_vvencapp-tooltest COMMAND vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o out.vvc )
 set_tests_properties( Test_vvencapp-tooltest PROPERTIES TIMEOUT 90 )
@@ -382,6 +384,8 @@ add_test( NAME Test_compare_output-medium_rc2p_statsFile_easy COMMAND ${CMAKE_CO
 
 add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc stats.json )
 
+get_directory_property( ALL_TESTS TESTS )
+set_tests_properties( ${ALL_TESTS} PROPERTIES RUN_SERIAL TRUE )
 
 if( VVENC_ENABLE_INSTALL )
   # include installer

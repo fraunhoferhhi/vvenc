@@ -15,7 +15,7 @@ endif()
 file( GLOB BASE_SRC_FILES "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" "../DecoderLib/*.cpp" "../EncoderLib/*.cpp" )
 
 # get include files
-file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" )
+file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" "../apputils/*.h" )
 
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
@@ -106,7 +106,7 @@ endif()
 
 target_include_directories( ${LIB_NAME} PRIVATE           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
                                         SYSTEM INTERFACE  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
-target_include_directories( ${LIB_NAME} PRIVATE . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 )
+target_include_directories( ${LIB_NAME} PRIVATE . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../apputils )
 
 if( VVENC_ENABLE_THIRDPARTY_JSON )
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
@@ -115,9 +115,9 @@ if( VVENC_ENABLE_THIRDPARTY_JSON )
 endif()
 
 if( TARGET INTEL_ITT)
-  target_link_libraries( ${LIB_NAME} PRIVATE INTEL_ITT Threads::Threads apputils )
+  target_link_libraries( ${LIB_NAME} PRIVATE INTEL_ITT Threads::Threads )
 else()
-  target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads apputils )
+  target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads )
 endif()
 
 # set the folder where to place the projects
