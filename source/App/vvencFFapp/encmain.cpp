@@ -50,7 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <ctime>
 
-#include "../vvencFFapp/EncApp.h"
+#include "EncApp.h"
 #include "apputils/ParseArg.h"
 
 #include "vvenc/vvenc.h"
@@ -68,13 +68,13 @@ int main(int argc, char* argv[])
   vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   std::string simdOpt;
-  apputils::df::program_options_lite::Options opts;
+  apputils::program_options::Options opts;
   opts.addOptions()
-    ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
+    ( "c",           apputils::program_options::parseConfigFile, "" )
     ( "SIMD",        simdOpt,         "" );
 
-  apputils::df::program_options_lite::SilentReporter err;
-  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
+  apputils::program_options::SilentReporter err;
+  apputils::program_options::scanArgv( opts, argc, ( const char** ) argv, err );
 
   vvenc_set_SIMD_extension( simdOpt.c_str() );
 

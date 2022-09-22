@@ -5,11 +5,7 @@ set( RUNTIME_DEST ${CMAKE_INSTALL_BINDIR} )
 set( LIBRARY_DEST ${CMAKE_INSTALL_LIBDIR} )
 set( ARCHIVE_DEST ${CMAKE_INSTALL_LIBDIR} )
 
-if( BUILD_SHARED_LIBS )
-  set( VVENC_INST_TARGETS vvenc )
-else()
-  set( VVENC_INST_TARGETS vvenc apputils )
-endif()
+set( VVENC_INST_TARGETS vvenc )
 
 # install targets
 macro( install_targets config_ )
