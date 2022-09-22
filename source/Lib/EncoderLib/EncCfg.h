@@ -59,7 +59,6 @@ struct VVEncCfg : public vvenc_config
   bool m_stageParallelProc;
   int  m_log2GopSize;
   int  m_maxTLayer;
-  bool m_blockImportanceMapping;
 
 private:
   void xInitCfgMembers();
