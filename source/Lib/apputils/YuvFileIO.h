@@ -343,7 +343,7 @@ public:
     if( m_cLogoRenderer.isInitialized() )
     {
       std::stringstream strstr;
-      if( 0 != m_cLogoRenderer.renderLogo( yuvInBuf, numComp, strstr ) )
+      if( 0 != m_cLogoRenderer.renderLogo( yuvInBuf, strstr ) )
       {
         if( !strstr.str().empty() )
           m_lastError = strstr.str();
@@ -1121,8 +1121,6 @@ private:
       return -1; 
     }
     
-    
-    
     std::fstream cLogoHandle;
     cLogoHandle.open( cLogo.logoFilename.c_str(), std::ios::binary | std::ios::in );
     if( cLogoHandle.fail() )
@@ -1156,6 +1154,8 @@ private:
   
       scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, 0, maxVal );
     }
+    
+    m_cLogoRenderer.setLogoReady();
     
     return 0;
   }
