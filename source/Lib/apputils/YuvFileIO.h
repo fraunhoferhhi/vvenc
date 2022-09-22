@@ -74,445 +74,6 @@ typedef int16_t LPel;
 
 // ====================================================================================================================
 
-static bool readYuvPlane( std::istream&       fd,
-                   vvencYUVPlane&      yuvPlane,
-                   bool                is16bit,
-                   int                 fileBitDepth,
-                   int                 packedYUVInput,
-                   const int&          compID,
-                   const vvencChromaFormat& inputChFmt,
-                   const vvencChromaFormat& internChFmt
-                 )
-{
-  const int csx_file = ( (compID == 0) || (inputChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
-  const int csy_file = ( (compID == 0) || (inputChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
-  const int csx_dest = ( (compID == 0) || (internChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
-  const int csy_dest = ( (compID == 0) || (internChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
-
-  const int stride  = yuvPlane.stride;
-  const int width   = yuvPlane.width;
-  const int height  = yuvPlane.height;
-  LPel* dst         = yuvPlane.ptr;
-
-  const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
-  const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
-
-  if ( compID != 0 && ( inputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
-  {
-    if ( internChFmt != VVENC_CHROMA_400 )
-    {
-      // set chrominance data to mid-range: (1<<(fileBitDepth-1))
-      const LPel val = 1 << ( fileBitDepth - 1 );
-      for (int y = 0; y < height; y++, dst+= stride)
-      {
-        for (int x = 0; x < width; x++)
-        {
-          dst[x] = val;
-        }
-      }
-    }
-
-    if ( inputChFmt != VVENC_CHROMA_400 )
-    {
-      fd.seekg( fileHeight * fileStride, std::ios::cur );
-      if ( fd.eof() || fd.fail() )
-      {
-        return false;
-      }
-    }
-  }
-  else if ( packedYUVInput )
-  {
-    const int fileStride_packed = ( width * 5 / 4 );
-    std::vector<uint8_t> bufVec( fileStride_packed );
-
-    for( int y = 0; y < height; y++ )
-    {
-      uint8_t *buf = &( bufVec[0] );
-
-      // read a new line
-      fd.read( reinterpret_cast<char*>( buf ), fileStride_packed );
-      if ( fd.eof() || fd.fail() )
-      {
-        return false;
-      }
-
-      for ( int x = 0; x < width; x += 4 )
-      {
-        int64_t iTemp = 0;
-        unsigned char* pucTemp = reinterpret_cast< unsigned char* >( &iTemp );
-        pucTemp[0] = buf[0];
-        pucTemp[1] = buf[1];
-        pucTemp[2] = buf[2];
-        pucTemp[3] = buf[3];
-        pucTemp[4] = buf[4];
-
-        dst[x+0] = 0x03ff & (iTemp>>0);
-        dst[x+1] = 0x03ff & (iTemp>>10);
-        dst[x+2] = 0x03ff & (iTemp>>20);
-        dst[x+3] = 0x03ff & (iTemp>>30);
-        buf += 5;
-      }
-      dst += stride;
-    }
-  }
-  else
-  {
-    std::vector<uint8_t> bufVec( fileStride );
-    uint8_t *buf = &( bufVec[0] );
-    const unsigned mask_y_file = ( 1 << csy_file ) - 1;
-    const unsigned mask_y_dest = ( 1 << csy_dest ) - 1;
-    for( int y444 = 0; y444 < ( height << csy_dest ); y444++ )
-    {
-      if ( ( y444 & mask_y_file ) == 0 )
-      {
-        // read a new line
-        fd.read( reinterpret_cast<char*>( buf ), fileStride );
-        if ( fd.eof() || fd.fail() )
-        {
-          return false;
-        }
-      }
-
-      if ( ( y444 & mask_y_dest ) == 0 )
-      {
-        // process current destination line
-        if ( csx_file < csx_dest )
-        {
-          // eg file is 444, dest is 422.
-          const int sx = csx_dest - csx_file;
-          if ( ! is16bit )
-          {
-            for ( int x = 0; x < width; x++ )
-            {
-              dst[ x ] = buf[ x << sx ];
-            }
-          }
-          else
-          {
-            for ( int x = 0; x < width; x++ )
-            {
-              dst[ x ] = LPel( buf[ ( x << sx ) * 2 + 0 ] ) | ( LPel ( buf[ ( x << sx ) * 2 + 1 ] ) << 8 );
-            }
-          }
-        }
-        else
-        {
-          // eg file is 422, dest is 444.
-          const int sx = csx_file - csx_dest;
-          if ( ! is16bit )
-          {
-            for ( int x = 0; x < width; x++ )
-            {
-              dst[ x ] = buf[ x >> sx ];
-            }
-          }
-          else
-          {
-            for ( int x = 0; x < width; x++ )
-            {
-              dst[ x ] = LPel( buf[ ( x >> sx ) * 2 + 0 ] ) | ( LPel( buf[ ( x >> sx ) * 2 + 1 ] ) << 8 );
-            }
-          }
-        }
-
-        dst += stride;
-      }
-    }
-
-  }
-  return true;
-}
-
-static bool writeYuvPlane( std::ostream&            fd,
-                    const vvencYUVPlane&     yuvPlane,
-                    bool                     is16bit,
-                    int                      fileBitDepth,
-                    int                      packedYUVOutputMode,
-                    const int&               compID,
-                    const vvencChromaFormat& internChFmt,
-                    const vvencChromaFormat& outputChFmt
-                  )
-{
-  const int stride = yuvPlane.stride;
-  const int width  = yuvPlane.width;
-  const int height = yuvPlane.height;
-  const LPel* src  = yuvPlane.ptr;
-
-  const int csx_file = ( (compID == 0) || (outputChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
-  const int csy_file = ( (compID == 0) || (outputChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
-  const int csx_src  = ( (compID == 0) || (internChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
-  const int csy_src  = ( (compID == 0) || (internChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
-
-  const int  fileWidth  = ( width  << csx_src ) >> csx_file;
-  const int  fileHeight = ( height << csy_src ) >> csy_file;
-  const bool writePYUV  = ( packedYUVOutputMode > 0 ) && ( fileBitDepth == 10 || fileBitDepth == 12 ) && ( ( fileWidth & ( 1 + ( fileBitDepth & 3 ) ) ) == 0 );
-  const int  fileStride = writePYUV ? ( ( width << csx_src ) * fileBitDepth ) >> ( csx_file + 3 ) : ( ( width << csx_src ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
-
-  std::vector<uint8_t> bufVec( fileStride );
-  uint8_t *buf = &( bufVec[ 0 ] );
-
-  if ( writePYUV )
-  {
-    const unsigned mask_y_file = (1 << csy_file) - 1;
-    const unsigned mask_y_src  = (1 << csy_src ) - 1;
-    const int      widthS_file = fileWidth >> (fileBitDepth == 12 ? 1 : 2);
-
-    for ( int y444 = 0; y444 < ( height << csy_src ); y444++)
-    {
-      if ( ( y444 & mask_y_file ) == 0 )  // write a new line to file
-      {
-        if ( csx_file < csx_src )
-        {
-          // eg file is 444, source is 422.
-          const int sx = csx_src - csx_file;
-
-          if (fileBitDepth == 10)  // write 4 values into 5 bytes
-          {
-            for ( int x = 0; x < widthS_file; x++)
-            {
-              const unsigned src0 = src[(4*x  ) >> sx];
-              const unsigned src1 = src[(4*x+1) >> sx];
-              const unsigned src2 = src[(4*x+2) >> sx];
-              const unsigned src3 = src[(4*x+3) >> sx];
-
-              buf[5*x  ] = ((src0     ) & 0xff); // src0:76543210
-              buf[5*x+1] = ((src1 << 2) & 0xfc) + ((src0 >> 8) & 0x03);
-              buf[5*x+2] = ((src2 << 4) & 0xf0) + ((src1 >> 6) & 0x0f);
-              buf[5*x+3] = ((src3 << 6) & 0xc0) + ((src2 >> 4) & 0x3f);
-              buf[5*x+4] = ((src3 >> 2) & 0xff); // src3:98765432
-            }
-          }
-          else if ( fileBitDepth == 12 ) //...2 values into 3 bytes
-          {
-            for ( int x = 0; x < widthS_file; x++ )
-            {
-              const unsigned src0 = src[(2*x  ) >> sx];
-              const unsigned src1 = src[(2*x+1) >> sx];
-
-              buf[3*x  ] = ((src0     ) & 0xff); // src0:76543210
-              buf[3*x+1] = ((src1 << 4) & 0xf0) + ((src0 >> 8) & 0x0f);
-              buf[3*x+2] = ((src1 >> 4) & 0xff); // src1:BA987654
-            }
-          }
-        }
-        else
-        {
-          // eg file is 422, source is 444.
-          const int sx = csx_file - csx_src;
-
-          if (fileBitDepth == 10)  // write 4 values into 5 bytes
-          {
-            for ( int x = 0; x < widthS_file; x++ )
-            {
-              const unsigned src0 = src[(4*x  ) << sx];
-              const unsigned src1 = src[(4*x+1) << sx];
-              const unsigned src2 = src[(4*x+2) << sx];
-              const unsigned src3 = src[(4*x+3) << sx];
-
-              buf[5*x  ] = ((src0     ) & 0xff); // src0:76543210
-              buf[5*x+1] = ((src1 << 2) & 0xfc) + ((src0 >> 8) & 0x03);
-              buf[5*x+2] = ((src2 << 4) & 0xf0) + ((src1 >> 6) & 0x0f);
-              buf[5*x+3] = ((src3 << 6) & 0xc0) + ((src2 >> 4) & 0x3f);
-              buf[5*x+4] = ((src3 >> 2) & 0xff); // src3:98765432
-            }
-          }
-          else if ( fileBitDepth == 12 ) //...2 values into 3 bytes
-          {
-            for ( int x = 0; x < widthS_file; x++ )
-            {
-              const unsigned src0 = src[(2*x  ) << sx];
-              const unsigned src1 = src[(2*x+1) << sx];
-
-              buf[3*x  ] = ((src0     ) & 0xff); // src0:76543210
-              buf[3*x+1] = ((src1 << 4) & 0xf0) + ((src0 >> 8) & 0x0f);
-              buf[3*x+2] = ((src1 >> 4) & 0xff); // src1:BA987654
-            }
-          }
-        }
-
-        fd.write( reinterpret_cast<const char*>( buf ), fileStride );
-        if ( fd.eof() || fd.fail() )
-        {
-          return false;
-        }
-      }
-
-      if ( ( y444 & mask_y_src ) == 0)
-      {
-        src += stride;
-      }
-    }
-  }
-  // !writePYUV
-  else if ( compID != 0 && ( outputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
-  {
-    if ( outputChFmt != VVENC_CHROMA_400 )
-    {
-      const LPel value = 1 << ( fileBitDepth - 1 );
-
-      for ( int y = 0; y < fileHeight; y++ )
-      {
-        if ( ! is16bit )
-        {
-          uint8_t val( value );
-          for ( int x = 0; x < fileWidth; x++ )
-          {
-            buf[x]=val;
-          }
-        }
-        else
-        {
-          uint16_t val( value );
-          for ( int x = 0; x < fileWidth; x++ )
-          {
-            buf[2*x  ]= (val>>0) & 0xff;
-            buf[2*x+1]= (val>>8) & 0xff;
-          }
-        }
-
-        fd.write( reinterpret_cast<const char*>( buf ), fileStride );
-        if ( fd.eof() || fd.fail() )
-        {
-          return false;
-        }
-      }
-    }
-  }
-  else
-  {
-    const unsigned mask_y_file = (1 << csy_file) - 1;
-    const unsigned mask_y_src  = (1 << csy_src ) - 1;
-
-    for ( int y444 = 0; y444 < ( height << csy_src ); y444++ )
-    {
-      if ( ( y444 & mask_y_file ) == 0 )
-      {
-        // write a new line
-        if ( csx_file < csx_src )
-        {
-          // eg file is 444, source is 422.
-          const int sx = csx_src - csx_file;
-          if ( ! is16bit )
-          {
-            for ( int x = 0; x < fileWidth; x++ )
-            {
-              buf[x] = (uint8_t)(src[x>>sx]);
-            }
-          }
-          else
-          {
-            for ( int x = 0; x < fileWidth; x++ )
-            {
-              buf[2*x  ] = (src[x>>sx]>>0) & 0xff;
-              buf[2*x+1] = (src[x>>sx]>>8) & 0xff;
-            }
-          }
-        }
-        else
-        {
-          // eg file is 422, source is 444.
-          const int sx = csx_file - csx_src;
-          if ( ! is16bit )
-          {
-            for ( int x = 0; x < fileWidth; x++ )
-            {
-              buf[x] = (uint8_t)(src[x<<sx]);
-            }
-          }
-          else
-          {
-            for ( int x = 0; x < fileWidth; x++ )
-            {
-              buf[2*x  ] = (src[x<<sx]>>0) & 0xff;
-              buf[2*x+1] = (src[x<<sx]>>8) & 0xff;
-            }
-          }
-        }
-
-        fd.write( reinterpret_cast<const char*>( buf ), fileStride );
-        if ( fd.eof() || fd.fail() )
-        {
-          return false;
-        }
-      }
-
-      if ( ( y444 & mask_y_src ) == 0 )
-      {
-        src += stride;
-      }
-    }
-  }
-  return true;
-}
-
-
-static bool verifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth )
-{
-  const int stride = yuvPlane.stride;
-  const int width  = yuvPlane.width;
-  const int height = yuvPlane.height;
-  LPel* dst        = yuvPlane.ptr;
-
-  const LPel mask = ~( ( 1 << bitDepth ) - 1 );
-
-  for ( int y = 0; y < height; y++, dst += stride )
-  {
-    for ( int x = 0; x < width; x++ )
-    {
-      if ( ( dst[ x ] & mask ) != 0 )
-      {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-
-static void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
-{
-  const int stride = yuvPlaneOut.stride;
-  const int width  = yuvPlaneOut.width;
-  const int height = yuvPlaneOut.height;
-  LPel* dst        = yuvPlaneOut.ptr;
-  const LPel* src    = yuvPlaneIn.ptr;
-  const int instride = yuvPlaneIn.stride;
-
-  if( 0 == shiftBits )
-  {
-    return;
-  }
-
-  if( shiftBits > 0 )
-  {
-    for( int y = 0; y < height; y++, dst += stride, src += instride )
-    {
-      for( int x = 0; x < width; x++)
-      {
-        dst[x] = src[x] << shiftBits;
-      }
-    }
-  }
-  else if ( shiftBits < 0 )
-  {
-    const int shiftbitsr =- shiftBits;
-    const LPel rounding = 1 << ( shiftbitsr-1 );
-
-    for( int y = 0; y < height; y++, dst += stride, src += instride )
-    {
-      for( int x = 0; x < width; x++)
-      {
-        LPel val = ( src[ x ] + rounding ) >> shiftbitsr;
-        dst[ x ] = std::max<LPel>( minVal, std::min<LPel>( maxVal, val ) );
-      }
-    }
-  }
-}
-
-
-
 class YuvFileIO
 {
 private:
@@ -651,7 +212,7 @@ public:
         for( int comp = 0; comp < 3; comp++ )
         {
           vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   
-          if ( readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
+          if ( ! readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
           {
             m_lastError = "Failed to read plane from logo overlay file:  " + cLogo.logoFilename;
             return -1;
@@ -1136,7 +697,443 @@ public:
 
     return true;
   }
+  
+private:
+  
+  static bool verifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth )
+  {
+    const int stride = yuvPlane.stride;
+    const int width  = yuvPlane.width;
+    const int height = yuvPlane.height;
+    LPel* dst        = yuvPlane.ptr;
+  
+    const LPel mask = ~( ( 1 << bitDepth ) - 1 );
+  
+    for ( int y = 0; y < height; y++, dst += stride )
+    {
+      for ( int x = 0; x < width; x++ )
+      {
+        if ( ( dst[ x ] & mask ) != 0 )
+        {
+          return false;
+        }
+      }
+    }
+  
+    return true;
+  }
+  
+  static bool readYuvPlane( std::istream&       fd,
+                     vvencYUVPlane&      yuvPlane,
+                     bool                is16bit,
+                     int                 fileBitDepth,
+                     int                 packedYUVInput,
+                     const int&          compID,
+                     const vvencChromaFormat& inputChFmt,
+                     const vvencChromaFormat& internChFmt
+                   )
+  {
+    const int csx_file = ( (compID == 0) || (inputChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+    const int csy_file = ( (compID == 0) || (inputChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+    const int csx_dest = ( (compID == 0) || (internChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+    const int csy_dest = ( (compID == 0) || (internChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+  
+    const int stride  = yuvPlane.stride;
+    const int width   = yuvPlane.width;
+    const int height  = yuvPlane.height;
+    LPel* dst         = yuvPlane.ptr;
+  
+    const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
+    const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
+  
+    if ( compID != 0 && ( inputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
+    {
+      if ( internChFmt != VVENC_CHROMA_400 )
+      {
+        // set chrominance data to mid-range: (1<<(fileBitDepth-1))
+        const LPel val = 1 << ( fileBitDepth - 1 );
+        for (int y = 0; y < height; y++, dst+= stride)
+        {
+          for (int x = 0; x < width; x++)
+          {
+            dst[x] = val;
+          }
+        }
+      }
+  
+      if ( inputChFmt != VVENC_CHROMA_400 )
+      {
+        fd.seekg( fileHeight * fileStride, std::ios::cur );
+        if ( fd.eof() || fd.fail() )
+        {
+          return false;
+        }
+      }
+    }
+    else if ( packedYUVInput )
+    {
+      const int fileStride_packed = ( width * 5 / 4 );
+      std::vector<uint8_t> bufVec( fileStride_packed );
+  
+      for( int y = 0; y < height; y++ )
+      {
+        uint8_t *buf = &( bufVec[0] );
+  
+        // read a new line
+        fd.read( reinterpret_cast<char*>( buf ), fileStride_packed );
+        if ( fd.eof() || fd.fail() )
+        {
+          return false;
+        }
+  
+        for ( int x = 0; x < width; x += 4 )
+        {
+          int64_t iTemp = 0;
+          unsigned char* pucTemp = reinterpret_cast< unsigned char* >( &iTemp );
+          pucTemp[0] = buf[0];
+          pucTemp[1] = buf[1];
+          pucTemp[2] = buf[2];
+          pucTemp[3] = buf[3];
+          pucTemp[4] = buf[4];
+  
+          dst[x+0] = 0x03ff & (iTemp>>0);
+          dst[x+1] = 0x03ff & (iTemp>>10);
+          dst[x+2] = 0x03ff & (iTemp>>20);
+          dst[x+3] = 0x03ff & (iTemp>>30);
+          buf += 5;
+        }
+        dst += stride;
+      }
+    }
+    else
+    {
+      std::vector<uint8_t> bufVec( fileStride );
+      uint8_t *buf = &( bufVec[0] );
+      const unsigned mask_y_file = ( 1 << csy_file ) - 1;
+      const unsigned mask_y_dest = ( 1 << csy_dest ) - 1;
+      for( int y444 = 0; y444 < ( height << csy_dest ); y444++ )
+      {
+        if ( ( y444 & mask_y_file ) == 0 )
+        {
+          // read a new line
+          fd.read( reinterpret_cast<char*>( buf ), fileStride );
+          if ( fd.eof() || fd.fail() )
+          {
+            return false;
+          }
+        }
+  
+        if ( ( y444 & mask_y_dest ) == 0 )
+        {
+          // process current destination line
+          if ( csx_file < csx_dest )
+          {
+            // eg file is 444, dest is 422.
+            const int sx = csx_dest - csx_file;
+            if ( ! is16bit )
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = buf[ x << sx ];
+              }
+            }
+            else
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = LPel( buf[ ( x << sx ) * 2 + 0 ] ) | ( LPel ( buf[ ( x << sx ) * 2 + 1 ] ) << 8 );
+              }
+            }
+          }
+          else
+          {
+            // eg file is 422, dest is 444.
+            const int sx = csx_file - csx_dest;
+            if ( ! is16bit )
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = buf[ x >> sx ];
+              }
+            }
+            else
+            {
+              for ( int x = 0; x < width; x++ )
+              {
+                dst[ x ] = LPel( buf[ ( x >> sx ) * 2 + 0 ] ) | ( LPel( buf[ ( x >> sx ) * 2 + 1 ] ) << 8 );
+              }
+            }
+          }
+  
+          dst += stride;
+        }
+      }
+  
+    }
+    return true;
+  }
+  
+  static bool writeYuvPlane( std::ostream&     fd,
+                      const vvencYUVPlane&     yuvPlane,
+                      bool                     is16bit,
+                      int                      fileBitDepth,
+                      int                      packedYUVOutputMode,
+                      const int&               compID,
+                      const vvencChromaFormat& internChFmt,
+                      const vvencChromaFormat& outputChFmt
+                    )
+  {
+    const int stride = yuvPlane.stride;
+    const int width  = yuvPlane.width;
+    const int height = yuvPlane.height;
+    const LPel* src  = yuvPlane.ptr;
+  
+    const int csx_file = ( (compID == 0) || (outputChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+    const int csy_file = ( (compID == 0) || (outputChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+    const int csx_src  = ( (compID == 0) || (internChFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+    const int csy_src  = ( (compID == 0) || (internChFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+  
+    const int  fileWidth  = ( width  << csx_src ) >> csx_file;
+    const int  fileHeight = ( height << csy_src ) >> csy_file;
+    const bool writePYUV  = ( packedYUVOutputMode > 0 ) && ( fileBitDepth == 10 || fileBitDepth == 12 ) && ( ( fileWidth & ( 1 + ( fileBitDepth & 3 ) ) ) == 0 );
+    const int  fileStride = writePYUV ? ( ( width << csx_src ) * fileBitDepth ) >> ( csx_file + 3 ) : ( ( width << csx_src ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
+  
+    std::vector<uint8_t> bufVec( fileStride );
+    uint8_t *buf = &( bufVec[ 0 ] );
+  
+    if ( writePYUV )
+    {
+      const unsigned mask_y_file = (1 << csy_file) - 1;
+      const unsigned mask_y_src  = (1 << csy_src ) - 1;
+      const int      widthS_file = fileWidth >> (fileBitDepth == 12 ? 1 : 2);
+  
+      for ( int y444 = 0; y444 < ( height << csy_src ); y444++)
+      {
+        if ( ( y444 & mask_y_file ) == 0 )  // write a new line to file
+        {
+          if ( csx_file < csx_src )
+          {
+            // eg file is 444, source is 422.
+            const int sx = csx_src - csx_file;
+  
+            if (fileBitDepth == 10)  // write 4 values into 5 bytes
+            {
+              for ( int x = 0; x < widthS_file; x++)
+              {
+                const unsigned src0 = src[(4*x  ) >> sx];
+                const unsigned src1 = src[(4*x+1) >> sx];
+                const unsigned src2 = src[(4*x+2) >> sx];
+                const unsigned src3 = src[(4*x+3) >> sx];
+  
+                buf[5*x  ] = ((src0     ) & 0xff); // src0:76543210
+                buf[5*x+1] = ((src1 << 2) & 0xfc) + ((src0 >> 8) & 0x03);
+                buf[5*x+2] = ((src2 << 4) & 0xf0) + ((src1 >> 6) & 0x0f);
+                buf[5*x+3] = ((src3 << 6) & 0xc0) + ((src2 >> 4) & 0x3f);
+                buf[5*x+4] = ((src3 >> 2) & 0xff); // src3:98765432
+              }
+            }
+            else if ( fileBitDepth == 12 ) //...2 values into 3 bytes
+            {
+              for ( int x = 0; x < widthS_file; x++ )
+              {
+                const unsigned src0 = src[(2*x  ) >> sx];
+                const unsigned src1 = src[(2*x+1) >> sx];
+  
+                buf[3*x  ] = ((src0     ) & 0xff); // src0:76543210
+                buf[3*x+1] = ((src1 << 4) & 0xf0) + ((src0 >> 8) & 0x0f);
+                buf[3*x+2] = ((src1 >> 4) & 0xff); // src1:BA987654
+              }
+            }
+          }
+          else
+          {
+            // eg file is 422, source is 444.
+            const int sx = csx_file - csx_src;
+  
+            if (fileBitDepth == 10)  // write 4 values into 5 bytes
+            {
+              for ( int x = 0; x < widthS_file; x++ )
+              {
+                const unsigned src0 = src[(4*x  ) << sx];
+                const unsigned src1 = src[(4*x+1) << sx];
+                const unsigned src2 = src[(4*x+2) << sx];
+                const unsigned src3 = src[(4*x+3) << sx];
+  
+                buf[5*x  ] = ((src0     ) & 0xff); // src0:76543210
+                buf[5*x+1] = ((src1 << 2) & 0xfc) + ((src0 >> 8) & 0x03);
+                buf[5*x+2] = ((src2 << 4) & 0xf0) + ((src1 >> 6) & 0x0f);
+                buf[5*x+3] = ((src3 << 6) & 0xc0) + ((src2 >> 4) & 0x3f);
+                buf[5*x+4] = ((src3 >> 2) & 0xff); // src3:98765432
+              }
+            }
+            else if ( fileBitDepth == 12 ) //...2 values into 3 bytes
+            {
+              for ( int x = 0; x < widthS_file; x++ )
+              {
+                const unsigned src0 = src[(2*x  ) << sx];
+                const unsigned src1 = src[(2*x+1) << sx];
+  
+                buf[3*x  ] = ((src0     ) & 0xff); // src0:76543210
+                buf[3*x+1] = ((src1 << 4) & 0xf0) + ((src0 >> 8) & 0x0f);
+                buf[3*x+2] = ((src1 >> 4) & 0xff); // src1:BA987654
+              }
+            }
+          }
+  
+          fd.write( reinterpret_cast<const char*>( buf ), fileStride );
+          if ( fd.eof() || fd.fail() )
+          {
+            return false;
+          }
+        }
+  
+        if ( ( y444 & mask_y_src ) == 0)
+        {
+          src += stride;
+        }
+      }
+    }
+    // !writePYUV
+    else if ( compID != 0 && ( outputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
+    {
+      if ( outputChFmt != VVENC_CHROMA_400 )
+      {
+        const LPel value = 1 << ( fileBitDepth - 1 );
+  
+        for ( int y = 0; y < fileHeight; y++ )
+        {
+          if ( ! is16bit )
+          {
+            uint8_t val( value );
+            for ( int x = 0; x < fileWidth; x++ )
+            {
+              buf[x]=val;
+            }
+          }
+          else
+          {
+            uint16_t val( value );
+            for ( int x = 0; x < fileWidth; x++ )
+            {
+              buf[2*x  ]= (val>>0) & 0xff;
+              buf[2*x+1]= (val>>8) & 0xff;
+            }
+          }
+  
+          fd.write( reinterpret_cast<const char*>( buf ), fileStride );
+          if ( fd.eof() || fd.fail() )
+          {
+            return false;
+          }
+        }
+      }
+    }
+    else
+    {
+      const unsigned mask_y_file = (1 << csy_file) - 1;
+      const unsigned mask_y_src  = (1 << csy_src ) - 1;
+  
+      for ( int y444 = 0; y444 < ( height << csy_src ); y444++ )
+      {
+        if ( ( y444 & mask_y_file ) == 0 )
+        {
+          // write a new line
+          if ( csx_file < csx_src )
+          {
+            // eg file is 444, source is 422.
+            const int sx = csx_src - csx_file;
+            if ( ! is16bit )
+            {
+              for ( int x = 0; x < fileWidth; x++ )
+              {
+                buf[x] = (uint8_t)(src[x>>sx]);
+              }
+            }
+            else
+            {
+              for ( int x = 0; x < fileWidth; x++ )
+              {
+                buf[2*x  ] = (src[x>>sx]>>0) & 0xff;
+                buf[2*x+1] = (src[x>>sx]>>8) & 0xff;
+              }
+            }
+          }
+          else
+          {
+            // eg file is 422, source is 444.
+            const int sx = csx_file - csx_src;
+            if ( ! is16bit )
+            {
+              for ( int x = 0; x < fileWidth; x++ )
+              {
+                buf[x] = (uint8_t)(src[x<<sx]);
+              }
+            }
+            else
+            {
+              for ( int x = 0; x < fileWidth; x++ )
+              {
+                buf[2*x  ] = (src[x<<sx]>>0) & 0xff;
+                buf[2*x+1] = (src[x<<sx]>>8) & 0xff;
+              }
+            }
+          }
+  
+          fd.write( reinterpret_cast<const char*>( buf ), fileStride );
+          if ( fd.eof() || fd.fail() )
+          {
+            return false;
+          }
+        }
+  
+        if ( ( y444 & mask_y_src ) == 0 )
+        {
+          src += stride;
+        }
+      }
+    }
+    return true;
+  }
 
+  static void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
+  {
+    const int stride = yuvPlaneOut.stride;
+    const int width  = yuvPlaneOut.width;
+    const int height = yuvPlaneOut.height;
+    LPel* dst        = yuvPlaneOut.ptr;
+    const LPel* src    = yuvPlaneIn.ptr;
+    const int instride = yuvPlaneIn.stride;
+  
+    if( 0 == shiftBits )
+    {
+      return;
+    }
+  
+    if( shiftBits > 0 )
+    {
+      for( int y = 0; y < height; y++, dst += stride, src += instride )
+      {
+        for( int x = 0; x < width; x++)
+        {
+          dst[x] = src[x] << shiftBits;
+        }
+      }
+    }
+    else if ( shiftBits < 0 )
+    {
+      const int shiftbitsr =- shiftBits;
+      const LPel rounding = 1 << ( shiftbitsr-1 );
+  
+      for( int y = 0; y < height; y++, dst += stride, src += instride )
+      {
+        for( int x = 0; x < width; x++)
+        {
+          LPel val = ( src[ x ] + rounding ) >> shiftbitsr;
+          dst[ x ] = std::max<LPel>( minVal, std::min<LPel>( maxVal, val ) );
+        }
+      }
+    }
+  }
 
 };
 
