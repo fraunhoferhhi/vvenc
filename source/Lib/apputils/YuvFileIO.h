@@ -1104,7 +1104,7 @@ private:
       return -1;
     }
     
-    LogoOverlay cLogo = m_cLogoRenderer.getLogoInputOptions();
+    LogoInputOptions cLogo = m_cLogoRenderer.getLogoInputOptions();
     
     std::string cErr;       
     if( !checkInputFile( cLogo.logoFilename, cErr ) )
