@@ -104,6 +104,7 @@ inline void to_json( json& j, const LogoInputOptions& l)
     { "SourceWidth",   l.sourceWidth },
     { "SourceHeight",  l.sourceHeight },
     { "InputBitDepth", l.bitdepth },
+    { "//BgColorMinMax",  "defines background color (min-max range inclusive). color range is removed when >= 0" },
     { "BgColorMin",    l.bgColorMin },
     { "BgColorMax",    l.bgColorMax }
   };
@@ -112,13 +113,18 @@ inline void to_json( json& j, const LogoInputOptions& l)
 inline void to_json( json& j, const LogoRenderOptions& r)
 {
   j = json{
+    { "//TopLeftXY",     "defines logo top left(x,y) position in px. position is clipped to max width and height (right and bottom picture border)" },
     { "TopLeftX",        r.topLeftX },
     { "TopLeftY",        r.topLeftY },
+    { "//MarginRight",   "defines logo margin to right border in px. position is clipped left picture border" },
     { "MarginRight",     r.marginRight },
+    { "//MarginBottom",  "defines logo margin to bottom border in px. position is clipped top picture border" },
     { "MarginBottom",    r.marginBottom },
+    { "//ScaledWidthHeight","defines logo scaling in px. Not implemented yet!" },
     { "ScaledWidth",     r.scaledWidth },
     { "ScaledHeight",    r.scaledHeight },
     { "KeepAspectRatio", r.keepAspectRatio },
+    { "//Opacity",       "defines opacity level in range 0-100% (0: opaque - 100: transparent)" },
     { "Opacity",         r.opacity }
   };
 }

@@ -1,0 +1,31 @@
+[
+    {
+        "input_opts": {
+            "//BgColorMinMax": "defines background color (min-max range inclusive). color range is removed when >= 0",
+            "BgColorMax": 80,
+            "BgColorMin": 0,
+            "InputBitDepth": 10,
+            "LogoFilename": "logo/hhi_white_1412x374_10bit.yuv",
+            "SourceHeight": 374,
+            "SourceWidth": 1412
+        },
+       "render_opts": {
+            "//MarginBottom": "defines logo margin to bottom border in px. position is clipped top picture border",
+            "//MarginRight": "defines logo margin to right border in px. position is clipped left picture border",
+            "//Opacity": "defines opacity level in range 0-100% (0: opaque - 100: transparent)",
+            "//ScaledWidthHeight": "defines logo scaling in px. Not implemented yet!",
+            "//TopLeftXY": "defines logo top left(x,y) position in px. position is clipped to max width and height (right and bottom picture border)",
+            "TopLeftX": 50,
+            "TopLeftY": 2000,
+            "MarginRight": 20,
+            "MarginBottom": 20,
+            "Opacity": 50,
+            "ScaledHeight": 0,
+            "ScaledWidth": 0,
+            "KeepAspectRatio": true
+        },
+        "version": "1.6.0"
+    }
+]
+
+
