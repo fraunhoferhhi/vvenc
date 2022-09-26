@@ -88,19 +88,11 @@ struct LogoRenderOptions
   int  opacity         = 0;
 };
 
-struct LogoRescaleOptions
-{
-  int  scaledWidth     = 0;
-  int  scaledHeight    = 0;
-  bool keepAspectRatio = true;
-};
-
 struct LogoOverlay
 {
   std::string        version = VVENC_VERSION;
   LogoInputOptions   inputOpts;
   LogoRenderOptions  renderOpts;
-  LogoRescaleOptions rescaleOpts;
 };
 
 inline void to_json( json& j, const LogoInputOptions& l)
@@ -131,23 +123,12 @@ inline void to_json( json& j, const LogoRenderOptions& r)
   };
 }
 
-inline void to_json( json& j, const LogoRescaleOptions& r)
-{
-  j = json{
-    { "//ScaledWidthHeight","defines logo scaling in px. Not implemented yet!" },
-    { "ScaledWidth",     r.scaledWidth },
-    { "ScaledHeight",    r.scaledHeight },
-    { "KeepAspectRatio", r.keepAspectRatio },
-  };
-}
-
 inline void to_json( json& j, const LogoOverlay& l)
 {
   j = json{
     { "version",      l.version     },
     { "input_opts",   l.inputOpts   },
     { "render_opts",  l.renderOpts  },
-    { "rescale_opts", l.rescaleOpts }
   };
 }
 
@@ -170,19 +151,11 @@ inline void from_json(const json& j, LogoRenderOptions& l )
   j.at("Opacity").get_to(l.opacity);
 }
 
-inline void from_json(const json& j, LogoRescaleOptions& l )
-{
-  j.at("ScaledWidth").get_to(l.scaledWidth);
-  j.at("ScaledHeight").get_to(l.scaledHeight);
-  j.at("KeepAspectRatio").get_to(l.keepAspectRatio);
-}
-
 inline void from_json(const json& j, LogoOverlay& l )
 {
   j.at("version").get_to(l.version);
   j.at("input_opts").get_to(l.inputOpts);
   j.at("render_opts").get_to(l.renderOpts);
-  j.at("rescale_opts").get_to(l.rescaleOpts);
 }
 
 class LogoRenderer
