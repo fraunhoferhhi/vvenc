@@ -264,7 +264,7 @@ int EncApp::encode()
                              appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput,
                              appCfg.m_forceY4mInput, appCfg.m_LogoFileName ))
     {
-      if( ! vvencappCfg.m_LogoFileName.empty() )
+      if( !appCfg.m_LogoFileName.empty() )
         msgApp( VVENC_ERROR, "%s\n", m_yuvInputFile.getLastError().c_str() );
       else
         msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
