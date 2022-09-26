@@ -212,8 +212,8 @@ public:
     m_chromaFormat = chromaFormat;
     if( readLogoFile( fileName, rcOstr ) )
     {
-      rcOstr << "write sample logo file 'sample.json' as reference." << std::endl;      
-      writeLogoFile( "sample.json", rcOstr );
+      rcOstr << "sample json file for logo description:" << std::endl;     
+      dumpOutput( rcOstr );
       return -1;
     }
        
@@ -264,6 +264,14 @@ public:
   LogoInputOptions getLogoInputOptions() { return m_cLogoOverlay.inputOpts; }
   vvencYUVBuffer* getLogoYuvBuffer()     { return &m_cYuvBufLogo; }
    
+  void dumpOutput( std::ostream& rcOstr )
+  {
+   #ifdef VVENC_ENABLE_THIRDPARTY_JSON  
+    const json j { m_cLogoOverlay }; 
+    rcOstr << j.dump(2) << std::endl;  
+   #endif
+  }
+  
   int writeLogoFile( std::string fileName, std::ostream& rcOstr )
   {
    #ifdef VVENC_ENABLE_THIRDPARTY_JSON

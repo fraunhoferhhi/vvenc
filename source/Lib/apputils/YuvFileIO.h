@@ -170,7 +170,7 @@ public:
 
       if( !cLogoFilename.empty() )
       {
-        if( 0 != initLogoOverlayRenderer( cLogoFilename ) )
+        if( 0 != initLogoRenderer( cLogoFilename ) )
         {
           return -1;
         }
@@ -680,12 +680,12 @@ private:
     return true;
   }
   
-  static bool readYuvPlane( std::istream&       fd,
-                     vvencYUVPlane&      yuvPlane,
-                     bool                is16bit,
-                     int                 fileBitDepth,
-                     int                 packedYUVInput,
-                     const int&          compID,
+  static bool readYuvPlane( std::istream&     fd,
+                     vvencYUVPlane&           yuvPlane,
+                     bool                     is16bit,
+                     int                      fileBitDepth,
+                     int                      packedYUVInput,
+                     const int&               compID,
                      const vvencChromaFormat& inputChFmt,
                      const vvencChromaFormat& internChFmt
                    )
@@ -1052,7 +1052,8 @@ private:
     return true;
   }
 
-  static void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
+  static void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, 
+                             const int shiftBits, const LPel minVal, const LPel maxVal )
   {
     const int stride = yuvPlaneOut.stride;
     const int width  = yuvPlaneOut.width;
@@ -1092,7 +1093,7 @@ private:
     }
   }
   
-  int initLogoOverlayRenderer( std::string cLogoFilename )
+  int initLogoRenderer( std::string cLogoFilename )
   {
     std::stringstream strstr;
     if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, strstr ) )
@@ -1129,21 +1130,20 @@ private:
       return -1;
     }
     
+    // read the logo int yuvBuffer
     bool is16bit = cLogo.bitdepth > 8 ? true : false;
-    vvencChromaFormat   logoChrFmt       = VVENC_CHROMA_420;
-    vvencChromaFormat   logoBufferChrFmt = VVENC_CHROMA_420;
     const LPel maxVal = ( 1 << cLogo.bitdepth ) - 1;
     vvencYUVBuffer* yuvBufLogo = m_cLogoRenderer.getLogoYuvBuffer();
     for( int comp = 0; comp < 3; comp++ )
     {
       vvencYUVPlane yuvPlane = yuvBufLogo->planes[ comp ];   
-      if ( ! readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, logoChrFmt, logoBufferChrFmt ) )
+      if ( ! readYuvPlane( cLogoHandle, yuvPlane, is16bit, cLogo.bitdepth, false, comp, m_bufferChrFmt, m_bufferChrFmt ) )
       {
         m_lastError = "Failed to read plane from logo overlay file:  " + cLogo.logoFilename;
         return -1;
       }
   
-      if ( logoBufferChrFmt == VVENC_CHROMA_400 && comp)
+      if ( m_bufferChrFmt == VVENC_CHROMA_400 && comp)
         continue;
   
       if ( ! verifyYuvPlane( yuvPlane, cLogo.bitdepth ) )

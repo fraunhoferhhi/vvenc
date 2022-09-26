@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
+
 #include <string>
 #include <vector>
 #include <tuple>
