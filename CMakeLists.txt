@@ -313,16 +313,26 @@ add_test( NAME Test_vvenclibtest-sdk_default             COMMAND vvenclibtest 4 
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
 add_test( NAME Test_vvenclibtest-timestamps COMMAND vvenclibtest 6 )
 
+set( CLEANUP_TEST_FILES "" )
 
 function( add_vvenc_test NAME TIMEOUT OUT_OUTPUT REQUIRES )
-  set( command ${ARGN} )  # use remaining arguments after REQUIRES as commandline
-  list( TRANSFORM command REPLACE "OUTPUT" "out_${NAME}.vvc" )  # substitute output file in command line
+  set( command ${ARGN} )                                    # use remaining arguments after REQUIRES as commandline
+
+  if( "OUTPUT" IN_LIST command )
+    set( out_file "out_${NAME}.vvc" )                       # generate output file name
+    list( TRANSFORM command REPLACE "OUTPUT" ${out_file} )  # substitute output file in command line
+    set( ${OUT_OUTPUT} ${out_file} PARENT_SCOPE )           # return output file name in OUT_OUTPUT parameter
+
+    set( CLEANUP_TEST_FILES "${CLEANUP_TEST_FILES};${out_file}" PARENT_SCOPE ) # collect list of output files to clean up afterwards
+  endif()
+
+
   add_test( NAME Test_${NAME} COMMAND ${command} )
   set_tests_properties( Test_${NAME} PROPERTIES
                                      TIMEOUT ${TIMEOUT}
                                      FIXTURES_REQUIRED "${REQUIRES};cleanup"
-                                     FIXTURES_SETUP out_${NAME}.vvc )
-  set( ${OUT_OUTPUT} out_${NAME}.vvc PARENT_SCOPE )
+                                     FIXTURES_SETUP "${out_file}"    # this test is the setup for the output-file
+                      )
 endfunction()
 
 add_vvenc_test( vvencapp-tooltest       90 OUT_VVC   ""                       vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o OUTPUT )
@@ -373,8 +383,8 @@ add_vvenc_test( vvencapp-medium_rc2p_statsFile1_easy      30 OUT_VVC   ""       
 add_vvenc_test( vvencapp-medium_rc2p_statsFile2_easy      30 OUT_VVC   "${OUT_VVC}"             vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Pass=2 --RCStatsFile=stats_easy.json -o OUTPUT )
 add_vvenc_test( compare_output-medium_rc2p_statsFile_easy 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm out_vvenc*.vvc rec.yuv stats_exp.json stats_easy.json )
-set_tests_properties( Test_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
+add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
+set_tests_properties( Cleanup_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
 
 
 if( VVENC_ENABLE_INSTALL )
