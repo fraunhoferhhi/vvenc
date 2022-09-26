@@ -395,7 +395,7 @@ public:
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
                                                                ///< values that are not arbitrary must be quoted "\"values\""
                                                                ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
-  std::string  m_LogoFileName;                                 ///< logo overlay file
+  std::string  m_logoFileName;                                 ///< logo overlay file
 private:
   const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
 
@@ -676,7 +676,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
-  ("logofile",                                          m_LogoFileName,                                    "set logo overlay filename (json)")
+  ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
 
   if( !m_easyMode )
@@ -1330,7 +1330,7 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
     rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
-  if( ! m_LogoFileName.empty() )
+  if( ! m_logoFileName.empty() )
   {
     rcOstr << "error: reading of logo overlay file not supported, please disable logofile parameter or compile with json enabled" << std::endl;
     ret = false;

@@ -307,9 +307,9 @@ int main( int argc, char* argv[] )
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvenccfg.m_inputBitDepth[0], vvenccfg.m_MSBExtendedBitDepth[0], vvenccfg.m_internalBitDepth[0],
                                  vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput,
-                                 vvencappCfg.m_forceY4mInput, vvencappCfg.m_LogoFileName ) )
+                                 vvencappCfg.m_forceY4mInput, vvencappCfg.m_logoFileName ) )
     {
-      if( ! vvencappCfg.m_LogoFileName.empty() )
+      if( ! vvencappCfg.m_logoFileName.empty() )
         msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: %s\n",cYuvFileInput.getLastError().c_str() );
       else
         msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
