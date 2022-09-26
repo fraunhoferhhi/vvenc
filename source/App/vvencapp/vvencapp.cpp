@@ -60,8 +60,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "apputils/VVEncAppCfg.h"
 #include "apputils/YuvFileIO.h"
+#include "apputils/VVEncAppCfg.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -318,7 +318,7 @@ int main( int argc, char* argv[] )
       vvenc_encoder_close( enc );
       return -1;
     }
-    
+
     const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_leadFrames;
     if( iRemSkipFrames < 0 )
     {
