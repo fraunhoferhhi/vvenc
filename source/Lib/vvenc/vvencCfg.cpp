@@ -1822,7 +1822,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_useAMaxBT < 0               || c->m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
-  vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
+  {
+    const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+    vvenc_confirmParameter(c, c->m_alfSpeed < 0              || c->m_alfSpeed > maxTLayer,        "ALFSpeed out of range (0,log2(GopSize))");
+  }
 
   vvenc_confirmParameter(c, c->m_alfUnitSize < c->m_CTUSize,                                      "ALF Unit Size must be greater than or equal to CTUSize");
   vvenc_confirmParameter(c, c->m_alfUnitSize % c->m_CTUSize != 0,                                 "ALF Unit Size must be a multiple of CTUSize");
