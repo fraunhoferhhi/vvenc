@@ -2630,7 +2630,7 @@ double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double
     //distortion
     for( int altIdx = 0; altIdx < m_alfParamTemp.numAlternativesChroma; ++altIdx )
     {
-      assert(alfFilterShape.numCoeff == m_alfCovarianceFrame[channel][iShapeIdx][altIdx].numCoeff);
+      assert(alfFilterShape.numCoeff == m_alfCovarianceFrame[channel][altIdx].numCoeff);
       AlfParam bestSliceParam;
       double bestCost = MAX_DOUBLE;
       double bestDist = MAX_DOUBLE;
