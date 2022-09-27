@@ -1318,6 +1318,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_ReshapeCW_default( &c->m_reshapeCW );
   }
 
+  const bool autoGop = c->m_GOPList[0].m_POC;
+
   if( c->m_GOPList[ 0 ].m_POC == -1 || ( c->m_addGOP32refPics && c->m_GOPSize == 32 ) )
   {
     if( c->m_IntraPeriod == 1 || c->m_GOPSize == 1 )
@@ -1449,9 +1451,32 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     else
     {
-      vvenc_confirmParameter( c, true, "gop auto configuration only supported for gop size (1,8,16,32)" );
+      vvenc_confirmParameter( c, true, "GOP auto configuration only supported for gop size (1,8,16,32)" );
+    }
+
+    if( autoGop && c->m_numRefPics != 0 )
+    {
+      const int maxTLayer  = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+      const int numRefCode = c->m_numRefPics;
+
+      for( int i = 0; i < 64; i++ )
+      {
+        if( c->m_GOPList[i].m_POC == -1 ) break;
+
+        int tLayer  = c->m_GOPList[i].m_temporalId;
+        int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
+
+        c->m_GOPList[i].m_numRefPicsActive[0] = c->m_GOPList[i].m_numRefPicsActive[1] = numRefs;
+
+        vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
+        vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
+      }
     }
   }
+
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics != 0 && c->m_addGOP32refPics, "NumRefPics and AddGOP32refPics options are mutually exclusive!" );
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
