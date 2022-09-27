@@ -145,7 +145,6 @@ struct AlfParam
   bool                         alfLumaCoeffFlag[MAX_NUM_ALF_CLASSES];                   // alf_luma_coeff_flag[i]
   int                          numLumaFilters;                                          // number_of_filters_minus1 + 1
   bool                         alfLumaCoeffDeltaFlag;                                   // alf_luma_coeff_delta_flag
-  std::vector<AlfFilterShape>* filterShapes;
   bool                         newFilterFlag[MAX_NUM_CH];
 
   AlfParam()
