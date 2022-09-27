@@ -151,8 +151,8 @@ protected:
   short                        m_chromaCoeffFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   AlfParam*                    m_alfParamChroma;
   Pel                          m_alfClippingValues[MAX_NUM_CH][MaxAlfNumClippingValues];
-  std::vector<AlfFilterShape>  m_filterShapesCcAlf[2];
-  std::vector<AlfFilterShape>  m_filterShapes[MAX_NUM_CH];
+  AlfFilterShape               m_filterShapesCcAlf[2];
+  AlfFilterShape               m_filterShapes[MAX_NUM_CH];
   AlfClassifier*               m_classifier;
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
