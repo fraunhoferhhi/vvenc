@@ -109,8 +109,8 @@ inline void to_json( json& j, const LogoInputOptions& l)
 inline void to_json( json& j, const LogoRenderOptions& r)
 {
   j = json{
-    { "//OffsetHor",     "defines logo horizontal offset(x) in px. (clipped to max picture width), if >= 0 offsert from left, < 0 offset from right+1" },
-    { "//OffsetVer",     "defines logo vertical offset(y) in px. (clipped to max picture height), if >= 0 offsert from top, < 0 offset from bottom+1" },
+    { "//OffsetHor",     "defines logo horizontal offset(x) in px. (clipped to pic borders), if >= 0 offset from left, < 0 offset from right+1" },
+    { "//OffsetVer",     "defines logo   vertical offset(y) in px. (clipped to pic borders), if >= 0 offset from top, < 0 offset from bottom+1" },
     { "OffsetHor",        r.offsetHor },
     { "OffsetVer",        r.offsetVer },
     { "//Opacity",       "defines opacity level in range 0-100% (0: opaque - 100: transparent)" },
