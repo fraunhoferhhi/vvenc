@@ -1136,6 +1136,20 @@ private:
       return -1;
     }
     
+    if ( isY4mInputFilename( cLogo.logoFilename ) )
+    {
+      std::string headerline;
+      getline(cLogoHandle, headerline);  // jump over y4m header
+      
+      std::string y4mPrefix;
+      getline(cLogoHandle, y4mPrefix);   /* assume basic FRAME\n headers */
+      if( y4mPrefix != "FRAME")
+      {
+        m_lastError = "Source image does not contain valid y4m header (FRAME) - end of stream";
+        return -1;
+      }
+    }
+
     // read the logo int yuvBuffer
     bool is16bit = cLogo.bitdepth > 8 ? true : false;
     const LPel maxVal = ( 1 << cLogo.bitdepth ) - 1;

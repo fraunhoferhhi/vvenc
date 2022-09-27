@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <algorithm>
 #include <optional>
+#include <regex>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -182,6 +183,21 @@ public:
       dumpOutput( rcOstr );
       return -1;
     }
+    
+    std::string ext;
+    if(m_cLogo.inputOpts.logoFilename.find_last_of(".") != std::string::npos)
+    {
+      ext = m_cLogo.inputOpts.logoFilename.substr(m_cLogo.inputOpts.logoFilename.find_last_of(".")+1);
+      std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+    }
+    if( "y4m" == ext )
+    {
+      if ( 0 != parseY4M ( m_cLogo.inputOpts.logoFilename ) )
+      {
+        rcOstr << "cannot parse y4m information in file " << m_cLogo.inputOpts.logoFilename << std::endl;     
+        return -1;
+      }
+    }    
        
     vvenc_YUVBuffer_default( &m_cYuvBufLogo );
     vvenc_YUVBuffer_alloc_buffer( &m_cYuvBufLogo, chromaFormat, m_cLogo.inputOpts.sourceWidth, m_cLogo.inputOpts.sourceHeight );
@@ -445,6 +461,97 @@ public:
     
     return 0;
   }
+  
+private:
+  
+  int parseY4M( std::string fileName )
+  {
+    std::fstream cfHandle;
+    cfHandle.open( fileName, std::ios::binary | std::ios::in );
+    if( cfHandle.fail() )
+    {
+      return -1;
+    }
+      
+    std::string headerline;
+    getline(cfHandle, headerline);
+    if( headerline.empty() ){ return -1; }
+    std::transform( headerline.begin(), headerline.end(), headerline.begin(), ::toupper );
+  
+    std::regex reg("\\s+"); // tokenize at spaces
+    std::sregex_token_iterator iter(headerline.begin(), headerline.end(), reg, -1);
+    std::sregex_token_iterator end;
+    std::vector<std::string> vec(iter, end);
+  
+    bool valid=false;
+    for (auto &p : vec)
+    {
+      if( p == "YUV4MPEG2" ) // read file signature
+      { valid = true; }
+      else if( p[0] == 'W' ) // width
+        m_cLogo.inputOpts.sourceWidth = atoi( p.substr( 1 ).c_str());
+      else if( p[0] == 'H' ) // height
+        m_cLogo.inputOpts.sourceHeight = atoi( p.substr( 1 ).c_str());
+      else if( p[0] == 'F' )  // framerate,scale
+      {
+        size_t sep = p.find(":");
+        if( sep == std::string::npos ) return -1;
+      }
+      else if( p[0] == 'A' ) // aspcet ration
+      {
+        size_t sep = p.find(":");
+        if( sep == std::string::npos ) return -1;
+      }
+      else if( p[0] == 'C' ) // colorspace ( e.g. C420p10)
+      {
+        std::vector<std::string> ignores = {"JPEG", "MPEG2", "PALVD" }; // ignore some special cases
+        for( auto &i : ignores )
+        {
+          auto n = p.find( i );
+          if (n != std::string::npos) p.erase(n, i.length()); // remove from param string (e.g. 420PALVD)
+        }
+  
+        size_t sep = p.find("P");
+        std::string chromatype;
+        if( sep != std::string::npos )
+        {
+          chromatype = ( p.substr( 1, sep-1 ).c_str());
+          m_cLogo.inputOpts.bitdepth = atoi( p.substr( sep+1 ).c_str());
+        }
+        else
+        {
+          sep = p.find("MONO");
+          if( sep != std::string::npos )
+          {
+            chromatype = "400";
+            if( p == "MONO") m_cLogo.inputOpts.bitdepth = 8;
+            else m_cLogo.inputOpts.bitdepth = atoi( p.substr( sep+5 ).c_str()); // e.g. mono10
+          }
+          else
+          {
+            chromatype = ( p.substr( 1 ).c_str());
+            m_cLogo.inputOpts.bitdepth = 8;
+          }
+        }
+  
+        if( chromatype == "400" )      { m_chromaFormat =  VVENC_CHROMA_400; }
+        else if( chromatype == "420" ) { m_chromaFormat =  VVENC_CHROMA_420; }
+        else if( chromatype == "422" ) { m_chromaFormat =  VVENC_CHROMA_422; }
+        else if( chromatype == "444" ) { m_chromaFormat =  VVENC_CHROMA_444; }
+        else { return -1; } // unsupported chroma foramt}
+      }
+      else if( p[0] == 'I' ) // interlaced format (ignore it, because we cannot set it in any params
+      {}
+      else if( p[0] == 'X' ) // ignore comments
+      {}
+    }
+  
+    cfHandle.close();
+    if( !valid ) return -1;
+    
+    return 0;
+  }
+   
 
 private:
   bool              m_bInitialized = false;
