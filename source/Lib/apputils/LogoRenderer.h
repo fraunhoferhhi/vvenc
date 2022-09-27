@@ -240,7 +240,7 @@ public:
   
   int writeLogoFile( std::string fileName, std::ostream& rcOstr )
   {
-   #ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream    logoFHandle;   
     logoFHandle.open( fileName, std::ios::out );
     if ( logoFHandle.fail() )
@@ -255,8 +255,9 @@ public:
     if(  logoFHandle.is_open() )
       logoFHandle.close();
     return 0;
-  #endif
+  #else
     return -1;
+  #endif
   }
   
   int readLogoFile( std::string fileName, std::ostream& rcOstr )
@@ -314,9 +315,11 @@ public:
       
     if(  logoFHandle.is_open() )
       logoFHandle.close();
-  #endif
-      
+
     return 0;
+  #else
+    return -1;
+  #endif    
   }
   
   void setLogoReady()
