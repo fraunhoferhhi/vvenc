@@ -421,9 +421,9 @@ public:
         for( int y = 0; y < yuvLogo.height; y++ )
         {
           const int16_t* alpha = yuvAlpha.ptr + (( y << csy ) * yuvAlpha.stride);
-          for( int x = 0; x < yuvLogo.width; x++ )
+          int xA = 0;
+          for( int x = 0; x < yuvLogo.width; x++, xA += (1 << csx) )
           {         
-            const int xA = x << csx; 
             if( alpha[xA] >= 100 )
             {
               dst[x] = src[x];                                        
