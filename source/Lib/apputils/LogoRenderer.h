@@ -81,11 +81,9 @@ struct LogoInputOptions
 
 struct LogoRenderOptions
 {
-  int  topLeftX        = 0;
-  int  topLeftY        = 0;
-  int  marginRight     = 0;
-  int  marginBottom    = 0;
-  int  opacity         = 0;
+  int  offsetHor  = 0; // horizontal offset ( >= 0 offset from left, < 0 offset from right)
+  int  offsetVer  = 0; // vertical offset   ( >= 0 offset from top, < 0 offset from bottom)
+  int  opacity    = 0;
 };
 
 struct LogoOverlay
@@ -111,13 +109,10 @@ inline void to_json( json& j, const LogoInputOptions& l)
 inline void to_json( json& j, const LogoRenderOptions& r)
 {
   j = json{
-    { "//TopLeftXY",     "defines logo top left(x,y) position in px. position is clipped to max width and height (right and bottom picture border)" },
-    { "TopLeftX",        r.topLeftX },
-    { "TopLeftY",        r.topLeftY },
-    { "//MarginRight",   "defines logo margin to right border in px. position is clipped left picture border" },
-    { "MarginRight",     r.marginRight },
-    { "//MarginBottom",  "defines logo margin to bottom border in px. position is clipped top picture border" },
-    { "MarginBottom",    r.marginBottom },
+    { "//OffsetHor",     "defines logo horizontal offset(x) in px. (clipped to max picture width), if >= 0 offsert from left, < 0 offset from right+1" },
+    { "//OffsetVer",     "defines logo vertical offset(y) in px. (clipped to max picture height), if >= 0 offsert from top, < 0 offset from bottom+1" },
+    { "OffsetHor",        r.offsetHor },
+    { "OffsetVer",        r.offsetVer },
     { "//Opacity",       "defines opacity level in range 0-100% (0: opaque - 100: transparent)" },
     { "Opacity",         r.opacity }
   };
@@ -144,10 +139,8 @@ inline void from_json(const json& j, LogoInputOptions& l)
 
 inline void from_json(const json& j, LogoRenderOptions& l )
 {
-  j.at("TopLeftX").get_to(l.topLeftX);
-  j.at("TopLeftY").get_to(l.topLeftY);
-  j.at("MarginRight").get_to(l.marginRight);
-  j.at("MarginBottom").get_to(l.marginBottom);
+  j.at("OffsetHor").get_to(l.offsetHor);
+  j.at("OffsetVer").get_to(l.offsetVer);
   j.at("Opacity").get_to(l.opacity);
 }
 
@@ -381,27 +374,21 @@ public:
     
     int logoPosX = 0;
     int logoPosY = 0;
-    if( m_cLogo.renderOpts.topLeftX != 0 )
+    if( m_cLogo.renderOpts.offsetHor != 0 )
     {
-      int maxX = yuvDestBuf.planes[0].width - m_cYuvBufLogo.planes[0].width; 
+      const int maxX = yuvDestBuf.planes[0].width - m_cYuvBufLogo.planes[0].width;      
+      logoPosX = (m_cLogo.renderOpts.offsetHor >= 0) ? 
+                  std::min( maxX, m_cLogo.renderOpts.offsetHor ) :
+                  std::max( 0, maxX + m_cLogo.renderOpts.offsetHor+1);
       
-      logoPosX = ( m_cLogo.renderOpts.topLeftX < 0 || m_cLogo.renderOpts.topLeftX > maxX )
-                  ? maxX : m_cLogo.renderOpts.topLeftX;
-      if( m_cLogo.renderOpts.marginRight )
-      {
-        logoPosX = std::max( 0, logoPosX - m_cLogo.renderOpts.marginRight);
-      }
     } 
     
-    if( m_cLogo.renderOpts.topLeftY != 0 )
+    if( m_cLogo.renderOpts.offsetVer != 0 )
     {
-      int maxY = yuvDestBuf.planes[0].height - m_cYuvBufLogo.planes[0].height; 
-      logoPosY = ( m_cLogo.renderOpts.topLeftY < 0 || m_cLogo.renderOpts.topLeftY > maxY )
-                 ? maxY : m_cLogo.renderOpts.topLeftY;
-      if( m_cLogo.renderOpts.marginBottom )
-      {
-        logoPosY = std::max( 0, logoPosY - m_cLogo.renderOpts.marginBottom);
-      }
+      const int maxY = yuvDestBuf.planes[0].height - m_cYuvBufLogo.planes[0].height; 
+      logoPosY = (m_cLogo.renderOpts.offsetVer >= 0) ? 
+                  std::min( maxY, m_cLogo.renderOpts.offsetVer ) :
+                  std::max( 0, maxY + m_cLogo.renderOpts.offsetVer+1);
     }
        
     const int numComp = (m_chromaFormat==VVENC_CHROMA_400) ? 1 : 3;   
@@ -418,9 +405,10 @@ public:
       if( m_bAlphaNeeded && m_cYuvBufAlpha.planes[0].ptr )
       {
         vvencYUVPlane yuvAlpha = m_cYuvBufAlpha.planes[0];
+        const int16_t* alpha = yuvAlpha.ptr;
+        
         for( int y = 0; y < yuvLogo.height; y++ )
         {
-          const int16_t* alpha = yuvAlpha.ptr + (( y << csy ) * yuvAlpha.stride);
           int xA = 0;
           for( int x = 0; x < yuvLogo.width; x++, xA += (1 << csx) )
           {         
@@ -433,8 +421,9 @@ public:
               dst[x] = (( src[x] * alpha[xA] ) + ( dst[x] * (100-alpha[xA]) )) / 100 ;   
             }
           }
-          src += yuvLogo.stride;
-          dst += yuvDes.stride;
+          src   += yuvLogo.stride;
+          dst   += yuvDes.stride;
+          alpha += ( (1 << csy) * yuvAlpha.stride);
         }
       }
       else
@@ -454,10 +443,9 @@ public:
     return 0;
   }
 
-  private:
+private:
   bool              m_bInitialized = false;
   bool              m_bLogoReady   = false;
-  std::fstream      m_rcLogoFHandleOut;
   vvencChromaFormat m_chromaFormat = VVENC_NUM_CHROMA_FORMAT;
   LogoOverlay       m_cLogo;
   vvencYUVBuffer    m_cYuvBufLogo;
