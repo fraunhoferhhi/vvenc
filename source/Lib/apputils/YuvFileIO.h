@@ -342,13 +342,19 @@ public:
     
     if( m_cLogoRenderer.isInitialized() )
     {
-      std::stringstream strstr;
-      if( 0 != m_cLogoRenderer.renderLogo( yuvInBuf, strstr ) )
+      LogoInputOptions cLogo = m_cLogoRenderer.getLogoInputOptions();
+      if ( cLogo.sourceWidth > yuvInBuf.planes[0].width || cLogo.sourceHeight > yuvInBuf.planes[0].height )
       {
-        if( !strstr.str().empty() )
-          m_lastError = strstr.str();
-        else
-          m_lastError = "failed to render Logo";
+        std::stringstream css;
+        css << "input picture size (" << yuvInBuf.planes[0].width << "x" << yuvInBuf.planes[0].height << ") < logo size (" << 
+                  cLogo.sourceWidth  << "x" << cLogo.sourceHeight << ") cannot render logo" << std::endl;     
+        m_lastError = css.str();   
+        return -1;
+      }
+
+      if( 0 != m_cLogoRenderer.renderLogo( yuvInBuf ) )
+      {
+        m_lastError = "failed to render Logo";
         return -1;
       }
     }

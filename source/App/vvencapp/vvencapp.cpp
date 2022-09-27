@@ -309,10 +309,7 @@ int main( int argc, char* argv[] )
                                  vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput,
                                  vvencappCfg.m_forceY4mInput, vvencappCfg.m_logoFileName ) )
     {
-      if( ! vvencappCfg.m_logoFileName.empty() )
-        msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: %s\n",cYuvFileInput.getLastError().c_str() );
-      else
-        msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: open input file failed: %s\n", cYuvFileInput.getLastError().c_str() );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );

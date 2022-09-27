@@ -365,36 +365,17 @@ public:
     }
   } 
   
-  int renderLogo ( const vvencYUVBuffer& yuvDestBuf, std::ostream& rcOstr )
+  int renderLogo ( const vvencYUVBuffer& yuvDestBuf )
   {   
-    if( !m_bInitialized )
+    if( !m_bInitialized || !m_bLogoReady )
     {
-      rcOstr << "LogoRenderer not initialized" << std::endl;     
       return -1;
     }
-    if( !m_bLogoReady )
-    {
-      rcOstr << "Logo not ready - setup not completed." << std::endl;     
-      return -1;
-    }
+
     if( m_bBypass ){ return 0; }
     
-    if ( m_cYuvBufLogo.planes[0].width > yuvDestBuf.planes[0].width && m_cYuvBufLogo.planes[0].height > yuvDestBuf.planes[0].height )
-    {
-      rcOstr << "input picture size (" << yuvDestBuf.planes[0].width << "x" << yuvDestBuf.planes[0].height << ") < logo size (" << 
-                 m_cYuvBufLogo.planes[0].width << "x" << m_cYuvBufLogo.planes[0].height << ") cannot render logo" << std::endl;     
-      return -1;
-    }
-    if ( m_cYuvBufLogo.planes[0].width > yuvDestBuf.planes[0].width )
-    {
-      rcOstr << "logo rendering error: input picture width (" << yuvDestBuf.planes[0].width <<  ") < logo width (" << 
-                 m_cYuvBufLogo.planes[0].width << ") cannot render logo" << std::endl;     
-      return -1;
-    }
-    if ( m_cYuvBufLogo.planes[0].height > yuvDestBuf.planes[0].height )
-    {
-      rcOstr << "logo rendering error: input picture height (" << yuvDestBuf.planes[0].width <<  ") < logo height (" << 
-                 m_cYuvBufLogo.planes[0].height << ") cannot render logo" << std::endl;     
+    if ( m_cYuvBufLogo.planes[0].width > yuvDestBuf.planes[0].width || m_cYuvBufLogo.planes[0].height > yuvDestBuf.planes[0].height )
+    {    
       return -1;
     }
     
@@ -428,19 +409,20 @@ public:
     {
       vvencYUVPlane yuvDes = yuvDestBuf.planes[ comp ];
       vvencYUVPlane yuvLogo = m_cYuvBufLogo.planes[ comp ];
-      vvencYUVPlane yuvAlpha = m_cYuvBufAlpha.planes[0];
       
       const int csx = ( (comp == 0) || (m_chromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
       const int csy = ( (comp == 0) || (m_chromaFormat!=VVENC_CHROMA_420) ) ? 0 : 1;
       const int16_t* src = yuvLogo.ptr;
       int16_t* dst = yuvDes.ptr + ( (logoPosY >> csy) * yuvDes.stride ) + (logoPosX >> csx);
-      for( int y = 0; y < yuvLogo.height; y++ )
+
+      if( m_bAlphaNeeded && m_cYuvBufAlpha.planes[0].ptr )
       {
-        const int16_t* alpha = yuvAlpha.ptr + (( y << csy ) * yuvAlpha.stride);
-        for( int x = 0; x < yuvLogo.width; x++ )
-        {         
-          if( m_bAlphaNeeded )
-          { 
+        vvencYUVPlane yuvAlpha = m_cYuvBufAlpha.planes[0];
+        for( int y = 0; y < yuvLogo.height; y++ )
+        {
+          const int16_t* alpha = yuvAlpha.ptr + (( y << csy ) * yuvAlpha.stride);
+          for( int x = 0; x < yuvLogo.width; x++ )
+          {         
             const int xA = x << csx; 
             if( alpha[xA] >= 100 )
             {
@@ -451,13 +433,21 @@ public:
               dst[x] = (( src[x] * alpha[xA] ) + ( dst[x] * (100-alpha[xA]) )) / 100 ;   
             }
           }
-          else
-          {
+          src += yuvLogo.stride;
+          dst += yuvDes.stride;
+        }
+      }
+      else
+      {
+        for( int y = 0; y < yuvLogo.height; y++ )
+        {
+          for( int x = 0; x < yuvLogo.width; x++ )
+          {         
             dst[x] = src[x];            
           }
+          src += yuvLogo.stride;
+          dst += yuvDes.stride;
         }
-        src   += yuvLogo.stride;
-        dst   += yuvDes.stride;
       }
     }
     
