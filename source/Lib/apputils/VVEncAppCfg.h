@@ -903,7 +903,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
-    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset")
+    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset (1: always, 2: only for screen content frames)")
     ("SaoEncodingRate",                                 c->m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
     ("SaoEncodingRateChroma",                           c->m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
     ("SaoLumaOffsetBitShift",                           c->m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
