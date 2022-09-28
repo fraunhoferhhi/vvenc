@@ -60,7 +60,9 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 AdaptiveLoopFilter::AdaptiveLoopFilter()
-  : m_classifier( nullptr )
+  : m_filterShapesCcAlf{ AlfFilterShape( size_CC_ALF ), AlfFilterShape( size_CC_ALF ) }
+  , m_filterShapes     { AlfFilterShape(           7 ), AlfFilterShape(           5 ) }
+  , m_classifier( nullptr )
 {
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
@@ -718,10 +720,6 @@ void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const 
   m_numCTUsInWidth  = ( m_picWidth / m_maxCUWidth ) + ( ( m_picWidth % m_maxCUWidth ) ? 1 : 0 );
   m_numCTUsInHeight = ( m_picHeight / m_maxCUHeight ) + ( ( m_picHeight % m_maxCUHeight ) ? 1 : 0 );
   m_numCTUsInPic    = m_numCTUsInHeight * m_numCTUsInWidth;
-  m_filterShapesCcAlf[0].push_back(AlfFilterShape(size_CC_ALF));
-  m_filterShapesCcAlf[1].push_back(AlfFilterShape(size_CC_ALF));
-  m_filterShapes[CH_L].push_back( AlfFilterShape( 7 ) );
-  m_filterShapes[CH_C].push_back( AlfFilterShape( 5 ) );
   m_alfVBLumaPos = m_maxCUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA;
   m_alfVBChmaPos = (m_maxCUHeight >> ((m_chromaFormat == CHROMA_420) ? 1 : 0)) - ALF_VB_POS_ABOVE_CTUROW_CHMA;
 
@@ -800,11 +798,7 @@ void AdaptiveLoopFilter::destroy()
 
   m_tempBuf.destroy();
   m_tempBuf2.destroy();
-  m_filterShapes[CH_L].clear();
-  m_filterShapes[CH_C].clear();
 
-  m_filterShapesCcAlf[0].clear();
-  m_filterShapesCcAlf[1].clear();
   if ( m_ccAlfFilterControl[0] )
   {
     delete [] m_ccAlfFilterControl[0];

@@ -51,27 +51,19 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-//struct VVEncCfg;
-
 namespace vvenc {
 
   // BitAllocation functions
   namespace BitAllocation
   {
-    int applyQPAdaptationChroma( const Slice* slice,
+    int applyQPAdaptationSlice ( const Slice* slice,
                                  const VVEncCfg* encCfg,
                                  const int sliceQP,
+                                 const double sliceLambda,
                                  uint16_t* const picVisActLuma,
                                  std::vector<int>& ctuPumpRedQP,
-                                 int* const optChromaQPOffsets,
-                                 const uint32_t ctuStartAddr,
-                                 const uint32_t ctuBoundingAddr );
-    int applyQPAdaptationLuma  ( const Slice* slice,
-                                 const VVEncCfg* encCfg,
-                                 const int savedQP,
-                                 const double lambda,
-                                 std::vector<int>& ctuPumpRedQP,
                                  std::vector<uint8_t>* ctuRCQPMemory,
+                                 int* const optChromaQPOffsets,
                                  const uint8_t* minNoiseLevels,
                                  const uint32_t ctuStartAddr,
                                  const uint32_t ctuBoundingAddr );

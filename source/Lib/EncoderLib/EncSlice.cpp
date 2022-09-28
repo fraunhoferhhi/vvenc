@@ -322,48 +322,24 @@ void EncSlice::initPic( Picture* pic )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice )
 {
-  // pre-compute lambda and qp
-  const bool cqp = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
+  // pre-compute lambda and QP
   const bool rcp = (m_pcEncCfg->m_RCTargetBitrate > 0 && slice->pic->picInitialQP >= 0); // 2nd pass
-  int  iQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, slice->pic->picInitialQP), adaptedLumaQP = -1;
+  int  iQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, slice->pic->picInitialQP); // RC start QP
   double dQP     = (rcp ? (double) slice->pic->picInitialQP : xGetQPForPicture (slice));
   double dLambda = (rcp ? slice->pic->picInitialLambda : xCalculateLambda (slice, slice->TLayer, dQP, dQP, iQP));
-  int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
+  int sliceChromaQpOffsetIntraOrPeriodic[2] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[0], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[1] };
+  int cbQP = 0, crQP = 0, cbCrQP = 0;
 
-  if (m_pcEncCfg->m_usePerceptQPA)
+  if (m_pcEncCfg->m_usePerceptQPA) // adapt sliceChromaQpOffsetIntraOrPeriodic and pic->ctuAdaptedQP
   {
-    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCTargetBitrate == 0 && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
-    uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
-    uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
+    const bool cqp = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
+    const uint32_t startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
+    const uint32_t boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
-    adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, &slice->pic->picVisActY, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                            (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
-                                                            startCtuTsAddr, boundingCtuTsAddr); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
-
-    if ((m_pcEncCfg->m_RCNumPasses == 2) && m_pcRateCtrl->rcIsFinalPass && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (boundingCtuTsAddr > startCtuTsAddr))
-    {
-      const int nCtu = int (boundingCtuTsAddr - startCtuTsAddr);
-      const int offs = (slice->poc / m_pcEncCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
-      std::vector<uint8_t>& ctuQPMem = *m_pcRateCtrl->getIntraPQPAStats(); // unpack pass-1 red. QPs
-      std::vector<int>& ctuPumpRedQP = *m_ThreadRsrc[0]->m_encCu.getQpPtr();
-
-      if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
-      {
-        for (uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++)
-        {
-          const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
-
-          ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
-        }
-      }
-    }
-
-    slice->sliceQp = iQP; // start slice QP for reference
-    slice->pic->picInitialQP = iQP;
-
-    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_ThreadRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                     (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
-                                                     m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // adapt pic->ctuAdaptedQP[] and ctuQpaLambda[]
+    if ((iQP = BitAllocation::applyQPAdaptationSlice (slice, m_pcEncCfg, iQP, dLambda, &slice->pic->picVisActY, // updates pic->picInitialQP
+                                                      *m_ThreadRsrc[0]->m_encCu.getQpPtr(), m_pcRateCtrl->getIntraPQPAStats(),
+                                                      (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
+                                                      m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // QP OK?
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }
@@ -373,8 +349,6 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   {
     slice->pic->picInitialQP = -1; // no QPA - unused now
   }
-
-  int cbQP = 0, crQP = 0, cbCrQP = 0;
 
   if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
@@ -389,8 +363,8 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     const GOPEntry &gopEntry             = *(slice->pic->gopEntry);
     const bool bUseIntraOrPeriodicOffset = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
 
-    cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 0 ] : gopEntry.m_CbQPoffset;
-    crQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 1 ] : gopEntry.m_CrQPoffset;
+    cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[0] : gopEntry.m_CbQPoffset;
+    crQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[1] : gopEntry.m_CrQPoffset;
     cbCrQP = (cbQP + crQP) >> 1; // use floor of average CbCr chroma QP offset for joint-CbCr coding
 
     cbQP = Clip3 (-12, 12, cbQP + slice->pps->chromaQpOffset[COMP_Cb]) - slice->pps->chromaQpOffset[COMP_Cb];

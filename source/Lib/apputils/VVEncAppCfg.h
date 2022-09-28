@@ -534,7 +534,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("framescale",                                      c->m_FrameScale,                                     "temporal scale (framerate denominator) e.g. 1, 1001 ")
     ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
 
-    ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
+    ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000, -1: ticks per frame=1)")
     ("frames,f",                                        c->m_framesToBeEncoded,                              "max. frames to encode [all]")
     ;
   }
@@ -548,7 +548,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FrameRate,-fr",                                   c->m_FrameRate,                                      "Temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000")
     ("FrameScale",                                      c->m_FrameScale,                                     "Temporal scale (framerate denominator) e.g. 1, 1001")
     ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
-    ("TicksPerSecond",                                  c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
+    ("TicksPerSecond",                                  c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000, -1: ticks per frame=1)")
     ("LeadFrames",                                      c->m_leadFrames,                                     "Number of leading frames to be read before starting the encoding, use when splitting the video into overlapping segments")
     ("TrailFrames",                                     c->m_trailFrames,                                    "Number of trailing frames to be read after frames to be encoded, use when splitting the video into overlapping segments")
     ;
@@ -798,6 +798,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
+    
+    ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
     ;
 
     opts.setSubSection("Low-level QT-BTT partitioning options");
