@@ -671,6 +671,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c-> m_deblockLastTLayers                     = 0;
   c->m_addGOP32refPics                         = false;
+  c->m_numRefPics                              = 0;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
