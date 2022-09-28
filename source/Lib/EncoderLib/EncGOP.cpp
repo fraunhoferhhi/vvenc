@@ -1529,10 +1529,15 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     naluType = VVENC_NAL_UNIT_CODED_SLICE_STSA;
     slice->nalUnitType = naluType;
   }
+  
+  const int maxTLayer  = m_pcEncCfg->m_picReordering && m_pcEncCfg->m_GOPSize > 1 ? vvenc::ceilLog2( m_pcEncCfg->m_GOPSize ) : 0;
+  const int numRefCode = pic.useScNumRefs ? m_pcEncCfg->m_numRefPicsSCC : m_pcEncCfg->m_numRefPics;
+  const int tLayer     = slice->TLayer;
+  const int numRefs    = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
   // reference list
-  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : slice->rpl[0]->numberOfActivePictures;
-  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : slice->rpl[1]->numberOfActivePictures;
+  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
+  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
   slice->constructRefPicList  ( picList, false );
 
   if ( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control

@@ -375,6 +375,7 @@ void Picture::setSccFlags( const VVEncCfg* encCfg )
   useScMCTF  = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
   useScLMCS  = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
   useScIBC   = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useScNumRefs = isSccWeak;
   useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
 
   if( ( encCfg->m_qtbttSpeedUpMode & 2 ) && isSccStrong )

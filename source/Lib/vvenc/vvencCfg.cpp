@@ -672,6 +672,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c-> m_deblockLastTLayers                     = 0;
   c->m_addGOP32refPics                         = false;
   c->m_numRefPics                              = 0;
+  c->m_numRefPicsSCC                           = -1;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -1321,6 +1322,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   const bool autoGop = c->m_GOPList[0].m_POC;
 
+  if( c->m_numRefPicsSCC < 0 )
+  {
+    c->m_numRefPicsSCC = c->m_numRefPics;
+  }
+
   if( c->m_GOPList[ 0 ].m_POC == -1 || ( c->m_addGOP32refPics && c->m_GOPSize == 32 ) )
   {
     if( c->m_IntraPeriod == 1 || c->m_GOPSize == 1 )
@@ -1452,7 +1458,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     else
     {
-      vvenc_confirmParameter( c, true, "GOP auto configuration only supported for gop size (1,8,16,32)" );
+      vvenc_confirmParameter( c, true, "GOP auto configuration only supported for GOP size (1,8,16,32)" );
     }
 
     if( autoGop && c->m_numRefPics != 0 )
@@ -1467,17 +1473,37 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         int tLayer  = c->m_GOPList[i].m_temporalId;
         int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-        c->m_GOPList[i].m_numRefPicsActive[0] = c->m_GOPList[i].m_numRefPicsActive[1] = numRefs;
+        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
+        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPics!" );
+      }
+    }
 
-        vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
-        vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
-        vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
+    if( autoGop && c->m_numRefPicsSCC != 0 )
+    {
+      const int maxTLayer  = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+      const int numRefCode = c->m_numRefPicsSCC;
+
+      for( int i = 0; i < 64; i++ )
+      {
+        if( c->m_GOPList[i].m_POC == -1 ) break;
+
+        int tLayer  = c->m_GOPList[i].m_temporalId;
+        int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
+
+        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPicsSCC!" );
+        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPicsSCC!" );
+        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPicsSCC!" );
       }
     }
   }
 
-  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
-  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics != 0 && c->m_addGOP32refPics, "NumRefPics and AddGOP32refPics options are mutually exclusive!" );
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPicsSCC != 0,                         "NumRefPicsSCC cannot be used if explicit GOP configuration is used!" );
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0 && c->m_addGOP32refPics, "NumRefPics and AddGOP32refPics options are mutually exclusive!" );
+  vvenc_confirmParameter( c, !autoGop && c->m_numRefPicsSCC != 0 && c->m_addGOP32refPics, "NumRefPicsSCC and AddGOP32refPics options are mutually exclusive!" );
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
