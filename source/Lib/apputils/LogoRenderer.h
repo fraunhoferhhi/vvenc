@@ -57,6 +57,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
+#include "FileIOHelper.h"
+
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
 #include "../../../thirdparty/nlohmann_json/single_include/nlohmann/json.hpp"
 using nlohmann::json;
@@ -164,7 +166,7 @@ public:
     if( m_bInitialized ){ uninit(); }
   }
   
-  int init( const std::string &fileName, vvencChromaFormat chromaFormat, std::ostream& rcOstr )
+  int init( const std::string &fileName, vvencChromaFormat chromaFormat, int internalBitdepth, std::ostream& rcOstr )
   {
     if( m_bInitialized )
     { 
@@ -184,20 +186,33 @@ public:
       return -1;
     }
     
-    std::string ext;
-    if(m_cLogo.inputOpts.logoFilename.find_last_of(".") != std::string::npos)
+    bool isY4mInput = false;
+    if( FileIOHelper::isY4mInputFilename( m_cLogo.inputOpts.logoFilename ) )
     {
-      ext = m_cLogo.inputOpts.logoFilename.substr(m_cLogo.inputOpts.logoFilename.find_last_of(".")+1);
-      std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
-    }
-    if( "y4m" == ext )
-    {
-      if ( 0 != parseY4M ( m_cLogo.inputOpts.logoFilename ) )
+      vvenc_config c;
+      if ( 0 > FileIOHelper::parseY4mHeader( m_cLogo.inputOpts.logoFilename, c, m_chromaFormat ) )
       {
         rcOstr << "cannot parse y4m information in file " << m_cLogo.inputOpts.logoFilename << std::endl;     
         return -1;
       }
-    }    
+      m_cLogo.inputOpts.sourceWidth  = c.m_SourceWidth;
+      m_cLogo.inputOpts.sourceHeight = c.m_SourceHeight;
+      m_cLogo.inputOpts.bitdepth     = c.m_inputBitDepth[0];
+      isY4mInput = true;
+    }   
+
+    std::string cErr;
+    if( !FileIOHelper::checkInputFile( m_cLogo.inputOpts.logoFilename, cErr ) )
+    {
+      rcOstr << "Logo input file error: " << cErr << std::endl;     
+      return -1; 
+    }
+    
+    if( m_cLogo.inputOpts.sourceWidth <= 0 || m_cLogo.inputOpts.sourceHeight <= 0 )
+    {
+      rcOstr << "Logo input file error: invalid size " << m_cLogo.inputOpts.sourceWidth  << "x" << m_cLogo.inputOpts.sourceHeight << std::endl;
+      return -1; 
+    } 
        
     vvenc_YUVBuffer_default( &m_cYuvBufLogo );
     vvenc_YUVBuffer_alloc_buffer( &m_cYuvBufLogo, chromaFormat, m_cLogo.inputOpts.sourceWidth, m_cLogo.inputOpts.sourceHeight );
@@ -217,8 +232,60 @@ public:
         vvenc_YUVBuffer_alloc_buffer( &m_cYuvBufAlpha, VVENC_CHROMA_400, m_cLogo.inputOpts.sourceWidth, m_cLogo.inputOpts.sourceHeight );
       }
     }
+
+    std::fstream cLogoHandle;
+    cLogoHandle.open( m_cLogo.inputOpts.logoFilename.c_str(), std::ios::binary | std::ios::in );
+    if( cLogoHandle.fail() )
+    {
+      rcOstr << "Failed to open logo overlay file: " << m_cLogo.inputOpts.logoFilename << std::endl;
+      return -1;
+    }
     
-    m_bLogoReady   = false;
+    if ( isY4mInput )
+    {
+      std::string headerline;
+      getline(cLogoHandle, headerline);  // jump over y4m header
+      
+      std::string y4mPrefix;
+      getline(cLogoHandle, y4mPrefix);   /* assume basic FRAME\n headers */
+      if( y4mPrefix != "FRAME")
+      {
+        rcOstr << "Source image does not contain valid y4m header (FRAME) - end of stream" << std::endl;
+        return -1;
+      }
+    }
+
+    // read the logo int yuvBuffer
+    bool is16bit       = m_cLogo.inputOpts.bitdepth > 8 ? true : false;
+    int  bitdepthShift = internalBitdepth  - m_cLogo.inputOpts.bitdepth;
+    const LPel maxVal = ( 1 << m_cLogo.inputOpts.bitdepth ) - 1;
+    for( int comp = 0; comp < 3; comp++ )
+    {
+      vvencYUVPlane yuvPlane = m_cYuvBufLogo.planes[ comp ];   
+      if ( ! FileIOHelper::readYuvPlane( cLogoHandle, yuvPlane, is16bit, m_cLogo.inputOpts.bitdepth, false, comp, m_chromaFormat, m_chromaFormat ) )
+      {
+        rcOstr << "Failed to read plane from logo overlay file: " << m_cLogo.inputOpts.logoFilename << std::endl;
+        return -1;
+      }
+  
+      if ( m_chromaFormat == VVENC_CHROMA_400 && comp)
+        continue;
+  
+      if ( ! FileIOHelper::verifyYuvPlane( yuvPlane, m_cLogo.inputOpts.bitdepth ) )
+      {
+        rcOstr << "Logo image contains values outside the specified bit range!" << std::endl;
+        return -1;
+      }
+  
+      FileIOHelper::scaleYuvPlane( yuvPlane, yuvPlane, bitdepthShift, 0, maxVal );
+    }
+
+
+    if( !m_bBypass && m_bAlphaNeeded )
+    {
+      initAlphaMask();
+    }
+
     m_bInitialized = true; 
     
     return 0;
@@ -337,49 +404,10 @@ public:
     return -1;
   #endif    
   }
-  
-  void setLogoReady()
-  {
-    if( !m_bInitialized ) return;
-    m_bLogoReady = true;
-    if( !m_bAlphaNeeded || m_bBypass ) return;
-    
-    // init alpha mask
-    bool bgColorSet  = (m_cLogo.inputOpts.bgColorMin >= 0 && m_cLogo.inputOpts.bgColorMax >= 0 ) ? true : false;
-    bool opacitySet  = (m_cLogo.renderOpts.opacity > 0) ? true : false;
-    int transp = 100 - m_cLogo.renderOpts.opacity; // transparency level
-
-    vvencYUVPlane yuvSrc = m_cYuvBufLogo.planes[0];
-    vvencYUVPlane yuvDes = m_cYuvBufAlpha.planes[0];
-    
-    const int16_t* src = yuvSrc.ptr;
-    int16_t*       dst = yuvDes.ptr;
-    
-    for( int y = 0; y < yuvSrc.height; y++ )
-    {
-      for( int x = 0; x < yuvSrc.width; x++ )
-      {
-        if( bgColorSet && ( src[x] >= m_cLogo.inputOpts.bgColorMin && src[x] <= m_cLogo.inputOpts.bgColorMax ))
-        {
-          dst[x] = 0; // ignore background ( transparent )
-        }
-        else if( opacitySet )
-        {
-          dst[x] = transp;
-        }
-        else
-        {
-          dst[x] = 100;  // opaque
-        }
-      }
-      src += yuvSrc.stride;
-      dst += yuvDes.stride;
-    }
-  } 
-  
+   
   int renderLogo ( const vvencYUVBuffer& yuvDestBuf )
   {   
-    if( !m_bInitialized || !m_bLogoReady )
+    if( !m_bInitialized )
     {
       return -1;
     }
@@ -461,101 +489,48 @@ public:
     
     return 0;
   }
-  
+
 private:
-  
-  int parseY4M( std::string fileName )
+
+  void initAlphaMask()
   {
-    std::fstream cfHandle;
-    cfHandle.open( fileName, std::ios::binary | std::ios::in );
-    if( cfHandle.fail() )
+    if( !m_bAlphaNeeded || m_bBypass ) return;
+    
+    // init alpha mask
+    bool bgColorSet  = (m_cLogo.inputOpts.bgColorMin >= 0 && m_cLogo.inputOpts.bgColorMax >= 0 ) ? true : false;
+    bool opacitySet  = (m_cLogo.renderOpts.opacity > 0) ? true : false;
+    int transp = 100 - m_cLogo.renderOpts.opacity; // transparency level
+
+    vvencYUVPlane yuvSrc = m_cYuvBufLogo.planes[0];
+    vvencYUVPlane yuvDes = m_cYuvBufAlpha.planes[0];
+    
+    const int16_t* src = yuvSrc.ptr;
+    int16_t*       dst = yuvDes.ptr;
+    
+    for( int y = 0; y < yuvSrc.height; y++ )
     {
-      return -1;
-    }
-      
-    std::string headerline;
-    getline(cfHandle, headerline);
-    if( headerline.empty() ){ return -1; }
-    std::transform( headerline.begin(), headerline.end(), headerline.begin(), ::toupper );
-  
-    std::regex reg("\\s+"); // tokenize at spaces
-    std::sregex_token_iterator iter(headerline.begin(), headerline.end(), reg, -1);
-    std::sregex_token_iterator end;
-    std::vector<std::string> vec(iter, end);
-  
-    bool valid=false;
-    for (auto &p : vec)
-    {
-      if( p == "YUV4MPEG2" ) // read file signature
-      { valid = true; }
-      else if( p[0] == 'W' ) // width
-        m_cLogo.inputOpts.sourceWidth = atoi( p.substr( 1 ).c_str());
-      else if( p[0] == 'H' ) // height
-        m_cLogo.inputOpts.sourceHeight = atoi( p.substr( 1 ).c_str());
-      else if( p[0] == 'F' )  // framerate,scale
+      for( int x = 0; x < yuvSrc.width; x++ )
       {
-        size_t sep = p.find(":");
-        if( sep == std::string::npos ) return -1;
-      }
-      else if( p[0] == 'A' ) // aspcet ration
-      {
-        size_t sep = p.find(":");
-        if( sep == std::string::npos ) return -1;
-      }
-      else if( p[0] == 'C' ) // colorspace ( e.g. C420p10)
-      {
-        std::vector<std::string> ignores = {"JPEG", "MPEG2", "PALVD" }; // ignore some special cases
-        for( auto &i : ignores )
+        if( bgColorSet && ( src[x] >= m_cLogo.inputOpts.bgColorMin && src[x] <= m_cLogo.inputOpts.bgColorMax ))
         {
-          auto n = p.find( i );
-          if (n != std::string::npos) p.erase(n, i.length()); // remove from param string (e.g. 420PALVD)
+          dst[x] = 0; // ignore background ( transparent )
         }
-  
-        size_t sep = p.find("P");
-        std::string chromatype;
-        if( sep != std::string::npos )
+        else if( opacitySet )
         {
-          chromatype = ( p.substr( 1, sep-1 ).c_str());
-          m_cLogo.inputOpts.bitdepth = atoi( p.substr( sep+1 ).c_str());
+          dst[x] = transp;
         }
         else
         {
-          sep = p.find("MONO");
-          if( sep != std::string::npos )
-          {
-            chromatype = "400";
-            if( p == "MONO") m_cLogo.inputOpts.bitdepth = 8;
-            else m_cLogo.inputOpts.bitdepth = atoi( p.substr( sep+5 ).c_str()); // e.g. mono10
-          }
-          else
-          {
-            chromatype = ( p.substr( 1 ).c_str());
-            m_cLogo.inputOpts.bitdepth = 8;
-          }
+          dst[x] = 100;  // opaque
         }
-  
-        if( chromatype == "400" )      { m_chromaFormat =  VVENC_CHROMA_400; }
-        else if( chromatype == "420" ) { m_chromaFormat =  VVENC_CHROMA_420; }
-        else if( chromatype == "422" ) { m_chromaFormat =  VVENC_CHROMA_422; }
-        else if( chromatype == "444" ) { m_chromaFormat =  VVENC_CHROMA_444; }
-        else { return -1; } // unsupported chroma foramt}
       }
-      else if( p[0] == 'I' ) // interlaced format (ignore it, because we cannot set it in any params
-      {}
-      else if( p[0] == 'X' ) // ignore comments
-      {}
+      src += yuvSrc.stride;
+      dst += yuvDes.stride;
     }
-  
-    cfHandle.close();
-    if( !valid ) return -1;
-    
-    return 0;
-  }
-   
+  } 
 
 private:
   bool              m_bInitialized = false;
-  bool              m_bLogoReady   = false;
   vvencChromaFormat m_chromaFormat = VVENC_NUM_CHROMA_FORMAT;
   LogoOverlay       m_cLogo;
   vvencYUVBuffer    m_cYuvBufLogo;
