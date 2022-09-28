@@ -747,7 +747,8 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_reservedFlag[6];
+  bool                m_reservedFlag[5];
+  bool                m_saoScc;
   bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;

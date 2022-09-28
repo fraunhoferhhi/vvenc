@@ -566,7 +566,7 @@ void EncSlice::compressSlice( Picture* pic )
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
     lnRsrc->m_CachedBvs         .resetIbcBvCand();
 
-    if( slice->sps->saoEnabled )
+    if( slice->sps->saoEnabled && pic->useScSAO )
     {
       lnRsrc->m_encSao          .initSlice( slice );
     }
@@ -725,7 +725,7 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   CodingStructure& cs = *pic->cs;
 
   // finalize
-  if( slice.sps->saoEnabled )
+  if( slice.sps->saoEnabled && pic->useScSAO )
   {
     // store disabled statistics
     saoDisabledRate( cs, &m_saoReconParams[ 0 ] );
@@ -755,7 +755,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     setJointCbCrModes( cs, Position(0, 0), cs.area.lumaSize() );
   }
 
-  if( slice.sps->saoEnabled )
+  if( slice.sps->saoEnabled && pic->useScSAO )
   {
     // check SAO enabled or disabled
     EncSampleAdaptiveOffset::decidePicParams( cs, m_saoDisabledRate, m_saoEnabled, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, m_pcEncCfg->m_internChromaFormat );
@@ -767,6 +767,10 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     }
 
     std::fill( m_saoReconParams.begin(), m_saoReconParams.end(), SAOBlkParam() );
+  }
+  else
+  {
+    m_saoAllDisabled = true;
   }
 
   if( slice.sps->alfEnabled )
@@ -1045,7 +1049,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKSTART( itt_domain_encode, itt_handle_sao );
 
         // SAO filter
-        if( slice.sps->saoEnabled )
+        if( slice.sps->saoEnabled && pic->useScSAO )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_SAO, &cs, CH_L );
           TileLineEncRsrc* lineEncRsrc    = encSlice->m_TileLineEncRsrc[ lineIdx ];

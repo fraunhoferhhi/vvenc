@@ -232,6 +232,12 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "yuv420_10_packed",          YUV420_10_PACKED },
 };
 
+const std::vector<SVPair<int>> SaoToIntMap =
+{
+  { "0", 0 },
+  { "1", 1 },
+  { "2", 2 },
+};
 
 const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
@@ -363,6 +369,8 @@ class VVEncAppCfg;
 static void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset );
 
 static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs );
+
+static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
 
 
 // ====================================================================================================================
@@ -498,6 +506,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToArr<char>                toDecodeBitstreams1           ( &c->m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
+
+  IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
 
   po::Options opts;
   if( m_easyMode )
@@ -891,7 +901,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
-    ("SAO",                                             c->m_bUseSAO,                                        "Enable Sample Adaptive Offset")
+    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset")
     ("SaoEncodingRate",                                 c->m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
     ("SaoEncodingRateChroma",                           c->m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
     ("SaoLumaOffsetBitShift",                           c->m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
@@ -1513,6 +1523,12 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
   case YUV400_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
+}
+
+static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal )
+{
+  cfg->m_bUseSAO = !!saoVal;
+  cfg->m_saoScc  = saoVal == 2;
 }
 
 
