@@ -1527,7 +1527,7 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
   }
 }
 
-static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal )
+static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
 {
   cfg->m_bUseSAO = !!saoVal;
   cfg->m_saoScc  = saoVal == 2;
