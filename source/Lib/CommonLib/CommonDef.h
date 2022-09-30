@@ -410,7 +410,7 @@ static constexpr int    FAST_SKIP_DEPTH =                               2;
 
 static constexpr double PBINTRA_RATIO     =                             1.1;
 static constexpr int    NUM_MRG_SATD_CAND =                             4;
-static constexpr double MRG_FAST_RATIO    =                             1.25;
+static constexpr double MRG_FAST_RATIO[2]    =                        { 1.25, 1.05 };
 static constexpr double MRG_FAST_RATIOMYV[4] =                        { 1.15, 1.1, 1.1, 1.05 };
 static constexpr int    NUM_AMAXBT_LAYER =                             10;
 static constexpr double AMAXBT_TH32 =                                  15.0;
