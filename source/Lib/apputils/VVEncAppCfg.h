@@ -395,6 +395,7 @@ public:
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
                                                                ///< values that are not arbitrary must be quoted "\"values\""
                                                                ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
+  std::string  m_logoFileName;                                 ///< logo overlay file
 private:
   const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
 
@@ -675,6 +676,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
 
   if( !m_easyMode )
@@ -1158,20 +1160,20 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     // file check
     std::string cErr;
-    if( !apputils::YuvFileIO::checkInputFile( m_inputFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
     {
       err.warn( "Input file" ) << cErr;
     }
 
-    if( !apputils::YuvFileIO::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
     }
 
     // check for y4m input
-    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    if ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) )
     {
-      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
+      if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
         rcOstr << "cannot parse y4m metadata\n";
         ret = -1;
@@ -1179,7 +1181,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     }
     else
     {
-      if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
+      if( apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
@@ -1326,6 +1328,11 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   if( ! m_RCStatsFileName.empty() )
   {
     rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+  if( ! m_logoFileName.empty() )
+  {
+    rcOstr << "error: reading of logo overlay file not supported, please disable logofile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
 #endif
