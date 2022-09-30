@@ -1480,10 +1480,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         int tLayer  = c->m_GOPList[i].m_temporalId;
         int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
-        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType == 'B' )
           vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
-        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
       }
     }
 
@@ -1499,10 +1501,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         int tLayer  = c->m_GOPList[i].m_temporalId;
         int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPicsSCC!" );
-        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
-          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPicsSCC!" );
-        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPicsSCC!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType == 'B' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
       }
     }
   }
