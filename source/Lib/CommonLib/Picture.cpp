@@ -269,6 +269,7 @@ void Picture::destroy( bool bPicHeader )
   {
     delete psei;
   }
+
   SEIs.clear();
 }
 

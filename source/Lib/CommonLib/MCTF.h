@@ -64,6 +64,7 @@ struct MotionVector
 {
   int x, y;
   int error;
+  double overlap;
   //int noise;
   MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
 
@@ -157,6 +158,8 @@ private:
   static const int16_t  m_interpolationFilter4[16][4];
   static const int16_t  m_interpolationFilter8[16][8];
   static const double   m_refStrengths[3][4];
+  static const int      m_cuTreeThresh[4];
+  static const double   m_cuTreeCenter;
 
   const VVEncCfg*       m_encCfg;
   NoMallocThreadPool*   m_threadPool;
