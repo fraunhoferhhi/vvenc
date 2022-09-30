@@ -1,4 +1,15 @@
 /////////////////////////////////////////
+tag 1.6.1
+
+* libvvenc:
+  - bugfix for rate control at low rates
+  - bugfix to multi-threaded encoding with tiles
+  - made apputils an internal header only lib, fixing linking problems
+  - speedup non-linear ALF (-4% runtime for slower)
+  - added auto-logic for correct tickspersec setting
+  - optimized non-RD-optimized quantization
+
+/////////////////////////////////////////
 tag 1.6.0
 
 * libvvenc:

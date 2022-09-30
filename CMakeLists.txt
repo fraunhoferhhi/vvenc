@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.6.0 )
+project( vvenc VERSION 1.6.1 )
 
 # set alternative version numbering for release candidates
 #set( PROJECT_VERSION_RC rc1 )
@@ -311,7 +311,7 @@ add_test( NAME Test_vvenclibtest-calling_order           COMMAND vvenclibtest 2 
 add_test( NAME Test_vvenclibtest-input_params            COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-sdk_default             COMMAND vvenclibtest 4 )
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
-add_test( NAME Test_vvenclibtest-timestamps COMMAND vvenclibtest 6 )
+add_test( NAME Test_vvenclibtest-timestamps              COMMAND vvenclibtest 6 )
 
 set( CLEANUP_TEST_FILES "" )
 
@@ -385,7 +385,6 @@ add_vvenc_test( compare_output-medium_rc2p_statsFile_easy 30 NO_OUTPUT "${OUT_VV
 
 add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
 set_tests_properties( Cleanup_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
-
 
 if( VVENC_ENABLE_INSTALL )
   # include installer

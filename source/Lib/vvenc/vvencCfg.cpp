@@ -582,6 +582,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
   c->m_bUseSAO                                 = true;
+  c->m_saoScc                                  = false;
   c->m_saoEncodingRate                         = -1.0;
   c->m_saoEncodingRateChroma                   = -1.0;
   c->m_log2SaoOffsetScale[0]=c->m_log2SaoOffsetScale[1] = 0;
@@ -1530,13 +1531,29 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
+
+  const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
   
   if( c->m_deblockLastTLayers > 0 )
   {
-    const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
-    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                  "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
-    vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
+    if( maxTLayer > 0 )
+    {
+      vvenc_confirmParameter( c, c->m_bLoopFilterDisable, "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
+      vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
+    }
     c->m_loopFilterOffsetInPPS = false;
+  }
+
+  if( c->m_alf )
+  {
+    if( c->m_alfSpeed > maxTLayer )
+    {
+      msg.log( VVENC_WARNING, "**********************************************************************************************\n" );
+      msg.log( VVENC_WARNING, "** WARNING: ALFSpeed would disable ALF for the given GOP configuration, disabling ALFSpeed! **\n" );
+      msg.log( VVENC_WARNING, "**********************************************************************************************\n" );
+
+      c->m_alfSpeed = 0;
+    }
   }
 
   c->m_configDone = true;
@@ -1874,12 +1891,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_useAMaxBT < 0               || c->m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
-  vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
 
   vvenc_confirmParameter(c, c->m_alfUnitSize < c->m_CTUSize,                                      "ALF Unit Size must be greater than or equal to CTUSize");
   vvenc_confirmParameter(c, c->m_alfUnitSize % c->m_CTUSize != 0,                                 "ALF Unit Size must be a multiple of CTUSize");
 
-  vvenc_confirmParameter(c, maxTLayer > 0 && maxTLayer - c->m_alfSpeed <= 0,                      "ALFSpeed disables ALF for this temporal configuration. Disable ALF if intended, or turn off ALFSpeed!");
+  vvenc_confirmParameter(c, c->m_alfSpeed < 0 || ( maxTLayer > 0 && c->m_alfSpeed > maxTLayer ),  "ALFSpeed out of range (0,log2(GopSize))" );
   vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_maxParallelFrames < 0,                                           "MaxParallelFrames out of range" );

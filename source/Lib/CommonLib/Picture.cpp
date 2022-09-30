@@ -187,6 +187,7 @@ Picture::Picture()
     , useScBDPCM        ( false )
     , useScIBC          ( false )
     , useScLMCS         ( false )
+    , useScSAO          ( false )
     , useScNumRefs      ( false )
     , useQtbttSpeedUpMode( 0 )
     , seqBaseQp         ( 0 )
@@ -370,12 +371,13 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
 void Picture::setSccFlags( const VVEncCfg* encCfg )
 {
-  useScME    = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
-  useScTS    = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
-  useScBDPCM = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
-  useScMCTF  = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
-  useScLMCS  = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
-  useScIBC   = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useScME      = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
+  useScTS      = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
+  useScBDPCM   = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
+  useScMCTF    = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
+  useScLMCS    = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
+  useScIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useScSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
   useScNumRefs = isSccWeak;
   useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
 
