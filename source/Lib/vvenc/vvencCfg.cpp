@@ -2378,6 +2378,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // scc
       c->m_IBCFastMethod                   = 6;
       c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
 
       break;
 
@@ -2435,6 +2436,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // scc
       c->m_IBCFastMethod                   = 6;
       c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
 
       break;
 
