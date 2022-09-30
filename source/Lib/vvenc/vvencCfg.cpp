@@ -582,6 +582,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
   c->m_bUseSAO                                 = true;
+  c->m_saoScc                                  = false;
   c->m_saoEncodingRate                         = -1.0;
   c->m_saoEncodingRateChroma                   = -1.0;
   c->m_log2SaoOffsetScale[0]=c->m_log2SaoOffsetScale[1] = 0;
