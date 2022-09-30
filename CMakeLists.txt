@@ -386,9 +386,6 @@ add_vvenc_test( compare_output-medium_rc2p_statsFile_easy 30 NO_OUTPUT "${OUT_VV
 add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
 set_tests_properties( Cleanup_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
 
-get_directory_property( ALL_TESTS TESTS )
-set_tests_properties( ${ALL_TESTS} PROPERTIES RUN_SERIAL TRUE )
-
 if( VVENC_ENABLE_INSTALL )
   # include installer
   include( cmake/modules/vvencInstall.cmake )
