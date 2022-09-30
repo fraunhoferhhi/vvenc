@@ -336,13 +336,13 @@ function( add_vvenc_test NAME TIMEOUT OUT_OUTPUT REQUIRES )
 endfunction()
 
 add_vvenc_test( vvencapp-tooltest       90 OUT_VVC   ""                       vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o OUTPUT )
-add_vvenc_test( vvencFFapp-tooltest     60 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltest     60 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 -b OUTPUT )
 add_vvenc_test( compare_output-tooltest 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --SIMD=SCALAR -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 --SIMD=SCALAR -b OUTPUT )
 add_vvenc_test( compare_output-tooltest-Scalar 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-tooltesttrans 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltesttrans 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
 add_vvenc_test( output-tooltesttrans     30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
 add_vvenc_test( vvencapp-faster       30 OUT_VVC   ""                       vvencapp --preset faster -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 11 -o OUTPUT )
