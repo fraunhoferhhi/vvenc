@@ -2422,7 +2422,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
-      c->m_numRefPics                      = 1;
+      c->m_numRefPics                      = 222111;
       c->m_numRefPicsSCC                   = 0;
 
       // tools
