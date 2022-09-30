@@ -2348,7 +2348,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 2;
       c->m_FastIntraTools                  = 0;
@@ -2359,6 +2359,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 1;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_RDOQ                            = 2;
@@ -2398,7 +2400,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
@@ -2409,10 +2411,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 1;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_alf                             = 1;
-      c->m_alfSpeed                        = 1;
+      c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
