@@ -232,6 +232,12 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "yuv420_10_packed",          YUV420_10_PACKED },
 };
 
+const std::vector<SVPair<int>> SaoToIntMap =
+{
+  { "0", 0 },
+  { "1", 1 },
+  { "2", 2 },
+};
 
 const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
@@ -364,6 +370,8 @@ static void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset );
 
 static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs );
 
+static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
+
 
 // ====================================================================================================================
 // Class definition
@@ -395,6 +403,7 @@ public:
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
                                                                ///< values that are not arbitrary must be quoted "\"values\""
                                                                ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
+  std::string  m_logoFileName;                                 ///< logo overlay file
 private:
   const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
 
@@ -498,6 +507,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToArr<char>                toDecodeBitstreams1           ( &c->m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
+
+  IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
 
   po::Options opts;
   if( m_easyMode )
@@ -675,6 +686,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
 
   if( !m_easyMode )
@@ -893,7 +905,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
-    ("SAO",                                             c->m_bUseSAO,                                        "Enable Sample Adaptive Offset")
+    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset (1: always, 2: only for screen content frames)")
     ("SaoEncodingRate",                                 c->m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
     ("SaoEncodingRateChroma",                           c->m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
     ("SaoLumaOffsetBitShift",                           c->m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
@@ -1159,20 +1171,20 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     // file check
     std::string cErr;
-    if( !apputils::YuvFileIO::checkInputFile( m_inputFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
     {
       err.warn( "Input file" ) << cErr;
     }
 
-    if( !apputils::YuvFileIO::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
     }
 
     // check for y4m input
-    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    if ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) )
     {
-      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
+      if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
         rcOstr << "cannot parse y4m metadata\n";
         ret = -1;
@@ -1180,7 +1192,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     }
     else
     {
-      if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
+      if( apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
@@ -1327,6 +1339,11 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   if( ! m_RCStatsFileName.empty() )
   {
     rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+  if( ! m_logoFileName.empty() )
+  {
+    rcOstr << "error: reading of logo overlay file not supported, please disable logofile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
 #endif
@@ -1516,6 +1533,12 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
   case YUV400_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
+}
+
+static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
+{
+  cfg->m_bUseSAO = !!saoVal;
+  cfg->m_saoScc  = saoVal == 2;
 }
 
 
