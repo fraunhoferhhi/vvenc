@@ -623,6 +623,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
+  c->m_blockImportanceMapping                  = true;
+
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
   c->m_qtbttSpeedUpMode                        = 0;
@@ -1244,8 +1246,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    msg.log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
-    c->m_vvencMCTF.MCTF = 0;
+    msg.log( VVENC_WARNING, "disabling MCTF (and BIM), because QP < 17\n" );
+    c->m_vvencMCTF.MCTF         = 0;
+    c->m_blockImportanceMapping = false; // TODO: change, when BIM is independent from MCTF
   }
   if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
   {
@@ -1260,6 +1263,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
+
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
@@ -2943,6 +2949,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
+    css << "BIM:" << c->m_blockImportanceMapping << " ";
 
     css << "\nPRE-ANALYSIS CFG: ";
     css << "STA:" << c->m_sliceTypeAdapt << " ";

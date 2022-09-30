@@ -564,10 +564,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const SPS &sps      = *tempCS->sps;
   const uint32_t uiLPelX  = tempCS->area.Y().lumaPos().x;
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
+  const bool isBimEnabled = (m_pcEncCfg->m_blockImportanceMapping && !bestCS->picture->m_picShared->m_ctuBimQpOffset.empty());
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
-  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
+  if ((m_pcEncCfg->m_usePerceptQPA || isBimEnabled) && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
   {
     const PreCalcValues &pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
@@ -580,7 +581,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
       }
 
-      if ((!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU behavior, Museum fix
+      if ((m_pcEncCfg->m_usePerceptQPA) && (!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU behavior, Museum fix
           (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
           (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
       {
@@ -596,8 +597,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
         if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
         {
-          if ((m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && (m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) // last CTU row of non-Intra key-frame
-              && (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
+          if ((m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) && // last CTU row of non-Intra key-frame
+              (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
           {
             m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus); // copy the pumping reducing QP offset from the top CTU neighbor
             tempCS->currQP[partitioner.chType] = tempCS->baseQP =
@@ -607,14 +608,41 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
         }
       }
-      else
+      else if (m_pcEncCfg->m_usePerceptQPA)
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
       }
-      setUpLambda ( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
+
+      // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
+      if( m_pcEncCfg->m_usePerceptQPA )
+      {
+        setUpLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
+      }
+      else
+      {
+        setUpLambda( slice, slice.getLambdas()[0], tempCS->baseQP, false, true );
+      }
+
+      if( isBimEnabled )
+      {
+        const int baseQp = tempCS->baseQP;
+
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+
+        // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
+        if( m_pcEncCfg->m_usePerceptQPA )
+        {
+          updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true );
+        }
+        else
+        {
+          updateLambda( slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true );
+        }
+      }
     }
-    else if (slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
+    else if (m_pcEncCfg->m_usePerceptQPA && slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
     {
       CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
       tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
@@ -623,7 +651,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
-
+      if (isBimEnabled)
+      {
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+      }
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
   }
@@ -632,7 +663,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     m_MergeSimpleFlag = 0;
   }
-  m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
+  m_modeCtrl.initCULevel( partitioner, *tempCS, m_MergeSimpleFlag );
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
