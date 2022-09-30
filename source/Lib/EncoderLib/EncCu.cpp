@@ -1696,7 +1696,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[ CH_L ],  dfunc);
 
       bool sameMV[ MRG_MAX_NUM_CANDS ] = { false, };
-      if (m_pcEncCfg->m_useFastMrg == 2)
+      if (m_pcEncCfg->m_useFastMrg >= 2)
       {
         for (int m = 0; m < mergeCtx.numValidMergeCand - 1; m++)
         {
@@ -1747,7 +1747,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         int insertPos = -1;
         updateCandList(ModeInfo(uiMergeCand, true, false, false, BioOrDmvr, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
         m_SortedPelUnitBufs.insert( insertPos, (int)RdModeList.size() );
-        if (m_pcEncCfg->m_useFastMrg != 2)
+        if (m_pcEncCfg->m_useFastMrg < 2)
         {
           CHECK(std::min(uiMergeCand + 1, uiNumMrgSATDCand) != RdModeList.size(), "");
         }
@@ -1849,7 +1849,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
 
       bool testMMVD = true;
-      if (m_pcEncCfg->m_useFastMrg == 2)
+      if (m_pcEncCfg->m_useFastMrg >= 2)
       {
         uiNumMrgSATDCand = (unsigned)RdModeList.size();
         testMMVD = (RdModeList.size() > 1);
@@ -1943,10 +1943,10 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         mmvdCandInserted |=xCheckSATDCostAffineMerge(tempCS, cu, affineMergeCtx, mrgCtx, m_SortedPelUnitBufs, uiNumMrgSATDCand, RdModeList, candCostList, distParam, ctxStartIntraCtx, merge_ctx_size);
       }
       // Try to limit number of candidates using SATD-costs
-      uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg == 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
+      uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg >= 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
       {
-        if( candCostList[i] > MRG_FAST_RATIO * candCostList[0] )
+        if( candCostList[i] > MRG_FAST_RATIO[std::max( 0, m_pcEncCfg->m_useFastMrg - 2 )] * candCostList[0] )
         {
           uiNumMrgSATDCand = i;
           break;
@@ -1980,7 +1980,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     }
     else
     {
-      if (m_pcEncCfg->m_useFastMrg != 2)
+      if (m_pcEncCfg->m_useFastMrg < 2)
       {
         if (bestIsMMVDSkip)
         {
@@ -2200,7 +2200,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
       xEncodeInterResidual( tempCS, bestCS, partitioner, encTestMode, uiNoResidualPass, uiNoResidualPass == 0 ? &candHasNoResidual[uiMrgHADIdx] : NULL );
 
-      if (m_pcEncCfg->m_useFastMrg == 2)
+      if (m_pcEncCfg->m_useFastMrg >= 2)
       {
         if( cu.ciip && bestCS->cost == MAX_DOUBLE && uiMrgHADIdx+1 == uiNumMrgSATDCand )
         {
@@ -2536,7 +2536,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
     comboList.list[candidateIdx].cost = updateCost;
     if ((m_pcEncCfg->m_Geo > 1) && candidateIdx)
     {
-      if (updateCost > MRG_FAST_RATIO * geocandCostList[0] || updateCost > m_mergeBestSATDCost || updateCost > m_AFFBestSATDCost)
+      if (updateCost > MRG_FAST_RATIO[0] * geocandCostList[0] || updateCost > m_mergeBestSATDCost || updateCost > m_AFFBestSATDCost)
       {
         geoNumMrgSATDCand = (int)geoRdModeList.size();
         break;
@@ -2548,7 +2548,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   }
   for (uint8_t i = 0; i < geoNumMrgSATDCand; i++)
   {
-    if (geocandCostList[i] > MRG_FAST_RATIO * geocandCostList[0] || geocandCostList[i] > m_mergeBestSATDCost
+    if (geocandCostList[i] > MRG_FAST_RATIO[0] * geocandCostList[0] || geocandCostList[i] > m_mergeBestSATDCost
         || geocandCostList[i] > m_AFFBestSATDCost)
     {
       geoNumMrgSATDCand = i;
@@ -2760,7 +2760,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       numMrgSATDCand = numValidBv;
       for (unsigned int i = 1; i < numValidBv; i++)
       {
-        if (candCostList[i] > MRG_FAST_RATIO * candCostList[0])
+        if (candCostList[i] > MRG_FAST_RATIO[0] * candCostList[0])
         {
           numMrgSATDCand = i;
           break;
@@ -2920,10 +2920,9 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
   m_cInterSearch.resetBufferedUniMotions();
 
-  int bcwLoopNum = (tempCS->slice->isInterB() ? BCW_NUM : 1);
-  bcwLoopNum = (tempCS->sps->BCW ? bcwLoopNum : 1);
+  int bcwLoopNum = BCW_NUM;
 
-  if( tempCS->area.lwidth() * tempCS->area.lheight() < BCW_SIZE_CONSTRAINT )
+  if( tempCS->area.Y().area() < BCW_SIZE_CONSTRAINT || !tempCS->slice->isInterB() || !tempCS->sps->BCW )
   {
     bcwLoopNum = 1;
   }

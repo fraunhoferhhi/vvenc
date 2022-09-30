@@ -248,6 +248,7 @@ public:
   bool                          useScIBC;
   bool                          useScLMCS;
   bool                          useScSAO;
+  bool                          useScNumRefs;
   int                           useQtbttSpeedUpMode;
   int                           seqBaseQp;
   int                           actualHeadBits;
