@@ -447,7 +447,7 @@ double EncSlice::xCalculateLambda( const Slice* slice,
   double dQPFactor = gopEntry.m_QPFactor;
   if( slice->sliceType == VVENC_I_SLICE )
   {
-    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopEntry.m_sliceType != VVENC_I_SLICE)
+    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopEntry.m_sliceType != 'I')
     {
       dQPFactor = m_pcEncCfg->m_dIntraQpFactor;
     }
