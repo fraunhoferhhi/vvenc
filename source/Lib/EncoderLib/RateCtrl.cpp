@@ -1005,7 +1005,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
-          encRcPic->clipTargetQP( getPicList(), secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
+          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
 

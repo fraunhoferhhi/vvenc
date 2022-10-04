@@ -306,7 +306,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   double averageAdaptedLambda = 0.0;
   int    averageAdaptedLumaQP = -1;
   uint32_t meanLuma           = MAX_UINT;
-  std::vector<Pel> ctuAvgLuma;
+  std::vector<int> ctuAvgLuma;
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr)
   {
@@ -353,7 +353,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
                                                        bitDepth, isHighResolution, &minActivityPart);
         hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
         pic->ctuQpaLambda[ctuRsAddr] = hpEner[1]; // temporary backup of CTU mean visual activity
-        pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
+        pic->ctuAdaptedQP[ctuRsAddr] = (int) pic->getOrigBuf (ctuArea).getAvg(); // and mean luma
 
         updateMinNoiseLevelsPic (pic->minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
       }
@@ -440,8 +440,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
     for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
     {
-      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) averageAdaptedLumaQP; // save the slice QP
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save adapted lambda, QP
+      pic->ctuAdaptedQP[ctuRsAddr] = averageAdaptedLumaQP;
     }
   }
   else // use CTU-level QPA
@@ -507,8 +507,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       averageAdaptedLambda = sliceLambda * pow (2.0, double (adaptedLumaQP - sliceQP) / 3.0);
       averageAdaptedLumaQP += adaptedLumaQP;
 
-      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) adaptedLumaQP;  // save the adapted CTU QP
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save adapted lambda, QP
+      pic->ctuAdaptedQP[ctuRsAddr] = adaptedLumaQP;
     }
 
     averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
@@ -534,8 +534,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         averageAdaptedLambda = sliceLambda * pow (2.0, double (clippedLumaQP - sliceQP) / 3.0);
         averageAdaptedLumaQP += clippedLumaQP;
 
-        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store modified lambda
-        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) clippedLumaQP;  // store modified CTU QP
+        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store mod. lambda, QP
+        pic->ctuAdaptedQP[ctuRsAddr] = clippedLumaQP;
       }
 
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
@@ -549,7 +549,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
         pic->ctuQpaLambda[ctuRsAddr] *= averageAdaptedLambda; // scale adapted lambda
-        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + lrQpDiff);
+        pic->ctuAdaptedQP[ctuRsAddr] = std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + lrQpDiff);
       }
 
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + lrQpDiff); // used in applyQPAdaptationSubCtu
