@@ -51,8 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 #include <string>
 #include <algorithm>
-#include <optional>
-#include <regex>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
