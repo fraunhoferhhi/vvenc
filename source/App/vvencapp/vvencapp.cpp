@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdio.h>
 #include <string>
+#include <sstream>
 #include <fstream>
 #include <cstring>
 #include <ctime>
@@ -59,7 +60,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "apputils/ParseArg.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
@@ -307,9 +307,9 @@ int main( int argc, char* argv[] )
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvenccfg.m_inputBitDepth[0], vvenccfg.m_MSBExtendedBitDepth[0], vvenccfg.m_internalBitDepth[0],
                                  vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput,
-                                 vvencappCfg.m_forceY4mInput ) )
+                                 vvencappCfg.m_forceY4mInput, vvencappCfg.m_logoFileName ) )
     {
-      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: open input file failed: %s\n", cYuvFileInput.getLastError().c_str() );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );
@@ -368,11 +368,11 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = iSeqNumber * vvenccfg.m_TicksPerSecond * vvenccfg.m_FrameScale / vvenccfg.m_FrameRate;
+          cYUVInputBuffer.cts             = (vvenccfg.m_TicksPerSecond > 0) ? iSeqNumber * (int64_t)vvenccfg.m_TicksPerSecond * (int64_t)vvenccfg.m_FrameScale / (int64_t)vvenccfg.m_FrameRate : iSeqNumber;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;
-          //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
+          //std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
         }
         else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
         {

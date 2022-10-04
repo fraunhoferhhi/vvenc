@@ -331,7 +331,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
 
-  if( m_pcEncCfg->m_FrameRate )
+  if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
   {
     m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)m_pcEncCfg->m_FrameScale/(int64_t)m_pcEncCfg->m_FrameRate);
   }
@@ -1051,6 +1051,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
+  bUseDQP |= m_pcEncCfg->m_blockImportanceMapping != 0;
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
@@ -1529,19 +1530,22 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     naluType = VVENC_NAL_UNIT_CODED_SLICE_STSA;
     slice->nalUnitType = naluType;
   }
+  
+  const int maxTLayer  = m_pcEncCfg->m_picReordering && m_pcEncCfg->m_GOPSize > 1 ? vvenc::ceilLog2( m_pcEncCfg->m_GOPSize ) : 0;
+  const int numRefCode = pic.useScNumRefs ? m_pcEncCfg->m_numRefPicsSCC : m_pcEncCfg->m_numRefPics;
+  const int tLayer     = slice->TLayer;
+  const int numRefs    = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-  // reference list
-  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : slice->rpl[0]->numberOfActivePictures;
-  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : slice->rpl[1]->numberOfActivePictures;
-  slice->constructRefPicList  ( picList, false );
-
-  if ( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
+  if( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
   {
     slice->sliceType = sliceType = VVENC_I_SLICE;
-    slice->numRefIdx[REF_PIC_LIST_0] = 0;
-    slice->numRefIdx[REF_PIC_LIST_1] = 0;
-    slice->constructRefPicList( picList, false );
   }
+
+  // reference list
+  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
+  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
+  slice->constructRefPicList  ( picList, false );
+
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
   slice->updateRefPicCounter  ( +1 );
@@ -1575,6 +1579,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   {
     for( int comp = 0; comp < MAX_NUM_COMP; comp++)
     {
+      //TODO: gopEntry.m_tcOffsetDiv2 and gopEntry.m_betaOffsetDiv2 are set with the luma value also for the chroma components (currently not used or all values are equal)
       slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = gopEntry.m_tcOffsetDiv2   + m_pcEncCfg->m_loopFilterTcOffsetDiv2[comp];
       slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = gopEntry.m_betaOffsetDiv2 +   m_pcEncCfg->m_loopFilterBetaOffsetDiv2[comp];
     }
@@ -2021,7 +2026,10 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     const int64_t iDiffFrames = m_numPicsCoded - pic.poc;
     au.cts      = pic.cts;
     au.ctsValid = pic.ctsValid;
-    au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    if( m_pcEncCfg->m_TicksPerSecond > 0 )
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+    else
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer )) + au.cts;
     au.dtsValid = pic.ctsValid;
   }
 

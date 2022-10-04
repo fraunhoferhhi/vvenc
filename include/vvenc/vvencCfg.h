@@ -415,7 +415,7 @@ typedef struct vvenc_config
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
   int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
   int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
-  int                 m_TicksPerSecond;                                                  // ticks per second e.g. 90000 for dts generation (1..27000000)
+  int                 m_TicksPerSecond;                                                  // ticks per second e.g. 90000 for dts generation (1..27000000, -1: ticks per frame=1)
   int                 m_framesToBeEncoded;                                               // number of encoded frames (default: 0, all)
   int                 m_inputBitDepth[ 2 ];                                              // bit-depth of input pictures (2d array for luma,chroma)
 
@@ -737,7 +737,9 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[3];
+  int                 m_reservedInt[1];
+  int                 m_numRefPics;                                                      // Number of reference pictures
+  int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
   int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
@@ -745,9 +747,12 @@ typedef struct vvenc_config
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-
+  
   bool                m_picReordering;
-  bool                m_reservedFlag[6];
+  bool                m_reservedFlag[3];
+  bool                m_blockImportanceMapping;
+  bool                m_saoScc;
+  bool                m_addGOP32refPics;
   bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;

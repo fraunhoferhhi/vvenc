@@ -151,8 +151,8 @@ protected:
   short                        m_chromaCoeffFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   AlfParam*                    m_alfParamChroma;
   Pel                          m_alfClippingValues[MAX_NUM_CH][MaxAlfNumClippingValues];
-  std::vector<AlfFilterShape>  m_filterShapesCcAlf[2];
-  std::vector<AlfFilterShape>  m_filterShapes[MAX_NUM_CH];
+  AlfFilterShape               m_filterShapesCcAlf[2];
+  AlfFilterShape               m_filterShapes[MAX_NUM_CH];
   AlfClassifier*               m_classifier;
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
@@ -167,9 +167,9 @@ protected:
   int                          m_maxCUWidth;
   int                          m_maxCUHeight;
   int                          m_maxCUDepth;
-  int                          m_numCTUsInWidth;
-  int                          m_numCTUsInHeight;
-  int                          m_numCTUsInPic;
+  uint32_t                     m_numCTUsInWidth;
+  uint32_t                     m_numCTUsInHeight;
+  uint32_t                     m_numCTUsInPic;
   int                          m_alfVBLumaPos;
   int                          m_alfVBChmaPos;
   int                          m_alfVBLumaCTUHeight;

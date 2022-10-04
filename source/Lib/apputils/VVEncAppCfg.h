@@ -37,40 +37,43 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 
-
 ------------------------------------------------------------------------------------------- */
-
-
-/** \file     VVEncAppCfg.cpp
-    \brief    Handle encoder configuration parameters
+/** \file     VVEncAppCfg.h
+    \brief    Handle encoder configuration parameters (header)
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <cstring>
+#pragma once
+
+#include "vvenc/vvencCfg.h"
+#include "vvenc/vvenc.h"
+
+
 #include <string>
+#include <vector>
+#include <tuple>
+#include <functional>
+
+#include <cstring>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <cstdarg>
 
-#include "apputils/IStreamIO.h"
-#include "apputils/ParseArg.h"
-#include "apputils/VVEncAppCfg.h"
-#include "apputils/YuvFileIO.h"
-#include "vvenc/vvenc.h"
+#include "IStreamIO.h"
+#include "ParseArg.h"
+#include "YuvFileIO.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
 using namespace std;
-namespace po = apputils::df::program_options_lite;
+namespace po = apputils::program_options;
 
 namespace apputils {
 
-//! \ingroup EncoderApp
+//! \ingroup apputils
 //! \{
-//!
-//!
+
 
 // ====================================================================================================================
 // enums
@@ -229,6 +232,12 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "yuv420_10_packed",          YUV420_10_PACKED },
 };
 
+const std::vector<SVPair<int>> SaoToIntMap =
+{
+  { "0", 0 },
+  { "1", 1 },
+  { "2", 2 },
+};
 
 const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
@@ -355,38 +364,83 @@ const std::vector<SVPair<int>> BitrateAbrevToIntMap =
 //// string <-> enum
 //// ====================================================================================================================
 
+class VVEncAppCfg;
 
-void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset )
-{
-  VVEncAppCfg::presetChangeCallback callback = appcfg->getPresetChangeCallback();
-  if( callback )
-  {
-    callback( cfg, (vvencPresetMode)preset );
-  }
-}
+static void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset );
 
-void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs )
-{
-  switch( dbcs )
-  {
-  case YUV420_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV420_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV420_10_PACKED : appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; appcfg->m_packedYUVInput=true; break;
-  case YUV422_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV422_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV444_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV444_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV400_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV400_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
-  default: break;
-  }
-}
+static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs );
+
+static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
+
 
 // ====================================================================================================================
-// Public member functions
+// Class definition
 // ====================================================================================================================
 
-int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
+/// application params and parser class for app+lib options
+class VVEncAppCfg
+{
+public:
+  typedef std::function<void( vvenc_config*, vvencPresetMode ) > presetChangeCallback;
+
+public:
+  std::string  m_inputFileName;                                ///< source file name
+  std::string  m_bitstreamFileName;                            ///< output bitstream file
+  std::string  m_reconFileName;                                ///< output reconstruction file
+  std::string  m_RCStatsFileName;                              ///< rate control statistics file
+  vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
+  int          m_FrameSkip                     = 0;            ///< number of skipped frames from the beginning
+  bool         m_bClipInputVideoToRec709Range  = false;
+  bool         m_bClipOutputVideoToRec709Range = false;
+  bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
+  bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_forceY4mInput                 = false;        ///< If true, y4m input file syntax is forced (only needed for input via std::cin)
+  bool         m_decode                        = false;
+  bool         m_showVersion                   = false;
+  bool         m_showHelp                      = false;
+
+  std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
+                                                               ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
+                                                               ///< values that are not arbitrary must be quoted "\"values\""
+                                                               ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
+  std::string  m_logoFileName;                                 ///< logo overlay file
+private:
+  const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
+
+  presetChangeCallback  m_changePresetCallback = nullptr;
+public:
+
+  VVEncAppCfg( bool easyMode = false )
+  : m_easyMode (easyMode )
+  {
+
+  }
+  virtual ~VVEncAppCfg(){}
+
+  void setPresetChangeCallback( presetChangeCallback callback )
+  {
+    m_changePresetCallback = callback;
+  }
+
+  presetChangeCallback getPresetChangeCallback( )
+  {
+    return m_changePresetCallback ;
+  }
+
+public:
+
+/* parse
+  This method parses a list of command line arguments and sets them in the vvenc_config
+  \param[in]  argc number or arguments in argv string list
+  \param[in]  argv list of char* (argv[]); option name must be defined by prefix -- or -
+  \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+  \param[in]  std::ostream& reference to ostream where info,warnings and errors are written to
+  \retval     returns 0 on success,
+              < o on error
+              > 0 :  1 when information is printed into ostream (help)
+                      2 when warning is printed into ostream
+*/
+int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 {
   int ret = 0;
 
@@ -454,6 +508,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
 
+  IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
+
   po::Options opts;
   if( m_easyMode )
   {
@@ -479,7 +535,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("framescale",                                      c->m_FrameScale,                                     "temporal scale (framerate denominator) e.g. 1, 1001 ")
     ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
 
-    ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
+    ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000, -1: ticks per frame=1)")
     ("frames,f",                                        c->m_framesToBeEncoded,                              "max. frames to encode [all]")
     ;
   }
@@ -493,7 +549,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FrameRate,-fr",                                   c->m_FrameRate,                                      "Temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000")
     ("FrameScale",                                      c->m_FrameScale,                                     "Temporal scale (framerate denominator) e.g. 1, 1001")
     ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
-    ("TicksPerSecond",                                  c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
+    ("TicksPerSecond",                                  c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000, -1: ticks per frame=1)")
     ("LeadFrames",                                      c->m_leadFrames,                                     "Number of leading frames to be read before starting the encoding, use when splitting the video into overlapping segments")
     ("TrailFrames",                                     c->m_trailFrames,                                    "Number of trailing frames to be read after frames to be encoded, use when splitting the video into overlapping segments")
     ;
@@ -630,6 +686,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
 
   if( !m_easyMode )
@@ -743,6 +800,10 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
+    
+    ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
+    ("NumRefPics",                                      c->m_numRefPics,                                     "Number of reference pictures in RPL (0: default for RPL, <10: apply for all temporal layers, >=10: each decimal digit specifies the number for a temporal layer, last digit applying to the highest TL)" )
+    ("NumRefPicsSCC",                                   c->m_numRefPicsSCC,                                  "Number of reference pictures in RPL for SCC pictures (semantic analogue to NumRefPics, -1: equal to NumRefPics)" )
     ;
 
     opts.setSubSection("Low-level QT-BTT partitioning options");
@@ -846,7 +907,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
-    ("SAO",                                             c->m_bUseSAO,                                        "Enable Sample Adaptive Offset")
+    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset (1: always, 2: only for screen content frames)")
     ("SaoEncodingRate",                                 c->m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
     ("SaoEncodingRateChroma",                           c->m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
     ("SaoLumaOffsetBitShift",                           c->m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
@@ -961,6 +1022,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
+    ("BIM",                                             c->m_blockImportanceMapping,                         "Block importance mapping (basic temporal RDO based on MCTF).")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -1111,20 +1173,20 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
     // file check
     std::string cErr;
-    if( !apputils::YuvFileIO::checkInputFile( m_inputFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
     {
       err.warn( "Input file" ) << cErr;
     }
 
-    if( !apputils::YuvFileIO::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    if( !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
     }
 
     // check for y4m input
-    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    if ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) )
     {
-      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, *this ))
+      if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
         rcOstr << "cannot parse y4m metadata\n";
         ret = -1;
@@ -1132,7 +1194,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     }
     else
     {
-      if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
+      if( apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
@@ -1156,7 +1218,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       return 2;
     }
   }
-  catch( df::program_options_lite::ParseFailure &e )
+  catch( program_options::ParseFailure &e )
   {
     rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\".\n";
     if( argc == 2 )
@@ -1168,21 +1230,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   return ret;
 }
 
-std::string VVEncAppCfg::getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
-{
-  std::stringstream css;
-  if( eMsgLevel >= VVENC_DETAILS )
-  {
-    css << "Input          File                    : " << m_inputFileName << "\n";
-    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
-    css << "Reconstruction File                    : " << m_reconFileName << "\n";
-    css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
-  }
-
-  return css.str();
-}
-
-bool VVEncAppCfg::checkCfg( vvenc_config* c, std::ostream& rcOstr )
+bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
 {
   bool ret = false;
 
@@ -1211,39 +1259,49 @@ bool VVEncAppCfg::checkCfg( vvenc_config* c, std::ostream& rcOstr )
   return ret;
 }
 
-int get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId )
+virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
 {
-  int w = frameWidth;
-  if ( compId > 0 )
+  std::stringstream css;
+  if( eMsgLevel >= VVENC_DETAILS )
   {
-    switch ( chFmt )
-    {
-      case VVENC_CHROMA_400: w = 0;      break;
-      case VVENC_CHROMA_420:
-      case VVENC_CHROMA_422: w = w >> 1; break;
-      default: break;
-    }
+    css << "Input          File                    : " << m_inputFileName << "\n";
+    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
+    css << "Reconstruction File                    : " << m_reconFileName << "\n";
+    css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
   }
-  return w;
+
+  return css.str();
 }
 
-int get_height_of_component( const vvencChromaFormat chFmt, const int frameHeight, const int compId )
+std::vector <std::tuple<std::string, std::string>> getAdditionalSettingList()
 {
-  int h = frameHeight;
-  if ( compId > 0 )
+  std::vector <std::tuple<std::string, std::string>> settingsDictionary;
+  if ( !m_additionalSettings.empty())
   {
-    switch ( chFmt )
+    char delimiter =':'; // delimiter to mark entry beside space
+    std::vector<std::string> tokenvec = tokenize( m_additionalSettings, delimiter );
+
+    for( auto &t : tokenvec )
     {
-      case VVENC_CHROMA_400: h = 0;      break;
-      case VVENC_CHROMA_420: h = h >> 1; break;
-      case VVENC_CHROMA_422:
-      default: break;
+      char delimiterEntryValue = '='; // delimiter to mark entry from value
+      std::vector<std::string> entry = tokenize( t, delimiterEntryValue );
+
+      if( !entry.empty() )
+      {
+        std::string key   = entry.front();
+        std::string value = entry.size() > 1 ? entry[1] : "";
+
+        settingsDictionary.push_back(std::make_tuple( key, value) );
+      }
     }
   }
-  return h;
+
+  return settingsDictionary;
 }
 
-bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
+private:
+
+bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
 {
   bool ret = true;
 
@@ -1283,6 +1341,11 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   if( ! m_RCStatsFileName.empty() )
   {
     rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+  if( ! m_logoFileName.empty() )
+  {
+    rcOstr << "error: reading of logo overlay file not supported, please disable logofile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
 #endif
@@ -1344,9 +1407,9 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
 }
 
 
-std::vector<std::string> VVEncAppCfg::tokenize(std::string str, char delimiter )
+std::vector<std::string> tokenize(std::string str, char delimiter )
 {
-  std::vector<string> tokenvec;
+  std::vector<std::string> tokenvec;
   bool tupleRequired=false;
   std::string cDefDel = " ";
   if ( delimiter == '=' )
@@ -1413,30 +1476,71 @@ std::vector<std::string> VVEncAppCfg::tokenize(std::string str, char delimiter )
   return tokenvec;
 }
 
-std::vector <std::tuple<std::string, std::string>> VVEncAppCfg::getAdditionalSettingList()
+
+static int get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId )
 {
-  std::vector <std::tuple<std::string, std::string>> settingsDictionary;
-  if ( !m_additionalSettings.empty())
+  int w = frameWidth;
+  if ( compId > 0 )
   {
-    char delimiter =':'; // delimiter to mark entry beside space
-    std::vector<string> tokenvec = tokenize( m_additionalSettings, delimiter );
-
-    for( auto &t : tokenvec )
+    switch ( chFmt )
     {
-      char delimiterEntryValue = '='; // delimiter to mark entry from value
-      std::vector<string> entry = tokenize( t, delimiterEntryValue );
-
-      if( !entry.empty() )
-      {
-        std::string key   = entry.front();
-        std::string value = entry.size() > 1 ? entry[1] : "";
-
-        settingsDictionary.push_back(std::make_tuple( key, value) );
-      }
+      case VVENC_CHROMA_400: w = 0;      break;
+      case VVENC_CHROMA_420:
+      case VVENC_CHROMA_422: w = w >> 1; break;
+      default: break;
     }
   }
+  return w;
+}
 
-  return settingsDictionary;
+static int get_height_of_component( const vvencChromaFormat chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case VVENC_CHROMA_400: h = 0;      break;
+      case VVENC_CHROMA_420: h = h >> 1; break;
+      case VVENC_CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
+}
+
+};
+
+void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset )
+{
+  VVEncAppCfg::presetChangeCallback callback = appcfg->getPresetChangeCallback();
+  if( callback )
+  {
+    callback( cfg, (vvencPresetMode)preset );
+  }
+}
+
+void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs )
+{
+  switch( dbcs )
+  {
+  case YUV420_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_10_PACKED : appcfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; appcfg->m_packedYUVInput=true; break;
+  case YUV422_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :         appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  default: break;
+  }
+}
+
+static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
+{
+  cfg->m_bUseSAO = !!saoVal;
+  cfg->m_saoScc  = saoVal == 2;
 }
 
 

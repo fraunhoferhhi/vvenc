@@ -55,7 +55,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 
 #include "vvenc/vvenc.h"
-#include "apputils/ParseArg.h"
 
 using namespace std;
 
@@ -254,7 +253,7 @@ int EncApp::encode()
   vvenc_accessUnit_alloc_payload( &au, auSizeScale * vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight + 1024 );
 
   // main loop
-  int framesRcvd  = 0;
+  int64_t framesRcvd  = 0;
   const int start = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass - 1 : 0;
   const int end   = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass     : vvencCfg.m_RCNumPasses;
   for( int pass = start; pass < end; pass++ )
@@ -263,7 +262,7 @@ int EncApp::encode()
 
     if( m_yuvInputFile.open( appCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
                              appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput,
-                             appCfg.m_forceY4mInput ))
+                             appCfg.m_forceY4mInput, appCfg.m_logoFileName ))
     {
       msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
@@ -339,7 +338,7 @@ int EncApp::encode()
         {
           if( vvencCfg.m_FrameRate > 0 )
           {
-            yuvInBuf.cts      = framesRcvd * vvencCfg.m_TicksPerSecond * vvencCfg.m_FrameScale / vvencCfg.m_FrameRate;
+            yuvInBuf.cts      = (vvencCfg.m_TicksPerSecond > 0) ? framesRcvd * (int64_t)vvencCfg.m_TicksPerSecond * (int64_t)vvencCfg.m_FrameScale / (int64_t)vvencCfg.m_FrameRate : framesRcvd;
             yuvInBuf.ctsValid = true;
           }
           framesRcvd += 1;

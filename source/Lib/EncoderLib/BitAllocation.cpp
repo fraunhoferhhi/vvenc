@@ -248,25 +248,25 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
   return 0;
 }
 
-static void updateMinNoiseLevelsPic( Picture* pic, const int bitDepth, const unsigned avgValue, const unsigned noise )
+static void updateMinNoiseLevelsPic (uint8_t* const minNoiseLevels, const int bitDepth, const unsigned avgValue, const unsigned noise)
 {
   const unsigned avgIndex = avgValue >> (bitDepth - 3); // one of 8 mean level regions
 
-  CHECK( avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
+  CHECK (avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds");
 
-  if (noise < (unsigned) pic->minNoiseLevels [avgIndex])
+  if (noise < (unsigned) minNoiseLevels [avgIndex])
   {
-    pic->minNoiseLevels [avgIndex] = (uint8_t) noise;
+    minNoiseLevels [avgIndex] = (uint8_t) noise;
   }
 }
 
-static void clipQPValToEstimatedMinimStats( const uint8_t* minNoiseLevels, const int bitDepth, const unsigned avgValue,
-                                            const double resFac, const int extraQPOffset, int& QP ) // output QP
+static void clipQPValToEstimatedMinimStats (const uint8_t* minNoiseLevels, const int bitDepth, const unsigned avgValue,
+                                            const double resFac, const int extraQPOffset, int& QP) // output QP
 {
   const unsigned avgIndex = avgValue >> (bitDepth - 3); // one of 8 mean level regions
   const int32_t dQPOffset = -9;
 
-  CHECK( avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds" );
+  CHECK (avgIndex >= QPA_MAX_NOISE_LEVELS, "array index out of bounds");
 
   int i = minNoiseLevels[avgIndex];
 
@@ -295,25 +295,42 @@ static void clipQPValToEstimatedMinimStats( const uint8_t* minNoiseLevels, const
 
 // public functions
 
-int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, uint16_t* const picVisActLuma,
-                                            std::vector<int>& ctuPumpRedQP, int* const optChromaQPOffsets,
-                                            const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
+int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
+                                           const double sliceLambda, uint16_t* const picVisActLuma,
+                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
+                                           int* const optChromaQPOffsets, const uint8_t* minNoiseLevels,
+                                           const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
-  int    savedLumaQP          = -1;
+  double averageAdaptedLambda = 0.0;
+  int    averageAdaptedLumaQP = -1;
   uint32_t meanLuma           = MAX_UINT;
+  std::vector<Pel> ctuAvgLuma;
 
-  if (pic == nullptr || encCfg == nullptr) return -1;
+  if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr)
+  {
+    return -1;
+  }
 
+  const bool isEncPass        = (encCfg->m_LookAhead > 0 && !slice->pic->isPreAnalysis);
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-  const int          bitDepth = slice->sps->bitDepths[CH_L];
-  const PreCalcValues&    pcv = *pic->cs->pcv;
+  const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
+  const int  bitDepth         = slice->sps->bitDepths[CH_L];
+  const double hpEnerPicNorm  = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, (encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back()),
+                                                                 (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+  const PreCalcValues& pcv    = *pic->cs->pcv;
+
+  pic->picInitialQP = sliceQP;  // modified below and used in applyQPAdaptationSubCtu
+  if ((encCfg->m_RCTargetBitrate > 0) && useFrameWiseQPA)
+  {
+    averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP - 1); // one will be added again
+  }
 
   for (uint32_t comp = 0; comp < getNumberValidComponents (pic->chromaFormat); comp++)
   {
-    const ComponentID  compID = (ComponentID) comp;
+    const ComponentID compID  = (ComponentID) comp;
 
     if (isLuma (compID)) // luma: CTU-wise QPA operation
     {
@@ -332,17 +349,20 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
         unsigned minActivityPart = 0;
 
         hpEner[1] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                       picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
+                                                       picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
                                                        bitDepth, isHighResolution, &minActivityPart);
         hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
         pic->ctuQpaLambda[ctuRsAddr] = hpEner[1]; // temporary backup of CTU mean visual activity
         pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
 
-        updateMinNoiseLevelsPic( pic, bitDepth, pic->ctuAdaptedQP[ ctuRsAddr ], minActivityPart );
+        updateMinNoiseLevelsPic (pic->minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
       }
 
       hpEner[comp] /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);
-      if (picVisActLuma != nullptr) *picVisActLuma = ClipBD (uint16_t (0.5 + hpEner[comp]), bitDepth);
+      if (picVisActLuma != nullptr)
+      {
+        *picVisActLuma = ClipBD (uint16_t (0.5 + hpEner[comp]), bitDepth);
+      }
     }
     else // chroma: only picture-wise operation required
     {
@@ -351,16 +371,15 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
       const CPelBuf picPrv2 = pic->getOrigBufPrev (compID, PREV_FRAME_2);
 
       hpEner[comp] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                        picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
+                                                        picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
                                                         bitDepth, isHighResolution && (pic->chromaFormat == CHROMA_444));
 
       const int adaptChromaQPOffset = 2.0 * hpEner[comp] <= hpEner[0] ? 0 : apprI3Log2 (2.0 * hpEner[comp] / hpEner[0]);
 
-      if (savedLumaQP < 0)
+      if (averageAdaptedLumaQP < 0) // YUV is not 4:0:0!
       {
-        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
-                                                                                                                  encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
-                                                                                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth)));
+        averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] * hpEnerPicNorm));
+
         if (isChromaEnabled (pic->chromaFormat) && (averageAdaptedLumaQP < MAX_QP))
         {
           averageAdaptedLumaQP += getGlaringColorQPOffset (pic, -1 /*ctuAddr*/, slice->sps->bitDepths[CH_C], meanLuma);
@@ -374,137 +393,81 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
           averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
         }
+      }
 
-        savedLumaQP = averageAdaptedLumaQP;
-      } // savedLumaQP < 0
-
-      GCC_WARNING_DISABLE_maybe_uninitialized   // probably spurious warning, when building with -fsanitize=undefined: "error: 'encCfg.33' may be used uninitialized in this function"
-      const int lumaChromaMappingDQP = (savedLumaQP - slice->sps->chromaQpMappingTable.getMappedChromaQpValue (compID, savedLumaQP)) >> (encCfg->m_QP >= MAX_QP_PERCEPT_QPA ? 1 : 0);
-      GCC_WARNING_RESET
-
-      if (optChromaQPOffsets != nullptr) optChromaQPOffsets[comp - 1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
-    } // isChroma (compID)
+      if (optChromaQPOffsets != nullptr) // adapts sliceChromaQpOffsetIntraOrPeriodic
+      {
+        GCC_WARNING_DISABLE_maybe_uninitialized // probably spurious warning, when building with -fsanitize=undefined: "error: 'encCfg.33' may be used uninitialized in this function"
+        const int lumaChromaMappingDQP = (averageAdaptedLumaQP - slice->sps->chromaQpMappingTable.getMappedChromaQpValue (compID, averageAdaptedLumaQP)) >> (encCfg->m_QP >= MAX_QP_PERCEPT_QPA ? 1 : 0);
+        GCC_WARNING_RESET
+        optChromaQPOffsets[comp - 1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
+      }
+    } // isLuma or isChroma
   }
 
-  return savedLumaQP;
-}
-
-int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
-                                          std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                          const uint8_t* minNoiseLevels, const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
-{
-  Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
-  double hpEnerPic, hpEnerAvg = 0.0;
-  int    adaptedSliceQP       = -1;
-  uint32_t meanLuma           = MAX_UINT;
-  std::vector<Pel> ctuAvgLuma;
-
-  if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
-
-  const bool isEncPass        = (encCfg->m_LookAhead > 0 && !slice->pic->isPreAnalysis);
-  const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
-  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-  const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
-  const int          bitDepth = slice->sps->bitDepths[CH_L];
-  const int           sliceQP = (savedQP < 0 ? slice->sliceQp : savedQP);
-  const PreCalcValues&    pcv = *pic->cs->pcv;
-
-  if (!useFrameWiseQPA || (savedQP < 0)) // mean visual activity value and luma value in each CTU
+  if (averageAdaptedLumaQP < 0) // only if YUV is 4:0:0!
   {
-    if (savedQP >= 0) // data available from chroma QPA!
-    {
-      for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
-      {
-        const Position pos ((ctuRsAddr % pcv.widthInCtus) * pcv.maxCUSize, (ctuRsAddr / pcv.widthInCtus) * pcv.maxCUSize);
-        const CompArea ctuArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, pcv.maxCUSize, pcv.maxCUSize)), pic->Y());
+    averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] * hpEnerPicNorm));
 
-        hpEnerAvg += pic->ctuQpaLambda[ctuRsAddr] * double (ctuArea.width * ctuArea.height);
-      }
-    }
-    else // per-CTU data missing, CTU-wise QPA operation
-    {
-      const PosType guardSize = (isHighResolution ? 2 : 1);
-
-      for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
-      {
-        const Position pos ((ctuRsAddr % pcv.widthInCtus) * pcv.maxCUSize, (ctuRsAddr / pcv.widthInCtus) * pcv.maxCUSize);
-        const CompArea ctuArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, pcv.maxCUSize, pcv.maxCUSize)), pic->Y());
-        const SizeType fltWidth  = pcv.maxCUSize + guardSize * (pos.x > 0 ? 2 : 1);
-        const SizeType fltHeight = pcv.maxCUSize + guardSize * (pos.y > 0 ? 2 : 1);
-        const CompArea fltArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x > 0 ? pos.x - guardSize : 0, pos.y > 0 ? pos.y - guardSize : 0, fltWidth, fltHeight)), pic->Y());
-        const CPelBuf  picOrig   = pic->getOrigBuf (fltArea);
-        const CPelBuf  picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
-        const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
-        unsigned minActivityPart = 0;
-
-        hpEnerPic = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                       picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                                       bitDepth, isHighResolution, &minActivityPart);
-        hpEnerAvg += hpEnerPic * double (ctuArea.width * ctuArea.height);
-        pic->ctuQpaLambda[ctuRsAddr] = hpEnerPic; // temporary backup of CTU mean visual activity
-        pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
-
-        if (!isEncPass)
-        {
-          updateMinNoiseLevelsPic( pic, bitDepth, pic->ctuAdaptedQP[ ctuRsAddr ], minActivityPart );
-        }
-      }
-    }
-
-    hpEnerAvg /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);
-  }
-
-  hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
-                                               (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
-
-  if (useFrameWiseQPA || (sliceQP >= MAX_QP))
-  {
-    int averageAdaptedLumaQP = (savedQP < 0 ? Clip3 (0, MAX_QP, slice->sliceQp + apprI3Log2 (hpEnerAvg * hpEnerPic)) : std::min (MAX_QP, savedQP + 1));
-
-    if (isChromaEnabled (pic->chromaFormat) && (averageAdaptedLumaQP < MAX_QP) && (savedQP < 0))
-    {
-      averageAdaptedLumaQP += getGlaringColorQPOffset (pic, -1 /*ctuAddr*/, slice->sps->bitDepths[CH_C], meanLuma);
-
-      if ((averageAdaptedLumaQP > MAX_QP) && !isHDR) averageAdaptedLumaQP = MAX_QP;
-    }
-    // change mean picture QP index depending on picture's average luma value (Sharp)
-    if (isHDR && (savedQP < 0))
+    // change mean picture QP index based on the picture's average luma value (Sharp)
+    if (isHDR)
     {
       if (meanLuma == MAX_UINT) meanLuma = pic->getOrigBuf().Y().getAvg();
 
       averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
     }
+  }
 
-    hpEnerAvg = lambda * pow (2.0, double (averageAdaptedLumaQP - slice->sliceQp) / 3.0);
+  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())
+  {
+    const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
+    const int offs = (slice->poc / encCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
+    std::vector<uint8_t>& ctuQPMem = *ctuRCQPMemory; // unpack 1st-pass reduction QPs
+
+    if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
+    {
+      for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
+      {
+        ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
+      }
+    }
+  }
+
+  if (useFrameWiseQPA || (averageAdaptedLumaQP >= MAX_QP)) // store the CTU-wise QP/lambda values
+  {
+    averageAdaptedLumaQP = std::min (MAX_QP, averageAdaptedLumaQP + 1);
+    averageAdaptedLambda = sliceLambda * pow (2.0, double (averageAdaptedLumaQP - sliceQP) / 3.0);
 
     for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
     {
-      pic->ctuQpaLambda[ctuRsAddr] = hpEnerAvg; // store adapted slice-level lambda
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) averageAdaptedLumaQP; // store fixed QPs
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
+      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) averageAdaptedLumaQP; // save the slice QP
     }
-
-    adaptedSliceQP = averageAdaptedLumaQP;
   }
-  else // use CTU-wise QPA
+  else // use CTU-level QPA
   {
     const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
     const int dvsr = encCfg->m_IntraPeriod - encCfg->m_GOPSize;
+    const int aaQP = averageAdaptedLumaQP; // backup of initial average QP from above
+    const bool rcIsFirstPassOf2 = ((encCfg->m_RCTargetBitrate == 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (slice->poc > 0) ? encCfg->m_RCNumPasses == 2 : false);
 
     if (isEncPass) ctuAvgLuma.resize (nCtu);
 
+    averageAdaptedLumaQP = -1;
     for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
     {
-      int adaptedLumaQP = Clip3 (0, MAX_QP, slice->sliceQp + apprI3Log2 (pic->ctuQpaLambda[ctuRsAddr]/*hpEner*/ * hpEnerPic));
+      const double hpEnerCTU = pic->ctuQpaLambda[ctuRsAddr];
+      int adaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEnerCTU * hpEnerPicNorm));
 
       if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
       {
-        if (ctuRCQPMemory != nullptr) // save I-frame QP for second rate control pass
+        if (rcIsFirstPassOf2) // backup 1st-pass I-frame QP for 2nd rate control pass
         {
           if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
           if (adaptedLumaQP > 0)
           {
-            adaptedLumaQP -= (sliceQP >> 4); // a first-pass tuning for stabilization
+            adaptedLumaQP -= (aaQP >> 4); // some first-pass tuning for stabilization
           }
         }
         if (ctuPumpRedQP[ctuRsAddr] < 0) adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize - (dvsr >> 1)) / dvsr);
@@ -512,7 +475,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && rcIsFirstPassOf2 && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
@@ -531,70 +494,30 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
         adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
       }
       // reduce delta-QP variance, avoid wasting precious bit budget at low bit-rates
-      if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1))
+      if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1))
       {
         const int retunedAdLumaQP = adaptedLumaQP + 1;
 
-        adaptedLumaQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedLumaQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * sliceQP + 2) >> 2;
+        adaptedLumaQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedLumaQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * aaQP + 2) >> 2;
         if (adaptedLumaQP > retunedAdLumaQP) adaptedLumaQP = retunedAdLumaQP;
         if (adaptedLumaQP < MAX_QP && encCfg->m_QP == MAX_QP_PERCEPT_QPA && slice->TLayer > 1) adaptedLumaQP++; // a fine-tuning
       }
       if (isEncPass) ctuAvgLuma[ctuRsAddr - ctuStartAddr] = pic->ctuAdaptedQP[ctuRsAddr];
 
-      hpEnerAvg = lambda * pow (2.0, double (adaptedLumaQP - slice->sliceQp) / 3.0);
+      averageAdaptedLambda = sliceLambda * pow (2.0, double (adaptedLumaQP - sliceQP) / 3.0);
+      averageAdaptedLumaQP += adaptedLumaQP;
 
-      pic->ctuQpaLambda[ctuRsAddr] = hpEnerAvg;  // store adapted CTU-level lambdas
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) adaptedLumaQP;  // store adapted CTU QPs
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
+      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) adaptedLumaQP;  // save the adapted CTU QP
+    }
 
-      adaptedSliceQP += adaptedLumaQP;
+    averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
 
-      // try to reduce local bitrate peaks using minimum smoothing of the adapted QPs
-      if ((pcv.widthInCtus > 1) && (encCfg->m_PadSourceWidth <= 640 && encCfg->m_PadSourceHeight <= 480))
-      {
-        const uint32_t ctuIdxX = ctuRsAddr % pcv.widthInCtus; // horizontal CTU index
-
-        if (ctuIdxX == 0)
-        {
-          adaptedLumaQP = (ctuRsAddr > 1 ? pic->ctuAdaptedQP[ctuRsAddr - 2] : 0);
-        }
-        else // ctuIdxX > 0
-        {
-          adaptedLumaQP = (ctuIdxX > 1 ? std::min (pic->ctuAdaptedQP[ctuRsAddr - 2], pic->ctuAdaptedQP[ctuRsAddr]) : pic->ctuAdaptedQP[ctuRsAddr]);
-        }
-        if (ctuRsAddr > pcv.widthInCtus) // previous vertical
-        {
-          adaptedLumaQP = std::min (adaptedLumaQP, (int) pic->ctuAdaptedQP[ctuRsAddr - 1 - pcv.widthInCtus]);
-        }
-        if ((ctuRsAddr > 0) && (pic->ctuAdaptedQP[ctuRsAddr - 1] < (Pel) adaptedLumaQP))
-        {
-          hpEnerAvg = lambda * pow (2.0, double (adaptedLumaQP - slice->sliceQp) / 3.0);
-
-          pic->ctuQpaLambda[ctuRsAddr - 1] = hpEnerAvg;   // lambda after smoothing
-          pic->ctuAdaptedQP[ctuRsAddr - 1] = (Pel) adaptedLumaQP; // min. smoothing
-        }
-
-        if ((ctuRsAddr == ctuBoundingAddr - 1) && (ctuRsAddr > pcv.widthInCtus)) // last CTU in the given slice
-        {
-          adaptedLumaQP = std::min (pic->ctuAdaptedQP[ctuRsAddr - 1], pic->ctuAdaptedQP[ctuRsAddr - pcv.widthInCtus]);
-
-          if (pic->ctuAdaptedQP[ctuRsAddr] < (Pel) adaptedLumaQP)
-          {
-            hpEnerAvg = lambda * pow (2.0, double (adaptedLumaQP - slice->sliceQp) / 3.0);
-
-            pic->ctuQpaLambda[ctuRsAddr] = hpEnerAvg;
-            pic->ctuAdaptedQP[ctuRsAddr] = (Pel) adaptedLumaQP;
-          }
-        }
-      }
-    } // end CTU-wise loop
-
-    adaptedSliceQP = (ctuBoundingAddr > ctuStartAddr ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
-
-    if ((encCfg->m_RCTargetBitrate > 0 && adaptedSliceQP != slice->sliceQp) || (isEncPass)) // QP, rate control
+    if ((encCfg->m_RCTargetBitrate > 0 && averageAdaptedLumaQP != sliceQP) || (isEncPass)) // QP/rate control
     {
-      const int rcQpDiff = (encCfg->m_RCTargetBitrate > 0 ? slice->sliceQp - adaptedSliceQP : 0);
+      const int rcQpDiff = (encCfg->m_RCTargetBitrate > 0 ? sliceQP - averageAdaptedLumaQP : 0);
 
-      adaptedSliceQP = -1;
+      averageAdaptedLumaQP = -1;
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
         int clippedLumaQP = pic->ctuAdaptedQP[ctuRsAddr] + rcQpDiff;
@@ -608,45 +531,46 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
         }
         clippedLumaQP = Clip3 (0, MAX_QP, clippedLumaQP);
 
-        hpEnerAvg = lambda * pow (2.0, double (clippedLumaQP - slice->sliceQp) / 3.0);
+        averageAdaptedLambda = sliceLambda * pow (2.0, double (clippedLumaQP - sliceQP) / 3.0);
+        averageAdaptedLumaQP += clippedLumaQP;
 
-        pic->ctuQpaLambda[ctuRsAddr] = hpEnerAvg; // store clipped CTU-level lambda
-        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) clippedLumaQP; // store clipped CTU QP
-
-        adaptedSliceQP += clippedLumaQP;
+        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store modified lambda
+        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) clippedLumaQP;  // store modified CTU QP
       }
 
-      pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu()
-      adaptedSliceQP = (ctuBoundingAddr > ctuStartAddr ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean final luma QP
+      pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
+      averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
     }
-    else if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1) && (adaptedSliceQP + 1 < sliceQP))
+    else if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (averageAdaptedLumaQP + 1 < aaQP))
     {
-      const int lrQpDiff = (sliceQP - adaptedSliceQP) >> (encCfg->m_QP <= MAX_QP_PERCEPT_QPA ? 2 : 1); // for monotonous rate change at low rates
+      const int lrQpDiff = (aaQP - averageAdaptedLumaQP) >> (encCfg->m_QP <= MAX_QP_PERCEPT_QPA ? 2 : 1); // for monotonous rate change at low rates
 
-      hpEnerAvg = pow (2.0, double (lrQpDiff) / 3.0);
+      averageAdaptedLambda = pow (2.0, double (lrQpDiff) / 3.0);
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
-        pic->ctuQpaLambda[ctuRsAddr] *= hpEnerAvg;
+        pic->ctuQpaLambda[ctuRsAddr] *= averageAdaptedLambda; // scale adapted lambda
         pic->ctuAdaptedQP[ctuRsAddr] = (Pel) std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + lrQpDiff);
       }
 
-      pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + lrQpDiff); // used in applyQPAdaptationSubCtu()
-      adaptedSliceQP = sliceQP;
+      pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + lrQpDiff); // used in applyQPAdaptationSubCtu
+      averageAdaptedLumaQP = aaQP; // TODO hlm: += lrQpDiff?
     }
-    if (isEncPass) ctuAvgLuma.clear();
-  }
 
-  return adaptedSliceQP;
+    if (isEncPass) ctuAvgLuma.clear();
+  } // CTU-/frame-level QPA
+
+  return averageAdaptedLumaQP;
 }
 
 int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, const uint8_t* minNoiseLevels)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
-  double hpEnerPic, hpEnerSub = 0.0;
-  int    adaptedSubCtuQP      = -1;
   uint32_t meanLuma           = MAX_UINT;
 
-  if (pic == nullptr || encCfg == nullptr) return -1;
+  if (pic == nullptr || encCfg == nullptr)
+  {
+    return -1;
+  }
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !slice->pic->isPreAnalysis);
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
@@ -661,13 +585,12 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const CPelBuf     picOrig   = pic->getOrigBuf (fltArea);
   const CPelBuf     picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
   const CPelBuf     picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
-
-  hpEnerSub = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                 picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                                 bitDepth, isHighResolution);
-  hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, 0,
-                                               (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
-  adaptedSubCtuQP = Clip3 (0, MAX_QP, pic->picInitialQP + apprI3Log2 (hpEnerSub * hpEnerPic));
+  const double hpEnerSubCTU   = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
+                                                                   picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
+                                                                   bitDepth, isHighResolution);
+  const double hpEnerPicNorm  = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, 0,
+                                                                 (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+  int adaptedSubCtuQP = Clip3 (0, MAX_QP, pic->picInitialQP + apprI3Log2 (hpEnerSubCTU * hpEnerPicNorm));
 
   if (isChromaEnabled (pic->chromaFormat) && (adaptedSubCtuQP < MAX_QP))
   {
@@ -741,7 +664,7 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
 
   return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                             picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride,
-                                            (origPrev != nullptr ? 24 : encCfg->m_FrameRate/encCfg->m_FrameScale),
+                                            (origPrev != nullptr ? 24 : encCfg->m_FrameRate / encCfg->m_FrameScale),
                                             slice->sps->bitDepths[CH_L], isHighRes);
 }
 

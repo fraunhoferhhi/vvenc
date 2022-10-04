@@ -228,7 +228,7 @@ public:
   PelStorage*                   m_bufsOrigPrev[ NUM_PREV_FRAMES ];
 
   std::vector<double>           ctuQpaLambda;
-  std::vector<Pel>              ctuAdaptedQP;
+  std::vector<int>              ctuAdaptedQP;
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
@@ -247,6 +247,8 @@ public:
   bool                          useScBDPCM;
   bool                          useScIBC;
   bool                          useScLMCS;
+  bool                          useScSAO;
+  bool                          useScNumRefs;
   int                           useQtbttSpeedUpMode;
   int                           seqBaseQp;
   int                           actualHeadBits;

@@ -118,6 +118,9 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
+const int    MCTF::m_cuTreeThresh[4] = { 75, 60,     30, 15 };
+const double MCTF::m_cuTreeCenter    =           45;
+
 int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
   int error = 0;
@@ -626,11 +629,14 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       srcFrameInfo.push_back( TemporalFilterSourcePicInfo() );
       TemporalFilterSourcePicInfo &srcPic = srcFrameInfo.back();
 
+      const int wInBlks = ( m_area.width  + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+      const int hInBlks = ( m_area.height + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+
       srcPic.picBuffer.createFromBuf( curPic->getOrigBuf() );
-      srcPic.mvs.allocate( m_area.width / 4, m_area.height / 4 );
+      srcPic.mvs.allocate( wInBlks, hInBlks );
 
       {
-        const int width = m_area.width;
+        const int width  = m_area.width;
         const int height = m_area.height;
         Array2D<MotionVector> mv_0( width / ( m_mctfUnitSize * 8 ) + 1, height / ( m_mctfUnitSize * 8 ) + 1 );
         Array2D<MotionVector> mv_1( width / ( m_mctfUnitSize * 4 ) + 1, height / ( m_mctfUnitSize * 4 ) + 1 );
@@ -639,22 +645,104 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         PelStorage bufferSub2;
         PelStorage bufferSub4;
 
-        subsampleLuma(srcPic.picBuffer, bufferSub2);
-        subsampleLuma(bufferSub2, bufferSub4);
+        subsampleLuma( srcPic.picBuffer, bufferSub2 );
+        subsampleLuma( bufferSub2,       bufferSub4 );
 
-        motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize );
-        motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * m_mctfUnitSize, &mv_0, 2);
-        motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2);
+        motionEstimationLuma( mv_0, origSubsampled4, bufferSub4,       2 * m_mctfUnitSize );
+        motionEstimationLuma( mv_1, origSubsampled2, bufferSub2,       2 * m_mctfUnitSize, &mv_0, 2 );
+        motionEstimationLuma( mv_2, origBuf,         srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2 );
 
-        motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, m_mctfUnitSize, &mv_2, 1, true);
+        motionEstimationLuma( srcPic.mvs, origBuf,   srcPic.picBuffer,     m_mctfUnitSize, &mv_2, 1, true );
       }
 
-      srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
+      srcPic.index = std::min( 3, std::abs( curPic->poc - m_filterPoc ) - 1 );
     }
 
     // filter
     fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
     bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+
+    if( m_encCfg->m_blockImportanceMapping )
+    {
+      const int ctuSize        = m_encCfg->m_CTUSize;
+      const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
+      const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
+      const int numCtu         = widthInCtus * heightInCtus;
+      const int ctuBlocks      = ctuSize / m_mctfUnitSize;
+
+      pic->m_picShared->m_ctuBimQpOffset.resize( numCtu, 0 );
+
+      std::vector<double> sumError( numCtu * 2, 0 );
+      std::vector<double> blkCount( numCtu * 2, 0 );
+
+      int distFactor[2] = { 3,3 };
+
+      for( auto& srcPic : srcFrameInfo )
+      {
+        if( srcPic.index >= 2 )
+        {
+          continue;
+        }
+
+        int dist = srcPic.index;
+        distFactor[dist]--;
+
+        for( int y = 0; y < srcPic.mvs.h(); y++ ) // going over in block steps
+        {
+          for( int x = 0; x < srcPic.mvs.w(); x++ )
+          {
+            const int ctuX    = x / ctuBlocks;
+            const int ctuY    = y / ctuBlocks;
+            const int ctuId   = ctuY * widthInCtus + ctuX;
+            const auto& mvBlk = srcPic.mvs.get( x, y );
+            sumError[dist * numCtu + ctuId] += mvBlk.error;
+            blkCount[dist * numCtu + ctuId] += mvBlk.overlap;
+          }
+        }
+      }
+
+      if( distFactor[0] < 3 && distFactor[1] < 3 )
+      {
+        double weight = pic->TLayer > 1 ? 0.6 : 1;
+
+        for( int i = 0; i < numCtu; i++ )
+        {
+          const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
+          const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
+          int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
+          weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * m_cuTreeCenter );
+
+          int qpOffset = 0;
+
+          if( weightedErr > m_cuTreeThresh[0] )
+          {
+            qpOffset = 2;
+          }
+          else if( weightedErr > m_cuTreeThresh[1] )
+          {
+            qpOffset = 1;
+          }
+          else if( weightedErr < m_cuTreeThresh[3] )
+          {
+            qpOffset = -2;
+          }
+          else if( weightedErr < m_cuTreeThresh[2] )
+          {
+            qpOffset = -1;
+          }
+
+          pic->m_picShared->m_ctuBimQpOffset[i] = qpOffset;
+        }
+      }
+      else
+      {
+        std::fill( pic->m_picShared->m_ctuBimQpOffset.begin(), pic->m_picShared->m_ctuBimQpOffset.end(), 0 );
+      }
+    }
+  }
+  else
+  {
+    pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }
 }
 
@@ -921,6 +1009,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
     best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
+    best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }
@@ -1018,8 +1107,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const ComponentID compID = ( ComponentID ) c;
     const int height    = orgPic.bufs[c].height;
     const int width     = orgPic.bufs[c].width;
-    const int srcStride = orgPic.bufs[c].stride;
-    const int dstStride = newOrgPic.bufs[c].stride;
 
     const double sigmaSq = sigmaSqCh[ toChannelType( compID) ];
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
@@ -1027,17 +1114,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
     const int blkSizeY = m_mctfUnitSize >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
     const int blkSizeX = m_mctfUnitSize >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
-    const int yOut     = yStart         >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
-          Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
+    const int yOut     = yStart         >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
 
-    for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
+    for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++ )
     {
-      const Pel* srcPel  = srcPelRow;
-            Pel* dstPel  = dstPelRow;
       const int h = std::min( blkSizeY, height - by );
 
-      for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++, srcPel += blkSizeX, dstPel += blkSizeX )
+      for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++ )
       {
         const int w = std::min( blkSizeX, width - bx );
 
