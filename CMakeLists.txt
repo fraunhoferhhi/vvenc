@@ -383,7 +383,7 @@ add_vvenc_test( vvencapp-medium_rc2p_statsFile1_easy      30 OUT_VVC   ""       
 add_vvenc_test( vvencapp-medium_rc2p_statsFile2_easy      30 OUT_VVC   "${OUT_VVC}"             vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Pass=2 --RCStatsFile=stats_easy.json -o OUTPUT )
 add_vvenc_test( compare_output-medium_rc2p_statsFile_easy 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
+add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove -f ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
 set_tests_properties( Cleanup_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
 
 if( VVENC_ENABLE_INSTALL )
