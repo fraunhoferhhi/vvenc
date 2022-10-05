@@ -1077,7 +1077,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.clear();
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
-  pps.useDQP                        = m_pcEncCfg->m_RCTargetBitrate > 0 ? true : bUseDQP;
+  pps.useDQP                        = bUseDQP;
 
   if ( m_pcEncCfg->m_cuChromaQpOffsetSubdiv >= 0 )
   {
