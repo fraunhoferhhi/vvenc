@@ -1401,18 +1401,6 @@ void PicHeader::copyPicInfo( const PicHeader* other, bool cpyAll)
 // ------------------------------------------------------------------------------------------------
 // Sequence parameter set (SPS)
 // ------------------------------------------------------------------------------------------------
-SPSRExt::SPSRExt()
- : transformSkipRotationEnabled   (false)
- , transformSkipContextEnabled    (false)
- , implicitRdpcmEnabled           (false)
- , explicitRdpcmEnabled           (false)
- , extendedPrecisionProcessing    (false)
- , intraSmoothingDisabled         (false)
- , highPrecisionOffsetsEnabled    (false)
- , persistentRiceAdaptationEnabled(false)
- , cabacBypassAlignmentEnabled    (false)
-{
-}
 
 SPS::SPS()
 : spsId                           (  0 )

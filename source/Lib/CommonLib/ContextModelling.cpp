@@ -72,7 +72,6 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_log2BlockHeight           (Log2(m_height))
   , m_maxNumCoeff               (m_width * m_height)
   , m_signHiding                (signHide)
-  , m_extendedPrecision         (tu.cs->sps->spsRExt.extendedPrecisionProcessing)
   , m_maxLog2TrDynamicRange     (tu.cs->sps->getMaxLog2TrDynamicRange(m_chType))
   , m_scan                      (getScanOrder( SCAN_GROUPED_4x4, m_log2BlockWidth, m_log2BlockHeight ))
   , m_scanCG                    (getScanOrder( SCAN_UNGROUPED  , Log2(m_widthInGroups), Log2(m_heightInGroups)))

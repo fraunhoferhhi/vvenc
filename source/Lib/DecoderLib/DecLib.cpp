@@ -1011,9 +1011,9 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     xParsePrefixSEImessages();
 
-    if (sps->spsRExt.extendedPrecisionProcessing || sps->bitDepths[ CH_L ]>12 || sps->bitDepths[ CH_C ]>12 )
+    if( sps->bitDepths[CH_L] > 10 || sps->bitDepths[CH_C] > 10 )
     {
-      THROW("High bit depth support must be enabled at compile-time in order to decode this bitstream\n");
+      THROW( "VVenC does not support high bitdepth stream\n" );
     }
 
     //  Get a new picture buffer. This will also set up m_pic, and therefore give us a SPS and PPS pointer that we can use.

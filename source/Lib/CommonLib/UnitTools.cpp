@@ -3557,11 +3557,6 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
 
 // TU tools
 
-bool TU::isNonTransformedResidualRotated(const TransformUnit& tu, const ComponentID compID)
-{
-  return tu.cs->sps->spsRExt.transformSkipRotationEnabled && tu.blocks[compID].width == 4 && tu.cu->predMode == MODE_INTRA;
-}
-
 bool TU::getCbf( const TransformUnit& tu, const ComponentID compID )
 {
   return getCbfAtDepth( tu, compID, tu.depth );

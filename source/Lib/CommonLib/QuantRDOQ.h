@@ -100,7 +100,6 @@ private:
                                   int                iQBits,
                                   double             errorScale,
                                   bool               bLast,
-                                  bool               useLimitedPrefixLength,
                                   const int          maxLog2TrDynamicRange ) const;
   inline int xGetICRate     ( const uint32_t         uiAbsLevel,
                               const BinFracBits& fracBitsPar,
@@ -109,7 +108,6 @@ private:
                               const int          remRegBins,
                               unsigned           goRiceZero,
                               const uint16_t       ui16AbsGoRice,
-                              const bool         useLimitedPrefixLength,
                               const int          maxLog2TrDynamicRange  ) const;
   inline double xGetRateLast         ( const int* lastBitsX, const int* lastBitsY,
                                        unsigned        PosX, unsigned   PosY                              ) const;
@@ -140,7 +138,6 @@ private:
                                         int                 belowPixel,
                                         uint16_t            ricePar,
                                         bool                isLast,
-                                        bool                useLimitedPrefixLength,
                                         const int           maxLog2TrDynamicRange,
                                         int&                numUsedCtxBins
                                       ) const;
@@ -154,7 +151,6 @@ private:
                               int&                      numCtxBins,
                               const uint8_t             sign,
                               const uint16_t            ricePar,
-                              const bool                useLimitedPrefixLength,
                               const int                 maxLog2TrDynamicRange  ) const;
 private:
   bool    m_isErrScaleListOwner;

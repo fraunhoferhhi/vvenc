@@ -124,7 +124,6 @@ inline uint32_t QuantRDOQ::xGetCodedLevel( double&            rd64CodedCost,
                                        int                iQBits,
                                        double             errorScale,
                                        bool               bLast,
-                                       bool               useLimitedPrefixLength,
                                        const int          maxLog2TrDynamicRange
                                      ) const
 {
@@ -155,7 +154,7 @@ inline uint32_t QuantRDOQ::xGetCodedLevel( double&            rd64CodedCost,
   {
     double dErr         = double( lLevelDouble  - ( Intermediate_Int(uiAbsLevel) << iQBits ) );
 
-    double dCurrCost    = dErr * dErr * errorScale + xGetICost( xGetICRate( uiAbsLevel, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, ui16AbsGoRice, true, maxLog2TrDynamicRange ) );
+    double dCurrCost    = dErr * dErr * errorScale + xGetICost( xGetICRate( uiAbsLevel, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, ui16AbsGoRice, maxLog2TrDynamicRange ) );
     dCurrCost          += dCurrCostSig;
 
     if( dCurrCost < rd64CodedCost )
@@ -187,7 +186,6 @@ inline int QuantRDOQ::xGetICRate( const uint32_t         uiAbsLevel,
                                   const int          remRegBins,
                                   unsigned           goRiceZero,
                                   const uint16_t       ui16AbsGoRice,
-                                  const bool         useLimitedPrefixLength,
                                   const int          maxLog2TrDynamicRange  ) const
 {
   if( remRegBins < 4 )
@@ -200,22 +198,6 @@ inline int QuantRDOQ::xGetICRate( const uint32_t         uiAbsLevel,
     {
       length = symbol >> ui16AbsGoRice;
       iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
-    }
-    else if( useLimitedPrefixLength )
-    {
-      const uint32_t maximumPrefixLength = ( 32 - ( COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange ) );
-
-      uint32_t prefixLength = 0;
-      uint32_t suffix = ( symbol >> ui16AbsGoRice ) - COEF_REMAIN_BIN_REDUCTION;
-
-      while( ( prefixLength < maximumPrefixLength ) && ( suffix > ( ( 2 << prefixLength ) - 2 ) ) )
-      {
-        prefixLength++;
-      }
-
-      const uint32_t suffixLength = ( prefixLength == maximumPrefixLength ) ? ( maxLog2TrDynamicRange - ui16AbsGoRice ) : ( prefixLength + 1/*separator*/ );
-
-      iRate += ( COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice ) << SCALE_BITS;
     }
     else
     {
@@ -241,22 +223,6 @@ inline int QuantRDOQ::xGetICRate( const uint32_t         uiAbsLevel,
     {
       length = symbol >> ui16AbsGoRice;
       iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
-    }
-    else if( useLimitedPrefixLength )
-    {
-      const uint32_t maximumPrefixLength = ( 32 - ( COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange ) );
-
-      uint32_t prefixLength = 0;
-      uint32_t suffix = ( symbol >> ui16AbsGoRice ) - COEF_REMAIN_BIN_REDUCTION;
-
-      while( ( prefixLength < maximumPrefixLength ) && ( suffix > ( ( 2 << prefixLength ) - 2 ) ) )
-      {
-        prefixLength++;
-      }
-
-      const uint32_t suffixLength = ( prefixLength == maximumPrefixLength ) ? ( maxLog2TrDynamicRange - ui16AbsGoRice ) : ( prefixLength + 1/*separator*/ );
-
-      iRate += ( COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice ) << SCALE_BITS;
     }
     else
     {
@@ -548,7 +514,6 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
   const ChannelType chType  = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const bool extendedPrecision     = sps.spsRExt.extendedPrecisionProcessing;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
   const bool useIntraSubPartitions = tu.cu->ispMode && isLuma(compID);
@@ -559,12 +524,7 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
   */
 
   // Represents scaling through forward transform
-  int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
-
-  if (tu.mtsIdx[compID]==MTS_SKIP && extendedPrecision)
-  {
-    iTransformShift = std::max<int>(0, iTransformShift);
-  }
+  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
 
   double     d64BlockUncodedCost               = 0;
   const uint32_t uiLog2BlockWidth                  = Log2(uiWidth);
@@ -715,7 +675,7 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
         if( iScanPos == iLastScanPos )
         {
           uiLevel = xGetCodedLevel( pdCostCoeff[ iScanPos ], pdCostCoeff0[ iScanPos ], pdCostSig[ iScanPos ],
-                                    lLevelDouble, uiMaxAbsLevel, nullptr, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, iQBits, errorScale, 1, extendedPrecision, maxLog2TrDynamicRange );
+                                    lLevelDouble, uiMaxAbsLevel, nullptr, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, iQBits, errorScale, 1, maxLog2TrDynamicRange );
         }
         else
         {
@@ -723,7 +683,7 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
 
           const BinFracBits fracBitsSig = fracBits.getFracBitsArray( ctxIdSig );
           uiLevel = xGetCodedLevel( pdCostCoeff[ iScanPos ], pdCostCoeff0[ iScanPos ], pdCostSig[ iScanPos ],
-                                    lLevelDouble, uiMaxAbsLevel, &fracBitsSig, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, iQBits, errorScale, 0, extendedPrecision, maxLog2TrDynamicRange );
+                                    lLevelDouble, uiMaxAbsLevel, &fracBitsSig, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, iQBits, errorScale, 0, maxLog2TrDynamicRange );
           sigRateDelta[ uiBlkPos ] = ( remRegBins < 4 ? 0 : fracBitsSig.intBits[1] - fracBitsSig.intBits[0] );
         }
 
@@ -735,16 +695,16 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
 
         if( uiLevel > 0 )
         {
-          int rateNow              = xGetICRate( uiLevel,   fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
-          rateIncUp   [ uiBlkPos ] = xGetICRate( uiLevel+1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange ) - rateNow;
-          rateIncDown [ uiBlkPos ] = xGetICRate( uiLevel-1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange ) - rateNow;
+          int rateNow              = xGetICRate( uiLevel,   fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
+          rateIncUp   [ uiBlkPos ] = xGetICRate( uiLevel+1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange ) - rateNow;
+          rateIncDown [ uiBlkPos ] = xGetICRate( uiLevel-1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange ) - rateNow;
         }
         else // uiLevel == 0
         {
           if( remRegBins < 4 )
           {
-            int rateNow            = xGetICRate( uiLevel,   fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
-            rateIncUp [ uiBlkPos ] = xGetICRate( uiLevel+1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange ) - rateNow;
+            int rateNow            = xGetICRate( uiLevel,   fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
+            rateIncUp [ uiBlkPos ] = xGetICRate( uiLevel+1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange ) - rateNow;
           }
           else
           {
@@ -1169,15 +1129,9 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
   const ChannelType chType  = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const bool extendedPrecision     = sps.spsRExt.extendedPrecisionProcessing;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
-  int transformShift = getTransformShift( channelBitDepth, rect.size(), maxLog2TrDynamicRange );
-
-  if( extendedPrecision )
-  {
-    transformShift = std::max<int>( 0, transformShift );
-  }
+  const int transformShift = getTransformShift( channelBitDepth, rect.size(), maxLog2TrDynamicRange );
 
   const uint32_t maxNumCoeff                        = rect.area();
 
@@ -1296,7 +1250,7 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
       }
       int numUsedCtxBins = 0;
       cLevel = xGetCodedLevelTSPred(costCoeff[scanPos], costCoeff0[scanPos], costSig[scanPos], levelDouble, qBits, errorScale, coeffLevels, coeffLevelError,
-                                    &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, extendedPrecision, maxLog2TrDynamicRange, numUsedCtxBins);
+                                    &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, maxLog2TrDynamicRange, numUsedCtxBins);
 
       cctx.decimateNumCtxBins(numUsedCtxBins);
       rdStats.iNumSbbCtxBins += numUsedCtxBins;
@@ -1388,16 +1342,10 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
   const ChannelType chType = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[chType];
 
-  const bool extendedPrecision = sps.spsRExt.extendedPrecisionProcessing;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
   const int  dirMode = tu.cu->bdpcmM[toChannelType(compID)];
 
-  int transformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
-
-  if (extendedPrecision)
-  {
-    transformShift = std::max<int>(0, transformShift);
-  }
+  const int transformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
 
   const uint32_t maxNumCoeff = rect.area();
 
@@ -1515,7 +1463,7 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
       cctx.neighTS(rightPixel, belowPixel, scanPos, dstCoeff);
       int numUsedCtxBins = 0;
       cLevel = xGetCodedLevelTSPred(costCoeff[scanPos], costCoeff0[scanPos], costSig[scanPos], levelDouble, qBits, errorScale, coeffLevels, coeffLevelError,
-        &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, extendedPrecision, maxLog2TrDynamicRange, numUsedCtxBins);
+        &fracBitsSig, fracBitsPar, cctx, fracBits, fracBitsSign, fracBitsGr1, sign, rightPixel, belowPixel, goRiceParam, lastCoeff, maxLog2TrDynamicRange, numUsedCtxBins);
       cctx.decimateNumCtxBins(numUsedCtxBins);
       rdStats.iNumSbbCtxBins += numUsedCtxBins;
 
@@ -1641,7 +1589,6 @@ inline uint32_t QuantRDOQ::xGetCodedLevelTSPred(double&            rd64CodedCost
   int                belowPixel,
   uint16_t           ricePar,
   bool               isLast,
-  bool               useLimitedPrefixLength,
   const int          maxLog2TrDynamicRange,
   int&               numUsedCtxBins
 ) const
@@ -1691,7 +1638,7 @@ inline uint32_t QuantRDOQ::xGetCodedLevelTSPred(double&            rd64CodedCost
       modAbsLevel = cctx.deriveModCoeff(rightPixel, belowPixel, absLevel, m_bdpcm);
     }
     int numCtxBins = 0;
-    double dCurrCost = coeffLevelError[errorInd] + xGetICost(xGetICRateTS(modAbsLevel, fracBitsPar, cctx, fracBitsAccess, fracBitsSign, fracBitsGt1, numCtxBins, sign, ricePar, useLimitedPrefixLength, maxLog2TrDynamicRange));
+    double dCurrCost = coeffLevelError[errorInd] + xGetICost(xGetICRateTS(modAbsLevel, fracBitsPar, cctx, fracBitsAccess, fracBitsSign, fracBitsGt1, numCtxBins, sign, ricePar, maxLog2TrDynamicRange));
 
     if (cctx.numCtxBins() >= 4)
       dCurrCost += currCostSig; // if cctx.numCtxBins < 4, xGetICRateTS return rate including sign cost. dont need to add any more
@@ -1717,7 +1664,6 @@ inline int QuantRDOQ::xGetICRateTS( const uint32_t            absLevel,
                                     int&                      numCtxBins,
                                     const uint8_t             sign,
                                     const uint16_t            ricePar,
-                                    const bool                useLimitedPrefixLength,
                                     const int                 maxLog2TrDynamicRange  ) const
 {
  
@@ -1733,22 +1679,6 @@ inline int QuantRDOQ::xGetICRateTS( const uint32_t            absLevel,
     {
       length = symbol >> ricePar;
       rate += (length + 1 + ricePar) << SCALE_BITS;
-    }
-    else if (useLimitedPrefixLength)
-    {
-      const uint32_t maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange));
-
-      uint32_t prefixLength = 0;
-      uint32_t suffix = (symbol >> ricePar) - COEF_REMAIN_BIN_REDUCTION;
-
-      while ((prefixLength < maximumPrefixLength) && (suffix > ((2 << prefixLength) - 2)))
-      {
-        prefixLength++;
-      }
-
-      const uint32_t suffixLength = (prefixLength == maximumPrefixLength) ? (maxLog2TrDynamicRange - ricePar) : (prefixLength + 1/*separator*/);
-
-      rate += (COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ricePar) << SCALE_BITS;
     }
     else
     {
@@ -1788,22 +1718,6 @@ inline int QuantRDOQ::xGetICRateTS( const uint32_t            absLevel,
         {
           length = symbol >> ricePar;
           rate += (length + 1 + ricePar) << SCALE_BITS;
-        }
-        else if (useLimitedPrefixLength)
-        {
-          const uint32_t maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange));
-
-          uint32_t prefixLength = 0;
-          uint32_t suffix = (symbol >> ricePar) - COEF_REMAIN_BIN_REDUCTION;
-
-          while ((prefixLength < maximumPrefixLength) && (suffix > ((2 << prefixLength) - 2)))
-          {
-            prefixLength++;
-          }
-
-          const uint32_t suffixLength = (prefixLength == maximumPrefixLength) ? (maxLog2TrDynamicRange - ricePar) : (prefixLength + 1/*separator*/);
-
-          rate += (COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ricePar) << SCALE_BITS;
         }
         else
         {
@@ -1864,22 +1778,6 @@ inline int QuantRDOQ::xGetICRateTS( const uint32_t            absLevel,
       {
         length = symbol >> ricePar;
         rate  += ( length + 1 + ricePar ) << SCALE_BITS;
-      }
-      else if( useLimitedPrefixLength )
-      {
-        const uint32_t maximumPrefixLength = ( 32 - ( COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange ) );
-
-        uint32_t prefixLength = 0;
-        uint32_t suffix = ( symbol >> ricePar ) - COEF_REMAIN_BIN_REDUCTION;
-
-        while( ( prefixLength < maximumPrefixLength ) && ( suffix > ( ( 2 << prefixLength ) - 2 ) ) )
-        {
-          prefixLength++;
-        }
-
-        const uint32_t suffixLength = ( prefixLength == maximumPrefixLength ) ? ( maxLog2TrDynamicRange - ricePar ) : ( prefixLength + 1/*separator*/ );
-
-        rate += ( COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ricePar ) << SCALE_BITS;
       }
       else
       {

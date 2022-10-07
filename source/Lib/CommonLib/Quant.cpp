@@ -140,7 +140,6 @@ static void QuantCore(const TransformUnit tu, const ComponentID compID, const CC
   const ChannelType chType  = toChannelType( compID );
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const bool extendedPrecision     = sps.spsRExt.extendedPrecisionProcessing;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
@@ -150,12 +149,7 @@ static void QuantCore(const TransformUnit tu, const ComponentID compID, const CC
   */
 
   // Represents scaling through forward transform
-  int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
-
-  if (tu.mtsIdx[compID]==MTS_SKIP && extendedPrecision)
-  {
-    iTransformShift = std::max<int>(0, iTransformShift);
-  }
+  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
 
   const uint32_t log2CGSize         = cctx.log2CGSize();
 
@@ -547,10 +541,9 @@ void Quant::dequant(const TransformUnit& tu,
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
 
   // Represents scaling through forward transform
-  const bool bClipTransformShiftTo0 = tu.mtsIdx[compID]!=MTS_SKIP && sps->spsRExt.extendedPrecisionProcessing;
   const int  originalTransformShift = getTransformShift(channelBitDepth, area.size(), maxLog2TrDynamicRange);
   const bool needSqrtAdjustment     = TU::needsSqrt2Scale( tu, compID );
-  const int  iTransformShift        = (bClipTransformShiftTo0 ? std::max<int>(0, originalTransformShift) : originalTransformShift) + (needSqrtAdjustment?-1:0);
+  const int  iTransformShift        = originalTransformShift + (needSqrtAdjustment?-1:0);
 
   const int QP_per = cQP.per(isTransformSkip);
   const int QP_rem = cQP.rem(isTransformSkip);
@@ -765,12 +758,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     // The quantScale table and shift is used to compensate for this.
     const bool needSqrtAdjustment= TU::needsSqrt2Scale( tu, compID );
     const int defaultQuantisationCoefficient    = g_quantScales[needSqrtAdjustment?1:0][cQP.rem(useTransformSkip)];
-    int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange) + ( needSqrtAdjustment?-1:0);
-
-    if (useTransformSkip && sps.spsRExt.extendedPrecisionProcessing)
-    {
-      iTransformShift = std::max<int>(0, iTransformShift);
-    }
+    const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange) + ( needSqrtAdjustment?-1:0);
 
     const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + (useTransformSkip ? 0 : iTransformShift);
     // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
@@ -865,12 +853,7 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
     */
   const bool needSqrtAdjustment= TU::needsSqrt2Scale( tu, compID );
   const int defaultQuantisationCoefficient    = g_quantScales[needSqrtAdjustment?1:0][cQP.rem(useTransformSkip)];
-  int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange) + (needSqrtAdjustment?-1:0);
-
-  if (useTransformSkip && sps.spsRExt.extendedPrecisionProcessing)
-  {
-    iTransformShift = std::max<int>(0, iTransformShift);
-  }
+  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange) + (needSqrtAdjustment?-1:0);
 
 
   const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + iTransformShift;
