@@ -148,9 +148,6 @@ static void QuantCore(const TransformUnit tu, const ComponentID compID, const CC
   * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
   */
 
-  // Represents scaling through forward transform
-  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
-
   const uint32_t log2CGSize         = cctx.log2CGSize();
 
   uiAbsSum = 0;
