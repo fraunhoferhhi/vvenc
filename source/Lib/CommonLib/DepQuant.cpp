@@ -1385,8 +1385,6 @@ namespace DQIntern
 
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
-    CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
-
     //===== reset / pre-init =====
     const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
     m_quant.initQuantBlock    ( tu, compID, cQP, lambda );

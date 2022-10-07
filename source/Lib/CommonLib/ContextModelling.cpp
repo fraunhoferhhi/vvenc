@@ -83,7 +83,6 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_lastOffsetY               ((m_chType == CH_C) ? 0 :prefix_ctx[ m_log2BlockHeight ])
   , m_lastShiftX                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_width >> 3) )  : (m_log2BlockWidth + 1) >> 2)
   , m_lastShiftY                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_height >> 3) ) : (m_log2BlockHeight + 1) >> 2)
-//  , m_TrafoBypass               (tu.cs->sps->spsRExt.transformSkipContextEnabled &&  (tu.cu->transQuantBypass || tu.mtsIdx[compId]==MTS_SKIP))
   , m_scanPosLast               (-1)
   , m_subSetId                  (-1)
   , m_subSetPos                 (-1)
