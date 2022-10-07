@@ -140,8 +140,6 @@ static void QuantCore(const TransformUnit tu, const ComponentID compID, const CC
   const ChannelType chType  = toChannelType( compID );
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
-
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
   * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
   * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
