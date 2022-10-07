@@ -1559,7 +1559,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     double           singleCostTmp     = 0;
     const TempCtx    ctxStart          (m_CtxCache, m_CABACEstimator->getCtx());
           TempCtx    ctxBest           (m_CtxCache);
-    CodingStructure &saveCS            = *m_pSaveCS[0];
+    CodingStructure &saveCS            = *m_pSaveCS[cu.ispMode?0:1];
     TransformUnit *  tmpTU             = nullptr;
     int              bestLfnstIdx      = 0;
     int              startLfnstIdx     = 0;
@@ -1587,7 +1587,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     saveCS.pcv              = cs.pcv;
     saveCS.picture          = cs.picture;
     saveCS.area.repositionTo( cs.area);
-    saveCS.clearTUs();
 
     if (cu.ispMode)
     {
@@ -1598,6 +1597,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
     if (cu.ispMode)
     {
+      saveCS.clearTUs();
       do
       {
         saveCS.addTU(
@@ -1609,7 +1609,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     }
     else
     {
-      tmpTU = &saveCS.addTU(currArea, partitioner.chType, cs.cus[0]);
+      tmpTU = saveCS.tus.empty() ? &saveCS.addTU( currArea, partitioner.chType, nullptr ) : saveCS.tus.front();
+      tmpTU->initData();
+      tmpTU->UnitArea::operator=( currArea );
     }
 
 
@@ -2004,7 +2006,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     saveCS.pcv = cs.pcv;
     saveCS.picture = cs.picture;
     saveCS.area.repositionTo(cs.area);
-    saveCS.initStructData(MAX_INT, true);
 
     TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
     tmpTU.initData();

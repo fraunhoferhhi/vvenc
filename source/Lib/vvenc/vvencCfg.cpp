@@ -1523,7 +1523,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   //
-  // finalize initialization
+  // finalize initialization 
   //
 
 
