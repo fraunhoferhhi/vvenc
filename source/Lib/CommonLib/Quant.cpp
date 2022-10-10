@@ -133,12 +133,9 @@ static void QuantCore(const TransformUnit tu, const ComponentID compID, const CC
 {
   CoeffCodingContext cctx( tu, compID, signHiding );
 
-  const SPS &sps            = *tu.cs->sps;
   const CompArea &rect      = tu.blocks[compID];
   const uint32_t uiWidth    = rect.width;
   const uint32_t uiHeight   = rect.height;
-  const ChannelType chType  = toChannelType( compID );
-  const int channelBitDepth = sps.bitDepths[ chType ];
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
   * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
