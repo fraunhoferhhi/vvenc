@@ -1282,9 +1282,11 @@ void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t
 void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied )
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
-  /*Always High Precision*/
+  /*Always High Precision*/\
+  const int csx      = getChannelTypeScaleX( CH_C, cu.chromaFormat );
+  const int csy      = getChannelTypeScaleX( CH_C, cu.chromaFormat );
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;
-  const int mvShiftC = mvShift + getChannelTypeScaleX(CH_C, cu.chromaFormat);
+  const int mvShiftC = mvShift + csx;
 
   /*use merge MV as starting MV*/
   const Mv mergeMv[] = { cu.mv[REF_PIC_LIST_0][0], cu.mv[REF_PIC_LIST_1][0] };
@@ -1444,11 +1446,18 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
   const int scaleY = getComponentScaleY(COMP_Cb, cu.chromaFormat);
 
   const ptrdiff_t dstStride[MAX_NUM_COMP] = { pcYuvDst.bufs[COMP_Y].stride, cu.chromaFormat != CHROMA_400 ? pcYuvDst.bufs[COMP_Cb].stride : 0, cu.chromaFormat != CHROMA_400 ? pcYuvDst.bufs[COMP_Cr].stride : 0 };
-  for (y = puPos.y; y < (puPos.y + cu.lumaSize().height); y = y + dy, yStart = yStart + dy)
+  for( y = puPos.y; y < ( puPos.y + cu.lumaSize().height ); y = y + dy, yStart = yStart + dy )
   {
-    for (x = puPos.x, xStart = 0; x < (puPos.x + cu.lumaSize().width); x = x + dx, xStart = xStart + dx)
+    for( x = puPos.x, xStart = 0; x < ( puPos.x + cu.lumaSize().width ); x = x + dx, xStart = xStart + dx )
     {
-      new (&subCu) UnitArea(cu.chromaFormat, Area(x, y, dx, dy));
+      subCu.Y().x = x;
+      subCu.Y().y = y;
+
+      if( cu.chromaFormat != CHROMA_400 )
+      {
+        subCu.Cb().x = subCu.Cr().x = x >> csx;
+        subCu.Cb().y = subCu.Cr().y = y >> csy;
+      }
 
       Mv mv0 = mergeMv[REF_PIC_LIST_0] + cu.mvdL0SubPu[num]; mv0.clipToStorageBitDepth();
       Mv mv1 = mergeMv[REF_PIC_LIST_1] - cu.mvdL0SubPu[num]; mv1.clipToStorageBitDepth();
