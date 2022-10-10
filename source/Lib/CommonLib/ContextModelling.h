@@ -83,7 +83,6 @@ public:
   unsigned        log2CGWidth     ()                        const { return m_log2CGWidth; }
   unsigned        log2CGHeight    ()                        const { return m_log2CGHeight; }
   unsigned        log2CGSize      ()                        const { return m_log2CGSize; }
-  bool            extPrec         ()                        const { return m_extendedPrecision; }
   int             maxLog2TrDRange ()                        const { return m_maxLog2TrDynamicRange; }
   unsigned        maxNumCoeff     ()                        const { return m_maxNumCoeff; }
   int             scanPosLast     ()                        const { return m_scanPosLast; }
@@ -376,7 +375,6 @@ private:
   const unsigned            m_log2BlockHeight;
   const unsigned            m_maxNumCoeff;
   const bool                m_signHiding;
-  const bool                m_extendedPrecision;
   const int                 m_maxLog2TrDynamicRange;
   const ScanElement *       m_scan;
   const ScanElement *       m_scanCG;

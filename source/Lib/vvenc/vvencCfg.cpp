@@ -1690,12 +1690,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_inputBitDepth[0  ] < 8,                                 "InputBitDepth must be at least 8" );
   vvenc_confirmParameter( c, c->m_inputBitDepth[1] < 8,                                   "InputBitDepthC must be at least 8" );
 
-#if !RExt__HIGH_BIT_DEPTH_SUPPORT
   for (uint32_t channelType = 0; channelType < 2; channelType++)
   {
-    vvenc_confirmParameter( c,(c->m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
+    vvenc_confirmParameter( c,(c->m_internalBitDepth[channelType] > 10) , "VVenC does not support internal bitdepth larger than 10!");
   }
-#endif
 
 
   vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internalBitDepth[0] < 10 )     ,       "InternalBitDepth must be at least 10 bit for HDR");
