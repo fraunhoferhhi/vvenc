@@ -74,7 +74,7 @@ namespace vvenc {
 #define BIM_FUNC                                          1
 
 #define PRINT_RC_DATA                                     0
-#define PRINT_BIM_OFFSETS                                 1
+#define PRINT_BIM_OFFSETS                                 0
 #define CB_DEB                                            0
 #if CB_DEB
 #define DEB_POC                                           16
