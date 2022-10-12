@@ -72,6 +72,9 @@ namespace vvenc {
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
 #define BIM_FUNC                                          1
+#if BIM_FUNC
+#define BIM_CTU_SIZE                                      128
+#endif
 
 #define PRINT_RC_DATA                                     0
 #define PRINT_BIM_OFFSETS                                 0

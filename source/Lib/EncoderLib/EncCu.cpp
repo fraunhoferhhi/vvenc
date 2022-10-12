@@ -572,7 +572,17 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     const PreCalcValues &pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
+#if BIM_CTU_SIZE
+    uint32_t ctuRsAddr = getCtuAddr (partitioner.currQgPos, pcv);
+    if( isBimEnabled && bestCS->picture->m_picShared->m_ctuBimQpOffset.size() != pcv.sizeInCtus )
+    {
+      const unsigned otherWidthInCtus = ( pcv.lumaWidth + BIM_CTU_SIZE - 1 ) / BIM_CTU_SIZE;
+      ctuRsAddr = getCtuAddrFromCtuSize( partitioner.currQgPos, Log2( BIM_CTU_SIZE ), otherWidthInCtus );
+      CHECK( ctuRsAddr >= bestCS->picture->m_picShared->m_ctuBimQpOffset.size(), "ctuRsAddr exceeds size of m_ctuBimQpOffset" );
+    }
+#else
     const uint32_t ctuRsAddr = getCtuAddr (partitioner.currQgPos, pcv);
+#endif
 
     if (partitioner.currSubdiv == 0) // CTU-level QP adaptation
     {

@@ -665,7 +665,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     if( m_encCfg->m_blockImportanceMapping )
     {
 #if BIM_FUNC
+#if BIM_CTU_SIZE
+      const int ctuSize        = BIM_CTU_SIZE;
+#else
       const int ctuSize        = m_encCfg->m_CTUSize;
+#endif
       bimFunc( pic->m_picShared->m_ctuBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize );
 #else
       const int ctuSize        = m_encCfg->m_CTUSize;
