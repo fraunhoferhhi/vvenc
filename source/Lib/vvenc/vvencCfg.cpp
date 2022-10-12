@@ -2171,7 +2171,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   for( int col = 0; col < pps.numTileCols; col++ ) c->m_tileColumnWidth[col] = pps.tileColWidth [col];
   for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
 
-//  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loopfilter across boundaries doesn't work multi-threaded yet" );
+  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loopfilter across boundaries doesn't work multi-threaded yet" );
   vvenc_confirmParameter( c, c->m_treatAsSubPic && ( c->m_numTileCols > 1 || c->m_numTileRows > 1 ), "TreatAsSubPic and Tiles not supported yet");
 }
 
@@ -2371,9 +2371,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-//      c->m_RDOQ                            = 2;
-      c->m_RDOQ                            = 0;
-      c->m_useRDOQTS                       = 0;
+//      c->m_RDOQ                            = 0;
+//      c->m_useRDOQTS                       = 0;
+      c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;

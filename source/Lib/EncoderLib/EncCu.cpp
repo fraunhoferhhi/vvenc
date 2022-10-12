@@ -3933,29 +3933,29 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, const AffineMergeCtx& affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
   , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam& distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
 {
-  cu.mmvdSkip = false;
-  cu.geo = false;
-  cu.affine = true;
-  cu.mergeFlag = true;
-  cu.ciip = false;
-  cu.mmvdMergeFlag = false;
+  cu.mmvdSkip         = false;
+  cu.geo              = false;
+  cu.affine           = true;
+  cu.mergeFlag        = true;
+  cu.ciip             = false;
+  cu.mmvdMergeFlag    = false;
   cu.regularMergeFlag = false;
 
   const double sqrtLambdaForFirstPassIntra = m_cRdCost.getMotionLambda() * FRAC_BITS_SCALE;
 
   bool sameMV[AFFINE_MRG_MAX_NUM_CANDS + 1] = { false, };
 
-  if (m_pcEncCfg->m_Affine > 1)
+  if( m_pcEncCfg->m_Affine > 1 )
   {
-    for (int m = 0; m < affineMergeCtx.numValidMergeCand; m++)
+    for( int m = 0; m < affineMergeCtx.numValidMergeCand; m++ )
     {
-      if ((tempCS->slice->TLayer > 3) && (affineMergeCtx.mergeType[m] != MRG_TYPE_SUBPU_ATMVP))
+      if( ( tempCS->slice->TLayer > 3 ) && ( affineMergeCtx.mergeType[m] != MRG_TYPE_SUBPU_ATMVP ) )
       {
         sameMV[m] = m != 0;
       }
       else if( !sameMV[m + 1] )
       {
-        for (int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++)
+        for( int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++ )
         {
           // TODO: check interDir? check all affine candidates?
           if( ( affineMergeCtx.mvFieldNeighbours[( m << 1 ) + 0][0].mv == affineMergeCtx.mvFieldNeighbours[( n << 1 ) + 0][0].mv )
@@ -3970,20 +3970,20 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
 
   bool mmvdCandInserted = false;
 
-  for (uint32_t uiAffMergeCand = 0; uiAffMergeCand < affineMergeCtx.numValidMergeCand; uiAffMergeCand++)
+  for( uint32_t uiAffMergeCand = 0; uiAffMergeCand < affineMergeCtx.numValidMergeCand; uiAffMergeCand++ )
   {
     CHECK( uiAffMergeCand >= AFFINE_MRG_MAX_NUM_CANDS, "Out of bounds!" );
 
-    if ((m_pcEncCfg->m_Affine > 1) && sameMV[uiAffMergeCand])
+    if( ( m_pcEncCfg->m_Affine > 1 ) && sameMV[uiAffMergeCand] )
     {
       continue;
     }
     // set merge information
-    cu.interDir = affineMergeCtx.interDirNeighbours[uiAffMergeCand];
-    cu.mergeIdx = uiAffMergeCand;
+    cu.interDir   = affineMergeCtx.interDirNeighbours[uiAffMergeCand];
+    cu.mergeIdx   = uiAffMergeCand;
     cu.affineType = affineMergeCtx.affineType[uiAffMergeCand];
-    cu.BcwIdx = affineMergeCtx.BcwIdx[uiAffMergeCand];
-    cu.imv = 0;
+    cu.BcwIdx     = affineMergeCtx.BcwIdx[uiAffMergeCand];
+    cu.imv        = 0;
     cu.mv[0][0].setZero();
     cu.mv[1][0].setZero();
     cu.mv[0][1].setZero();
@@ -3993,23 +3993,23 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
 
     cu.mergeType = affineMergeCtx.mergeType[uiAffMergeCand];
 
-    if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
+    if( cu.mergeType == MRG_TYPE_SUBPU_ATMVP )
     {
-      cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 0][0].refIdx;
-      cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 1][0].refIdx;
-      CU::spanMotionInfo(cu, mrgCtx);
+      cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0][0].refIdx;
+      cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1][0].refIdx;
+      CU::spanMotionInfo( cu, mrgCtx );
     }
     else
     {
-      CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 0], REF_PIC_LIST_0);
-      CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiAffMergeCand << 1) + 1], REF_PIC_LIST_1);
-      CU::spanMotionInfo(cu);
+      CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0], REF_PIC_LIST_0 );
+      CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1], REF_PIC_LIST_1 );
+      CU::spanMotionInfo( cu );
     }
 
     distParam.cur = sortedPelBuffer.getTestBuf().Y();
-    cu.mcControl = 2;
-    m_cInterSearch.motionCompensation(cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X);
-    cu.mcControl = 0;
+    cu.mcControl  = 2;
+    m_cInterSearch.motionCompensation( cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X );
+    cu.mcControl  = 0;
 
 #if CB_DEB
     if( uiAffMergeCand == 0 && cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
@@ -4019,34 +4019,34 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
     }
 #endif
 
-    Distortion uiSad = distParam.distFunc(distParam);
+    Distortion uiSad = distParam.distFunc( distParam );
 
-    m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::MergeFlag(), merge_ctx_size), ctxStart);
-    uint64_t fracBits = xCalcPuMeBits(cu);
-    double cost = (double)uiSad + (double)fracBits * sqrtLambdaForFirstPassIntra;
+    m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::MergeFlag(), merge_ctx_size ), ctxStart );
+    uint64_t fracBits = xCalcPuMeBits( cu );
+    double cost = ( double ) uiSad + ( double ) fracBits * sqrtLambdaForFirstPassIntra;
 
     int insertPos = -1;
-    updateCandList(ModeInfo(uiAffMergeCand, false, false, false, false, true), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
+    updateCandList( ModeInfo( uiAffMergeCand, false, false, false, false, true ), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos );
     mmvdCandInserted |= insertPos > -1;
-    sortedPelBuffer.insert(insertPos, (int)RdModeList.size());
+    sortedPelBuffer.insert( insertPos, ( int ) RdModeList.size() );
   }
 
   cu.regularMergeFlag = true;
-  cu.affine = false;
+  cu.affine           = false;
 
   return mmvdCandInserted;
 }
 
-uint64_t EncCu::xCalcPuMeBits(const CodingUnit& cu)
+uint64_t EncCu::xCalcPuMeBits( const CodingUnit &cu )
 {
   CHECK( !cu.mergeFlag, "Should only be used for merge!" );
   CHECK( CU::isIBC( cu ), "Shound not be used for IBC" );
 
   m_CABACEstimator->resetBits();
   m_CABACEstimator->merge_flag(cu);
-  if (cu.mergeFlag)
+  if( cu.mergeFlag )
   {
-    m_CABACEstimator->merge_data(cu);
+    m_CABACEstimator->merge_data( cu );
   }
   return m_CABACEstimator->getEstFracBits();
 }
