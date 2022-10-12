@@ -131,7 +131,9 @@ protected:
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
-
+#if BIM_FUNC
+  void bimFunc( std::vector<int> &ctuBimQpOffset, unsigned TLayer, std::deque<TemporalFilterSourcePicInfo> srcFrameInfo, const int ctuSize );
+#endif
 #ifdef TARGET_SIMD_X86
   void initMCTF_X86();
   template <X86_VEXT vext>
