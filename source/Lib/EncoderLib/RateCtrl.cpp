@@ -703,8 +703,8 @@ double RateCtrl::getAverageBitsFromFirstPass()
         tlBits[it->tempLayer] = tlCount[it->tempLayer] = 0; // exclude ref-frame stats of previous scene
       }
       tlBits[it->tempLayer] += it->numBits;
-        tlCount[it->tempLayer]++;
-      }
+      tlCount[it->tempLayer]++;
+    }
     if (tlBits[0] == 0)
     {
       l = 0; // no I-frame in the analysis range
@@ -1015,7 +1015,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
 #endif
 #endif
-          encRcPic->clipTargetQP( getPicList(), secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
+          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
 

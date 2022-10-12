@@ -53,8 +53,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <regex>
 
-//#include "vvenc/vvencCfg.h"
-//#include "vvenc/vvenc.h"
+#include "vvenc/vvencCfg.h"
+#include "vvenc/vvenc.h"
 
 
 #if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)

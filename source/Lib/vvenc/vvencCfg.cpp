@@ -1480,10 +1480,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         int tLayer  = c->m_GOPList[i].m_temporalId;
         int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
-        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType == 'B' )
           vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
-        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
       }
     }
 
@@ -1499,10 +1501,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         int tLayer  = c->m_GOPList[i].m_temporalId;
         int numRefs = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-        vvenc_confirmParameter  ( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPicsSCC!" );
-        if( c->m_GOPList[i].m_sliceType == VVENC_B_SLICE )
-          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPicsSCC!" );
-        vvenc_confirmParameter( c, numRefs == 0,                                "Invalid number of references set in NumRefPicsSCC!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[0], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType == 'B' )
+          vvenc_confirmParameter( c, numRefs > c->m_GOPList[i].m_numRefPics[1], "Invalid number of references set in NumRefPics!" );
+        if( c->m_GOPList[i].m_sliceType != 'I' )
+          vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
       }
     }
   }
@@ -1519,7 +1523,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   //
-  // finalize initialization
+  // finalize initialization 
   //
 
 
@@ -1686,12 +1690,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_inputBitDepth[0  ] < 8,                                 "InputBitDepth must be at least 8" );
   vvenc_confirmParameter( c, c->m_inputBitDepth[1] < 8,                                   "InputBitDepthC must be at least 8" );
 
-#if !RExt__HIGH_BIT_DEPTH_SUPPORT
   for (uint32_t channelType = 0; channelType < 2; channelType++)
   {
-    vvenc_confirmParameter( c,(c->m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
+    vvenc_confirmParameter( c,(c->m_internalBitDepth[channelType] > 10) , "VVenC does not support internal bitdepth larger than 10!");
   }
-#endif
 
 
   vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internalBitDepth[0] < 10 )     ,       "InternalBitDepth must be at least 10 bit for HDR");
@@ -2354,7 +2356,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 2;
       c->m_FastIntraTools                  = 0;
@@ -2365,6 +2367,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 1;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_RDOQ                            = 2;
@@ -2376,6 +2380,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // scc
       c->m_IBCFastMethod                   = 6;
       c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
 
       break;
 
@@ -2404,7 +2409,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
@@ -2415,10 +2420,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 222111;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_alf                             = 1;
-      c->m_alfSpeed                        = 1;
+      c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
@@ -2431,6 +2438,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // scc
       c->m_IBCFastMethod                   = 6;
       c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
 
       break;
 
@@ -2470,6 +2478,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 222211;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -2533,6 +2543,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 222221;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_Affine                          = 2;

@@ -450,8 +450,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 
   // high level conditions and DC intra prediction
-  if(   sps.spsRExt.intraSmoothingDisabled
-    || !isLuma( chType )
+  if( !isLuma( chType )
     || useISP
     || CU::isMIP( cu, chType ) //th remove this
     || m_ipaParam.multiRefIndex
