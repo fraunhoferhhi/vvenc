@@ -1284,7 +1284,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
   /*Always High Precision*/\
   const int csx      = getChannelTypeScaleX( CH_C, cu.chromaFormat );
-  const int csy      = getChannelTypeScaleX( CH_C, cu.chromaFormat );
+  const int csy      = getChannelTypeScaleY( CH_C, cu.chromaFormat );
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;
   const int mvShiftC = mvShift + csx;
 
