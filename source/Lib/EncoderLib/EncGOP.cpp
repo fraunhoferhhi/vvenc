@@ -1536,15 +1536,17 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   const int tLayer     = slice->TLayer;
   const int numRefs    = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
-  if( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
-  {
-    slice->sliceType = sliceType = VVENC_I_SLICE;
-  }
-
-  // reference list
+  // reference list - needs to be done before STA, because ref pic 0 from REF_PIC_LIST_0 is checked for comparison
   slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
   slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
   slice->constructRefPicList  ( picList, false );
+
+  if( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
+  {
+    slice->sliceType = sliceType = VVENC_I_SLICE;
+    //reset RefPicList
+    slice->constructRefPicList  ( picList, false );
+  }
 
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
