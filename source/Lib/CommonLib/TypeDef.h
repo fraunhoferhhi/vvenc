@@ -71,11 +71,15 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
-#define SAME_CTU_SIZE_FIRST_PASS_BIM                      1
+#define SAME_CTU_SIZE_FIRST_PASS_BIM                      0
 
-#define BIM_FUNC                                          0
+#define BIM_FUNC                                          1
 #if BIM_FUNC
-#define BIM_CTU_SIZE                                      128
+#define BIM_CTU_SIZE                                      0
+#define ADD_BIM_OFFSET_ARRAY                              1
+#if BIM_CTU_SIZE && ADD_BIM_OFFSET_ARRAY
+#error "BIM_CTU_SIZE && ADD_BIM_OFFSET_ARRAY not allowed"
+#endif
 #endif
 #if SAME_CTU_SIZE_FIRST_PASS_BIM && BIM_CTU_SIZE
 #error "SAME_CTU_SIZE_FIRST_PASS_BIM && BIM_CTU_SIZE not allowed"

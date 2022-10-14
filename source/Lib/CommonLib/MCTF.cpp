@@ -671,6 +671,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       const int ctuSize        = m_encCfg->m_CTUSize;
 #endif
       bimFunc( pic->m_picShared->m_ctuBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize );
+#if ADD_BIM_OFFSET_ARRAY
+      bimFunc( pic->m_picShared->m_ctuOtherBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize == 64 ? 128 : 64 );
+#endif
 #else
       const int ctuSize        = m_encCfg->m_CTUSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -795,6 +798,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   else
   {
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
+#if ADD_BIM_OFFSET_ARRAY
+    pic->m_picShared->m_ctuOtherBimQpOffset.resize( 0 );
+#endif
   }
 }
 
