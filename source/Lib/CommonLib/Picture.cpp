@@ -381,7 +381,7 @@ void Picture::setSccFlags( const VVEncCfg* encCfg )
   useScIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
   useScSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
   useScNumRefs = isSccStrong;
-  useScFastMrg = isSccStrong ? std::max(0, encCfg->m_useFastMrg - 3) : std::max(0, encCfg->m_useFastMrg - 2);
+  useScFastMrg = isSccStrong ? 0 : std::max(0, encCfg->m_useFastMrg - 2);
   useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
 
   if( ( encCfg->m_qtbttSpeedUpMode & 2 ) && isSccStrong )
