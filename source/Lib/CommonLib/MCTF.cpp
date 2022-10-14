@@ -999,7 +999,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     avg = avg / ( w * h );
 
     // calculate variance
-    int variance = 0;
+    int64_t variance = 0;
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
