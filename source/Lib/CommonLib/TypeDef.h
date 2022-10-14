@@ -73,7 +73,7 @@ namespace vvenc {
 
 #define SAME_CTU_SIZE_FIRST_PASS_BIM                      0
 
-#define BIM_FUNC                                          0
+#define BIM_FUNC                                          1
 #if BIM_FUNC
 #define BIM_CTU_SIZE                                      128
 #endif
