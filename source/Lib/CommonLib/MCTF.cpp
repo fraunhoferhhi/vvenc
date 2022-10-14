@@ -1009,7 +1009,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         variance = variance + ( pix - avg ) * ( pix - avg );
       }
     }
-    double dvar  = variance / 16.0;
+    double dvar  = variance / 256.0; // 16.0 * 16.0
     best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
     best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
