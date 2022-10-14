@@ -1946,7 +1946,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg >= 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
       {
-        if( candCostList[i] > MRG_FAST_RATIO[std::max( 0, m_pcEncCfg->m_useFastMrg - 2 )] * candCostList[0] )
+        if( candCostList[i] > MRG_FAST_RATIO[tempCS->picture->useScFastMrg] * candCostList[0] )
         {
           uiNumMrgSATDCand = i;
           break;
