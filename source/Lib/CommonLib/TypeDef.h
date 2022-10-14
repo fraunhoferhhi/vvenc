@@ -71,9 +71,9 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
-#define SAME_CTU_SIZE_FIRST_PASS_BIM                      0
+#define SAME_CTU_SIZE_FIRST_PASS_BIM                      1
 
-#define BIM_FUNC                                          1
+#define BIM_FUNC                                          0
 #if BIM_FUNC
 #define BIM_CTU_SIZE                                      128
 #endif
