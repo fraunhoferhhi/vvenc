@@ -988,7 +988,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
 
     // calculate average
-    double avg = 0.0;
+    int avg = 0;
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
@@ -996,19 +996,21 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         avg = avg + orig.Y().at( blockX + x1, blockY + y1 );
       }
     }
-    avg = avg / ( w * h );
+    avg <<= 4;
+    avg   = avg / ( w * h );
 
     // calculate variance
-    double variance = 0;
+    int64_t variance = 0;
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
       {
-        int pix = orig.Y().at( blockX + x1, blockY + y1 );
+        int pix = orig.Y().at( blockX + x1, blockY + y1 ) << 4;
         variance = variance + ( pix - avg ) * ( pix - avg );
       }
     }
-    best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
+    double dvar  = variance / 256.0; // 16.0 * 16.0
+    best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
     best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
