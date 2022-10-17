@@ -509,6 +509,8 @@ void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& be
     return;
   }
 
+  if( partitioner.getImplicitSplit( *tempCS ) != CU_DONT_SPLIT ) return;
+
   const CPelBuf orgCb = tempCS->getOrgBuf( COMP_Cb );
   const CPelBuf orgCr = tempCS->getOrgBuf( COMP_Cr );
 
