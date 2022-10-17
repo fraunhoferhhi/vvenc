@@ -988,7 +988,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
 
     // calculate average
-    int avg = 0.0;
+    int avg = 0;
     for( int y1 = 0; y1 < h; y1++ )
     {
       for( int x1 = 0; x1 < w; x1++ )
