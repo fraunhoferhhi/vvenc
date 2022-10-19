@@ -128,7 +128,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
            *  - two back-to-back start_code_prefixes
            *  - start_code_prefix immediately followed by EOF
            */
-          msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n" );
+          msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n" );
         }
         else
         {
@@ -962,9 +962,9 @@ void DecLib::xActivateParameterSets( const int layerId)
     {
       switch(retPPS)
       {
-        case ParameterSetManager::PPS_ERR_INACTIVE_SPS: msg.log( VVENC_ERROR,   "Warning: tried to activate PPS referring to a inactive SPS at non-IDR."); break;
-        case ParameterSetManager::PPS_ERR_NO_SPS:       msg.log( VVENC_ERROR,   "Warning: tried to activate a PPS that refers to a non-existing SPS."); break;
-        case ParameterSetManager::PPS_ERR_NO_PPS:       msg.log( VVENC_ERROR,   "Warning: tried to activate non-existing PPS."); break;
+        case ParameterSetManager::PPS_ERR_INACTIVE_SPS: msg.log( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR."); break;
+        case ParameterSetManager::PPS_ERR_NO_SPS:       msg.log( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS."); break;
+        case ParameterSetManager::PPS_ERR_NO_PPS:       msg.log( VVENC_WARNING, "Warning: tried to activate non-existing PPS."); break;
         case ParameterSetManager::PPS_WARN_DCI_ID:      msg.log( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!"); break;
         case ParameterSetManager::PPS_WARN_NO_DCI:      msg.log( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI."); break;
         default: break;
@@ -1477,13 +1477,13 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
     int lostPoc;
     while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_0, lostPoc ) )
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
-      xCreateLostPicture(lostPoc - 1);
+      msg.log( VVENC_WARNING, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc );
+      xCreateLostPicture( lostPoc - 1 );
     }
     while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_1, lostPoc ) )
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
-      xCreateLostPicture(lostPoc - 1);
+      msg.log( VVENC_WARNING, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc );
+      xCreateLostPicture( lostPoc - 1 );
     }
   }
 
@@ -1893,7 +1893,7 @@ bool DecLib::isNewPicture(std::ifstream *bitstreamFile, class InputByteStream *b
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
@@ -1989,7 +1989,7 @@ bool DecLib::isNewAccessUnit( bool newPicture, std::ifstream *bitstreamFile, cla
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
