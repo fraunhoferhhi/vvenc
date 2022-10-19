@@ -197,12 +197,9 @@ typedef enum
 {
   PREV_FRAME_1    = 0,
   PREV_FRAME_2    = 1,
-  PREV_FRAME_TL0  = 2,
 } PrevFrameType;
 
-static constexpr int QPA_PREV_FRAMES =              (int)PREV_FRAME_2 + 1;
-static constexpr int NUM_PREV_FRAMES =            (int)PREV_FRAME_TL0 + 1;
-
+static constexpr int NUM_QPA_PREV_FRAMES =          (int)PREV_FRAME_2 + 1;
 
 static constexpr int AMVP_MAX_NUM_CANDS =                               2; ///< AMVP: advanced motion vector prediction - max number of final candidates
 static constexpr int AMVP_MAX_NUM_CANDS_MEM =                           3; ///< AMVP: advanced motion vector prediction - max number of candidates

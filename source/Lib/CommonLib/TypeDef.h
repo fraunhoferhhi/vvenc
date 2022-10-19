@@ -875,6 +875,7 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_useBckwdOnly;
   bool      m_isStartOfGop;
   bool      m_isStartOfIntra;
+  bool      m_isValid;
 
   void setDefaultGOPEntry()
   {
@@ -887,6 +888,7 @@ typedef struct GOPEntry : vvencGOPEntry
     m_useBckwdOnly     = false;
     m_isStartOfGop     = false;
     m_isStartOfIntra   = false;
+    m_isValid          = false;
   }
 
   void copyFromGopCfg( const vvencGOPEntry& cfgEntry )

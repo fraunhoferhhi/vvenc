@@ -566,7 +566,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const SPS &sps      = *tempCS->sps;
   const uint32_t uiLPelX  = tempCS->area.Y().lumaPos().x;
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
-  const bool isBimEnabled = (m_pcEncCfg->m_blockImportanceMapping && !bestCS->picture->m_picShared->m_ctuBimQpOffset.empty());
+  const bool isBimEnabled = (m_pcEncCfg->m_blockImportanceMapping && !bestCS->picture->ctuBimQpOffset->empty());
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
@@ -631,7 +631,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         const int baseQp = tempCS->baseQP;
 
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + (*(pic->ctuBimQpOffset))[ctuRsAddr]);
 
         // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
         if( m_pcEncCfg->m_usePerceptQPA )
@@ -655,7 +655,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       if (isBimEnabled)
       {
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + (*(pic->ctuBimQpOffset))[ctuRsAddr]);
       }
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }

@@ -195,9 +195,10 @@ Picture::Picture()
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
+    , ctuBimQpOffset    ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
+  std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
   std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 }
 
@@ -236,7 +237,7 @@ void Picture::reset()
   actualTotalBits     = 0;
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
+  std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
   std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
 
   encTime.resetTimer();
@@ -274,18 +275,18 @@ void Picture::destroy( bool bPicHeader )
   SEIs.clear();
 }
 
-void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared )
+void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ], PicShared* picShared )
 {
   m_picShared                      = picShared;
   m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
   m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
-  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+  for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
 }
 
 void Picture::releasePrevBuffers()
 {
-  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+  for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = nullptr;
 }
 

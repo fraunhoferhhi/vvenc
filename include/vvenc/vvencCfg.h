@@ -314,18 +314,18 @@ typedef struct vvencGOPEntry
   double m_QPFactor;
   int    m_tcOffsetDiv2;
   int    m_betaOffsetDiv2;
-  int    m_CbTcOffsetDiv2;
-  int    m_CbBetaOffsetDiv2;
-  int    m_CrTcOffsetDiv2;
-  int    m_CrBetaOffsetDiv2;
+  int    m_CbTcOffsetDiv2;                                                               // TODO: remove unused memory from configuration
+  int    m_CbBetaOffsetDiv2;                                                             // TODO: remove unused memory from configuration
+  int    m_CrTcOffsetDiv2;                                                               // TODO: remove unused memory from configuration
+  int    m_CrBetaOffsetDiv2;                                                             // TODO: remove unused memory from configuration
   int    m_temporalId;
-  bool   m_refPic;
+  bool   m_cfgUnused13;                                                                  // TODO: remove unused memory from configuration
   char   m_sliceType;
   int    m_numRefPicsActive[ 2 ];
   int    m_numRefPics[ 2 ];
   int    m_deltaRefPics[ 2 ][ VVENC_MAX_NUM_REF_PICS ];
-  bool   m_isEncoded;
-  bool   m_ltrp_in_slice_header_flag;
+  bool   m_cfgUnused14;                                                                  // TODO: remove unused memory from configuration
+  bool   m_cfgUnused15;                                                                  // TODO: remove unused memory from configuration
 }vvencGOPEntry;
 
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry );
@@ -590,7 +590,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_cfgUnused12;
+  bool                m_cfgUnused12;                                                     // TODO: remove unused memory from configuration
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME

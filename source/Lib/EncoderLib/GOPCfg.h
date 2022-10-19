@@ -77,19 +77,20 @@ class GOPCfg
 
     const vvencMCTF*             m_mctfCfg;
 
-    int m_refreshType;
-    int m_fixIntraPeriod;
-    int m_maxGopSize;
-    int m_defGopSize;
-    int m_nextListIdx;
-    int m_gopNum;
-    int m_nextPoc;
-    int m_pocOffset;
-    int m_cnOffset;
-    int m_numTillGop;
-    int m_numTillIntra;
-    int m_maxTid;
-    int m_defaultNumActive[ 2 ];
+    int  m_refreshType;
+    bool m_picReordering;
+    int  m_fixIntraPeriod;
+    int  m_maxGopSize;
+    int  m_defGopSize;
+    int  m_nextListIdx;
+    int  m_gopNum;
+    int  m_nextPoc;
+    int  m_pocOffset;
+    int  m_cnOffset;
+    int  m_numTillGop;
+    int  m_numTillIntra;
+    int  m_maxTid;
+    int  m_defaultNumActive[ 2 ];
 
   public:
     GOPCfg( MsgLog& _m )
@@ -97,6 +98,7 @@ class GOPCfg
       , m_gopList       ( nullptr )
       , m_mctfCfg       ( nullptr )
       , m_refreshType   ( 0 )
+      , m_picReordering ( false )
       , m_fixIntraPeriod( 0 )
       , m_maxGopSize    ( 0 )
       , m_defGopSize    ( 0 )
@@ -115,9 +117,9 @@ class GOPCfg
     {
     };
 
-    void initGopList( int refreshType, int intraPeriod, int gopSize, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
+    void initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
     void getNextGopEntry( GOPEntry& gopEntry );
-    void correctIncompleteLastGop( std::list<PicShared*>& picSharedList ) const;
+    void fixStartOfLastGop( GOPEntry& gopEntry ) const;
     void getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const;
 
     int  getMaxTLayer() const                             { return m_maxTid; }

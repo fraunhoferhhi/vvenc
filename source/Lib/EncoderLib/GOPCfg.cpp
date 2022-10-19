@@ -55,12 +55,13 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
+void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
   m_mctfCfg            = &mctfCfg;
   m_refreshType        = refreshType;
+  m_picReordering      = bPicReordering;
   m_fixIntraPeriod     = intraPeriod;
   m_maxGopSize         = gopSize;
   m_defGopSize         = m_fixIntraPeriod > 0 ? std::min( m_maxGopSize, m_fixIntraPeriod ) : m_maxGopSize;
@@ -102,6 +103,8 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bP
     }
   }
 
+  CHECK( leadFrames < 0, "negative number of lead frames not supported" );
+
   // start with first gop list
   m_gopList     = &m_defaultGopLists[ 0 ];
   m_nextListIdx = std::min( 1, (int)m_defaultGopLists.size() - 1 );
@@ -109,52 +112,57 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bP
 
   // lets start with poc 0
   m_gopNum       = 0;
-  m_nextPoc      = 0;
+  m_nextPoc      = -leadFrames;
   m_pocOffset    = 0;
   m_cnOffset     = 0;
-  CHECK( m_refreshType == VVENC_DRT_IDR2 && ( m_fixIntraPeriod == 1 || ! bPicReordering ), "refresh type idr2 only for random access possible" );
+  CHECK( m_refreshType == VVENC_DRT_IDR2 && ( m_fixIntraPeriod == 1 || ! m_picReordering ), "refresh type idr2 only for random access possible" );
   m_numTillGop   = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
   m_numTillIntra = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
-
-  // TODO (jb): cleanup
-#if 0
-  for( int i = 0; i < (int)m_defaultGopLists.size() + 1; i++ )
-  {
-    GOPEntryList& gopList = i < (int)m_defaultGopLists.size() ? m_defaultGopLists[ i ] : m_remainGopList;
-    std::cout << "GOPList " << i << ", def = " << ( i < (int)m_defaultGopLists.size() ) << ", size = " << gopList.size() << std::endl;
-    for( int j = 0; j < (int)gopList.size(); j++ )
-    {
-      const auto& gopEntry = gopList[ j ];
-      std::cout << "    Frame" << ( j + 1 )
-                << " POC= " << gopEntry.m_POC
-                << " TID= " << gopEntry.m_temporalId
-                << " isStartOfGop= " << gopEntry.m_isStartOfGop
-                << " MCTF= " << gopEntry.m_mctfIndex
-                << " qpOffset= " << gopEntry.m_QPOffset
-                << " modelOffset= " << gopEntry.m_QPOffsetModelOffset
-                << " modelScale= " << gopEntry.m_QPOffsetModelScale
-                << " NumL0= " << gopEntry.m_numRefPics[ 0 ]
-                << " L0: " << gopEntry.m_deltaRefPics[ 0 ][ 0 ]
-                << " "     << gopEntry.m_deltaRefPics[ 0 ][ 1 ]
-                << " "     << gopEntry.m_deltaRefPics[ 0 ][ 2 ]
-                << " "     << gopEntry.m_deltaRefPics[ 0 ][ 3 ]
-                << " "     << gopEntry.m_deltaRefPics[ 0 ][ 4 ]
-                << " "     << gopEntry.m_deltaRefPics[ 0 ][ 5 ]
-                << " NumL1= " << gopEntry.m_numRefPics[ 1 ]
-                << " L1: " << gopEntry.m_deltaRefPics[ 1 ][ 0 ]
-                << " "     << gopEntry.m_deltaRefPics[ 1 ][ 1 ]
-                << " "     << gopEntry.m_deltaRefPics[ 1 ][ 2 ]
-                << " "     << gopEntry.m_deltaRefPics[ 1 ][ 3 ]
-                << " "     << gopEntry.m_deltaRefPics[ 1 ][ 4 ]
-                << " "     << gopEntry.m_deltaRefPics[ 1 ][ 5 ]
-                << std::endl;
-    }
-  }
-#endif
 }
 
 void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
 {
+  // check for lead frames
+  if( m_nextPoc < 0 )
+  {
+    const int idr2Adj         = m_refreshType == VVENC_DRT_IDR2 ? 1 : 0;
+    const bool isStartOfIntra = m_fixIntraPeriod > 0 ? ( ( m_nextPoc + idr2Adj ) % m_fixIntraPeriod == 0 ) : false; ;
+
+    // try to estimate temporal layer 0 leading frames
+    bool isTl0 = false;
+    if( m_fixIntraPeriod == 1 || m_picReordering == false || m_defGopSize <= 1 || isStartOfIntra )
+    {
+      // for AI or LD every frame is temporal layer 0
+      isTl0 = true;
+    }
+    else
+    {
+      // dyadic gop with or without intra period
+      if( m_fixIntraPeriod > 0 )
+      {
+        const int ipOffset  = -m_fixIntraPeriod * ( ( m_nextPoc - ( m_fixIntraPeriod - 1 ) ) / m_fixIntraPeriod );
+        const int pocInIp   = m_nextPoc + ipOffset;
+        isTl0 = ( pocInIp + idr2Adj ) % m_defGopSize == 0;
+      }
+      else
+      {
+        isTl0 = ( ( m_nextPoc + idr2Adj ) % m_defGopSize ) == 0;
+      }
+    }
+
+    // create some fake gop entry for leading frames
+    gopEntry.m_POC            = m_nextPoc;
+    gopEntry.m_codingNum      = m_nextPoc;
+    gopEntry.m_sliceType      = isStartOfIntra ? 'I' : 'B';
+    gopEntry.m_temporalId     = isTl0 ? 0 : 1;
+    gopEntry.m_isStartOfIntra = isStartOfIntra;
+    gopEntry.m_isValid        = true;
+
+    // continue with next frame
+    m_nextPoc += 1;
+    return;
+  }
+
   const int  pocInGop   = m_nextPoc - m_pocOffset;
   const int  gopId      = m_pocToGopIdx[ pocInGop % (int)m_pocToGopIdx.size() ];
   const bool isLeading0 = m_refreshType != VVENC_DRT_IDR2 && m_nextPoc == 0 ? true : false; // for non IDR2, we have a leading poc 0
@@ -163,6 +171,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   gopEntry.m_POC       = m_nextPoc;
   gopEntry.m_codingNum = isLeading0 ? 0 : m_cnOffset + gopId;
   gopEntry.m_gopNum    = m_gopNum;
+  gopEntry.m_isValid   = true;
 
   // mark start of intra
   if( m_numTillIntra == 0 )
@@ -214,73 +223,16 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   {
     m_numTillIntra -= 1;
   }
-
-  // TODO (jb): cleanup
-#if 0
-  std::cout << "         (poc= " << gopEntry.m_POC
-            << " gopNum= " << gopEntry.m_gopNum
-            << " codingNum= " << gopEntry.m_codingNum
-            << " TID= " << gopEntry.m_temporalId
-            << " isStartOfIntra= " << gopEntry.m_isStartOfIntra
-            << " isStartOfGop= " << gopEntry.m_isStartOfGop
-            << " MCTF= " << gopEntry.m_mctfIndex
-            << " qpOffset= " << gopEntry.m_QPOffset
-            << " modelOffset= " << gopEntry.m_QPOffsetModelOffset
-            << " modelScale= " << gopEntry.m_QPOffsetModelScale
-            << " NumL0= " << gopEntry.m_numRefPics[ 0 ]
-            << " L0= " << gopEntry.m_deltaRefPics[ 0 ][ 0 ]
-            << " " << gopEntry.m_deltaRefPics[ 0 ][ 1 ]
-            << " " << gopEntry.m_deltaRefPics[ 0 ][ 2 ]
-            << " " << gopEntry.m_deltaRefPics[ 0 ][ 3 ]
-            << " " << gopEntry.m_deltaRefPics[ 0 ][ 4 ]
-            << " " << gopEntry.m_deltaRefPics[ 0 ][ 5 ]
-            << " NumL1= " << gopEntry.m_numRefPics[ 1 ]
-            << " L1= " << gopEntry.m_deltaRefPics[ 1 ][ 0 ]
-            << " " << gopEntry.m_deltaRefPics[ 1 ][ 1 ]
-            << " " << gopEntry.m_deltaRefPics[ 1 ][ 2 ]
-            << " " << gopEntry.m_deltaRefPics[ 1 ][ 3 ]
-            << " " << gopEntry.m_deltaRefPics[ 1 ][ 4 ]
-            << " " << gopEntry.m_deltaRefPics[ 1 ][ 5 ]
-            << ")" << std::endl;
-#endif
 }
 
-void GOPCfg::correctIncompleteLastGop( std::list<PicShared*>& picSharedList ) const
+void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry ) const
 {
-  std::vector<PicShared*> usedList;
-  usedList.reserve( picSharedList.size() );
-  for( auto picShared : picSharedList )
+  gopEntry.m_isStartOfGop = true;
+  if( gopEntry.m_gopNum == 0 && ! gopEntry.m_isStartOfIntra )
   {
-    if( picShared->getPOC() >= 0 && picShared->isUsed() )
-    {
-      usedList.push_back( picShared );
-    }
-  }
-
-  if( ! usedList.empty() )
-  {
-    std::sort( usedList.begin(), usedList.end(), []( auto& a, auto& b ){ return a->m_gopEntry.m_codingNum < b->m_gopEntry.m_codingNum; } );
-
-    const int size       = (int)usedList.size();
-    const int lastGopNum = usedList.back()->m_gopEntry.m_gopNum;
-
-    GOPEntry* startOfLastGop = &usedList.back()->m_gopEntry;
-    for( int i = size - 2; i >= 0; i-- )
-    {
-      if( usedList[ i ]->m_gopEntry.m_gopNum != lastGopNum )
-      {
-        break;
-      }
-      startOfLastGop = &usedList[ i ]->m_gopEntry;
-    }
-
-    startOfLastGop->m_isStartOfGop = true;
-    if( startOfLastGop->m_gopNum == 0 && ! startOfLastGop->m_isStartOfIntra )
-    {
-      startOfLastGop->m_isStartOfIntra = true;
-      startOfLastGop->m_sliceType      = 'I';
-      startOfLastGop->m_temporalId     = 0;
-    }
+    gopEntry.m_isStartOfIntra = true;
+    gopEntry.m_sliceType      = 'I';
+    gopEntry.m_temporalId     = 0;
   }
 }
 

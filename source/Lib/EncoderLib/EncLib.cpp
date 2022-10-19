@@ -50,9 +50,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
+#include "CommonLib/MCTF.h"
 #include "Utilities/NoMallocThreadPool.h"
 #include "Utilities/MsgLog.h"
-#include "GOPCfg.h"
+#include "EncStage.h"
+#include "PreProcess.h"
+#include "EncGOP.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -71,18 +74,16 @@ EncLib::EncLib( MsgLog& logger )
   , m_encCfg         ()
   , m_orgCfg         ()
   , m_firstPassCfg   ()
-  , m_gopCfg         ( nullptr )
   , m_rateCtrl       ( nullptr )
+  , m_preProcess     ( nullptr )
   , m_MCTF           ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
-  , m_prevSharedTL0  ( nullptr )
   , m_threadPool     ( nullptr )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
   , m_accessUnitOutputStarted( false )
-  , m_firstFlushDone ( false )
 {
 }
 
@@ -215,24 +216,27 @@ void EncLib::initPass( int pass, const char* statsFName )
     }
   }
 
-  // GOP structure
-  m_gopCfg = new GOPCfg( msg );
-  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_picReordering, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
-  CHECK( m_gopCfg->getMaxTLayer() != m_encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
-
   // thread pool
   if( m_encCfg.m_numThreads > 0 )
   {
     m_threadPool = new NoMallocThreadPool( m_encCfg.m_numThreads, "EncSliceThreadPool", &m_encCfg );
   }
   m_maxNumPicShared = 0;
+
+  // pre processing
+  m_preProcess = new PreProcess( msg );
+  m_preProcess->initStage( m_encCfg, 1, -m_encCfg.m_leadFrames, true, true, false );
+  m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass );
+  m_encStages.push_back( m_preProcess );
+  m_maxNumPicShared += 1;
+
   // MCTF
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
     const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
-    m_MCTF->initStage( minQueueSize, true, true, true, m_encCfg.m_CTUSize, false );
+    m_MCTF->initStage( m_encCfg, minQueueSize, -leadFrames, true, true, false );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minQueueSize - leadFrames;
@@ -243,8 +247,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_preEncoder = new EncGOP( msg );
     const int minQueueSize = m_firstPassCfg.m_GOPSize + 1;
-    m_preEncoder->initStage( minQueueSize, true, false, false, m_firstPassCfg.m_CTUSize, false );
-    m_preEncoder->init( m_firstPassCfg, m_gopCfg, *m_rateCtrl, m_threadPool, true );
+    m_preEncoder->initStage( m_firstPassCfg, minQueueSize, 0, false, false, false );
+    m_preEncoder->init( m_firstPassCfg, m_preProcess->getGOPCfg(), *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
     m_maxNumPicShared += minQueueSize;
   }
@@ -252,13 +256,13 @@ void EncLib::initPass( int pass, const char* statsFName )
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
   const int minQueueSize = m_encCfg.m_GOPSize + 1;
-  m_gopEncoder->initStage( minQueueSize, false, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
-  m_gopEncoder->init( m_encCfg, m_gopCfg, *m_rateCtrl, m_threadPool, false );
+  m_gopEncoder->initStage( m_encCfg, minQueueSize, 0, false, false, m_encCfg.m_stageParallelProc );
+  m_gopEncoder->init( m_encCfg, m_preProcess->getGOPCfg(), *m_rateCtrl, m_threadPool, false );
   m_encStages.push_back( m_gopEncoder );
   m_maxNumPicShared += minQueueSize;
 
   // additional pictures due to structural delay
-  m_maxNumPicShared += m_gopCfg->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
+  m_maxNumPicShared += m_preProcess->getGOPCfg()->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
   m_maxNumPicShared += 3;
 
   if( m_rateCtrl->rcIsFinalPass )
@@ -272,16 +276,8 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_encStages[ i ]->linkNextStage( m_encStages[ i + 1 ] );
   }
 
-  // prepare prev shared data
-  while( m_prevSharedQueue.size() < QPA_PREV_FRAMES )
-  {
-    m_prevSharedQueue.push_back( nullptr );
-  }
-  m_prevSharedTL0 = nullptr;
-
   m_picsRcvd                = -m_encCfg.m_leadFrames;
   m_accessUnitOutputStarted = false;
-  m_firstFlushDone          = false;
   m_passInitialized         = pass;
 }
 
@@ -297,6 +293,11 @@ void EncLib::xUninitLib()
   if( m_rateCtrl != nullptr )
   {
     m_rateCtrl->destroy();
+  }
+  if( m_preProcess )
+  {
+    delete m_preProcess;
+    m_preProcess = nullptr;
   }
   if( m_MCTF )
   {
@@ -315,31 +316,17 @@ void EncLib::xUninitLib()
   }
   m_encStages.clear();
 
-  // shared data
-  if( m_prevSharedTL0 )
-  {
-    m_prevSharedTL0->decUsed();
-    m_prevSharedTL0 = nullptr;
-  }
   for( auto picShared : m_picSharedList )
   {
     delete picShared;
   }
   m_picSharedList.clear();
-  m_prevSharedQueue.clear();
 
   // thread pool
   if( m_threadPool )
   {
     delete m_threadPool;
     m_threadPool = nullptr;
-  }
-
-  // GOP structure
-  if( m_gopCfg )
-  {
-    delete m_gopCfg;
-    m_gopCfg = nullptr;
   }
 }
 
@@ -382,8 +369,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
-  const int firstPoc = m_encCfg.m_vvencMCTF.MCTF ? -std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames ) : 0;
-
   // clear output access unit
   au.clearAu();
 
@@ -407,40 +392,16 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( picShared )
       {
         picShared->reuse( m_picsRcvd, yuvInBuf );
-        if( picShared->getPOC() >= 0 ) // skip lead frames
-        {
-          m_gopCfg->getNextGopEntry( picShared->m_gopEntry );
-        }
-        if( m_encCfg.m_sliceTypeAdapt
-            || m_encCfg.m_usePerceptQPA
-            || m_encCfg.m_RCNumPasses == 2
-            || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
-        {
-          xAssignPrevQpaBufs( picShared );
-        }
-        if( ! picShared->isLeadTrail() )
-        {
-          xDetectScc( picShared );
-        }
-        if( picShared->getPOC() >= firstPoc )
-        {
-          m_encStages[ 0 ]->addPicSorted( picShared );
-        }
+        m_encStages[ 0 ]->addPicSorted( picShared );
         m_picsRcvd  += 1;
         inputPending = false;
       }
     }
 
-    if( flush && ! m_firstFlushDone )
-    {
-      m_gopCfg->correctIncompleteLastGop( m_picSharedList );
-      m_firstFlushDone = true;
-    }
-
     PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
     // trigger stages
-    isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
+    isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );
     for( auto encStage : m_encStages )
     {
       encStage->runStage( flush, au );
@@ -505,9 +466,9 @@ void EncLib::getParameterSets( AccessUnitList& au )
   }
 }
 
-int EncLib::getCurPass() const 
-{ 
-  return m_passInitialized; 
+int EncLib::getCurPass() const
+{
+  return m_passInitialized;
 }
 
 // ====================================================================================================================
@@ -539,152 +500,6 @@ PicShared* EncLib::xGetFreePicShared()
 
   return picShared;
 }
-
-void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
-{
-  for( int i = 0; i < QPA_PREV_FRAMES; i++ )
-  {
-    picShared->m_prevShared[ i ] = m_prevSharedQueue[ i ];
-  }
-  m_prevSharedQueue.pop_back();
-  m_prevSharedQueue.push_front( picShared );
-  // for very first frame link itself
-  if( picShared->m_prevShared[ 0 ] == nullptr )
-  {
-    picShared->m_prevShared[ 0 ] = picShared;
-  }
-
-  if( m_encCfg.m_sliceTypeAdapt )
-  {
-    bool isTL0 = false;
-    if( picShared->getPOC() >= 0 )
-    {
-      isTL0 = picShared->m_gopEntry.m_temporalId == 0;
-    }
-    else
-    {
-      // lead pictures, before first I frame
-      const int numGops     = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod / m_encCfg.m_GOPSize               : 0;
-      const int numRemain   = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod - ( numGops * m_encCfg.m_GOPSize ) : 0;
-      const int lastGopSize = numRemain > 0 ? numRemain : m_encCfg.m_GOPSize;
-      const int idr2Adj     = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
-      isTL0                 = ( ( picShared->getPOC() + idr2Adj ) % lastGopSize ) == 0;
-    }
-    if( isTL0 )
-    {
-      if( m_prevSharedTL0 )
-      {
-        m_prevSharedTL0->decUsed();
-      }
-      picShared->m_prevShared[ PREV_FRAME_TL0 ] = m_prevSharedTL0;
-      m_prevSharedTL0 = picShared;
-      m_prevSharedTL0->incUsed();
-    }
-  }
-}
-
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && __GNUC__ == 5
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-overflow"
-#endif
-
-void EncLib::xDetectScc( PicShared* picShared )
-{
-  Picture pic;
-  picShared->shareData( &pic );
-  CPelUnitBuf yuvOrgBuf = pic.getOrigBuf();
-
-  bool isSccWeak   = false;
-  bool isSccStrong = false;
-
-  int SIZE_BL = 4;
-  int K_SC = 25;
-  const Pel* piSrc = yuvOrgBuf.Y().buf;
-  uint32_t   uiStride = yuvOrgBuf.Y().stride;
-  uint32_t   uiWidth = yuvOrgBuf.Y().width;
-  uint32_t   uiHeight = yuvOrgBuf.Y().height;
-  int size = SIZE_BL;
-  unsigned   hh, ww;
-  int SizeS = SIZE_BL << 1;
-  int sR[4] = { 0,0,0,0 };
-  int AmountBlock = (uiWidth >> 2) * (uiHeight >> 2);
-  for( hh = 0; hh < uiHeight; hh += SizeS )
-  {
-    for( ww = 0; ww < uiWidth; ww += SizeS )
-    {
-      int Rx = ww > (uiWidth >> 1) ? 1 : 0;
-      int Ry = hh > (uiHeight >> 1) ? 1 : 0;
-      Ry = Ry << 1 | Rx;
-
-      int i = ww;
-      int j = hh;
-      int n = 0;
-      int Var[4];
-      for( j = hh; (j < hh + SizeS) && (j < uiHeight); j += size )
-      {
-        for( i = ww; (i < ww + SizeS) && (i < uiWidth); i += size )
-        {
-          int sum = 0;
-          int Mit = 0;
-          int V = 0;
-          int h = j;
-          int w = i;
-          for( h = j; (h < j + size) && (h < uiHeight); h++ )
-          {
-            for( w = i; (w < i + size) && (w < uiWidth); w++ )
-            {
-              sum += int(piSrc[h * uiStride + w]);
-            }
-          }
-          int sizeEnd = ((h - j) * (w - i));
-          Mit = sum / sizeEnd;
-          for( h = j; (h < j + size) && (h < uiHeight); h++ )
-          {
-            for( w = i; (w < i + size) && (w < uiWidth); w++ )
-            {
-              V += abs(Mit - int(piSrc[h * uiStride + w]));
-            }
-          }
-          // Variance in Block (SIZE_BL*SIZE_BL)
-          V = V / sizeEnd;
-          Var[n] = V;
-          n++;
-        }
-      }
-      for( int i = 0; i < 2; i++ )
-      {
-        if( Var[i] == Var[i + 2] )
-        {
-          sR[Ry] += 1;
-        }
-        if( Var[i << 1] == Var[(i << 1) + 1] )
-        {
-          sR[Ry] += 1;
-        }
-      }
-    }
-  }
-  int s = 0;
-  isSccStrong = true;
-  for( int r = 0; r < 4; r++ )
-  {
-    s += sR[r];
-    if( ((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC) )
-    {
-      isSccStrong = false;
-    }
-  }
-  isSccWeak = ((s * 100 / AmountBlock) > K_SC);
-
-  picShared->m_isSccWeak   = isSccWeak;
-  picShared->m_isSccStrong = isSccStrong;
-
-  picShared->releaseShared( &pic );
-}
-
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && __GNUC__ == 5
-#pragma GCC diagnostic pop
-#endif
 
 } // namespace vvenc
 
