@@ -509,6 +509,8 @@ void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& be
     return;
   }
 
+  if( partitioner.getImplicitSplit( *tempCS ) != CU_DONT_SPLIT ) return;
+
   const CPelBuf orgCb = tempCS->getOrgBuf( COMP_Cb );
   const CPelBuf orgCr = tempCS->getOrgBuf( COMP_Cr );
 
@@ -1956,7 +1958,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg >= 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
       {
-        if( candCostList[i] > MRG_FAST_RATIO[std::max( 0, m_pcEncCfg->m_useFastMrg - 2 )] * candCostList[0] )
+        if( candCostList[i] > MRG_FAST_RATIO[tempCS->picture->useScFastMrg] * candCostList[0] )
         {
           uiNumMrgSATDCand = i;
           break;

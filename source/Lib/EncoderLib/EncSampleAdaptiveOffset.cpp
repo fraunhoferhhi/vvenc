@@ -913,9 +913,9 @@ void EncSampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructu
 
   if (!isLoopFiltAcrossSlicePPS)
   {
-    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameTile(*cuCurr, *cuLeft);
-    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameTile(*cuCurr, *cuAbove);
-    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameTile(*cuCurr, *cuAboveLeft);
+    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameSlice(*cuCurr, *cuLeft);
+    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameSlice(*cuCurr, *cuAbove);
+    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameSlice(*cuCurr, *cuAboveLeft);
   }
   else
   {
