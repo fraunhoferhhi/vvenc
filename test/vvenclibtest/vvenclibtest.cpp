@@ -242,8 +242,9 @@ int testLibParameterRanges()
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5 } );
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,6 }, true );
 
-  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
-  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
+  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 32,35,48,51,64,67,80,83,86,96,99,102 } );
+  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,15,31,255,256 }, true ); // level 1 is not enough for 176x144p60 just because of the sample rate
+                                                                                                                                                // level 15.1 is not available for the main_10 profile
 
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
