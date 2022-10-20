@@ -626,7 +626,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
-  ("Profile",                                           toProfile,                                           "select profile (main10, main10_stillpic)")
+  ("Profile",                                           toProfile,                                           "select profile (main_10, main_10_still_picture)")
   ("Level",                                             toLevel,                                             "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
   ("Tier",                                              toLevelTier,                                         "Tier to use for interpretation of level (main or high)")
   ;
