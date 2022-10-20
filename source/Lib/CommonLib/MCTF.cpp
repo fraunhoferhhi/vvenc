@@ -671,11 +671,12 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       const int ctuSize        = m_encCfg->m_CTUSize;
 #endif
       bimFunc( pic->m_picShared->m_ctuBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize );
-#if ADD_BIM_OFFSET_ARRAY
-      bimFunc( pic->m_picShared->m_ctuOtherBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize == 64 ? 128 : 64 );
-#endif
+#else
+#if BIM_CTU_SIZE
+      const int ctuSize        = BIM_CTU_SIZE;
 #else
       const int ctuSize        = m_encCfg->m_CTUSize;
+#endif
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
       const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
       const int numCtu         = widthInCtus * heightInCtus;
@@ -750,57 +751,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         std::fill( pic->m_picShared->m_ctuBimQpOffset.begin(), pic->m_picShared->m_ctuBimQpOffset.end(), 0 );
       }
 #endif
-#if PRINT_BIM_OFFSETS
-#if BIM_FUNC
-      const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
-      const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
-
-      const int otherCtuSize = ctuSize == 64 ? 128 : 64;
-      std::vector<int> otherCtuBimQpOffset;
-      bimFunc( otherCtuBimQpOffset, pic->TLayer, srcFrameInfo, otherCtuSize );
-#endif
-      int sum = 0;
-      printf( "\nALFRED    " );
-      for( int h = 0; h < heightInCtus; h++ )
-      {
-        for( int w = 0; w < widthInCtus; w++ )
-        {
-          printf( "%2d", pic->m_picShared->m_ctuBimQpOffset[h * widthInCtus + w] );
-        }
-        
-#if BIM_FUNC
-        if( otherCtuBimQpOffset.size() != 0 )
-        {
-          printf( "    " );
-          for( int w = 0; w < widthInCtus; w++ )
-          {
-            int id = h/2 * widthInCtus/2 + w/2;
-            printf( "%2d", otherCtuBimQpOffset[id] );
-          }
-          printf( "    " );
-          for( int w = 0; w < widthInCtus; w++ )
-          {
-            int id = h/2 * widthInCtus/2 + w/2;
-            printf( "%2d", abs( pic->m_picShared->m_ctuBimQpOffset[h * widthInCtus + w]- otherCtuBimQpOffset[id] ) );
-            sum += abs( pic->m_picShared->m_ctuBimQpOffset[h * widthInCtus + w]- otherCtuBimQpOffset[id] );
-          }
-        }
-#endif
-        printf( "\nALFRED    " );
-      }
-#if BIM_FUNC
-      printf( "meanQPdiff  %3f", ( sum / double( widthInCtus * heightInCtus ) ) );
-#endif
-      printf( "\n" );
-#endif
     }
   }
   else
   {
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
-#if ADD_BIM_OFFSET_ARRAY
-    pic->m_picShared->m_ctuOtherBimQpOffset.resize( 0 );
-#endif
   }
 }
 

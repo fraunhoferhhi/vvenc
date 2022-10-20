@@ -383,9 +383,6 @@ int RateCtrl::getBaseQP()
 
     for (auto& stats : firstPassData)
     {
-#if PRINT_RC_DATA && 0
-      printf( "MANFRED %d  qp %d  numBits %d targetBits %d  lambda %f\n", stats.poc, stats.qp, stats.numBits, stats.targetBits, stats.lambda );
-#endif
       sumFrBits += stats.numBits;
       sumVisAct += stats.visActY;
     }
@@ -1008,13 +1005,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
-#if PRINT_RC_DATA
-#ifdef __APPLE__
-          printf("HORST %d  targetBits %d  diffEstUsed %lld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
-#else
-          printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
-#endif
-#endif
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );

@@ -358,11 +358,7 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_QP /*base QP*/  = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
 
   // preserve some settings
-#if SAME_CTU_SIZE_FIRST_PASS_BIM
-  if( ( m_firstPassCfg.m_usePerceptQPA && ( m_firstPassCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_firstPassCfg.m_framesToBeEncoded == 1 ) ) || ( m_firstPassCfg.m_blockImportanceMapping && m_firstPassCfg.m_LookAhead ) )
-#else
   if( m_firstPassCfg.m_usePerceptQPA && ( m_firstPassCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_firstPassCfg.m_framesToBeEncoded == 1 ) )
-#endif
   {
     m_firstPassCfg.m_CTUSize       = m_encCfg.m_CTUSize;
   }

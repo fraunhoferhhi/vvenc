@@ -602,44 +602,6 @@ void AreaBuf<Pel>::scaleSignal(const int scale, const bool dir, const ClpRng& cl
   }
 }
 
-#if CB_DEB
-template<>
-void AreaBuf<Pel>::printBlock() const
-{
-  Pel* dst = buf;
-
-  printf("\n");
-  for (unsigned y = 0; y < height; y++)
-  {
-    printf("\n");
-    for (unsigned x = 0; x < width; x++)
-    {
-      printf( "%4d  ", dst[x] );
-    }
-    dst += stride;
-  }
-  printf("\n");
-}
-
-template<>
-void AreaBuf<int>::printBlock() const
-{
-  int* dst = buf;
-
-  printf("\n");
-  for (unsigned y = 0; y < height; y++)
-  {
-    printf("\n");
-    for (unsigned x = 0; x < width; x++)
-    {
-      printf( "%4d  ", dst[x] );
-    }
-    dst += stride;
-  }
-  printf("\n");
-}
-#endif
-
 template<>
 void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng)
 {

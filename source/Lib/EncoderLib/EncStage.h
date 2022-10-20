@@ -112,9 +112,6 @@ public:
     m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
     m_ctsValid    = yuvInBuf->ctsValid;
     m_ctuBimQpOffset.resize( 0 );
-#if ADD_BIM_OFFSET_ARRAY
-    m_ctuOtherBimQpOffset.resize( 0 );
-#endif
     std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
   }
 
@@ -178,10 +175,6 @@ public:
   bool       m_isSccStrong;
   std::vector<int>             
              m_ctuBimQpOffset;
-#if ADD_BIM_OFFSET_ARRAY
-  std::vector<int>
-             m_ctuOtherBimQpOffset;
-#endif
 
 private:
   PelStorage m_origBuf;

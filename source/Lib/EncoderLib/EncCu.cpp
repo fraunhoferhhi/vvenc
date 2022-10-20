@@ -638,14 +638,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         const int baseQp = tempCS->baseQP;
 
-#if ADD_BIM_OFFSET_ARRAY
-        const int bimOffset = pcv.sizeInCtus == pic->m_picShared->m_ctuBimQpOffset.size() ? pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr] : pic->m_picShared->m_ctuOtherBimQpOffset[ctuRsAddr];
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + bimOffset);
-#else
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
-#endif
 
         // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
         if( m_pcEncCfg->m_usePerceptQPA )
@@ -669,12 +663,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       if (isBimEnabled)
       {
-#if ADD_BIM_OFFSET_ARRAY
-        const int bimOffset = pcv.sizeInCtus == pic->m_picShared->m_ctuBimQpOffset.size() ? pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr] : pic->m_picShared->m_ctuOtherBimQpOffset[ctuRsAddr];
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + bimOffset);
-#else
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
-#endif
       }
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
@@ -4031,14 +4020,6 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
     cu.mcControl  = 2;
     m_cInterSearch.motionCompensation( cu, sortedPelBuffer.getTestBuf(), REF_PIC_LIST_X );
     cu.mcControl  = 0;
-
-#if CB_DEB
-    if( uiAffMergeCand == 0 && cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
-    {
-//          printf("\nbase");
-      m_SortedPelUnitBufs.getTestBuf().Y().printBlock();
-    }
-#endif
 
     Distortion uiSad = distParam.distFunc( distParam );
 
