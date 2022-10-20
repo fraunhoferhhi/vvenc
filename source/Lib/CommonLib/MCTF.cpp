@@ -664,14 +664,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     if( m_encCfg->m_blockImportanceMapping )
     {
-#if BIM_FUNC
-#if BIM_CTU_SIZE
-      const int ctuSize        = BIM_CTU_SIZE;
-#else
-      const int ctuSize        = m_encCfg->m_CTUSize;
-#endif
-      bimFunc( pic->m_picShared->m_ctuBimQpOffset, pic->TLayer, srcFrameInfo, ctuSize );
-#else
 #if BIM_CTU_SIZE
       const int ctuSize        = BIM_CTU_SIZE;
 #else
@@ -750,7 +742,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         std::fill( pic->m_picShared->m_ctuBimQpOffset.begin(), pic->m_picShared->m_ctuBimQpOffset.end(), 0 );
       }
-#endif
     }
   }
   else
@@ -758,85 +749,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
   }
 }
-
-#if BIM_FUNC
-void MCTF::bimFunc( std::vector<int> &ctuBimQpOffset, unsigned TLayer, std::deque<TemporalFilterSourcePicInfo> srcFrameInfo, const int ctuSize )
-{
-  const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
-  const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
-  const int numCtu         = widthInCtus * heightInCtus;
-  const int ctuBlocks      = ctuSize / m_mctfUnitSize;
-
-  ctuBimQpOffset.resize( numCtu, 0 );
-
-  std::vector<double> sumError( numCtu * 2, 0 );
-  std::vector<double> blkCount( numCtu * 2, 0 );
-
-  int distFactor[2] = { 3,3 };
-
-  for( auto& srcPic : srcFrameInfo )
-  {
-    if( srcPic.index >= 2 )
-    {
-      continue;
-    }
-
-    int dist = srcPic.index;
-    distFactor[dist]--;
-
-    for( int y = 0; y < srcPic.mvs.h(); y++ ) // going over in block steps
-    {
-      for( int x = 0; x < srcPic.mvs.w(); x++ )
-      {
-        const int ctuX    = x / ctuBlocks;
-        const int ctuY    = y / ctuBlocks;
-        const int ctuId   = ctuY * widthInCtus + ctuX;
-        const auto& mvBlk = srcPic.mvs.get( x, y );
-        sumError[dist * numCtu + ctuId] += mvBlk.error;
-        blkCount[dist * numCtu + ctuId] += mvBlk.overlap;
-      }
-    }
-  }
-
-  if( distFactor[0] < 3 && distFactor[1] < 3 )
-  {
-    double weight = TLayer > 1 ? 0.6 : 1;
-
-    for( int i = 0; i < numCtu; i++ )
-    {
-      const int avgErrD1 = ( int ) ( ( sumError[i         ] / blkCount[i         ] ) * distFactor[0] );
-      const int avgErrD2 = ( int ) ( ( sumError[i + numCtu] / blkCount[i + numCtu] ) * distFactor[1] );
-      int weightedErr = std::max( avgErrD1, avgErrD2 ) + abs( avgErrD2 - avgErrD1 ) * 3;
-      weightedErr     = ( int ) ( weightedErr * weight + ( 1 - weight ) * m_cuTreeCenter );
-
-      int qpOffset = 0;
-
-      if( weightedErr > m_cuTreeThresh[0] )
-      {
-        qpOffset = 2;
-      }
-      else if( weightedErr > m_cuTreeThresh[1] )
-      {
-        qpOffset = 1;
-      }
-      else if( weightedErr < m_cuTreeThresh[3] )
-      {
-        qpOffset = -2;
-      }
-      else if( weightedErr < m_cuTreeThresh[2] )
-      {
-        qpOffset = -1;
-      }
-
-      ctuBimQpOffset[i] = qpOffset;
-    }
-  }
-  else
-  {
-    std::fill( ctuBimQpOffset.begin(), ctuBimQpOffset.end(), 0 );
-  }
-}
-#endif
 
 // ====================================================================================================================
 // Private member functions
