@@ -778,11 +778,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_profile=vvencProfile::VVENC_MAIN_10_444;
       }
     }
+
+    if( c->m_framesToBeEncoded == 1 )
+    {
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10     ) c->m_profile = vvencProfile::VVENC_MAIN_10_STILL_PICTURE;
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10_444 ) c->m_profile = vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE;
+    }
+
+    vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "Unable to infer profile from input!" );
   }
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
     c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL_AUTO || c->m_level == vvencLevel::VVENC_NUMBER_OF_LEVELS, "Unable to infer level from input!" );
+  }
+  else
+  {
+    const vvencLevel inferedLevel = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+  }
+
+  {
+    const vvenc::ProfileFeatures *profileFeatures = vvenc::ProfileFeatures::getProfileFeatures( c->m_profile );
+    vvenc_confirmParameter( c, !profileFeatures, "Invalid profile!" );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL15_5 && !profileFeatures->canUseLevel15p5, "The video dimensions (size/rate) exceed the allowed maximum throughput for the level/profile combination!" );
   }
 
   if( !c->m_configDone )
@@ -1585,7 +1605,7 @@ static bool checkCfgParameter( vvenc_config *c )
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE
                            && c->m_profile != vvencProfile::  VVENC_MULTILAYER_MAIN_10_444
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE),
-                              "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+                              "unsupported profile. currently only supporting auto,main_10,main_10_still_picture");
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
