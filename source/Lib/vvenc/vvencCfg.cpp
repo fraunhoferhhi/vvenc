@@ -1045,11 +1045,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg.log( VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_WARNING,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1633,11 +1633,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       break;
   }
