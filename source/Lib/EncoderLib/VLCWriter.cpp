@@ -1747,7 +1747,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
         numSlicesInPreviousSubPics += slice->pps->subPics[sp].numSlicesInSubPic;
       }
       int bitsSliceAddress = ceilLog2(currSubPic.numSlicesInSubPic);
-      WRITE_CODE( slice->sliceSubPicId - numSlicesInPreviousSubPics, bitsSliceAddress, "sh_slice_address");
+      WRITE_CODE( slice->sliceMap.sliceID - numSlicesInPreviousSubPics, bitsSliceAddress, "sh_slice_address");
     }
   }
 
