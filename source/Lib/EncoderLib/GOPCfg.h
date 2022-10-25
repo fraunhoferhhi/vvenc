@@ -77,8 +77,8 @@ class GOPCfg
 
     const vvencMCTF*             m_mctfCfg;
 
-    int  m_refreshType;
     bool m_picReordering;
+    int  m_refreshType;
     int  m_fixIntraPeriod;
     int  m_maxGopSize;
     int  m_defGopSize;
@@ -97,8 +97,8 @@ class GOPCfg
       : msg             ( _m )
       , m_gopList       ( nullptr )
       , m_mctfCfg       ( nullptr )
-      , m_refreshType   ( 0 )
       , m_picReordering ( false )
+      , m_refreshType   ( 0 )
       , m_fixIntraPeriod( 0 )
       , m_maxGopSize    ( 0 )
       , m_defGopSize    ( 0 )
