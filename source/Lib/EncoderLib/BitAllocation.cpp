@@ -78,9 +78,9 @@ static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bit
 #endif
 }
 
-static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
-                                                 const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
-                                                 uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr)
+double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
+                                          const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
+                                          uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr)
 {
   double spatAct = 0.0, tempAct = 0.0;
   uint64_t saAct = 0;   // spatial absolute activity sum
@@ -663,69 +663,6 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   ctuPumpRedQP[ctuRsAddr] += pumpingReducQP;
 
   return pumpingReducQP;
-}
-
-double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev /*= nullptr*/)
-{
-  Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
-
-  if (pic == nullptr || encCfg == nullptr) return 0.0;
-
-  const bool isHighRes  = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-  const CPelBuf picOrig = pic->getOrigBuf (COMP_Y);
-  const CPelBuf picPrv1 = (origPrev != nullptr ? *origPrev : pic->getOrigBufPrev (COMP_Y, PREV_FRAME_1));
-  const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, PREV_FRAME_2);
-
-  return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride,
-                                            (origPrev != nullptr ? 24 : encCfg->m_FrameRate / encCfg->m_FrameScale),
-                                            slice->sps->bitDepths[CH_L], isHighRes);
-}
-
-bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass)
-{
-  Picture* const curPic = (slice != nullptr ? slice->pic : nullptr);
-
-  if (curPic == nullptr || encCfg == nullptr) return false;
-
-  const GOPEntry& gopEntry = *(slice->pic->gopEntry);
-  const int curPoc         = slice->poc;
-  const bool isHighRes     = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-
-  curPic->picVisActTL0 = curPic->picVisActY = 0;
-
-  if (((encCfg->m_LookAhead > 0 && encCfg->m_RCTargetBitrate == 0) || (encCfg->m_RCNumPasses > 1 && !rcIsFinalPass)) && !(slice->pps->sliceChromaQpFlag && encCfg->m_usePerceptQPA &&
-      ((slice->isIntra() && !slice->sps->IBC) || (encCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (curPoc % encCfg->m_sliceChromaQpOffsetPeriodicity) == 0))))
-  {
-    const double visActY = getPicVisualActivity (slice, encCfg);
-
-    curPic->picVisActY   = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
-  }
-
-  if (encCfg->m_sliceTypeAdapt && curPoc >= 0 && encCfg->m_GOPSize > 8 && gopEntry.m_temporalId == 0)
-  {
-    const CPelBuf prvTL0 = curPic->getOrigBufPrev (COMP_Y, PREV_FRAME_TL0);
-    const double visActY = (prvTL0.buf == nullptr ? 0.0 : getPicVisualActivity (slice, encCfg, &prvTL0));
-
-    curPic->picVisActTL0 = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
-
-    if (!slice->isIntra() && slice->getRefPic (REF_PIC_LIST_0, 0)) // detect scene change if comparison is possible
-    {
-      const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
-      const int scThreshold = ((curPic->isSccStrong ? 6 : (curPic->isSccWeak ? 5 : 4)) * (isHighRes ? 19 : 15)) >> 2;
-
-      if ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
-           refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * (scThreshold + 1)) && refPic->picVisActTL0 > 0)
-      {
-        curPic->picMemorySTA = refPic->picVisActTL0 * (curPic->picVisActTL0 < refPic->picVisActTL0 ? -1 : 1);
-
-        if (curPic->picMemorySTA * refPic->picMemorySTA >= 0) return true;
-      }
-    }
-    curPic->picMemorySTA = 0;
-  }
-
-  return false;
 }
 
 } // namespace vvenc

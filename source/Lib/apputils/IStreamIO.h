@@ -701,10 +701,10 @@ inline std::ostream& operator<< ( std::ostream& os, const vvencGOPEntry& entry )
   os << entry.m_QPFactor;
   os << entry.m_tcOffsetDiv2;
   os << entry.m_betaOffsetDiv2;
-  os << entry.m_CbTcOffsetDiv2;
-  os << entry.m_CbBetaOffsetDiv2;
-  os << entry.m_CrTcOffsetDiv2;
-  os << entry.m_CrBetaOffsetDiv2;
+  os << entry.m_cfgUnused1;
+  os << entry.m_cfgUnused2;
+  os << entry.m_cfgUnused3;
+  os << entry.m_cfgUnused4;
   os << entry.m_temporalId;
 
   for( int l = 0; l < 2; l++)
@@ -732,10 +732,10 @@ inline std::istream& operator>> ( std::istream& in, vvencGOPEntry& entry )
   in >> entry.m_QPFactor;
   in >> entry.m_tcOffsetDiv2;
   in >> entry.m_betaOffsetDiv2;
-  in >> entry.m_CbTcOffsetDiv2;
-  in >> entry.m_CbBetaOffsetDiv2;
-  in >> entry.m_CrTcOffsetDiv2;
-  in >> entry.m_CrBetaOffsetDiv2;
+  in >> entry.m_cfgUnused1;
+  in >> entry.m_cfgUnused2;
+  in >> entry.m_cfgUnused3;
+  in >> entry.m_cfgUnused4;
   in >> entry.m_temporalId;
 
   for( int l = 0; l < 2; l++)

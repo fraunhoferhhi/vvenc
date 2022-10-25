@@ -244,18 +244,15 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
   GOPEntry->m_QPFactor                  = 0.0;
   GOPEntry->m_tcOffsetDiv2              = 0;
   GOPEntry->m_betaOffsetDiv2            = 0;
-  GOPEntry->m_CbTcOffsetDiv2            = 0;
-  GOPEntry->m_CbBetaOffsetDiv2          = 0;
-  GOPEntry->m_CrTcOffsetDiv2            = 0;
-  GOPEntry->m_CrBetaOffsetDiv2          = 0;
+  GOPEntry->m_cfgUnused1                = 0;
+  GOPEntry->m_cfgUnused2                = 0;
+  GOPEntry->m_cfgUnused3                = 0;
+  GOPEntry->m_cfgUnused4                = 0;
   GOPEntry->m_temporalId                = 0;
-  GOPEntry->m_refPic                    = false;
   GOPEntry->m_sliceType                 = 'P';
   memset( GOPEntry->m_numRefPicsActive, 0, sizeof( GOPEntry->m_numRefPicsActive ) );
   memset( GOPEntry->m_numRefPics, 0, sizeof( GOPEntry->m_numRefPics ) );
   memset( GOPEntry->m_deltaRefPics, 0, sizeof( GOPEntry->m_deltaRefPics ) );
-  GOPEntry->m_isEncoded                 = false;
-  GOPEntry->m_ltrp_in_slice_header_flag = false;
 }
 
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
@@ -1318,6 +1315,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_cuQpDeltaSubdiv = 2;
     }
   }
+  vvenc_confirmParameter( c, c->m_sliceChromaQpOffsetPeriodicity < -1 || c->m_sliceChromaQpOffsetPeriodicity > 1, "Only values {-1, 0, 1} supported for SliceChromaQPOffsetPeriodicity" );
   if ( c->m_sliceChromaQpOffsetPeriodicity < 0)
   {
     c->m_sliceChromaQpOffsetPeriodicity = 0;

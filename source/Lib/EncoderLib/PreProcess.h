@@ -39,67 +39,62 @@ POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/**
-  \file    MsgLog.h
-  \brief   A logger for the logging callback function
+
+
+/** \file     PreProcess.h
+    \brief
 */
+
 
 #pragma once
 
-#include <functional>
-#include <stdarg.h>
-#include <mutex>
-
 #include "CommonLib/CommonDef.h"
-#include "vvenc/vvenc.h"
+#include "EncStage.h"
+#include "GOPCfg.h"
+
+//! \ingroup EncoderLib
+//! \{
 
 namespace vvenc {
 
-static std::mutex m_msgMutex;
+// ====================================================================================================================
 
-class MsgLog
+class PreProcess : public EncStage
 {
-public:
+  private:
+    const VVEncCfg* m_encCfg;
+    GOPCfg          m_gopCfg;
+    int             m_lastPoc;
+    bool            m_isHighRes;
+    bool            m_doSTA;
+    bool            m_doVisAct;
+    bool            m_doVisActQpa;
 
-  MsgLog(){}
-  MsgLog(void *msgCtx, vvencLoggingCallback msgFnc)
-  {
-    m_msgCtx = msgCtx;
-    m_msgFnc = msgFnc;
-  }
+  public:
+    PreProcess( MsgLog& _m );
+    virtual ~PreProcess();
 
-  ~MsgLog() {};
+    void init( const VVEncCfg& encCfg, bool isFinalPass );
 
-  void setCallback( void *msgCtx, vvencLoggingCallback msgFnc )
-  {
-    m_msgCtx = msgCtx;
-    m_msgFnc = msgFnc;
-  }
+    const GOPCfg* getGOPCfg() const { return &m_gopCfg; };
 
-  void log( int level, const char* fmt, ... )
-  {
-    if ( this->m_msgFnc )
-    {
-      std::unique_lock<std::mutex> _lock( m_msgMutex );
-      va_list args;
-      va_start( args, fmt );
-      m_msgFnc( m_msgCtx, level, fmt, args );
-      va_end( args );
-    }
-    else if ( g_msgFnc )
-    {
-      // global log (deprecated)
-      std::unique_lock<std::mutex> _lock( m_msgMutex );
-      va_list args;
-      va_start( args, fmt );
-      g_msgFnc( g_msgFncCtx, level, fmt, args );
-      va_end( args );
-    }
-}
+  protected:
+    virtual void initPicture    ( Picture* pic );
+    virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 
-private: 
-  std::function<void( void*, int, const char*, va_list )> m_msgFnc{};
-  void *m_msgCtx{};
+  private:
+    void     xFreeUnused          ( Picture* pic, const PicList& picList, PicList& doneList, PicList& freeList ) const;
+    void     xGetPrevPics         ( const Picture* pic, const PicList& picList, const Picture* prevPics[ NUM_QPA_PREV_FRAMES ] ) const;
+    Picture* xGetPrevTl0Pic       ( const Picture* pic, const PicList& picList ) const;
+    Picture* xGetStartOfLastGop   ( const PicList& picList ) const;
+    void     xLinkPrevQpaBufs     ( Picture* pic, const PicList& picList ) const;
+    void     xGetVisualActivity   ( Picture* pic, const PicList& picList ) const;
+    uint16_t xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const;
+    void     xDetectSTA           ( Picture* pic, const PicList& picList ) const;
+    void     xDetectScc           ( Picture* pic ) const;
 };
 
 } // namespace vvenc
+
+//! \}
+

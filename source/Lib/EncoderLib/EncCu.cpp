@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncPicture.h"
 #include "EncModeCtrl.h"
 #include "BitAllocation.h"
+#include "EncStage.h"
 
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/Picture.h"
