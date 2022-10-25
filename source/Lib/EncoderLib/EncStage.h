@@ -157,7 +157,6 @@ public:
     pic->cts            = m_cts;
     pic->ctsValid       = m_ctsValid;
     pic->gopEntry       = &m_gopEntry;
-    pic->ctuBimQpOffset = &m_ctuBimQpOffset;
     incUsed();
   }
 

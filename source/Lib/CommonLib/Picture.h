@@ -256,7 +256,6 @@ public:
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
   uint8_t                       minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
-  const std::vector<int>*       ctuBimQpOffset;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
