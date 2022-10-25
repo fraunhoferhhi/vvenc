@@ -245,7 +245,7 @@ Picture* PreProcess::xGetStartOfLastGop( const PicList& picList ) const
     return nullptr;
   }
 
-  // sort pics after coding number
+  // sort pics by coding number
   std::sort( cnList.begin(), cnList.end(), []( auto& a, auto& b ){ return a->gopEntry->m_codingNum < b->gopEntry->m_codingNum; } );
 
   // find start of current gop

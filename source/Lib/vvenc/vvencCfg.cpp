@@ -244,10 +244,10 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
   GOPEntry->m_QPFactor                  = 0.0;
   GOPEntry->m_tcOffsetDiv2              = 0;
   GOPEntry->m_betaOffsetDiv2            = 0;
-  GOPEntry->m_CbTcOffsetDiv2            = 0;
-  GOPEntry->m_CbBetaOffsetDiv2          = 0;
-  GOPEntry->m_CrTcOffsetDiv2            = 0;
-  GOPEntry->m_CrBetaOffsetDiv2          = 0;
+  GOPEntry->m_cfgUnused1                = 0;
+  GOPEntry->m_cfgUnused2                = 0;
+  GOPEntry->m_cfgUnused3                = 0;
+  GOPEntry->m_cfgUnused4                = 0;
   GOPEntry->m_temporalId                = 0;
   GOPEntry->m_sliceType                 = 'P';
   memset( GOPEntry->m_numRefPicsActive, 0, sizeof( GOPEntry->m_numRefPicsActive ) );
