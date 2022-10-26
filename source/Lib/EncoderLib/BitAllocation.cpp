@@ -358,7 +358,20 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         pic->ctuQpaLambda[ctuRsAddr] = hpEner[1]; // temporary backup of CTU mean visual activity
         pic->ctuAdaptedQP[ctuRsAddr] = (int) pic->getOrigBuf (ctuArea).getAvg(); // and mean luma
 
-        updateMinNoiseLevelsPic (pic->minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
+        if ((picOrig.buf == picPrv1.buf) && (encCfg->m_vvencMCTF.MCTF)) // replace temp. activity
+        {
+          hpEner[1] = 1.5 * pic->m_picShared->m_minNoiseLevels[pic->ctuAdaptedQP[ctuRsAddr] >> (bitDepth - 3)];
+
+          if (hpEner[1] < 382.0) // level in first frame
+          {
+            hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
+            pic->ctuQpaLambda[ctuRsAddr] += hpEner[1]; // add noise level to mean visual activity
+          }
+        }
+        else if (!isEncPass)
+        {
+          updateMinNoiseLevelsPic (pic->m_picShared->m_minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
+        }
       }
 
       hpEner[comp] /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);

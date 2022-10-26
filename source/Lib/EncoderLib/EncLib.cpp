@@ -215,6 +215,10 @@ void EncLib::initPass( int pass, const char* statsFName )
       m_rateCtrl->processFirstPassData( false );
     }
   }
+  else if( m_encCfg.m_usePerceptQPA && m_encCfg.m_LookAhead )
+  {
+    m_rateCtrl->init( m_encCfg );
+  }
 
   // thread pool
   if( m_encCfg.m_numThreads > 0 )

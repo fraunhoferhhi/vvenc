@@ -67,6 +67,7 @@ public:
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
   int              m_picMemorySTA;
+  uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
   std::vector<int> m_ctuBimQpOffset;
 
 private:
@@ -96,6 +97,7 @@ public:
   , m_ctsValid    ( false )
   {
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
   };
 
@@ -140,6 +142,7 @@ public:
     m_ctsValid     = yuvInBuf->ctsValid;
     m_ctuBimQpOffset.resize( 0 );
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
   }
 

@@ -830,7 +830,7 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
+void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
