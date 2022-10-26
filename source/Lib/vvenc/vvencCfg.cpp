@@ -244,18 +244,15 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
   GOPEntry->m_QPFactor                  = 0.0;
   GOPEntry->m_tcOffsetDiv2              = 0;
   GOPEntry->m_betaOffsetDiv2            = 0;
-  GOPEntry->m_CbTcOffsetDiv2            = 0;
-  GOPEntry->m_CbBetaOffsetDiv2          = 0;
-  GOPEntry->m_CrTcOffsetDiv2            = 0;
-  GOPEntry->m_CrBetaOffsetDiv2          = 0;
+  GOPEntry->m_cfgUnused1                = 0;
+  GOPEntry->m_cfgUnused2                = 0;
+  GOPEntry->m_cfgUnused3                = 0;
+  GOPEntry->m_cfgUnused4                = 0;
   GOPEntry->m_temporalId                = 0;
-  GOPEntry->m_refPic                    = false;
   GOPEntry->m_sliceType                 = 'P';
   memset( GOPEntry->m_numRefPicsActive, 0, sizeof( GOPEntry->m_numRefPicsActive ) );
   memset( GOPEntry->m_numRefPics, 0, sizeof( GOPEntry->m_numRefPics ) );
   memset( GOPEntry->m_deltaRefPics, 0, sizeof( GOPEntry->m_deltaRefPics ) );
-  GOPEntry->m_isEncoded                 = false;
-  GOPEntry->m_ltrp_in_slice_header_flag = false;
 }
 
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
@@ -778,11 +775,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_profile=vvencProfile::VVENC_MAIN_10_444;
       }
     }
+
+    if( c->m_framesToBeEncoded == 1 )
+    {
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10     ) c->m_profile = vvencProfile::VVENC_MAIN_10_STILL_PICTURE;
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10_444 ) c->m_profile = vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE;
+    }
+
+    vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "Unable to infer profile from input!" );
   }
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
     c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL_AUTO || c->m_level == vvencLevel::VVENC_NUMBER_OF_LEVELS, "Unable to infer level from input!" );
+  }
+  else
+  {
+    const vvencLevel inferedLevel = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+  }
+
+  {
+    const vvenc::ProfileFeatures *profileFeatures = vvenc::ProfileFeatures::getProfileFeatures( c->m_profile );
+    vvenc_confirmParameter( c, !profileFeatures, "Invalid profile!" );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL15_5 && !profileFeatures->canUseLevel15p5, "The video dimensions (size/rate) exceed the allowed maximum throughput for the level/profile combination!" );
   }
 
   if( !c->m_configDone )
@@ -1028,11 +1045,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg.log( VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_WARNING,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1298,6 +1315,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_cuQpDeltaSubdiv = 2;
     }
   }
+  vvenc_confirmParameter( c, c->m_sliceChromaQpOffsetPeriodicity < -1 || c->m_sliceChromaQpOffsetPeriodicity > 1, "Only values {-1, 0, 1} supported for SliceChromaQPOffsetPeriodicity" );
   if ( c->m_sliceChromaQpOffsetPeriodicity < 0)
   {
     c->m_sliceChromaQpOffsetPeriodicity = 0;
@@ -1585,7 +1603,7 @@ static bool checkCfgParameter( vvenc_config *c )
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE
                            && c->m_profile != vvencProfile::  VVENC_MULTILAYER_MAIN_10_444
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE),
-                              "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+                              "unsupported profile. currently only supporting auto,main_10,main_10_still_picture");
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
@@ -1615,11 +1633,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       break;
   }

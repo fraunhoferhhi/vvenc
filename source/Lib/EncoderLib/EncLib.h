@@ -45,12 +45,17 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "EncGOP.h"
-#include "EncStage.h"
-#include "CommonLib/MCTF.h"
+#include "vvenc/vvenc.h"
 #include "vvenc/vvencCfg.h"
+#include "CommonLib/Nal.h"
+#include "EncCfg.h"
 
+#include <vector>
+#include <list>
+#include <deque>
+#include <functional>
 #include <mutex>
+#include <condition_variable>
 
 //! \ingroup EncoderLib
 //! \{
@@ -65,7 +70,12 @@ namespace vvenc {
 
 class NoMallocThreadPool;
 class MsgLog;
-class GOPCfg;
+class EncStage;
+class PreProcess;
+class MCTF;
+class EncGOP;
+class RateCtrl;
+class PicShared;
 
 /// encoder class
 class EncLib
@@ -79,15 +89,13 @@ private:
   const VVEncCfg             m_encCfg;
   const VVEncCfg             m_orgCfg;
   VVEncCfg                   m_firstPassCfg;
-  GOPCfg*                    m_gopCfg;
   RateCtrl*                  m_rateCtrl;
+  PreProcess*                m_preProcess;
   MCTF*                      m_MCTF;
   EncGOP*                    m_preEncoder;
   EncGOP*                    m_gopEncoder;
   std::vector<EncStage*>     m_encStages;
   std::list<PicShared*>      m_picSharedList;
-  std::deque<PicShared*>     m_prevSharedQueue;
-  PicShared*                 m_prevSharedTL0;
 
   NoMallocThreadPool*        m_threadPool;
 
@@ -95,7 +103,6 @@ private:
   int                        m_passInitialized;
   int                        m_maxNumPicShared;
   bool                       m_accessUnitOutputStarted;
-  bool                       m_firstFlushDone;
   std::mutex                 m_stagesMutex;
   std::condition_variable    m_stagesCond;
   std::deque<AccessUnitList> m_AuList;
@@ -118,9 +125,6 @@ private:
   void     xInitRCCfg          ();
 
   PicShared* xGetFreePicShared();
-  void     xAssignPrevQpaBufs( PicShared* picShared );
-
-  void     xDetectScc          ( PicShared* picShared );
  };
 
 } // namespace vvenc

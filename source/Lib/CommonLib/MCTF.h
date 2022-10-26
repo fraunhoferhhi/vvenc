@@ -64,9 +64,10 @@ struct MotionVector
 {
   int x, y;
   int error;
+  uint16_t rmsme;
   double overlap;
-  //int noise;
-  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
+
+  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX), rmsme(UINT16_MAX) {}
 
   void set(int vectorX, int vectorY, int errorValue) { x = vectorX; y = vectorY; error = errorValue; }
 };

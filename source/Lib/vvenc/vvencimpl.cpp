@@ -54,7 +54,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/version.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Picture.h"
 #include "CommonLib/Nal.h"
+#include "EncoderLib/EncGOP.h"
 
 
 #include "EncoderLib/EncLib.h"
@@ -382,7 +384,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     }
   }
   else
-  {     
+  {
     if( bFlush && m_cVVEncCfg.m_RCNumPasses == 2 && m_pEncLib->getCurPass() == 0 )
     {
       // process all remaining pictures of first pass on first flush packet 

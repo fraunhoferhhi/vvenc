@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncPicture.h"
 #include "EncModeCtrl.h"
 #include "BitAllocation.h"
+#include "EncStage.h"
 
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/Picture.h"
@@ -588,70 +589,56 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
     if (partitioner.currSubdiv == 0) // CTU-level QP adaptation
     {
-      if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+      if (m_pcEncCfg->m_usePerceptQPA)
       {
-        m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
-      }
-
-      if ((m_pcEncCfg->m_usePerceptQPA) && (!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU behavior, Museum fix
-          (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
-          (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
-      {
-        const uint32_t h = lumaArea.height >> 1;
-        const uint32_t w = lumaArea.width  >> 1;
-        const int adQPTL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPTR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPBL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
-        const int adQPBR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
-
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
-
         if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
         {
-          if ((m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) && // last CTU row of non-Intra key-frame
-              (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
-          {
-            m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus); // copy the pumping reducing QP offset from the top CTU neighbor
-            tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-            bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at (ctuRsAddr);
-          }
-          tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-          bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
+          m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
         }
-      }
-      else if (m_pcEncCfg->m_usePerceptQPA)
-      {
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
-      }
 
-      // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
-      if( m_pcEncCfg->m_usePerceptQPA )
-      {
-        setUpLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
-      }
-      else
-      {
-        setUpLambda( slice, slice.getLambdas()[0], tempCS->baseQP, false, true );
-      }
+        if ((!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU QPA behavior - Museum fix
+            (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
+            (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
+        {
+          const uint32_t h = lumaArea.height >> 1;
+          const uint32_t w = lumaArea.width  >> 1;
+          const int adQPTL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
+          const int adQPTR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + 0, w, h), m_pcRateCtrl->getMinNoiseLevels());
+          const int adQPBL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
+          const int adQPBR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + h, w, h), m_pcRateCtrl->getMinNoiseLevels());
 
-      if( isBimEnabled )
+          tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+          bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
+
+          if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+          {
+            if ((m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) && // last CTU row of non-Intra key-frame
+                (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
+            {
+              m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus); // copy the pumping reducing QP offset from the top CTU neighbor
+              tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+              bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at (ctuRsAddr);
+            }
+            tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+            bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
+          }
+        }
+        else
+        {
+          tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+          bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
+        }
+
+        setUpLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true);
+      }
+      else // isBimEnabled without QPA
       {
         const int baseQp = tempCS->baseQP;
 
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
 
-        // TODO hlm: for isBimEnabled, make sure pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr] are set to slice lambda, QP when m_pcEncCfg->m_usePerceptQPA == false
-        if( m_pcEncCfg->m_usePerceptQPA )
-        {
-          updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true );
-        }
-        else
-        {
-          updateLambda( slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true );
-        }
+        updateLambda (slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true);
       }
     }
     else if (m_pcEncCfg->m_usePerceptQPA && slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
@@ -663,10 +650,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
-      if (isBimEnabled)
-      {
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
-      }
+
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
   }

@@ -119,7 +119,7 @@ struct Picture : public UnitArea
   void reset();
   void destroy( bool bPicHeader );
 
-  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared );
+  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ], PicShared* picShared );
   void releasePrevBuffers();
   void releaseSharedBuffers();
 
@@ -225,7 +225,7 @@ public:
 
   PelStorage                    m_picBufs[ NUM_PIC_TYPES ];
   PelStorage*                   m_sharedBufs[ NUM_PIC_TYPES ];
-  PelStorage*                   m_bufsOrigPrev[ NUM_PREV_FRAMES ];
+  PelStorage*                   m_bufsOrigPrev[ NUM_QPA_PREV_FRAMES ];
 
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
@@ -255,7 +255,6 @@ public:
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
-  uint8_t                       minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
