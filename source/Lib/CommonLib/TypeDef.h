@@ -71,7 +71,7 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
-#define BIM_CTU_SIZE                                      128
+#define BIM_CTU_SIZE                                      0
 
 // ====================================================================================================================
 // General settings
