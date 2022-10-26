@@ -2442,7 +2442,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
-                                  pic->minNoiseLevels );
+                                  pic->m_picShared->m_minNoiseLevels );
   }
 
   //===== add PSNR =====

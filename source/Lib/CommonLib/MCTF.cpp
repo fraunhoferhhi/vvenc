@@ -662,7 +662,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
     bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
 
-    if( m_encCfg->m_blockImportanceMapping )
+    if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA )
     {
       const int ctuSize        = m_encCfg->m_CTUSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -670,9 +670,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       const int numCtu         = widthInCtus * heightInCtus;
       const int ctuBlocks      = ctuSize / m_mctfUnitSize;
 
-      pic->m_picShared->m_ctuBimQpOffset.resize( numCtu, 0 );
-
       std::vector<double> sumError( numCtu * 2, 0 );
+      std::vector<uint32_t> sumRMS( numCtu * 2, 0 ); // RMS of motion estimation error
       std::vector<double> blkCount( numCtu * 2, 0 );
 
       int distFactor[2] = { 3,3 };
@@ -687,7 +686,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         int dist = srcPic.index;
         distFactor[dist]--;
 
-        for( int y = 0; y < srcPic.mvs.h(); y++ ) // going over in block steps
+        for( int y = 0; y < srcPic.mvs.h(); y++ ) // going over ref pic in block steps
         {
           for( int x = 0; x < srcPic.mvs.w(); x++ )
           {
@@ -696,14 +695,38 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             const int ctuId   = ctuY * widthInCtus + ctuX;
             const auto& mvBlk = srcPic.mvs.get( x, y );
             sumError[dist * numCtu + ctuId] += mvBlk.error;
+            sumRMS  [dist * numCtu + ctuId] += mvBlk.rmsme;
             blkCount[dist * numCtu + ctuId] += mvBlk.overlap;
           }
         }
       }
 
+      if( distFactor[0] < 3 && distFactor[1] < 3 && m_encCfg->m_usePerceptQPA )
+      {
+        for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
+        {
+          const Position pos ((i % widthInCtus) * ctuSize, (i / widthInCtus) * ctuSize);
+          const CompArea ctuArea  = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, ctuSize, ctuSize)), pic->Y());
+          const unsigned avgIndex = pic->getOrigBuf (ctuArea).getAvg() >> (m_encCfg->m_internalBitDepth[CH_L] - 3); // one of 8 mean level regions
+
+          if (4.0 * (sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu])) < pic->m_picShared->m_minNoiseLevels[avgIndex] * blkCount[i])
+          {
+            pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + 4.0 * sumRMS[i] / blkCount[i]); // * 4 as in QPA high-pass amplification
+          }
+        }
+      }
+      if( !m_encCfg->m_blockImportanceMapping )
+      {
+        if( !pic->m_picShared->m_ctuBimQpOffset.empty() ) pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
+
+        return;
+      }
+
+      pic->m_picShared->m_ctuBimQpOffset.resize( numCtu, 0 );
+
       if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
-        double weight = pic->TLayer > 1 ? 0.6 : 1;
+        const double weight = std::min( 1.0, overallStrength ); // was pic->TLayer > 1 ? 0.6 : 1;
 
         for( int i = 0; i < numCtu; i++ )
         {
@@ -1009,8 +1032,11 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         variance = variance + ( pix - avg ) * ( pix - avg );
       }
     }
-    double dvar  = variance / 256.0; // 16.0 * 16.0
-    best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + ( best.error / ( w * h ) ) / 50 );
+    const double dvar = variance / 256.0; // 16.0 * 16.0
+    const double mse  = best.error / double( w * h );
+
+    best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
+    best.rmsme   = uint16_t( 0.5 + sqrt( mse ) );
     best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
