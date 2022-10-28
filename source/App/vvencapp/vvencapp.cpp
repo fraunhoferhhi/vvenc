@@ -210,7 +210,7 @@ int main( int argc, char* argv[] )
   apputils::VVEncAppCfg vvencappCfg = apputils::VVEncAppCfg(true); // init config in easy mode
   vvencappCfg.setPresetChangeCallback(changePreset);
   vvenc_config vvenccfg;
-  vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, VVENC_DEFAULT_QP, vvencPresetMode::VVENC_MEDIUM );
 
   vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 

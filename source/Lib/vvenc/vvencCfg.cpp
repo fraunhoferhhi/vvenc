@@ -297,7 +297,6 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *reshapeCW )
   reshapeCW->initialCW  = 0;
   reshapeCW->rspPicSize = 0;
   reshapeCW->rspFps     = 0;
-  reshapeCW->rspBaseQP  = 0;
   reshapeCW->rspTid     = 0;
   reshapeCW->rspFpsToIp = 0;
 }
@@ -333,12 +332,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
 
-  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input
-  c->m_inputBitDepth[1]                        =0;
+  c->m_inputBitDepth[0]                        = 8;             ///< bit-depth of input
+  c->m_inputBitDepth[1]                        = 0;
 
   c->m_numThreads                              = 0;             ///< number of worker threads
 
-  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
+  c->m_QP                                      = VVENC_DEFAULT_QP;
   c->m_RCTargetBitrate                         = 0;
 
   c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
@@ -719,15 +718,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
 
-  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                     "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ),    "QP exceeds supported range (0 to 63)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,               "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == c->m_RCTargetBitrate )
-   {
+  {
      vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
-   }
+  }
 
   vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
@@ -1049,14 +1048,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg.log( VVENC_WARNING,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_WARNING, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
     }
   }
-    c->m_PadSourceWidth  = c->m_SourceWidth  + c->m_aiPad[0];
-    c->m_PadSourceHeight = c->m_SourceHeight + c->m_aiPad[1];
+  c->m_PadSourceWidth  = c->m_SourceWidth  + c->m_aiPad[0];
+  c->m_PadSourceHeight = c->m_SourceHeight + c->m_aiPad[1];
+
+  if ( c->m_RCTargetBitrate > 0 && c->m_QP != VVENC_DEFAULT_QP )
+  {
+    msg.log( VVENC_WARNING, "Warning: Rate control is enabled since a target bitrate is specified, ignoring QP value\n" );
+    c->m_QP = VVENC_DEFAULT_QP;
+  }
 
   for(uint32_t ch=0; ch < 2; ch++ )
   {
@@ -1136,7 +1141,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.rspFps     = fps;
   c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
   c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_reshapeCW.rspFps/16.0)));
-  c->m_reshapeCW.rspBaseQP  = c->m_QP;
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;

@@ -186,7 +186,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
 
 void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, VVENC_DEFAULT_QP, vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {
@@ -777,7 +777,7 @@ fail:
 int checkSDKStringApiDefault()
 {
   vvenc_config c;
-  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_DEFAULT_QP, vvencPresetMode::VVENC_MEDIUM );
 
   std::vector <std::tuple<std::string, std::string>> settings;
   settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176x144") );
@@ -844,7 +844,7 @@ int checkSDKStringApiDefault()
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
-  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_DEFAULT_QP, vvencPresetMode::VVENC_MEDIUM );
 
   std::vector <std::tuple<std::string, std::string>> settings;
   settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176t144") );

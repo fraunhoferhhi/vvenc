@@ -85,6 +85,7 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
 #define VVENC_MAX_STRING_LEN                  1024   // max length of string/filename
+#define VVENC_DEFAULT_QP                      32     // initial (i.e., default) base QP
 
 // ====================================================================================================================
 
@@ -382,7 +383,6 @@ typedef struct vvencReshapeCW
   unsigned int initialCW;
   int          rspPicSize;
   int          rspFps;
-  int          rspBaseQP;
   int          rspTid;
   int          rspFpsToIp;
 }vvencReshapeCW;
