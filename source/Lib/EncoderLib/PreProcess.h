@@ -80,7 +80,7 @@ class PreProcess : public EncStage
 
   protected:
     virtual void initPicture    ( Picture* pic );
-    virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+    virtual void processPictures( const PicList& picList, const bool flush, const int ctuSize, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 
   private:
     void     xFreeUnused          ( Picture* pic, const PicList& picList, PicList& doneList, PicList& freeList ) const;

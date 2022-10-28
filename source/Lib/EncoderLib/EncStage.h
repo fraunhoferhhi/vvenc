@@ -64,6 +64,7 @@ public:
   GOPEntry         m_gopEntry;
   bool             m_isSccWeak;
   bool             m_isSccStrong;
+  uint16_t         m_bimCtuSize;
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
   int              m_picMemorySTA;
@@ -85,6 +86,7 @@ public:
   PicShared()
   : m_isSccWeak   ( false )
   , m_isSccStrong ( false )
+  , m_bimCtuSize  ( 0 )
   , m_picVisActTL0( 0 )
   , m_picVisActY  ( 0 )
   , m_picMemorySTA( 0 )
@@ -131,6 +133,7 @@ public:
 
     m_isSccWeak    = false;
     m_isSccStrong  = false;
+    m_bimCtuSize   = 0;
     m_picVisActTL0 = 0;
     m_picVisActY   = 0;
     m_picMemorySTA = 0;
