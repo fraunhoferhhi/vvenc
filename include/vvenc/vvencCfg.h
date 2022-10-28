@@ -85,7 +85,9 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
 #define VVENC_MAX_STRING_LEN                  1024   // max length of string/filename
-#define VVENC_DEFAULT_QP                      32     // initial (i.e., default) base QP
+#define VVENC_DEFAULT_QP                      32     // default base QP
+#define VVENC_AUTO_QP                        -1      // indicates to use default QP, or ignore if RC is used
+#define VVENC_RC_OFF                          0      // indicates rate control is disabled
 
 // ====================================================================================================================
 
