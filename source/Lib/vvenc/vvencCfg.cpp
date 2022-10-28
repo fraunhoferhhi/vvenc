@@ -1339,10 +1339,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_treatAsSubPic )
   {
-    if( c->m_sliceTypeAdapt )    msg.log( VVENC_WARNING, "combination of TreatAsSubPic and STA may not work with VTM subPicMerge tool, consider disabling STA\n\n" );
-    if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
-    if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
-    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
+    if( c->m_sliceTypeAdapt )    msg.log( VVENC_WARNING, "Configuration warning: combination of TreatAsSubPic and STA may not work with VTM subPicMerge tool, consider disabling STA\n\n" );
+    if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "Configuration warning: disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
+    if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "Configuration warning: disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
+    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "Configuration warning: disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
     c->m_alfTempPred       = 0;
     c->m_JointCbCrMode     = false;
     c->m_lumaReshapeEnable = 0;
