@@ -272,7 +272,7 @@ int testLibParameterRanges()
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
 
-  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,0,1,2,3,4,51 } );
+  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
