@@ -1173,12 +1173,12 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     // file check
     std::string cErr;
-    if( !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
+    if( !m_inputFileName.empty() && !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
     {
       err.warn( "Input file" ) << cErr;
     }
 
-    if( !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    if( !m_bitstreamFileName.empty() && !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
     }
