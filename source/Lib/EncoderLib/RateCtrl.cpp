@@ -515,6 +515,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     { "isStartOfIntra", statsData.isStartOfIntra },
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
+    { "scType",         statsData.scType },
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -550,6 +551,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
+                                                    data[ "scType" ],
                                                     statsData.minNoiseLevels
                                                     ) );
   }
@@ -587,7 +589,8 @@ void RateCtrl::readStatsFile()
         || data.find( "tempLayer" )      == data.end() || ! data[ "tempLayer" ].is_number()
         || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
         || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
-        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number() )
+        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
+        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number() )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
@@ -602,6 +605,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
+                                                    data[ "scType" ],
                                                     minNoiseLevels
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
@@ -782,7 +786,7 @@ void RateCtrl::detectSceneCuts()
         it->isNewScene = false;
       }
     }
-    if (it->isIntra && !it->isStartOfIntra && !needRefresh[0]) // assume scene cuts at inserted I-frames
+    if (it->scType == SCT_TL0_SCENE_CUT && !needRefresh[0]) // assume scene cuts at inserted I-frames
     {
       it->isNewScene = needRefresh[0] = true;
     }
@@ -905,9 +909,10 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfIntra,
                                const bool isStartOfGop,
                                const int gopNum,
+                               const SceneType scType,
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, minNoiseLevels));
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )

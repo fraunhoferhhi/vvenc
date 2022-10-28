@@ -120,7 +120,7 @@ void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnit
       xDetectScc( pic );
 
       // detect STA picture
-      if( m_doSTA && pic->gopEntry->m_temporalId == 0 && pic->gopEntry->m_sliceType != 'I' )
+      if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
       {
         xDetectSTA( pic, picList );
       }
@@ -374,6 +374,7 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
     pic->picMemorySTA                 = picMemorySTA;
     picShared->m_picMemorySTA         = picMemorySTA;
     picShared->m_gopEntry.m_sliceType = 'I';
+    picShared->m_gopEntry.m_scType    = SCT_TL0_SCENE_CUT;
 
     if( m_encCfg->m_sliceTypeAdapt == 2 )
     {
