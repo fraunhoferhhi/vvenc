@@ -225,6 +225,29 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   }
 }
 
+void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
+{
+  // set gop entry
+  gopEntry.m_sliceType      = 'I';
+  gopEntry.m_isStartOfIntra = true;
+  gopEntry.m_isStartOfGop   = true;
+
+  // start with first gop list
+  m_gopList      = &m_defaultGopLists[ 0 ];
+  m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
+  m_numTillIntra = m_fixIntraPeriod;
+  m_numTillGop   = (int)m_gopList->size();
+
+  xCreatePocToGopIdx( *m_gopList, m_refreshType == VVENC_DRT_IDR2, m_pocToGopIdx );
+
+  // process current / first I picture
+  m_numTillGop  -= 1;
+  if( m_numTillIntra > 0 )
+  {
+    m_numTillIntra -= 1;
+  }
+}
+
 void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry ) const
 {
   gopEntry.m_isStartOfGop = true;

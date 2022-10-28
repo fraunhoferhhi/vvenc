@@ -354,7 +354,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_picReordering                           = 1;
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
-  c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
+  c->m_sliceTypeAdapt                          = -1;            ///< perceptually and objectively motivated slice type adaptation (STA)
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
@@ -709,14 +709,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
   vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
+  vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
 
-  vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
-  vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
+  vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                                      "IDR period (in frames) must be >= -1");
+  vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                                    "IDR period (in seconds) must be >= 0");
 
   vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                           "GOP Size must be between 1 and 64" );
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
+  vvenc_confirmParameter( c, c->m_sliceTypeAdapt < -1 || c->m_sliceTypeAdapt > 2,                        "Slice type adaptation (STA) invalid parameter given, range is (-1 .. 2)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ),    "QP exceeds supported range (0 to 63)" );
 
@@ -1220,6 +1221,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_picReordering = false;
     }
   }
+
+  // slice type adaptation (STA)
+  if( c->m_sliceTypeAdapt < 0 )
+  {
+    c->m_sliceTypeAdapt = c->m_GOPSize > 8 ? 1 : 0;
+  }
+  vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
 
   // set number of lead / trail frames in segment mode
   const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
@@ -2982,7 +2990,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "BIM:" << c->m_blockImportanceMapping << " ";
 
     css << "\nPRE-ANALYSIS CFG: ";
-    css << "STA:" << c->m_sliceTypeAdapt << " ";
+    css << "STA:" << (int)c->m_sliceTypeAdapt << " ";
     css << "LeadFrames:" << c->m_leadFrames << " ";
     css << "TrailFrames:" << c->m_trailFrames << " ";
 
