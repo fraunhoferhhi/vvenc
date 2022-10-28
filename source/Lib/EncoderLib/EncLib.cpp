@@ -408,7 +408,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );
     for( auto encStage : m_encStages )
     {
-      encStage->runStage( flush, au );
+      encStage->runStage( flush, m_encCfg.m_RCNumPasses > 1 ? m_orgCfg.m_CTUSize : m_encCfg.m_CTUSize, au );
       isQueueEmpty &= encStage->isStageDone();
     }
 
