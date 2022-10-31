@@ -58,14 +58,16 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Nal.h"
 #include "EncoderLib/EncGOP.h"
 
-
 #include "EncoderLib/EncLib.h"
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
-#include "CommonLib/TrQuant_EMT.h"
-#endif
+#if defined( TARGET_SIMD_X86 )
+#  include "CommonLib/x86/CommonDefX86.h"
+#  if ENABLE_SIMD_TRAFO
+#    include "CommonLib/TrQuant_EMT.h"
+#  endif   // ENABLE_SIMD_TRAFO
+#endif     // TARGET_SIMD_X86
 
 #if defined( __linux__ )
-#include <malloc.h>
+#  include <malloc.h>
 #endif
 
 
@@ -735,30 +737,31 @@ void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
-#if defined( TARGET_SIMD_X86 )
-  typedef std::map<std::string, X86_VEXT> translate;
-  const static translate                  m{ { "", UNDEFINED }, { "SCALAR", SCALAR }, { "SSE41", SSE41 }, { "SSE42", SSE42 }, { "AVX", AVX }, { "AVX2", AVX2 }, { "AVX512", AVX512 } };
-  translate::const_iterator               search = m.find( simdId );
-  if( search != m.end() )
+#if !defined( TARGET_SIMD_X86 )
+  return nullptr;
+#else   // TARGET_SIMD_X86
+
+  // TODO: don't let exceptions escape here
+
+  X86_VEXT request_ext = string_to_vext( simdId );
+  try
   {
-    X86_VEXT ext_flags = search->second;
-    read_x86_extension_flags( ext_flags );
+    read_x86_extension_flags( request_ext );
   }
-  else
+  catch( ... )
   {
-    THROW( "SIMD Mode not supported: " << simdId << "\n" );
+    THROW( "requested SIMD level (" << simdId << ") not supported by current CPU (max " << read_simd_extension_name() << ")." );
   }
-  static std::string currSimdName( read_simd_extension_name() );
 
 #  if ENABLE_SIMD_OPT_BUFFER
   g_pelBufOP.initPelBufOpsX86();
-#endif
-#if ENABLE_SIMD_TRAFO
+#  endif
+#  if ENABLE_SIMD_TRAFO
   g_tCoeffOps.initTCoeffOpsX86();
-#endif
-#endif
+#  endif
 
-  return currSimdName.c_str();
+  return read_simd_extension_name().c_str();
+#endif   // TARGET_SIMD_X86
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
@@ -773,7 +776,7 @@ std::string VVEncImpl::getCompileInfoString()
 }
 
 std::string VVEncImpl::createEncoderInfoStr()
-{ 
+{
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << read_simd_extension_name() <<"]";
 

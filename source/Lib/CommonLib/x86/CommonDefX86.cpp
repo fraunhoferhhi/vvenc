@@ -48,7 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefX86.h"
 
-#include <array>
+#include <map>
 #include <cstdint>
 #include "CommonLib/CommonDef.h"
 
@@ -66,7 +66,48 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
-constexpr std::array<const char*, 6> vext_names{ "SCALAR", "SSE41", "SSE42", "AVX", "AVX2", "AVX512" };
+
+#  if REAL_TARGET_X86
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SSE41, "SSE41" }, { SSE42, "SSE42" }, { AVX, "AVX" }, { AVX2, "AVX2" }, { AVX512, "AVX512" } };
+#  else   // !REAL_TARGET_X86
+#    if defined( REAL_TARGET_ARM )
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "NEON" } };
+#    elif defined( REAL_TARGET_WASM )
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "WASM" } };
+#    else
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "SIMDE" } };
+#    endif
+#  endif   // !REAL_TARGET_X86
+
+const std::string& vext_to_string( X86_VEXT vext )
+{
+  try
+  {
+    return vext_names.at( vext );
+  }
+  catch( std::out_of_range& )
+  {
+    THROW( "Invalid SIMD extension value " << vext );
+  }
+}
+
+X86_VEXT string_to_vext( const std::string& ext_name )
+{
+  if( ext_name.empty() )
+  {
+    return UNDEFINED;
+  }
+
+  for( auto& it: vext_names )
+  {
+    if( it.second == ext_name )
+    {
+      return it.first;
+    }
+  }
+
+  THROW( "Invalid SIMD Mode string: \"" << ext_name << "\"" );
+}
 
 #if __GNUC__   // valid for GCC and clang
 # define NO_OPT_SIMD __attribute__( ( optimize( "no-tree-vectorize" ) ) )
@@ -225,8 +266,8 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
   static const X86_VEXT max_supported = _get_x86_extensions();
   static X86_VEXT       ext_flags     = max_supported;
 #else
-  static const X86_VEXT max_supported = AVX;     // disable AVX2 for non-x86 because the SIMD-Everywhere implementation is buggy
-  static X86_VEXT       ext_flags     = SSE42;   // default to SSE42 for WASM and SIMD-everywhere
+  static const X86_VEXT max_supported = AVX;                               // disable AVX2 for non-x86 because the SIMD-Everywhere implementation is buggy
+  static X86_VEXT       ext_flags     = SIMD_EVERYWHERE_EXTENSION_LEVEL;   // default to SSE42 for WASM and SIMD-everywhere
 #endif
 
   if( request != UNDEFINED )
@@ -246,39 +287,10 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
   return ext_flags;
 }
 
-#if defined( TARGET_SIMD_X86 )
-
-std::string read_simd_extension_name()
+const std::string& read_simd_extension_name()
 {
-  X86_VEXT vext = read_x86_extension_flags();
-  if( vext < 0 || vext >= vext_names.size() )
-  {
-    static const char extension_not_available[] = "NA";
-    return extension_not_available;
-  }
-
-# if REAL_TARGET_X86
-
-  return vext_names[vext];
-
-# else   // !REAL_TARGET_X86
-  if( vext == SCALAR )
-  {
-    return vext_names[vext];
-  }
-  else
-  {
-#  if defined( REAL_TARGET_ARM )
-    return std::string( "NEON/SIMDE(" ) + vext_names[vext] + ")" ;
-#  elif defined( REAL_TARGET_WASM )
-    return std::string( "WASM/Emscripten(" ) + vext_names[vext] + ")";
-#  else
-    return std::string( "SIMDE(" ) + vext_names[vext] + ")" ;
-#  endif
-  }
-# endif   // !REAL_TARGET_X86
+  return vext_to_string( read_x86_extension_flags() );
 }
-#endif   // TARGET_SIMD_X86
 
 }   // namespace vvenc
 

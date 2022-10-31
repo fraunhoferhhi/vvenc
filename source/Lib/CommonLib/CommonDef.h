@@ -641,9 +641,6 @@ typedef enum
   AVX2,
   AVX512
 } X86_VEXT;
-
-X86_VEXT    read_x86_extension_flags( X86_VEXT request = UNDEFINED );
-std::string read_simd_extension_name();
 #endif
 
 template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
