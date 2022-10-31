@@ -225,7 +225,7 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
   static const X86_VEXT max_supported = _get_x86_extensions();
   static X86_VEXT       ext_flags     = max_supported;
 #else
-  static const X86_VEXT max_supported = AVX;
+  static const X86_VEXT max_supported = AVX;     // disable AVX2 for non-x86 because the SIMD-Everywhere implementation is buggy
   static X86_VEXT       ext_flags     = SSE42;   // default to SSE42 for WASM and SIMD-everywhere
 #endif
 
@@ -233,15 +233,14 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
   {
     if( request > max_supported )
     {
+#ifdef REAL_TARGET_X86
       THROW( "requested SIMD level (" << request << ") not supported by current CPU (max " << max_supported << ")." );
+#else
+      THROW( "requested SIMD level (" << request << ") not supported because the SIMD-Everywhere implementation for AVX2 is buggy." );
+#endif
     }
 
     ext_flags = request;
-
-#ifndef REAL_TARGET_X86
-    // disable AVX2 for non-x86 because the SIMD-Everywhere implementation is buggy
-    ext_flags = std::min( ext_flags, AVX );
-#endif
   }
 
   return ext_flags;
