@@ -39,12 +39,16 @@ POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
+
 /** \file     CommonDefX86.h
 */
 
 #pragma once
 
 #include "CommonDef.h"
+
+//! \ingroup CommonLib
+//! \{
 
 #ifdef TARGET_SIMD_X86
 
@@ -58,11 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #    define SIMDE_ENABLE_NATIVE_ALIASES
 #  endif   // !REAL_TARGET_X86 && !REAL_TARGET_WASM
 
-//! \ingroup CommonLib
-//! \{
-
 #  include "FixMissingIntrin.h"
-
 
 #  ifdef USE_AVX512
 #    define SIMDX86 AVX512
@@ -81,13 +81,25 @@ POSSIBILITY OF SUCH DAMAGE.
 #    include <simde/x86/sse4.1.h>
 #  endif
 
-namespace vvenc {
+
+namespace vvenc
+{
 
 #if defined( _MSC_VER ) && _MSC_VER <= 1900
 #define _mm_bsrli_si128 _mm_srli_si128
 #define _mm256_bsrli_epi128 _mm256_srli_si256
 #endif
-
+/*
+#define TRANSPOSE4x4_i16(T)                                                                                                                                                                        \
+{                                                                                                                                                                                                    \
+  __m128i a01b01 = _mm_unpacklo_epi16( T[0], T[1] );                                                                                                                                                 \
+  __m128i c01d01 = _mm_unpacklo_epi16( T[2], T[3] );                                                                                                                                                 \
+                                                                                                                                                                                                     \
+  T[0] = _mm_unpacklo_epi32( a01b01, c01d01 );                                                                                                                                                       \
+  T[1] = _mm_unpackhi_epi64( T[0], T[0]);                                                                                                                                                            \
+  T[2] = _mm_unpackhi_epi32( a01b01, c01d01 );                                                                                                                                                       \
+  T[3] = _mm_unpackhi_epi64( T[2], T[2]);                                                                                                                                                            \
+}
 
 #define TRANSPOSE4x4(T) \
 {\
@@ -165,7 +177,7 @@ namespace vvenc {
 
 #define ADDCLIP(dstptr, res, min, max)\
 {\
-  __m128i vdst = _mm_load_si128((__m128i*) dstptr);\
+  __m128i vdst = _mm_loadu_si128((__m128i*) dstptr);\
   vdst = _mm_add_epi16(vdst, res ); \
   vdst = _mm_min_epi16(max,_mm_max_epi16(min, vdst));\
   _mm_store_si128((__m128i*)dstptr, vdst);\
@@ -184,38 +196,14 @@ namespace vvenc {
   ADDCLIP(&D[6*stride], T[6], min, max);\
   ADDCLIP(&D[7*stride], T[7], min, max);\
 }\
-
-
-static inline __m128i _mm_sel_si128(__m128i a, __m128i b, __m128i mask)
-{
-#ifdef USE_SSE41
-  return _mm_blendv_epi8( a, b, mask);
-#else
-  return _mm_or_si128( _mm_andnot_si128( mask, a ), _mm_and_si128( b, mask ));
-#endif
-}
-
-
-static inline __m128i _mm_clip_epi8(__m128i v, __m128i low, __m128i hi)
-{
-#ifdef USE_SSE41
-  return _mm_min_epi8(_mm_max_epi8(v, low), hi);
-#else
-  __m128i vlowm = _mm_cmplt_epi8(v, low);
-  __m128i vhighm = _mm_cmpgt_epi8(v, hi);
-  return _mm_sel_si128(_mm_sel_si128(v, low, vlowm), hi, vhighm);
-#endif
-}
-
-
+*/
 #ifdef USE_AVX2
 
 static inline __m128i _mm256_cvtepi32_epi16x( __m256i& v )
 {
-  v = _mm256_packs_epi32( v, _mm256_setzero_si256() );
-  return _mm_unpacklo_epi64( _mm256_extracti128_si256( v, 0 ), _mm256_extracti128_si256( v, 1 ) );
+  return  _mm_packs_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
 }
-
+/*
 #define TRANSPOSESTORE16x16_ALGN(T, D, stride)\
 {\
   TRANSPOSE16x16_AVX2(T); \
@@ -336,7 +324,7 @@ static inline void TRANSPOSE8x8_32b_AVX2(__m256i T[8])
   T[7] = _mm256_permute2x128_si256(T_67[0], T_67[1], 0x31);
 }
 
-
+*/
 #endif
 
 #ifdef USE_AVX512

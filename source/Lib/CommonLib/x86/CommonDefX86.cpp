@@ -221,7 +221,6 @@ static X86_VEXT _get_x86_extensions()
 NO_OPT_SIMD
 X86_VEXT read_x86_extension_flags( X86_VEXT request )
 {
-  static bool b_detection_finished( false );
 #ifdef REAL_TARGET_X86
   static const X86_VEXT max_supported = _get_x86_extensions();
   static X86_VEXT       ext_flags     = max_supported;
@@ -244,12 +243,6 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
     ext_flags = std::min( ext_flags, AVX );
 #endif
   }
-
-  if( b_detection_finished )
-  {
-    return ext_flags;
-  }
-  b_detection_finished = true;
 
   return ext_flags;
 }
