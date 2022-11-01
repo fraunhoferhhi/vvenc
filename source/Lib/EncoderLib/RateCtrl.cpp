@@ -307,7 +307,7 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
     encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
 
-    if (frameLevel > std::max (1, 1 + int (log ((double) encRCSeq->gopSize) / log (2.0))))
+    if (frameLevel > std::max (1, int (log ((double) encRCSeq->gopSize) / log (2.0))))
     {
       double highTlQpCorr = 0.0;
 
