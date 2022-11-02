@@ -1747,6 +1747,18 @@ void PPS::initTiles()
     tileRowBd.push_back( tileRowBd[ rowIdx ] + tileRowHeight[ rowIdx ] );
   }
 
+  // set right column bounaries
+  for( colIdx = 0; colIdx < numTileCols; colIdx++ )
+  {
+    tileColBdRgt.push_back( std::min( ( tileColBd[ colIdx ] + tileColWidth[ colIdx ] ) << log2CtuSize, picWidthInLumaSamples ) );
+  }
+
+  // set bottom row bounaries
+  for( rowIdx = 0; rowIdx < numTileRows; rowIdx++ )
+  {
+    tileRowBdBot.push_back( std::min( ( tileRowBd[ rowIdx ] + tileRowHeight[ rowIdx ] ) << log2CtuSize, picHeightInLumaSamples ) );
+  }
+
   // set mapping between horizontal CTU address and tile column index
   colIdx = 0;
   for( ctuX = 0; ctuX <= picWidthInCtu; ctuX++ )

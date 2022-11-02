@@ -89,7 +89,6 @@ bool AdaptiveLoopFilter::isCrossedByVirtualBoundaries( const CodingStructure& cs
 {
   clipTop = false; clipBottom = false; clipLeft = false; clipRight = false;
   numHorVirBndry = 0; numVerVirBndry = 0;
-  const PPS*   pps = cs.pps;
   const PicHeader* picHeader = cs.picHeader;
 
   if( picHeader->virtualBoundariesEnabled )
@@ -126,67 +125,83 @@ bool AdaptiveLoopFilter::isCrossedByVirtualBoundaries( const CodingStructure& cs
     }
   }
 
+  const PPS*   pps = cs.pps;
   const Slice& slice = *(cs.slice);
   int   ctuSize = slice.sps->CTUSize;
   const Position currCtuPos(xPos, yPos);
   const CodingUnit *currCtu = cs.getCU(currCtuPos, CH_L, TREE_D);
   const SubPic& curSubPic = slice.pps->getSubPicFromPos(currCtuPos);
   bool loopFilterAcrossSubPicEnabled = curSubPic.loopFilterAcrossSubPicEnabled;
+  const int ctuX = xPos >> cs.pcv->maxCUSizeLog2;
+  const int ctuY = yPos >> cs.pcv->maxCUSizeLog2;
+
   //top
-  if (yPos >= ctuSize && clipTop == false)
-  {
-    const Position prevCtuPos(xPos, yPos - ctuSize);
-    const CodingUnit *prevCtu = cs.getCU(prevCtuPos, CH_L, TREE_D);
-    if ((!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *prevCtu)) ||
-        (!pps->loopFilterAcrossTilesEnabled && !CU::isSameTile(*currCtu,  *prevCtu))
-      || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *prevCtu))
-      )
-    {
-      clipTop = true;
-    }
-  }
+  if( yPos >= ctuSize && !slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, -1 ) )
+    clipTop = true;
+//   if (yPos >= ctuSize && clipTop == false)
+//   {
+//     const Position prevCtuPos(xPos, yPos - ctuSize);
+//     const CodingUnit *prevCtu = cs.getCU(prevCtuPos, CH_L, TREE_D);
+//     if ( !prevCtu
+//       || (!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *prevCtu)) 
+//       || (!pps->loopFilterAcrossTilesEnabled && !CU::isSameTile(*currCtu,  *prevCtu))
+//       || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *prevCtu))
+//       )
+//     {
+//       clipTop = true;
+//     }
+//   }
 
   //bottom
-  if (yPos + ctuSize < cs.pcv->lumaHeight && clipBottom == false)
-  {
-    const Position nextCtuPos(xPos, yPos + ctuSize);
-    const CodingUnit *nextCtu = cs.getCU(nextCtuPos, CH_L, TREE_D);
-    if ((!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *nextCtu)) ||
-        (!pps->loopFilterAcrossTilesEnabled  && !CU::isSameTile(*currCtu,  *nextCtu))
-      || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *nextCtu))
-      )
-    {
-      clipBottom = true;
-    }
-  }
+  if( yPos + ctuSize < cs.pcv->lumaHeight && !slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, 1 ) )
+    clipBottom = true;
+//   if (yPos + ctuSize < cs.pcv->lumaHeight && clipBottom == false)
+//   {
+//     const Position nextCtuPos(xPos, yPos + ctuSize);
+//     const CodingUnit *nextCtu = cs.getCU(nextCtuPos, CH_L, TREE_D);
+//     if ( !nextCtu
+//       || (!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *nextCtu)) 
+//       || (!pps->loopFilterAcrossTilesEnabled  && !CU::isSameTile(*currCtu,  *nextCtu))
+//       || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *nextCtu))
+//       )
+//     {
+//       clipBottom = true;
+//     }
+//   }
 
   //left
-  if (xPos >= ctuSize && clipLeft == false)
-  {
-    const Position prevCtuPos(xPos - ctuSize, yPos);
-    const CodingUnit *prevCtu = cs.getCU(prevCtuPos, CH_L, TREE_D);
-    if ((!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *prevCtu)) ||
-        (!pps->loopFilterAcrossTilesEnabled  && !CU::isSameTile(*currCtu,  *prevCtu))
-      || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *prevCtu))
-      )
-    {
-      clipLeft = true;
-    }
-  }
+  if( xPos >= ctuSize && !slice.pps->canFilterCtuBdry( ctuX, ctuY, -1, 0 ) )
+    clipLeft = true;
+//   if (xPos >= ctuSize && clipLeft == false)
+//   {
+//     const Position prevCtuPos(xPos - ctuSize, yPos);
+//     const CodingUnit *prevCtu = cs.getCU(prevCtuPos, CH_L, TREE_D);
+//     if ( !prevCtu
+//       || (!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *prevCtu)) 
+//       || (!pps->loopFilterAcrossTilesEnabled  && !CU::isSameTile(*currCtu,  *prevCtu))
+//       || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *prevCtu))
+//       )
+//     {
+//       clipLeft = true;
+//     }
+//   }
 
   //right
-  if (xPos + ctuSize < cs.pcv->lumaWidth && clipRight == false)
-  {
-    const Position nextCtuPos(xPos + ctuSize, yPos);
-    const CodingUnit *nextCtu = cs.getCU(nextCtuPos, CH_L, TREE_D);
-    if ((!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *nextCtu)) ||
-        (!pps->loopFilterAcrossTilesEnabled && !CU::isSameTile(*currCtu,  *nextCtu))
-      || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *nextCtu))
-      )
-      {
-      clipRight = true;
-      }
-    }
+  if( xPos + ctuSize < cs.pcv->lumaWidth && !slice.pps->canFilterCtuBdry( ctuX, ctuY, 1, 0 ) )
+    clipRight = true;
+//   if (xPos + ctuSize < cs.pcv->lumaWidth && clipRight == false)
+//   {
+//     const Position nextCtuPos(xPos + ctuSize, yPos);
+//     const CodingUnit *nextCtu = cs.getCU(nextCtuPos, CH_L, TREE_D);
+//     if ( !nextCtu
+//       || (!pps->loopFilterAcrossSlicesEnabled && !CU::isSameSlice(*currCtu, *nextCtu)) 
+//       || (!pps->loopFilterAcrossTilesEnabled && !CU::isSameTile(*currCtu,  *nextCtu))
+//       || (!loopFilterAcrossSubPicEnabled && !CU::isSameSubPic(*currCtu, *nextCtu))
+//       )
+//     {
+//       clipRight = true;
+//     }
+//   }
 
   rasterSliceAlfPad = 0;
   if ( !clipTop && !clipLeft )
@@ -307,7 +322,7 @@ const int AdaptiveLoopFilter::m_classToFilterMapping[NUM_FIXED_FILTER_SETS][MAX_
   { 16,  31,  32,  15,  60,  30,   4,  17,  19,  25,  22,  20,   4,  53,  19,  21,  22,  46,  25,  55,  26,  48,  63,  58,  55 },
 };
 
-void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, int ctuRsAddr)
+void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, const int ctuRsAddr, const int threadIdx )
 {
   if( m_ccAlfFilterParam.ccAlfFilterEnabled[(int)compID - 1] )
   {
@@ -322,8 +337,6 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
     if( !skipFiltering )
     {
       const ClpRngs& clpRngs      = cs.slice->clpRngs;
-      const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
-      const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
 
       bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
       int  numHorVirBndry = 0, numVerVirBndry = 0;
@@ -338,6 +351,9 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
       const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
       const int chromaScaleX = getComponentScaleX( compID, m_chromaFormat );
       const int chromaScaleY = getComponentScaleY( compID, m_chromaFormat );
+
+      const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
+      const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
 
       int rasterSliceAlfPad = 0;
       if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
@@ -360,10 +376,10 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
             const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == m_picWidth );
             const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
             const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-            PelUnitBuf buf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-            buf.copyFrom( recYuvExt.subBuf(
-              UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
-                yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+            PelUnitBuf buf = m_tempCtuBufPerThread[threadIdx]->subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+            buf.copyFrom( recYuvExt.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
+                                                                                  yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+
             // pad top-left unavailable samples for raster slice
             if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
             {
@@ -491,7 +507,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 
             const int wBuf = w + (clipL ? 0 : MAX_ALF_PADDING_SIZE) + (clipR ? 0 : MAX_ALF_PADDING_SIZE);
             const int hBuf = h + (clipT ? 0 : MAX_ALF_PADDING_SIZE) + (clipB ? 0 : MAX_ALF_PADDING_SIZE);
-            PelUnitBuf buf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+            PelUnitBuf buf = m_tempCtuBufPerThread[0]->subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
             buf.copyFrom( tmpYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE), yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf ) ) ) );
             // pad top-left unavailable samples for raster slice
             if ( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
@@ -707,7 +723,7 @@ void AdaptiveLoopFilter::reconstructCoeff( AlfParam& alfParam, ChannelType chann
   }
 }
 
-void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH] )
+void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH], int numThreads )
 {
   std::memcpy( m_inputBitDepth, inputBitDepth, sizeof( m_inputBitDepth ) );
   m_picWidth     = picWidth;
@@ -748,8 +764,14 @@ void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const 
 
   m_tempBuf.destroy();
   m_tempBuf.create( format, Area( 0, 0, picWidth, picHeight ), maxCUWidth, ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1, 0, false );
-  m_tempBuf2.destroy();
-  m_tempBuf2.create( format, Area( 0, 0, maxCUWidth + (MAX_ALF_PADDING_SIZE << 1), maxCUHeight + (MAX_ALF_PADDING_SIZE << 1) ), maxCUWidth, MAX_ALF_PADDING_SIZE, 0, false );
+
+  CHECK( !m_tempCtuBufPerThread.empty(), "Reusing allocated temp. buffers" );
+  m_tempCtuBufPerThread.resize( numThreads,  nullptr );
+  for( PelStorage*& tmpBuf : m_tempCtuBufPerThread )
+  {
+    tmpBuf = new PelStorage();
+    tmpBuf->create( format, Area( 0, 0, maxCUWidth + (MAX_ALF_PADDING_SIZE << 1), maxCUHeight + (MAX_ALF_PADDING_SIZE << 1) ), maxCUWidth, MAX_ALF_PADDING_SIZE, 0, false );
+  }
 
   // Classification
   if ( m_classifier == nullptr )
@@ -782,6 +804,7 @@ void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const 
   m_created = true;
 }
 
+
 void AdaptiveLoopFilter::destroy()
 {
   if (!m_created)
@@ -797,7 +820,12 @@ void AdaptiveLoopFilter::destroy()
   }
 
   m_tempBuf.destroy();
-  m_tempBuf2.destroy();
+  for( auto* tmpBuf: m_tempCtuBufPerThread )
+  {
+    delete tmpBuf;
+  }
+  m_tempCtuBufPerThread.clear();
+
 
   if ( m_ccAlfFilterControl[0] )
   {

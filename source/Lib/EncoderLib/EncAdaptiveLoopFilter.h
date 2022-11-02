@@ -385,11 +385,12 @@ private:
   int                    m_numAsusInPic;
   int                    m_numCtusInAsuWidth;
   int                    m_numCtusInAsuHeight;
+  bool                   m_accumStatCTUWise;
 
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
-  void init                         ( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
+  void init                         ( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );
@@ -397,14 +398,14 @@ public:
   void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
-  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
-  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC );
+  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, const int threadIdx );
+  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, const int threadIdx );
   void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
-  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
+  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuIdx, const int threadIdx );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
-  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
-  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
+  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, const int ctuRsAddr, const int threadIdx = 0 );
+  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, const int threadIdx );
   void alfReconstructor             ( CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
@@ -415,7 +416,7 @@ private:
   double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda );
-  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr );
+  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, const int threadIdx );
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
   void   copyAlfParam            ( AlfParam& alfParamDst, AlfParam& alfParamSrc, ChannelType channel );
@@ -424,7 +425,7 @@ private:
   void   getFrameStats           ( ChannelType channel );
   void   getFrameStat            ( AlfCovariance* frameCov, AlfCovariance** ctbCov, uint8_t* ctbEnableFlags, uint8_t* ctbAltIdx, const int numClasses, int altIdx );
   void   getPreBlkStats          ( AlfCovariance *alfCovariace, const AlfFilterShape &shape, AlfClassifier *classifier, Pel *org, const int orgStride, Pel *rec, const int recStride,
-                                   const CompArea &areaDst, const CompArea &area, const ChannelType channel, int vbCTUHeight, int vbPos );
+                                   const CompArea &areaDst, const ChannelType channel, int vbCTUHeight, int vbPos );
   template<bool clipToBdry, bool simd>
   void   calcCovariance4         ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
   template<bool clipToBdry, bool simd>

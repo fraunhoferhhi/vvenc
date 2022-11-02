@@ -916,6 +916,10 @@ template<DeblockEdgeDir edgeDir>
 void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const TransformUnit& currTU, const bool bValue, bool deriveBdStrngt )
 {
   const PreCalcValues &pcv = *cu.cs->pcv;
+  
+  const bool canFilterCuBdry = edgeDir ? CU::canFilterCUBdryTop( cu ): CU::canFilterCUBdryLeft( cu );
+  if( !canFilterCuBdry )
+    return;
 
   ChannelType start = CH_L;
   ChannelType end   = CH_C;
@@ -965,7 +969,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
       const int         incFst   = edgeDir ? pcv.minCUSize >> getChannelTypeScaleX( ChannelType( start ), cu.chromaFormat )
                                            : pcv.minCUSize >> getChannelTypeScaleY( ChannelType( start ), cu.chromaFormat );
 
-      if( cuP == &cu && cuNeigh == nullptr && ( edgeDir ? cu.blocks[ch].pos().y : cu.blocks[ch].pos().x ) > 0 ) //TODO: check for !pps.getLoopFilterAcrossSlicesEnabledFlag() || !pps.getLoopFilterAcrossTilesEnabledFlag()
+      if( cuP == &cu && cuNeigh == nullptr && ( edgeDir ? cu.blocks[ch].pos().y : cu.blocks[ch].pos().x ) > 0 )
       {
         const Position posP   { currTU.blocks[   ch].x - ( 1 - edgeDir ), currTU.blocks[   ch].y - edgeDir };
         const Position posPfst{ currTU.blocks[start].x - ( 1 - edgeDir ), currTU.blocks[start].y - edgeDir };
@@ -1384,8 +1388,21 @@ LFCUParam xGetLoopfilterParam( const CodingUnit& cu )
   const Position pos = cu.blocks[cu.chType].pos();
 
   LFCUParam stLFCUParam;                   ///< status structure
-  stLFCUParam.leftEdge     = ( 0 < pos.x ) && isAvailable ( cu, *CU::getLeft ( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
-  stLFCUParam.topEdge      = ( 0 < pos.y ) && isAvailable ( cu, *CU::getAbove( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
+  stLFCUParam.leftEdge     = ( 0 < pos.x );
+  stLFCUParam.topEdge      = ( 0 < pos.y );
+
+  // TODO: subpics?
+  if( !slice.pps->loopFilterAcrossSlicesEnabled || !slice.pps->loopFilterAcrossTilesEnabled )
+  {
+    const int scaleX = getChannelTypeScaleX( cu.chType, slice.pps->pcv->chrFormat );
+    const int scaleY = getChannelTypeScaleY( cu.chType, slice.pps->pcv->chrFormat );
+    const int ctuX   = ( pos.x << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
+    const int ctuY   = ( pos.y << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
+    const int ctuLX  = ( ( pos.x - 1 ) << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
+    const int ctuTY  = ( ( pos.y - 1 ) << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
+    stLFCUParam.leftEdge = stLFCUParam.leftEdge && slice.pps->canFilterCtuBdry( ctuX, ctuY, ctuLX - ctuX,            0 );
+    stLFCUParam.topEdge  = stLFCUParam.topEdge  && slice.pps->canFilterCtuBdry( ctuX, ctuY,            0, ctuTY - ctuY );
+  }
   return stLFCUParam;
 }
 

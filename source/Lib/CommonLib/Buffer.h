@@ -186,6 +186,8 @@ struct AreaBuf : public Size
         T* bufAt( const Position& pos )              { return &at( pos ); }
   const T* bufAt( const Position& pos ) const        { return &at( pos ); }
 
+  AreaBuf<      T> subBuf( const Area& area )                                                         { return AreaBuf<      T>( bufAt( area ), stride, area   ); }
+  AreaBuf<const T> subBuf( const Area& area )                                                   const { return AreaBuf<const T>( bufAt( area ), stride, area   ); }
   AreaBuf<      T> subBuf( const Position& pos, const Size& size )                                    { return AreaBuf<      T>( bufAt( pos  ), stride, size   ); }
   AreaBuf<const T> subBuf( const Position& pos, const Size& size )                              const { return AreaBuf<const T>( bufAt( pos  ), stride, size   ); }
   AreaBuf<      T> subBuf( const int& x, const int& y, const unsigned& _w, const unsigned& _h )       { return AreaBuf<      T>( bufAt( x, y ), stride, _w, _h ); }

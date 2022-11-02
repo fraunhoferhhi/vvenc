@@ -905,7 +905,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
 
         // need to check line above bcs of tiling, which allows CTU_ENCODE to run indepedently across tiles
-        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 )
+        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 && slice.pps->loopFilterAcrossTilesEnabled )
         {
           if( ctuPosY > 0 )
           {
@@ -921,12 +921,14 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        if(                                   processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
+        if( ctuPosX + 1 < pcv.widthInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
           return false;
         // check bottom right with 1 CTU delay (this is only required for intra pred)
         // at the right picture border this will check the bottom CTU
         const int checkBottomRight = std::min<int>( 1, checkRight );
-        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkBottomRight + ctuStride ] <= CTU_ENCODE )
+        if( ctuPosY + 1 < pcv.heightInCtus && ctuPosX + 1 < pcv.widthInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 1 ) && processStates[ ctuRsAddr + checkBottomRight + ctuStride ] <= CTU_ENCODE )
           return false;
 
         if( checkReadyState )
@@ -966,13 +968,15 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case LF_HOR:
       {
         // ensure horizontal ordering (from top to bottom)
-        if( ctuPosY > 0 && processStates[ ctuRsAddr - ctuStride ] <= LF_HOR )
+        if( ctuPosY > 0 && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, -1 ) && processStates[ ctuRsAddr - ctuStride ] <= LF_HOR )
           return false;
 
         // ensure vertical loop filter of neighbor ctu's will not modify current residual
         // check top, top-right and right ctu
         // (top, top-right checked implicitly due to ordering check above)
-        if( ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
+        if( ctuPosX + 1 < pcv.widthInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
           return false;
 
         if( checkReadyState )
@@ -998,19 +1002,24 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case SAO_FILTER:
       {
         // general wpp conditions, top and top-right ctu have to be filtered
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
+        if( ctuPosY > 0 && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, -1 ) && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, -1 ) && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
           return false;
 
         // ensure loop filter of neighbor ctu's will not modify current residual
         // sao processing dependents on +1 pixel to each side
         // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
+        if( ctuPosX + 1 < pcv.widthInCtus && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
           return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
+        if( ctuPosY + 1 < pcv.heightInCtus && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, 1 ) && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
           return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
+        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && 
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 1 ) && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
           return false;
 
         if( checkReadyState )
@@ -1027,7 +1036,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
 
           encSao.setCtuEncRsrc( &lineEncRsrc->m_SaoCABACEstimator, &taskRsrc->m_CtxCache );
-          encSao.storeCtuReco( cs, ctuArea );
+          encSao.storeCtuReco( cs, ctuArea, ctuPosX, ctuPosY );
           encSao.getCtuStatistics( cs, encSlice->m_saoStatData, ctuArea, ctuRsAddr );
           encSao.decideCtuParams( cs, encSlice->m_saoStatData, encSlice->m_saoEnabled, encSlice->m_saoAllDisabled, ctuArea, ctuRsAddr, &encSlice->m_saoReconParams[ 0 ], cs.picture->getSAO() );
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
@@ -1051,7 +1060,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );
 
-        if( ctuPosX+1 == pcv.widthInCtus )
+        const int tileCol = slice.pps->ctuToTileCol[ctuPosX];
+        const int lastCtuColInTileRow = 
+          slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
+        if( ctuPosX == lastCtuColInTileRow )
         {
           processStates[ctuRsAddr] = ALF_GET_STATISTICS;
         }
@@ -1067,9 +1079,16 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // ensure all surrounding ctu's are filtered (ALF will use pixels of adjacent CTU's)
         // due to wpp condition above in SAO_FILTER, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ctuRsAddr + ctuStride] <= SAO_FILTER )
+        if( ctuPosY + 1 < pcv.heightInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, 1 ) && processStates[ctuRsAddr + ctuStride    ] <= SAO_FILTER )
           return false;
 
+        if( ctuPosX + 1 < pcv.widthInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ctuRsAddr + 1            ] <= SAO_FILTER )
+          return false;
+        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 1 ) && processStates[ctuRsAddr + 1 + ctuStride] <= SAO_FILTER )
+          return false;
         if( checkReadyState )
           return true;
 
@@ -1080,11 +1099,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu );
-            encSlice->m_pALF->copyCTUforALF   ( cs, ctu - firstCtuInRow, ctuPosY );
+            encSlice->m_pALF->copyCTUforALF   ( cs, ctu % pcv.widthInCtus, ctuPosY );
+            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, threadIdx );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1102,9 +1121,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
 
         // ensure statistics from all previous ctu's have been collected
-        for( int i = pcv.widthInCtus - 1; i < ctuRsAddr; i += pcv.widthInCtus )
-          if( processStates[i] <= ALF_GET_STATISTICS )
-            return false;
+        if( processStates[ctuRsAddr] <= ALF_GET_STATISTICS )
+          return false;
+        for( int y = 0; y < pcv.heightInCtus; y++ )
+        {
+          for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
+          {
+            const int lastCtuInTileRow = y * pcv.widthInCtus + slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
+            if( processStates[lastCtuInTileRow] <= ALF_GET_STATISTICS )
+              return false;
+          }
+        }
 
         if( checkReadyState )
           return true;
@@ -1142,10 +1169,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->alfEnabled )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
-          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu );
+            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu, threadIdx );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1167,11 +1194,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->ccalfEnabled )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L);
-          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu );
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, threadIdx );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, threadIdx );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1188,11 +1215,20 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
 
-        // ensure statistics from all previous ctu's have been collected
-        for( int i = pcv.widthInCtus - 1; i < ctuRsAddr; i += pcv.widthInCtus )
-          if( processStates[i] <= CCALF_GET_STATISTICS )
-            return false;
+        if( processStates[ctuRsAddr] != CCALF_DERIVE_FILTER )
+          return false;
 
+        // ensure statistics from all previous ctu's have been collected
+        for( int y = 0; y < pcv.heightInCtus; y++ )
+        {
+          for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
+          {
+            const int lastCtuColInTileRow = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
+            const int lastCtuInTileRow = y * pcv.widthInCtus + lastCtuColInTileRow;
+            if( processStates[lastCtuInTileRow] <= CCALF_GET_STATISTICS )
+              return false;
+          }
+        }
         if( checkReadyState )
           return true;
 
@@ -1225,11 +1261,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         if( slice.sps->ccalfEnabled )
         {
-          const int firstCtuInRow = ctuRsAddr + 1 - pcv.widthInCtus;
+          const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu );
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu, threadIdx );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu, threadIdx );
           }
         }
 
