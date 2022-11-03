@@ -130,8 +130,6 @@ bool AdaptiveLoopFilter::isCrossedByVirtualBoundaries( const CodingStructure& cs
   int   ctuSize = slice.sps->CTUSize;
   const Position currCtuPos(xPos, yPos);
   const CodingUnit *currCtu = cs.getCU(currCtuPos, CH_L, TREE_D);
-  const SubPic& curSubPic = slice.pps->getSubPicFromPos(currCtuPos);
-  bool loopFilterAcrossSubPicEnabled = curSubPic.loopFilterAcrossSubPicEnabled;
   const int ctuX = xPos >> cs.pcv->maxCUSizeLog2;
   const int ctuY = yPos >> cs.pcv->maxCUSizeLog2;
 

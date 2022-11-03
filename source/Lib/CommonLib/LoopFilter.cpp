@@ -98,11 +98,6 @@ const uint8_t LoopFilter::sm_betaTable[MAX_QP + 1] =
 #define GET_OFFSETY( ptr, stride, y ) ( ( ptr ) + ( y ) * ( stride ) )
 #define GET_OFFSET( ptr, stride, x, y ) ( ( ptr ) + ( x ) + ( y ) * ( stride ) )
 
-static bool isAvailable( const CodingUnit& cu, const CodingUnit& cu2, const bool bEnforceSliceRestriction, const bool bEnforceTileRestriction )
-{
-  return ( ( !bEnforceSliceRestriction || CU::isSameSlice( cu, cu2 ) ) && ( !bEnforceTileRestriction || CU::isSameTile(cu, cu2) ) );
-}
-
 #define BsSet( val, compIdx ) (   ( val ) << ( ( compIdx ) << 1 ) )     
 #define BsGet( val, compIdx ) ( ( ( val ) >> ( ( compIdx ) << 1 ) ) & 3 )
 
