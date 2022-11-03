@@ -306,6 +306,21 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 
     encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
+
+    if (frameLevel > std::max (1, int (log ((double) encRCSeq->gopSize) / log (2.0))))
+    {
+      double highTlQpCorr = 0.0;
+
+      for (int l = 2; l <= 7; l++) // stabilization when corrections differ between low and high levels
+      {
+        highTlQpCorr += encRCSeq->qpCorrection[l];
+      }
+      if (highTlQpCorr > 1.0) // attenuate low-level QP correction towards 0 when bits need to be saved
+      {
+        if (encRCSeq->qpCorrection[0] < -1.0e-9) encRCSeq->qpCorrection[0] /= highTlQpCorr;
+        if (encRCSeq->qpCorrection[1] < -1.0e-9) encRCSeq->qpCorrection[1] /= highTlQpCorr;
+      }
+    }
   }
 }
 
@@ -830,7 +845,7 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
+void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
@@ -1005,7 +1020,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
-          encRcPic->clipTargetQP( getPicList(), secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
+          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
 

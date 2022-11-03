@@ -635,35 +635,6 @@ struct VUI
   {}
 };
 
-/// SPS RExt class
-struct SPSRExt // Names aligned to text specification
-{
-  bool             transformSkipRotationEnabled;
-  bool             transformSkipContextEnabled;
-  bool             implicitRdpcmEnabled;
-  bool             explicitRdpcmEnabled;
-  bool             extendedPrecisionProcessing;
-  bool             intraSmoothingDisabled;
-  bool             highPrecisionOffsetsEnabled;
-  bool             persistentRiceAdaptationEnabled;
-  bool             cabacBypassAlignmentEnabled;
-
-  SPSRExt();
-
-  bool settingsDifferFromDefaults() const
-  {
-    return transformSkipRotationEnabled
-        || transformSkipContextEnabled
-        || implicitRdpcmEnabled
-        || explicitRdpcmEnabled
-        || extendedPrecisionProcessing
-        || intraSmoothingDisabled
-        || highPrecisionOffsetsEnabled
-        || persistentRiceAdaptationEnabled
-        || cabacBypassAlignmentEnabled;
-  }
-};
-
 
 /// SPS class
 struct SPS
@@ -779,8 +750,6 @@ struct SPS
   unsigned          vuiPayloadSize;
   VUI               vuiParameters;
 
-  SPSRExt           spsRExt;
-
 //  TimingInfo        timingInfo;
   ProfileTierLevel  profileTierLevel;
 
@@ -829,7 +798,7 @@ struct SPS
 
   SPS();
   int               getNumRPL( int idx) const { return (int)rplList[idx].size()-1;}
-  int               getMaxLog2TrDynamicRange(ChannelType channelType)                   const { return spsRExt.extendedPrecisionProcessing ? std::max<int>(15, int(bitDepths[channelType] + 6)) : 15; }
+  int               getMaxLog2TrDynamicRange(ChannelType channelType)                   const { return 15; }
   uint32_t          getMaxTbSize()                                                      const { return  1 << log2MaxTbSize;                                        }
   bool              getUseImplicitMTS     ()                                            const { return MTS && !MTSIntra; }
 

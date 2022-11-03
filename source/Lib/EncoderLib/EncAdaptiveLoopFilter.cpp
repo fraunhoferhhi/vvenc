@@ -2606,7 +2606,6 @@ void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam,
         {
           m_CABACEstimator->getCtx() = AlfCtx(ctxStart);
           cost = m_lambda[channel] * uiCoeffBits;
-          //DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, shp=%d, NL=%d, numalt=%d, iter=%d, cofBitsCost=%.2f\n", cs.slice->poc, channel, iShapeIdx, nonLinearFlag, iter, cost );
           cost += deriveCtbAlfEnableFlags(cs, channel, lambdaChromaWeight, numClasses, m_filterShapes[channel].numCoeff, distUnfilter);
 
           DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f, cost = %.2f\n", cs.slice->poc, channel, nonLinearFlag, numAlternatives, iter, costMin, cost );

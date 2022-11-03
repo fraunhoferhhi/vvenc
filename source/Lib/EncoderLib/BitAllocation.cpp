@@ -46,7 +46,9 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "BitAllocation.h"
+#include "EncStage.h"
 #include "CommonLib/Picture.h"
+#include "CommonLib/UnitTools.h"
 #include <math.h>
 
 #include "vvenc/vvencCfg.h"
@@ -76,9 +78,9 @@ static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bit
 #endif
 }
 
-static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
-                                                 const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
-                                                 uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr)
+double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
+                                          const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
+                                          uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr)
 {
   double spatAct = 0.0, tempAct = 0.0;
   uint64_t saAct = 0;   // spatial absolute activity sum
@@ -306,7 +308,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   double averageAdaptedLambda = 0.0;
   int    averageAdaptedLumaQP = -1;
   uint32_t meanLuma           = MAX_UINT;
-  std::vector<Pel> ctuAvgLuma;
+  std::vector<int> ctuAvgLuma;
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr)
   {
@@ -315,6 +317,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !slice->pic->isPreAnalysis);
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
+  const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
   const int  bitDepth         = slice->sps->bitDepths[CH_L];
@@ -353,9 +356,22 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
                                                        bitDepth, isHighResolution, &minActivityPart);
         hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
         pic->ctuQpaLambda[ctuRsAddr] = hpEner[1]; // temporary backup of CTU mean visual activity
-        pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
+        pic->ctuAdaptedQP[ctuRsAddr] = (int) pic->getOrigBuf (ctuArea).getAvg(); // and mean luma
 
-        updateMinNoiseLevelsPic (pic->minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
+        if ((picOrig.buf == picPrv1.buf) && (encCfg->m_vvencMCTF.MCTF)) // replace temp. activity
+        {
+          hpEner[1] = 1.5 * pic->m_picShared->m_minNoiseLevels[pic->ctuAdaptedQP[ctuRsAddr] >> (bitDepth - 3)];
+
+          if (hpEner[1] < 382.0) // level in first frame
+          {
+            hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
+            pic->ctuQpaLambda[ctuRsAddr] += hpEner[1]; // add noise level to mean visual activity
+          }
+        }
+        else if (!isEncPass)
+        {
+          updateMinNoiseLevelsPic (pic->m_picShared->m_minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
+        }
       }
 
       hpEner[comp] /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);
@@ -440,8 +456,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
     for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
     {
-      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) averageAdaptedLumaQP; // save the slice QP
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save adapted lambda, QP
+      pic->ctuAdaptedQP[ctuRsAddr] = averageAdaptedLumaQP;
     }
   }
   else // use CTU-level QPA
@@ -493,6 +509,11 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
         adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
       }
+      // add further delta-QP of block importance mapping (BIM) detector if available
+      if (isBIM)
+      {
+        adaptedLumaQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, adaptedLumaQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+      }
       // reduce delta-QP variance, avoid wasting precious bit budget at low bit-rates
       if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1))
       {
@@ -507,8 +528,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       averageAdaptedLambda = sliceLambda * pow (2.0, double (adaptedLumaQP - sliceQP) / 3.0);
       averageAdaptedLumaQP += adaptedLumaQP;
 
-      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save the adapted lambda
-      pic->ctuAdaptedQP[ctuRsAddr] = (Pel) adaptedLumaQP;  // save the adapted CTU QP
+      pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // save adapted lambda, QP
+      pic->ctuAdaptedQP[ctuRsAddr] = adaptedLumaQP;
     }
 
     averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
@@ -534,8 +555,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         averageAdaptedLambda = sliceLambda * pow (2.0, double (clippedLumaQP - sliceQP) / 3.0);
         averageAdaptedLumaQP += clippedLumaQP;
 
-        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store modified lambda
-        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) clippedLumaQP;  // store modified CTU QP
+        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store mod. lambda, QP
+        pic->ctuAdaptedQP[ctuRsAddr] = clippedLumaQP;
       }
 
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
@@ -549,7 +570,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
         pic->ctuQpaLambda[ctuRsAddr] *= averageAdaptedLambda; // scale adapted lambda
-        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + lrQpDiff);
+        pic->ctuAdaptedQP[ctuRsAddr] = std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + lrQpDiff);
       }
 
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + lrQpDiff); // used in applyQPAdaptationSubCtu
@@ -574,6 +595,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !slice->pic->isPreAnalysis);
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
+  const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);
@@ -605,6 +627,11 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
     adaptedSubCtuQP = Clip3 (0, MAX_QP, adaptedSubCtuQP + lumaDQPOffset (meanLuma, bitDepth));
   }
+  // add additional delta-QP of block importance mapping (BIM) detection if available
+  if (isBIM)
+  {
+    adaptedSubCtuQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, adaptedSubCtuQP + pic->m_picShared->m_ctuBimQpOffset[getCtuAddr (pos, *pic->cs->pcv)]);
+  }
   // reduce the delta-QP variance, avoid wasting precious bit budget at low bit-rates
   if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (slice->sliceQp >= 0) && (encCfg->m_framesToBeEncoded != 1))
   {
@@ -612,7 +639,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
     adaptedSubCtuQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedSubCtuQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * slice->sliceQp + 2) >> 2;
     if (adaptedSubCtuQP > retunedAdLumaQP) adaptedSubCtuQP = retunedAdLumaQP;
-    if (adaptedSubCtuQP < MAX_QP && encCfg->m_QP >= MAX_QP_PERCEPT_QPA) adaptedSubCtuQP++; // for monotonous rate change, l. 563
+    if (adaptedSubCtuQP < MAX_QP && encCfg->m_QP >= MAX_QP_PERCEPT_QPA) adaptedSubCtuQP++; // for monotonous rate change, l. 507
   }
   if (isEncPass)
   {
@@ -649,69 +676,6 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   ctuPumpRedQP[ctuRsAddr] += pumpingReducQP;
 
   return pumpingReducQP;
-}
-
-double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev /*= nullptr*/)
-{
-  Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
-
-  if (pic == nullptr || encCfg == nullptr) return 0.0;
-
-  const bool isHighRes  = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-  const CPelBuf picOrig = pic->getOrigBuf (COMP_Y);
-  const CPelBuf picPrv1 = (origPrev != nullptr ? *origPrev : pic->getOrigBufPrev (COMP_Y, PREV_FRAME_1));
-  const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, PREV_FRAME_2);
-
-  return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride,
-                                            (origPrev != nullptr ? 24 : encCfg->m_FrameRate / encCfg->m_FrameScale),
-                                            slice->sps->bitDepths[CH_L], isHighRes);
-}
-
-bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass)
-{
-  Picture* const curPic = (slice != nullptr ? slice->pic : nullptr);
-
-  if (curPic == nullptr || encCfg == nullptr) return false;
-
-  const GOPEntry& gopEntry = *(slice->pic->gopEntry);
-  const int curPoc         = slice->poc;
-  const bool isHighRes     = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-
-  curPic->picVisActTL0 = curPic->picVisActY = 0;
-
-  if (((encCfg->m_LookAhead > 0 && encCfg->m_RCTargetBitrate == 0) || (encCfg->m_RCNumPasses > 1 && !rcIsFinalPass)) && !(slice->pps->sliceChromaQpFlag && encCfg->m_usePerceptQPA &&
-      ((slice->isIntra() && !slice->sps->IBC) || (encCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (curPoc % encCfg->m_sliceChromaQpOffsetPeriodicity) == 0))))
-  {
-    const double visActY = getPicVisualActivity (slice, encCfg);
-
-    curPic->picVisActY   = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
-  }
-
-  if (encCfg->m_sliceTypeAdapt && curPoc >= 0 && encCfg->m_GOPSize > 8 && gopEntry.m_temporalId == 0)
-  {
-    const CPelBuf prvTL0 = curPic->getOrigBufPrev (COMP_Y, PREV_FRAME_TL0);
-    const double visActY = (prvTL0.buf == nullptr ? 0.0 : getPicVisualActivity (slice, encCfg, &prvTL0));
-
-    curPic->picVisActTL0 = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
-
-    if (!slice->isIntra() && slice->getRefPic (REF_PIC_LIST_0, 0)) // detect scene change if comparison is possible
-    {
-      const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
-      const int scThreshold = ((curPic->isSccStrong ? 6 : (curPic->isSccWeak ? 5 : 4)) * (isHighRes ? 19 : 15)) >> 2;
-
-      if ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
-           refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * (scThreshold + 1)) && refPic->picVisActTL0 > 0)
-      {
-        curPic->picMemorySTA = refPic->picVisActTL0 * (curPic->picVisActTL0 < refPic->picVisActTL0 ? -1 : 1);
-
-        if (curPic->picMemorySTA * refPic->picMemorySTA >= 0) return true;
-      }
-    }
-    curPic->picMemorySTA = 0;
-  }
-
-  return false;
 }
 
 } // namespace vvenc

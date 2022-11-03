@@ -262,7 +262,7 @@ int EncApp::encode()
 
     if( m_yuvInputFile.open( appCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
                              appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput,
-                             appCfg.m_forceY4mInput ))
+                             appCfg.m_forceY4mInput, appCfg.m_logoFileName ))
     {
       msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
@@ -371,16 +371,7 @@ int EncApp::encode()
       {
         if( 0 != m_yuvInputFile.skipYuvFrames(vvencCfg.m_temporalSubsampleRatio - 1, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) )
         {
-          if( ! strcmp( appCfg.m_inputFileName.c_str(), "-" )  )
-            msgApp( VVENC_ERROR, "skip %d temporally frames from stdin failed\n", vvencCfg.m_temporalSubsampleRatio - 1 );
-          else
-            msgApp( VVENC_ERROR, "skip %d temporally frames failed. only %d frames left to proceed.\n", vvencCfg.m_temporalSubsampleRatio - 1, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, false) );
-            
-          vvenc_encoder_close( m_encCtx );
-          vvenc_YUVBuffer_free_buffer( &yuvInBuf );
-          vvenc_accessUnit_free_payload( &au );
-          closeFileIO();    
-          return -1;  
+          inputDone=true;
         }
       }
     }

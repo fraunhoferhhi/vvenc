@@ -662,9 +662,8 @@ namespace DQIntern
     const int         channelBitDepth       = sps.bitDepths[ chType ];
     const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange( chType );
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     // quant parameters
     m_QShift                    = QUANT_SHIFT  - 1 + qpPer + transformShift;
     m_QAdd                      = -( ( 3 << m_QShift ) >> 1 );
@@ -722,9 +721,8 @@ namespace DQIntern
     const TCoeff      minTCoeff             = -( 1 << maxLog2TrDynamicRange );
     const TCoeff      maxTCoeff             =  ( 1 << maxLog2TrDynamicRange ) - 1;
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     Intermediate_Int  shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
     Intermediate_Int  invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
     Intermediate_Int  add                   = (shift < 0) ? 0 : ((1 << shift) >> 1);
@@ -1387,8 +1385,6 @@ namespace DQIntern
 
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
-    CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
-
     //===== reset / pre-init =====
     const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
     m_quant.initQuantBlock    ( tu, compID, cQP, lambda );

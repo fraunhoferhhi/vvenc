@@ -167,7 +167,7 @@ namespace vvenc {
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void processGops();
-    void updateMinNoiseLevelsGop( int flush, int poc );
+    void updateMinNoiseLevelsGop( const bool flush, const int poc );
     double getAverageBitsFromFirstPass();
     void detectSceneCuts();
     void xUpdateAfterPicRC( const Picture* pic );

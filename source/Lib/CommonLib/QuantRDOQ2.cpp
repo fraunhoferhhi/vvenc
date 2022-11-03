@@ -321,7 +321,6 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
                                             const int          remRegBins,
                                             unsigned           goRiceZero,
                                             const uint16_t     ui16AbsGoRice,
-                                            const bool         useLimitedPrefixLength,
                                             const int          maxLog2TrDynamicRange ) const
 {
   cost_t iRate = xGetIEPRate();
@@ -334,22 +333,6 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
     {
       length = symbol >> ui16AbsGoRice;
       iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
-    }
-    else if( useLimitedPrefixLength )
-    {
-      const uint32_t maximumPrefixLength = ( 32 - ( COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange ) );
-
-      uint32_t prefixLength = 0;
-      uint32_t suffix = ( symbol >> ui16AbsGoRice ) - COEF_REMAIN_BIN_REDUCTION;
-
-      while( ( prefixLength < maximumPrefixLength ) && ( suffix > ( ( 2 << prefixLength ) - 2 ) ) )
-      {
-        prefixLength++;
-      }
-
-      const uint32_t suffixLength = ( prefixLength == maximumPrefixLength ) ? ( maxLog2TrDynamicRange - ui16AbsGoRice ) : ( prefixLength + 1/*separator*/ );
-
-      iRate += ( COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice ) << SCALE_BITS;
     }
     else
     {
@@ -374,22 +357,6 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
     {
       length = symbol >> ui16AbsGoRice;
       iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
-    }
-    else if( useLimitedPrefixLength )
-    {
-      const uint32_t maximumPrefixLength = ( 32 - ( COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange ) );
-
-      uint32_t prefixLength = 0;
-      uint32_t suffix = ( symbol >> ui16AbsGoRice ) - COEF_REMAIN_BIN_REDUCTION;
-
-      while( ( prefixLength < maximumPrefixLength ) && ( suffix > ( ( 2 << prefixLength ) - 2 ) ) )
-      {
-        prefixLength++;
-      }
-
-      const uint32_t suffixLength = ( prefixLength == maximumPrefixLength ) ? ( maxLog2TrDynamicRange - ui16AbsGoRice ) : ( prefixLength + 1/*separator*/ );
-
-      iRate += ( COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice ) << SCALE_BITS;
     }
     else
     {
@@ -515,7 +482,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   const ChannelType chType  = toChannelType( compID );
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const bool extendedPrecision     = sps.spsRExt.extendedPrecisionProcessing;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
   if( compID != COMP_Cr )
@@ -528,12 +494,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   */
 
   // Represents scaling through forward transform
-  int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
-
-  if (tu.mtsIdx[compID]==MTS_SKIP && extendedPrecision)
-  {
-    iTransformShift = std::max<int>(0, iTransformShift);
-  }
+  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
 
   const uint32_t uiLog2BlockWidth   = Log2(uiWidth);
   const uint32_t uiLog2BlockHeight  = Log2(uiHeight);
@@ -796,8 +757,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           cost_t iErr1        = iScaledLevel - ( (int64_t)1 << iQBits );
           cost_t iDist1       = _dist( iErr1, iErrScale, iErrScaleShift );
           cost_t iRate1       = remRegBins < 4 ? 
-                                 xiGetICRateCost( 1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange ) -
-                                 xiGetICRateCost( 0, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange ):
+                                 xiGetICRateCost( 1, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange ) -
+                                 xiGetICRateCost( 0, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange ):
                                  fracBitsGt1.intBits[ 0 ];
 
           cost_t iCost1       = iDist1 + iRate1 + xiGetCostSigCoef( fracBitsSig, 1 );
@@ -826,13 +787,13 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
             // ----------------- LEVEL > 0  ----------------
             cost_t iErrF       = iScaledLevel - (iFloor << iQBits);
             cost_t iDistF      = _dist( iErrF, iErrScale, iErrScaleShift ); //(iErrF*iErrScale) >> iErrScaleShift;
-            iCurrCostF         = iDistF + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+            iCurrCostF         = iDistF + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
           }
 
           // ----------------- LEVEL + 1 ----------------
           cost_t iErrC         = iScaledLevel - (iCeil << iQBits);
           cost_t iDistC        = _dist( iErrC, iErrScale, iErrScaleShift ); //(iErrC*iErrScale) >> iErrScaleShift;
-          cost_t iCurrCostC    = iDistC + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+          cost_t iCurrCostC    = iDistC + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
 
           if( iCurrCostC < iCurrCostF )
           {
@@ -887,7 +848,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
               // ----------------- LEVEL = 1 ----------------
               cost_t iErrF      = iScaledLevel - ( iFloor << iQBits );
               cost_t iDistF     = _dist( iErrF, iErrScale, iErrScaleShift ); //( iErrF*iErrScale ) >> iErrScaleShift;
-              iCostF            = iDistF + iCostSig1 + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+              iCostF            = iDistF + iCostSig1 + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
 
               if( iCostF < iBestCost )
               {
@@ -913,7 +874,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
             // ----------------- LEVELS = 1, 2 ----------------
             cost_t iErrC         = iScaledLevel - ( iCeil << iQBits );
             cost_t iDistC        = _dist( iErrC, iErrScale, iErrScaleShift ); //( iErrC*iErrScale ) >> iErrScaleShift;
-            cost_t iCostC        = iDistC + iCostSig1 + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+            cost_t iCostC        = iDistC + iCostSig1 + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
 
             if( iCostC < iBestCost )
             {
@@ -942,11 +903,11 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
             // ----------------- LEVEL X, X+1 ----------------
             cost_t iErrF        = iScaledLevel - (iFloor << iQBits);
             cost_t iDistF       = _dist( iErrF, iErrScale, iErrScaleShift ); //(iErrF*iErrScale) >> iErrScaleShift;
-            cost_t iCostF       = iDistF + iCostSig1 + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+            cost_t iCostF       = iDistF + iCostSig1 + xiGetICRateCost( iFloor, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
 
             cost_t iErrC        = iScaledLevel - ( iCeil << iQBits );
             cost_t iDistC       = _dist( iErrC, iErrScale, iErrScaleShift ); //( iErrC*iErrScale ) >> iErrScaleShift;
-            cost_t iCostC       = iDistC + iCostSig1 + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, extendedPrecision, maxLog2TrDynamicRange );
+            cost_t iCostC       = iDistC + iCostSig1 + xiGetICRateCost( iCeil, fracBitsPar, fracBitsGt1, fracBitsGt2, remRegBins, goRiceZero, goRiceParam, maxLog2TrDynamicRange );
 
             piCostSig[iScanPosinCG] = iCostSig1;
             if( iCostC < iCostF )

@@ -197,12 +197,9 @@ typedef enum
 {
   PREV_FRAME_1    = 0,
   PREV_FRAME_2    = 1,
-  PREV_FRAME_TL0  = 2,
 } PrevFrameType;
 
-static constexpr int QPA_PREV_FRAMES =              (int)PREV_FRAME_2 + 1;
-static constexpr int NUM_PREV_FRAMES =            (int)PREV_FRAME_TL0 + 1;
-
+static constexpr int NUM_QPA_PREV_FRAMES =          (int)PREV_FRAME_2 + 1;
 
 static constexpr int AMVP_MAX_NUM_CANDS =                               2; ///< AMVP: advanced motion vector prediction - max number of final candidates
 static constexpr int AMVP_MAX_NUM_CANDS_MEM =                           3; ///< AMVP: advanced motion vector prediction - max number of candidates
@@ -410,7 +407,7 @@ static constexpr int    FAST_SKIP_DEPTH =                               2;
 
 static constexpr double PBINTRA_RATIO     =                             1.1;
 static constexpr int    NUM_MRG_SATD_CAND =                             4;
-static constexpr double MRG_FAST_RATIO    =                             1.25;
+static constexpr double MRG_FAST_RATIO[2]    =                        { 1.25, 1.05 };
 static constexpr double MRG_FAST_RATIOMYV[4] =                        { 1.15, 1.1, 1.1, 1.05 };
 static constexpr int    NUM_AMAXBT_LAYER =                             10;
 static constexpr double AMAXBT_TH32 =                                  15.0;

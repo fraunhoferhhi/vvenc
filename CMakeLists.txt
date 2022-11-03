@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.6.0 )
+project( vvenc VERSION 1.6.1 )
 
 # set alternative version numbering for release candidates
 #set( PROJECT_VERSION_RC rc1 )
@@ -311,7 +311,7 @@ add_test( NAME Test_vvenclibtest-calling_order           COMMAND vvenclibtest 2 
 add_test( NAME Test_vvenclibtest-input_params            COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-sdk_default             COMMAND vvenclibtest 4 )
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
-add_test( NAME Test_vvenclibtest-timestamps COMMAND vvenclibtest 6 )
+add_test( NAME Test_vvenclibtest-timestamps              COMMAND vvenclibtest 6 )
 
 set( CLEANUP_TEST_FILES "" )
 
@@ -336,13 +336,13 @@ function( add_vvenc_test NAME TIMEOUT OUT_OUTPUT REQUIRES )
 endfunction()
 
 add_vvenc_test( vvencapp-tooltest       90 OUT_VVC   ""                       vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o OUTPUT )
-add_vvenc_test( vvencFFapp-tooltest     60 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltest     60 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 -b OUTPUT )
 add_vvenc_test( compare_output-tooltest 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --SIMD=SCALAR -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 --SIMD=SCALAR -b OUTPUT )
 add_vvenc_test( compare_output-tooltest-Scalar 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-tooltesttrans 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltesttrans 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../cfg/gop32.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
 add_vvenc_test( output-tooltesttrans     30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
 add_vvenc_test( vvencapp-faster       30 OUT_VVC   ""                       vvencapp --preset faster -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 11 -o OUTPUT )
@@ -383,9 +383,8 @@ add_vvenc_test( vvencapp-medium_rc2p_statsFile1_easy      30 OUT_VVC   ""       
 add_vvenc_test( vvencapp-medium_rc2p_statsFile2_easy      30 OUT_VVC   "${OUT_VVC}"             vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Pass=2 --RCStatsFile=stats_easy.json -o OUTPUT )
 add_vvenc_test( compare_output-medium_rc2p_statsFile_easy 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E rm ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
+add_test( NAME Cleanup_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove -f ${CLEANUP_TEST_FILES} rec.yuv stats_exp.json stats_easy.json )
 set_tests_properties( Cleanup_remove_temp_files PROPERTIES FIXTURES_CLEANUP cleanup )
-
 
 if( VVENC_ENABLE_INSTALL )
   # include installer

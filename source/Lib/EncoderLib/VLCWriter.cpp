@@ -1055,8 +1055,6 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
   bool sps_extension_present_flag=false;
   bool sps_extension_flags[NUM_SPS_EXTENSION_FLAGS]={false};
 
-  sps_extension_flags[SPS_EXT__REXT] = pcSPS->spsRExt.settingsDifferFromDefaults();
-
   for(int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++)
   {
     sps_extension_present_flag|=sps_extension_flags[i];
@@ -1086,24 +1084,14 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
     {
       if (sps_extension_flags[i])
       {
+#if 0 // TODO: enable when applicable
         switch (SPSExtensionFlagIndex(i))
         {
-        case SPS_EXT__REXT:
-        {
-          const SPSRExt &spsRangeExtension=pcSPS->spsRExt;
-          WRITE_FLAG( spsRangeExtension.transformSkipRotationEnabled,        "transform_skip_rotation_enabled_flag");
-          WRITE_FLAG( spsRangeExtension.transformSkipContextEnabled,         "transform_skip_context_enabled_flag");
-          WRITE_FLAG( spsRangeExtension.extendedPrecisionProcessing,         "extended_precision_processing_flag" );
-          WRITE_FLAG( spsRangeExtension.intraSmoothingDisabled,              "intra_smoothing_disabled_flag" );
-          WRITE_FLAG( spsRangeExtension.highPrecisionOffsetsEnabled,         "high_precision_offsets_enabled_flag" );
-          WRITE_FLAG( spsRangeExtension.persistentRiceAdaptationEnabled,     "persistent_rice_adaptation_enabled_flag" );
-          WRITE_FLAG( spsRangeExtension.cabacBypassAlignmentEnabled,         "cabac_bypass_alignment_enabled_flag" );
-          break;
-        }
         default:
           CHECK(sps_extension_flags[i]!=false, "Unknown PPS extension signalled"); // Should never get here with an active SPS extension flag.
           break;
         }
+#endif
       }
     }
   }
@@ -1759,7 +1747,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
         numSlicesInPreviousSubPics += slice->pps->subPics[sp].numSlicesInSubPic;
       }
       int bitsSliceAddress = ceilLog2(currSubPic.numSlicesInSubPic);
-      WRITE_CODE( slice->sliceSubPicId - numSlicesInPreviousSubPics, bitsSliceAddress, "sh_slice_address");
+      WRITE_CODE( slice->sliceMap.sliceID - numSlicesInPreviousSubPics, bitsSliceAddress, "sh_slice_address");
     }
   }
 
@@ -2341,7 +2329,7 @@ void HLSWriter::xCodePredWeightTable( const Slice* slice )
               int iDeltaWeight = (wp[j].iWeight - (1<<wp[COMP_Cb].log2WeightDenom));
               WRITE_SVLC( iDeltaWeight, iNumRef==0?"delta_chroma_weight_l0[i]":"delta_chroma_weight_l1[i]" );
 
-              int range=slice->sps->spsRExt.highPrecisionOffsetsEnabled ? (1<<slice->sps->bitDepths[ CH_C ])/2 : 128;
+              int range=128;
               int pred = ( range - ( ( range*wp[j].iWeight)>>(wp[j].log2WeightDenom) ) );
               int iDeltaChroma = (wp[j].iOffset - pred);
               WRITE_SVLC( iDeltaChroma, iNumRef==0?"delta_chroma_offset_l0[i]":"delta_chroma_offset_l1[i]" );
@@ -2421,7 +2409,7 @@ void HLSWriter::xCodePredWeightTable( const PicHeader *picHeader, const PPS *pps
             int iDeltaWeight = (wp[j].iWeight - (1<<wp[COMP_Cb].log2WeightDenom));
             WRITE_SVLC( iDeltaWeight, iNumRef==0?"delta_chroma_weight_l0[i]":"delta_chroma_weight_l1[i]" );
 
-            int range=sps->spsRExt.highPrecisionOffsetsEnabled ? (1<<sps->bitDepths[ CH_C ])/2 : 128;
+            int range=128;
             int pred = ( range - ( ( range*wp[j].iWeight)>>(wp[j].log2WeightDenom) ) );
             int iDeltaChroma = (wp[j].iOffset - pred);
             WRITE_SVLC( iDeltaChroma, iNumRef==0?"delta_chroma_offset_l0[i]":"delta_chroma_offset_l1[i]" );

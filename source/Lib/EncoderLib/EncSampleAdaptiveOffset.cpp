@@ -68,17 +68,7 @@ namespace vvenc {
 //! rounding with IBDI
 inline double xRoundIbdi2(int bitDepth, double x)
 {
-#if FULL_NBIT
   return ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) -0.5)));
-#else
-  if (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) == 0)
-    return ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) -0.5)));
-  else
-    return ((x) > 0) ? (int)(((int)(x) + (1 << (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) - 1)))
-                             / (1 << DISTORTION_PRECISION_ADJUSTMENT(bitDepth)))
-                     : ((int)(((int)(x) - (1 << (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) - 1)))
-                              / (1 << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))));
-#endif
 }
 
 inline double xRoundIbdi(int bitDepth, double x)
@@ -955,9 +945,9 @@ void EncSampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructu
 
   if (!isLoopFiltAcrossSlicePPS)
   {
-    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameTile(*cuCurr, *cuLeft);
-    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameTile(*cuCurr, *cuAbove);
-    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameTile(*cuCurr, *cuAboveLeft);
+    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameSlice(*cuCurr, *cuLeft);
+    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameSlice(*cuCurr, *cuAbove);
+    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameSlice(*cuCurr, *cuAboveLeft);
   }
   else
   {

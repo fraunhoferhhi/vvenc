@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncLib.h"
 #include "CommonLib/Contexts.h"
 #include "CommonLib/UnitTools.h"
+#include "CommonLib/SampleAdaptiveOffset.h"
 #include "CommonLib/dtrace_buffer.h"
 
 #include <map>

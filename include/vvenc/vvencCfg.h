@@ -85,6 +85,9 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
 #define VVENC_MAX_STRING_LEN                  1024   // max length of string/filename
+#define VVENC_DEFAULT_QP                      32     // default base QP
+#define VVENC_AUTO_QP                        -1      // indicates to use default QP, or ignore if RC is used
+#define VVENC_RC_OFF                          0      // indicates rate control is disabled
 
 // ====================================================================================================================
 
@@ -314,18 +317,18 @@ typedef struct vvencGOPEntry
   double m_QPFactor;
   int    m_tcOffsetDiv2;
   int    m_betaOffsetDiv2;
-  int    m_CbTcOffsetDiv2;
-  int    m_CbBetaOffsetDiv2;
-  int    m_CrTcOffsetDiv2;
-  int    m_CrBetaOffsetDiv2;
+  int    m_cfgUnused1;                                                                   // TODO: remove unused memory from configuration
+  int    m_cfgUnused2;
+  int    m_cfgUnused3;
+  int    m_cfgUnused4;
   int    m_temporalId;
-  bool   m_refPic;
+  bool   m_cfgUnused5;                                                                   // TODO: remove unused memory from configuration
   char   m_sliceType;
   int    m_numRefPicsActive[ 2 ];
   int    m_numRefPics[ 2 ];
   int    m_deltaRefPics[ 2 ][ VVENC_MAX_NUM_REF_PICS ];
-  bool   m_isEncoded;
-  bool   m_ltrp_in_slice_header_flag;
+  bool   m_cfgUnused6;                                                                   // TODO: remove unused memory from configuration
+  bool   m_cfgUnused7;
 }vvencGOPEntry;
 
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry );
@@ -382,7 +385,6 @@ typedef struct vvencReshapeCW
   unsigned int initialCW;
   int          rspPicSize;
   int          rspFps;
-  int          rspBaseQP;
   int          rspTid;
   int          rspFpsToIp;
 }vvencReshapeCW;
@@ -481,15 +483,15 @@ typedef struct vvenc_config
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
 
   vvencRPLEntry       m_cfgUnused2[ 64 ];                                                // TODO: remove unused memory from configuration
-  vvencRPLEntry       m_cfgUnused3[ 64 ];                                                // TODO: remove unused memory from configuration
+  vvencRPLEntry       m_cfgUnused3[ 64 ];
 
   vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
 
   int                 m_cfgUnused4[ 7 ];                                                 // TODO: remove unused memory from configuration
-  int                 m_cfgUnused5[ 7 ];                                                 // TODO: remove unused memory from configuration
-  int                 m_cfgUnused6;                                                      // TODO: remove unused memory from configuration
-  int                 m_cfgUnused7;                                                      // TODO: remove unused memory from configuration
-  int                 m_cfgUnused8;                                                      // TODO: remove unused memory from configuration
+  int                 m_cfgUnused5[ 7 ];
+  int                 m_cfgUnused6;
+  int                 m_cfgUnused7;
+  int                 m_cfgUnused8;
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;
@@ -590,7 +592,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_cfgUnused12;
+  bool                m_cfgUnused10;                                                     // TODO: remove unused memory from configuration
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME
@@ -649,7 +651,7 @@ typedef struct vvenc_config
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
   int                 m_loopFilterBetaOffsetDiv2[3];                                     // beta offset for deblocking filter
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
-  int                 m_cfgUnused10;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
 
   bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
   bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
@@ -677,7 +679,7 @@ typedef struct vvenc_config
   int                 m_chromaSampleLocType;                                             // Specifies the location of chroma samples for progressive content
   bool                m_overscanInfoPresent;                                             // Signals whether overscan_appropriate_flag is present
   bool                m_overscanAppropriateFlag;                                         // Indicates whether conformant decoded pictures are suitable for display using overscan
-  bool                m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused12;                                                     // TODO: remove unused memory from configuration
   bool                m_videoFullRangeFlag;                                              // Indicates the black level and range of luma and chroma signals
 
   unsigned int        m_masteringDisplay[10];                                            // mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
@@ -737,7 +739,9 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[3];
+  int                 m_reservedInt[1];
+  int                 m_numRefPics;                                                      // Number of reference pictures
+  int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
   int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
   int                 m_deblockLastTLayers;
@@ -747,7 +751,9 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
   
   bool                m_picReordering;
-  bool                m_reservedFlag[5];
+  bool                m_reservedFlag[3];
+  bool                m_blockImportanceMapping;
+  bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)

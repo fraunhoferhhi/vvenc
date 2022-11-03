@@ -1546,25 +1546,14 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
     {
       if (sps_extension_flags[i])
       {
+#if 0 // TODO: extend when applicable
         switch (SPSExtensionFlagIndex(i))
         {
-        case SPS_EXT__REXT:
-          CHECK(bSkipTrailingExtensionBits, "Skipping trailing extension bits not supported");
-          {
-            SPSRExt &spsRExt = pcSPS->spsRExt;
-            READ_FLAG( spsRExt.transformSkipRotationEnabled,    "transform_skip_rotation_enabled_flag");
-            READ_FLAG( spsRExt.transformSkipContextEnabled,     "transform_skip_context_enabled_flag");
-            READ_FLAG( spsRExt.extendedPrecisionProcessing,     "extended_precision_processing_flag");
-            READ_FLAG( spsRExt.intraSmoothingDisabled,          "intra_smoothing_disabled_flag");
-            READ_FLAG( spsRExt.highPrecisionOffsetsEnabled,     "high_precision_offsets_enabled_flag");
-            READ_FLAG( spsRExt.persistentRiceAdaptationEnabled, "persistent_rice_adaptation_enabled_flag");
-            READ_FLAG( spsRExt.cabacBypassAlignmentEnabled,     "cabac_bypass_alignment_enabled_flag");
-          }
-          break;
         default:
           bSkipTrailingExtensionBits=true;
           break;
         }
+#endif
       }
     }
     if (bSkipTrailingExtensionBits)
@@ -3562,7 +3551,7 @@ void HLSyntaxReader::parsePredWeightTable( Slice* slice, const SPS *sps )
         CHECK( iDeltaWeight >  127, "Invalid code" );
         wp[COMP_Y].iWeight = (iDeltaWeight + (1<<wp[COMP_Y].log2WeightDenom));
         READ_SVLC( wp[COMP_Y].iOffset, iNumRef==0?"luma_offset_l0[i]":"luma_offset_l1[i]" );
-        const int range=sps->spsRExt.highPrecisionOffsetsEnabled ? (1<<sps->bitDepths[ CH_L ])/2 : 128;
+        const int range = 128;
         CHECK ( wp[0].iOffset < -range , "luma_offset_lx shall be in the rage of -128 to 127");
         CHECK ( wp[0].iOffset >= range , "luma_offset_lx shall be in the rage of -128 to 127");
       }
@@ -3575,7 +3564,7 @@ void HLSyntaxReader::parsePredWeightTable( Slice* slice, const SPS *sps )
       {
         if ( wp[COMP_Cb].presentFlag )
         {
-          int range=sps->spsRExt.highPrecisionOffsetsEnabled ? (1<<sps->bitDepths[ CH_C ])/2 : 128;
+          int range = 128;
           for ( int j=1 ; j<numValidComp ; j++ )
           {
             int iDeltaWeight;
@@ -3694,7 +3683,7 @@ void HLSyntaxReader::parsePredWeightTable( PicHeader* picHeader, const PPS *pps,
         CHECK(deltaWeight > 127, "delta_luma_weight_lx shall be in the rage of -128 to 127");
         wp[COMP_Y].iWeight = (deltaWeight + (1 << wp[COMP_Y].log2WeightDenom));
         READ_SVLC(wp[COMP_Y].iOffset, numRef == 0 ? "luma_offset_l0[i]" : "luma_offset_l1[i]");
-        const int range = sps->spsRExt.highPrecisionOffsetsEnabled ? (1 << sps->bitDepths[CH_L]) / 2 : 128;
+        const int range = 128;
         CHECK ( wp[0].iOffset < -range , "luma_offset_lx shall be in the rage of -128 to 127");
         CHECK ( wp[0].iOffset >= range , "luma_offset_lx shall be in the rage of -128 to 127");
       }
@@ -3707,7 +3696,7 @@ void HLSyntaxReader::parsePredWeightTable( PicHeader* picHeader, const PPS *pps,
       {
         if ( wp[COMP_Cb].presentFlag )
         {
-          int range=sps->spsRExt.highPrecisionOffsetsEnabled ? (1<<sps->bitDepths[ CH_C ])/2 : 128;
+          int range = 128;
           for ( int j=1 ; j<numValidComp ; j++ )
           {
             int deltaWeight;
