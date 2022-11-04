@@ -741,26 +741,37 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
   return nullptr;
 #else   // TARGET_SIMD_X86
 
-  // TODO: don't let exceptions escape here
-
-  X86_VEXT request_ext = string_to_vext( simdId );
+#if HANDLE_EXCEPTION
   try
+#endif
   {
-    read_x86_extension_flags( request_ext );
-  }
-  catch( ... )
-  {
-    THROW( "requested SIMD level (" << simdId << ") not supported by current CPU (max " << read_simd_extension_name() << ")." );
-  }
+    X86_VEXT request_ext = string_to_vext( simdId );
+    try {
+      read_x86_extension_flags( request_ext );
+    }
+    catch( Exception& )
+    {
+      // not using the actual message from the exception here, because we need to insert the SIMD-level name instead of the enum
+      THROW( "requested SIMD level (" << simdId << ") not supported by current CPU (max " << read_simd_extension_name() << ")." );
+    }
 
 #  if ENABLE_SIMD_OPT_BUFFER
-  g_pelBufOP.initPelBufOpsX86();
+    g_pelBufOP.initPelBufOpsX86();
 #  endif
 #  if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.initTCoeffOpsX86();
+    g_tCoeffOps.initTCoeffOpsX86();
 #  endif
 
-  return read_simd_extension_name().c_str();
+    return read_simd_extension_name().c_str();
+  }
+#if HANDLE_EXCEPTION
+  catch( Exception& e )
+  {
+    MsgLog msg;
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+    return nullptr;
+  }
+#endif
 #endif   // TARGET_SIMD_X86
 }
 
