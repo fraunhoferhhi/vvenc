@@ -444,13 +444,13 @@ inline cost_t QuantRDOQ2::xiGetCostLast( const uint32_t uiPosX, const uint32_t u
   cost_t iCtxX = g_uiGroupIdx[uiPosX];
   cost_t iCtxY = g_uiGroupIdx[uiPosY];
 
-  cost_t iCost = m_lastBitsX[chType][uiCtxX] + m_lastBitsY[chType][uiCtxY];
+  cost_t iCost = m_lastBitsX[chType][iCtxX] + m_lastBitsY[chType][iCtxY];
 
-  if( uiCtxX > 3 )
+  if( iCtxX > 3 )
   {
     iCost += xGetIEPRate() * ( ( iCtxX - 2 ) >> 1 );
   }
-  if( uiCtxY > 3 )
+  if( iCtxY > 3 )
   {
     iCost += xGetIEPRate() * ( ( iCtxY - 2 ) >> 1 );
   }

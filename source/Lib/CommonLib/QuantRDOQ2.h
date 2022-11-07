@@ -84,7 +84,7 @@ private:
   void xSetErrScaleCoeffNoScalingList  ( unsigned list, unsigned wIdx, unsigned hIdx, int qp, const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths );
   void xInitLastPosBitsTab             ( const CoeffCodingContext& cctx, const unsigned uiWidth, const unsigned uiHeight, const ChannelType chType, const FracBitsAccess& fracBits );
 
-  inline cost_t xiGetICost              ( int iRate ) const;
+  inline cost_t xiGetICost              ( cost_t iRate ) const;
   inline cost_t xGetIEPRate             () const;
   inline cost_t xiGetICRateCost ( const unsigned     uiAbsLevel,
                                   const BinFracBits& fracBitsPar,
