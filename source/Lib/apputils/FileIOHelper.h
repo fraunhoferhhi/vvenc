@@ -98,7 +98,7 @@ public:
     if( cfHandle.fail() ) return false;
 
     char line[10] = {0};
-    int headerlinesize = cfHandle.readsome( line, 10 );
+    std::streamsize headerlinesize = cfHandle.readsome( line, 10 );
     cfHandle.close();
 
     if( headerlinesize && memcmp( line, "YUV4MPEG2", 9 ) == 0 ) return true;
