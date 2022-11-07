@@ -722,7 +722,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, const int filterIdx )
         return;
       }
 
-      pic->m_picShared->m_bimCtuSize = (uint16_t) ctuSize;
       pic->m_picShared->m_ctuBimQpOffset.resize( numCtu, 0 );
 
       if( distFactor[0] < 3 && distFactor[1] < 3 )
