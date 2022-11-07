@@ -287,7 +287,7 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
   return ext_flags;
 }
 
-const std::string& read_simd_extension_name()
+const std::string& read_x86_extension_name()
 {
   return vext_to_string( read_x86_extension_flags() );
 }

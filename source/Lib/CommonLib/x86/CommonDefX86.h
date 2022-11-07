@@ -88,7 +88,7 @@ const std::string& vext_to_string( X86_VEXT vext );
 X86_VEXT           string_to_vext( const std::string& ext_name );
 
 X86_VEXT           read_x86_extension_flags( X86_VEXT request = UNDEFINED );
-const std::string& read_simd_extension_name();
+const std::string& read_x86_extension_name();
 
 #if defined( _MSC_VER ) && _MSC_VER <= 1900
 #define _mm_bsrli_si128 _mm_srli_si128
