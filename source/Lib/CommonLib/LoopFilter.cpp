@@ -1393,10 +1393,8 @@ LFCUParam xGetLoopfilterParam( const CodingUnit& cu )
     const int scaleY = getChannelTypeScaleY( cu.chType, slice.pps->pcv->chrFormat );
     const int ctuX   = ( pos.x << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
     const int ctuY   = ( pos.y << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
-    const int ctuLX  = ( ( pos.x - 1 ) << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
-    const int ctuTY  = ( ( pos.y - 1 ) << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
-    stLFCUParam.leftEdge = stLFCUParam.leftEdge && slice.pps->canFilterCtuBdry( ctuX, ctuY, ctuLX - ctuX,            0 );
-    stLFCUParam.topEdge  = stLFCUParam.topEdge  && slice.pps->canFilterCtuBdry( ctuX, ctuY,            0, ctuTY - ctuY );
+    stLFCUParam.leftEdge = stLFCUParam.leftEdge && slice.pps->canFilterCtuBdry( ctuX, ctuY,    ( ( ( pos.x - 1 ) << scaleX ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuX, 0 );
+    stLFCUParam.topEdge  = stLFCUParam.topEdge  && slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, ( ( ( pos.y - 1 ) << scaleY ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuY );
   }
   return stLFCUParam;
 }
