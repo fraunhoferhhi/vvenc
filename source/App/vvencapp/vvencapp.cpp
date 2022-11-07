@@ -345,9 +345,9 @@ int main( int argc, char* argv[] )
         vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
         vvenc_accessUnit_free_payload( &AU );
         vvenc_encoder_close( enc );
-        return -1;  
+        return -1;
       }
-      
+
       iSeqNumber=iRemSkipFrames;
     }
 
