@@ -682,7 +682,7 @@ namespace DQIntern
       SCALE_BITS - 2 * (nomTransformShift + DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth)) + m_QShift + (needsSqrt2ScaleAdjustment ? 1 : 0);
     const double  qScale2       = double( qScale * qScale );
     const double  nomDistFactor = ( nomDShift < 0 ? 1.0/(double(int64_t(1)<<(-nomDShift))*qScale2*lambda) : double(int64_t(1)<<nomDShift)/(qScale2*lambda) );
-    const int64_t pow2dfShift   = (int64_t)( nomDistFactor * qScale2 ) + 1;
+    const uint32_t pow2dfShift   = (uint32_t)( nomDistFactor * qScale2 ) + 1;
     const int     dfShift       = ceilLog2( pow2dfShift );
     m_DistShift                 = 62 + m_QShift - 2*maxLog2TrDynamicRange - dfShift;
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
