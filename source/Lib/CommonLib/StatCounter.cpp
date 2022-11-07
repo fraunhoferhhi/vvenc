@@ -148,7 +148,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
   }
   OUTSTR( 0, "\r\n" );
   OUTSTR( leftW, " " );
-  OUTSTRC( (numTotalValSyms * (xDim - firstSizeIdx)), '-' );
+  OUTSTRC( (numTotalValSyms * (xDim - (size_t)firstSizeIdx)), '-' );
   OUTSTR( 0, "\r\n" );
 
   // Data over Y and X axis
