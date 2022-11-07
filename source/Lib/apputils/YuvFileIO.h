@@ -409,8 +409,7 @@ public:
     return true;
   }
 
-
-  unsigned countYuvFrames( int width, int height, bool countFromStart = true )
+  int countYuvFrames( int width, int height, bool countFromStart = true )
   {
     if( m_readStdin ) return -1;
 
@@ -458,7 +457,7 @@ public:
 
     m_cHandle.seekg( lastPos, std::ios::beg ); // rewind to last pos
 
-    return (unsigned)(filelength / frameSize);
+    return (int)(filelength / frameSize);
   }
 };
 
