@@ -453,7 +453,7 @@ void EncApp::closeFileIO()
   m_bitstream.close();
 }
 
-void EncApp::printRateSummary( int framesRcvd )
+void EncApp::printRateSummary( int64_t framesRcvd )
 {
   vvenc_print_summary( m_encCtx );
 
