@@ -55,11 +55,13 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#define OUTPUT(...) { sprintf( cStr, __VA_ARGS__ ); m_str << cStr; }
+#define SC_CSTR_SIZE     512
+
+#define OUTPUT(...) { snprintf( cStr, SC_CSTR_SIZE - 1, __VA_ARGS__ ); m_str << cStr; }
 #define OUTSTR( _w, ... ) { m_str << std::setw( (int)(_w) ) << __VA_ARGS__; }
 #define OUTSTRC( _w, _c ) { m_str << std::setfill( _c ) << std::setw( (int)(_w)  ) << _c << std::setfill( ' ' ); }
 #define OUTSTRF( _w, _p, ... ) { m_str << std::fixed << std::setw( (int)(_w) ) << std::setprecision(_p) << __VA_ARGS__; }
-#define OUTPUT_COND_SIZE_IDX(_stype,_idx,...) { sprintf( cStr, __VA_ARGS__ ); m_str << cStr; }
+#define OUTPUT_COND_SIZE_IDX(_stype,_idx,...) { snprintf( cStr, SC_CSTR_SIZE - 1, __VA_ARGS__ ); m_str << cStr; }
 #define MIN_SIZE_IDX 2
 #define IDX_TO_SIZE(_i) (1<<_i)
 
@@ -69,7 +71,8 @@ namespace vvenc {
 template<typename T>
 std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T>& cntSet, bool axisInBlockSizes, bool absoluteNumbers, bool weightedByArea, bool secondColumnInPercentage, bool ratiosWithinSingleElement, int refCntId )
 {
-  char cStr[512];
+  char cStr[SC_CSTR_SIZE];
+  std::memset( cStr, 0, sizeof( cStr ) );
   std::stringstream m_str;
 
   CHECK( !axisInBlockSizes && weightedByArea, "Mode is not supported" );
