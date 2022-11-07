@@ -2037,7 +2037,7 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
 
   if ((m_signalType == RESHAPE_SIGNAL_SDR || m_signalType == RESHAPE_SIGNAL_HLG) && rcDtParam.compID != COMP_Y)
   {
-    const int64_t fixedPTweight = ( int64_t ) ( m_chromaWeight * ( double ) ( 1 << 16 ) );
+    const uint32_t fixedPTweight = ( uint32_t ) ( m_chromaWeight * ( double ) ( 1 << 16 ) );
 
     return m_fxdWtdPredPtr( rcDtParam, fixedPTweight );
   }
