@@ -523,7 +523,7 @@ void MCTF::initPicture( Picture* pic )
   pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::processPictures( const PicList& picList, const bool flush, const int ctuSize, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void MCTF::processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // ensure this is only processed if necessary 
   if( !flush && (picList.empty() || ( m_lastPicIn == picList.back())))
@@ -559,7 +559,7 @@ void MCTF::processPictures( const PicList& picList, const bool flush, const int 
     // filter picture (when more than 1 picture is available for processing)
     if( picFifo.size() > 1 )
     {
-      filter( picFifo, filterIdx, ctuSize );
+      filter( picFifo, filterIdx );
     }
     // set picture done
     doneList.push_back( picFifo[ filterIdx ] );
@@ -576,7 +576,7 @@ void MCTF::processPictures( const PicList& picList, const bool flush, const int 
 }
 
 
-void MCTF::filter( const std::deque<Picture*>& picFifo, const int filterIdx, const int currCtuSize )
+void MCTF::filter( const std::deque<Picture*>& picFifo, const int filterIdx )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
@@ -664,11 +664,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, const int filterIdx, con
 
     if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA )
     {
-#if BIM_CTU_SIZE
-      const int ctuSize        = currCtuSize;
-#else
-      const int ctuSize        = m_encCfg->m_CTUSize;
-#endif
+      const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
       const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
       const int numCtu         = widthInCtus * heightInCtus;

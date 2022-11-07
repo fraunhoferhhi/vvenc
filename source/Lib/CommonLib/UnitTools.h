@@ -198,9 +198,7 @@ namespace TU
 }
 
 uint32_t  getCtuAddr                    (const Position& pos, const PreCalcValues &pcv);
-#if BIM_CTU_SIZE
 uint32_t  getCtuAddrFromCtuSize         (const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus);
-#endif
 
 int       getNumModesMip                (const Size& block);
 int       getMipSizeId                  (const Size& block);

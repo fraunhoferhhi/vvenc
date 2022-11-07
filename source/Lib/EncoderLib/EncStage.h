@@ -241,7 +241,7 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
-  virtual void processPictures( const PicList& picList, const bool flush, const int ctuSize, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+  virtual void processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 
 public:
   virtual void waitForFreeEncoders() {}
@@ -353,7 +353,7 @@ public:
         // process pictures
         PicList doneList;
         PicList freeList;
-        processPictures( m_procList, flush, ctuSize, auList, doneList, freeList );
+        processPictures( m_procList, flush, auList, doneList, freeList );
 
         // send processed/finalized pictures to next stage
         for( auto pic : doneList )

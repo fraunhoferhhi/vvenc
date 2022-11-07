@@ -3633,12 +3633,10 @@ uint32_t getCtuAddr( const Position& pos, const PreCalcValues& pcv )
   return ( pos.x >> pcv.maxCUSizeLog2 ) + ( pos.y >> pcv.maxCUSizeLog2 ) * pcv.widthInCtus;
 }
 
-#if BIM_CTU_SIZE
 uint32_t getCtuAddrFromCtuSize( const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus )
 {
   return ( pos.x >> maxCUSizeLog2 ) + ( pos.y >> maxCUSizeLog2 ) * widthInCtus;
 }
-#endif
 
 int getNumModesMip(const Size& block)
 {

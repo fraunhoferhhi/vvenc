@@ -71,8 +71,6 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
-#define BIM_CTU_SIZE                                      0 // 1: always use user defined CTU size in BIM QP offset calculations (e.g., final-pass CTU size config in rate ctrl)
-
 // ====================================================================================================================
 // General settings
 // ====================================================================================================================
