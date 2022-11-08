@@ -297,9 +297,9 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
   }
 }
 
-inline cost_t QuantRDOQ2::xiGetICost( int iRate ) const
+inline cost_t QuantRDOQ2::xiGetICost(int iRate ) const
 {
-  return m_dLambda * iRate;
+  return (cost_t)(m_dLambda * iRate);
 }
 
 inline cost_t QuantRDOQ2::xGetIEPRate() const
@@ -394,7 +394,7 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
     iRate = 0;
   }
   }
-  return xiGetICost( iRate );
+  return xiGetICost( (int)iRate );
 }
 
 inline cost_t QuantRDOQ2::xiGetCostSigCoeffGroup( const BinFracBits& fracBitsSigCG, unsigned uiSignificanceCoeffGroup ) const
@@ -1106,7 +1106,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         }
         if( iLastNZPosInCG - iFirstNZPosInCG >= SBH_THRESHOLD )
         {
-          iCodedCostCG -= xiGetICost( xGetIEPRate() ); //subtract cost for one sign bin
+          iCodedCostCG -= xiGetICost( (int)xGetIEPRate() ); //subtract cost for one sign bin
           bool bSign    = plSrcCoeff[ cctx.blockPos( iSubPos + iFirstNZPosInCG) ] < 0;
 
           if( bSign != ( uiAbsSumCG & 0x1 ) ) {

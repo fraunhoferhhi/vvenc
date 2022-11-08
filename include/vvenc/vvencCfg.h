@@ -749,7 +749,7 @@ typedef struct vvenc_config
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-  
+
   bool                m_picReordering;
   bool                m_reservedFlag[3];
   bool                m_blockImportanceMapping;

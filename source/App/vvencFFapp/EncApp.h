@@ -120,7 +120,7 @@ private:
   void closeFileIO();
 
   // statistics
-  void printRateSummary( int framesRcvd );
+  void printRateSummary( int64_t framesRcvd );
   void printChromaFormat();
 };
 
