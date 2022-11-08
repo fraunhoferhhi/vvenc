@@ -46,7 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // calculate scale value of bitrate and initial delay
-int EncHRD::xCalcScale(int x)
+int EncHRD::xCalcScale(uint32_t x)
 {
   if (x==0)
   {
@@ -74,8 +74,8 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
   profileLevelTierFeatures.extractPTLInformation( sps );
 
   bool useSubCpbParams = false; //encCfg.getNoPicPartitionFlag() == false;
-  int bitRate = encCfg.m_RCTargetBitrate;
-  int cpbSize = profileLevelTierFeatures.getCpbSizeInBits();
+  uint32_t bitRate = (uint32_t)encCfg.m_RCTargetBitrate;
+  uint32_t cpbSize = (uint32_t)profileLevelTierFeatures.getCpbSizeInBits();
 
   CHECK(!(cpbSize != 0), "Unspecified error");  // CPB size may not be equal to zero. ToDo: have a better default and check for level constraints
 

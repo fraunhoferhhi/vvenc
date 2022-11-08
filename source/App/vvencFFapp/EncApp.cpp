@@ -290,12 +290,12 @@ int EncApp::encode()
           msgApp( VVENC_ERROR, "skip %d frames from stdin failed\n", remSkipFrames );
         else
           msgApp( VVENC_ERROR, "skip %d frames failed. file contains %d frames only.\n", remSkipFrames, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) );
-          
+
         vvenc_encoder_close( m_encCtx );
         vvenc_YUVBuffer_free_buffer( &yuvInBuf );
         vvenc_accessUnit_free_payload( &au );
-        closeFileIO();    
-        return -1;  
+        closeFileIO();
+        return -1;
       }
     }
 
@@ -453,7 +453,7 @@ void EncApp::closeFileIO()
   m_bitstream.close();
 }
 
-void EncApp::printRateSummary( int framesRcvd )
+void EncApp::printRateSummary( int64_t framesRcvd )
 {
   vvenc_print_summary( m_encCtx );
 
