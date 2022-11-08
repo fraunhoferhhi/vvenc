@@ -1934,23 +1934,36 @@ void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPos
   // copy unfiltered reco (including padded / extended area)
   const ChromaFormat chromaFormat = cs.area.chromaFormat;
   UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
+  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
+  {
+    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
+    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
+    CompArea cpyArea = ctuArea.blocks[ i ];
+    if( ctuPosX == 0 )
+    {
+      cpyArea.x     -= extX;
+      cpyArea.width += extX;
+    }
+    if( ctuPosX + 1 >= cs.pcv->widthInCtus )
+    {
+      cpyArea.width += extX;
+    }
 
-  const int pad = MAX_ALF_PADDING_SIZE;
-  const int w = ctuArea.lwidth();
-  const int h = ctuArea.lheight();
-  const bool clipL = ctuPosX != 0                       && !cs.pps->canFilterCtuBdry( ctuPosX, ctuPosY,-1, 0 );
-  const bool clipR = ctuPosX + 1 < cs.pcv->widthInCtus  && !cs.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 );
-  const bool clipT = ctuPosY != 0                       && !cs.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0,-1 );
-  const bool clipB = ctuPosY + 1 < cs.pcv->heightInCtus && !cs.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, 1 );
+    if( ctuPosY == 0 )
+    {
+      cpyArea.y      -= extY;
+      cpyArea.height += extY;
+    }
+    if( ctuPosY + 1 >= cs.pcv->heightInCtus )
+    {
+      cpyArea.height += extY;
+    }
 
-  const int wBuf = w + ( clipL ? 0 : pad ) + ( clipR ? 0 : pad );
-  const int hBuf = h + ( clipT ? 0 : pad ) + ( clipB ? 0 : pad );
-
-  UnitArea cpyArea( cs.area.chromaFormat, Area( ctuArea.lx() - ( clipL ? 0 : pad ), ctuArea.ly() - ( clipT ? 0 : pad ), wBuf, hBuf ) );
-  CPelUnitBuf srcBuf = cs.getRecoBuf().subBuf( cpyArea );
-  PelUnitBuf  dstBuf = m_tempBuf.subBuf( cpyArea );
-  dstBuf.copyFrom( srcBuf );
-
+           PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
+    const CPelBuf srcBuf = cs.getRecoBuf( cpyArea.compID ).subBuf( cpyArea.pos(), cpyArea.size() );
+    dstBuf.copyFrom( srcBuf );
+  }
 }
 
 void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, const double* lambdas )

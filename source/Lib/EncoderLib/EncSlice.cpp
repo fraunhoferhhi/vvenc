@@ -1189,6 +1189,14 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     case CCALF_GET_STATISTICS:
       {
+        if( ctuPosY > 0 &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0,-1 ) && processStates[ctuRsAddr - ctuStride    ] <= ALF_RECONSTRUCT )
+          return false;
+
+        if( ctuPosY + 1 < pcv.heightInCtus &&
+          slice.pps->canFilterCtuBdry( ctuPosX, ctuPosY, 0, 1 ) && processStates[ctuRsAddr + ctuStride    ] <= ALF_RECONSTRUCT )
+          return false;
+
         if( checkReadyState )
           return true;
 
