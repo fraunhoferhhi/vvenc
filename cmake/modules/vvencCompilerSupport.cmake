@@ -28,15 +28,16 @@ function( check_missing_intrinsics )
   set_if_compiler_supports_flag( FLAG_msse2 -msse2 )
   set_if_compiler_supports_flag( FLAG_mavx  -mavx  )
 
-  _check_intrinsic( _mm_storeu_si16     "${FLAG_msse2}" "int16_t a = 0; _mm_storeu_si16( &a, _mm_setzero_si128() );" )
-  _check_intrinsic( _mm_storeu_si32     "${FLAG_msse2}" "int32_t a = 0; _mm_storeu_si32( &a, _mm_setzero_si128() );" )
-  _check_intrinsic( _mm_storeu_si64     "${FLAG_msse2}" "int64_t a = 0; _mm_storeu_si64( &a, _mm_setzero_si128() );" )
-  _check_intrinsic( _mm_loadu_si32      "${FLAG_msse2}" "int32_t a = 0; __m128i x = _mm_loadu_si32( &a );"           )
-  _check_intrinsic( _mm_loadu_si64      "${FLAG_msse2}" "int64_t a = 0; __m128i x = _mm_loadu_si64( &a );"           )
-  _check_intrinsic( _mm256_zeroupper    "${FLAG_mavx}"  "_mm256_zeroupper();"                                        )
-  _check_intrinsic( _mm256_loadu2_m128i "${FLAG_mavx}"  "int a[4] = { 0, };                                          \
-                                                        __m256i x = _mm256_loadu2_m128i( ( const __m128i* ) a,       \
-                                                                                         ( const __m128i* ) a );"    )
+  _check_intrinsic( _mm_storeu_si16      "${FLAG_msse2}" "int16_t a = 0; _mm_storeu_si16( &a, _mm_setzero_si128() );" )
+  _check_intrinsic( _mm_storeu_si32      "${FLAG_msse2}" "int32_t a = 0; _mm_storeu_si32( &a, _mm_setzero_si128() );" )
+  _check_intrinsic( _mm_storeu_si64      "${FLAG_msse2}" "int64_t a = 0; _mm_storeu_si64( &a, _mm_setzero_si128() );" )
+  _check_intrinsic( _mm_loadu_si32       "${FLAG_msse2}" "int32_t a = 0; __m128i x = _mm_loadu_si32( &a );"           )
+  _check_intrinsic( _mm_loadu_si64       "${FLAG_msse2}" "int64_t a = 0; __m128i x = _mm_loadu_si64( &a );"           )
+  _check_intrinsic( _mm256_zeroupper     "${FLAG_mavx}"  "_mm256_zeroupper();"                                        )
+  _check_intrinsic( _mm256_loadu2_m128i  "${FLAG_mavx}"  "int a[4] = { 0, };                                          \
+                                                         __m256i x = _mm256_loadu2_m128i( ( const __m128i* ) a,       \
+                                                                                          ( const __m128i* ) a );"    )
+  _check_intrinsic( _mm256_extract_epi32 "${FLAG_mavx}"  "_mm256_extract_epi32( _mm256_setzero_si256(), 1 );"         )
 endfunction()
 
 function( _check_intrinsic symbol_name compiler_flags code )

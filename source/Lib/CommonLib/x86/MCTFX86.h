@@ -59,15 +59,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if USE_AVX2 && _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )
-static inline uint32_t _mm256_extract_epi32(__m256i vec, const int i )
-{   
-  __m128i indx = _mm_cvtsi32_si128(i);
-  __m256i val  = _mm256_permutevar8x32_epi32(vec, _mm256_castsi128_si256(indx));
-  return         _mm_cvtsi128_si32(_mm256_castsi256_si128(val));
-}
-#endif
-
 template<X86_VEXT vext>
 int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {

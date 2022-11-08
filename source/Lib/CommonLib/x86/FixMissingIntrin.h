@@ -95,10 +95,21 @@ static inline void _mm256_zeroupper() {}  // NOOP
 #endif
 
 #ifdef MISSING_INTRIN_mm256_loadu2_m128i
-#if USE_AVX2
+#if USE_AVX
 static inline __m256i _mm256_loadu2_m128i( __m128i const* hiaddr, __m128i const* loaddr )
 {
   return _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( hiaddr ) ), _mm_loadu_si128( loaddr ), 1 );
+}
+#endif
+#endif
+
+#ifdef MISSING_INTRIN_mm256_extract_epi32
+#if USE_AVX
+static inline uint32_t _mm256_extract_epi32( __m256i vec, const int i )
+{
+  __m128i indx = _mm_cvtsi32_si128( i );
+  __m256i val  = _mm256_permutevar8x32_epi32( vec, _mm256_castsi128_si256( indx ) );
+  return _mm_cvtsi128_si32( _mm256_castsi256_si128( val ) );
 }
 #endif
 #endif
