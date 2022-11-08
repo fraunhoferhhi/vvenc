@@ -297,7 +297,7 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
   }
 }
 
-inline cost_t QuantRDOQ2::xiGetICost(cost_t iRate ) const
+inline cost_t QuantRDOQ2::xiGetICost(int iRate ) const
 {
   return (cost_t)(m_dLambda * iRate);
 }
@@ -394,12 +394,12 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
     iRate = 0;
   }
   }
-  return xiGetICost( iRate );
+  return xiGetICost( (int)iRate );
 }
 
 inline cost_t QuantRDOQ2::xiGetCostSigCoeffGroup( const BinFracBits& fracBitsSigCG, unsigned uiSignificanceCoeffGroup ) const
 {
-  return xiGetICost( (cost_t)fracBitsSigCG.intBits[uiSignificanceCoeffGroup] );
+  return xiGetICost( fracBitsSigCG.intBits[uiSignificanceCoeffGroup] );
 }
 
 void QuantRDOQ2::xInitLastPosBitsTab( const CoeffCodingContext& cctx, const uint32_t uiWidth, const uint32_t uiHeight, const ChannelType chType, const FracBitsAccess& fracBits )
@@ -441,25 +441,25 @@ void QuantRDOQ2::xInitLastPosBitsTab( const CoeffCodingContext& cctx, const uint
 */
 inline cost_t QuantRDOQ2::xiGetCostLast( const uint32_t uiPosX, const uint32_t uiPosY, const ChannelType chType ) const
 {
-  cost_t iCtxX = g_uiGroupIdx[uiPosX];
-  cost_t iCtxY = g_uiGroupIdx[uiPosY];
+  uint32_t uiCtxX = g_uiGroupIdx[uiPosX];
+  uint32_t uiCtxY = g_uiGroupIdx[uiPosY];
 
-  cost_t iCost = m_lastBitsX[chType][iCtxX] + m_lastBitsY[chType][iCtxY];
+  uint32_t uiCost = m_lastBitsX[chType][uiCtxX] + m_lastBitsY[chType][uiCtxY];
 
-  if( iCtxX > 3 )
+  if( uiCtxX > 3 )
   {
-    iCost += xGetIEPRate() * ( ( iCtxX - 2 ) >> 1 );
+    uiCost += xGetIEPRate() * ( ( uiCtxX - 2 ) >> 1 );
   }
-  if( iCtxY > 3 )
+  if( uiCtxY > 3 )
   {
-    iCost += xGetIEPRate() * ( ( iCtxY - 2 ) >> 1 );
+    uiCost += xGetIEPRate() * ( ( uiCtxY - 2 ) >> 1 );
   }
-  return xiGetICost( iCost );
+  return xiGetICost( (int)uiCost );
 }
 
 inline cost_t QuantRDOQ2::xiGetCostSigCoef( const BinFracBits& fracBitsSig, unsigned uiSignificance ) const
 {
-  return xiGetICost( (cost_t)fracBitsSig.intBits[uiSignificance] );
+  return xiGetICost( fracBitsSig.intBits[uiSignificance] );
 }
 
 static inline cost_t _dist( cost_t iErr, cost_t iErrScale, int64_t iErrScaleShift )
@@ -1106,7 +1106,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         }
         if( iLastNZPosInCG - iFirstNZPosInCG >= SBH_THRESHOLD )
         {
-          iCodedCostCG -= xiGetICost( xGetIEPRate() ); //subtract cost for one sign bin
+          iCodedCostCG -= xiGetICost( (int)xGetIEPRate() ); //subtract cost for one sign bin
           bool bSign    = plSrcCoeff[ cctx.blockPos( iSubPos + iFirstNZPosInCG) ] < 0;
 
           if( bSign != ( uiAbsSumCG & 0x1 ) ) {
@@ -1161,8 +1161,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   if( !CU::isIntra( *tu.cu ) && isLuma( compID ) )
   {
     const BinFracBits fracBitsQtRootCbf = fracBits.getFracBitsArray( Ctx::QtRootCbf() );
-    iUncodedCostBlock += xiGetICost( (cost_t)fracBitsQtRootCbf.intBits[0] );
-    iCodedCostBlock   += xiGetICost( (cost_t)fracBitsQtRootCbf.intBits[1] );
+    iUncodedCostBlock += xiGetICost( fracBitsQtRootCbf.intBits[0] );
+    iCodedCostBlock   += xiGetICost( fracBitsQtRootCbf.intBits[1] );
   }
   else
   {
@@ -1196,8 +1196,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
     if( !lastCbfIsInferred )
     {
-      iUncodedCostBlock += xiGetICost((cost_t)fracBitsQtCbf.intBits[0]);
-      iCodedCostBlock   += xiGetICost((cost_t)fracBitsQtCbf.intBits[1]);
+      iUncodedCostBlock += xiGetICost(fracBitsQtCbf.intBits[0]);
+      iCodedCostBlock   += xiGetICost(fracBitsQtCbf.intBits[1]);
     }
   }
 
