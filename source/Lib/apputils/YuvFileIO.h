@@ -199,7 +199,7 @@ public:
   bool  isOpen()  { return m_cHandle.is_open(); }
   bool  isEof()   { return m_cHandle.eof();     }
   bool  isFail()  { return m_cHandle.fail();    }
-  std::string getLastError() const { return m_lastError; }   
+  std::string getLastError() const { return m_lastError; }
 
   int   skipYuvFrames ( int numFrames, int width, int height )
   {
@@ -240,9 +240,9 @@ public:
     }
 
     const std::streamoff offset = frameSize * numFrames;
-    
+
     std::istream& inStream = m_readStdin ? std::cin : m_cHandle;
-    
+
     // check for file size
     if( !m_readStdin )
     {
@@ -254,7 +254,7 @@ public:
       {
         return -1;
       }
-    } 
+    }
 
     // attempt to seek
     if ( !! inStream.seekg( offset, std::ios::cur ) )
@@ -272,7 +272,7 @@ public:
       inStream.read( buf, sizeof( buf ) );
     }
     inStream.read( buf, offset_mod_bufsize );
-    
+
     return 0;
   }
 
@@ -345,16 +345,16 @@ public:
 
       FileIOHelper::scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
     }
-    
+
     if( m_cLogoRenderer.isInitialized() )
     {
       LogoInputOptions cLogo = m_cLogoRenderer.getLogoInputOptions();
       if ( cLogo.sourceWidth > yuvInBuf.planes[0].width || cLogo.sourceHeight > yuvInBuf.planes[0].height )
       {
         std::stringstream css;
-        css << "input picture size (" << yuvInBuf.planes[0].width << "x" << yuvInBuf.planes[0].height << ") < logo size (" << 
-                  cLogo.sourceWidth  << "x" << cLogo.sourceHeight << ") cannot render logo" << std::endl;     
-        m_lastError = css.str();   
+        css << "input picture size (" << yuvInBuf.planes[0].width << "x" << yuvInBuf.planes[0].height << ") < logo size (" <<
+                  cLogo.sourceWidth  << "x" << cLogo.sourceHeight << ") cannot render logo" << std::endl;
+        m_lastError = css.str();
         return -1;
       }
 
@@ -364,7 +364,7 @@ public:
         return -1;
       }
     }
-    
+
     m_packetCount++;
 
     return 0;
@@ -402,18 +402,17 @@ public:
       if ( ! FileIOHelper::writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_bufferChrFmt, m_fileChrFmt ) )
         return false;
     }
-    
+
     m_packetCount++;
     vvenc_YUVBuffer_free_buffer( &yuvScaled );
 
     return true;
   }
 
-
   int countYuvFrames( int width, int height, bool countFromStart = true )
   {
     if( m_readStdin ) return -1;
-    
+
     //set the frame size according to the chroma format
     std::streamoff frameSize      = 0;
     const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
@@ -444,21 +443,21 @@ public:
       const char Y4MHeader[] = {'F','R','A','M','E'};
       frameSize += (sizeof(Y4MHeader) + 1);  /* assume basic FRAME\n headers */;
     }
-    
+
     std::streamoff lastPos = m_cHandle.tellg();  // backup last position
-    
+
     if( countFromStart )
     {
       m_cHandle.seekg( 0, std::ios::beg );
     }
     std::streamoff curPos = m_cHandle.tellg();
-      
+
     m_cHandle.seekg( 0, std::ios::end );
     std::streamoff filelength = m_cHandle.tellg() - curPos;
-    
+
     m_cHandle.seekg( lastPos, std::ios::beg ); // rewind to last pos
-    
-    return filelength / frameSize;
+
+    return (int)(filelength / frameSize);
   }
 };
 

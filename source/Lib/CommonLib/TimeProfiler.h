@@ -198,27 +198,27 @@ public:
     os << '\n';
     os << std::setw(10) << " "
        << std::setw(30) << std::left << "stages" << std::internal
-       << std::setw(ts) << "time(ms)"
+       << std::setw((int)ts) << "time(ms)"
        << std::setw(10) << "%"
        << '\n';
 
-    for (size_t i=0; i < P_STAGES; ++i) 
+    for (size_t i=0; i < P_STAGES; ++i)
     {
         auto v = prof.durations[i];
         if( v.count() != 0.0 )
         {
           os << std::setw( 10 ) << " "
             << std::setw( 30 ) << std::left << stageNames[i] << std::internal
-            << std::fixed << std::setw( ts ) << std::setprecision( prec ) << (v / scale)/* * total*/
+            << std::fixed << std::setw( (int)ts ) << std::setprecision( prec ) << (v / scale)/* * total*/
             << std::fixed << std::setw( 10 ) << std::setprecision( prec ) << (v / counted) * 100.0
             << '\n';
         }
     }
     os << '\n';
 
-    os << std::setw(10) << " " 
+    os << std::setw(10) << " "
        << std::setw(30) << std::left << "TOTAL" << std::internal
-       << std::fixed << std::setw(ts) << std::setprecision(prec) << (counted / scale)/*total*/
+       << std::fixed << std::setw((int)ts) << std::setprecision(prec) << (counted / scale)/*total*/
        << std::fixed << std::setw(10) << std::setprecision(prec) << 100.00
        << '\n';
 
