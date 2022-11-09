@@ -623,10 +623,20 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       else // isBimEnabled without QPA
       {
-        const int baseQp = tempCS->baseQP;
+        const int baseQp         = tempCS->baseQP;
+        const unsigned bimQpSize = (unsigned) bestCS->picture->m_picShared->m_ctuBimQpOffset.size();
+        uint32_t ctuAddr         = ctuRsAddr;
 
+        if (bimQpSize != pcv.sizeInCtus) // re-calculate correct address of BIM CTU QP offset
+        {
+          const unsigned bimCtuSize  = m_pcEncCfg->m_bimCtuSize;
+          const unsigned bimCtuWidth = (pcv.lumaWidth + bimCtuSize - 1) / bimCtuSize;
+
+          ctuAddr = getCtuAddrFromCtuSize (partitioner.currQgPos, Log2 (bimCtuSize), bimCtuWidth);
+          CHECK (ctuAddr >= bimQpSize, "ctuAddr exceeds size of m_ctuBimQpOffset");
+        }
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuRsAddr]);
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuAddr]);
 
         updateLambda (slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true);
       }

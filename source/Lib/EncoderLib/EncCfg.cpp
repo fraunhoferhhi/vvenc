@@ -51,6 +51,7 @@ namespace vvenc {
 
 VVEncCfg::VVEncCfg()
   : m_stageParallelProc( false )
+  , m_bimCtuSize( 64 )
 {
 }
 
@@ -66,6 +67,7 @@ void VVEncCfg::xInitCfgMembers()
   m_stageParallelProc = m_numThreads > 0 && m_maxParallelFrames > 0;
   m_log2GopSize       = floorLog2( m_GOPSize );
   m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
+  m_bimCtuSize        = m_CTUSize;
 }
 
 }
