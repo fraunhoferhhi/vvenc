@@ -188,19 +188,6 @@ class IStreamToEnum
     template<typename F>
     friend std::istream& operator >> ( std::istream& in, IStreamToEnum<F>& toEnum );
 
-    const char* to_string() const
-    {
-      for ( const auto& map : *toMap )
-      {
-        if ( *dstVal == map.value )
-        {
-          return map.str;
-        }
-      }
-      //msgApp( ERROR, "Unknown enum \"%s\" in to_string", *dstVal );
-      return "";
-    }
-
   private:
     E*                            dstVal;
     const std::vector<SVPair<E>>* toMap;
@@ -244,6 +231,49 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 }
 
 // ====================================================================================================================
+// string <-> int8_t
+// ====================================================================================================================
+
+class IStreamToInt8
+{
+  public:
+    IStreamToInt8( int8_t * d )
+      : dstVal ( d )
+    {
+    }
+
+    ~IStreamToInt8()
+    {
+    }
+
+    friend std::ostream& operator << ( std::ostream& os, const IStreamToInt8& toInt8 );
+
+    friend std::istream& operator >> ( std::istream& in, IStreamToInt8& toInt8 );
+
+  private:
+    int8_t* dstVal;
+};
+
+inline std::istream& operator >> ( std::istream& in, IStreamToInt8& toInt8 )
+{
+  std::string str;
+  in >> str;
+  int ret = std::stoi( str );
+  if( ret < std::numeric_limits<int8_t>::min() || ret > std::numeric_limits<int8_t>::max() )
+  {
+    in.setstate( std::ios::failbit );
+  }
+  *toInt8.dstVal = (int8_t)ret;
+  return in;
+}
+
+inline std::ostream& operator << ( std::ostream& os, const IStreamToInt8& toInt8 )
+{
+  os << (int)(*toInt8.dstVal);
+  return os;
+}
+
+// ====================================================================================================================
 // string <-> function
 // ====================================================================================================================
 
@@ -272,11 +302,6 @@ class IStreamToFunc
 
     template<typename F>
     friend std::ostream& operator << ( std::ostream& in, const IStreamToFunc<F>& toEnum );
-
-    const char* to_string() const
-    {
-      return "";
-    }
 
   private:
     setParamFunc                  mfunc;

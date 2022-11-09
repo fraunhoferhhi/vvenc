@@ -119,6 +119,7 @@ class GOPCfg
 
     void initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
     void getNextGopEntry( GOPEntry& gopEntry );
+    void startIntraPeriod( GOPEntry& gopEntry );
     void fixStartOfLastGop( GOPEntry& gopEntry ) const;
     void getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const;
 

@@ -510,6 +510,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
 
+  IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
+
   po::Options opts;
   if( m_easyMode )
   {
@@ -626,7 +628,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
+    ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt nal unit type)")
     ;
 
     opts.setSubSection("Quantization parameters");
