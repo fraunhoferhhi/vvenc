@@ -338,7 +338,7 @@ public:
     m_picCount++;
   }
 
-  void runStage( const bool flush, AccessUnitList& auList )
+  void runStage( bool flush, AccessUnitList& auList )
   {
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
