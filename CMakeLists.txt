@@ -18,41 +18,29 @@ if( PROJECT_VERSION_RC )
     set( PROJECT_VERSION "${PROJECT_VERSION}-${PROJECT_VERSION_RC}" )
 endif()
 
-set( VVENC_ENABLE_X86_SIMD TRUE )
-set( VVENC_ENABLE_ARM_SIMD FALSE )
+set( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
+message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH}" )
 
-if( APPLE )
-  if( DEFINED CMAKE_OSX_ARCHITECTURES )
-    if( CMAKE_OSX_ARCHITECTURES STREQUAL "" )
-      if( CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64" )
-        set( VVENC_ENABLE_X86_SIMD FALSE )
-        set( VVENC_ENABLE_ARM_SIMD TRUE )
-      endif()
-    elseif( CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" )
-      set( VVENC_ENABLE_X86_SIMD FALSE )
-      set( VVENC_ENABLE_ARM_SIMD TRUE )
-    endif()
-  else()
-    if( CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64" )
-      set( VVENC_ENABLE_X86_SIMD FALSE )
-      set( VVENC_ENABLE_ARM_SIMD TRUE )
-    endif()
-  endif()
-endif()
+# we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
+set( VVENC_ENABLE_X86_SIMD TRUE CACHE BOOL "enable x86 intrinsics" )
+
+include( vvencCompilerSupport )
 
 # enable sse4.1 build for all source files for gcc and clang
 if( VVENC_ENABLE_X86_SIMD )
   if( UNIX OR MINGW )
-    add_compile_options( "-msse4.1" )
+    # when building for non-x86, but emulating simd using simd-everywhere (e.g. on ARM),
+    # the x86-compiler flags are not understood by the compiler
+    set_if_compiler_supports_flag( FLAG_msse41 -msse4.1 )
+    add_compile_options( ${FLAG_msse41} )
+  endif()
+
+  if( NOT MSVC AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten" )
+    check_missing_intrinsics()
   endif()
 
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_X86" )
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_X86" )
-endif()
-
-if( VVENC_ENABLE_ARM_SIMD )
-  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_ARM" )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_ARM" )
 endif()
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
@@ -118,24 +106,32 @@ else()
   set( VVENC_OUTPUT_DIR_POSTFIX static )
 endif()
 
-set( VVENC_ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
+set( VVENC_ENABLE_TRACING         OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
 
-# Using CMake's default library name convention which is the same for all configurations.
-set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/lib/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/lib/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/lib/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/lib/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( VVENC_TOPLEVEL_OUTPUT_DIRS   ON  CACHE BOOL   "Put build artifacts into ${CMAKE_SOURCE_DIR}/{bin,lib}/" )
 
-set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG}" )
-set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE}" )
-set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO}" )
-set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL}" )    
+if( VVENC_TOPLEVEL_OUTPUT_DIRS )
+  # Using CMake's default library name convention which is the same for all configurations.
+  set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/lib/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/lib/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/lib/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/lib/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
 
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/bin/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/bin/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/bin/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG}" )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE}" )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO}" )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL}" )
 
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/bin/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/bin/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/bin/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
+else()
+  # Put build artifacts below build-directory. (Don't need to add {debug,release,relwithdebinfo,minsizerel}-{static,shared}/)
+  set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib" )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib" )
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" )
+endif()
 
 # enable or disable Intel Vtune ITT Tracing
 if( CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" )
@@ -162,9 +158,6 @@ set( CMAKE_POSITION_INDEPENDENT_CODE TRUE )
 # use folders in IDEs for projects (e.g. lib sample app test)
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 
-set( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
-message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH}" )
-
 # Enable multithreading
 find_package( Threads REQUIRED )
 
@@ -186,7 +179,7 @@ if( VVENC_ENABLE_TRACING )
 endif()
 
 if( VVENC_ENABLE_X86_SIMD )
-  if( ( UNIX OR MINGW ) AND NOT VVENC_OPT_TARGET_ARCH STREQUAL "" )
+  if( ( UNIX OR MINGW ) AND VVENC_OPT_TARGET_ARCH )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
   endif()

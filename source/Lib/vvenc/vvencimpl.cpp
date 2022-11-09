@@ -58,14 +58,16 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Nal.h"
 #include "EncoderLib/EncGOP.h"
 
-
 #include "EncoderLib/EncLib.h"
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
-#include "CommonLib/TrQuant_EMT.h"
-#endif
+#if defined( TARGET_SIMD_X86 )
+#  include "CommonLib/x86/CommonDefX86.h"
+#  if ENABLE_SIMD_TRAFO
+#    include "CommonLib/TrQuant_EMT.h"
+#  endif   // ENABLE_SIMD_TRAFO
+#endif     // TARGET_SIMD_X86
 
 #if defined( __linux__ )
-#include <malloc.h>
+#  include <malloc.h>
 #endif
 
 
@@ -735,18 +737,49 @@ void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
-  const char* simdSet = NULL;
+  const std::string simdReqStr( simdId );
 #if defined( TARGET_SIMD_X86 )
-  std::string cSimdId ( simdId );
-  simdSet = read_x86_extension( cSimdId );
-#if ENABLE_SIMD_OPT_BUFFER
-  g_pelBufOP.initPelBufOpsX86();
-#endif
-#if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.initTCoeffOpsX86();
-#endif
-#endif
-  return simdSet;
+#  if HANDLE_EXCEPTION
+  try
+#  endif   // HANDLE_EXCEPTION
+  {
+    X86_VEXT request_ext = string_to_vext( simdReqStr );
+    try
+    {
+      read_x86_extension_flags( request_ext );
+    }
+    catch( Exception& )
+    {
+      // not using the actual message from the exception here, because we need to insert the SIMD-level name instead of the enum
+      THROW( "requested SIMD level (" << simdReqStr << ") not supported by current CPU (max " << read_x86_extension_name() << ")." );
+    }
+
+#  if ENABLE_SIMD_OPT_BUFFER
+    g_pelBufOP.initPelBufOpsX86();
+#  endif
+#  if ENABLE_SIMD_TRAFO
+    g_tCoeffOps.initTCoeffOpsX86();
+#  endif
+
+    return read_x86_extension_name().c_str();
+  }
+#  if HANDLE_EXCEPTION
+  catch( Exception& e )
+  {
+    MsgLog msg;
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+    return nullptr;
+  }
+#  endif   // HANDLE_EXCEPTION
+#else      // !TARGET_SIMD_X86
+  if( !simdReqStr.empty() && simdReqStr != "SCALAR" )
+  {
+    MsgLog msg;
+    msg.log( VVENC_ERROR, "\nVVenC built without SIMD support\n" );
+    return nullptr;
+  }
+  return "SCALAR";
+#endif     // TARGET_SIMD_X86
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
@@ -762,16 +795,15 @@ std::string VVEncImpl::getCompileInfoString()
 
 std::string VVEncImpl::createEncoderInfoStr()
 {
-  std::string cInfoStr;
-
-    // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string curSimd;
-  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
-  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
-
   std::stringstream cssCap;
-  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+#if defined( TARGET_SIMD_X86 )
+  cssCap << getCompileInfoString() << "[SIMD=" << read_x86_extension_name() <<"]";
+#else   // !TARGET_SIMD_X86
+  cssCap << getCompileInfoString() << "[SIMD=SCALAR]";
+#endif  // !TARGET_SIMD_X86
 
+
+  std::string cInfoStr;
   cInfoStr  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
   cInfoStr += " ";
   cInfoStr += cssCap.str();

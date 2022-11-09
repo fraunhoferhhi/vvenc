@@ -49,8 +49,25 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <iomanip>
 #include <limits>
-#include <stdarg.h>
+#include <cstdarg>
 #include <functional>
+#include <mutex>
+
+#if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
+# define REAL_TARGET_X86 1
+#elif defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+# define REAL_TARGET_ARM 1
+#elif defined( __wasm__ ) || defined( __wasm32__ )
+# define REAL_TARGET_WASM 1
+#endif
+
+#if defined( TARGET_SIMD_X86 )
+# ifdef _WIN32
+#  include <intrin.h>
+//# elif defined( __GNUC__ )
+//#  include <simde/x86/sse2.h>
+# endif
+#endif // TARGET_SIMD_X86
 
 #if _MSC_VER > 1000
 // disable "signed and unsigned mismatch"
@@ -66,8 +83,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #if ENABLE_CU_MODE_COUNTERS
 #include "StatCounter.h"
 #endif
-
-#include <mutex>
 
 // MS Visual Studio before 2014 does not support required C++11 features
 #ifdef _MSC_VER
@@ -94,18 +109,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef TARGET_SIMD_X86
-#if ENABLE_SIMD_OPT
-#define SIMD_PREFETCH_T0(_s)  _mm_prefetch( (char*)(_s), _MM_HINT_T0 )
-#else
-#define SIMD_PREFETCH_T0(_s)
-#endif //ENABLE_SIMD_OPT
-
-#if defined( _WIN32 )
-# include <intrin.h>
-#else
-# include <x86intrin.h>
-#endif
-#endif
+# if ENABLE_SIMD_OPT
+#  define SIMD_PREFETCH_T0( _s ) _mm_prefetch( (char*) ( _s ), _MM_HINT_T0 )
+# else
+#  define SIMD_PREFETCH_T0( _s )
+# endif   // ENABLE_SIMD_OPT
+#endif    // TARGET_SIMD_X86
 
 //! \ingroup CommonLib
 //! \{
@@ -520,9 +529,9 @@ struct PPS;
 class Slice;
 class PreCalcValues;
 
-template <typename T> inline T Clip3 (const T minVal, const T maxVal, const T a) { return std::min<T> (std::max<T> (minVal, a) , maxVal); }  ///< general min/max clip
-template <typename T> inline T ClipBD( const T x, const int bitDepth ) { return Clip3( T( 0 ), T( ( 1 << bitDepth ) - 1 ), x ); }
-template <typename T> inline T ClipPel (const T a, const ClpRng& clpRng)         { return std::min<T> (std::max<T> (clpRng.min(), a) , clpRng.max()); }  ///< clip reconstruction
+template <typename T> constexpr static inline T Clip3  ( const T minVal, const T maxVal, const T a) { return std::min<T> (std::max<T> (minVal, a) , maxVal); }  ///< general min/max clip
+template <typename T> constexpr static inline T ClipBD ( const T x, const int bitDepth )            { return Clip3( T( 0 ), T( ( 1 << bitDepth ) - 1 ), x ); }
+template <typename T> constexpr static inline T ClipPel( const T a, const ClpRng& clpRng )          { return std::min<T> (std::max<T> (clpRng.min(), a) , clpRng.max()); }  ///< clip reconstruction
 
 template <typename T> inline void Check3( T minVal, T maxVal, T a)
 {
@@ -574,7 +583,7 @@ inline std::string prnt( const char* fmt, ...)
 #else
 namespace detail {
 template<typename T>
-T* aligned_malloc(size_t len, size_t alignement) {
+static inline T* aligned_malloc(size_t len, size_t alignement) {
   T* p = NULL;
   if( posix_memalign( (void**)&p, alignement, sizeof(T)*(len) ) )
   {
@@ -622,7 +631,9 @@ T* aligned_malloc(size_t len, size_t alignement) {
 #endif
 
 #ifdef TARGET_SIMD_X86
-typedef enum {
+typedef enum
+{
+  UNDEFINED = -1,
   SCALAR = 0,
   SSE41,
   SSE42,
@@ -630,9 +641,6 @@ typedef enum {
   AVX2,
   AVX512
 } X86_VEXT;
-
-X86_VEXT read_x86_extension_flags(const std::string &extStrId = std::string());
-const char* read_x86_extension(const std::string &extStrId);
 #endif
 
 template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
@@ -657,6 +665,7 @@ static inline unsigned int bit_scan_reverse( int a )
   return __builtin_clz( a ) ^ ( 8 * sizeof( a ) - 1 );
 }
 #endif
+
 #if ENABLE_SIMD_LOG2
 static inline int floorLog2( int val )
 {

@@ -76,7 +76,10 @@ int main(int argc, char* argv[])
   apputils::program_options::SilentReporter err;
   apputils::program_options::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  vvenc_set_SIMD_extension( simdOpt.c_str() );
+  if( ! vvenc_set_SIMD_extension( simdOpt.c_str() ) )
+  {
+    return 1;
+  }
 
   EncApp* pcEncApp = new EncApp;
 
