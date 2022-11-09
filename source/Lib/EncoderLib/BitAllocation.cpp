@@ -409,6 +409,15 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
           averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
         }
+        // add mean delta-QP of block importance mapping (BIM) detection if available
+        if (isBIM)
+        {
+          const std::vector<int>* bimQpOffsets = &pic->m_picShared->m_ctuBimQpOffset;
+          const int bimQpOffsetsSum = std::accumulate (bimQpOffsets->begin(), bimQpOffsets->end(), 0);
+          const int bimQPORoundOffs = (int) bimQpOffsets->size() >> 2;
+
+          averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + (bimQpOffsetsSum + (bimQpOffsetsSum < 0 ? -bimQPORoundOffs : bimQPORoundOffs)) / (int) bimQpOffsets->size());
+        }
       }
 
       if (optChromaQPOffsets != nullptr) // adapts sliceChromaQpOffsetIntraOrPeriodic
@@ -431,6 +440,15 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       if (meanLuma == MAX_UINT) meanLuma = pic->getOrigBuf().Y().getAvg();
 
       averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
+    }
+    // add averaged delta-QP of block importance mapping (BIM) detection if available
+    if (isBIM)
+    {
+      const std::vector<int>* bimQpOffsets = &pic->m_picShared->m_ctuBimQpOffset;
+      const int bimQpOffsetsSum = std::accumulate (bimQpOffsets->begin(), bimQpOffsets->end(), 0);
+      const int bimQPORoundOffs = (int) bimQpOffsets->size() >> 2;
+
+      averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + (bimQpOffsetsSum + (bimQpOffsetsSum < 0 ? -bimQPORoundOffs : bimQPORoundOffs)) / (int) bimQpOffsets->size());
     }
   }
 
@@ -597,7 +615,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
   const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
-  const int         bitDepth  = slice->sps->bitDepths[CH_L];
+  const int  bitDepth         = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);
   const Position    pos       = lumaArea.pos();
   const CompArea    subArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, lumaArea.width, lumaArea.height)), pic->Y());
