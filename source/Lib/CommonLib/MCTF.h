@@ -129,9 +129,9 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic );
-  virtual void processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 private:
-  void filter( const std::deque<Picture*>& picFifo, const int filterIdx );
+  void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 
 #ifdef TARGET_SIMD_X86
   void initMCTF_X86();

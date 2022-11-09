@@ -238,7 +238,7 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
-  virtual void processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 
 public:
   virtual void waitForFreeEncoders() {}
@@ -338,7 +338,7 @@ public:
     m_picCount++;
   }
 
-  void runStage( const bool flush, const int ctuSize, AccessUnitList& auList )
+  void runStage( const bool flush, AccessUnitList& auList )
   {
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )

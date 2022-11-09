@@ -97,7 +97,7 @@ void PreProcess::initPicture( Picture* pic )
 }
 
 
-void PreProcess::processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // continue with next poc
   if( ! picList.empty() && picList.back()->poc > m_lastPoc )

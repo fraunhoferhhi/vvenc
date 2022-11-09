@@ -355,6 +355,7 @@ void EncLib::xInitRCCfg()
   }
   m_firstPassCfg.m_vvencMCTF.MCTF  = m_encCfg.m_vvencMCTF.MCTF;
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
+  m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_bimCtuSize;
 
   // clear MaxCuDQPSubdiv
   if( m_firstPassCfg.m_CTUSize < 128 && ( m_firstPassCfg.m_PadSourceWidth > 1024 || m_firstPassCfg.m_PadSourceHeight > 640 ) )
@@ -408,7 +409,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );
     for( auto encStage : m_encStages )
     {
-      encStage->runStage( flush, m_encCfg.m_RCNumPasses > 1 ? m_orgCfg.m_CTUSize : m_encCfg.m_CTUSize, au );
+      encStage->runStage( flush, au );
       isQueueEmpty &= encStage->isStageDone();
     }
 

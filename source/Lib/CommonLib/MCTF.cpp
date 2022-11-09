@@ -523,7 +523,7 @@ void MCTF::initPicture( Picture* pic )
   pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::processPictures( const PicList& picList, const bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // ensure this is only processed if necessary 
   if( !flush && (picList.empty() || ( m_lastPicIn == picList.back())))
@@ -576,7 +576,7 @@ void MCTF::processPictures( const PicList& picList, const bool flush, AccessUnit
 }
 
 
-void MCTF::filter( const std::deque<Picture*>& picFifo, const int filterIdx )
+void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
