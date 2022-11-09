@@ -75,7 +75,7 @@ struct StopClock
 {
   StopClock() : m_startTime(), m_timer() {}
 
-  int  getTimerInSec() const { return std::chrono::duration_cast<std::chrono::seconds>( m_timer ).count(); };
+  int  getTimerInSec() const { return (int)std::chrono::duration_cast<std::chrono::seconds>( m_timer ).count(); };
   void resetTimer()          { m_timer = std::chrono::steady_clock::duration::zero(); }
   void startTimer()          { m_startTime  = std::chrono::steady_clock::now(); }
   void stopTimer()           { auto endTime = std::chrono::steady_clock::now(); m_timer += endTime - m_startTime; m_startTime = endTime; }

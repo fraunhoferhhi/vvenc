@@ -89,6 +89,7 @@ void  EncReshape::init( const VVEncCfg& encCfg )
   {
     m_lumaBD = encCfg.m_internalBitDepth[ CH_L ];
     m_reshapeLUTSize = 1 << m_lumaBD;
+    m_rspBaseQP = encCfg.m_QP;
     m_initCWAnalyze = m_reshapeLUTSize / PIC_ANALYZE_CW_BINS;
     m_initCW = m_reshapeLUTSize / PIC_CODE_CW_BINS;
 
@@ -529,7 +530,7 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
         }
       }
 
-      if (m_rateAdpMode == 2 && reshapeCW.rspBaseQP <= 22) { intraAdp = false; interAdp = false; }
+      if (m_rateAdpMode == 2 && m_rspBaseQP <= 22) { intraAdp = false; interAdp = false; }
       m_sliceReshapeInfo.sliceReshaperEnabled = intraAdp;
       if (!intraAdp && !interAdp)
       {
@@ -538,7 +539,7 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
         return;
       }
 
-      if (m_rateAdpMode == 1 && reshapeCW.rspBaseQP <= 22)
+      if (m_rateAdpMode == 1 && m_rspBaseQP <= 22)
       {
         for (int i = 0; i < m_binNum; i++)
         {

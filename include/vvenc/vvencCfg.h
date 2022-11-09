@@ -85,6 +85,9 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
 #define VVENC_MAX_STRING_LEN                  1024   // max length of string/filename
+#define VVENC_DEFAULT_QP                      32     // default base QP
+#define VVENC_AUTO_QP                        -1      // indicates to use default QP, or ignore if RC is used
+#define VVENC_RC_OFF                          0      // indicates rate control is disabled
 
 // ====================================================================================================================
 
@@ -382,7 +385,6 @@ typedef struct vvencReshapeCW
   unsigned int initialCW;
   int          rspPicSize;
   int          rspFps;
-  int          rspBaseQP;
   int          rspTid;
   int          rspFpsToIp;
 }vvencReshapeCW;
@@ -747,7 +749,7 @@ typedef struct vvenc_config
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-  
+
   bool                m_picReordering;
   bool                m_reservedFlag[3];
   bool                m_blockImportanceMapping;

@@ -715,10 +715,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           }
         }
       }
+
       if( !m_encCfg->m_blockImportanceMapping )
       {
-        if( !pic->m_picShared->m_ctuBimQpOffset.empty() ) pic->m_picShared->m_ctuBimQpOffset.resize( 0 );
-
+        CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
         return;
       }
 
