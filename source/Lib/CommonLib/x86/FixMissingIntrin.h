@@ -45,6 +45,13 @@ POSSIBILITY OF SUCH DAMAGE.
 #ifdef TARGET_SIMD_X86
 
 #include <simde/x86/sse2.h>
+#ifdef USE_AVX
+#include <simde/x86/avx.h>
+#endif
+#ifdef USE_AVX2
+#include <simde/x86/avx2.h>
+#endif
+
 #include <cstdint>
 
 namespace vvenc
@@ -85,6 +92,23 @@ static inline __m128i _mm_loadu_si64( const void* p )
 }
 #endif
 
+#ifdef MISSING_INTRIN_mm_bslli_si128
+static inline __m128i __m128i _mm_bslli_si128( __m128i a, int i )
+{
+  return _mm_slli_si128( a, i )
+}
+#endif
+
+#ifdef MISSING_INTRIN_mm_bsrli_si128
+static inline __m128i _mm_bsrli_si128( __m128i a, int i )
+{
+  return _mm_srli_si128( a, i );
+}
+#endif
+
+
+#if defined( USE_AVX ) || defined( USE_AVX2 )
+
 // this should only be true for non-x86 architectures
 #ifdef MISSING_INTRIN_mm256_zeroupper
 #if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
@@ -95,16 +119,13 @@ static inline void _mm256_zeroupper() {}  // NOOP
 #endif
 
 #ifdef MISSING_INTRIN_mm256_loadu2_m128i
-#if USE_AVX
 static inline __m256i _mm256_loadu2_m128i( __m128i const* hiaddr, __m128i const* loaddr )
 {
   return _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( hiaddr ) ), _mm_loadu_si128( loaddr ), 1 );
 }
 #endif
-#endif
 
 #ifdef MISSING_INTRIN_mm256_extract_epi32
-#if USE_AVX
 static inline uint32_t _mm256_extract_epi32( __m256i vec, const int i )
 {
   __m128i indx = _mm_cvtsi32_si128( i );
@@ -112,7 +133,27 @@ static inline uint32_t _mm256_extract_epi32( __m256i vec, const int i )
   return _mm_cvtsi128_si32( _mm256_castsi256_si128( val ) );
 }
 #endif
+
+#ifdef MISSING_INTRIN_mm256_set_m128i
+static inline __m256i _mm256_set_m128i( __m128i hi, __m128i lo )
+{
+  return _mm256_insertf128_si256( _mm256_castsi128_si256( lo ), hi, 1 );
+}
 #endif
+
+#endif   // USE_AVX
+
+
+#ifdef USE_AVX2
+
+#ifdef MISSING_INTRIN_mm256_bsrli_epi128
+static inline __m256i _mm256_bsrli_epi128( __m256i a, const int i )
+{
+  return _mm256_srli_si256( a, i ) :
+}
+#endif
+
+#endif   // USE_AVX2
 
 }   // namespace vvenc
 

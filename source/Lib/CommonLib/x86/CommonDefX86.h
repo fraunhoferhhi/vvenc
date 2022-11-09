@@ -90,10 +90,6 @@ X86_VEXT           string_to_vext( const std::string& ext_name );
 X86_VEXT           read_x86_extension_flags( X86_VEXT request = UNDEFINED );
 const std::string& read_x86_extension_name();
 
-#if defined( _MSC_VER ) && _MSC_VER <= 1900
-#define _mm_bsrli_si128 _mm_srli_si128
-#define _mm256_bsrli_epi128 _mm256_srli_si256
-#endif
 
 #ifdef USE_AVX2
 
