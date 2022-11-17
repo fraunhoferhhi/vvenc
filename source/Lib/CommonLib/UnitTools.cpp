@@ -3656,6 +3656,11 @@ uint32_t getCtuAddr( const Position& pos, const PreCalcValues& pcv )
   return ( pos.x >> pcv.maxCUSizeLog2 ) + ( pos.y >> pcv.maxCUSizeLog2 ) * pcv.widthInCtus;
 }
 
+uint32_t getCtuAddrFromCtuSize( const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus )
+{
+  return ( pos.x >> maxCUSizeLog2 ) + ( pos.y >> maxCUSizeLog2 ) * widthInCtus;
+}
+
 int getNumModesMip(const Size& block)
 {
   switch( getMipSizeId(block) )

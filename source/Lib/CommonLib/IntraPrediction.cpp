@@ -487,10 +487,13 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 }
 
+}   // namespace vvenc
+
 #ifdef TARGET_SIMD_X86
 #include "x86/CommonDefX86.h"
 #endif
 
+namespace vvenc {
 
 /** Function for deriving the simplified angular intra predictions.
 *

@@ -82,7 +82,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_lastPoc     = std::numeric_limits<int>::min();
   m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
 
-  m_doSTA       = m_encCfg->m_sliceTypeAdapt && m_encCfg->m_GOPSize > 8;
+  m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
   m_doVisAct    =    m_encCfg->m_usePerceptQPA
                   || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate )
                   || ( m_encCfg->m_RCNumPasses > 1 && ! isFinalPass );
@@ -120,7 +120,7 @@ void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnit
       xDetectScc( pic );
 
       // detect STA picture
-      if( m_doSTA && pic->gopEntry->m_temporalId == 0 && pic->gopEntry->m_sliceType != 'I' )
+      if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
       {
         xDetectSTA( pic, picList );
       }
@@ -348,9 +348,12 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
 }
 
 
-void PreProcess::xDetectSTA( Picture* pic, const PicList& picList ) const
+void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 {
   const Picture* prevTl0 = xGetPrevTl0Pic( pic, picList );
+
+  int picMemorySTA = 0;
+  bool isSta       = false;
 
   if( prevTl0 && prevTl0->picVisActTL0 > 0 )
   {
@@ -359,16 +362,23 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList ) const
     if(        pic->picVisActTL0 * 11 > prevTl0->picVisActTL0 * scThreshold
         || prevTl0->picVisActTL0 * 11 > pic->picVisActTL0     * ( scThreshold + 1 ) )
     {
-      const int dir    = pic->picVisActTL0 < prevTl0->picVisActTL0 ? -1 : 1;
-      int picMemorySTA = prevTl0->picVisActTL0 * dir;
+      const int dir = pic->picVisActTL0 < prevTl0->picVisActTL0 ? -1 : 1;
+      picMemorySTA  = prevTl0->picVisActTL0 * dir;
+      isSta         = ( picMemorySTA * prevTl0->picMemorySTA ) >= 0;
+    }
+  }
 
-      if( picMemorySTA * prevTl0->picMemorySTA >= 0 )
-      {
-        PicShared* picShared              = pic->m_picShared;
-        pic->picMemorySTA                 = picMemorySTA;
-        picShared->m_picMemorySTA         = picMemorySTA;
-        picShared->m_gopEntry.m_sliceType = 'I';
-      }
+  if( isSta )
+  {
+    PicShared* picShared              = pic->m_picShared;
+    pic->picMemorySTA                 = picMemorySTA;
+    picShared->m_picMemorySTA         = picMemorySTA;
+    picShared->m_gopEntry.m_sliceType = 'I';
+    picShared->m_gopEntry.m_scType    = SCT_TL0_SCENE_CUT;
+
+    if( m_encCfg->m_sliceTypeAdapt == 2 )
+    {
+      m_gopCfg.startIntraPeriod( picShared->m_gopEntry );
     }
   }
 }

@@ -756,7 +756,7 @@ typedef struct vvenc_config
   bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
-  bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
+  int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
   bool                m_treatAsSubPic;
 
   double              m_reservedDouble[10];

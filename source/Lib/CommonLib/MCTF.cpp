@@ -664,7 +664,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
     if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA )
     {
-      const int ctuSize        = m_encCfg->m_CTUSize;
+      const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
       const int heightInCtus   = ( m_area.height + ctuSize - 1 ) / ctuSize;
       const int numCtu         = widthInCtus * heightInCtus;

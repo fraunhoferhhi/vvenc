@@ -45,7 +45,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "UnitTools.h"
 #ifdef TARGET_SIMD_X86
-#include "x86/CommonDefX86.h"
+#  include "x86/CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
 #endif
 
 #include <bitset>

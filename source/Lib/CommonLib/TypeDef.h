@@ -146,6 +146,11 @@ namespace vvenc {
 #define ENABLE_SIMD_OPT_BCW                               1                                                 ///< SIMD optimization for GBi
 #endif
 
+
+#if defined( TARGET_SIMD_X86 ) && !defined( REAL_TARGET_X86 )
+#  define SIMD_EVERYWHERE_EXTENSION_LEVEL                 SSE42
+#endif
+
 // End of SIMD optimizations
 
 // ====================================================================================================================
@@ -866,6 +871,12 @@ struct XUCache
 };
 
 
+enum SceneType : int8_t
+{
+  SCT_NONE          = 0,
+  SCT_TL0_SCENE_CUT = 1
+};
+
 typedef struct GOPEntry : vvencGOPEntry
 {
   int       m_codingNum;
@@ -877,6 +888,7 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_isStartOfGop;
   bool      m_isStartOfIntra;
   bool      m_isValid;
+  SceneType m_scType;
 
   void setDefaultGOPEntry()
   {
@@ -890,6 +902,7 @@ typedef struct GOPEntry : vvencGOPEntry
     m_isStartOfGop     = false;
     m_isStartOfIntra   = false;
     m_isValid          = false;
+    m_scType           = SCT_NONE;
   }
 
   void copyFromGopCfg( const vvencGOPEntry& cfgEntry )

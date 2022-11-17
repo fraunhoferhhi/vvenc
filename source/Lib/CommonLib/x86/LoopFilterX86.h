@@ -55,13 +55,6 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \{
 
 namespace vvenc {
-  
-
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#else
-#include <immintrin.h>
-#endif
 
 template<X86_VEXT vext>
 inline void xPelLumaCore( int64_t m0, int64_t& m1, int64_t& m2, int64_t& m3, int64_t& m4, int64_t& m5, int64_t& m6, int64_t m7, const int tc )

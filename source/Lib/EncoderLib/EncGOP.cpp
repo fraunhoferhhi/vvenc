@@ -1051,7 +1051,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
-  bUseDQP |= m_pcEncCfg->m_blockImportanceMapping != 0;
+  bUseDQP |= m_pcEncCfg->m_blockImportanceMapping;
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
@@ -1077,7 +1077,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.clear();
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
-  pps.useDQP                        = m_pcEncCfg->m_RCTargetBitrate > 0 ? true : bUseDQP;
+  pps.useDQP                        = bUseDQP;
 
   if ( m_pcEncCfg->m_cuChromaQpOffsetSubdiv >= 0 )
   {
@@ -2442,6 +2442,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
+                                  pic->gopEntry->m_scType,
                                   pic->m_picShared->m_minNoiseLevels );
   }
 

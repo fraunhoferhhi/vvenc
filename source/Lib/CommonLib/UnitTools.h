@@ -200,6 +200,8 @@ namespace TU
 }
 
 uint32_t  getCtuAddr                    (const Position& pos, const PreCalcValues &pcv);
+uint32_t  getCtuAddrFromCtuSize         (const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus);
+
 int       getNumModesMip                (const Size& block);
 int       getMipSizeId                  (const Size& block);
 bool      allowLfnstWithMip             (const Size& block);
