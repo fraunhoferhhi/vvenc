@@ -384,6 +384,7 @@ static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cf
 
 static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
 
+
 // ====================================================================================================================
 // Class definition
 // ====================================================================================================================
