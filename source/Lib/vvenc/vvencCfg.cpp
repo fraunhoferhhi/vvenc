@@ -200,10 +200,14 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
     case VVENC_HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
     case VVENC_HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
     case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
-    default                          : cT = "unknown"; break;
+    case VVENC_SDR_BT709          : cT = "SDR BT.709"; break;
+    case VVENC_SDR_BT2020         : cT = "SDR BT.2020"; break;
+    case VVENC_SDR_BT470BG        : cT = "SDR BT470bg"; break;
+    default                       : cT = "unknown"; break;
   }
   return cT;
 }
+
 
 static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
 {
@@ -725,7 +729,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
      vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
   }
 
-  vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
+  vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_SDR_BT470BG,  "HdrMode must be in the range 0 - 8" );
 
   vvenc_confirmParameter( c, c->m_verbosity < VVENC_SILENT || c->m_verbosity > VVENC_DETAILS, "verbosity is out of range[0..6]" );
 
@@ -898,6 +902,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_HdrMode = c->m_colourPrimaries==9 ? VVENC_HDR_PQ_BT2020 : VVENC_HDR_PQ;
   }
 
+  if ( c->m_HdrMode != VVENC_HDR_OFF && c->m_HdrMode != VVENC_HDR_USER_DEFINED )
+  {
+    // VUI and SEI options
+    c->m_vuiParametersPresent     = c->m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
+    c->m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
+  } 
+
   if( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 )
   {
     c->m_reshapeSignalType       = vvenc::RESHAPE_SIGNAL_PQ;
@@ -945,10 +956,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCbCr);
     }
 
-    // VUI and SEI options
-    c->m_vuiParametersPresent     = c->m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
-    c->m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
-
     c->m_transferCharacteristics = 16; // smpte2084 - HDR10
     if( c->m_colourPrimaries == 2 )
     {
@@ -980,10 +987,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       std::copy(qpVals.begin(), qpVals.end(), c->m_qpOutValsCb);
     }
 
-    // VUI and SEI options
-    c->m_vuiParametersPresent = c->m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
-    c->m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
-
     if( c->m_colourPrimaries == 2 )
     {
       c->m_colourPrimaries = c->m_HdrMode == VVENC_HDR_HLG_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
@@ -1003,6 +1006,24 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       c->m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
     }
+  }
+  else if( c->m_HdrMode == VVENC_SDR_BT709 )
+  {
+    c->m_transferCharacteristics = 1; // bt709
+    c->m_colourPrimaries = 1;         // bt709
+    c->m_matrixCoefficients = 1;      // bt709
+  }
+  else if( c->m_HdrMode == VVENC_SDR_BT2020 )
+  {
+    c->m_transferCharacteristics = 14; // bt2020-10
+    c->m_colourPrimaries = 9;          // bt2020nc
+    c->m_matrixCoefficients = 9;       // bt2020nc
+  }
+  else if( c->m_HdrMode == VVENC_SDR_BT470BG )
+  {
+    c->m_transferCharacteristics = 5; // bt470bg
+    c->m_colourPrimaries = 5;         // bt470bg
+    c->m_matrixCoefficients = 5;      // bt470bg
   }
 
   if( c->m_preferredTransferCharacteristics < 0 )
