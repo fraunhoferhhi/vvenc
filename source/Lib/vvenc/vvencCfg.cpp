@@ -202,7 +202,7 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
     case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
     case VVENC_SDR_BT709          : cT = "SDR BT.709"; break;
     case VVENC_SDR_BT2020         : cT = "SDR BT.2020"; break;
-    case VVENC_SDR_BT470BG        : cT = "SDR BT.470bg"; break;
+    case VVENC_SDR_BT470BG        : cT = "SDR BT.470 B/G"; break;
     default                       : cT = "unknown"; break;
   }
   return cT;
