@@ -100,7 +100,7 @@ public:
   void        reconstructCoeffAPSs    ( CodingStructure& cs, bool luma, bool chroma, bool isRdo);
   void        reconstructCoeff        ( AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo = false);
   void        ALFProcess              ( CodingStructure& cs);
-  void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH], int numThreads = 1 );
+  void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH] );
   void        destroy                 ();
   static void deriveClassificationBlk ( AlfClassifier *classifier,
                                        const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift,
@@ -120,7 +120,6 @@ public:
   void (*m_filterCcAlf)             ( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const Area &blkDst, const Area &blkSrc,
                                       const ComponentID compId, const int16_t *filterCoeff, const ClpRngs &clpRngs,
                                       CodingStructure &cs, int vbCTUHeight, int vbPos);
-  void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, const int ctuRsAddr, const int threadIdx );
   CcAlfFilterParam &getCcAlfFilterParam() { return m_ccAlfFilterParam; }
   uint8_t* getCcAlfControlIdc       ( const ComponentID compID)   { return m_ccAlfFilterControl[compID-1]; }
   void (*m_filter5x5Blk[2])         ( const AlfClassifier *classifier, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc,
@@ -160,7 +159,7 @@ protected:
   uint8_t*                     m_ctuEnableFlag[MAX_NUM_COMP];
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];
   PelStorage                   m_tempBuf;
-  std::vector<PelStorage*>     m_tempCtuBufPerThread;
+  PelStorage                   m_tempBuf2;
   int                          m_inputBitDepth[MAX_NUM_CH];
   int                          m_picWidth;
   int                          m_picHeight;

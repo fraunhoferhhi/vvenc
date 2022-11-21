@@ -140,6 +140,7 @@ struct PerThreadRsrc
 {
   CtxCache  m_CtxCache;
   EncCu     m_encCu;
+  PelStorage m_alfTempCtuBuf;
 };
 
 struct CtuEncParam
@@ -191,6 +192,7 @@ EncSlice::~EncSlice()
 
   for( auto* taskRsc: m_ThreadRsrc )
   {
+    taskRsc->m_alfTempCtuBuf.destroy();
     delete taskRsc;
   }
   m_ThreadRsrc.clear();
@@ -241,6 +243,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
                            globalCtuQpVector,
                            m_syncPicCtx.data(),
                            &rateCtrl );
+    taskRsc->m_alfTempCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1), pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1) ), pps.pcv->maxCUSize, MAX_ALF_PADDING_SIZE, 0, false );
   }
 
   for( TileLineEncRsrc*& lnRsc : m_TileLineEncRsrc )
@@ -1107,7 +1110,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
             encSlice->m_pALF->copyCTUforALF   ( cs, ctu % pcv.widthInCtus, ctuPosY );
-            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, threadIdx );
+            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1176,7 +1179,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu, threadIdx );
+            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1209,8 +1212,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, threadIdx );
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, threadIdx );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1276,8 +1279,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu, threadIdx );
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu, threadIdx );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
           }
         }
 

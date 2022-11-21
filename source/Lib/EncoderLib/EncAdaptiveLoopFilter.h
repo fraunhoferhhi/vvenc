@@ -398,15 +398,16 @@ public:
   void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
-  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, const int threadIdx );
-  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, const int threadIdx );
+  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& m_alfTempCtuBuf );
+  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, PelStorage& m_alfTempCtuBuf );
   void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
-  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuIdx, const int threadIdx );
+  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& m_alfTempCtuBuf );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
+  void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, const int ctuRsAddr, PelStorage& m_alfTempCtuBuf );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
-  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, const int ctuRsAddr, const int threadIdx = 0 );
-  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, const int threadIdx );
-  void alfReconstructor             ( CodingStructure& cs );
+  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& m_alfTempCtuBuf );
+  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, PelStorage& m_alfTempCtuBuf );
+//  void alfReconstructor             ( CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
 private:
@@ -416,7 +417,7 @@ private:
   double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda );
-  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, const int threadIdx );
+  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& m_alfTempCtuBuf );
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
   void   copyAlfParam            ( AlfParam& alfParamDst, AlfParam& alfParamSrc, ChannelType channel );

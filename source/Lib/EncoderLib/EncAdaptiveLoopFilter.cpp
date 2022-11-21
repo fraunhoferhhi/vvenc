@@ -1335,7 +1335,8 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
 
 void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
 {
-  AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth, ( encCfg.m_numThreads > 0 && threadpool ) ? threadpool->numThreads() : 1 );
+
+  AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );
 
   m_encCfg = &encCfg;
   m_CABACEstimator = &cabacEstimator;
@@ -1749,7 +1750,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
   }
 }
 
-void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, const int threadIdx )
+void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   if( isSkipAlfForFrame( pic ) )
   {
@@ -1771,7 +1772,7 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
         m_alfCovariance[compIdx][ctuRsAddr][classIdx].reset();
       }
     }
-    xGetStatisticsCTU( pic, cs, recYuv, xC, yC, ctuRsAddr, threadIdx );
+    xGetStatisticsCTU( pic, cs, recYuv, xC, yC, ctuRsAddr, alfTempCtuBuf );
   }
   else
   {
@@ -1787,12 +1788,12 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
     // bottom-right CTU in ASU?
     if( xA + wA == xC + wC && yA + hA == yC + hC )
     {
-      getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC, threadIdx );
+      getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC, alfTempCtuBuf );
     }
   }
 }
 
-void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, const int threadIdx )
+void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, PelStorage& alfTempCtuBuf )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
   // init ASU stats buffer
@@ -1812,12 +1813,12 @@ void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs,
   {
     for( int x = xA; x <= xC; x += m_maxCUWidth )
     {
-      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr, threadIdx );
+      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr, alfTempCtuBuf );
     }
   }
 }
 
-void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, const int threadIdx )
+void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& alfTempCtuBuf )
 {
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
@@ -1857,7 +1858,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
 
         const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf  dstBuf = m_tempCtuBufPerThread[threadIdx]->subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
         CPelUnitBuf srcBuf = recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) );
         dstBuf.copyFrom( srcBuf );
         // pad top-left unavailable samples for raster slice
@@ -2102,7 +2103,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   alfEncoderCtb( cs, alfParam, lambdaChromaWeight );
 }
 
-void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, const int ctuRsAddr, const int threadIdx )
+void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
 
@@ -2120,7 +2121,7 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
 
   // Perform filtering
   PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
-  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr, threadIdx );
+  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr, alfTempCtuBuf );
 }
 
 #if ENABLE_TRACING
@@ -2141,7 +2142,7 @@ void traceStreamBlock( std::stringstream& str, Tsrc *buf, unsigned stride, unsig
 }
 #endif
 
-void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, const int ctuRsAddr, const int threadIdx )
+void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   bool ctuEnableFlag = m_ctuEnableFlag[COMP_Y][ctuRsAddr];
   const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
@@ -2213,7 +2214,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
           const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
           const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-          PelUnitBuf  dstBuf = m_tempCtuBufPerThread[threadIdx]->subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+          PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
           dstBuf.copyFrom( m_tempBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE), yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf ) ) ) );
           // pad top-left unavailable samples for raster slice
           if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
@@ -2310,28 +2311,28 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 }
 
-void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
-{
-  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
-  if( !cs.slice->alfEnabled[COMP_Y] )
-  {
-    return;
-  }
-
-
-  reconstructCoeffAPSs( cs, true, cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
-  const PreCalcValues& pcv = *cs.pcv;
-
-  int ctuIdx = 0;
-  for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
-  {
-    for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
-    {
-      reconstructCTU_MT( *cs.picture, cs, ctuIdx );
-      ctuIdx++;
-    }
-  }
-}
+// void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
+// {
+//   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
+//   if( !cs.slice->alfEnabled[COMP_Y] )
+//   {
+//     return;
+//   }
+// 
+// 
+//   reconstructCoeffAPSs( cs, true, cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
+//   const PreCalcValues& pcv = *cs.pcv;
+// 
+//   int ctuIdx = 0;
+//   for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
+//   {
+//     for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
+//     {
+//       reconstructCTU_MT( *cs.picture, cs, ctuIdx );
+//       ctuIdx++;
+//     }
+//   }
+// }
 
 void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
 {
@@ -6152,7 +6153,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   }
 }
 
-void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, const int threadIdx )
+void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   const int filterIdx = 0;
 
@@ -6194,7 +6195,7 @@ void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs
         const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
         const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf recBuf = m_tempCtuBufPerThread[threadIdx]->subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelUnitBuf recBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
         recBuf.copyFrom( recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), 
                                                                               yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
         // pad top-left unavailable samples for raster slice
@@ -6601,6 +6602,101 @@ void EncAdaptiveLoopFilter::countChromaSampleValueNearMidPoint(const Pel* chroma
       }
     }
     chroma += (chromaStride << log2BlockHeight);
+  }
+}
+
+void EncAdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
+{
+  if( m_ccAlfFilterParam.ccAlfFilterEnabled[(int)compID - 1] )
+  {
+    const PreCalcValues& pcv = *cs.pcv;
+    const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
+
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
+    if( !skipFiltering )
+    {
+      const ClpRngs& clpRngs      = cs.slice->clpRngs;
+
+      bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
+      int  numHorVirBndry = 0, numVerVirBndry = 0;
+      int  horVirBndryPos[] = { 0, 0, 0 };
+      int  verVirBndryPos[] = { 0, 0, 0 };
+      if( filterControl != nullptr )
+        filterIdx--;
+
+      const int16_t* filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[(int)compID - 1][filterIdx]; //filterSet[filterIdx];
+
+      const int width  = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
+      const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
+      const int chromaScaleX = getComponentScaleX( compID, m_chromaFormat );
+      const int chromaScaleY = getComponentScaleY( compID, m_chromaFormat );
+
+      const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
+      const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
+
+      int rasterSliceAlfPad = 0;
+      if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
+        numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
+        rasterSliceAlfPad ) )
+      {
+        int yStart = yPos;
+        for( int i = 0; i <= numHorVirBndry; i++ )
+        {
+          const int  yEnd = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
+          const int  h = yEnd - yStart;
+          const bool clipT = ( i == 0 && clipTop ) || ( i > 0 ) || ( yStart == 0 );
+          const bool clipB = ( i == numHorVirBndry && clipBottom ) || ( i < numHorVirBndry ) || ( yEnd == m_picHeight );
+          int        xStart = xPos;
+          for( int j = 0; j <= numVerVirBndry; j++ )
+          {
+            const int  xEnd = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
+            const int  w = xEnd - xStart;
+            const bool clipL = ( j == 0 && clipLeft ) || ( j > 0 ) || ( xStart == 0 );
+            const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == m_picWidth );
+            const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
+            const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
+            PelUnitBuf buf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+            buf.copyFrom( recYuvExt.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
+                                                                                  yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+
+            // pad top-left unavailable samples for raster slice
+            if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
+            }
+
+            // pad bottom-right unavailable samples for raster slice
+            if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
+            }
+            buf.extendBorderPel( MAX_ALF_PADDING_SIZE );
+            buf = buf.subBuf( UnitArea(
+              cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+
+            const Area blkSrc( 0, 0, w, h );
+
+            const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+
+            xStart = xEnd;
+          }
+
+          yStart = yEnd;
+        }
+      }
+      else
+      {
+        Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
+        Area blkSrc( xPos, yPos, width, height );
+
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+      }
+    }
   }
 }
 
