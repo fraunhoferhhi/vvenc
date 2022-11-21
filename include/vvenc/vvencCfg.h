@@ -217,7 +217,7 @@ typedef enum
   VVENC_HDR_USER_DEFINED,// user defined HDR mode (to provide old HDR modes, HDR is set individually)
   VVENC_SDR_BT709,       // SDR BT.709 
   VVENC_SDR_BT2020,      // SDR BT.2020
-  VVENC_SDR_BT470BG      // SDR BT.470bg
+  VVENC_SDR_BT470BG      // SDR BT.470 B/G
 }vvencHDRMode;
 
 typedef enum
