@@ -398,7 +398,8 @@ void PreProcess::xDetectScc( Picture* pic ) const
   bool isSccStrong = false;
 
   int SIZE_BL = 4;
-  int K_SC = 25;
+  const int minLevel = 1 << (m_encCfg->m_internalBitDepth[CH_L] - (!m_encCfg->m_videoFullRangeFlag ? 4 : 6)); // 1/16th or 1/64th of range
+  const int K_SC = 25;
   const Pel* piSrc = yuvOrgBuf.Y().buf;
   uint32_t   uiStride = yuvOrgBuf.Y().stride;
   uint32_t   uiWidth = yuvOrgBuf.Y().width;
@@ -446,18 +447,24 @@ void PreProcess::xDetectScc( Picture* pic ) const
             }
           }
           // Variance in Block (SIZE_BL*SIZE_BL)
-          V = V / sizeEnd;
-          Var[n] = V;
+          if (V < sizeEnd && Mit <= minLevel)
+          {
+            Var[n] = -1;
+          }
+          else
+          {
+            Var[n] = V / sizeEnd;
+          }
           n++;
         }
       }
       for( int i = 0; i < 2; i++ )
       {
-        if( Var[i] == Var[i + 2] )
+        if( Var[i] >= 0 && Var[i] == Var[i + 2] )
         {
           sR[Ry] += 1;
         }
-        if( Var[i << 1] == Var[(i << 1) + 1] )
+        if( Var[i << 1] >= 0 && Var[i << 1] == Var[(i << 1) + 1] )
         {
           sR[Ry] += 1;
         }
@@ -466,15 +473,24 @@ void PreProcess::xDetectScc( Picture* pic ) const
   }
   int s = 0;
   isSccStrong = true;
+  size = 0;
   for( int r = 0; r < 4; r++ )
   {
     s += sR[r];
-    if( ((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC) )
+    if (size < sR[r]) // find peak quarter
+    {
+      size = sR[r];
+    }
+    if ((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC)
     {
       isSccStrong = false;
     }
   }
   isSccWeak = ((s * 100 / AmountBlock) > K_SC);
+  if (isSccWeak && (size * 100 / (AmountBlock >> 1)) > K_SC)
+  {
+    isSccStrong = true; // peak quarter is above 2*K_SC threshold
+  }
 
   PicShared* picShared     = pic->m_picShared;
   pic->isSccWeak           = isSccWeak;
