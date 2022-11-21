@@ -663,11 +663,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   if( m_easyMode )
   {
-    opts.setSubSection("HDR and Color Options");
+    opts.setSubSection("HDR/SDR and Color Options");
     opts.addOptions()
-    ("sdr",                                             toSDRMode,                                           "set SDR mode"
-                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg  ")
-    ("hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
@@ -675,9 +675,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("VUI and SEI options");
     opts.addOptions()
-    ("Sdr",                                             toSDRMode,                                           "set SDR mode"
-                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg  ")
-    ("Hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("Sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("Hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
