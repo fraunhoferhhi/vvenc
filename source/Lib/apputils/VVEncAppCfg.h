@@ -239,6 +239,18 @@ const std::vector<SVPair<int>> SaoToIntMap =
   { "2", 2 },
 };
 
+const std::vector<SVPair<vvencHDRMode>> SdrModeToIntMap =
+{
+  { "off",                 VVENC_HDR_OFF },
+  { "sdr",                 VVENC_SDR_BT709},
+  { "sdr_709",             VVENC_SDR_BT709},
+  { "sdr709",              VVENC_SDR_BT709},
+  { "sdr_2020",            VVENC_SDR_BT2020},
+  { "sdr2020",             VVENC_SDR_BT2020},
+  { "sdr_470bg",           VVENC_SDR_BT470BG},
+  { "sdr470bg",            VVENC_SDR_BT470BG},
+};
+
 const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
   { "off",                 VVENC_HDR_OFF },
@@ -455,6 +467,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   std::string writeCfg = "";
 
+  vvencHDRMode hdrMode = c->m_HdrMode;
+  vvencHDRMode sdrMode = c->m_HdrMode;
+
   IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &c->m_verbosity,   &MsgLevelToEnumMap );
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, c, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &c->m_SourceWidth, &c->m_SourceHeight }, true, 'x' );
@@ -464,7 +479,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<vvencTier>          toLevelTier                  ( &c->m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<vvencLevel>         toLevel                      ( &c->m_level,                       &LevelToEnumMap        );
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &c->m_SegmentMode,                 &SegmentToEnumMap      );
-  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &c->m_HdrMode,                     &HdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toSDRMode                    ( &sdrMode,                          &SdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &hdrMode,                          &HdrModeToIntMap       );
+
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
   IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8);
@@ -646,9 +663,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   if( m_easyMode )
   {
-    opts.setSubSection("HDR and Color Options");
+    opts.setSubSection("HDR/SDR and Color Options");
     opts.addOptions()
-    ("hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
@@ -656,7 +675,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("VUI and SEI options");
     opts.addOptions()
-    ("Hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("Sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("Hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
@@ -1190,8 +1211,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     {
       if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
-        rcOstr << "cannot parse y4m metadata\n";
-        ret = -1;
+        err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
       }
     }
     else
@@ -1200,6 +1220,16 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
+    }
+
+    if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
+    {
+      if( sdrMode != VVENC_HDR_OFF && hdrMode != VVENC_HDR_OFF )
+      {
+        err.error( "Dynamic range" ) << "cannot combine hdr and sdr mode. use one or another.\n";
+      }
+
+      c->m_HdrMode = (sdrMode != VVENC_HDR_OFF) ? sdrMode : hdrMode;
     }
 
     for( auto& a : argv_unhandled )
