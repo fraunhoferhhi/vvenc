@@ -479,8 +479,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<vvencTier>          toLevelTier                  ( &c->m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<vvencLevel>         toLevel                      ( &c->m_level,                       &LevelToEnumMap        );
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &c->m_SegmentMode,                 &SegmentToEnumMap      );
-  IStreamToEnum<vvencHDRMode>       toSDRMode                    ( &hdrMode,                          &SdrModeToIntMap       );
-  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &sdrMode,                          &HdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toSDRMode                    ( &sdrMode,                          &SdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &hdrMode,                          &HdrModeToIntMap       );
 
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
@@ -1211,8 +1211,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     {
       if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
-        rcOstr << "cannot parse y4m metadata\n";
-        ret = -1;
+        err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
       }
     }
     else
