@@ -837,10 +837,9 @@ inline bool checkCtuTaskNbBot( const PPS& pps, const int& ctuPosX, const int& ct
   return ctuPosY + 1 < pps.pcv->heightInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, 0, 1 ) && processStates[ ctuRsAddr     + pps.pcv->widthInCtus ] <= tskType;
 }
 
-inline bool checkCtuTaskNbRgt( const PPS& pps, const int& ctuPosX, const int& ctuPosY, const int& ctuRsAddr, const ProcessCtuState* processStates, const TaskType tskType, const int rightOffset = 1 )
+inline bool checkCtuTaskNbRgt( const PPS& pps, const int& ctuPosX, const int& ctuPosY, const int& ctuRsAddr, const ProcessCtuState* processStates, const TaskType tskType )
 {
-  //return ctuPosX + 1 < pps.pcv->widthInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ ctuRsAddr + rightOffset ] <= tskType;
-  return ctuPosX + rightOffset < pps.pcv->widthInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, rightOffset, 0 ) && processStates[ ctuRsAddr + rightOffset ] <= tskType;
+  return ctuPosX + 1 < pps.pcv->widthInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, 1, 0 ) && processStates[ ctuRsAddr + 1 ] <= tskType;
 }
 
 inline bool checkCtuTaskNbTopRgt( const PPS& pps, const int& ctuPosX, const int& ctuPosY, const int& ctuRsAddr, const ProcessCtuState* processStates, const TaskType tskType )
@@ -850,7 +849,6 @@ inline bool checkCtuTaskNbTopRgt( const PPS& pps, const int& ctuPosX, const int&
 
 inline bool checkCtuTaskNbBotRgt( const PPS& pps, const int& ctuPosX, const int& ctuPosY, const int& ctuRsAddr, const ProcessCtuState* processStates, const TaskType tskType, const int rightOffset = 1 )
 {
-  //return ctuPosX + 1 < pps.pcv->widthInCtus && ctuPosY + 1 < pps.pcv->heightInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, 1, 1 ) && processStates[ ctuRsAddr + 1 + pps.pcv->widthInCtus ] <= tskType;
   return ctuPosX + rightOffset < pps.pcv->widthInCtus && ctuPosY + 1 < pps.pcv->heightInCtus && pps.canFilterCtuBdry( ctuPosX, ctuPosY, rightOffset, 1 ) && processStates[ ctuRsAddr + rightOffset + pps.pcv->widthInCtus ] <= tskType;
 }
 
@@ -936,7 +934,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     // reshape + vertical loopfilter
     case RESHAPE_LF_VER:
       {
-        // clip check to right picture border
+        // clip check to right tile border (CTU_ENCODE pre-processing delay due to IBC)
         const int tileCol = slice.pps->ctuToTileCol[ctuPosX];
         const int lastCtuPosXInTile = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, lastCtuPosXInTile - ctuPosX );
@@ -958,11 +956,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        if( checkCtuTaskNbRgt   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CTU_ENCODE, checkRight ) ) 
+        if( processStates[ ctuRsAddr + checkRight ] <= CTU_ENCODE )
           return false;
         // check bottom right with 1 CTU delay (this is only required for intra pred)
         // at the right picture border this will check the bottom CTU
-        const int checkBottomRight = std::min<int>( 1, checkRight );
+        const int checkBottomRight = std::min<int>( 1, lastCtuPosXInTile - ctuPosX );
         if( checkCtuTaskNbBotRgt( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CTU_ENCODE, checkBottomRight ) ) 
           return false;
 
@@ -1201,7 +1199,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     case CCALF_GET_STATISTICS:
       {
-        //if( checkCtuTaskNbTop   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
         if( checkCtuTaskNbBot   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) 
           return false;
 
