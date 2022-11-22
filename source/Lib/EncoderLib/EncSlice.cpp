@@ -939,25 +939,25 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const int lastCtuPosXInTile = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, lastCtuPosXInTile - ctuPosX );
 
+        const bool filterAcrossTiles = encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 && slice.pps->loopFilterAcrossTilesEnabled;
+
         // need to check line above bcs of tiling, which allows CTU_ENCODE to run independently across tiles
-        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 && slice.pps->loopFilterAcrossTilesEnabled )
+        if( filterAcrossTiles )
         {
           if( ctuPosY > 0 )
           {
-            if( ctuPosX > 0 && processStates[ctuRsAddr - ctuStride - 1] <= CTU_ENCODE )
-              return false;
-            if( processStates[ctuRsAddr - ctuStride] <= CTU_ENCODE || processStates[ctuRsAddr - ctuStride + checkRight] <= CTU_ENCODE )
-              return false;
+            for( int i = -!!ctuPosX; i <= checkRight; i++ )
+              if( processStates[ctuRsAddr - ctuStride + i] <= CTU_ENCODE )
+                return false;
           }
-          // is checked above already
-          if( ctuPosX > 0 && processStates[ctuRsAddr - 1] <= CTU_ENCODE )
-            return false;
         }
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        if( processStates[ ctuRsAddr + checkRight ] <= CTU_ENCODE )
-          return false;
+        for( int i = filterAcrossTiles ? -!!ctuPosX : checkRight; i <= checkRight; i++ )
+          if( processStates[ctuRsAddr + i] <= CTU_ENCODE )
+            return false;
+
         // check bottom right with 1 CTU delay (this is only required for intra pred)
         // at the right picture border this will check the bottom CTU
         const int checkBottomRight = std::min<int>( 1, lastCtuPosXInTile - ctuPosX );
