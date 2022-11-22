@@ -915,20 +915,15 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           if( ctuPosY > 0 )
           {
-            if( ctuPosX > 0 && processStates[ctuRsAddr - ctuStride - 1] <= CTU_ENCODE )
-              return false;
-            for( int i = 0; i <= checkRight; i++ )
+            for( int i = -!!ctuPosX; i <= checkRight; i++ )
               if( processStates[ctuRsAddr - ctuStride + i] <= CTU_ENCODE )
                 return false;
           }
-          // is checked above already
-          if( ctuPosX > 0 && processStates[ctuRsAddr - 1] <= CTU_ENCODE )
-            return false;
         }
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        for( int i = hasTiles ? 0 : checkRight; i <= checkRight; i++ )
+        for( int i = hasTiles ? -!!ctuPosX : checkRight; i <= checkRight; i++ )
           if( processStates[ctuRsAddr + i] <= CTU_ENCODE )
             return false;
         // check bottom right with 1 CTU delay (this is only required for intra pred)
