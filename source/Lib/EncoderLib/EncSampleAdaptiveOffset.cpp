@@ -227,7 +227,7 @@ void EncSampleAdaptiveOffset::storeCtuReco( CodingStructure& cs, const UnitArea&
     clipX  = cs.pps->tileColBdRgt[cs.pps->ctuToTileCol[ctuX]] - lPos.x;
     clipY  = cs.pps->tileRowBdBot[cs.pps->ctuToTileRow[ctuY]] - lPos.y;
   }
-  lSize.clip( clipX, clipY );
+  lSize.clipSize( clipX, clipY );
 
   const UnitArea relocArea( ctuArea.chromaFormat, Area( lPos, lSize ) );
   Picture& pic       = *cs.picture;
