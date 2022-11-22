@@ -908,15 +908,18 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // clip check to right picture border
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
 
+        const bool hasTiles = encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1;
+
         // need to check line above bcs of tiling, which allows CTU_ENCODE to run indepedently across tiles
-        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 )
+        if( hasTiles )
         {
           if( ctuPosY > 0 )
           {
             if( ctuPosX > 0 && processStates[ctuRsAddr - ctuStride - 1] <= CTU_ENCODE )
               return false;
-            if( processStates[ctuRsAddr - ctuStride] <= CTU_ENCODE || processStates[ctuRsAddr - ctuStride + checkRight] <= CTU_ENCODE )
-              return false;
+            for( int i = 0; i <= checkRight; i++ )
+              if( processStates[ctuRsAddr - ctuStride + i] <= CTU_ENCODE )
+                return false;
           }
           // is checked above already
           if( ctuPosX > 0 && processStates[ctuRsAddr - 1] <= CTU_ENCODE )
@@ -925,11 +928,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        if(                                   processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
-          return false;
+        for( int i = hasTiles ? 0 : checkRight; i <= checkRight; i++ )
+          if( processStates[ctuRsAddr + i] <= CTU_ENCODE )
+            return false;
         // check bottom right with 1 CTU delay (this is only required for intra pred)
         // at the right picture border this will check the bottom CTU
-        const int checkBottomRight = std::min<int>( 1, checkRight );
+        const int checkBottomRight = std::min<int>( 1, ( int ) pcv.widthInCtus - 1 - ctuPosX );
         if( ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkBottomRight + ctuStride ] <= CTU_ENCODE )
           return false;
 
