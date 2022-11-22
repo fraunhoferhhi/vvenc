@@ -209,12 +209,15 @@ typedef enum
 
 typedef enum
 {
-  VVENC_HDR_OFF     = 0, // SDR
+  VVENC_HDR_OFF     = 0, // undefined - no signalization
   VVENC_HDR_PQ,          // HDR10, Dolby
   VVENC_HDR_HLG,         // Hybrid Log Gamma
   VVENC_HDR_PQ_BT2020,   // HDR10, Dolby + BT.2020
   VVENC_HDR_HLG_BT2020,  // Hybrid Log Gamma + BT.2020
-  VVENC_HDR_USER_DEFINED // user defined HDR mode (to provide old HDR modes, HDR is set individually)
+  VVENC_HDR_USER_DEFINED,// user defined HDR mode (to provide old HDR modes, HDR is set individually)
+  VVENC_SDR_BT709,       // SDR BT.709 
+  VVENC_SDR_BT2020,      // SDR BT.2020
+  VVENC_SDR_BT470BG      // SDR BT.470 B/G
 }vvencHDRMode;
 
 typedef enum

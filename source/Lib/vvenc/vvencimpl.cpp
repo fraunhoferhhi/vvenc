@@ -92,6 +92,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 
 VVEncImpl::VVEncImpl()
 {
+  setSIMDExtension( nullptr );   // ensure SIMD-detection is finished
   m_cEncoderInfo = createEncoderInfoStr();
 }
 
@@ -737,7 +738,7 @@ void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
-  const std::string simdReqStr( simdId );
+  const std::string simdReqStr( simdId ? simdId : "" );
 #if defined( TARGET_SIMD_X86 )
 #  if HANDLE_EXCEPTION
   try
@@ -797,6 +798,7 @@ std::string VVEncImpl::createEncoderInfoStr()
 {
   std::stringstream cssCap;
 #if defined( TARGET_SIMD_X86 )
+  setSIMDExtension( nullptr );   // ensure SIMD-detection is finished
   cssCap << getCompileInfoString() << "[SIMD=" << read_x86_extension_name() <<"]";
 #else   // !TARGET_SIMD_X86
   cssCap << getCompileInfoString() << "[SIMD=SCALAR]";
