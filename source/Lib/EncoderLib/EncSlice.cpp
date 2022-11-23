@@ -939,23 +939,23 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const int lastCtuPosXInTile = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, lastCtuPosXInTile - ctuPosX );
 
-        const bool filterAcrossTiles = encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 && slice.pps->loopFilterAcrossTilesEnabled;
+        const bool hasTiles = encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1;
 
         // need to check line above bcs of tiling, which allows CTU_ENCODE to run independently across tiles
-        if( filterAcrossTiles )
+        if( hasTiles )
         {
           if( ctuPosY > 0 )
           {
             for( int i = -!!ctuPosX; i <= checkRight; i++ )
-              if( processStates[ctuRsAddr - ctuStride + i] <= CTU_ENCODE )
+              if( pps.canFilterCtuBdry( ctuPosX, ctuPosY, i, -1 ) && processStates[ctuRsAddr - ctuStride + i] <= CTU_ENCODE )
                 return false;
           }
         }
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
-        for( int i = filterAcrossTiles ? -!!ctuPosX : checkRight; i <= checkRight; i++ )
-          if( processStates[ctuRsAddr + i] <= CTU_ENCODE )
+        for( int i = hasTiles ? -!!ctuPosX : checkRight; i <= checkRight; i++ )
+          if( pps.canFilterCtuBdry( ctuPosX, ctuPosY, i, 0 ) && processStates[ctuRsAddr + i] <= CTU_ENCODE )
             return false;
 
         // check bottom right with 1 CTU delay (this is only required for intra pred)
@@ -1199,8 +1199,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     case CCALF_GET_STATISTICS:
       {
-        if( checkCtuTaskNbBot   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) 
-          return false;
+        if( checkCtuTaskNbTop   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
+        if( checkCtuTaskNbBot   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_RECONSTRUCT ) ) return false;
 
         if( checkReadyState )
           return true;

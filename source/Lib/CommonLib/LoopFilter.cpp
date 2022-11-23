@@ -907,14 +907,25 @@ inline void xDeriveEdgefilterParam( const Position pos, const int numVerVirBndry
   }
 }
 
+template<DeblockEdgeDir edgeDir>
+bool canFilterCUBdry( const Slice& slice, const Position& pos, const ChannelType& chType, const PreCalcValues &pcv )
+{
+  const int scaleX = getChannelTypeScaleX( chType, pcv.chrFormat );
+  const int scaleY = getChannelTypeScaleY( chType, pcv.chrFormat );
+  const int ctuX   = ( pos.x << scaleX ) >> pcv.maxCUSizeLog2;
+  const int ctuY   = ( pos.y << scaleY ) >> pcv.maxCUSizeLog2;
+  if( edgeDir )
+    return ( 0 < pos.y ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, ( ( ( pos.y << scaleY ) - 1 ) >> pcv.maxCUSizeLog2 ) - ctuY );
+  else
+    return ( 0 < pos.x ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, ( ( ( pos.x << scaleX ) - 1 ) >> pcv.maxCUSizeLog2 ) - ctuX, 0 );
+}
 
 template<DeblockEdgeDir edgeDir>
 void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const TransformUnit& currTU, const bool bValue, bool deriveBdStrngt )
 {
   const PreCalcValues &pcv = *cu.cs->pcv;
-  
-  const bool canFilterCuBdry = edgeDir ? CU::canFilterCUBdryTop( cu ): CU::canFilterCUBdryLeft( cu );
-  if( !canFilterCuBdry )
+
+  if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[cu.chType].pos(), cu.chType, pcv ) )
     return;
 
   ChannelType start = CH_L;

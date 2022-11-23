@@ -181,8 +181,6 @@ namespace CU
   void     getIbcMVPsEncOnly            (CodingUnit& cu, Mv* mvPred, int& nbPred);
   bool     isAddNeighborMvIBC           (const Mv& currMv, Mv* neighborMvs, int numNeighborMv);
   bool     getDerivedBVIBC              (CodingUnit& cu, const Mv& currentMv, Mv& derivedMv);
-  bool     canFilterCUBdryLeft          (const CodingUnit& cu);
-  bool     canFilterCUBdryTop           (const CodingUnit& cu);
 }
 
 // TU tools

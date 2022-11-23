@@ -1630,29 +1630,6 @@ bool CU::getDerivedBVIBC(CodingUnit& cu, const Mv& currentMv, Mv& derivedMv)
   }
   return isIBC;
 }
-
-bool CU::canFilterCUBdryLeft( const CodingUnit& cu )
-{
-  const Slice& slice = *cu.slice;
-  const Position pos = cu.blocks[cu.chType].pos();
-  const int scaleX = getChannelTypeScaleX( cu.chType, slice.pps->pcv->chrFormat );
-  const int scaleY = getChannelTypeScaleY( cu.chType, slice.pps->pcv->chrFormat );
-  const int ctuX   = ( pos.x << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
-  const int ctuY   = ( pos.y << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
-  return ( 0 < pos.x ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, ( ( ( pos.x - 1 ) << scaleX ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuX, 0 );
-}
-
-bool CU::canFilterCUBdryTop( const CodingUnit& cu )
-{
-  const Slice& slice = *cu.slice;
-  const Position pos = cu.blocks[cu.chType].pos();
-  const int scaleX = getChannelTypeScaleX( cu.chType, slice.pps->pcv->chrFormat );
-  const int scaleY = getChannelTypeScaleY( cu.chType, slice.pps->pcv->chrFormat );
-  const int ctuX   = ( pos.x << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
-  const int ctuY   = ( pos.y << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
-  return ( 0 < pos.y ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, ( ( ( pos.y - 1 ) << scaleY ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuY );
-}
-
 void CU::fillIBCMvpCand(CodingUnit& cu, AMVPInfo& amvpInfo)
 {
   AMVPInfo* pInfo = &amvpInfo;
