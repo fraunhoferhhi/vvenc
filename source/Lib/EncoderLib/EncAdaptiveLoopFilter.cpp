@@ -1330,9 +1330,10 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
   m_alfCovarianceCcAlf[1] = nullptr;
   m_alfCovarianceFrameCcAlf[0] = nullptr;
   m_alfCovarianceFrameCcAlf[1] = nullptr;
+  m_accumStatCTUWise = false;
 }
 
-void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
+void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
 {
 
   AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );
@@ -1388,8 +1389,27 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     ChannelType chType = toChannelType( ComponentID( compIdx ) );
     int numClasses = compIdx ? 1 : MAX_NUM_ALF_CLASSES;
 
-    m_alfCovariance[compIdx] = new AlfCovariance*[m_numAsusInPic];
-    for( int j = 0; j < m_numAsusInPic; j++ )
+    // statistics buffer
+    // if ASUs are used, the preferred way to gather statistics is across ASUs
+    // CTU-wise gathering is the fall-back mode for the cases when tiles are used and at least one tile boundary splits ASUs
+    m_accumStatCTUWise = false;
+    if( m_numAsusInPic != m_numCTUsInPic && pps.getNumTiles() > 1 && !pps.loopFilterAcrossTilesEnabled )
+    {
+      // check whether any tile boundary splits ASUs. Only in that case we need extra CTU-buffers.
+      for( int tileIdx = 0; tileIdx < pps.numTileRows * pps.numTileCols; tileIdx++ )
+      {
+        int tileCtuX = pps.tileColBd[tileIdx % pps.numTileCols] << pps.pcv->maxCUSizeLog2;
+        int tileCtuY = pps.tileRowBd[tileIdx / pps.numTileCols] << pps.pcv->maxCUSizeLog2;
+        if( tileCtuX % m_maxAsuWidth != 0 || tileCtuY % m_maxAsuHeight != 0 )
+        {
+          m_accumStatCTUWise = true;
+          break;
+        }
+      }
+    }
+    const int numUnitsInPic = m_accumStatCTUWise ? m_numCTUsInPic: m_numAsusInPic;
+    m_alfCovariance[compIdx] = new AlfCovariance*[numUnitsInPic];
+    for( int j = 0; j < numUnitsInPic; j++ )
     {
       m_alfCovariance[compIdx][j] = new AlfCovariance[numClasses];
       for( int k = 0; k < numClasses; k++ )
@@ -1507,7 +1527,8 @@ void EncAdaptiveLoopFilter::destroy()
     {
       int numClasses = compIdx ? 1 : MAX_NUM_ALF_CLASSES;
 
-      for( int j = 0; j < m_numAsusInPic; j++ )
+      const int numUnitsInPic = m_accumStatCTUWise ? m_numCTUsInPic: m_numAsusInPic;
+      for( int j = 0; j < numUnitsInPic; j++ )
       {
         for( int k = 0; k < numClasses; k++ )
         {
@@ -1729,7 +1750,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
   }
 }
 
-void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr )
+void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   if( isSkipAlfForFrame( pic ) )
   {
@@ -1739,27 +1760,40 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
   const PreCalcValues& pcv = *cs.pcv;
   const int xC = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
   const int yC = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
-  const int wC = std::min( m_maxCUWidth,  m_picWidth  - xC );
-  const int hC = std::min( m_maxCUHeight, m_picHeight - yC );
-
-  // get statistics ASU-wise
-  const int xA = xC & ~(m_maxAsuWidth - 1);
-  const int yA = yC & ~(m_maxAsuHeight - 1);
-  const int wA = std::min( m_maxAsuWidth,  m_picWidth  - xA );
-  const int hA = std::min( m_maxAsuHeight, m_picHeight - yA );
-
-  // bottom-right CTU in ASU?
-  if( xA + wA == xC + wC && yA + hA == yC + hC )
+  if( m_accumStatCTUWise )
   {
-    getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC );
+    // CTU-wise statistics gathering mode
+    // later in the derivation step statistics will be accumulated into ASUs
+    for( int compIdx = 0; compIdx < getNumberValidComponents( m_chromaFormat ); compIdx++ )
+    {
+      const int numClasses = isLuma( ComponentID( compIdx ) ) ? MAX_NUM_ALF_CLASSES : 1;
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+      {
+        m_alfCovariance[compIdx][ctuRsAddr][classIdx].reset();
+      }
+    }
+    xGetStatisticsCTU( pic, cs, recYuv, xC, yC, ctuRsAddr, alfTempCtuBuf );
   }
   else
   {
-    return;
+    // regular mode: gather statistics ASU-wise
+    const int wC = std::min( m_maxCUWidth,  m_picWidth  - xC );
+    const int hC = std::min( m_maxCUHeight, m_picHeight - yC );
+
+    const int xA = xC & ~(m_maxAsuWidth - 1);
+    const int yA = yC & ~(m_maxAsuHeight - 1);
+    const int wA = std::min( m_maxAsuWidth,  m_picWidth  - xA );
+    const int hA = std::min( m_maxAsuHeight, m_picHeight - yA );
+
+    // bottom-right CTU in ASU?
+    if( xA + wA == xC + wC && yA + hA == yC + hC )
+    {
+      getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC, alfTempCtuBuf );
+    }
   }
 }
 
-void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC )
+void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, PelStorage& alfTempCtuBuf )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
   // init ASU stats buffer
@@ -1779,17 +1813,16 @@ void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs,
   {
     for( int x = xA; x <= xC; x += m_maxCUWidth )
     {
-      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr );
+      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr, alfTempCtuBuf );
     }
   }
 }
 
-void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr )
+void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& alfTempCtuBuf )
 {
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
 
-  const CPelBuf& recLuma = recYuv.get( COMP_Y );
   const PreCalcValues& pcv = *cs.pcv;
   bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
   int numHorVirBndry = 0, numVerVirBndry = 0;
@@ -1801,6 +1834,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
   int ctuRsAddr = getCtuAddr( Position( xPos, yPos ), pcv );
   const int width = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
   const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
+  const CPelBuf& recLuma = recYuv.get( COMP_Y );
 
   int rasterSliceAlfPad = 0;
   if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight, numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos, rasterSliceAlfPad ) )
@@ -1824,7 +1858,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
 
         const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf  dstBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
         CPelUnitBuf srcBuf = recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) );
         dstBuf.copyFrom( srcBuf );
         // pad top-left unavailable samples for raster slice
@@ -1861,7 +1895,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
           Pel* org = orgYuv.get( compID ).bufAt( xStart >> getComponentScaleX( compID, m_chromaFormat ), yStart >> getComponentScaleY( compID, m_chromaFormat ) );
 
           const CompArea& compAreaDst = areaDst.block( compID );
-          getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, compArea, chType
+          getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, chType
             , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
             , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
           );
@@ -1887,13 +1921,12 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
 
       int  recStride = recYuv.get( compID ).stride;
       Pel* rec = recYuv.get( compID ).bufAt( compArea );
-
       int  orgStride = orgYuv.get( compID ).stride;
       Pel* org = orgYuv.get( compID ).bufAt( compArea );
 
       ChannelType chType = toChannelType( compID );
 
-      getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, compArea, chType
+      getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, chType
         , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
         , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
       );
@@ -1903,7 +1936,7 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
 
 void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPosX, int ctuPosY )
 {
-  // copy unfiltered reco (including padded / extented area)
+  // copy unfiltered reco (including padded / extended area)
   const ChromaFormat chromaFormat = cs.area.chromaFormat;
   UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
   const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
@@ -1912,18 +1945,26 @@ void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPos
     const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
     const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
     CompArea cpyArea = ctuArea.blocks[ i ];
-    cpyArea.x += extX;
-    cpyArea.y += extY;
     if( ctuPosX == 0 )
     {
-      cpyArea.x     -= 2 * extX;
-      cpyArea.width += 2 * extX;
+      cpyArea.x     -= extX;
+      cpyArea.width += extX;
     }
+    if( ctuPosX + 1 >= cs.pcv->widthInCtus )
+    {
+      cpyArea.width += extX;
+    }
+
     if( ctuPosY == 0 )
     {
-      cpyArea.y      -= 2 * extY;
-      cpyArea.height += 2 * extY;
+      cpyArea.y      -= extY;
+      cpyArea.height += extY;
     }
+    if( ctuPosY + 1 >= cs.pcv->heightInCtus )
+    {
+      cpyArea.height += extY;
+    }
+
            PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
     const CPelBuf srcBuf = cs.getRecoBuf( cpyArea.compID ).subBuf( cpyArea.pos(), cpyArea.size() );
     dstBuf.copyFrom( srcBuf );
@@ -1971,9 +2012,39 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   {
     const ComponentID compID = ComponentID( compIdx );
     const ChannelType chType = toChannelType( compID );
+    const int numClasses = ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 );
     for( int asuRsAddr = 0; asuRsAddr < m_numAsusInPic; asuRsAddr++ )
     {
-      for( int classIdx = 0; classIdx < ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 ); classIdx++ )
+      DTRACE( g_trace_ctx, D_ALF, "ASU=%d\n", asuRsAddr );
+      if( m_accumStatCTUWise )
+      {
+        // accumulate CTUs to ASU
+        int ctuX, ctuY;
+        getAsuCtuXY( asuRsAddr, ctuX, ctuY );
+        int ctuMaxX = getAsuMaxCtuX( ctuX );
+        int ctuMaxY = getAsuMaxCtuY( ctuY );
+        if( asuRsAddr > 0 )
+        {
+          for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+            m_alfCovariance[compIdx][asuRsAddr][classIdx].reset();
+        }
+        for( int cY = ctuY; cY < ctuMaxY; cY++ )
+        {
+          for( int cX = ctuX; cX < ctuMaxX; cX++ )
+          {
+            const int ctuRsAddr = cY * m_numCTUsInWidth + cX;
+            if( ctuRsAddr > 0 )
+            {
+              for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+              {
+                m_alfCovariance[compIdx][asuRsAddr][classIdx] += m_alfCovariance[compIdx][ctuRsAddr][classIdx];
+              }
+            }
+          }
+        }
+      }
+
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
       {
         m_alfCovarianceFrame[chType][isLuma( compID ) ? classIdx : 0] += m_alfCovariance[compIdx][asuRsAddr][classIdx];
 #if ENABLE_TRACING
@@ -2032,7 +2103,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   alfEncoderCtb( cs, alfParam, lambdaChromaWeight );
 }
 
-void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
+void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
 
@@ -2050,7 +2121,7 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
 
   // Perform filtering
   PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
-  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr );
+  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr, alfTempCtuBuf );
 }
 
 #if ENABLE_TRACING
@@ -2071,7 +2142,7 @@ void traceStreamBlock( std::stringstream& str, Tsrc *buf, unsigned stride, unsig
 }
 #endif
 
-void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, int ctuRsAddr )
+void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   bool ctuEnableFlag = m_ctuEnableFlag[COMP_Y][ctuRsAddr];
   const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
@@ -2143,7 +2214,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
           const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
           const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-          PelUnitBuf  dstBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+          PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
           dstBuf.copyFrom( m_tempBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE), yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf ) ) ) );
           // pad top-left unavailable samples for raster slice
           if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
@@ -2240,28 +2311,28 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 }
 
-void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
-{
-  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
-  if( !cs.slice->alfEnabled[COMP_Y] )
-  {
-    return;
-  }
-
-
-  reconstructCoeffAPSs( cs, true, cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
-  const PreCalcValues& pcv = *cs.pcv;
-
-  int ctuIdx = 0;
-  for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
-  {
-    for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
-    {
-      reconstructCTU_MT( *cs.picture, cs, ctuIdx );
-      ctuIdx++;
-    }
-  }
-}
+// void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
+// {
+//   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
+//   if( !cs.slice->alfEnabled[COMP_Y] )
+//   {
+//     return;
+//   }
+// 
+// 
+//   reconstructCoeffAPSs( cs, true, cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
+//   const PreCalcValues& pcv = *cs.pcv;
+// 
+//   int ctuIdx = 0;
+//   for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
+//   {
+//     for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
+//     {
+//       reconstructCTU_MT( *cs.picture, cs, ctuIdx );
+//       ctuIdx++;
+//     }
+//   }
+// }
 
 void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
 {
@@ -3325,7 +3396,7 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
 #define GET_ALF_COVAR( elocal, b, k, x ) elocal[( b ) * NL_COVAR_bstride + ( k ) * NL_COVAR_kstride + ( x ) * NL_COVAR_xstride]
 #define SET_ALF_COVAR( elocal, b, k, x, v ) GET_ALF_COVAR( elocal, b, k, x ) = ( v )
 
-void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos)
+void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const ChannelType channel, int vbCTUHeight, int vbPos)
 {
   const int numBins = ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) ? AlfNumClippingValues : 1;
 
@@ -3340,7 +3411,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
   const bool useSimd = false;
 #endif
 
-  for( int i = 0; i < area.height; i += 4 )
+  for( int i = 0; i < areaDst.height; i += 4 )
   {
     const int maxFilterSamples = 4;
 
@@ -3362,7 +3433,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
       }
     }
 
-    for( int j = 0; j < area.width; j += 4 )
+    for( int j = 0; j < areaDst.width; j += 4 )
     {
       const int idx = ( i / 4 ) * ( MAX_CU_SIZE / 4 ) + j / 4;
       if( classifier && classifier[idx].classIdx == m_ALF_UNUSED_CLASSIDX && classifier[idx].transposeIdx == m_ALF_UNUSED_TRANSPOSIDX )
@@ -6082,7 +6153,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   }
 }
 
-void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuRsAddr )
+void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   const int filterIdx = 0;
 
@@ -6124,10 +6195,9 @@ void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs
         const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
         const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf recBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-        recBuf.copyFrom( recYuv.subBuf(
-          UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
-            yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+        PelUnitBuf recBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        recBuf.copyFrom( recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), 
+                                                                              yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
         // pad top-left unavailable samples for raster slice
         if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
         {
@@ -6161,7 +6231,6 @@ void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs
     const UnitArea area( m_chromaFormat, Area( xPos, yPos, width, height ) );
 
     const ComponentID compID = ComponentID( compIdx );
-
     getBlkStatsCcAlf( m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr], m_filterShapesCcAlf[compIdx - 1], orgYuv, recYuv, area, area, compID, yPos );
   }
 }
@@ -6533,6 +6602,101 @@ void EncAdaptiveLoopFilter::countChromaSampleValueNearMidPoint(const Pel* chroma
       }
     }
     chroma += (chromaStride << log2BlockHeight);
+  }
+}
+
+void EncAdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
+{
+  if( m_ccAlfFilterParam.ccAlfFilterEnabled[(int)compID - 1] )
+  {
+    const PreCalcValues& pcv = *cs.pcv;
+    const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
+
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
+    if( !skipFiltering )
+    {
+      const ClpRngs& clpRngs      = cs.slice->clpRngs;
+
+      bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
+      int  numHorVirBndry = 0, numVerVirBndry = 0;
+      int  horVirBndryPos[] = { 0, 0, 0 };
+      int  verVirBndryPos[] = { 0, 0, 0 };
+      if( filterControl != nullptr )
+        filterIdx--;
+
+      const int16_t* filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[(int)compID - 1][filterIdx]; //filterSet[filterIdx];
+
+      const int width  = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
+      const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
+      const int chromaScaleX = getComponentScaleX( compID, m_chromaFormat );
+      const int chromaScaleY = getComponentScaleY( compID, m_chromaFormat );
+
+      const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
+      const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
+
+      int rasterSliceAlfPad = 0;
+      if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
+        numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
+        rasterSliceAlfPad ) )
+      {
+        int yStart = yPos;
+        for( int i = 0; i <= numHorVirBndry; i++ )
+        {
+          const int  yEnd = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
+          const int  h = yEnd - yStart;
+          const bool clipT = ( i == 0 && clipTop ) || ( i > 0 ) || ( yStart == 0 );
+          const bool clipB = ( i == numHorVirBndry && clipBottom ) || ( i < numHorVirBndry ) || ( yEnd == m_picHeight );
+          int        xStart = xPos;
+          for( int j = 0; j <= numVerVirBndry; j++ )
+          {
+            const int  xEnd = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
+            const int  w = xEnd - xStart;
+            const bool clipL = ( j == 0 && clipLeft ) || ( j > 0 ) || ( xStart == 0 );
+            const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == m_picWidth );
+            const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
+            const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
+            PelUnitBuf buf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+            buf.copyFrom( recYuvExt.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
+                                                                                  yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+
+            // pad top-left unavailable samples for raster slice
+            if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
+            }
+
+            // pad bottom-right unavailable samples for raster slice
+            if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
+            }
+            buf.extendBorderPel( MAX_ALF_PADDING_SIZE );
+            buf = buf.subBuf( UnitArea(
+              cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+
+            const Area blkSrc( 0, 0, w, h );
+
+            const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+
+            xStart = xEnd;
+          }
+
+          yStart = yEnd;
+        }
+      }
+      else
+      {
+        Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
+        Area blkSrc( xPos, yPos, width, height );
+
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+      }
+    }
   }
 }
 

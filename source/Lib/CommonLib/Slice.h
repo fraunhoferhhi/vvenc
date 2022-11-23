@@ -868,6 +868,8 @@ struct PPS
   std::vector<uint32_t>  tileRowHeight;                //!< tile row heights in units of CTUs
   std::vector<uint32_t>  tileColBd;                    //!< tile column left-boundaries in units of CTUs
   std::vector<uint32_t>  tileRowBd;                    //!< tile row top-boundaries in units of CTUs
+  std::vector<uint32_t>  tileColBdRgt;                 //!< tile column right-boundaries in luma samples
+  std::vector<uint32_t>  tileRowBdBot;                 //!< tile row bottom-boundaries in luma samples
   std::vector<uint32_t>  ctuToTileCol;                 //!< mapping between CTU horizontal address and tile column index
   std::vector<uint32_t>  ctuToTileRow;                 //!< mapping between CTU vertical address and tile row index
   bool                   rectSlice;                    //!< rectangular slice flag
@@ -959,6 +961,7 @@ public:
 
     return tileRowResIdx + tileRowResIdxRest;
   }
+  bool                   canFilterCtuBdry( int ctuX, int ctuY, int offX, int offY ) const { return getTileIdx( ctuX, ctuY ) == getTileIdx( ctuX + offX, ctuY + offY ) || loopFilterAcrossTilesEnabled; }
   
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;

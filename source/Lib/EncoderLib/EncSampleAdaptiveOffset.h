@@ -101,7 +101,7 @@ public:
   static void disabledRate   ( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
   static void decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
 
-  void storeCtuReco          ( CodingStructure& cs, const UnitArea& ctuArea );
+  void storeCtuReco          ( CodingStructure& cs, const UnitArea& ctuArea, const int ctuX, const int ctuY );
   void getCtuStatistics      ( CodingStructure& cs, std::vector<SAOStatData**>& saoStatistics, const UnitArea& ctuArea, const int ctuRsAddr );
   void decideCtuParams       ( CodingStructure& cs, const std::vector<SAOStatData**>& saoStatistics, const bool saoEnabled[ MAX_NUM_COMP ], const bool allBlksDisabled, const UnitArea& ctuArea, const int ctuRsAddr, SAOBlkParam* reconParams, SAOBlkParam* codedParams );
 
