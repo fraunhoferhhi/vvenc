@@ -1832,7 +1832,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             updateCandList(ModeInfo(mergeCand, false, false, true, false, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
             if( insertPos > -1 )
             {
-              m_SortedPelUnitBufs.getTestBuf().copyFrom( testBuf );
               m_SortedPelUnitBufs.insert( insertPos, uiNumMrgSATDCand+4 ); // add 4 to prevent best RdCandidates being reused as testbuf
             }
             else if (fastCIIP) //3
