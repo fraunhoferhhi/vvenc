@@ -407,8 +407,9 @@ void PreProcess::xDetectScc( Picture* pic ) const
   int size = SIZE_BL;
   unsigned   hh, ww;
   int SizeS = SIZE_BL << 1;
-  int sR[4] = { 0,0,0,0 };
-  int AmountBlock = (uiWidth >> 2) * (uiHeight >> 2);
+  int sR[4] = { 0, 0, 0, 0 }; // strong SCC data
+  int zR[4] = { 0, 0, 0, 0 }; // zero input data
+  const int amountBlock = (uiWidth >> 2) * (uiHeight >> 2);
   for( hh = 0; hh < uiHeight; hh += SizeS )
   {
     for( ww = 0; ww < uiWidth; ww += SizeS )
@@ -460,13 +461,27 @@ void PreProcess::xDetectScc( Picture* pic ) const
       }
       for( int i = 0; i < 2; i++ )
       {
-        if( Var[i] >= 0 && Var[i] == Var[i + 2] )
+        if( Var[i] == Var[i + 2] )
         {
-          sR[Ry] += 1;
+          if( Var[i] < 0 && zR[Ry] * 20 < amountBlock )
+          {
+            zR[Ry]++;
+          }
+          else
+          {
+            sR[Ry]++;
+          }
         }
-        if( Var[i << 1] >= 0 && Var[i << 1] == Var[(i << 1) + 1] )
+        if( Var[i << 1] == Var[(i << 1) + 1] )
         {
-          sR[Ry] += 1;
+          if( Var[i << 1] < 0 && zR[Ry] * 20 < amountBlock )
+          {
+            zR[Ry]++;
+          }
+          else
+          {
+            sR[Ry]++;
+          }
         }
       }
     }
@@ -481,15 +496,15 @@ void PreProcess::xDetectScc( Picture* pic ) const
     {
       size = sR[r];
     }
-    if ((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC)
+    if ((sR[r] * 100 / (amountBlock >> 2)) <= K_SC)
     {
       isSccStrong = false;
     }
   }
-  isSccWeak = ((s * 100 / AmountBlock) > K_SC);
-  if (isSccWeak && (size * 100 / (AmountBlock >> 1)) > K_SC)
+  isSccWeak = ((s * 100 / amountBlock) > K_SC);
+  if (isSccWeak && (size * 93 / (amountBlock >> 1)) > K_SC)
   {
-    isSccStrong = true; // peak quarter is above 2*K_SC threshold
+    isSccStrong = true; // peak quarter is above 2.15*K_SC threshold
   }
 
   PicShared* picShared     = pic->m_picShared;

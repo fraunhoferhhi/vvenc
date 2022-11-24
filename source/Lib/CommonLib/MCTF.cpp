@@ -601,7 +601,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( ! pic->useScMCTF )
+  if( ( overallStrength <= 1.0 || !m_encCfg->m_usePerceptQPA ) && !pic->useScMCTF )
   {
     isFilterThisFrame = false;
   }
@@ -659,8 +659,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // filter
-    fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
-    bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+    if( pic->useScMCTF )
+    {
+      fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
+      bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+    }
 
     if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA )
     {
@@ -703,20 +706,23 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
       if( distFactor[0] < 3 && distFactor[1] < 3 && m_encCfg->m_usePerceptQPA )
       {
+        const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
+
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
           const Position pos ((i % widthInCtus) * ctuSize, (i / widthInCtus) * ctuSize);
           const CompArea ctuArea  = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, ctuSize, ctuSize)), pic->Y());
           const unsigned avgIndex = pic->getOrigBuf (ctuArea).getAvg() >> (m_encCfg->m_internalBitDepth[CH_L] - 3); // one of 8 mean level regions
 
-          if (4.0 * (sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu])) < pic->m_picShared->m_minNoiseLevels[avgIndex] * blkCount[i])
+          sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
+          if (bd12bScale * sumRMS[i] < pic->m_picShared->m_minNoiseLevels[avgIndex] * blkCount[i])
           {
-            pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + 4.0 * sumRMS[i] / blkCount[i]); // * 4 as in QPA high-pass amplification
+            pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + bd12bScale * sumRMS[i] / blkCount[i]); // scaled to 12 bit, see also QPA
           }
         }
       }
 
-      if( !m_encCfg->m_blockImportanceMapping )
+      if( !m_encCfg->m_blockImportanceMapping || !pic->useScMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
         return;
