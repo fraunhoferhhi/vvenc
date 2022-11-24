@@ -917,7 +917,6 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
           if( pic->isLongTerm && curPoc == pRPL1->refPicIdentifier[i] )
           {
             isReference = 1;
-            if( !pic->isLongTerm ) pic->isLongTerm = true;
           }
         }
       }
