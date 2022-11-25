@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -53,25 +49,25 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonDefX86.h"
 
+#include "TrQuant.h"
 #include "TrQuant_EMT.h"
-
 
 #if ENABLE_SIMD_TRAFO
 #ifdef TARGET_SIMD_X86
 
 namespace vvenc {
 
-template< X86_VEXT vext, int W >
-void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned rows )
+template<X86_VEXT vext, unsigned trSize>
+void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
 {
   unsigned maxLoopL = std::min<int>( reducedLines, 4 );
 
 #if USE_AVX2
-  if( W >= 8 && vext >= AVX2 )
+  if( trSize >= 8 && vext >= AVX2 )
   {
     if( ( trSize & 15 ) == 0 )
     {
-      unsigned trLoops = trSize >> 4;
+      static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
 
       for( int k = 0; k < rows; k += 2 )
       {
@@ -80,7 +76,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
         const TCoeff* srcPtr0 = &src[ k      * lines];
         const TCoeff* srcPtr1 = &src[(k + 1) * lines];
 
-        __m256i vsrc1v[4][2];
+        __m256i vsrc1v[trLoops][2];
         
         const TMatrixCoeff*  itPtr0 = &it[ k      * trSize];
         const TMatrixCoeff*  itPtr1 = &it[(k + 1) * trSize];
@@ -197,7 +193,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
     }
   }
 #else
-  if( W >= 8 )
+  if( trSize >= 8 )
   {
     for( int k = 0; k < rows; k += 2 )
     {
@@ -256,7 +252,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
     }
   }
 #endif
-  else if( W >= 4 )
+  else if( trSize >= 4 )
   {
     CHECKD( trSize != 4, "trSize needs to be '4'!" );
 
@@ -311,8 +307,8 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
 #endif
 }
 
-template<X86_VEXT vext, int W>
-void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
+template<X86_VEXT vext, int trSize>
+void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
 {
   const int rnd_factor = 1 << ( shift - 1 );
   
@@ -339,48 +335,76 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
   //  src += trSize;
   //}
 
-  if( W >= 8 )
+  if( trSize >= 8 )
   {
 #if USE_AVX2
     if( vext >= AVX2 && ( trSize & 15 ) == 0 )
     {
-      for( int i = 0; i < reducedLine; i += 2 )
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+      // vsrcarr[2] and vsrcarr[3] might be unitialized for nlx4==0, but in that case they will not be used, so discard the warning!
+#endif
+      static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
+
+      // is number of lines a multiplier of 4
+      const int nlx4 = reducedLine == 2 ? 0 : 1;
+
+      for( int i = 0; i < reducedLine; i += ( 2 << nlx4 ) )
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
         
-        __m256i vsrcarr[2][4];
+        __m256i vsrcarr[trLoops][4];
           
-        for( int k = 0; k < trSize; k += 16 )
+        for( int k = 0; k < trLoops; k++ )
         {
-          __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0] );
-          __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8] );
+          __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0] );
+          __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8] );
           __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
           vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
 
-          vsrcarr[0][k >> 4] = vsrc;
+          vsrcarr[k][0] = vsrc;
           
-          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0 + trSize] );
-          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8 + trSize] );
+          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + trSize] );
+          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + trSize] );
           vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
           vsrc  = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
 
-          vsrcarr[1][k >> 4] = vsrc;
+          vsrcarr[k][1] = vsrc;
+
+          if( !nlx4 ) continue;
+
+          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + 2 * trSize] );
+          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + 2 * trSize] );
+          vsrc = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[k][2] = vsrc;
+
+          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + 3 * trSize] );
+          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + 3 * trSize] );
+          vsrc = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[k][3] = vsrc;
         }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
           __m256i vsum00 = _mm256_setzero_si256();
-          __m256i vsum01 = _mm256_setzero_si256();
           __m256i vsum02 = _mm256_setzero_si256();
-          __m256i vsum03 = _mm256_setzero_si256();
 
           __m256i vsum10 = _mm256_setzero_si256();
-          __m256i vsum11 = _mm256_setzero_si256();
           __m256i vsum12 = _mm256_setzero_si256();
-          __m256i vsum13 = _mm256_setzero_si256();
+          
+          __m256i vsum20 = _mm256_setzero_si256();
+          __m256i vsum22 = _mm256_setzero_si256();
 
-          for( int k = 0; k < trSize; k += 16 )
+          __m256i vsum30 = _mm256_setzero_si256();
+          __m256i vsum32 = _mm256_setzero_si256();
+
+          for( int k = 0; k < trLoops; k++ )
           {
             // dst[j * line + i] += src[i * trSize + k] * t[j * trSize + k]
 
@@ -397,54 +421,42 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
             __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 3 * trSize] );
 #endif
 #else
-            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
-            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
-            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
-            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
+            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 0 * trSize] );
+            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 1 * trSize] );
+            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 2 * trSize] );
+            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 3 * trSize] );
 #endif
 
-            // first source line
-            __m256i vsrc  = vsrcarr[0][k >> 4];
-
             __m256i
-            vtmp   = _mm256_madd_epi16( vit0,   vsrc );
-            vsum00 = _mm256_add_epi32 ( vsum00, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit1,   vsrc );
-            vsum01 = _mm256_add_epi32 ( vsum01, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit2,   vsrc );
-            vsum02 = _mm256_add_epi32 ( vsum02, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit3,   vsrc );
-            vsum03 = _mm256_add_epi32 ( vsum03, vtmp );
-     
-            vsrc  = vsrcarr[1][k >> 4];
-          
-            vtmp   = _mm256_madd_epi16( vit0,   vsrc );
-            vsum10 = _mm256_add_epi32 ( vsum10, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit1,   vsrc );
-            vsum11 = _mm256_add_epi32 ( vsum11, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit2,   vsrc );
-            vsum12 = _mm256_add_epi32 ( vsum12, vtmp );
-          
-            vtmp   = _mm256_madd_epi16( vit3,   vsrc );
-            vsum13 = _mm256_add_epi32 ( vsum13, vtmp );
-          }
+            vsrc  = vsrcarr[k][0];
 
-          vsum00 = _mm256_hadd_epi32( vsum00, vsum01 );
-          vsum02 = _mm256_hadd_epi32( vsum02, vsum03 );
+            vsum00 = _mm256_add_epi32( vsum00, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
+            vsum02 = _mm256_add_epi32( vsum02, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
+     
+            vsrc  = vsrcarr[k][1];
+
+            vsum10 = _mm256_add_epi32( vsum10, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
+            vsum12 = _mm256_add_epi32( vsum12, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
+
+            // skip branching
+            //if( !nlx4 ) continue;
+     
+            vsrc  = vsrcarr[k][2];
+
+            vsum20 = _mm256_add_epi32( vsum20, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
+            vsum22 = _mm256_add_epi32( vsum22, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
+            
+            vsrc  = vsrcarr[k][3];
+
+            vsum30 = _mm256_add_epi32( vsum30, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
+            vsum32 = _mm256_add_epi32( vsum32, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
+          }
 
           vsum00 = _mm256_hadd_epi32( vsum00, vsum02 );
 
           __m128i xsum00 = _mm_add_epi32( _mm256_castsi256_si128( vsum00 ), _mm256_extracti128_si256( vsum00, 1 ) );
           xsum00 = _mm_add_epi32 ( xsum00, _mm_set1_epi32( rnd_factor ) );
           xsum00 = _mm_srai_epi32( xsum00, shift );
-        
-          vsum10 = _mm256_hadd_epi32( vsum10, vsum11 );
-          vsum12 = _mm256_hadd_epi32( vsum12, vsum13 );
 
           vsum10 = _mm256_hadd_epi32( vsum10, vsum12 );
           
@@ -452,74 +464,90 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
           xsum10 = _mm_add_epi32 ( xsum10, _mm_set1_epi32( rnd_factor ) );
           xsum10 = _mm_srai_epi32( xsum10, shift );
 
-          __m128i xtmp = _mm_unpacklo_epi32( xsum00, xsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
+          if( nlx4 )
+          {
+            vsum20 = _mm256_hadd_epi32( vsum20, vsum22 );
 
-          dstPtr += line;
+            __m128i xsum20 = _mm_add_epi32( _mm256_castsi256_si128( vsum20 ), _mm256_extracti128_si256( vsum20, 1 ) );
+            xsum20 = _mm_add_epi32( xsum20, _mm_set1_epi32( rnd_factor ) );
+            xsum20 = _mm_srai_epi32( xsum20, shift );
 
-          xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
+            vsum30 = _mm256_hadd_epi32( vsum30, vsum32 );
 
-          dstPtr += line;
-          
-          xtmp = _mm_unpackhi_epi32( xsum00, xsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
+            __m128i xsum30 = _mm_add_epi32( _mm256_castsi256_si128( vsum30 ), _mm256_extracti128_si256( vsum30, 1 ) );
+            xsum30 = _mm_add_epi32( xsum30, _mm_set1_epi32( rnd_factor ) );
+            xsum30 = _mm_srai_epi32( xsum30, shift );
 
-          dstPtr += line;
+            __m128i xtmp0 = _mm_unpacklo_epi32( xsum00, xsum10 );
+            __m128i xtmp1 = _mm_unpacklo_epi32( xsum20, xsum30 );
 
-          xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
+            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpacklo_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
+            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
 
-          dstPtr += line;
+            xtmp0 = _mm_unpackhi_epi32( xsum00, xsum10 );
+            xtmp1 = _mm_unpackhi_epi32( xsum20, xsum30 );
+
+            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpacklo_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
+            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
+          }
+          else
+          {
+            __m128i xtmp = _mm_unpacklo_epi32( xsum00, xsum10 );
+
+            _mm_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
+            _mm_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
+
+            xtmp = _mm_unpackhi_epi32( xsum00, xsum10 );
+
+            _mm_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
+            _mm_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
+          }
 
           itPtr  += ( trSize << 2 );
         }
 
-        src += ( trSize << 1 );
+        src += ( trSize << ( 1 + nlx4 ) );
       }
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic pop
+#endif
     }
     else
 #endif
     {
+      static constexpr unsigned trLoops = trSize >> 3 ? trSize >> 3 : 1;
+
       for( int i = 0; i < reducedLine; i += 2 )
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
-        
-#if USE_AVX2
-        __m128i vsrcarr[2][1];
-#else
-        __m128i vsrcarr[2][8];
-#endif
+     
+        __m128i vsrcarr[trLoops][2];
           
-        for( int k = 0; k < trSize; k += 8 )
+        for( int k = 0; k < trLoops; k++ )
         {
-          __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0] );
-          __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4] );
+          __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src[(k << 3) + 0] );
+          __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src[(k << 3) + 4] );
           __m128i vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
 
-          vsrcarr[0][k >> 3] = vsrc;
+          vsrcarr[k][0] = vsrc;
           
-          vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0 + trSize] );
-          vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4 + trSize] );
+          vsrc0 = _mm_load_si128( ( const __m128i* ) &src[(k << 3) + 0 + trSize] );
+          vsrc1 = _mm_load_si128( ( const __m128i* ) &src[(k << 3) + 4 + trSize] );
           vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
 
-          vsrcarr[1][k >> 3] = vsrc;
+          vsrcarr[k][1] = vsrc;
         }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
           __m128i vsum00 = _mm_setzero_si128();
-          __m128i vsum01 = _mm_setzero_si128();
           __m128i vsum02 = _mm_setzero_si128();
-          __m128i vsum03 = _mm_setzero_si128();
         
           __m128i vsum10 = _mm_setzero_si128();
-          __m128i vsum11 = _mm_setzero_si128();
           __m128i vsum12 = _mm_setzero_si128();
-          __m128i vsum13 = _mm_setzero_si128();
 
-          for( int k = 0; k < trSize; k += 8 )
+          for( int k = 0; k < trLoops; k++ )
           {
             // dst[j * line + i] += src[i * trSize + k] * t[j * trSize + k]
 
@@ -536,77 +564,44 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
             __m128i vit3  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 3 * trSize] );
   #endif
   #else
-            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 * trSize] );
-            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 1 * trSize] );
-            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 2 * trSize] );
-            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 3 * trSize] );
+            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[(k << 3) + 0 * trSize] );
+            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[(k << 3) + 1 * trSize] );
+            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[(k << 3) + 2 * trSize] );
+            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[(k << 3) + 3 * trSize] );
   #endif
             
             // fist source line
-            __m128i vsrc  = vsrcarr[0][k >> 3];
+            __m128i vsrc  = vsrcarr[k][0];
 
-            __m128i
-            vtmp   = _mm_madd_epi16( vit0,   vsrc );
-            vsum00 = _mm_add_epi32 ( vsum00, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit1,   vsrc );
-            vsum01 = _mm_add_epi32 ( vsum01, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit2,   vsrc );
-            vsum02 = _mm_add_epi32 ( vsum02, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit3,   vsrc );
-            vsum03 = _mm_add_epi32 ( vsum03, vtmp );
+            vsum00 = _mm_add_epi32( vsum00, _mm_hadd_epi32( _mm_madd_epi16( vit0, vsrc ), _mm_madd_epi16( vit1, vsrc ) ) );
+            vsum02 = _mm_add_epi32( vsum02, _mm_hadd_epi32( _mm_madd_epi16( vit2, vsrc ), _mm_madd_epi16( vit3, vsrc ) ) );
           
             // second source line
-            vsrc   = vsrcarr[1][k >> 3];
-          
-            vtmp   = _mm_madd_epi16( vit0,   vsrc );
-            vsum10 = _mm_add_epi32 ( vsum10, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit1,   vsrc );
-            vsum11 = _mm_add_epi32 ( vsum11, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit2,   vsrc );
-            vsum12 = _mm_add_epi32 ( vsum12, vtmp );
-          
-            vtmp   = _mm_madd_epi16( vit3,   vsrc );
-            vsum13 = _mm_add_epi32 ( vsum13, vtmp );
-          }
+            vsrc   = vsrcarr[k][1];
 
-          vsum00 = _mm_hadd_epi32( vsum00, vsum01 );
-          vsum02 = _mm_hadd_epi32( vsum02, vsum03 );
+            vsum10 = _mm_add_epi32( vsum10, _mm_hadd_epi32( _mm_madd_epi16( vit0, vsrc ), _mm_madd_epi16( vit1, vsrc ) ) );
+            vsum12 = _mm_add_epi32( vsum12, _mm_hadd_epi32( _mm_madd_epi16( vit2, vsrc ), _mm_madd_epi16( vit3, vsrc ) ) );
+          }
 
           vsum00 = _mm_hadd_epi32( vsum00, vsum02 );
           vsum00 = _mm_add_epi32 ( vsum00, _mm_set1_epi32( rnd_factor ) );
           vsum00 = _mm_srai_epi32( vsum00, shift );
-        
-          vsum10 = _mm_hadd_epi32( vsum10, vsum11 );
-          vsum12 = _mm_hadd_epi32( vsum12, vsum13 );
 
           vsum10 = _mm_hadd_epi32( vsum10, vsum12 );
           vsum10 = _mm_add_epi32 ( vsum10, _mm_set1_epi32( rnd_factor ) );
           vsum10 = _mm_srai_epi32( vsum10, shift );
 
           __m128i xtmp = _mm_unpacklo_epi32( vsum00, vsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
-
-          dstPtr += line;
+          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
-
-          dstPtr += line;
+          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
           
           xtmp = _mm_unpackhi_epi32( vsum00, vsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
-
-          dstPtr += line;
+          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp );
-
-          dstPtr += line;
+          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           itPtr  += ( trSize << 2 );
         }
@@ -803,6 +798,127 @@ void cpyCoeff_SSE( const Pel* src, ptrdiff_t stride, TCoeff* dst, unsigned width
 }
 
 template<X86_VEXT vext>
+void simdInvLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
+{
+  CHECK( index > 2 || ( zeroOutSize != 8 && zeroOutSize != 16 ), "Wrong parameters" );
+
+  static constexpr int maxLog2TrDynamicRange = 15;
+  const TCoeff    outputMinimum = -( 1 << maxLog2TrDynamicRange );
+  const TCoeff    outputMaximum =  ( 1 << maxLog2TrDynamicRange ) - 1;
+  const int8_t*   trMat         = ( size > 4 ) ? g_lfnstInv8x8[mode][index][0] : g_lfnstInv4x4[mode][index][0];
+  const int       trSize        = ( size > 4 ) ? 48 : 16;
+  int*            out           = dst;
+
+  const __m128i vzero = _mm_setzero_si128();
+  const __m128i vmin  = _mm_set1_epi32( outputMinimum );
+  const __m128i vmax  = _mm_set1_epi32( outputMaximum );
+
+  for( int j = 0; j < trSize; j += 4, out += 4 )
+  {
+    __m128i       vsum[4];
+
+    for( int k = 0; k < 4; k++, trMat += 16 )
+    {
+      const int8_t* trMatTmp = trMat;
+      int* srcPtr = src;
+
+      __m128i vsrc;
+      __m128i vtr;
+      __m128i vtmp;
+      __m128i vcur = vzero;
+
+      for( int i = 0; i < zeroOutSize; i += 8, srcPtr += 8, trMatTmp += 8 )
+      {
+        vsrc = _mm_loadu_si128( ( const __m128i* ) srcPtr );
+        vtr  = _mm_loadl_epi64( ( const __m128i* ) trMatTmp );
+        vtr  = _mm_cvtepi8_epi16( vtr );
+        vtmp = _mm_cvtepi16_epi32( vtr );
+
+        vtmp = _mm_mullo_epi32( vsrc, vtmp );
+        vcur = _mm_add_epi32( vtmp, vcur );
+
+        vsrc = _mm_loadu_si128( ( const __m128i* ) &srcPtr[4] );
+        vtmp = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtr, vzero ) );
+      
+        vtmp = _mm_mullo_epi32( vsrc, vtmp );
+        vcur = _mm_add_epi32( vtmp, vcur );
+      }
+
+      vsum[k] = vcur;
+    }
+
+    __m128i vout = _mm_hadd_epi32( _mm_hadd_epi32( vsum[0], vsum[1] ), _mm_hadd_epi32( vsum[2], vsum[3] ) );
+    vout = _mm_add_epi32( vout, _mm_set1_epi32( 64 ) );
+    vout = _mm_srai_epi32( vout, 7 );
+    vout = _mm_min_epi32( _mm_max_epi32( vmin, vout ), vmax );
+
+    _mm_storeu_si128( ( __m128i* ) out, vout );
+  }
+}
+
+template<X86_VEXT vext>
+void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize )
+{
+  const int8_t *trMat  = ( size > 4 ) ? g_lfnstFwd8x8[mode][index][0] : g_lfnstFwd4x4[mode][index][0];
+  const int     trSize = ( size > 4 ) ? 48 : 16;
+  int *         out    = dst;
+
+  const __m128i vzero  = _mm_setzero_si128();
+
+  for( int j = 0; j < zeroOutSize; j += 4, out += 4 )
+  {
+    __m128i vout[4];
+
+    for( int k = 0; k < 4; k++ )
+    {
+      int* srcPtr = src;
+      const int8_t* trMatTmp = trMat;
+
+      __m128i vsum = vzero;
+
+      for( int i = 0; i < trSize; i += 16, srcPtr += 16, trMatTmp += 16 )
+      {
+        __m128i vtrc = _mm_loadu_si128( ( const __m128i* ) trMatTmp );
+        __m128i vtrl = _mm_cvtepi8_epi16( vtrc );
+        __m128i vtrh = _mm_cvtepi8_epi16( _mm_unpackhi_epi64( vtrc, vzero ) );
+
+        __m128i vsrc0 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[0] );
+                vtrc  = _mm_cvtepi16_epi32( vtrl );
+                vsrc0 = _mm_mullo_epi32( vsrc0, vtrc );
+              
+        __m128i vsrc1 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[4] );
+                vtrc  = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtrl, vzero ) );
+                vsrc1 = _mm_mullo_epi32( vsrc1, vtrc );
+              
+        __m128i vsrc2 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[8] );
+                vtrc  = _mm_cvtepi16_epi32( vtrh );
+                vsrc2 = _mm_mullo_epi32( vsrc2, vtrc );
+              
+        __m128i vsrc3 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[12] );
+                vtrc  = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtrh, vzero ) );
+                vsrc3 = _mm_mullo_epi32( vsrc3, vtrc );
+
+        vsrc0 = _mm_add_epi32( vsrc0, vsrc1 );
+        vsrc2 = _mm_add_epi32( vsrc2, vsrc3 );
+
+        vsum = _mm_add_epi32( vsum, _mm_add_epi32( vsrc0, vsrc2 ) );
+      }
+
+      vout[k] = vsum;
+      trMat += trSize;
+    }
+
+    __m128i vdst = _mm_hadd_epi32( _mm_hadd_epi32( vout[0], vout[1] ), _mm_hadd_epi32( vout[2], vout[3] ) );
+    vdst = _mm_add_epi32( vdst, _mm_set1_epi32( 64 ) );
+    vdst = _mm_srai_epi32( vdst, 7 );
+
+    _mm_storeu_si128( ( __m128i* ) out, vdst );
+  }
+
+  ::memset( out, 0, ( trSize - zeroOutSize ) * sizeof( int ) );
+}
+
+template<X86_VEXT vext>
 void TCoeffOps::_initTCoeffOpsX86()
 {
   cpyResi4     = cpyResi_SSE  <vext, 4>;
@@ -811,15 +927,29 @@ void TCoeffOps::_initTCoeffOpsX86()
   cpyCoeff8    = cpyCoeff_SSE <vext, 8>;
   roundClip4   = roundClip_SSE<vext, 4>;
   roundClip8   = roundClip_SSE<vext, 8>;
-  fastInvCore4 = fastInv_SSE  <vext, 4>;
-  fastInvCore8 = fastInv_SSE  <vext, 8>;
-  fastFwdCore4_2D
-               = fastFwd_SSE  <vext, 4>;
-  fastFwdCore8_2D
-               = fastFwd_SSE  <vext, 8>;
+
+  fastInvCore[0] = fastInv_SSE<vext,  4>;
+  fastInvCore[1] = fastInv_SSE<vext,  8>;
+  fastInvCore[2] = fastInv_SSE<vext, 16>;
+  fastInvCore[3] = fastInv_SSE<vext, 32>;
+  fastInvCore[4] = fastInv_SSE<vext, 64>;
+
+  fastFwdCore_2D[0] = fastFwd_SSE<vext,  4>;
+  fastFwdCore_2D[1] = fastFwd_SSE<vext,  8>;
+  fastFwdCore_2D[2] = fastFwd_SSE<vext, 16>;
+  fastFwdCore_2D[3] = fastFwd_SSE<vext, 32>;
+  fastFwdCore_2D[4] = fastFwd_SSE<vext, 64>;
+}
+
+template<X86_VEXT vext>
+void TrQuant::_initTrQuantX86()
+{
+  m_invLfnstNxN = simdInvLfnstNxN<vext>;
+  m_fwdLfnstNxN  = simdFwdLfnstNxN<vext>;
 }
 
 template void TCoeffOps::_initTCoeffOpsX86<SIMDX86>();
+template void TrQuant::_initTrQuantX86<SIMDX86>();
 
 }
 

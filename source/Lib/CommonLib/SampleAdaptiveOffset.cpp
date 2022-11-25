@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -282,6 +278,125 @@ void offsetBlock_core(const int channelBitDepth, const ClpRng& clpRng, int typeI
   }
   }
 }
+void calcSaoStatisticsEo0_Core(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff)
+{
+  int iNaRight=width-endX;
+  srcLine      = srcLine + startX;
+  orgLine      =orgLine + startX;
+  int iNaWidth = startX + iNaRight;
+  int i,j;
+  diff +=2;
+  count+=2;
+  for ( i = 0; i < endY; i++ )
+  {
+    int iSignLeft = sgn( *srcLine - *(srcLine - 1) );
+    for ( j = 0; j < width - iNaWidth; j++, srcLine++, orgLine++ )
+    {
+      int iSignRight       = sgn( *srcLine - *(srcLine + 1) );
+      int iType            = iSignLeft + iSignRight;
+      iSignLeft            = -1 * iSignRight;
+      diff[iType]  += (*orgLine - *srcLine);
+      count[iType] += 1;
+    }
+    srcLine += srcStride - ( width - iNaWidth );
+    orgLine += orgStride - ( width - iNaWidth );
+  }
+}
+void calcSaoStatisticsEo90_Core(int width,int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
+{
+  diff +=2;
+  count+=2;
+  int x,y,edgeType;
+  Pel* srcLineAbove = srcLine - srcStride;
+  int8_t signDown;
+  for (x=0; x<endX; x++)
+  {
+    signUpLine[x] = (int8_t)sgn(srcLine[x] - srcLineAbove[x]);
+  }
+  Pel* srcLineBelow;
+  for (y=startY; y<endY; y++)
+  {
+    srcLineBelow = srcLine + srcStride;
+    for (x=0; x<endX; x++)
+    {
+      signDown  = (int8_t)sgn(srcLine[x] - srcLineBelow[x]);
+      edgeType  = signDown + signUpLine[x];
+      signUpLine[x]= -signDown;
+      diff [edgeType] += (orgLine[x] - srcLine[x]);
+      count[edgeType] ++;
+    }
+    srcLine += srcStride;
+    orgLine += orgStride;
+  }
+}
+
+
+void calcSaoStatisticsEo135_Core(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine,int8_t *signDownLine)
+{
+  int x,y,edgeType;
+  int8_t signDown;
+  int8_t *signTmpLine;
+  Pel* srcLineBelow = srcLine + srcStride;
+  //middle lines
+   for (y=1; y<endY; y++)
+   {
+     srcLineBelow = srcLine + srcStride;
+     for (x=startX; x<endX; x++)
+     {
+       signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x+1]);
+       edgeType = signDown + signUpLine[x];
+       diff [edgeType] += (orgLine[x] - srcLine[x]);
+       count[edgeType] ++;
+       signDownLine[x+1] = -signDown;
+     }
+     signDownLine[startX] = (int8_t)sgn(srcLineBelow[startX] - srcLine[startX-1]);
+     signTmpLine  = signUpLine;
+     signUpLine   = signDownLine;
+     signDownLine = signTmpLine;
+     srcLine += srcStride;
+     orgLine += orgStride;
+   }
+}
+void calcSaoStatisticsEo45_Core(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
+{
+  int x,y,edgeType;
+  int8_t signDown;
+  Pel* srcLineBelow = srcLine + srcStride;
+  //middle lines
+  for (y=1; y<endY; y++)
+  {
+    srcLineBelow = srcLine + srcStride;
+
+    for(x=startX; x<endX; x++)
+    {
+      signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x-1]);
+      edgeType = signDown + signUpLine[x];
+      diff [edgeType] += (orgLine[x] - srcLine[x]);
+      count[edgeType] ++;
+      signUpLine[x-1] = -signDown;
+    }
+    signUpLine[endX-1] = (int8_t)sgn(srcLineBelow[endX-1] - srcLine[endX]);
+    srcLine  += srcStride;
+    orgLine  += orgStride;
+  }
+}
+void calcSaoStatisticsBo_Core(int width,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
+{
+  int x,y;
+  int startX=0;
+  int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+  for (y=0; y< endY; y++)
+  {
+    for (x=startX; x< endX; x++)
+    {
+      int bandIdx= srcLine[x] >> shiftBits;
+      diff [bandIdx] += (orgLine[x] - srcLine[x]);
+      count[bandIdx] ++;
+    }
+    srcLine += srcStride;
+    orgLine += orgStride;
+  }
+}
 
 void SAOOffset::reset()
 {
@@ -315,6 +430,11 @@ SampleAdaptiveOffset::~SampleAdaptiveOffset()
 void SampleAdaptiveOffset::init( ChromaFormat format, uint32_t maxCUWidth, uint32_t maxCUHeight, uint32_t lumaBitShift, uint32_t chromaBitShift )
 {
   offsetBlock = offsetBlock_core;
+  calcSaoStatisticsEo90 =  calcSaoStatisticsEo90_Core;
+  calcSaoStatisticsEo135 =  calcSaoStatisticsEo135_Core;
+  calcSaoStatisticsEo45 =  calcSaoStatisticsEo45_Core;
+  calcSaoStatisticsEo0 =  calcSaoStatisticsEo0_Core;
+  calcSaoStatisticsBo = calcSaoStatisticsBo_Core;
 #if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
   initSampleAdaptiveOffsetX86();
 #endif

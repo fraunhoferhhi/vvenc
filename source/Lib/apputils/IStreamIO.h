@@ -1,50 +1,45 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or
-other Intellectual Property Rights other than the copyrights concerning
+The copyright in this software is being made available under the Clear BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed.
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
 #pragma once
-#include "apputils/apputilsDecl.h"
 
 #include <iostream>
 #include <sstream>
@@ -52,8 +47,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <list>
 #include <map>
 #include <vector>
+#include <algorithm>
 
-#include "apputils/VVEncAppCfg.h"
+#include "VVEncAppCfg.h"
 #include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface
@@ -62,14 +58,18 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace apputils {
 
 template<typename E>
-struct APPUTILS_DECL SVPair
+struct SVPair
 {
   const char* str;
   E           value;
 };
 
+// ====================================================================================================================
+// string <-> vector
+// ====================================================================================================================
+
 template<typename T>
-class APPUTILS_DECL IStreamToRefVec
+class IStreamToRefVec
 {
   public:
     IStreamToRefVec( std::vector<T*> v, bool _allRequired, char _sep = 'x' )
@@ -109,6 +109,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
     // treat all whitespaces and commas as valid separators
     if( toVec.sep == 'x')
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
+    else if( toVec.sep == '/')
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == '/'; }, ' ' );
     else
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
     std::stringstream tokenStream( line );
@@ -161,8 +163,13 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<T>& t
   return os;
 }
 
+
+// ====================================================================================================================
+// string <-> enum
+// ====================================================================================================================
+
 template<typename E>
-class APPUTILS_DECL IStreamToEnum
+class IStreamToEnum
 {
   public:
     IStreamToEnum( E* d, const std::vector<SVPair<E>>* m )
@@ -237,18 +244,19 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 }
 
 // ====================================================================================================================
-// string <-> enum
+// string <-> function
 // ====================================================================================================================
 
-
-typedef void (*setParamFunc) (VVEncAppCfg*, int);
+class VVEncAppCfg;
+typedef void (*setParamFunc) (VVEncAppCfg*, vvenc_config*, int);
 
 template<typename E>
-class APPUTILS_DECL IStreamToFunc
+class IStreamToFunc
 {
   public:
-    IStreamToFunc( setParamFunc func, VVEncAppCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
+    IStreamToFunc( setParamFunc func, VVEncAppCfg* appCfg, vvenc_config* encCfg, const std::vector<SVPair<E>>* m, const E _default )
       : mfunc( func )
+      , mappCfg ( appCfg )
       , mencCfg( encCfg )
       , toMap( m )
       , dstVal( _default )
@@ -272,7 +280,8 @@ class APPUTILS_DECL IStreamToFunc
 
   private:
     setParamFunc                  mfunc;
-    VVEncAppCfg*                  mencCfg;
+    VVEncAppCfg*                  mappCfg;
+    vvenc_config*                 mencCfg;
     const std::vector<SVPair<E>>* toMap;
     E                             dstVal;
 };
@@ -288,7 +297,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFunc<E>& toEnum )
     if ( str == map.str )
     {
       toEnum.dstVal = map.value;
-      toEnum.mfunc(toEnum.mencCfg, map.value);
+      toEnum.mfunc( toEnum.mappCfg, toEnum.mencCfg, map.value);
       return in;
     }
   }
@@ -320,7 +329,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToFunc<F>& toE
 // ====================================================================================================================
 
 template<typename T>
-class APPUTILS_DECL IStreamToVec
+class IStreamToVec
 {
   public:
     IStreamToVec( std::vector<T>* v )
@@ -420,7 +429,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 // ====================================================================================================================
 
 template<typename T>
-class APPUTILS_DECL IStreamToArr
+class IStreamToArr
 {
   public:
     IStreamToArr( T* v, size_t maxSize )
@@ -450,7 +459,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
 
   bool fail = false;
-  int pos = 0;
+  size_t pos = 0;
   // split into multiple lines if any
   while ( ! in.eof() )
   {
@@ -541,7 +550,7 @@ template<typename T>
 inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toArr )
 {
   int size=0;
-  for ( int i = 0; i < toArr._maxSize; i++ )
+  for ( size_t i = 0; i < toArr._maxSize; i++ )
   {
     if( toArr._valVec[i] != 0 ) size++;
     else break;
@@ -593,6 +602,87 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& t
 
   return os;
 }
+
+
+// ====================================================================================================================
+// string -> abbreviated value
+// ====================================================================================================================
+
+// T: value type, A abbreviation value type
+template<typename T, typename A>
+class IStreamToAbbr
+{
+  public:
+    IStreamToAbbr( T* v, const std::vector<SVPair<A>>* m  )
+    : dstVal ( v )
+    , toMap  ( m )      
+    {
+    }
+
+    ~IStreamToAbbr()
+    {
+    }
+
+    template<typename F, typename G>
+    friend std::istream& operator >> ( std::istream& in, IStreamToAbbr<F,G>& toValue );
+
+    template<typename F, typename G>
+    friend std::ostream& operator << ( std::ostream& in, const IStreamToAbbr<F,G>& toValue );
+
+  private:
+    T*                            dstVal;
+    const std::vector<SVPair<A>>* toMap;
+};
+
+template<typename T, typename A>
+inline std::istream& operator >> ( std::istream& in, IStreamToAbbr<T,A>& toValue )
+{
+  std::string str;
+  in >> str;
+
+  // search map for a used abbreviation
+  for ( const auto& map : *toValue.toMap )
+  {
+    std::string key(map.str);
+    std::size_t n = str.find( key );
+    if (n!=std::string::npos)
+    {
+      str.erase(n, key.length());                                                 // remove the scaling unit, e.g. 1.5M -> 1.5
+      replace_if( str.begin(), str.end(), []( int c ){ return c == ','; }, '.' ); // use correct comma syntax for double representaion
+
+      bool isNumber = strspn( str.c_str(), "-.0123456789" ) == str.size(); // check if valid double value
+      if( !isNumber)
+      {
+        in.setstate( std::ios::failbit );
+        return in;
+      }
+
+      double value = strtod(str.c_str(), NULL); // convert input string to double
+      value *= map.value;                       // scale depending on given abbreviation/scaling factor
+      *toValue.dstVal = (T)value;
+      return in;
+    }
+  }
+
+  // read value in original format
+  std::string::size_type posAfter;
+  *toValue.dstVal = std::stoi( str, &posAfter );
+
+  if( posAfter && !str.substr(posAfter).empty() ) // check if value is valid int
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
+template<typename T, typename A>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToAbbr<T,A>& toValue )
+{
+  os << *toValue.dstVal;
+  return os;
+}
+
 
 // ====================================================================================================================
 // vvencGOPEntry

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -83,7 +79,7 @@ Slice::Slice()
   , lmcsEnabled                         ( 0 )
   , explicitScalingListUsed             ( 0 )
   , deblockingFilterDisable             ( false )
-  , deblockingFilterOverrideFlag        ( false )
+  , deblockingFilterOverride            ( false )
   , deblockingFilterBetaOffsetDiv2      { 0 }
   , deblockingFilterTcOffsetDiv2        { 0 }
   , depQuantEnabled                     ( false )
@@ -94,7 +90,6 @@ Slice::Slice()
   , biDirPred                           ( false )
   , lmChromaCheckDisable                { false }
   , symRefIdx                           { -1, -1 }
-  , depth                               ( 0 )
   , vps                                 ( nullptr )
   , dci                                 ( nullptr )
   , sps                                 ( nullptr )
@@ -109,20 +104,19 @@ Slice::Slice()
   , cabacInitFlag                       ( false )
   , sliceSubPicId                       ( 0 )
   , encCABACTableIdx                    ( VVENC_I_SLICE )
-  , tileGroupNumAps                     ( 0 )
-  , tileGroupChromaApsId                ( 0 )
-  , tileGroupCcAlfCbEnabled             ( false )
-  , tileGroupCcAlfCrEnabled             ( false )
-  , tileGroupCcAlfCbApsId               ( -1 )
-  , tileGroupCcAlfCrApsId               ( -1 )
-  , disableSATDForRd                    ( 0 )
+  , numAps                     ( 0 )
+  , chromaApsId                ( -1 )
+  , ccAlfCbEnabled             ( false )
+  , ccAlfCrEnabled             ( false )
+  , ccAlfCbApsId               ( -1 )
+  , ccAlfCrApsId               ( -1 )
   , isLossless                          ( false )
 {
   ::memset( saoEnabled,              0, sizeof( saoEnabled ) );
   ::memset( numRefIdx,               0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,      0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,                 0, sizeof( lambdas ) );
-  ::memset( tileGroupAlfEnabled,     0, sizeof( tileGroupAlfEnabled ) );
+  ::memset( alfEnabled,              0, sizeof( alfEnabled ) );
   ::memset( alfAps,                  0, sizeof( alfAps ) );
   ::memset( refPicList,              0, sizeof( refPicList ) );
   ::memset( refPOCList,              0, sizeof( refPOCList ) );
@@ -163,24 +157,20 @@ void Slice::resetSlicePart()
   ::memset( numRefIdx,           0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,  0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,             0, sizeof( lambdas ) );
-  ::memset( tileGroupAlfEnabled, 0, sizeof( tileGroupAlfEnabled ) );
+  ::memset( alfEnabled,          0, sizeof( alfEnabled ) );
 
   ccAlfFilterParam.reset();
-  tileGroupCcAlfCbEnabled = false;
-  tileGroupCcAlfCrEnabled = false;
+  ccAlfCbEnabled = false;
+  ccAlfCrEnabled = false;
 
   sliceMap = SliceMap();
 }
 
 void Slice::setDefaultClpRng( const SPS& sps )
 {
-  clpRngs.comp[COMP_Y].min = clpRngs.comp[COMP_Cb].min  = clpRngs.comp[COMP_Cr].min = 0;
-  clpRngs.comp[COMP_Y].max = (1<< sps.bitDepths[ CH_L ])-1;
-  clpRngs.comp[COMP_Y].bd  = sps.bitDepths[ CH_L ];
-  clpRngs.comp[COMP_Y].n   = 0;
-  clpRngs.comp[COMP_Cb].max = clpRngs.comp[COMP_Cr].max = (1<< sps.bitDepths[ CH_C ])-1;
-  clpRngs.comp[COMP_Cb].bd  = clpRngs.comp[COMP_Cr].bd  = sps.bitDepths[ CH_C ];
-  clpRngs.comp[COMP_Cb].n   = clpRngs.comp[COMP_Cr].n   = 0;
+  CHECK( sps.bitDepths[CH_L] != sps.bitDepths[CH_C], "Different luma/chroma bitdepths not supported!" );
+
+  clpRngs.bd = sps.bitDepths[CH_L];
 }
 
 
@@ -231,9 +221,9 @@ void  Slice::sortPicList        (PicList& rcListPic)
 }
 
 
-Picture* Slice::xGetLongTermRefPic( PicList& rcListPic, int poc, bool pocHasMsb)
+Picture* Slice::xGetLongTermRefPic( const PicList& rcListPic, int poc, bool pocHasMsb)
 {
-  PicList::iterator  iterPic = rcListPic.begin();
+  PicList::const_iterator  iterPic = rcListPic.begin();
   Picture*           picCand = *(iterPic);
   Picture*           pcStPic = picCand;
 
@@ -382,7 +372,7 @@ void Slice::setList1IdxToList0Idx()
   }
 }
 
-void Slice::constructRefPicList(PicList& rcListPic, bool extBorder)
+void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
 {
   ::memset(isUsedAsLongTerm, 0, sizeof(isUsedAsLongTerm));
   if (sliceType == VVENC_I_SLICE)
@@ -405,7 +395,7 @@ void Slice::constructRefPicList(PicList& rcListPic, bool extBorder)
       {
         int poc_ = poc + rpl[eRefList]->refPicIdentifier[ii];
 
-        PicList::iterator  iterPic = rcListPic.begin();
+        PicList::const_iterator  iterPic = rcListPic.begin();
         pcRefPic   = *(iterPic);
 
         while ( iterPic != rcListPic.end() )
@@ -550,7 +540,7 @@ void Slice::checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureLi
  * Note that the current picture is already placed in the reference list and its marking is not changed.
  * If the current picture has a nal_ref_idc that is not 0, it will remain marked as "used for reference".
  */
-void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicList& rcListPic )
+void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, const PicList& rcListPic )
 {
   const bool bEfficientFieldIRAPEnabled = true;
   Picture* rpcPic;
@@ -560,7 +550,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP)  // IDR picture
   {
     // mark all pictures as not used for reference
-    PicList::iterator        iterPic       = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     while (iterPic != rcListPic.end())
     {
       rpcPic = *(iterPic);
@@ -581,7 +571,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     {
       if (bRefreshPending==true && pocCurr > lastIDR) // IDR reference marking pending
       {
-        PicList::iterator        iterPic       = rcListPic.begin();
+        PicList::const_iterator iterPic = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
@@ -598,7 +588,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     {
       if (bRefreshPending==true && pocCurr > pocCRA) // CRA reference marking pending
       {
-        PicList::iterator iterPic = rcListPic.begin();
+        PicList::const_iterator iterPic = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
@@ -631,7 +621,7 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   sliceQp                         = slice->sliceQp;
   chromaQpAdjEnabled              = slice->chromaQpAdjEnabled;
   deblockingFilterDisable         = slice->deblockingFilterDisable;
-  deblockingFilterOverrideFlag    = slice->deblockingFilterOverrideFlag;
+  deblockingFilterOverride        = slice->deblockingFilterOverride;
   for( int comp = 0; comp < MAX_NUM_COMP; comp++ )
   {
     deblockingFilterBetaOffsetDiv2[comp]  = slice->deblockingFilterBetaOffsetDiv2[comp];
@@ -672,7 +662,6 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
       isUsedAsLongTerm[i][MAX_NUM_REF] = slice->isUsedAsLongTerm[i][MAX_NUM_REF];
     }
   }
-  if( cpyAlmostAll ) depth = slice->depth;
 
   // access channel
   if (cpyAlmostAll) rpl[0] = slice->rpl[0];
@@ -701,11 +690,10 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
 
   cabacInitFlag                 = slice->cabacInitFlag;
   memcpy( alfAps, slice->alfAps, sizeof(alfAps)); // this might be quite unsafe
-  memcpy( tileGroupAlfEnabled, slice->tileGroupAlfEnabled, sizeof(tileGroupAlfEnabled));
-  tileGroupNumAps               = slice->tileGroupNumAps;
-  tileGroupLumaApsId            = slice->tileGroupLumaApsId;
-  tileGroupChromaApsId          = slice->tileGroupChromaApsId;
-  disableSATDForRd              = slice->disableSATDForRd;
+  memcpy( alfEnabled, slice->alfEnabled, sizeof(alfEnabled));
+  numAps               = slice->numAps;
+  lumaApsId            = slice->lumaApsId;
+  chromaApsId          = slice->chromaApsId;
   isLossless                    = slice->isLossless;
 
   sliceMap                      = slice->sliceMap;
@@ -713,40 +701,19 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   ccAlfFilterParam              = slice->ccAlfFilterParam;
   ccAlfFilterControl[0]         = slice->ccAlfFilterControl[0];
   ccAlfFilterControl[1]         = slice->ccAlfFilterControl[1];
-  tileGroupCcAlfCbEnabled       = slice->tileGroupCcAlfCbEnabled;
-  tileGroupCcAlfCrEnabled       = slice->tileGroupCcAlfCrEnabled;
-  tileGroupCcAlfCbApsId         = slice->tileGroupCcAlfCbApsId;
-  tileGroupCcAlfCrApsId         = slice->tileGroupCcAlfCrApsId;
+  ccAlfCbEnabled       = slice->ccAlfCbEnabled;
+  ccAlfCrEnabled       = slice->ccAlfCrEnabled;
+  ccAlfCbApsId         = slice->ccAlfCbApsId;
+  ccAlfCrApsId         = slice->ccAlfCrApsId;
 
   if( cpyAlmostAll ) encCABACTableIdx  = slice->encCABACTableIdx;
 }
 
-
-/** Function for checking if this is a switching-point
-*/
-bool Slice::isTemporalLayerSwitchingPoint(PicList& rcListPic) const
-{
-  // loop through all pictures in the reference picture buffer
-  PicList::iterator iterPic = rcListPic.begin();
-  while ( iterPic != rcListPic.end())
-  {
-    const Picture* pic = *(iterPic++);
-    if( pic->isReferenced && pic->isReconstructed && pic->poc != poc)
-    {
-      if( pic->TLayer >= TLayer)
-      {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
 /** Function for checking if this is a STSA candidate
  */
-bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) const
+bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(const PicList& rcListPic) const
 {
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while ( iterPic != rcListPic.end())
   {
     const Picture* pic = *(iterPic++);
@@ -762,7 +729,7 @@ bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) c
 }
 
 
-void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
+void Slice::checkLeadingPictureRestrictions(const PicList& rcListPic) const
 {
   // When a picture is a leading picture, it shall be a RADL or RASL picture.
   if(associatedIRAP > poc && !pps->mixedNaluTypesInPic)
@@ -801,7 +768,7 @@ void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
   }
 
   // loop through all pictures in the reference picture buffer
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while ( iterPic != rcListPic.end())
   {
     Picture* pic = *(iterPic++);
@@ -866,10 +833,8 @@ void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
 }
 
 
-
-
 //Function for applying picture marking based on the Reference Picture List
-void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps ) const
+void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps ) const
 {
   int i, isReference;
   checkLeadingPictureRestrictions(rcListPic);
@@ -877,7 +842,7 @@ void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const Refe
   bool isNeedToCheck = (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) ? false : true;
 
   // loop through all pictures in the reference picture buffer
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while (iterPic != rcListPic.end())
   {
     Picture* pic = *(iterPic++);
@@ -968,55 +933,31 @@ void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const Refe
   }
 }
 
-int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors) const
+// int Slice::checkThatAllRefPicsAreAvailable( const PicList& rcListPic, const ReferencePictureList *pRPL, int rplIdx ) const
+bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const
 {
-  Picture* pic;
-  int isAvailable = 0;
-  int notPresentPoc = -2;
+  if( isIDRorBLA() ) return false; // assume that all pic in the DPB will be flushed anyway so no need to check.
 
-  if (isIDRorBLA()) return 0; //Assume that all pic in the DPB will be flushed anyway so no need to check.
+  const ReferencePictureList* pRPL = rpl[ refList ];
+  int numberOfPictures             = pRPL->numberOfLongtermPictures + pRPL->numberOfShorttermPictures + pRPL->numberOfInterLayerPictures;
 
-  int numberOfPictures = pRPL->numberOfLongtermPictures + pRPL->numberOfShorttermPictures + pRPL->numberOfInterLayerPictures;
-  //Check long term ref pics
-  for (int ii = 0; pRPL->numberOfLongtermPictures > 0 && ii < numberOfPictures; ii++)
+  // check long term ref pics
+  if( pRPL->numberOfLongtermPictures > 0 )
   {
-    if (!pRPL->isLongtermRefPic[ii] || pRPL->isInterLayerRefPic[ii])
-      continue;
+    for( int ii = 0; ii < numberOfPictures; ii++ )
+    {
+      if( ! pRPL->isLongtermRefPic[ii] || pRPL->isInterLayerRefPic[ii] )
+        continue;
 
-    notPresentPoc = pRPL->refPicIdentifier[ii];
-    isAvailable = 0;
-    PicList::iterator iterPic = rcListPic.begin();
-    while (iterPic != rcListPic.end())
-    {
-      pic = *(iterPic++);
-      int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-      int curPoc = pic->getPOC() & (pocCycle - 1);
-      int refPoc = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
-      if(pRPL->deltaPocMSBPresent[ii])
+      bool isAvailable = false;
+      int  checkPoc    = pRPL->refPicIdentifier[ii];
+
+      for( auto& pic : rcListPic )
       {
-        refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
-      }
-      else
-      {
-        curPoc = curPoc & (pocCycle - 1);
-      }
-      if (pic->isLongTerm && curPoc == refPoc && pic->isReferenced)
-      {
-        isAvailable = 1;
-        break;
-      }
-    }
-    // if there was no such long-term check the short terms
-    if (!isAvailable)
-    {
-      iterPic = rcListPic.begin();
-      while (iterPic != rcListPic.end())
-      {
-        pic = *(iterPic++);
         int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-        int curPoc = pic->getPOC() & (pocCycle - 1);
-        int refPoc = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
-        if(pRPL->deltaPocMSBPresent[ii])
+        int curPoc   = pic->getPOC() & (pocCycle - 1);
+        int refPoc   = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
+        if( pRPL->deltaPocMSBPresent[ii] )
         {
           refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
         }
@@ -1024,63 +965,82 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
         {
           curPoc = curPoc & (pocCycle - 1);
         }
-        if (!pic->isLongTerm && curPoc == refPoc && pic->isReferenced)
+        if( pic->isLongTerm && curPoc == refPoc && pic->isReferenced )
         {
-          isAvailable = 1;
-          pic->isLongTerm = true;
+          isAvailable = true;
           break;
         }
       }
-    }
-    if (!isAvailable)
-    {
-      if (printErrors)
+
+      // if there was no such long-term check the short terms
+      if( ! isAvailable )
       {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Long-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
+        for( auto& pic : rcListPic )
+        {
+          int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
+          int curPoc   = pic->getPOC() & (pocCycle - 1);
+          int refPoc   = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
+          if( pRPL->deltaPocMSBPresent[ii] )
+          {
+            refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
+          }
+          else
+          {
+            curPoc = curPoc & (pocCycle - 1);
+          }
+          if( ! pic->isLongTerm && curPoc == refPoc && pic->isReferenced )
+          {
+            isAvailable     = true;
+            pic->isLongTerm = true;
+            break;
+          }
+        }
       }
-      return notPresentPoc;
+
+      if( ! isAvailable )
+      {
+        missingPoc = checkPoc;
+        return true;
+      }
     }
   }
-  //report that a picture is lost if it is in the Reference Picture List but not in the DPB
 
-  isAvailable = 0;
-  //Check short term ref pics
-  for (int ii = 0; ii < numberOfPictures; ii++)
+  // check short term ref pics
+  for( int ii = 0; ii < numberOfPictures; ii++ )
   {
-    if (pRPL->isLongtermRefPic[ii])
+    if( pRPL->isLongtermRefPic[ii] )
       continue;
 
-    notPresentPoc = poc + pRPL->refPicIdentifier[ii];
-    isAvailable = 0;
-    PicList::iterator iterPic = rcListPic.begin();
-    while (iterPic != rcListPic.end())
+    bool isAvailable = false;
+    int  checkPoc    = poc + pRPL->refPicIdentifier[ii];
+
+    for( auto& pic : rcListPic )
     {
-      pic = *(iterPic++);
-      if (!pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced)
+      if( ! pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced )
       {
-        isAvailable = 1;
+        isAvailable = true;
         break;
       }
     }
-    //report that a picture is lost if it is in the Reference Picture List but not in the DPB
-    if (isAvailable == 0 && pRPL->numberOfShorttermPictures > 0)
+    if( ! isAvailable && pRPL->numberOfShorttermPictures > 0 )
     {
-      if (printErrors)
-      {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
-      }
-      return notPresentPoc;
+      missingPoc = checkPoc;
+      return true;
     }
   }
-  return 0;
+
+  return false;
 }
 
-void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
+void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
 {
   Picture* picCand;;
   int pocCycle = 0;
 
-    if ( isIDRorBLA() ) return; //Assume that all pic in the DPB will be flushed anyway so no need to check.
+  if ( isIDRorBLA() ) return; //Assume that all pic in the DPB will be flushed anyway so no need to check.
+
+  ReferencePictureList rplSrc0 = *pRPL0;
+  ReferencePictureList rplSrc1 = *pRPL1;
 
   ReferencePictureList* pLocalRPL0 = &rplLocal[0];
   (*pLocalRPL0) = ReferencePictureList();
@@ -1088,12 +1048,12 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   uint32_t numOfSTRPL0 = 0;
   uint32_t numOfLTRPL0 = 0;
   uint32_t numOfILRPL0 = 0;
-  uint32_t numOfRefPic = pRPL0->numberOfShorttermPictures + pRPL0->numberOfLongtermPictures;
+  uint32_t numOfRefPic = rplSrc0.numberOfShorttermPictures + rplSrc0.numberOfLongtermPictures;
   uint32_t refPicIdxL0 = 0;
   for (int ii = 0; ii < numOfRefPic; ii++)
   {
     // loop through all pictures in the reference picture buffer
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     bool isAvailable = false;
 
     pocCycle = 1 << (sps->bitsForPOC);
@@ -1102,12 +1062,12 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
       picCand = *(iterPic++);
       if( pic->layerId == picCand->layerId && picCand->isReferenced)
       {
-        if (!pRPL0->isLongtermRefPic[ii] && picCand->poc == poc + pRPL0->refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        if (!rplSrc0.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc0.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
         {
           isAvailable = true;
           break;
         }
-        else if (pRPL0->isLongtermRefPic[ii] && (picCand->poc & (pocCycle - 1)) == pRPL0->refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        else if (rplSrc0.isLongtermRefPic[ii] && (picCand->poc & (pocCycle - 1)) == rplSrc0.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
         {
           isAvailable = true;
           break;
@@ -1116,10 +1076,10 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
     }
     if (isAvailable)
     {
-      pLocalRPL0->setRefPicIdentifier(refPicIdxL0, pRPL0->refPicIdentifier[ii], pRPL0->isLongtermRefPic[ii], pRPL0->isInterLayerRefPic[ii], pRPL0->interLayerRefPicIdx[ii]);
+      pLocalRPL0->setRefPicIdentifier(refPicIdxL0, rplSrc0.refPicIdentifier[ii], rplSrc0.isLongtermRefPic[ii], rplSrc0.isInterLayerRefPic[ii], rplSrc0.interLayerRefPicIdx[ii]);
       refPicIdxL0++;
-      numOfSTRPL0 = numOfSTRPL0 + ((pRPL0->isLongtermRefPic[ii]) ? 0 : 1);
-      numOfLTRPL0 = numOfLTRPL0 + ((pRPL0->isLongtermRefPic[ii]) ? 1 : 0);
+      numOfSTRPL0 = numOfSTRPL0 + ((rplSrc0.isLongtermRefPic[ii]) ? 0 : 1);
+      numOfLTRPL0 = numOfLTRPL0 + ((rplSrc0.isLongtermRefPic[ii]) ? 1 : 0);
       isAvailable = false;
     }
   }
@@ -1130,7 +1090,7 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
     pLocalRPL0->numberOfLongtermPictures = (numOfLTRPL0);
     if( !isIRAP() && !pLocalRPL0->isPOCInRefPicList(associatedIRAP, poc))
     {
-      if (useLTforDRAP && !pRPL1->isPOCInRefPicList(associatedIRAP, poc))
+      if (useLTforDRAP && !rplSrc1.isPOCInRefPicList(associatedIRAP, poc))
       {
         // Adding associated IRAP as longterm picture
         pLocalRPL0->setRefPicIdentifier(refPicIdxL0, associatedIRAP, true, false, 0);
@@ -1153,12 +1113,12 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   uint32_t numOfSTRPL1 = 0;
   uint32_t numOfLTRPL1 = 0;
   uint32_t numOfILRPL1 = 0;
-  numOfRefPic = pRPL1->numberOfShorttermPictures + pRPL1->numberOfLongtermPictures;
+  numOfRefPic = rplSrc1.numberOfShorttermPictures + rplSrc1.numberOfLongtermPictures;
   uint32_t refPicIdxL1 = 0;
   for (int ii = 0; ii < numOfRefPic; ii++)
   {
     // loop through all pictures in the reference picture buffer
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     bool isAvailable = false;
     pocCycle = 1 << sps->bitsForPOC;
     while (iterPic != rcListPic.end())
@@ -1166,12 +1126,12 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
       picCand = *(iterPic++);
       if( pic->layerId == picCand->layerId && picCand->isReferenced )
       {
-        if (!pRPL1->isLongtermRefPic[ii] && picCand->poc == poc + pRPL1->refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        if (!rplSrc1.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc1.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
         {
           isAvailable = true;
           break;
         }
-        else if (pRPL1->isLongtermRefPic[ii] && (picCand->poc & (pocCycle - 1)) == pRPL1->refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        else if (rplSrc1.isLongtermRefPic[ii] && (picCand->poc & (pocCycle - 1)) == rplSrc1.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
         {
           isAvailable = true;
           break;
@@ -1180,16 +1140,16 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
     }
     if (isAvailable)
     {
-      pLocalRPL1->setRefPicIdentifier(refPicIdxL1, pRPL1->refPicIdentifier[ii], pRPL1->isLongtermRefPic[ii], pRPL1->isInterLayerRefPic[ii], pRPL1->interLayerRefPicIdx[ii]);
+      pLocalRPL1->setRefPicIdentifier(refPicIdxL1, rplSrc1.refPicIdentifier[ii], rplSrc1.isLongtermRefPic[ii], rplSrc1.isInterLayerRefPic[ii], rplSrc1.interLayerRefPicIdx[ii]);
       refPicIdxL1++;
-      numOfSTRPL1 = numOfSTRPL1 + ((pRPL1->isLongtermRefPic[ii]) ? 0 : 1);
-      numOfLTRPL1 = numOfLTRPL1 + ((pRPL1->isLongtermRefPic[ii]) ? 1 : 0);
+      numOfSTRPL1 = numOfSTRPL1 + ((rplSrc1.isLongtermRefPic[ii]) ? 0 : 1);
+      numOfLTRPL1 = numOfLTRPL1 + ((rplSrc1.isLongtermRefPic[ii]) ? 1 : 0);
       isAvailable = false;
     }
   }
 
   //Copy from L1 if we have less than active ref pic
-  int numOfNeedToFill = pRPL0->numberOfActivePictures - (numOfLTRPL0 + numOfSTRPL0);
+  int numOfNeedToFill = rplSrc0.numberOfActivePictures - (numOfLTRPL0 + numOfSTRPL0);
   bool isDisallowMixedRefPic = sps->allRplEntriesHasSameSign;
   int originalL0StrpNum = numOfSTRPL0;
   int originalL0LtrpNum = numOfLTRPL0;
@@ -1219,9 +1179,9 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
       {
         pLocalRPL0->setRefPicIdentifier(refPicIdxL0, pLocalRPL1->refPicIdentifier[ii], pLocalRPL1->isLongtermRefPic[ii], pLocalRPL1->isInterLayerRefPic[ii], pLocalRPL1->interLayerRefPicIdx[ii]);
         refPicIdxL0++;
-        numOfSTRPL0 +=  pRPL1->isLongtermRefPic[ii] ? 0 : 1;
-        numOfLTRPL0 += (pRPL1->isLongtermRefPic[ii] && !pRPL1->isInterLayerRefPic[ii]) ? 1 : 0;
-        numOfILRPL0 +=  pRPL1->isInterLayerRefPic[ ii] ? 1 : 0;
+        numOfSTRPL0 +=  rplSrc1.isLongtermRefPic[ii] ? 0 : 1;
+        numOfLTRPL0 += (rplSrc1.isLongtermRefPic[ii] && !rplSrc1.isInterLayerRefPic[ii]) ? 1 : 0;
+        numOfILRPL0 +=  rplSrc1.isInterLayerRefPic[ ii] ? 1 : 0;
 
         numOfNeedToFill--;
       }
@@ -1235,8 +1195,8 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   pLocalRPL0->numberOfActivePictures  = ( numPics < rpl[0]->numberOfActivePictures ? numPics : rpl[0]->numberOfActivePictures ) + numOfILRPL0;
   pLocalRPL0->ltrpInSliceHeader = rpl[0]->ltrpInSliceHeader;
 
-  pLocalRPL0->numberOfActivePictures    = (numOfLTRPL0 + numOfSTRPL0 < pRPL0->numberOfActivePictures) ? numOfLTRPL0 + numOfSTRPL0 : pRPL0->numberOfActivePictures;
-  pLocalRPL0->ltrpInSliceHeader = pRPL0->ltrpInSliceHeader;
+  pLocalRPL0->numberOfActivePictures    = (numOfLTRPL0 + numOfSTRPL0 < rplSrc0.numberOfActivePictures) ? numOfLTRPL0 + numOfSTRPL0 : rplSrc0.numberOfActivePictures;
+  pLocalRPL0->ltrpInSliceHeader = rplSrc0.ltrpInSliceHeader;
   rplIdx[0] = -1;
   rpl[0]    = pLocalRPL0;
 
@@ -1279,8 +1239,8 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   pLocalRPL1->numberOfInterLayerPictures = numOfILRPL1;
   numPics = numOfLTRPL1 + numOfSTRPL1;
 
-  pLocalRPL1->numberOfActivePictures    = (isDisallowMixedRefPic) ? numPics : ((numPics < pRPL1->numberOfActivePictures) ? numPics : pRPL1->numberOfActivePictures);
-  pLocalRPL1->ltrpInSliceHeader         = pRPL1->ltrpInSliceHeader;
+  pLocalRPL1->numberOfActivePictures    = (isDisallowMixedRefPic) ? numPics : ((numPics < rplSrc1.numberOfActivePictures) ? numPics : rplSrc1.numberOfActivePictures);
+  pLocalRPL1->ltrpInSliceHeader         = rplSrc1.ltrpInSliceHeader;
   rplIdx[1] = -1;
   rpl[1]    = pLocalRPL1;
 }
@@ -1354,10 +1314,10 @@ bool Slice::isPocRestrictedByDRAP( int poc, bool precedingDRAPInDecodingOrder ) 
 
 void Slice::setAlfApsIds( const std::vector<int>& ApsIDs)
 {
-  tileGroupLumaApsId.resize(tileGroupNumAps);
-  for (int i = 0; i < tileGroupNumAps; i++)
+  lumaApsId.resize(numAps);
+  for (int i = 0; i < numAps; i++)
   {
-    tileGroupLumaApsId[i] = ApsIDs[i];
+    lumaApsId[i] = ApsIDs[i];
   }
 }
 
@@ -1940,6 +1900,18 @@ ReferencePictureList::ReferencePictureList()
   ::memset(interLayerRefPicIdx, 0, sizeof(interLayerRefPicIdx));
 }
 
+void ReferencePictureList::initFromGopEntry( const GOPEntry& gopEntry, int l )
+{
+  *this = ReferencePictureList();
+  numberOfShorttermPictures = gopEntry.m_numRefPics[ l ];
+  numberOfLongtermPictures  = 0;
+  numberOfActivePictures    = gopEntry.m_numRefPicsActive[ l ];
+  for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
+  {
+    setRefPicIdentifier( j, -gopEntry.m_deltaRefPics[ l ][ j ], 0, false, 0 );
+  }
+}
+
 void ReferencePictureList::setRefPicIdentifier(int idx, int identifier, bool isLongterm, bool _isInterLayerRefPic, int interLayerIdx)
 {
   refPicIdentifier[idx] = identifier;
@@ -1985,15 +1957,17 @@ ParameterSetManager::~ParameterSetManager()
 
 //! activate a PPS and depending on isIDR parameter also SPS
 //! \returns true, if activation is successful
-bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
+ParameterSetManager::PPSErrCodes ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
 {
+  PPSErrCodes ret=PPS_OK;
+
   PPS *pps = m_ppsMap.getPS(ppsId);
   if (pps)
   {
     int spsId = pps->spsId;
     if (!isIRAP && (spsId != m_activeSPSId ))
     {
-      msg( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR.");
+      ret=PPS_ERR_INACTIVE_SPS;
     }
     else
     {
@@ -2003,7 +1977,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
         int dciId = sps->dciId;
         if ((m_activeDCIId!=-1) && (dciId != m_activeDCIId ))
         {
-          msg( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!");
+          ret=PPS_WARN_DCI_ID;
         }
         else
         {
@@ -2017,7 +1991,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
             }
             else
             {
-              msg( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI.");
+              ret=PPS_WARN_NO_DCI;
             }
           }
           else
@@ -2033,23 +2007,23 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
         m_activeSPSId = spsId;
         m_ppsMap.clearActive();
         m_ppsMap.setActive(ppsId);
-        return true;
+        return ret;
       }
       else
       {
-        msg( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS.");
+        ret=PPS_ERR_NO_SPS;
       }
     }
   }
   else
   {
-    msg( VVENC_WARNING, "Warning: tried to activate non-existing PPS.");
+    ret=PPS_ERR_NO_PPS;
   }
 
   // Failed to activate if reach here.
   m_activeSPSId=-1;
   m_activeDCIId=-1;
-  return false;
+  return ret;
 }
 
 bool ParameterSetManager::activateAPS(int apsId, int apsType)
@@ -2060,10 +2034,7 @@ bool ParameterSetManager::activateAPS(int apsId, int apsType)
     m_apsMap.setActive((apsId << NUM_APS_TYPE_LEN) + apsType);
     return true;
   }
-  else
-  {
-    msg(VVENC_WARNING, "Warning: tried to activate non-existing APS.");
-  }
+
   return false;
 }
 

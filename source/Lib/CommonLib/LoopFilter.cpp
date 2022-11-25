@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -332,7 +328,7 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
   }
   else
   {
-    delta = Clip3(-tc, tc, ((((m4 - m3) << 2) + m2 - m5 + 4) >> 3));
+    delta           = Clip3(-tc, tc, ((4 * (m4 - m3) + m2 - m5 + 4) >> 3));
     piSrc[-iOffset] = ClipPel(m3 + delta, clpRng);
     piSrc[0] = ClipPel(m4 - delta, clpRng);
   }
@@ -388,50 +384,18 @@ LoopFilter::~LoopFilter()
  */
 void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) const
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_DEBLOCK_FILTER );
+  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_DEBLOCK_FILTER );
   const PreCalcValues& pcv = *cs.pcv;
 
-
 #if ENABLE_TRACING
-
   for (int y = 0; y < pcv.heightInCtus; y++)
   {
     for (int x = 0; x < pcv.widthInCtus; x++)
     {
       const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
-        if( currCU.Y().valid() )
-        {
-          DTRACE(g_trace_ctx, D_CRC, "CU LumaPos %d %d", currCU.Y().x, currCU.Y().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
-        }
-     }
-  }
-
-  if( pcv.chrFormat != VVENC_CHROMA_400 )
-  {
-    for (int y = 0; y < pcv.heightInCtus; y++)
-    {
-      for (int x = 0; x < pcv.widthInCtus; x++)
-      {
-        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-          if( currCU.Cb().valid() )
-          {
-            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-          }
-       }
+      DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
     }
   }
-
 #endif
 
   if( cs.pps->deblockingFilterControlPresent && cs.pps->deblockingFilterDisabled && !cs.pps->deblockingFilterOverrideEnabled )
@@ -460,42 +424,13 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
     loopFilterPicLine( cs, MAX_NUM_CH, y, 0, NUM_EDGE_DIR );
   }
 
-#if ENABLE_TRACING 
+#if ENABLE_TRACING && false
   for (int y = 0; y < pcv.heightInCtus; y++)
   {
     for (int x = 0; x < pcv.widthInCtus; x++)
     {
       const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
-        if( currCU.Y().valid() )
-        {
-          DTRACE(g_trace_ctx, D_CRC, "CU LumaPos %d %d", currCU.Y().x, currCU.Y().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
-        }
-     }
-  }
-
-  if( pcv.chrFormat != VVENC_CHROMA_400 )
-  {
-    for (int y = 0; y < pcv.heightInCtus; y++)
-    {
-      for (int x = 0; x < pcv.widthInCtus; x++)
-      {
-        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-          if( currCU.Cb().valid() )
-          {
-            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-          }
-       }
+      DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
     }
   }
 #endif
@@ -580,33 +515,6 @@ void LoopFilter::calcFilterStrengthsCTU( CodingStructure& cs, const UnitArea& ct
   }
 }
 
-void LoopFilter::loopFilterCTU( CodingStructure &cs, const ChannelType chType, const int ctuCol, const int ctuLine, const int offset, const DeblockEdgeDir edgeDir ) const
-{
-  const PreCalcValues &pcv = *cs.pcv;
-
-  const bool frstLine = ctuLine == 0;
-
-  const int ly = frstLine ? 0 : ( ctuLine * pcv.maxCUSize + ( offset ) );
-  const int lh = frstLine ? pcv.maxCUSize + ( offset ) : pcv.maxCUSize;
-
-  if( ly >= pcv.lumaHeight )
-  {
-    return;
-  }
-  
-  PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-
-  const UnitArea ctuArea = clipArea( UnitArea( pcv.chrFormat, Area( ctuCol << pcv.maxCUSizeLog2, ly, pcv.maxCUSize, lh ) ), *cs.picture );
-
-  if( edgeDir == NUM_EDGE_DIR || edgeDir == EDGE_VER )
-  {
-    xDeblockArea<EDGE_VER>( cs, ctuArea, chType, recoBuf );
-  }
-  if( edgeDir == NUM_EDGE_DIR || edgeDir == EDGE_HOR )
-  {
-    xDeblockArea<EDGE_HOR>( cs, ctuArea, chType, recoBuf );
-  }
-}
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
@@ -746,9 +654,6 @@ template<> inline SizeType parlSize<EDGE_HOR>( const Size& size ) { return size.
 template<> inline SizeType perpSize<EDGE_HOR>( const Size& size ) { return size.height; }
 template<> inline SizeType parlSize<EDGE_VER>( const Size& size ) { return size.height; }
 template<> inline SizeType perpSize<EDGE_VER>( const Size& size ) { return size.width; }
-
-// set / get functions
-LFCUParam xGetLoopfilterParam( const CodingUnit& cu );
 
 // filtering functions
 template<DeblockEdgeDir edgeDir>
@@ -1626,8 +1531,8 @@ void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos
     sidePisLarge = false;
   }
  
-  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + ( tcOffsetDiv2 << 1 ) ) );
-  const int iIndexB   = Clip3( 0, MAX_QP, iQP + ( betaOffsetDiv2 << 1 ) );
+  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + 2 * tcOffsetDiv2  ) );
+  const int iIndexB   = Clip3( 0, MAX_QP, iQP + 2 * betaOffsetDiv2 );
 
       const int iTc = bitDepthLuma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthLuma))) >> (10 - bitDepthLuma)) : ((sm_tcTable[iIndexTC]) << (bitDepthLuma - 10));
   const int iBeta     = sm_betaTable[iIndexB ] << ( bitDepthLuma - 8 );
@@ -1777,7 +1682,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       const ClpRng& clpRng( cs.slice->clpRngs[ComponentID( chromaIdx + 1 )] );
 
       int iQP = lfp.qp[chromaIdx + 1];
-      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + (tcOffsetDiv2[chromaIdx] << 1));
+      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + 2 * tcOffsetDiv2[chromaIdx] );
         const int iTc = bitDepthChroma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthChroma))) >> (10 - bitDepthChroma)) : ((sm_tcTable[iIndexTC]) << (bitDepthChroma - 10));
       Pel* piSrcChroma   = chromaIdx == 0 ? piSrcCb : piSrcCr;
 
@@ -1786,7 +1691,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       if( largeBoundary )
       {
         const int iBitdepthScale = 1 << ( sps.bitDepths[CH_C] - 8 );
-        const int indexB = Clip3<int>(0, MAX_QP, iQP + (betaOffsetDiv2[chromaIdx] << 1));
+        const int indexB = Clip3<int>(0, MAX_QP, iQP + 2 * betaOffsetDiv2[chromaIdx]);
         const int beta   = sm_betaTable[indexB] * iBitdepthScale;
 
         const int dp0 = xCalcDP( piSrcChroma, offset, isChromaHorCTBBoundary );

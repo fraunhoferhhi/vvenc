@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -304,15 +300,14 @@ bool InterPrediction::xCheckIdenticalMotion( const CodingUnit& cu ) const
       {
         if( !cu.affine )
         {
-          if( cu.mv[0] == cu.mv[1] )
+          if( cu.mv[0][0] == cu.mv[1][0] )
           {
             return true;
           }
         }
         else
         {
-          if ( (cu.affineType == AFFINEMODEL_4PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]))
-            || (cu.affineType == AFFINEMODEL_6PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]) && (cu.mv[0][2] == cu.mv[1][2])) )
+          if( cu.mv[0][0] == cu.mv[1][0] && cu.mv[0][1] == cu.mv[1][1] && ( cu.affineType == AFFINEMODEL_4PARAM || cu.mv[0][2] == cu.mv[1][2] ) )
           {
             return true;
           }
@@ -946,14 +941,11 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
       const Pel* SrcY0Tmp = srcY0 + (xu << 2) + (yu << 2) * src0Stride;
 
       calcBDOFSumsCore(SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride, src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX);
-      tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(sumDIX << 2, sumAbsGX));
+      tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(4 * sumDIX, sumAbsGX));
       tmpx = Clip3(-limit, limit, tmpx);
 
-      int     mainsGxGy = sumSignGY_GX >> 12;
-      int     secsGxGy  = sumSignGY_GX & ((1 << 12) - 1);
-      int     tmpData   = tmpx * mainsGxGy;
-      tmpData           = ((tmpData << 12) + tmpx*secsGxGy) >> 1;
-      tmpy = (sumAbsGY == 0 ? 0 : xRightShiftMSB(((sumDIY << 2) - tmpData), sumAbsGY));
+      const int tmpData = sumSignGY_GX * tmpx >> 1;
+      tmpy = (sumAbsGY == 0 ? 0 : xRightShiftMSB((4 * sumDIY - tmpData), sumAbsGY));
       tmpy = Clip3(-limit, limit, tmpy);
 
       srcY0Temp = srcY0 + (stridePredMC + 1) + ((yu*src0Stride + xu) << 2);
@@ -1111,6 +1103,11 @@ void DMVR::init( RdCost* pcRdCost, const ChromaFormat chFormat )
       m_yuvPred[i].create( chFormat, predArea );
       m_yuvTmp[i].create( CHROMA_400, refArea, 0, DMVR_NUM_ITERATION );
       m_yuvPad[i].create( chFormat, predArea, 0, DMVR_NUM_ITERATION + (NTAPS_LUMA>>1), 32 );
+      // the buffer m_yuvPad[i].bufs[0].buf is aligned to 32
+      // the actual begin of the written to buffer is m_yuvPad[i].bufs[0].buf - 3 * stride - 3 = m_yuvPad[i].bufs[0].buf - 99,
+      // which is not aligned with int. Since the margin on the left side is 1 sample too big, moving the buffer within the
+      // allocated memory 1 to the left doesn't cause problems
+      m_yuvPad[i].bufs[0].buf--;
     }
   }
 }
@@ -1252,13 +1249,11 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
         const PelBuf& srcBuf = refBuf[refId].bufs[compID];
         int offset = (deltaIntMvY)*srcBuf.stride + (deltaIntMvX);
 
-        xPredInterBlk((ComponentID)compID, cu, nullptr, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs.comp[compID],
-          bioApplied, false, refId, 0, 0, 0, srcBuf.buf + offset, srcBuf.stride);
+        xPredInterBlk( ( ComponentID ) compID, cu, nullptr, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs[compID], bioApplied, false, refId, 0, 0, 0, srcBuf.buf + offset, srcBuf.stride );
       }
       else
       {
-        xPredInterBlk((ComponentID)compID, cu, refPic, cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs.comp[compID],
-          bioApplied, false, refId, 0, 0, 0);
+        xPredInterBlk( ( ComponentID ) compID, cu, refPic,  cMvClipped, dstBuf[refId], true, cu.cs->slice->clpRngs[compID], bioApplied, false, refId, 0, 0, 0 );
       }
     }
   }
@@ -1286,8 +1281,7 @@ void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t
 
 void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_INTER_MRG_DMVR );
-  int iterationCount = 1;
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
   /*Always High Precision*/
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;
   const int mvShiftC = mvShift + getChannelTypeScaleX(CH_C, cu.chromaFormat);
@@ -1326,7 +1320,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       mergeMVL0.hor -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
       mergeMVL0.ver -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
 
-      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL0, yuvTmp, true, clpRngs.comp[COMP_Y], false, false, L0, cu.lwidth() + padSize, cu.lheight() + padSize, true);
+      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL0, yuvTmp, true, clpRngs[COMP_Y], false, false, L0, cu.lwidth() + padSize, cu.lheight() + padSize, true);
     }
 
     /*L1 MC for refinement*/
@@ -1338,14 +1332,14 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       mergeMVL1.hor -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
       mergeMVL1.ver -= (DMVR_NUM_ITERATION << MV_FRACTIONAL_BITS_INTERNAL);
 
-      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL1, yuvTmp, true, clpRngs.comp[COMP_Y], false, false, L1, cu.lwidth() + padSize, cu.lheight() + padSize, true);
+      xPredInterBlk(COMP_Y, cu, refPic, mergeMVL1, yuvTmp, true, clpRngs[COMP_Y], false, false, L1, cu.lwidth() + padSize, cu.lheight() + padSize, true);
     }
 
     // point mc buffer to center point to avoid multiplication to reach each iteration to the beginning
     const Pel* biLinearPredL0 = m_yuvTmp[0].getBuf( COMP_Y ).buf;
     const Pel* biLinearPredL1 = m_yuvTmp[1].getBuf( COMP_Y ).buf;
     const int bioEnabledThres = 2 * dy * dx;
-    const int bd = cu.cs->slice->clpRngs.comp[COMP_Y].bd;
+    const int bd = cu.cs->slice->clpRngs[COMP_Y].bd;
 
     DistParam distParam = m_pcRdCost->setDistParam( nullptr, nullptr, bilinearBufStride, bilinearBufStride, bd, COMP_Y, dx, dy, 1, true );
 
@@ -1363,76 +1357,67 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
         int16_t deltaMV[2]      = { 0, 0 };
 
         // set all entries to MAX_UNIT64
-        memset( sadArray, 0xff, sizeof( sadArray ) );
         uint64_t *pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
 
         const Pel* addrL0Centre = biLinearPredL0 + yStart * bilinearBufStride + xStart;
         const Pel* addrL1Centre = biLinearPredL1 + yStart * bilinearBufStride + xStart;
 
-        for( int i = 0; i < iterationCount; i++ )
+        const Pel* addrL0 = addrL0Centre;
+        const Pel* addrL1 = addrL1Centre;
+
+        distParam.org.buf = addrL0;
+        distParam.cur.buf = addrL1;
+        minCost  = distParam.distFunc( distParam ) >> 1;
+        minCost -= ( minCost >> 2 );
+
+        if( minCost < ( dx * dy ) )
         {
-          const ptrdiff_t diff0 = totalDeltaMV[0] + (totalDeltaMV[1] * bilinearBufStride);
-          const Pel* addrL0 = addrL0Centre + diff0;
-          const Pel* addrL1 = addrL1Centre - diff0;
-          if (i == 0)
-          {
-            distParam.org.buf = addrL0;
-            distParam.cur.buf = addrL1;
-            minCost = distParam.distFunc(distParam)>>1;
-            minCost -= (minCost >>2);
-            if (minCost < (dx * dy))
-            {
-              notZeroCost = false;
-              break;
-            }
-            pSADsArray[0] = minCost;
-          }
-          if (!minCost)
-          {
-            notZeroCost = false;
-            break;
-          }
+          notZeroCost = false;
+        }
+        else
+        {
+          pSADsArray[0] = minCost;
+          pSADsArray    = sadArray;
 
           //xBIPMVRefine
           {
-            deltaMV[0] = 0;
-            deltaMV[1] = 0;
-
-            for (int nIdx = 0; (nIdx < 25); ++nIdx)
+            for( int ver = -2; ver <= 2; ver++ )
             {
-              int32_t sadOffset = ((m_pSearchOffset[nIdx].ver * ((2 * DMVR_NUM_ITERATION) + 1)) + m_pSearchOffset[nIdx].hor);
-              if (*(pSADsArray + sadOffset) == MAX_UINT64)
+              const int initHor = -2;
+              const ptrdiff_t offset = initHor + ver * bilinearBufStride;
+              
+              distParam.org.buf = addrL0 + offset;
+              distParam.cur.buf = addrL1 - offset;
+              
+              distParam.dmvrSadX5( distParam, pSADsArray, ver != 0 );
+
+              for( int hor = -2; hor <= 2; hor++, pSADsArray++ )
               {
-                const ptrdiff_t diff = m_pSearchOffset[nIdx].hor + (m_pSearchOffset[nIdx].ver * bilinearBufStride);
-                distParam.org.buf = addrL0 + diff;
-                distParam.cur.buf = addrL1 - diff;
-                const uint64_t cost = distParam.distFunc(distParam)>>1;
-                *(pSADsArray + sadOffset) = cost;
-              }
-              if (*(pSADsArray + sadOffset) < minCost)
-              {
-                minCost = *(pSADsArray + sadOffset);
-                deltaMV[0] = m_pSearchOffset[nIdx].hor;
-                deltaMV[1] = m_pSearchOffset[nIdx].ver;
+                Distortion cost = *pSADsArray;
+
+                if( cost < minCost )
+                {
+                  minCost = cost;
+                  deltaMV[0] = hor;
+                  deltaMV[1] = ver;
+                }
               }
             }
           }
 
-          if (deltaMV[0] == 0 && deltaMV[1] == 0)
-          {
-            break;
-          }
-          totalDeltaMV[0] += deltaMV[0];
-          totalDeltaMV[1] += deltaMV[1];
-          pSADsArray += ((deltaMV[1] * (((2 * DMVR_NUM_ITERATION) + 1))) + deltaMV[0]);
+          pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
         }
 
-        bioAppliedType[num] = (minCost < bioEnabledThres) ? false : bioApplied;
-        totalDeltaMV[0] = (totalDeltaMV[0] << mvShift);
-        totalDeltaMV[1] = (totalDeltaMV[1] << mvShift);
-        xDMVRSubPixelErrorSurface(notZeroCost, totalDeltaMV, deltaMV, pSADsArray);
+        totalDeltaMV[0] += deltaMV[0];
+        totalDeltaMV[1] += deltaMV[1];
+        pSADsArray += ( ( deltaMV[1] * ( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) ) + deltaMV[0] );
 
-        cu.mvdL0SubPu[num] = Mv(totalDeltaMV[0], totalDeltaMV[1]);
+        bioAppliedType[num] = ( minCost < bioEnabledThres ) ? false : bioApplied;
+        totalDeltaMV[0] = totalDeltaMV[0] * ( 1 << mvShift );
+        totalDeltaMV[1] = totalDeltaMV[1] * ( 1 << mvShift );
+        xDMVRSubPixelErrorSurface( notZeroCost, totalDeltaMV, deltaMV, pSADsArray );
+
+        cu.mvdL0SubPu[num] = Mv( totalDeltaMV[0], totalDeltaMV[1] );
 
         num++;
       }
@@ -1568,12 +1553,12 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   int iDMvVerX = 0;
   int iDMvVerY = 0;
 
-  iDMvHorX = (mvRT - mvLT).hor << (iBit - Log2(cxWidth));
-  iDMvHorY = (mvRT - mvLT).ver << (iBit - Log2(cxWidth));
+  iDMvHorX = (mvRT - mvLT).hor * (1 << (iBit - Log2(cxWidth)));
+  iDMvHorY = (mvRT - mvLT).ver * (1 <<(iBit - Log2(cxWidth)));
   if (cu.affineType == AFFINEMODEL_6PARAM)
   {
-    iDMvVerX = (mvLB - mvLT).hor << (iBit - Log2(cxHeight));
-    iDMvVerY = (mvLB - mvLT).ver << (iBit - Log2(cxHeight));
+    iDMvVerX = (mvLB - mvLT).hor * (1 <<(iBit - Log2(cxHeight)));
+    iDMvVerY = (mvLB - mvLT).ver * (1 <<(iBit - Log2(cxHeight)));
   }
   else
   {
@@ -1581,16 +1566,16 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     iDMvVerY = iDMvHorX;
   }
 
-  int iMvScaleHor = mvLT.hor << iBit;
-  int iMvScaleVer = mvLT.ver << iBit;
+  int iMvScaleHor = mvLT.hor * (1 << iBit);
+  int iMvScaleVer = mvLT.ver * (1 << iBit);
   const PPS &pps = *cu.cs->pps;
   const SPS &sps = *cu.cs->sps;
   const int iMvShift = 4;
   const int iOffset = 8;
   const int iHorMax = (pps.picWidthInLumaSamples + iOffset - cu.Y().x - 1) << iMvShift;
-  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) << iMvShift;
+  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) * (1 << iMvShift);
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
-  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) << iMvShift;
+  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
 
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;
@@ -1626,13 +1611,13 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   {
     int* dMvH = dMvScaleHor;
     int* dMvV = dMvScaleVer;
-    int quadHorX = iDMvHorX << 2;
-    int quadHorY = iDMvHorY << 2;
-    int quadVerX = iDMvVerX << 2;
-    int quadVerY = iDMvVerY << 2;
+    int quadHorX = 4 * iDMvHorX ;
+    int quadHorY = 4 * iDMvHorY ;
+    int quadVerX = 4 * iDMvVerX ;
+    int quadVerY = 4 * iDMvVerY ;
 
-    dMvH[0] = ((iDMvHorX + iDMvVerX) << 1) - ((quadHorX + quadVerX) << 1);
-    dMvV[0] = ((iDMvHorY + iDMvVerY) << 1) - ((quadHorY + quadVerY) << 1);
+    dMvH[0] = ((iDMvHorX + iDMvVerX) * 2) - ((quadHorX + quadVerX)  * 2);
+    dMvV[0] = ((iDMvHorY + iDMvVerY) * 2) - ((quadHorY + quadVerY)  * 2);
 
     for (int w = 1; w < blockWidth; w++)
     {
@@ -1690,12 +1675,12 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     const int halfBHLuma = lumaBlockHeight >> 1;
 
     int dMvHorXLuma, dMvHorYLuma, dMvVerXLuma, dMvVerYLuma;
-    dMvHorXLuma = (mvRT - mvLT).hor << (iBit - floorLog2(cxWidthLuma));
-    dMvHorYLuma = (mvRT - mvLT).ver << (iBit - floorLog2(cxWidthLuma));
+    dMvHorXLuma = (mvRT - mvLT).hor * (1 << (iBit - floorLog2(cxWidthLuma)));
+    dMvHorYLuma = (mvRT - mvLT).ver * (1 <<  (iBit - floorLog2(cxWidthLuma)));
     if (cu.affineType == AFFINEMODEL_6PARAM)
     {
-      dMvVerXLuma = (mvLB - mvLT).hor << (iBit - floorLog2(cxHeightLuma));
-      dMvVerYLuma = (mvLB - mvLT).ver << (iBit - floorLog2(cxHeightLuma));
+      dMvVerXLuma = (mvLB - mvLT).hor * (1 << (iBit - floorLog2(cxHeightLuma)));
+      dMvVerYLuma = (mvLB - mvLT).ver * (1 << (iBit - floorLog2(cxHeightLuma)));
     }
     else
     {

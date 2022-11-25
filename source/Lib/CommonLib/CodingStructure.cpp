@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -96,7 +92,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
     m_cuPtr   [ i ] = nullptr;
-    m_tuPtr   [ i ] = nullptr;
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -216,34 +211,17 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
   }
   else
   {
-    TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
-    unsigned idx = ptu->idx;
-    if (!ptu && m_isTuEnc)
-      return parent->getTU(pos, effChType);
-    else
+    CodingUnit* cu = m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
+    if( !cu ) return nullptr;
+
+    TransformUnit* ptu = cu->firstTU;
+
+    while( ptu && !ptu->blocks[effChType].contains( pos ) )
     {
-      if (isLuma(effChType))
-      {
-        const TransformUnit& tu = *tus[idx - 1];
-        if (tu.cu->ispMode)
-        {
-          if (subTuIdx == -1)
-          {
-            unsigned extraIdx = 0;
-            while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
-            {
-              extraIdx++;
-              CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
-                "tu searched by position points to a chroma tree CU");
-              CHECK(extraIdx > 3, "extraIdx > 3");
-            }
-            return tus[idx - 1 + extraIdx];
-          }
-          return tus[idx - 1 + subTuIdx];
-        }
-      }
-      return ptu;
+      ptu = ptu->next;
     }
+
+    return ptu;
   }
 }
 
@@ -258,34 +236,17 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
   }
   else
   {
-    TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
-    unsigned idx = ptu->idx;
-    if (!ptu && m_isTuEnc)
-      return parent->getTU(pos, effChType);
-    else
+    const CodingUnit* cu = m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
+    if( !cu ) return nullptr;
+
+    const TransformUnit* ptu = cu->firstTU;
+
+    while( ptu && !ptu->blocks[effChType].contains( pos ) )
     {
-      if (isLuma(effChType))
-      {
-        const TransformUnit& tu = *tus[idx - 1];
-        if (tu.cu->ispMode)
-        {
-          if (subTuIdx == -1)
-          {
-            unsigned extraIdx = 0;
-            while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
-            {
-              extraIdx++;
-              CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
-                "tu searched by position points to a chroma tree CU");
-              CHECK(extraIdx > 3, "extraIdx > 3");
-            }
-            return tus[idx - 1 + extraIdx];
-          }
-          return tus[idx - 1 + subTuIdx];
-        }
-      }
-      return ptu;
+      ptu = ptu->next;
     }
+
+    return ptu;
   }
 }
 
@@ -431,32 +392,6 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
     if( !tu->blocks[i].valid() )
     {
       continue;
-    }
-
-    if (i < getNumberValidChannels(area.chromaFormat))
-    {
-      const CompArea& _selfBlk = area.blocks[i];
-      const CompArea     &_blk = tu-> blocks[i];
-
-      bool isIspTu = tu->cu != nullptr && tu->cu->ispMode && isLuma( _blk.compID );
-
-      bool isFirstIspTu = false;
-      if( isIspTu )
-      {
-        isFirstIspTu = CU::isISPFirst( *tu->cu, _blk, getFirstComponentOfChannel( ChannelType( i ) ) );
-      }
-      if( !isIspTu || isFirstIspTu )
-      {
-        const UnitScale& scale = unitScale[_blk.compID];
-
-        const Area scaledSelf  = scale.scale( _selfBlk );
-        const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
-        TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
-
-        CHECKD( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
-
-        g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
-      }
     }
 
     coeffs[i] = m_coeffs[i] + m_offsets[i];
@@ -638,7 +573,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
   if( isTopLayer )
   {
-    motionLutBuf.resize( pcv->heightInCtus );
+    motionLutBuf.resize( pps->getNumTileLineIds() );
   }
   else
   {
@@ -660,7 +595,6 @@ void CodingStructure::createTempBuffers( const bool isTopLayer )
     unsigned _area  = unitScale[i].scale( area.blocks[i].size() ).area();
 
     m_cuPtr[i]      = _area > 0 ? new CodingUnit*    [_area] : nullptr;
-    m_tuPtr[i]      = _area > 0 ? new TransformUnit* [_area] : nullptr;
   }
 
   for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
@@ -678,9 +612,6 @@ void CodingStructure::destroyTempBuffers()
   {
     delete[] m_cuPtr[i];
     m_cuPtr[i] = nullptr;
-
-    delete[] m_tuPtr[i];
-    m_tuPtr[i] = nullptr;
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -722,11 +653,11 @@ void CodingStructure::rebindPicBufs()
 {
   CHECK( parent, "rebindPicBufs can only be used for the top level CodingStructure" );
 
-  if( !picture->m_bufs[ PIC_RECONSTRUCTION ].bufs.empty() ) m_reco.createFromBuf( picture->m_bufs[ PIC_RECONSTRUCTION ] );
+  if( !picture->m_picBufs[ PIC_RECONSTRUCTION ].bufs.empty() ) m_reco.createFromBuf( picture->m_picBufs[ PIC_RECONSTRUCTION ] );
   else                                                         m_reco.destroy();
-  if( !picture->m_bufs[ PIC_PREDICTION     ].bufs.empty() ) m_pred.createFromBuf( picture->m_bufs[ PIC_PREDICTION ] );
+  if( !picture->m_picBufs[ PIC_PREDICTION     ].bufs.empty() ) m_pred.createFromBuf( picture->m_picBufs[ PIC_PREDICTION ] );
   else                                                         m_pred.destroy();
-  if( !picture->m_bufs[ PIC_RESIDUAL       ].bufs.empty() ) m_resi.createFromBuf( picture->m_bufs[ PIC_RESIDUAL ] );
+  if( !picture->m_picBufs[ PIC_RESIDUAL       ].bufs.empty() ) m_resi.createFromBuf( picture->m_picBufs[ PIC_RESIDUAL ] );
   else                                                         m_resi.destroy();
 }
 
@@ -800,8 +731,9 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   if( nullptr == parent )
   {
-    int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
-    subStruct.motionLut = motionLutBuf[ctuPosY];
+    const int ctuPosX = subArea.lx() >> pcv->maxCUSizeLog2;
+    const int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
+    subStruct.motionLut = motionLutBuf[pps->getTileLineId( ctuPosX, ctuPosY )];
   }
   else
   {
@@ -823,20 +755,20 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   }
 }
 
-void CodingStructure::useSubStructure( CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyReco )
+void CodingStructure::useSubStructure( CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyRecoToPic )
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
 
-  if( cpyReco )
+  CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
+
+  if( parent )
   {
-    CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
+    // copy data to picture
+    getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
+  }
 
-    if( parent )
-    {
-      // copy data to picture
-      getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
-    }
-
+  if( cpyRecoToPic )
+  {
     picture->getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
   }
 
@@ -850,8 +782,9 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
 
     if( nullptr == parent )
     {
-      int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
-      motionLutBuf[ctuPosY] = subStruct.motionLut;
+      const int ctuPosX = subStruct.area.lx() >> pcv->maxCUSizeLog2;
+      const int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
+      motionLutBuf[pps->getTileLineId( ctuPosX, ctuPosY )] = subStruct.motionLut;
     }
     else
     {
@@ -1052,18 +985,11 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
 void CodingStructure::clearTUs( bool force )
 {
+#if CLEAR_AND_CHECK_TUIDX
   if( !m_numTUs && !force ) return;
 
-  int numCh = getNumberValidChannels( area.chromaFormat );
-  for( int i = 0; i < numCh; i++ )
-  {
-    size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
-
-    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
-
-  }
-
-  numCh = getNumberValidComponents( area.chromaFormat );
+#endif
+  int numCh = getNumberValidComponents( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
     m_offsets[i] = 0;
@@ -1250,28 +1176,36 @@ const CPelUnitBuf CodingStructure::getBuf( const UnitArea& unit, const PictureTy
 
 const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const CodingUnit& curCu, const ChannelType _chType ) const
 {
-  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curCu.chromaFormat );
-  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curCu.chromaFormat );
+  const int csx    = getChannelTypeScaleX( _chType, area.chromaFormat );
+  const int csy    = getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int xshift = pcv->maxCUSizeLog2 - csx;
+  const int yshift = pcv->maxCUSizeLog2 - csy;
   const int ydiff  = ( pos.y >> yshift ) - ( curCu.blocks[_chType].y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curCu.blocks[_chType].x >> xshift );
 
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
+  if( pos.x < 0 || pos.y < 0 || ( pos.x * (1 << csx) ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
+
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
 
   return ( cu && CU::isSameSliceAndTile( *cu, curCu ) && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) ) ? cu : nullptr;
 }
 
-const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
+const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
 {
-  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, area.chromaFormat );
-  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int csx    = getChannelTypeScaleX( _chType, area.chromaFormat );
+  const int csy    = getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int xshift = pcv->maxCUSizeLog2 - csx;
+  const int yshift = pcv->maxCUSizeLog2 - csy;
   const int ydiff  = ( pos.y >> yshift ) - ( curPos.y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curPos.x >> xshift );
 
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
+
+  if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curTileIdx ) return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, _treeType );
 

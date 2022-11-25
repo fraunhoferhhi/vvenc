@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -435,8 +431,8 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& 
   BestEncodingInfo& encInfo = *m_bestEncInfo[idx1][idx2][idx3][idx4];
 
   encInfo.poc            =  cs.picture->poc;
-  encInfo.cu.repositionTo( *cs.cus.front() );
-  encInfo.tu.repositionTo( *cs.tus.front() );
+  encInfo.cu.UnitArea::operator= ( *cs.cus.front() );
+  encInfo.tu.UnitArea::operator= ( *cs.tus.front() );
   encInfo.cu             = *cs.cus.front();
   for( auto &blk : cs.tus.front()->blocks )
   {
@@ -542,7 +538,7 @@ void EncModeCtrl::destroy()
   BestEncInfoCache::destroy();
 }
 
-void EncModeCtrl::initCTUEncoding( const Slice &slice )
+void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
 {
   CacheBlkInfoCtrl::init( slice );
   BestEncInfoCache::init( slice );
@@ -557,37 +553,30 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
+
+  m_tileIdx = tileIdx;
 }
 
-#if QTBTT_SPEED3
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
-#else
-void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
-#endif
 {
   // Min/max depth
   unsigned minDepth = 0;
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
-#if QTBTT_SPEED3
     partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
-#else
-    bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
-    partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
-#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
 
-  const CodingUnit* cuLeft  = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), partitioner.chType, partitioner.treeType );
-  const CodingUnit* cuAbove = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuLeft  = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuAbove = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
 
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )
                          || ( !cuLeft  &&  cuAbove  && cuAbove->qtDepth > partitioner.currQtDepth )
-                         || ( !cuAbove && !cuLeft   && cs.area.lwidth() >= ( 32 << cs.slice->depth ) )
+                         || ( !cuAbove && !cuLeft   && cs.area.lwidth() >= ( 32 << cs.slice->TLayer ) )
                          || ( m_pcEncCfg->m_qtbttSpeedUp > 1 && partitioner.maxBTD < ( ( cs.slice->isIntra() && !cs.sps->IBC ) ? 3 : 2 ) ) )
                          && ( cs.area.lwidth() > ( cs.pcv->getMinQtSize( *cs.slice, partitioner.chType ) << 1 ) );
 
@@ -600,9 +589,11 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP );
   cuECtx.didHorzSplit   = partitioner.canSplit( CU_HORZ_SPLIT, cs );
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
-  
+  cuECtx.doHorChromaSplit = true;
+  cuECtx.doVerChromaSplit = true;
+  cuECtx.doQtChromaSplit  = true;
 
-  if( m_pcEncCfg->m_contentBasedFastQtbt )
+  if( m_pcEncCfg->m_contentBasedFastQtbt && cs.pcv->getMaxMTTDepth(*cs.slice, partitioner.chType))
   {
     const CompArea& currArea = partitioner.currArea().Y();
     int cuHeight  = currArea.height;
@@ -620,7 +611,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
       Intermediate_Int dowVal = 0;
 
       unsigned j, k;
-      
+
       for( k = 0; k < cuHeight - 1; k++ )
       {
         for( j = 0; j < cuWidth - 1; j++ )
@@ -652,6 +643,11 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
+
+  if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) && ( !cuECtx.doQtChromaSplit ) )
+  {
+    cuECtx.maxDepth         = partitioner.currDepth;
+  }
 
   if( isBoundary )
   {
@@ -691,7 +687,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if ((!slice.isIntra() || slice.sps->IBC) && cuECtx.isBestNoSplitSkip )
   {
-    for( int i = 2; i < m_ComprCUCtxList.size(); i++ )
+    for( int i = 2; i <= m_ComprCUCtxList.size(); i++ )
     {
       if( ( m_ComprCUCtxList.end() - i )->isBestNoSplitSkip )
       {
@@ -705,11 +701,31 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   }
 
   const PartSplit split = getPartSplit( encTestmode );
-  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 )
+  if( !partitioner.canSplit( split, cs ) || skipScore >= 2 || ( skipScore == 1 && m_ComprCUCtxList.size() == 2 ) )
   {
     if( split == CU_HORZ_SPLIT ) cuECtx.didHorzSplit = false;
     if( split == CU_VERT_SPLIT ) cuECtx.didVertSplit = false;
     if( split == CU_QUAD_SPLIT ) cuECtx.didQuadSplit = false;
+    return false;
+  }
+
+  if( isChroma( partitioner.chType ) && !cuECtx.doHorChromaSplit && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
+  {
+    if( split == CU_HORZ_SPLIT )
+    {
+      cuECtx.didHorzSplit = false;
+    }
+
+    return false;
+  }
+
+  if( isChroma( partitioner.chType ) && !cuECtx.doVerChromaSplit && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
+  {
+    if( split == CU_VERT_SPLIT )
+    {
+      cuECtx.didVertSplit = false;
+    }
+
     return false;
   }
 
@@ -818,7 +834,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-#if FASTTT_TH
       if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostHorzSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostHorzSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
@@ -830,7 +845,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
           return false;
         }
       }
-#endif
       break;
     case CU_TRIV_SPLIT:
       if( cuECtx.didVertSplit && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
@@ -852,7 +866,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-#if FASTTT_TH
       if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostVertSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostVertSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
@@ -864,7 +877,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
           return false;
         }
       }
-#endif
       break;
     default:
       THROW( "Only CU split modes are governed by the EncModeCtrl" );
@@ -931,9 +943,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   {
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
-    if (m_pcEncCfg->m_FastInferMerge && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+    if (m_pcEncCfg->m_FastInferMerge && !slice.isIntra() && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
-      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+      if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;
@@ -979,7 +991,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     if( cuECtx.bestCS && cuECtx.bestCU && cuECtx.interHad )
     {
       // Get SATD threshold from best Inter-CU
-      if (!cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast && !cs.slice->disableSATDForRd)
+      if( !cs.slice->isIRAP() && m_pcEncCfg->m_usePbIntraFast )
       {
         const DFunc dfunc = DF_HAD;
         DistParam distParam = m_pcRdCost->setDistParam( cs.getOrgBuf( COMP_Y ), cuECtx.bestCS->getPredBuf( COMP_Y ), cs.sps->bitDepths[ CH_L ], dfunc );
@@ -1020,7 +1032,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       {
         if (m_pcEncCfg->m_FastInferMerge)
         {
-          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+          if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;
@@ -1085,12 +1097,10 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   CodedCUInfo    &relatedCU   = getBlkInfo( partitioner.currArea() );
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
 
-#if FASTTT_TH
   if (m_pcEncCfg->m_fastTTSplit)
   {
     cuECtx.bestCostBeforeSplit = cuECtx.bestCS->cost;
   }
-#endif
 
   setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -53,6 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "dtrace_next.h"
 #include "CommonDef.h"
 #include "Unit.h"
+#include "UnitTools.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -158,6 +155,26 @@ inline void dtraceUnitComp( DTRACE_CHANNEL channel, CPelUnitBuf& pelUnitBuf, con
   DTRACE_BLOCK( g_trace_ctx, channel, piReco, uiStride, uiWidth, uiHeight );
 }
 
+inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
+{
+  DTRACE( trace_ctx, D_MOT_FIELD, "CU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
+  const CMotionBuf mb = cu.getMotionBuf();
+  for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
+  {
+    RefPicList eListIdx = RefPicList( listIdx );
+    for( int y = 0, i = 0; y < cu.lheight(); y += 4 )
+    {
+      for( int x = 0; x < cu.lwidth(); x += 4, i++ )
+      {
+        const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
+        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );
+      }
+      DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+    }
+    DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+  }
+}
+
 inline void dtraceCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelUnitBuf& pelUnitBuf, const Area* parea = NULL )
 {
   const Area& area = parea ? *parea : cs.area.Y();
@@ -184,32 +201,39 @@ inline void dtraceCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingS
 inline void dtraceCCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelBuf& pelBuf, ComponentID compId, const Area* parea = NULL )
 {
   const Area& area = parea ? *parea : cs.area.Y();
-  DTRACE( trace_ctx, channel, "CRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,comp %d Checksum(%x)\n",
+  DTRACE( trace_ctx, channel, "CCRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,comp %d Checksum(%x)\n",
       DTRACE_GET_COUNTER( g_trace_ctx, channel ),
       cs.slice->poc,
       area.x, area.y, area.width, area.height, compId,
       calcCheckSum( pelBuf, cs.sps->bitDepths[ toChannelType(compId) ]));
 }
 
-inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
+
+inline void dtraceAreaCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const UnitArea& ctuArea )
 {
-  DTRACE( trace_ctx, D_MOT_FIELD, "CU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
-  const CMotionBuf mb = cu.getMotionBuf();
-  for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
+  dtraceCRC( g_trace_ctx, channel, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+
+  for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
   {
-    RefPicList eListIdx = RefPicList( listIdx );
-    for( int y = 0, i = 0; y < cu.lheight(); y += 4 )
+    if( currCU.Y().valid() )
     {
-      for( int x = 0; x < cu.lwidth(); x += 4, i++ )
-      {
-        const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
-        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );
-      }
-      DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+      dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
     }
-    DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+  }
+
+  if( cs.pcv->chrFormat != VVENC_CHROMA_400 )
+  {
+    for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+    {
+      if( currCU.Cb().valid() )
+      {
+        dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+        dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+      }
+    }
   }
 }
+
 
 #define DTRACE_PEL_BUF(...)              dtracePelBuf( __VA_ARGS__ )
 #define DTRACE_COEFF_BUF(...)            dtraceCoeffBuf( __VA_ARGS__ )
@@ -218,9 +242,10 @@ inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 #define DTRACE_COEFF_BUF_COND(_cond,...) { if((_cond)) dtraceCoeffBuf( __VA_ARGS__ ); }
 #define DTRACE_BLOCK_REC_COND(_cond,...) { if((_cond)) dtraceBlockRec( __VA_ARGS__ ); }
 #define DTRACE_UNIT_COMP(...)            dtraceUnitComp( __VA_ARGS__ )
+#define DTRACE_MOT_FIELD(...)            dtraceMotField( __VA_ARGS__ )
 #define DTRACE_CRC(...)                  dtraceCRC( __VA_ARGS__ )
 #define DTRACE_CCRC(...)                 dtraceCCRC( __VA_ARGS__ )
-#define DTRACE_MOT_FIELD(...)            dtraceMotField( __VA_ARGS__ )
+#define DTRACE_AREA_CRC(...)             dtraceAreaCRC( __VA_ARGS__ )
 
 #else
 
@@ -231,10 +256,10 @@ inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 #define DTRACE_COEFF_BUF_COND(...)
 #define DTRACE_BLOCK_REC_COND(...)
 #define DTRACE_UNIT_COMP(...)
+#define DTRACE_MOT_FIELD(...)
 #define DTRACE_CRC(...)
 #define DTRACE_CCRC(...)
-#define DTRACE_MOT_FIELD(...)
-
+#define DTRACE_AREA_CRC(...)
 #endif
 
 } // namespace vvenc

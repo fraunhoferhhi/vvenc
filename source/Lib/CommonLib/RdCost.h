@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -68,7 +64,8 @@ class DistParam;
 // ====================================================================================================================
 
 // for function pointer
-typedef Distortion (*FpDistFunc) (const DistParam&);
+typedef Distortion( *FpDistFunc   )( const DistParam& );
+typedef void      ( *FpDistFuncX5 )( const DistParam&, Distortion*, bool );
 
 // ====================================================================================================================
 // Class definition
@@ -80,31 +77,30 @@ class DistParam
 public:
   CPelBuf               org;
   CPelBuf               cur;
-  FpDistFunc            distFunc;
+  FpDistFunc            distFunc  = nullptr;
+  FpDistFuncX5          dmvrSadX5 = nullptr;
 #if ENABLE_MEASURE_SEARCH_SPACE
-  FpDistFunc            xDistFunc;
+  FpDistFunc            xDistFunc = nullptr;
 #endif
-  int                   bitDepth;
-  int                   subShift;
-  ComponentID           compID;
-  bool                  applyWeight;     // whether weighted prediction is used or not
-  Distortion            maximumDistortionForEarlyExit; /// During cost calculations, if distortion exceeds this value, cost calculations may early-terminate.
-  const WPScalingParam* wpCur;           // weighted prediction scaling parameters for current ref
-  const CPelBuf*        orgLuma;
+  int                   bitDepth    = 0;
+  int                   subShift    = 0;
+  ComponentID           compID      = MAX_NUM_COMP;
+  bool                  applyWeight = false;     // whether weighted prediction is used or not
+  Distortion            maximumDistortionForEarlyExit = MAX_DISTORTION; /// During cost calculations, if distortion exceeds this value, cost calculations may early-terminate.
+  const WPScalingParam* wpCur   = nullptr;           // weighted prediction scaling parameters for current ref
+  const CPelBuf*        orgLuma = nullptr;
 
-  const Pel*            mask;
-  int                   maskStride;
-  int                   stepX;
-  int                   maskStride2;
+  const Pel*            mask        = nullptr;
+  int                   maskStride  = 0;
+  int                   stepX       = 0;
+  int                   maskStride2 = 0;
+
+  DistParam() = default;
 
   DistParam( const CPelBuf& _org, const CPelBuf& _cur,  FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
-  : org(_org), cur(_cur), distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID), applyWeight( false )
-    ,maximumDistortionForEarlyExit( MAX_DISTORTION ), wpCur( nullptr ), orgLuma( nullptr)
-  { }
-
-  DistParam() : org(), cur(), bitDepth( 0 ), subShift( 0 ), compID( MAX_NUM_COMP ), applyWeight( false )
-  ,maximumDistortionForEarlyExit( MAX_DISTORTION ), wpCur( nullptr ), orgLuma( nullptr)
-  { }
+    : org(_org), cur(_cur), distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
+  {
+  }
 };
 
 /// RD cost computation class
@@ -114,6 +110,7 @@ private:
   // for distortion
 
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
+  FpDistFuncX5            m_afpDistortFuncX5[2]; // [eDFunc]
   Distortion           ( *m_wtdPredPtr[2] )  ( const DistParam& dp, ChromaFormat chmFmt, const uint32_t *lumaWeights );
   Distortion           ( *m_fxdWtdPredPtr )  ( const DistParam& dp, uint32_t fixedWeight );
   vvencCostMode           m_costMode;
@@ -160,7 +157,7 @@ public:
     return ( useUnadjustedLambda ? m_DistScaleUnadjusted : m_DistScale ) * double( distortion ) + double( fracBits );
   }
 
-  void          setDistParam        ( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, bool useHadamard = false );
+  void          setDistParam        ( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, int useHadamard = 0 );
   DistParam     setDistParam        ( const CPelBuf& org, const CPelBuf& cur, int bitDepth, DFunc dfunc );
   DistParam     setDistParam        ( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift, bool isDMVR = false );
   void          setDistParamGeo     ( DistParam &rcDP, const CPelBuf& org, const Pel *piRefY, int iRefStride, const Pel *mask, int iMaskStride, int stepX, int iMaskStride2, int bitDepth, ComponentID compID );
@@ -191,7 +188,7 @@ public:
 #endif
   }
   Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return Distortion( m_motionLambda * getBitsOfVectorWithPredictor(x, y, imvShift )); }
-  uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x << m_iCostScale) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y << m_iCostScale) - m_mvPredictor.ver)>>imvShift); }
+  uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x * (1 << m_iCostScale)) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y * (1 << m_iCostScale)) - m_mvPredictor.ver)>>imvShift); }
 
   void           saveUnadjustedLambda ();
   void           setReshapeInfo       ( uint32_t type, int lumaBD, ChromaFormat cf )   { m_signalType = type; m_lumaBD = lumaBD; m_cf = cf; }
@@ -225,8 +222,12 @@ private:
   static Distortion xGetSAD128        ( const DistParam& pcDtParam );
   static Distortion xGetSADwMask      ( const DistParam &pcDtParam );
   
+  static void       xGetSAD8X5        ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos );
+  static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos );
+  
   static Distortion xCalcHADs2x2      ( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur );
   static Distortion xGetHAD2SADs      ( const DistParam& pcDtParam );
+  template<bool fastHad>
   static Distortion xGetHADs          ( const DistParam& pcDtParam );
 
 #ifdef TARGET_SIMD_X86
@@ -240,7 +241,12 @@ private:
   template<int iWidth, X86_VEXT vext>
   static Distortion xGetSAD_NxN_SIMD( const DistParam& pcDtParam );
 
-  template<X86_VEXT vext>
+  template <X86_VEXT vext>
+  static void xGetSADX5_8xN_SIMD    ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
+  template <X86_VEXT vext>
+  static void xGetSADX5_16xN_SIMD   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
+
+  template<X86_VEXT vext, bool fastHad>
   static Distortion xGetHADs_SIMD   ( const DistParam& pcDtParam );
   template<X86_VEXT vext>
   static Distortion xGetHAD2SADs_SIMD( const DistParam &rcDtParam );

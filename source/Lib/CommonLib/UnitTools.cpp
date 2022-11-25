@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -289,23 +285,27 @@ uint32_t CU::getCtuAddr( const CodingUnit &cu )
 
 int CU::predictQP( const CodingUnit& cu, const int prevQP )
 {
-  const CodingStructure &cs = *cu.cs;
-
-  uint32_t  ctuRsAddr = getCtuAddr( cu );
-  uint32_t  ctuXPosInCtus = ctuRsAddr % cs.pcv->widthInCtus;
-  if ( ctuXPosInCtus == 0 &&
-      !( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) &&
-      !( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) && 
-      ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType) != NULL ) && 
-      CU::isSameSliceAndTile( *cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType), cu ) )
+  const ChannelType      chType   = cu.chType;
+  const CodingStructure& cs       = *cu.cs;
+  const Slice&           slice    = *cs.slice;
+  const bool             inCtuA   = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) );
+  const bool             inCtuL   = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) );
+  const CodingUnit*      cuAbove  =          cs.getCURestricted( cu.blocks[chType].pos().offset( 0, -1 ), cu, chType );
+  const CodingUnit*      cuLeft   = inCtuL ? cs.getCURestricted( cu.blocks[chType].pos().offset( -1, 0 ), cu, chType ) : nullptr;
+  
+  const uint32_t ctuRsAddr       = getCtuAddr( cu );
+  const uint32_t ctuXPosInCtus   = ctuRsAddr % cs.pcv->widthInCtus;
+  const uint32_t tileXPosInCtus  = slice.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]];
+  
+  if( ctuXPosInCtus == tileXPosInCtus && !inCtuL && !inCtuA && cuAbove )
   {
-    return ( ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType ) )->qp );
+    return cuAbove->qp;
   }
   else
   {
-    const int a = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType))->qp : prevQP;
-    const int b = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( -1, 0 ), cu.chType, cu.treeType))->qp : prevQP;
-
+    const int a = inCtuA ? cuAbove->qp : prevQP;
+    const int b = inCtuL ? cuLeft->qp  : prevQP;
+  
     return ( a + b + 1 ) >> 1;
   }
 }
@@ -1296,7 +1296,7 @@ int convertMvFixedToFloat(int32_t val)
     int round = (1 << scale) >> 1;
     int n     = (val + round) >> scale;
     exponent  = scale + ((n ^ sign) >> (MV_MANTISSA_BITCOUNT - 1));
-    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign << (MV_MANTISSA_BITCOUNT - 1));
+    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign * (1 << (MV_MANTISSA_BITCOUNT - 1)));
   }
   else
   {
@@ -1304,14 +1304,14 @@ int convertMvFixedToFloat(int32_t val)
     mantissa = val;
   }
 
-  return exponent | (mantissa << MV_EXPONENT_BITCOUNT);
+  return exponent | (mantissa * (1 << MV_EXPONENT_BITCOUNT));
 }
 
 int convertMvFloatToFixed(int val)
 {
   int exponent = val & MV_EXPONENT_MASK;
   int mantissa = val >> MV_EXPONENT_BITCOUNT;
-  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) << (exponent - 1);
+  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) * (1 << (exponent - 1));
 }
 
 int roundMvComp(int x)
@@ -1898,12 +1898,12 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
   int shift = MAX_CU_DEPTH;
   int iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY;
 
-  iDMvHorX = (mvRT - mvLT).hor << (shift - Log2(neiW));
-  iDMvHorY = (mvRT - mvLT).ver << (shift - Log2(neiW));
+  iDMvHorX = (mvRT - mvLT).hor * (1<< (shift - Log2(neiW)));
+  iDMvHorY = (mvRT - mvLT).ver * (1<< (shift - Log2(neiW)));
   if (cuNeighbour->affineType == AFFINEMODEL_6PARAM && !isTopCtuBoundary)
   {
-    iDMvVerX = (mvLB - mvLT).hor << (shift - Log2(neiH));
-    iDMvVerY = (mvLB - mvLT).ver << (shift - Log2(neiH));
+    iDMvVerX = (mvLB - mvLT).hor * (1<< (shift - Log2(neiH)));
+    iDMvVerY = (mvLB - mvLT).ver * (1<< (shift - Log2(neiH)));
   }
   else
   {
@@ -1911,8 +1911,8 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
     iDMvVerY = iDMvHorX;
   }
 
-  int iMvScaleHor = mvLT.hor << shift;
-  int iMvScaleVer = mvLT.ver << shift;
+  int iMvScaleHor = mvLT.hor * (1<< shift);
+  int iMvScaleVer = mvLT.ver * (1<< shift);
   int horTmp, verTmp;
 
   // v0
@@ -2322,8 +2322,8 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
         break;
 
       case 5: // 5 : LT, LB
-        vx = (cMv[l][0].hor << shift) + ((cMv[l][2].ver - cMv[l][0].ver) << shiftHtoW);
-        vy = (cMv[l][0].ver << shift) - ((cMv[l][2].hor - cMv[l][0].hor) << shiftHtoW);
+        vx = (cMv[l][0].hor *(1<< shift)) + ((cMv[l][2].ver - cMv[l][0].ver) * (1<< shiftHtoW));
+        vy = (cMv[l][0].ver *(1<< shift)) - ((cMv[l][2].hor - cMv[l][0].hor) * (1<< shiftHtoW));
         roundAffineMv(vx, vy, shift);
         cMv[l][1].set(vx, vy);
         cMv[l][1].clipToStorageBitDepth();
@@ -2882,7 +2882,7 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
   }
 }
 
-void CU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefList)
+void CU::setAllAffineMvField(CodingUnit& cu, const MvField *mvField, RefPicList eRefList)
 {
   // Set Mv
   Mv mv[3];
@@ -2925,13 +2925,13 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
   int deltaMvVerY = 0;
   if (!SameMV)
   {
-    deltaMvHorX = (affRT - affLT).hor << (shift - Log2(width));
-    deltaMvHorY = (affRT - affLT).ver << (shift - Log2(width));
+    deltaMvHorX = (affRT - affLT).hor * (1<< (shift - Log2(width)));
+    deltaMvHorY = (affRT - affLT).ver * (1<< (shift - Log2(width)));
     int height = cu.Y().height;
     if (cu.affineType == AFFINEMODEL_6PARAM)
     {
-      deltaMvVerX = (affLB - affLT).hor << (shift - Log2(height));
-      deltaMvVerY = (affLB - affLT).ver << (shift - Log2(height));
+      deltaMvVerX = (affLB - affLT).hor * (1<< (shift - Log2(height)));
+      deltaMvVerY = (affLB - affLT).ver * (1<< (shift - Log2(height)));
     }
     else
     {
@@ -2940,8 +2940,8 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
     }
   }
 
-  int mvScaleHor = affLT.hor << shift;
-  int mvScaleVer = affLT.ver << shift;
+  int mvScaleHor = affLT.hor * (1<< shift);
+  int mvScaleVer = affLT.ver * (1<< shift);
   int blockWidth = AFFINE_MIN_BLOCK_SIZE;
   int blockHeight = AFFINE_MIN_BLOCK_SIZE;
   const int halfBW = blockWidth >> 1;
@@ -3234,10 +3234,10 @@ void CU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t sp
   }
   for (int y = 0; y < mb.height; y++)
   {
-    lookUpY = (((4 * y + offsetY) << 1) + 5) * g_Dis[distanceY];
+    lookUpY = (2 * (4 * y + offsetY) + 5) * g_Dis[distanceY];
     for (int x = 0; x < mb.width; x++)
     {
-      motionIdx = (((4 * x + offsetX) << 1) + 5) * g_Dis[distanceX] + lookUpY;
+      motionIdx = (2 * (4 * x + offsetX) + 5) * g_Dis[distanceX] + lookUpY;
       tpmMask   = abs(motionIdx) < 32 ? 2 : (motionIdx <= 0 ? (1 - isFlip) : isFlip);
       if (tpmMask == 2)
       {

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -244,7 +240,8 @@ void HLSyntaxReader::parseFillerData(InputBitstream* bs, uint32_t &fdSize)
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-HLSyntaxReader::HLSyntaxReader()
+HLSyntaxReader::HLSyntaxReader(MsgLog& msg)
+: VLCReader(msg)
 {
 }
 
@@ -784,14 +781,7 @@ void HLSyntaxReader::parseAlfAps( APS* aps )
   {
     if (ccAlfParam.newCcAlfFilter[ccIdx])
     {
-      if (MAX_NUM_CC_ALF_FILTERS > 1)
-      {
-        READ_UVLC(code, ccIdx == 0 ? "alf_cc_cb_filters_signalled_minus1" : "alf_cc_cr_filters_signalled_minus1");
-      }
-      else
-      {
-        code = 0;
-      }
+      READ_UVLC(code, ccIdx == 0 ? "alf_cc_cb_filters_signalled_minus1" : "alf_cc_cr_filters_signalled_minus1");
       ccAlfParam.ccAlfFilterCount[ccIdx] = code + 1;
 
       for (int filterIdx = 0; filterIdx < ccAlfParam.ccAlfFilterCount[ccIdx]; filterIdx++)
@@ -1493,7 +1483,7 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
   if(pcSPS->ptlDpbHrdParamsPresent)
   {
 
-    READ_FLAG( pcSPS->hrdParametersPresent, "sps_general_hrd_params_present_flag");
+    READ_FLAG( pcSPS->hrdParametersPresent, "sps_timing_hrd_params_present_flag");
     if( pcSPS->hrdParametersPresent )
     {
       parseGeneralHrdParameters(&pcSPS->generalHrdParams);
@@ -2637,15 +2627,15 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   pcSlice->saoEnabled[CH_L]                 = picHeader->saoEnabled[CH_L];
   pcSlice->saoEnabled[CH_C]                 = picHeader->saoEnabled[CH_C];
 
-  pcSlice->tileGroupAlfEnabled[COMP_Y]      = picHeader->alfEnabled[COMP_Y];
-  pcSlice->tileGroupAlfEnabled[COMP_Cb]     = picHeader->alfEnabled[COMP_Cb];
-  pcSlice->tileGroupAlfEnabled[COMP_Cr]     = picHeader->alfEnabled[COMP_Cr];
-  pcSlice->tileGroupNumAps                  = picHeader->numAlfAps;
-  pcSlice->tileGroupChromaApsId             = picHeader->alfChromaApsId;
-  pcSlice->tileGroupCcAlfCbEnabled          = picHeader->ccalfEnabled[COMP_Cb];
-  pcSlice->tileGroupCcAlfCrEnabled          = picHeader->ccalfEnabled[COMP_Cr];
-  pcSlice->tileGroupCcAlfCbApsId            = picHeader->ccalfCbApsId;
-  pcSlice->tileGroupCcAlfCrApsId            = picHeader->ccalfCrApsId;
+  pcSlice->alfEnabled[COMP_Y]      = picHeader->alfEnabled[COMP_Y];
+  pcSlice->alfEnabled[COMP_Cb]     = picHeader->alfEnabled[COMP_Cb];
+  pcSlice->alfEnabled[COMP_Cr]     = picHeader->alfEnabled[COMP_Cr];
+  pcSlice->numAps                  = picHeader->numAlfAps;
+  pcSlice->chromaApsId             = picHeader->alfChromaApsId;
+  pcSlice->ccAlfCbEnabled          = picHeader->ccalfEnabled[COMP_Cb];
+  pcSlice->ccAlfCrEnabled          = picHeader->ccalfEnabled[COMP_Cr];
+  pcSlice->ccAlfCbApsId            = picHeader->ccalfCbApsId;
+  pcSlice->ccAlfCrApsId            = picHeader->ccalfCrApsId;
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cb - 1] = picHeader->ccalfEnabled[COMP_Cb];
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cr - 1] = picHeader->ccalfEnabled[COMP_Cr];
 
@@ -2657,14 +2647,14 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   if (sps->alfEnabled && !pps->alfInfoInPh)
   {
     READ_FLAG(uiCode, "sh_alf_enabled_flag");
-    pcSlice->tileGroupAlfEnabled[COMP_Y] = uiCode;
+    pcSlice->alfEnabled[COMP_Y] = uiCode;
     bool alfCbEnabledFlag = false;
     bool alfCrEnabledFlag = false;
     if (uiCode)
     {
       READ_CODE(3, uiCode, "sh_num_alf_aps_ids_luma");
       int numAps = uiCode;
-      pcSlice->tileGroupNumAps = (numAps);
+      pcSlice->numAps = (numAps);
       std::vector<int> apsId(numAps, -1);
       for (int i = 0; i < numAps; i++)
       {
@@ -2685,7 +2675,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
       if (alfCbEnabledFlag || alfCrEnabledFlag)
       {
         READ_CODE(3, uiCode, "sh_alf_aps_id_chroma");
-        pcSlice->tileGroupChromaApsId = uiCode;
+        pcSlice->chromaApsId = uiCode;
         APS* APStoCheckChroma = parameterSetManager->getAPS(uiCode, ALF_APS);
         CHECK(APStoCheckChroma->alfParam.newFilterFlag[CH_C] != 1, "bitstream conformance error, alf_chroma_filter_signal_flag shall be equal to 1");
         pcSlice->ccAlfFilterParam = APStoCheckChroma->ccAlfParam; 
@@ -2693,29 +2683,29 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
     }
     else
     {
-      pcSlice->tileGroupNumAps = (0);
+      pcSlice->numAps = (0);
     }
-    pcSlice->tileGroupAlfEnabled[COMP_Cb] = alfCbEnabledFlag;
-    pcSlice->tileGroupAlfEnabled[COMP_Cr] = alfCrEnabledFlag;
+    pcSlice->alfEnabled[COMP_Cb] = alfCbEnabledFlag;
+    pcSlice->alfEnabled[COMP_Cr] = alfCrEnabledFlag;
 
-    if (sps->ccalfEnabled && pcSlice->tileGroupAlfEnabled[COMP_Y])
+    if (sps->ccalfEnabled && pcSlice->alfEnabled[COMP_Y])
     {
-      READ_FLAG(pcSlice->tileGroupCcAlfCbEnabled, "sh_cc_alf_cb_enabled_flag");
+      READ_FLAG(pcSlice->ccAlfCbEnabled, "sh_cc_alf_cb_enabled_flag");
 
-      if (pcSlice->tileGroupCcAlfCbEnabled)
+      if (pcSlice->ccAlfCbEnabled)
       {
         // parse APS ID
         READ_CODE(3, uiCode, "sh_cc_alf_cb_aps_id");
-        pcSlice->tileGroupCcAlfCbApsId = (uiCode);
+        pcSlice->ccAlfCbApsId = (uiCode);
         pcSlice->ccAlfFilterParam = parameterSetManager->getAPS( uiCode, ALF_APS )->ccAlfParam;
       }
       // Cr
-      READ_FLAG(pcSlice->tileGroupCcAlfCrEnabled, "sh_cc_alf_cr_enabled_flag");
-      if (pcSlice->tileGroupCcAlfCrEnabled)
+      READ_FLAG(pcSlice->ccAlfCrEnabled, "sh_cc_alf_cr_enabled_flag");
+      if (pcSlice->ccAlfCrEnabled)
       {
         // parse APS ID
         READ_CODE(3, uiCode, "sh_cc_alf_cr_aps_id");
-        pcSlice->tileGroupCcAlfCrApsId = (uiCode);
+        pcSlice->ccAlfCrApsId = (uiCode);
         pcSlice->ccAlfFilterParam = parameterSetManager->getAPS( uiCode, ALF_APS )->ccAlfParam;
       }
     }
@@ -3089,10 +3079,10 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   {
     if(pps->deblockingFilterOverrideEnabled&& !pps->dbfInfoInPh)
     {
-      READ_FLAG ( slice->deblockingFilterOverrideFlag, "sh_deblocking_filter_params_present_flag" );
+      READ_FLAG ( slice->deblockingFilterOverride, "sh_deblocking_filter_params_present_flag" );
     }
 
-    if(slice->deblockingFilterOverrideFlag)
+    if(slice->deblockingFilterOverride)
     {
       if (!pps->deblockingFilterDisabled )
       {
@@ -3493,8 +3483,9 @@ void HLSyntaxReader::parseRemainingBytes( bool noTrailingBytesExpected )
       uint32_t trailingNullByte=m_pcBitstream->readByte();
       if (trailingNullByte!=0)
       {
-        msg( VVENC_ERROR, "Trailing byte should be 0, but has value %02x\n", trailingNullByte);
-        THROW("Invalid trailing '0' byte");
+        std::stringstream css;
+        css << "Invalid trailing '0' byte - trailing byte should be 0, but has value " << std::setfill('0') << std::setw(2) << trailingNullByte << std::endl;
+        THROW( css.str() );
       }
     }
   }

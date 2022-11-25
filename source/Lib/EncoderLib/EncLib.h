@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -50,9 +46,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "EncGOP.h"
-#include "EncHRD.h"
+#include "EncStage.h"
 #include "CommonLib/MCTF.h"
-#include "CommonLib/Nal.h"
 #include "vvenc/vvencCfg.h"
 
 #include <mutex>
@@ -62,88 +57,71 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
 // ====================================================================================================================
 // Class definition
 // ====================================================================================================================
 
-class YUVWriterIf;
+
 class NoMallocThreadPool;
+class MsgLog;
+class GOPCfg;
 
 /// encoder class
 class EncLib
 {
 private:
-  int                       m_numPicsRcvd;
-  int                       m_numPicsInQueue;
-  int                       m_numPicsCoded;
-  int                       m_pocEncode;
-  int                       m_pocRecOut;
-  int                       m_GOPSizeLog2;
-  int                       m_TicksPerFrameMul4;
-  int                       m_numPassInitialized;
+  MsgLog&                    msg;
 
-  const VVEncCfg            m_cEncCfg;
-  VVEncCfg                  m_cBckCfg;
-  EncGOP*                   m_cGOPEncoder;
-  EncHRD                    m_cEncHRD;
-  MCTF                      m_MCTF;
-  PicList                   m_cListPic;
+  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
+  void*                                         m_recYuvBufCtx;
 
-  std::function<void( void*, vvencYUVBuffer* )> m_RecYUVBufferCallback;
-  void*                     m_RecYUVBufferCallbackCtx;
+  const VVEncCfg             m_encCfg;
+  const VVEncCfg             m_orgCfg;
+  VVEncCfg                   m_firstPassCfg;
+  GOPCfg*                    m_gopCfg;
+  RateCtrl*                  m_rateCtrl;
+  MCTF*                      m_MCTF;
+  EncGOP*                    m_preEncoder;
+  EncGOP*                    m_gopEncoder;
+  std::vector<EncStage*>     m_encStages;
+  std::list<PicShared*>      m_picSharedList;
+  std::deque<PicShared*>     m_prevSharedQueue;
+  PicShared*                 m_prevSharedTL0;
 
-  NoMallocThreadPool*       m_threadPool;
-  RateCtrl*                 m_pcRateCtrl;                          ///< Rate control class
+  NoMallocThreadPool*        m_threadPool;
 
-  VPS                       m_cVPS;
-  DCI                       m_cDCI;
-  ParameterSetMap<SPS>      m_spsMap;
-  ParameterSetMap<PPS>      m_ppsMap;
-
-  XUCache                   m_shrdUnitCache;
-  std::mutex                m_unitCacheMutex;
-
-  std::vector<int>          m_pocToGopId;
-  std::vector<int>          m_nextPocOffset;
+  int                        m_picsRcvd;
+  int                        m_passInitialized;
+  int                        m_maxNumPicShared;
+  bool                       m_accessUnitOutputStarted;
+  bool                       m_firstFlushDone;
+  std::mutex                 m_stagesMutex;
+  std::condition_variable    m_stagesCond;
+  std::deque<AccessUnitList> m_AuList;
 
 public:
-  EncLib();
+  EncLib( MsgLog& logger );
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const VVEncCfg& encCfg );
+  void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );
+  void     initEncoderLib      ( const vvenc_config& encCfg );
   void     initPass            ( int pass, const char* statsFName );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
-
-  void     setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
+  void     getParameterSets    ( AccessUnitList& au );
+  int      getCurPass          () const;
 
 private:
   void     xUninitLib          ();
-  void     xResetLib           ();
-  void     xSetRCEncCfg        ( int pass );
+  void     xInitRCCfg          ();
 
-  int      xGetGopIdFromPoc    ( int poc ) const { return m_pocToGopId[ poc % m_cEncCfg.m_GOPSize ]; }
-  int      xGetNextPocICO      ( int poc, bool flush, int max, bool altGOP ) const;
-  int      xGetFirstEncPOC     ( int max ) const;
-  void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList, bool altGOP );
-  void     xInitPicture        ( Picture& pic, int picNum, const PPS& pps, const SPS& sps, const VPS& vps, const DCI& dci );
-  void     xDeletePicBuffer    ();
-  Picture* xGetNewPicBuffer    ( const PPS& pps, const SPS& sps );            ///< get picture buffer which will be processed. If ppsId<0, then the ppsMap will be queried for the first match.
-  Picture* xGetPictureBuffer   ( int poc );
+  PicShared* xGetFreePicShared();
+  void     xAssignPrevQpaBufs( PicShared* picShared );
 
-  void     xInitVPS            ( VPS &vps )                                  const; ///< initialize VPS from encoder options
-  void     xInitDCI            ( DCI &dci, const SPS &sps, const int dciId ) const; ///< initialize DCI from encoder options
-  void     xInitConstraintInfo ( ConstraintInfo &ci )                        const;  ///< initialize SPS from encoder options
-  void     xInitSPS            ( SPS &sps )                                  const; ///< initialize SPS from encoder options
-  void     xInitPPS            ( PPS &pps, const SPS &sps )                  const;  ///< initialize PPS from encoder options
-  void     xInitPPSforTiles    ( PPS &pps, const SPS &sps ) const;
-
-  void     xInitRPL            ( SPS &sps ) const;
-  void     xInitHrdParameters  ( SPS &sps );
-  void     xOutputRecYuv       ();
-  void     xDetectScreenC      ( Picture& pic, PelUnitBuf yuvOrgBuf );
-};
+  void     xDetectScc          ( PicShared* picShared );
+ };
 
 } // namespace vvenc
 

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -318,14 +314,11 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
     const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
     const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
 
-    int filterIdx =
-      ( filterControl == nullptr )
-      ? -1/*selectedFilterIdx*/
-      : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
     bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
     if( !skipFiltering )
     {
-
       const ClpRngs& clpRngs      = cs.slice->clpRngs;
       const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
       const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
@@ -387,8 +380,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
             const Area blkSrc( 0, 0, w, h );
 
             const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
-            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-              m_alfVBLumaPos );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
 
             xStart = xEnd;
           }
@@ -401,8 +393,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
         Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
         Area blkSrc( xPos, yPos, width, height );
 
-        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight,
-          m_alfVBLumaPos );
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
     }
   }
@@ -410,7 +401,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
 
 void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 {
-  if (!cs.slice->tileGroupAlfEnabled[COMP_Y] && !cs.slice->tileGroupAlfEnabled[COMP_Cb] && !cs.slice->tileGroupAlfEnabled[COMP_Cr])
+  if (!cs.slice->alfEnabled[COMP_Y] && !cs.slice->alfEnabled[COMP_Cb] && !cs.slice->alfEnabled[COMP_Cr])
   {
     return;
   }
@@ -449,7 +440,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
       const CodingUnit *cu = cs.getCU( Position(xPos, yPos), CH_L, TREE_D );
 
       // skip this CTU if ALF is disabled
-      if (!cu->slice->tileGroupAlfEnabled[COMP_Y] && !cu->slice->tileGroupAlfEnabled[COMP_Cb] && !cu->slice->tileGroupAlfEnabled[COMP_Cr])
+      if (!cu->slice->alfEnabled[COMP_Y] && !cu->slice->alfEnabled[COMP_Cb] && !cu->slice->alfEnabled[COMP_Cr])
       {
         ctuIdx++;
         continue;
@@ -459,7 +450,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
       if(ctuIdx == 0 || lastSliceIdx != cu->slice->sliceSubPicId || alfCtuFilterIndex==nullptr)
       {
         cs.slice = cu->slice;
-        reconstructCoeffAPSs(cs, true, cu->slice->tileGroupAlfEnabled[COMP_Cb] || cu->slice->tileGroupAlfEnabled[COMP_Cr], false);
+        reconstructCoeffAPSs(cs, true, cu->slice->alfEnabled[COMP_Cb] || cu->slice->alfEnabled[COMP_Cr], false);
         alfCtuFilterIndex = cu->slice->pic->m_alfCtbFilterIndex.data();
         m_ccAlfFilterParam = cu->slice->ccAlfFilterParam;
       }
@@ -532,7 +523,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
                 coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
                 clip = m_clipDefault;
               }
-              m_filter7x7Blk[1](m_classifier, recYuv, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+              m_filter7x7Blk[1]( m_classifier, recYuv, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
             }
 
             for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
@@ -546,8 +537,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
                 const Area blkSrc( 0, 0, w >> chromaScaleX, h >> chromaScaleY );
                 const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
                 uint8_t alt_num = m_ctuAlternative[compIdx][ctuIdx];
-                m_filter5x5Blk[1](m_classifier, recYuv, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx],
-                                  cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos);
+                m_filter5x5Blk[1]( m_classifier, recYuv, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
               }
               if (cu->slice->ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
               {
@@ -560,8 +550,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 
                   const int16_t *filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1][filterIdx - 1];
 
-                  m_filterCcAlf(recYuv.get(compID), buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs,
-                                m_alfVBLumaCTUHeight, m_alfVBLumaPos);
+                  m_filterCcAlf( recYuv.get( compID ), buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
                 }
               }
 
@@ -593,8 +582,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
             coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
             clip  = m_clipDefault;
           }
-          m_filter7x7Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs,
-                             m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+          m_filter7x7Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
         }
 
         for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
@@ -607,8 +595,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
           {
             Area blk( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
             uint8_t alt_num = m_ctuAlternative[compIdx][ctuIdx];
-            m_filter5x5Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num],
-                               clpRngs.comp[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos);
+            m_filter5x5Blk[1]( m_classifier, recYuv, tmpYuv, blk, blk, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
           }
           if (cu->slice->ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
           {
@@ -621,8 +608,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
 
               const int16_t *filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1][filterIdx - 1];
 
-              m_filterCcAlf(recYuv.get(compID), tmpYuv, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs,
-                            m_alfVBLumaCTUHeight, m_alfVBLumaPos);
+              m_filterCcAlf( recYuv.get( compID ), tmpYuv, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
             }
           }
         }
@@ -640,9 +626,9 @@ void AdaptiveLoopFilter::reconstructCoeffAPSs(CodingStructure& cs, bool luma, bo
   APS* curAPS;
   if (luma)
   {
-    for (int i = 0; i < cs.slice->tileGroupNumAps; i++)
+    for (int i = 0; i < cs.slice->numAps; i++)
     {
-      int apsIdx = cs.slice->tileGroupLumaApsId[i];
+      int apsIdx = cs.slice->lumaApsId[i];
       curAPS = aps[apsIdx];
       CHECK(curAPS == NULL, "invalid APS");
       alfParamTmp = curAPS->alfParam;
@@ -655,7 +641,7 @@ void AdaptiveLoopFilter::reconstructCoeffAPSs(CodingStructure& cs, bool luma, bo
   //chroma
   if (chroma)
   {
-    int apsIdxChroma = cs.slice->tileGroupChromaApsId;
+    int apsIdxChroma = cs.slice->chromaApsId;
     curAPS = aps[apsIdxChroma];
     m_alfParamChroma = &curAPS->alfParam;
     alfParamTmp = *m_alfParamChroma;
@@ -1378,10 +1364,10 @@ void AdaptiveLoopFilter::filterBlkCcAlf(const PelBuf &dstBuf, const CPelUnitBuf 
           sum += filterCoeff[6] * (srcCross[offset3 + jj2    ] - currSrcCross);
 
           sum = (sum + ((1 << m_scaleBits ) >> 1)) >> m_scaleBits;
-          const int offset = 1 << clpRngs.comp[compId].bd >> 1;
-          sum = ClipPel(sum + offset, clpRngs.comp[compId]) - offset;
+          const int offset = 1 << clpRngs[compId].bd >> 1;
+          sum = ClipPel(sum + offset, clpRngs[compId]) - offset;
           sum += srcSelf[jj];
-          srcSelf[jj] = ClipPel(sum, clpRngs.comp[compId]);
+          srcSelf[jj] = ClipPel(sum, clpRngs[compId]);
         }
       }
     }

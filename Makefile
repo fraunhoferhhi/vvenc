@@ -38,6 +38,10 @@ ifneq ($(address-sanitizer),)
 CONFIG_OPTIONS += -DVVENC_USE_ADDRESS_SANITIZER=$(address-sanitizer)
 endif
 
+ifneq ($(thread-sanitizer),)
+CONFIG_OPTIONS += -DVVENC_USE_THREAD_SANITIZER=$(thread-sanitizer)
+endif
+
 ifneq ($(enable-arch),)
 CONFIG_OPTIONS += -DVVENC_OPT_TARGET_ARCH=$(enable-arch)
 endif
@@ -60,6 +64,10 @@ endif
 
 ifneq ($(osx-arch),)
 CONFIG_OPTIONS += -DCMAKE_OSX_ARCHITECTURES=$(osx-arch)
+endif
+
+ifneq ($(toolchainfile),)
+CONFIG_OPTIONS += -DCMAKE_TOOLCHAIN_FILE=$(toolchainfile)
 endif
 
 ifeq ($(j),)
@@ -310,4 +318,3 @@ $(TARGETS_RELWITHDEBINFO_CLEAN_FIRST): $(BUILD_DIR-relwithdebinfo)
 ifeq ($(OS),Windows_NT)
 .NOTPARALLEL:
 endif
-

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+The copyright in this software is being made available under the Clear BSD
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -54,14 +50,20 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/ProfileLevelTier.h"
+#include "Utilities/MsgLog.h"
+#include "EncoderLib/GOPCfg.h"
 
 #include <math.h>
 #include <thread>
+
+#include "apputils/VVEncAppCfg.h"
+
 
 VVENC_NAMESPACE_BEGIN
 
 static bool checkCfgParameter( vvenc_config *cfg );
 static void checkCfgPicPartitioningParameter( vvenc_config *c );
+static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid );
 static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
@@ -308,10 +310,9 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->MCTF = 0;
   vvencMCTF->MCTFSpeed = 0;
   vvencMCTF->MCTFFutureReference = true;
-  vvencMCTF->MCTFNumLeadFrames = 0;
-  vvencMCTF->MCTFNumTrailFrames = 0;
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
+  vvencMCTF->MCTFUnitSize = -1;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
@@ -320,19 +321,32 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 {
   int i = 0;
 
-  //basic params
-  c->m_configDone                              = false;
-  c->m_confirmFailed                           = false;         ///< state variable
+  // internal params
+  c->m_configDone                              = false;         ///< state variable, Private context used for internal data ( do not change )
+  c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
+  c->m_msgFnc                                  = nullptr;
+  c->m_msgCtx                                  = nullptr;
 
-  c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
-  c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
-
-  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz)
-  c->m_FrameSkip                               = 0;             ///< number of skipped frames from the beginning
+  // core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
+  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
+  c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
   c->m_TicksPerSecond                          = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
 
+  c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
+
+  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input
+  c->m_inputBitDepth[1]                        =0;
+
+  c->m_numThreads                              = 0;             ///< number of worker threads
+
+  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
+  c->m_RCTargetBitrate                         = 0;
+
+  c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
+
+  // basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
   c->m_levelTier                               = vvencTier::VVENC_TIER_MAIN ;
   c->m_level                                   = vvencLevel::VVENC_LEVEL_AUTO;
@@ -340,21 +354,18 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraPeriod                             = 0;             ///< period of I-slice (random access period)
   c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
-  c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
+  c->m_GOPSize                                 = 32;            ///< GOP size
+  c->m_picReordering                           = 1;
 
-  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
-  c->m_usePerceptQPA                           = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+  c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
+  c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
 
-  c->m_RCTargetBitrate                         = 0;
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
+  c->m_LookAhead                               = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
-  c->m_numThreads                              = 0;             ///< number of worker threads
-
-  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input file
-  c->m_inputBitDepth[1]                        =0;
   c->m_internalBitDepth[0]                     =10;                                 ///< bit-depth codec operates at (input/output files will be converted)
   c->m_internalBitDepth[1]                     =0;
 
@@ -386,20 +397,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bitDepthConstraintValue                 = 10;
   c->m_intraOnlyConstraintFlag                 = false;
 
-  c->m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
   c->m_rewriteParamSets                        = true;                                 ///< Flag to enable rewriting of parameter sets at random access points
   c->m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   for( i = 0; i < VVENC_MAX_GOP; i++ )
   {
-    vvenc_RPLEntry_default( &c->m_RPLList0[i]);                                         ///< the RPL entries from the config file
-    vvenc_RPLEntry_default( &c->m_RPLList1[i]);                                         ///< the RPL entries from the config file
     vvenc_GOPEntry_default( &c->m_GOPList[i]);                                          ///< the coding structure entries from the config file
   }
-  memset(&c->m_maxDecPicBuffering,0, sizeof(c->m_maxDecPicBuffering));                ///< total number of pictures in the decoded picture buffer
-  memset(&c->m_maxNumReorderPics,0, sizeof(c->m_maxNumReorderPics));                  ///< total number of reorder pictures
-  c->m_maxTempLayer                            = 0;                                     ///< Max temporal layer
-  c->m_numRPLList0                             = 0;
-  c->m_numRPLList1                             = 0;
 
   c->m_useSameChromaQPTables                   = true;
 
@@ -461,7 +464,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_MinQT[2] = 4;
   c->m_maxMTTDepth                             = 3;
   c->m_maxMTTDepthI                            = 3;
-  c->m_maxMTTDepthIChroma                      = 3;
+  c->m_maxMTTDepthIChroma                      = -1;
 
   c->m_maxBT[0]=32;  c->m_maxBT[1]=128;  c->m_maxBT[2]=64;
   c->m_maxTT[0]=32;  c->m_maxTT[1]=64;  c->m_maxTT[2]=32;
@@ -473,6 +476,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
   c->m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
+  c->m_fastHad                                 = false;
   c->m_RDOQ                                    = 1;                                     ///< flag for using RD optimized quantization
   c->m_useRDOQTS                               = true;                                  ///< flag for using RD optimized quantization for transform skip
   c->m_useSelectiveRDOQ                        = false;                                 ///< flag for using selective RDOQ
@@ -485,12 +489,11 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
-  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_MODE3;
   c->m_useEarlyCU                              = 0;
   c->m_useFastDecisionForMerge                 = true;
 
   c->m_bDisableIntraCUsInInterSlices           = false;
-  c->m_bUseConstrainedIntraPred                = false;
   c->m_bFastUDIUseMPMEnabled                   = true;
   c->m_bFastMEForGenBLowDelayEnabled           = true;
 
@@ -514,7 +517,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
   c->m_motionEstimationSearchMethodSCC         = 0;
-  c->m_bRestrictMESampling                     = false;
   c->m_SearchRange                             = 96;
   c->m_bipredSearchRange                       = 4;
   c->m_minSearchWindow                         = 8;
@@ -522,6 +524,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
   c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
+  c->m_meReduceTap                             = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
   c->m_LMChroma                                = false;
@@ -556,7 +559,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useChromaTS                             = 0;
   c->m_useBDPCM                                = 0;
 
-  c->m_rprEnabledFlag                          = 1;
+  c->m_rprEnabledFlag                          = -1;
   c->m_resChangeInClvsEnabled                  = false;
   c->m_craAPSreset                             = false;
   c->m_rprRASLtoolSwitch                       = false;
@@ -575,8 +578,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset(&c->m_loopFilterBetaOffsetDiv2,0, sizeof(c->m_loopFilterBetaOffsetDiv2));
   memset(&c->m_loopFilterTcOffsetDiv2,0, sizeof(c->m_loopFilterTcOffsetDiv2));
 
-  c->m_deblockingFilterMetric                  = 0;
-
   c->m_bDisableLFCrossTileBoundaryFlag         = false;
   c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
@@ -588,7 +589,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_decodingParameterSetEnabled             = false;
   c->m_vuiParametersPresent                    = -1;
-  c->m_hrdParametersPresent                    = -1;
+  c->m_hrdParametersPresent                    = true;
   c->m_aspectRatioInfoPresent                  = false;
   c->m_aspectRatioIdc                          = 0;
   c->m_sarWidth                                = 0;
@@ -603,7 +604,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_chromaSampleLocType                     = 0;
   c->m_overscanInfoPresent                     = false;
   c->m_overscanAppropriateFlag                 = false;
-  c->m_videoSignalTypePresent                  = false;
   c->m_videoFullRangeFlag                      = false;
 
   memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));
@@ -618,22 +618,20 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ccalf                                   = false;
   c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;
+  c->m_alfUnitSize                             = -1;
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
-#if 1//QTBTT_SPEED3
   c->m_qtbttSpeedUpMode                        = 0;
-#endif 
-#if FASTTT_TH
   c->m_fastTTSplit                             = 0;
-#endif
 
   c->m_fastLocalDualTreeMode                   = 0;
 
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
+  c->m_tileParallelCtuEnc                      = true;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -643,7 +641,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numTileCols                             = 1;
   c->m_numTileRows                             = 1;
   c->m_numSlicesInPic                          = 1;
-  
+
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
   memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
@@ -662,9 +660,21 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
   memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
 
-  c->m_numIntraModesFullRD = -1;
-  c->m_reduceIntraChromaModesFullRD = false;
+  c->m_numIntraModesFullRD                     = -1;
+  c->m_reduceIntraChromaModesFullRD            = false;
 
+  c->m_treatAsSubPic                           = false;
+  c->m_explicitAPSid                           = 0;
+
+  c->m_leadFrames                              = 0;
+  c->m_trailFrames                             = 0;
+
+  c-> m_deblockLastTLayers                     = 0;
+  c->m_addGOP32refPics                         = false;
+
+  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
+  memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
+  memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
@@ -674,7 +684,10 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
 {
   if ( ! bflag )
     return false;
-  vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+  msg.log( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+
   c->m_confirmFailed = true;
   return true;
 }
@@ -688,40 +701,28 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_inputBitDepth[0] < 8 || c->m_inputBitDepth[0] > 16,                    "InputBitDepth must be at least 8" );
   vvenc_confirmParameter( c, c->m_inputBitDepth[0] != 8 && c->m_inputBitDepth[0] != 10,                  "Input bitdepth must be 8 or 10 bit" );
-  vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
+  vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,            "Internal bitdepth must be 8 or 10 bit" );
 
   vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
-  vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                 "TicksPerSecond must be in range from 1 to 27000000" );
-
-  int temporalRate   = c->m_FrameRate;
-  int temporalScale  = 1;
-
-  switch( c->m_FrameRate )
-  {
-  case 23: temporalRate = 24000; temporalScale = 1001; break;
-  case 29: temporalRate = 30000; temporalScale = 1001; break;
-  case 59: temporalRate = 60000; temporalScale = 1001; break;
-  default: break;
-  }
-
-  vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
+  vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
+  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
   vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
   vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
-  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > 64,                                                        "GOP Size must be between 1 and 64" );
-  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                                        "GOP Size must be a multiple of 2" );
-  vvenc_confirmParameter( c, c->m_GOPList[0].m_POC == -1 && c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
+  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                           "GOP Size must be between 1 and 64" );
+  vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
+  vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
 
-  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                 "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                     "QP exceeds supported range (0 to 63)" );
 
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                           "TargetBitrate must be between 0 - 800000000" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,               "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == c->m_RCTargetBitrate )
    {
-     vvenc_confirmParameter( c, c->m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
      vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
@@ -732,7 +733,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c,  (c->m_numIntraModesFullRD < -1 || c->m_numIntraModesFullRD == 0 || c->m_numIntraModesFullRD > 3), "Error: NumIntraModesFullRD must be -1 or between 1 and 3");
 
-  
+#if ! ENABLE_TRACING
+  vvenc_confirmParameter( c, c->m_traceFile[0] != '\0', "trace file option '--tracefile' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_traceRule[0] != '\0', "trace rule option '--tracerule' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_listTracingChannels, "list trace channels option '--tracechannellist' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+#endif
+
   if ( c->m_confirmFailed )
   {
     return c->m_confirmFailed;
@@ -741,6 +747,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
   // set a lot of dependent parameters
   //
+
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -765,21 +773,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_profile=vvencProfile::VVENC_MAIN_10_444;
       }
     }
+
+    if( c->m_framesToBeEncoded == 1 )
+    {
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10     ) c->m_profile = vvencProfile::VVENC_MAIN_10_STILL_PICTURE;
+      if( c->m_profile == vvencProfile::VVENC_MAIN_10_444 ) c->m_profile = vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE;
+    }
+
+    vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "Unable to infer profile from input!" );
   }
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
-    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, temporalRate, temporalScale, c->m_RCTargetBitrate );
+    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL_AUTO || c->m_level == vvencLevel::VVENC_NUMBER_OF_LEVELS, "Unable to infer level from input!" );
+  }
+  else
+  {
+    const vvencLevel inferedLevel = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
+    vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
   }
 
-  if ( c->m_InputQueueSize <= 0 )
   {
-    c->m_InputQueueSize = c->m_GOPSize;
-
-    if ( c->m_vvencMCTF.MCTF )
-    {
-      c->m_InputQueueSize += vvenc::MCTF_ADD_QUEUE_DELAY;
-    }
+    const vvenc::ProfileFeatures *profileFeatures = vvenc::ProfileFeatures::getProfileFeatures( c->m_profile );
+    vvenc_confirmParameter( c, !profileFeatures, "Invalid profile!" );
+    vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL15_5 && !profileFeatures->canUseLevel15p5, "The video dimensions (size/rate) exceed the allowed maximum throughput for the level/profile combination!" );
   }
 
   if( !c->m_configDone )
@@ -802,38 +820,19 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
   c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
 
-  // set MCTF Lead/Trail frames
-  if( c->m_SegmentMode != VVENC_SEG_OFF )
+  if( c->m_maxMTTDepthIChroma < 0 )
   {
-    if( c->m_vvencMCTF.MCTF )
-    {
-      switch( c->m_SegmentMode )
-      {
-        case VVENC_SEG_FIRST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
-          break;
-        case VVENC_SEG_MID:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
-          break;
-        case VVENC_SEG_LAST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = c->m_vvencMCTF.MCTFNumLeadFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
-          c->m_vvencMCTF.MCTFNumTrailFrames = 0;
-          break;
-        default:
-          break;
-      }
-    }
+    c->m_maxMTTDepthIChroma = c->m_maxMTTDepthI;
   }
 
   // rate control
   if( c->m_RCNumPasses < 0 )
   {
-    if( c->m_RCPass > 0 )
-      c->m_RCNumPasses = 2;
-    else
-      c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
+    c->m_RCNumPasses = ( c->m_RCPass > 0 ? 2 : 1 ); // single pass by default (SDK usage)
+  }
+  if ( c->m_LookAhead < 0 )
+  {
+    c->m_LookAhead = c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ? 1 : 0;
   }
 
   // threading
@@ -852,13 +851,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
-    if( c->m_RCTargetBitrate > 0
-        && c->m_RCNumPasses == 1
-        && c->m_maxParallelFrames > 2 )
-    {
-      c->m_maxParallelFrames = 2;
-    }
   }
+
+  if( c->m_alfUnitSize < 0 )
+    c->m_alfUnitSize = c->m_CTUSize;
 
   // quantization threshold
   if( c->m_quantThresholdVal < 0 )
@@ -866,30 +862,21 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_quantThresholdVal = 8;
   }
 
-  // MCTF
-  c->m_vvencMCTF.MCTFNumLeadFrames  = std::min( c->m_vvencMCTF.MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
-  c->m_vvencMCTF.MCTFNumTrailFrames = std::min( c->m_vvencMCTF.MCTFNumTrailFrames, VVENC_MCTF_RANGE );
-
   /* rules for input, output and internal bitdepths as per help text */
-  if (c->m_MSBExtendedBitDepth[0  ] == 0)
-    c->m_MSBExtendedBitDepth[0  ] = c->m_inputBitDepth      [0  ];
+  if (c->m_MSBExtendedBitDepth[0] == 0)
+    c->m_MSBExtendedBitDepth  [0] = c->m_inputBitDepth      [0];
   if (c->m_MSBExtendedBitDepth[1] == 0)
-    c->m_MSBExtendedBitDepth[1] = c->m_MSBExtendedBitDepth[0  ];
-  if (c->m_internalBitDepth   [0  ] == 0)
-    c->m_internalBitDepth   [0  ] = c->m_MSBExtendedBitDepth[0  ];
+    c->m_MSBExtendedBitDepth  [1] = c->m_MSBExtendedBitDepth[0];
+  if (c->m_internalBitDepth   [0] == 0)
+    c->m_internalBitDepth     [0] = c->m_MSBExtendedBitDepth[0];
   if (c->m_internalBitDepth   [1] == 0)
-    c->m_internalBitDepth   [1] = c->m_internalBitDepth   [0  ];
+    c->m_internalBitDepth     [1] = c->m_internalBitDepth   [0];
   if (c->m_inputBitDepth      [1] == 0)
-    c->m_inputBitDepth      [1] = c->m_inputBitDepth      [0  ];
-  if (c->m_outputBitDepth     [0  ] == 0)
-    c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
+    c->m_inputBitDepth        [1] = c->m_inputBitDepth      [0];
+  if (c->m_outputBitDepth     [0] == 0)
+    c->m_outputBitDepth       [0] = c->m_internalBitDepth   [0];
   if (c->m_outputBitDepth     [1] == 0)
-    c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
-
-  if( c->m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
-  {
-    c->m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
-  }
+    c->m_outputBitDepth       [1] = c->m_outputBitDepth     [0];
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
      (( c->m_masteringDisplay[0] != 0 && c->m_masteringDisplay[1] != 0 && c->m_masteringDisplay[8] != 0 && c->m_masteringDisplay[9] != 0 ) ||
@@ -1021,11 +1008,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vuiParametersPresent = 0;
   }
 
-  if ( c->m_hrdParametersPresent < 0 )
-  {
-    c->m_hrdParametersPresent = 0;
-  }
-
   switch ( c->m_conformanceWindowMode)
   {
   case 0:
@@ -1061,11 +1043,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        msg.log( VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1147,32 +1129,40 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   c->m_log2DiffMaxMinCodingBlockSize = c->m_MaxCodingDepth;
 
-  c->m_reshapeCW.rspFps     = c->m_FrameRate;
+  int fps = c->m_FrameRate/c->m_FrameScale;
+
+  c->m_reshapeCW.rspFps     = fps;
   c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
-  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_FrameRate /16.0)));
+  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_reshapeCW.rspFps/16.0)));
   c->m_reshapeCW.rspBaseQP  = c->m_QP;
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
 
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag < 0 || c->m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  if( c->m_rprEnabledFlag == -1 )
+  {
+    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
+  }
+
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
     c->m_resChangeInClvsEnabled = true;
     c->m_craAPSreset            = true;
     c->m_rprRASLtoolSwitch      = true;
-  }  
-    
-  if( c->m_IntraPeriod == 0 &&  c->m_IntraPeriodSec > 0 )
+  }
+
+  if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
   {
-    if ( c->m_FrameRate % c->m_GOPSize == 0 )
+    if ( fps % c->m_GOPSize == 0 )
     {
-      c->m_IntraPeriod = c->m_FrameRate * c->m_IntraPeriodSec;
+      c->m_IntraPeriod = fps * c->m_IntraPeriodSec;
     }
     else
     {
-      int iIDRPeriod  = (c->m_FrameRate * c->m_IntraPeriodSec);
+      int iIDRPeriod  = (fps * c->m_IntraPeriodSec);
       if( iIDRPeriod < c->m_GOPSize )
       {
         iIDRPeriod = c->m_GOPSize;
@@ -1189,6 +1179,66 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       }
     }
   }
+  else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
+  {
+    msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too and given gop structures are resetted\n\n" );
+    c->m_GOPSize = 1;
+    for( int i = 0; i < VVENC_MAX_GOP; i++ )
+    {
+      vvenc_GOPEntry_default( &c->m_GOPList[i] );
+    }
+  }
+  vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
+
+  if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
+  {
+    msg.log( VVENC_WARNING, "\nWARNING: Setting IntraPeriod in the range of ( N * GOPSize + 1 ) .. ( N * GOPSize + 4 ), i.e. only a small distance above a multiple of the GOPSize, will lead to degraded results.\n" );
+    msg.log( VVENC_WARNING, "         Consider changing the IntraPeriod for better results. For optimal results, set the IntraPeriod to a multiple of GOPSize.\n\n" );
+  }
+
+  if( c->m_GOPSize > 1 && c->m_GOPList[ 0 ].m_POC != -1  )
+  {
+    bool bPicReordering = false;
+    for( int i = 1; i < c->m_GOPSize; i++ )
+    {
+      if( c->m_GOPList[ i - 1 ].m_POC > c->m_GOPList[ i ].m_POC )
+      {
+        bPicReordering = true;
+        break;
+      }
+    }
+    vvenc_confirmParameter( c, ! c->m_picReordering && bPicReordering, "PicReordering disabled, but given GOP configuration uses picture reordering" );
+    if( c->m_picReordering && ! bPicReordering )
+    {
+      msg.log( VVENC_WARNING, "\nPicReordering enabled, but not used in given GOP configuration, disabling PicReordering\n\n" );
+      c->m_picReordering = false;
+    }
+  }
+
+  // set number of lead / trail frames in segment mode
+  const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
+  switch( c->m_SegmentMode )
+  {
+    case VVENC_SEG_FIRST:
+      c->m_leadFrames  = 0;
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_MID:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_LAST:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = 0;
+      break;
+    default:
+      // do nothing
+      break;
+  }
+
+  vvenc_confirmParameter( c, c->m_leadFrames > 0 && c->m_temporalSubsampleRatio > 1, "Use of leading frames not supported in combination with temporal subsampling" );
+  vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
 
   //
   // do some check and set of parameters next
@@ -1199,67 +1249,33 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     if ( c->m_updateCtrl > 0 && c->m_adpOption > 2 ) { c->m_adpOption -= 2; }
   }
 
-  if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400) )
+  if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400 ) )
   {
     c->m_JointCbCrMode = false;
   }
 
+  if( c->m_vvencMCTF.MCTFUnitSize == -1 )
+  {
+    c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
+  }
+
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    vvenc::msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
+    msg.log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
-  if( c->m_vvencMCTF.MCTF )
+  if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
   {
-    if( c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
+    const int log2GopSize = std::min<int>( 6, vvenc::floorLog2( c->m_GOPSize ) );
+
+    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, log2GopSize - ( ( c->m_QP - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
+
+    for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
     {
-      if( c->m_GOPSize == 32 )
-      {
-#if JVET_V0056_MCTF
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-        c->m_vvencMCTF.MCTFFrames[2] = 32;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-#else
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-        c->m_vvencMCTF.MCTFFrames[2] = 32;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.28125;     //  9/32
-        c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
-        c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-#endif
-      }
-      else if( c->m_GOPSize == 16 )
-      {
-#if JVET_V0056_MCTF
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-#else
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
-        c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-#endif
-      }
-      else if( c->m_GOPSize == 8 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0]    = 8;
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.65625;     // 21/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 1;
-      }
+      c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
+      c->m_vvencMCTF.MCTFStrengths[i] = 2.0 / double ( c->m_vvencMCTF.numFrames - i );
     }
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
@@ -1271,7 +1287,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   if ( c->m_usePerceptQPATempFiltISlice == 2
-      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize) )
+      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
   {
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
@@ -1304,717 +1320,162 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
-  /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
-   * This permits the ability to omit a GOP structure specification */
-  if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
+  if( c->m_treatAsSubPic )
   {
-    vvenc_GOPEntry_default( &c->m_GOPList[0] );
-    c->m_GOPList[0].m_QPFactor = 1;
-    c->m_GOPList[0].m_betaOffsetDiv2 = 0;
-    c->m_GOPList[0].m_tcOffsetDiv2 = 0;
-    c->m_GOPList[0].m_POC = 1;
-    vvenc_RPLEntry_default( &c->m_RPLList0[0] );
-    vvenc_RPLEntry_default( &c->m_RPLList1[0] );
-    c->m_RPLList0[0].m_POC = c->m_RPLList1[0].m_POC = 1;
-    c->m_RPLList0[0].m_numRefPicsActive = 4;
-    c->m_GOPList[0].m_numRefPicsActive[0] = 4;
+    if( c->m_sliceTypeAdapt )    msg.log( VVENC_WARNING, "combination of TreatAsSubPic and STA may not work with VTM subPicMerge tool, consider disabling STA\n" );
+    if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    c->m_alfTempPred       = 0;
+    c->m_JointCbCrMode     = false;
+    c->m_lumaReshapeEnable = 0;
+    c->m_reshapeSignalType = 0;
+    c->m_updateCtrl        = 0;
+    c->m_adpOption         = 0;
+    c->m_initialCW         = 0;
+    c->m_LMCSOffset        = 0;
+    c->m_useAMaxBT         = 0;
+    vvenc_ReshapeCW_default( &c->m_reshapeCW );
   }
-  else
+
+  if( c->m_GOPList[ 0 ].m_POC == -1 || ( c->m_addGOP32refPics && c->m_GOPSize == 32 ) )
   {
-    // set default RA config
-    if( c->m_GOPSize == 16 && c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1 )
+    if( c->m_IntraPeriod == 1 || c->m_GOPSize == 1 )
     {
-      for( int i = 0; i < 16; i++ )
-      {
-        vvenc_GOPEntry_default( &c->m_GOPList[i] );
-        c->m_GOPList[i].m_sliceType = 'B';
-        c->m_GOPList[i].m_QPFactor = 1;
-
-        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
-        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
-        c->m_GOPList[i].m_numRefPics[0] = 2;
-        c->m_GOPList[i].m_numRefPics[1] = 2;
-      }
-      c->m_GOPList[0].m_POC  = 16;  c->m_GOPList[0].m_temporalId  = 0;
-      c->m_GOPList[1].m_POC  =  8;  c->m_GOPList[1].m_temporalId  = 1;
-      c->m_GOPList[2].m_POC  =  4;  c->m_GOPList[2].m_temporalId  = 2;
-      c->m_GOPList[3].m_POC  =  2;  c->m_GOPList[3].m_temporalId  = 3;
-      c->m_GOPList[4].m_POC  =  1;  c->m_GOPList[4].m_temporalId  = 4;
-      c->m_GOPList[5].m_POC  =  3;  c->m_GOPList[5].m_temporalId  = 4;
-      c->m_GOPList[6].m_POC  =  6;  c->m_GOPList[6].m_temporalId  = 3;
-      c->m_GOPList[7].m_POC  =  5;  c->m_GOPList[7].m_temporalId  = 4;
-      c->m_GOPList[8].m_POC  =  7;  c->m_GOPList[8].m_temporalId  = 4;
-      c->m_GOPList[9].m_POC  = 12;  c->m_GOPList[9].m_temporalId  = 2;
-      c->m_GOPList[10].m_POC = 10;  c->m_GOPList[10].m_temporalId = 3;
-      c->m_GOPList[11].m_POC =  9;  c->m_GOPList[11].m_temporalId = 4;
-      c->m_GOPList[12].m_POC = 11;  c->m_GOPList[12].m_temporalId = 4;
-      c->m_GOPList[13].m_POC = 14;  c->m_GOPList[13].m_temporalId = 3;
-      c->m_GOPList[14].m_POC = 13;  c->m_GOPList[14].m_temporalId = 4;
-      c->m_GOPList[15].m_POC = 15;  c->m_GOPList[15].m_temporalId = 4;
-
-      c->m_GOPList[0].m_numRefPics[0]  = 3;
-      c->m_GOPList[8].m_numRefPics[0]  = 3;
-      c->m_GOPList[12].m_numRefPics[0] = 3;
-      c->m_GOPList[13].m_numRefPics[0] = 3;
-      c->m_GOPList[14].m_numRefPics[0] = 3;
-      c->m_GOPList[15].m_numRefPics[0] = 4;
-
-      c->m_GOPList[0].m_deltaRefPics[0][0]  = 16; c->m_GOPList[0].m_deltaRefPics[0][1]  = 32; c->m_GOPList[0].m_deltaRefPics[0][2]  = 24;
-      c->m_GOPList[1].m_deltaRefPics[0][0]  =  8; c->m_GOPList[1].m_deltaRefPics[0][1]  = 16;
-      c->m_GOPList[2].m_deltaRefPics[0][0]  =  4; c->m_GOPList[2].m_deltaRefPics[0][1]  = 12;
-      c->m_GOPList[3].m_deltaRefPics[0][0]  =  2; c->m_GOPList[3].m_deltaRefPics[0][1]  = 10;
-      c->m_GOPList[4].m_deltaRefPics[0][0]  =  1; c->m_GOPList[4].m_deltaRefPics[0][1]  = -1;
-      c->m_GOPList[5].m_deltaRefPics[0][0]  =  1; c->m_GOPList[5].m_deltaRefPics[0][1]  = 3;
-      c->m_GOPList[6].m_deltaRefPics[0][0]  =  2; c->m_GOPList[6].m_deltaRefPics[0][1]  = 6;
-      c->m_GOPList[7].m_deltaRefPics[0][0]  =  1; c->m_GOPList[7].m_deltaRefPics[0][1]  = 5;
-      c->m_GOPList[8].m_deltaRefPics[0][0]  =  1; c->m_GOPList[8].m_deltaRefPics[0][1]  = 3; c->m_GOPList[8].m_deltaRefPics[0][2]  = 7;
-      c->m_GOPList[9].m_deltaRefPics[0][0]  =  4; c->m_GOPList[9].m_deltaRefPics[0][1]  = 12;
-      c->m_GOPList[10].m_deltaRefPics[0][0] =  2; c->m_GOPList[10].m_deltaRefPics[0][1] = 10;
-      c->m_GOPList[11].m_deltaRefPics[0][0] =  1; c->m_GOPList[11].m_deltaRefPics[0][1] = 9;
-      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] = 3; c->m_GOPList[12].m_deltaRefPics[0][2]  = 11;
-      c->m_GOPList[13].m_deltaRefPics[0][0] =  2; c->m_GOPList[13].m_deltaRefPics[0][1] = 6; c->m_GOPList[13].m_deltaRefPics[0][2]  = 14;
-      c->m_GOPList[14].m_deltaRefPics[0][0] =  1; c->m_GOPList[14].m_deltaRefPics[0][1] = 5; c->m_GOPList[14].m_deltaRefPics[0][2]  = 13;
-      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] = 3; c->m_GOPList[15].m_deltaRefPics[0][2]  = 7; c->m_GOPList[15].m_deltaRefPics[0][3]  = 15;
-
-      c->m_GOPList[3].m_numRefPics[1]  = 3;
-      c->m_GOPList[4].m_numRefPics[1]  = 4;
-      c->m_GOPList[5].m_numRefPics[1]  = 3;
-      c->m_GOPList[7].m_numRefPics[1]  = 3;
-      c->m_GOPList[11].m_numRefPics[1] = 3;
-
-      c->m_GOPList[0].m_deltaRefPics[1][0]  = 16; c->m_GOPList[0].m_deltaRefPics[1][1]  =  32;
-      c->m_GOPList[1].m_deltaRefPics[1][0]  = -8; c->m_GOPList[1].m_deltaRefPics[1][1]  =   8;
-      c->m_GOPList[2].m_deltaRefPics[1][0]  = -4; c->m_GOPList[2].m_deltaRefPics[1][1]  = -12;
-      c->m_GOPList[3].m_deltaRefPics[1][0]  = -2; c->m_GOPList[3].m_deltaRefPics[1][1]  =  -6; c->m_GOPList[3].m_deltaRefPics[1][2]  = -14;
-      c->m_GOPList[4].m_deltaRefPics[1][0]  = -1; c->m_GOPList[4].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[4].m_deltaRefPics[1][2]  =  -7;  c->m_GOPList[4].m_deltaRefPics[1][3]  = -15;
-      c->m_GOPList[5].m_deltaRefPics[1][0]  = -1; c->m_GOPList[5].m_deltaRefPics[1][1]  =  -5; c->m_GOPList[5].m_deltaRefPics[1][2]  = -13;
-      c->m_GOPList[6].m_deltaRefPics[1][0]  = -2; c->m_GOPList[6].m_deltaRefPics[1][1]  =  -10;
-      c->m_GOPList[7].m_deltaRefPics[1][0]  = -1; c->m_GOPList[7].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[7].m_deltaRefPics[1][2]  = -11;
-      c->m_GOPList[8].m_deltaRefPics[1][0]  = -1; c->m_GOPList[8].m_deltaRefPics[1][1]  =  -9;
-      c->m_GOPList[9].m_deltaRefPics[1][0]  = -4; c->m_GOPList[9].m_deltaRefPics[1][1]  =   4;
-      c->m_GOPList[10].m_deltaRefPics[1][0] = -2; c->m_GOPList[10].m_deltaRefPics[1][1] =  -6;
-      c->m_GOPList[11].m_deltaRefPics[1][0] = -1; c->m_GOPList[11].m_deltaRefPics[1][1] =  -3; c->m_GOPList[11].m_deltaRefPics[1][2]  = -7;
-      c->m_GOPList[12].m_deltaRefPics[1][0] = -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -5;
-      c->m_GOPList[13].m_deltaRefPics[1][0] = -2; c->m_GOPList[13].m_deltaRefPics[1][1] =   2;
-      c->m_GOPList[14].m_deltaRefPics[1][0] = -1; c->m_GOPList[14].m_deltaRefPics[1][1] =  -3;
-      c->m_GOPList[15].m_deltaRefPics[1][0] = -1; c->m_GOPList[15].m_deltaRefPics[1][1] =   1;
-
-      for( int i = 0; i < 16; i++ )
-      {
-        switch( c->m_GOPList[i].m_temporalId )
-        {
-        case 0: c->m_GOPList[i].m_QPOffset   = 1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
-        break;
-        case 1: c->m_GOPList[i].m_QPOffset   = 1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.8848;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2061;
-        break;
-        case 2: c->m_GOPList[i].m_QPOffset   = 4;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.7476;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2286;
-        break;
-        case 3: c->m_GOPList[i].m_QPOffset   = 5;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.90;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2333;
-        break;
-        case 4: c->m_GOPList[i].m_QPOffset   = 6;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -7.1444;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.3;
-        break;
-        default: break;
-        }
-      }
+      vvenc_confirmParameter( c, c->m_GOPSize != 1,     "gop auto configuration for all intra supports only gop size 1" );
+      vvenc_confirmParameter( c, c->m_IntraPeriod != 1, "gop auto configuration for gop size 1 supports only all intra" );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'I',     1,    0,           0.0,     0.0,  0.0,         0,             0,   { },                          0,   { } );
     }
-    else if( c->m_GOPSize == 32 &&
-            ( (c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1) ||
-              (c->m_GOPList[16].m_POC == -1 && c->m_GOPList[17].m_POC == -1)
-              ) )
+    else if( c->m_GOPSize == 8 )
     {
-      for( int i = 0; i < 32; i++ )
-      {
-        vvenc_GOPEntry_default(&c->m_GOPList[i]);
-        c->m_GOPList[i].m_sliceType = 'B';
-        c->m_GOPList[i].m_QPFactor = 1;
-
-        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
-        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
-        c->m_GOPList[i].m_numRefPics[0] = 2;
-        c->m_GOPList[i].m_numRefPics[1] = 2;
-      }
-      c->m_GOPList[ 0].m_POC = 32;   c->m_GOPList[0].m_temporalId  = 0;
-      c->m_GOPList[ 1].m_POC = 16;   c->m_GOPList[1].m_temporalId  = 1;
-      c->m_GOPList[ 2].m_POC =  8;   c->m_GOPList[2].m_temporalId  = 2;
-      c->m_GOPList[ 3].m_POC =  4;   c->m_GOPList[3].m_temporalId  = 3;
-      c->m_GOPList[ 4].m_POC =  2;   c->m_GOPList[4].m_temporalId  = 4;
-      c->m_GOPList[ 5].m_POC =  1;   c->m_GOPList[5].m_temporalId  = 5;
-      c->m_GOPList[ 6].m_POC =  3;   c->m_GOPList[6].m_temporalId  = 5;
-      c->m_GOPList[ 7].m_POC =  6;   c->m_GOPList[7].m_temporalId  = 4;
-      c->m_GOPList[ 8].m_POC =  5;   c->m_GOPList[8].m_temporalId  = 5;
-      c->m_GOPList[ 9].m_POC =  7;   c->m_GOPList[9].m_temporalId  = 5;
-      c->m_GOPList[10].m_POC = 12;   c->m_GOPList[10].m_temporalId = 3;
-      c->m_GOPList[11].m_POC = 10;   c->m_GOPList[11].m_temporalId = 4;
-      c->m_GOPList[12].m_POC =  9;   c->m_GOPList[12].m_temporalId = 5;
-      c->m_GOPList[13].m_POC = 11;   c->m_GOPList[13].m_temporalId = 5;
-      c->m_GOPList[14].m_POC = 14;   c->m_GOPList[14].m_temporalId = 4;
-      c->m_GOPList[15].m_POC = 13;   c->m_GOPList[15].m_temporalId = 5;
-
-      c->m_GOPList[16].m_POC = 15;   c->m_GOPList[16].m_temporalId = 5;
-      c->m_GOPList[17].m_POC = 24;   c->m_GOPList[17].m_temporalId = 2;
-      c->m_GOPList[18].m_POC = 20;   c->m_GOPList[18].m_temporalId = 3;
-      c->m_GOPList[19].m_POC = 18;   c->m_GOPList[19].m_temporalId = 4;
-      c->m_GOPList[20].m_POC = 17;   c->m_GOPList[20].m_temporalId = 5;
-      c->m_GOPList[21].m_POC = 19;   c->m_GOPList[21].m_temporalId = 5;
-      c->m_GOPList[22].m_POC = 22;   c->m_GOPList[22].m_temporalId = 4;
-      c->m_GOPList[23].m_POC = 21;   c->m_GOPList[23].m_temporalId = 5;
-      c->m_GOPList[24].m_POC = 23;   c->m_GOPList[24].m_temporalId = 5;
-      c->m_GOPList[25].m_POC = 28;   c->m_GOPList[25].m_temporalId = 3;
-      c->m_GOPList[26].m_POC = 26;   c->m_GOPList[26].m_temporalId = 4;
-      c->m_GOPList[27].m_POC = 25;   c->m_GOPList[27].m_temporalId = 5;
-      c->m_GOPList[28].m_POC = 27;   c->m_GOPList[28].m_temporalId = 5;
-      c->m_GOPList[29].m_POC = 30;   c->m_GOPList[29].m_temporalId = 4;
-      c->m_GOPList[30].m_POC = 29;   c->m_GOPList[30].m_temporalId = 5;
-      c->m_GOPList[31].m_POC = 31;   c->m_GOPList[31].m_temporalId = 5;
-
-      c->m_GOPList[ 0].m_numRefPics[0] = 3;
-      c->m_GOPList[ 1].m_numRefPics[0] = 2;
-      c->m_GOPList[ 2].m_numRefPics[0] = 2;
-      c->m_GOPList[ 3].m_numRefPics[0] = 2;
-      c->m_GOPList[ 4].m_numRefPics[0] = 2;
-      c->m_GOPList[ 5].m_numRefPics[0] = 2;
-      c->m_GOPList[ 6].m_numRefPics[0] = 2;
-      c->m_GOPList[ 7].m_numRefPics[0] = 2;
-      c->m_GOPList[ 8].m_numRefPics[0] = 2;
-      c->m_GOPList[ 9].m_numRefPics[0] = 3;
-      c->m_GOPList[10].m_numRefPics[0] = 2;
-      c->m_GOPList[11].m_numRefPics[0] = 2;
-      c->m_GOPList[12].m_numRefPics[0] = 2;
-      c->m_GOPList[13].m_numRefPics[0] = 3;
-      c->m_GOPList[14].m_numRefPics[0] = 3;
-      c->m_GOPList[15].m_numRefPics[0] = 3;
-
-      c->m_GOPList[16].m_numRefPics[0] = 4;
-      c->m_GOPList[17].m_numRefPics[0] = 2;
-      c->m_GOPList[18].m_numRefPics[0] = 2;
-      c->m_GOPList[19].m_numRefPics[0] = 2;
-      c->m_GOPList[20].m_numRefPics[0] = 2;
-      c->m_GOPList[21].m_numRefPics[0] = 3;
-      c->m_GOPList[22].m_numRefPics[0] = 3;
-      c->m_GOPList[23].m_numRefPics[0] = 3;
-      c->m_GOPList[24].m_numRefPics[0] = 4;
-      c->m_GOPList[25].m_numRefPics[0] = 3;
-      c->m_GOPList[26].m_numRefPics[0] = 3;
-      c->m_GOPList[27].m_numRefPics[0] = 3;
-      c->m_GOPList[28].m_numRefPics[0] = 4;
-      c->m_GOPList[29].m_numRefPics[0] = 3;
-      c->m_GOPList[30].m_numRefPics[0] = 3;
-      c->m_GOPList[31].m_numRefPics[0] = 4;
-
-      c->m_GOPList[ 0].m_deltaRefPics[0][0] = 32; c->m_GOPList[ 0].m_deltaRefPics[0][1] = 64; c->m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
-      c->m_GOPList[ 1].m_deltaRefPics[0][0] = 16; c->m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
-      c->m_GOPList[ 2].m_deltaRefPics[0][0] =  8; c->m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
-      c->m_GOPList[ 3].m_deltaRefPics[0][0] =  4; c->m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
-
-      c->m_GOPList[ 4].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
-      c->m_GOPList[ 5].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
-      c->m_GOPList[ 6].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
-      c->m_GOPList[ 7].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
-
-      c->m_GOPList[ 8].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
-      c->m_GOPList[ 9].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 9].m_deltaRefPics[0][1] =  3; c->m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
-      c->m_GOPList[10].m_deltaRefPics[0][0] =  4; c->m_GOPList[10].m_deltaRefPics[0][1] = 12;
-      c->m_GOPList[11].m_deltaRefPics[0][0] =  2; c->m_GOPList[11].m_deltaRefPics[0][1] = 10;
-
-      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] =  9;
-      c->m_GOPList[13].m_deltaRefPics[0][0] =  1; c->m_GOPList[13].m_deltaRefPics[0][1] =  3; c->m_GOPList[13].m_deltaRefPics[0][2] = 11;
-      c->m_GOPList[14].m_deltaRefPics[0][0] =  2; c->m_GOPList[14].m_deltaRefPics[0][1] =  6; c->m_GOPList[14].m_deltaRefPics[0][2] = 14;
-      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] =  5; c->m_GOPList[15].m_deltaRefPics[0][2] = 13;
-
-      c->m_GOPList[16].m_deltaRefPics[0][0] =  1; c->m_GOPList[16].m_deltaRefPics[0][1] =  3; c->m_GOPList[16].m_deltaRefPics[0][2] =  7; c->m_GOPList[16].m_deltaRefPics[0][3] = 15;
-      c->m_GOPList[17].m_deltaRefPics[0][0] =  8; c->m_GOPList[17].m_deltaRefPics[0][1] = 24;
-      c->m_GOPList[18].m_deltaRefPics[0][0] =  4; c->m_GOPList[18].m_deltaRefPics[0][1] = 20;
-      c->m_GOPList[19].m_deltaRefPics[0][0] =  2; c->m_GOPList[19].m_deltaRefPics[0][1] = 18;
-
-      c->m_GOPList[20].m_deltaRefPics[0][0] =  1; c->m_GOPList[20].m_deltaRefPics[0][1] = 17;
-      c->m_GOPList[21].m_deltaRefPics[0][0] =  1; c->m_GOPList[21].m_deltaRefPics[0][1] =  3; c->m_GOPList[21].m_deltaRefPics[0][2] = 19;
-      c->m_GOPList[22].m_deltaRefPics[0][0] =  2; c->m_GOPList[22].m_deltaRefPics[0][1] =  6; c->m_GOPList[22].m_deltaRefPics[0][2] = 22;
-      c->m_GOPList[23].m_deltaRefPics[0][0] =  1; c->m_GOPList[23].m_deltaRefPics[0][1] =  5; c->m_GOPList[23].m_deltaRefPics[0][2] = 21;
-
-      c->m_GOPList[24].m_deltaRefPics[0][0] =  1; c->m_GOPList[24].m_deltaRefPics[0][1] =  3; c->m_GOPList[24].m_deltaRefPics[0][2] =  7; c->m_GOPList[24].m_deltaRefPics[0][3] = 23;
-      c->m_GOPList[25].m_deltaRefPics[0][0] =  4; c->m_GOPList[25].m_deltaRefPics[0][1] = 12; c->m_GOPList[25].m_deltaRefPics[0][2] = 28;
-      c->m_GOPList[26].m_deltaRefPics[0][0] =  2; c->m_GOPList[26].m_deltaRefPics[0][1] = 10; c->m_GOPList[26].m_deltaRefPics[0][2] = 26;
-      c->m_GOPList[27].m_deltaRefPics[0][0] =  1; c->m_GOPList[27].m_deltaRefPics[0][1] =  9; c->m_GOPList[27].m_deltaRefPics[0][2] = 25;
-
-      c->m_GOPList[28].m_deltaRefPics[0][0] =  1; c->m_GOPList[28].m_deltaRefPics[0][1] =  3; c->m_GOPList[28].m_deltaRefPics[0][2] = 11; c->m_GOPList[28].m_deltaRefPics[0][3] = 27;
-      c->m_GOPList[29].m_deltaRefPics[0][0] =  2; c->m_GOPList[29].m_deltaRefPics[0][1] = 14; c->m_GOPList[29].m_deltaRefPics[0][2] = 30;
-      c->m_GOPList[30].m_deltaRefPics[0][0] =  1; c->m_GOPList[30].m_deltaRefPics[0][1] = 13; c->m_GOPList[30].m_deltaRefPics[0][2] = 29;
-      c->m_GOPList[31].m_deltaRefPics[0][0] =  1; c->m_GOPList[31].m_deltaRefPics[0][1] =  3; c->m_GOPList[31].m_deltaRefPics[0][2] = 15; c->m_GOPList[31].m_deltaRefPics[0][3] = 31;
-
-      c->m_GOPList[ 0].m_numRefPics[1] = 2;
-      c->m_GOPList[ 1].m_numRefPics[1] = 2;
-      c->m_GOPList[ 2].m_numRefPics[1] = 2;
-      c->m_GOPList[ 3].m_numRefPics[1] = 3;
-      c->m_GOPList[ 4].m_numRefPics[1] = 4;
-      c->m_GOPList[ 5].m_numRefPics[1] = 5;
-      c->m_GOPList[ 6].m_numRefPics[1] = 4;
-      c->m_GOPList[ 7].m_numRefPics[1] = 3;
-      c->m_GOPList[ 8].m_numRefPics[1] = 4;
-      c->m_GOPList[ 9].m_numRefPics[1] = 3;
-      c->m_GOPList[10].m_numRefPics[1] = 2;
-      c->m_GOPList[11].m_numRefPics[1] = 3;
-      c->m_GOPList[12].m_numRefPics[1] = 4;
-      c->m_GOPList[13].m_numRefPics[1] = 3;
-      c->m_GOPList[14].m_numRefPics[1] = 2;
-      c->m_GOPList[15].m_numRefPics[1] = 3;
-
-      c->m_GOPList[16].m_numRefPics[1] = 2;
-      c->m_GOPList[17].m_numRefPics[1] = 2;
-      c->m_GOPList[18].m_numRefPics[1] = 2;
-      c->m_GOPList[19].m_numRefPics[1] = 3;
-      c->m_GOPList[20].m_numRefPics[1] = 4;
-      c->m_GOPList[21].m_numRefPics[1] = 3;
-      c->m_GOPList[22].m_numRefPics[1] = 2;
-      c->m_GOPList[23].m_numRefPics[1] = 3;
-      c->m_GOPList[24].m_numRefPics[1] = 2;
-      c->m_GOPList[25].m_numRefPics[1] = 2;
-      c->m_GOPList[26].m_numRefPics[1] = 2;
-      c->m_GOPList[27].m_numRefPics[1] = 3;
-      c->m_GOPList[28].m_numRefPics[1] = 2;
-      c->m_GOPList[29].m_numRefPics[1] = 2;
-      c->m_GOPList[30].m_numRefPics[1] = 2;
-      c->m_GOPList[31].m_numRefPics[1] = 2;
-
-      c->m_GOPList[ 0].m_deltaRefPics[1][0] =  32; c->m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
-      c->m_GOPList[ 1].m_deltaRefPics[1][0] = -16; c->m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
-      c->m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; c->m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
-      c->m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; c->m_GOPList[ 3].m_deltaRefPics[1][1] = -12; c->m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
-
-      c->m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; c->m_GOPList[ 4].m_deltaRefPics[1][2] = -14; c->m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
-      c->m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; c->m_GOPList[ 5].m_deltaRefPics[1][3] = -15; c->m_GOPList[5].m_deltaRefPics[1][4] = -31;
-      c->m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; c->m_GOPList[ 6].m_deltaRefPics[1][2] = -13; c->m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
-      c->m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 7].m_deltaRefPics[1][1] = -10; c->m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
-
-      c->m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 8].m_deltaRefPics[1][2] = -11; c->m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
-      c->m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; c->m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
-      c->m_GOPList[10].m_deltaRefPics[1][0] =  -4; c->m_GOPList[10].m_deltaRefPics[1][1] = -20;
-      c->m_GOPList[11].m_deltaRefPics[1][0] =  -2; c->m_GOPList[11].m_deltaRefPics[1][1] =  -6; c->m_GOPList[11].m_deltaRefPics[1][2] = -22;
-
-      c->m_GOPList[12].m_deltaRefPics[1][0] =  -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -3; c->m_GOPList[12].m_deltaRefPics[1][2] =  -7; c->m_GOPList[12].m_deltaRefPics[1][3] = -23;
-      c->m_GOPList[13].m_deltaRefPics[1][0] =  -1; c->m_GOPList[13].m_deltaRefPics[1][1] =  -5; c->m_GOPList[13].m_deltaRefPics[1][2] = -21;
-      c->m_GOPList[14].m_deltaRefPics[1][0] =  -2; c->m_GOPList[14].m_deltaRefPics[1][1] = -18;
-      c->m_GOPList[15].m_deltaRefPics[1][0] =  -1; c->m_GOPList[15].m_deltaRefPics[1][1] =  -3; c->m_GOPList[15].m_deltaRefPics[1][2] = -19;
-
-      c->m_GOPList[16].m_deltaRefPics[1][0] =  -1; c->m_GOPList[16].m_deltaRefPics[1][1] = -17;
-      c->m_GOPList[17].m_deltaRefPics[1][0] =  -8; c->m_GOPList[17].m_deltaRefPics[1][1] =   8;
-      c->m_GOPList[18].m_deltaRefPics[1][0] =  -4; c->m_GOPList[18].m_deltaRefPics[1][1] = -12;
-      c->m_GOPList[19].m_deltaRefPics[1][0] =  -2; c->m_GOPList[19].m_deltaRefPics[1][1] =  -6; c->m_GOPList[19].m_deltaRefPics[1][2] = -14;
-
-      c->m_GOPList[20].m_deltaRefPics[1][0] =  -1; c->m_GOPList[20].m_deltaRefPics[1][1] =  -3; c->m_GOPList[20].m_deltaRefPics[1][2] =  -7; c->m_GOPList[20].m_deltaRefPics[1][3] = -15;
-      c->m_GOPList[21].m_deltaRefPics[1][0] =  -1; c->m_GOPList[21].m_deltaRefPics[1][1] =  -5; c->m_GOPList[21].m_deltaRefPics[1][2] = -13;
-      c->m_GOPList[22].m_deltaRefPics[1][0] =  -2; c->m_GOPList[22].m_deltaRefPics[1][1] = -10;
-      c->m_GOPList[23].m_deltaRefPics[1][0] =  -1; c->m_GOPList[23].m_deltaRefPics[1][1] =  -3; c->m_GOPList[23].m_deltaRefPics[1][2] = -11;
-
-      c->m_GOPList[24].m_deltaRefPics[1][0] =  -1; c->m_GOPList[24].m_deltaRefPics[1][1] =  -9;
-      c->m_GOPList[25].m_deltaRefPics[1][0] =  -4; c->m_GOPList[25].m_deltaRefPics[1][1] =   4;
-      c->m_GOPList[26].m_deltaRefPics[1][0] =  -2; c->m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-      c->m_GOPList[27].m_deltaRefPics[1][0] =  -1; c->m_GOPList[27].m_deltaRefPics[1][1] =  -3; c->m_GOPList[27].m_deltaRefPics[1][2] = -7;
-
-      c->m_GOPList[28].m_deltaRefPics[1][0] =  -1; c->m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-      c->m_GOPList[29].m_deltaRefPics[1][0] =  -2; c->m_GOPList[29].m_deltaRefPics[1][1] =   2;
-      c->m_GOPList[30].m_deltaRefPics[1][0] =  -1; c->m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-      c->m_GOPList[31].m_deltaRefPics[1][0] =  -1; c->m_GOPList[31].m_deltaRefPics[1][1] =   1;
-
-      for( int i = 0; i < 32; i++ )
-      {
-        switch( c->m_GOPList[i].m_temporalId )
-        {
-        case 0: c->m_GOPList[i].m_QPOffset   = -1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
-                break;
-        case 1: c->m_GOPList[i].m_QPOffset   = 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
-                break;
-        case 2: c->m_GOPList[i].m_QPOffset   = 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
-                break;
-        case 3: c->m_GOPList[i].m_QPOffset   = 3;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2571;
-                break;
-        case 4: c->m_GOPList[i].m_QPOffset   = 5;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.4895;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.1947;
-                break;
-        case 5: c->m_GOPList[i].m_QPOffset   = 6;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4429;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2429;
-                break;
-        default: break;
-        }
-      }
+      vvenc_confirmParameter( c, c->m_picReordering, "gop auto configuration for gop size 8 only without picture reordering supported" );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',     1,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 9, 17, 25 },             4,   { 1, 9, 17, 25 } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     2,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 2, 10, 18 },             4,   { 1, 2, 10, 18 } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     3,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 3, 11, 19 },             4,   { 1, 3, 11, 19 } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 4, 12, 20 },             4,   { 1, 4, 12, 20 } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     5,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 5, 13, 21 },             4,   { 1, 5, 13, 21 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     6,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 6, 14, 22 },             4,   { 1, 6, 14, 22 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     7,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 7, 15, 23 },             4,   { 1, 7, 15, 23 } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     8,    1,          0.0,      0.0,  1.0,         0,             4,   { 1, 8, 16, 24 },             4,   { 1, 8, 16, 24 } );
     }
-  }
-
-  for (int i = 0; c->m_GOPList[i].m_POC != -1 && i < VVENC_MAX_GOP + 1; i++)
-  {
-    c->m_RPLList0[i].m_POC = c->m_RPLList1[i].m_POC = c->m_GOPList[i].m_POC;
-    c->m_RPLList0[i].m_temporalId = c->m_RPLList1[i].m_temporalId = c->m_GOPList[i].m_temporalId;
-    c->m_RPLList0[i].m_refPic = c->m_RPLList1[i].m_refPic = c->m_GOPList[i].m_refPic;
-    c->m_RPLList0[i].m_sliceType = c->m_RPLList1[i].m_sliceType = c->m_GOPList[i].m_sliceType;
-
-    c->m_RPLList0[i].m_numRefPicsActive = c->m_GOPList[i].m_numRefPicsActive[0];
-    c->m_RPLList1[i].m_numRefPicsActive = c->m_GOPList[i].m_numRefPicsActive[1];
-    c->m_RPLList0[i].m_numRefPics = c->m_GOPList[i].m_numRefPics[0];
-    c->m_RPLList1[i].m_numRefPics = c->m_GOPList[i].m_numRefPics[1];
-    c->m_RPLList0[i].m_ltrp_in_slice_header_flag = c->m_GOPList[i].m_ltrp_in_slice_header_flag;
-    c->m_RPLList1[i].m_ltrp_in_slice_header_flag = c->m_GOPList[i].m_ltrp_in_slice_header_flag;
-
-    for (int j = 0; j < c->m_GOPList[i].m_numRefPics[0]; j++)
-      c->m_RPLList0[i].m_deltaRefPics[j] = c->m_GOPList[i].m_deltaRefPics[0][j];
-    for (int j = 0; j < c->m_GOPList[i].m_numRefPics[1]; j++)
-      c->m_RPLList1[i].m_deltaRefPics[j] = c->m_GOPList[i].m_deltaRefPics[1][j];
-  }
-
-  int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
-  bool verifiedGOP=false;
-  bool errorGOP=false;
-  int checkGOP=1;
-  int refList[VVENC_MAX_NUM_REF_PICS+1] = {0};
-  bool isOK[VVENC_MAX_GOP];
-  for(int i=0; i<VVENC_MAX_GOP; i++)
-  {
-    isOK[i]=false;
-  }
-  int numOK=0;
-
-  int extraRPLs = 0;
-  int numRefs   = 1;
-  //start looping through frames in coding order until we can verify that the GOP structure is correct.
-  while (!verifiedGOP && !errorGOP)
-  {
-    int curGOP = (checkGOP - 1) % c->m_GOPSize;
-    int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
-    if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
+    else if( c->m_GOPSize == 16 )
     {
-      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
-      errorGOP = true;
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    16,    1,           0.0,     0.0,  1.0,         0,             2,   { 16, 32, 24     },           2,   { 16,  32           } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     8,    1,       -4.8848,  0.2061,  1.0,         1,             2,   {  8, 16         },           2,   { -8,   8           } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     4,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4, -12           } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     2,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6, -14      } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     1,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1, -1         },           2,   { -1,  -3,  -7, -15 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     3,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3         },           2,   { -1,  -5, -13      } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     6,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6         },           2,   { -2, -10           } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     5,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5         },           2,   { -1,  -3, -11      } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     7,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7     },           2,   { -1,  -9           } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',    12,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4,   4           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    10,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6           } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',     9,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  9         },           2,   { -1,  -3,  -7      } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',    11,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3, 11     },           2,   { -1,  -5           } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    14,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6, 14     },           2,   { -2,   2           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    13,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5, 13     },           2,   { -1,  -3           } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    15,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7, 15 },           2,   { -1,   1           } );
     }
-    else
+    else if( c->m_GOPSize == 32 )
     {
-      //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
-      bool beforeI = false;
-      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
+      if( !c->m_addGOP32refPics )
       {
-        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-        if (absPOC < 0)
-        {
-          beforeI = true;
-        }
-        else
-        {
-          bool found = false;
-          for (int j = 0; j<numRefs; j++)
-          {
-            if (refList[j] == absPOC)
-            {
-              found = true;
-              for (int k = 0; k < c->m_GOPSize; k++)
-              {
-                if (absPOC % (c->m_GOPSize * multipleFactor) == c->m_RPLList0[k].m_POC % (c->m_GOPSize * multipleFactor))
-                {
-                  if (c->m_RPLList0[k].m_temporalId == c->m_RPLList0[curGOP].m_temporalId)
-                  {
-                    c->m_RPLList0[k].m_refPic = true;
-                  }
-                }
-              }
-            }
-          }
-          if (!found)
-          {
-            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
-            errorGOP = true;
-          }
-        }
-      }
-      if (!beforeI && !errorGOP)
-      {
-        //all ref frames were present
-        if (!isOK[curGOP])
-        {
-          numOK++;
-          isOK[curGOP] = true;
-          if (numOK == c->m_GOPSize)
-          {
-            verifiedGOP = true;
-          }
-        }
+        //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+        //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+        //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+        c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },           2,   {  32,  64                } );
+        c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },           2,   { -16,  16                } );
+        c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8, -24                } );
+        c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12, -28           } );
+        c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14, -30      } );
+        c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },           2,   {  -1,  -3,  -7, -15, -31 } );
+        c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },           2,   {  -1,  -5, -13, -29      } );
+        c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },           2,   {  -2, -10, -26           } );
+        c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },           2,   {  -1,  -3, -11, -27      } );
+        c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },           2,   {  -1,  -9, -25           } );
+        c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },           2,   {  -4, -20                } );
+        c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },           2,   {  -2,  -6, -22           } );
+        c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },           2,   {  -1,  -3,  -7, -23      } );
+        c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },           2,   {  -1,  -5, -21           } );
+        c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },           2,   {  -2, -18                } );
+        c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },           2,   {  -1,  -3, -19           } );
+        c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },           2,   {  -1, -17                } );
+        c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8,   8                } );
+        c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12                } );
+        c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14           } );
+        c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },           2,   {  -1,  -3,  -7, -15      } );
+        c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },           2,   {  -1,  -5, -13           } );
+        c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },           2,   {  -2, -10                } );
+        c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },           2,   {  -1,  -3, -11           } );
+        c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },           2,   {  -1,  -9                } );
+        c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },           2,   {  -4,   4                } );
+        c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },           2,   {  -2,  -6                } );
+        c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },           2,   {  -1,  -3, -7            } );
+        c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },           2,   {  -1,  -5                } );
+        c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },           2,   {  -2,   2                } );
+        c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },           2,   {  -1,  -3                } );
+        c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },           2,   {  -1,   1                } );
       }
       else
       {
-        //create a new RPLEntry for this frame containing all the reference pictures that were available (POC > 0)
-        c->m_RPLList0[c->m_GOPSize + extraRPLs] = c->m_RPLList0[curGOP];
-        c->m_RPLList1[c->m_GOPSize + extraRPLs] = c->m_RPLList1[curGOP];
-        int newRefs0 = 0;
-        for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
+        if( c->m_GOPList[ 0 ].m_POC != -1 )
         {
-          int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-          if (absPOC >= 0)
-          {
-            c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[newRefs0] = c->m_RPLList0[curGOP].m_deltaRefPics[i];
-            newRefs0++;
-          }
+          msg.log( VVENC_WARNING, "Custom gop configuartion and option AddGOP32refPics detected, given gop configuration will be overwritten!\n" );
         }
-        int numPrefRefs0 = c->m_RPLList0[curGOP].m_numRefPicsActive;
-
-        int newRefs1 = 0;
-        for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
-        {
-          int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
-          if (absPOC >= 0)
-          {
-            c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[newRefs1] = c->m_RPLList1[curGOP].m_deltaRefPics[i];
-            newRefs1++;
-          }
-        }
-        int numPrefRefs1 = c->m_RPLList1[curGOP].m_numRefPicsActive;
-
-        for (int offset = -1; offset>-checkGOP; offset--)
-        {
-          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList0[offGOP].m_POC;
-          if (offPOC >= 0 && c->m_RPLList0[offGOP].m_temporalId <= c->m_RPLList0[curGOP].m_temporalId)
-          {
-            bool newRef = false;
-            for (int i = 0; i<(newRefs0 + newRefs1); i++)
-            {
-              if (refList[i] == offPOC)
-              {
-                newRef = true;
-              }
-            }
-            for (int i = 0; i<newRefs0; i++)
-            {
-              if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
-              {
-                newRef = false;
-              }
-            }
-            if (newRef)
-            {
-              int insertPoint = newRefs0;
-              //this picture can be added, find appropriate place in list and insert it.
-              if (c->m_RPLList0[offGOP].m_temporalId == c->m_RPLList0[curGOP].m_temporalId)
-              {
-                c->m_RPLList0[offGOP].m_refPic = true;
-              }
-              for (int j = 0; j<newRefs0; j++)
-              {
-                if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
-                {
-                  insertPoint = j;
-                  break;
-                }
-              }
-              int prev = curPOC - offPOC;
-              for (int j = insertPoint; j<newRefs0 + 1; j++)
-              {
-                int newPrev = c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j];
-                c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
-                prev = newPrev;
-              }
-              newRefs0++;
-            }
-          }
-          if (newRefs0 >= numPrefRefs0)
-          {
-            break;
-          }
-        }
-
-        for (int offset = -1; offset>-checkGOP; offset--)
-        {
-          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList1[offGOP].m_POC;
-          if (offPOC >= 0 && c->m_RPLList1[offGOP].m_temporalId <= c->m_RPLList1[curGOP].m_temporalId)
-          {
-            bool newRef = false;
-            for (int i = 0; i<(newRefs0 + newRefs1); i++)
-            {
-              if (refList[i] == offPOC)
-              {
-                newRef = true;
-              }
-            }
-            for (int i = 0; i<newRefs1; i++)
-            {
-              if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
-              {
-                newRef = false;
-              }
-            }
-            if (newRef)
-            {
-              int insertPoint = newRefs1;
-              //this picture can be added, find appropriate place in list and insert it.
-              if (c->m_RPLList1[offGOP].m_temporalId == c->m_RPLList1[curGOP].m_temporalId)
-              {
-                c->m_RPLList1[offGOP].m_refPic = true;
-              }
-              for (int j = 0; j<newRefs1; j++)
-              {
-                if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
-                {
-                  insertPoint = j;
-                  break;
-                }
-              }
-              int prev = curPOC - offPOC;
-              for (int j = insertPoint; j<newRefs1 + 1; j++)
-              {
-                int newPrev = c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j];
-                c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
-                prev = newPrev;
-              }
-              newRefs1++;
-            }
-          }
-          if (newRefs1 >= numPrefRefs1)
-          {
-            break;
-          }
-        }
-
-        c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPics = newRefs0;
-        c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPics, c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPicsActive);
-        c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPics = newRefs1;
-        c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPics, c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPicsActive);
-        curGOP = c->m_GOPSize + extraRPLs;
-        extraRPLs++;
-      }
-      numRefs = 0;
-      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
-      {
-        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-        if (absPOC >= 0)
-        {
-          refList[numRefs] = absPOC;
-          numRefs++;
-        }
-      }
-      for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
-      {
-        int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
-        if (absPOC >= 0)
-        {
-          bool alreadyExist = false;
-          for (int j = 0; !alreadyExist && j < numRefs; j++)
-          {
-            if (refList[j] == absPOC)
-            {
-              alreadyExist = true;
-            }
-          }
-          if (!alreadyExist)
-          {
-            refList[numRefs] = absPOC;
-            numRefs++;
-          }
-        }
-      }
-      refList[numRefs] = curPOC;
-      numRefs++;
-    }
-    checkGOP++;
-  }
-
-  c->m_maxTempLayer = 1;
-
-  for(int i=0; i < c->m_GOPSize; i++)
-  {
-    if(c->m_GOPList[i].m_temporalId >= c->m_maxTempLayer)
-    {
-      c->m_maxTempLayer = c->m_GOPList[i].m_temporalId+1;
-    }
-  }
-  for(int i=0; i< VVENC_MAX_TLAYER; i++)
-  {
-    c->m_maxNumReorderPics[i] = 0;
-    c->m_maxDecPicBuffering[i] = 1;
-  }
-  for(int i=0; i < c->m_GOPSize; i++)
-  {
-    int numRefPic = c->m_RPLList0[i].m_numRefPics;
-    for (int tmp = 0; tmp < c->m_RPLList1[i].m_numRefPics; tmp++)
-    {
-      bool notSame = true;
-      for (int jj = 0; notSame && jj < c->m_RPLList0[i].m_numRefPics; jj++)
-      {
-        if (c->m_RPLList1[i].m_deltaRefPics[tmp] == c->m_RPLList0[i].m_deltaRefPics[jj]) notSame = false;
-      }
-      if (notSame) numRefPic++;
-    }
-    if (numRefPic + 1 > c->m_maxDecPicBuffering[c->m_GOPList[i].m_temporalId])
-    {
-      c->m_maxDecPicBuffering[c->m_GOPList[i].m_temporalId] = numRefPic + 1;
-    }
-    int highestDecodingNumberWithLowerPOC = 0;
-    for(int j=0; j < c->m_GOPSize; j++)
-    {
-      if(c->m_GOPList[j].m_POC <= c->m_GOPList[i].m_POC)
-      {
-        highestDecodingNumberWithLowerPOC = j;
+        //overwrite GOPEntries
+        c->m_GOPList[  0 ] = vvenc::GOPEntry(  'B',   32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48, 40, 36 },       1,   {  32, 48                 } );
+        c->m_GOPList[  1 ] = vvenc::GOPEntry(  'B',   16,    0,       -4.9309,  0.2265,  1.0,         1,             3,   { 16, 32, 48, 24, 20 },       1,   { -16                     } );
+        c->m_GOPList[  2 ] = vvenc::GOPEntry(  'B',    8,    1,       -4.5000,  0.1900,  1.0,         2,             4,   {  8, 24, 16, 40, 12 },       2,   {  -8, -24                } );
+        c->m_GOPList[  3 ] = vvenc::GOPEntry(  'B',    4,    3,       -5.4095,  0.2571,  1.0,         3,             3,   {  4,  8, 20         },       3,   {  -4, -12, -28,          } );
+        c->m_GOPList[  4 ] = vvenc::GOPEntry(  'B',    2,    5,       -4.4895,  0.1947,  1.0,         4,             3,   {  2,  6, 18         },       4,   {  -2,  -6, -14, -30      } );
+        c->m_GOPList[  5 ] = vvenc::GOPEntry(  'B',    1,    6,       -5.4429,  0.2429,  1.0,         5,             1,   {  1                 },       2,   {  -1,  -3,  -7, -15, -31 } );
+        c->m_GOPList[  6 ] = vvenc::GOPEntry(  'B',    3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3             },       2,   {  -1,  -5, -13, -29      } );
+        c->m_GOPList[  7 ] = vvenc::GOPEntry(  'B',    6,    5,       -4.4895,  0.1947,  1.0,         4,             3,   {  2,  4,  6         },       3,   {  -2, -10, -26           } );
+        c->m_GOPList[  8 ] = vvenc::GOPEntry(  'B',    5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5             },       2,   {  -1,  -3, -11, -27      } );
+        c->m_GOPList[  9 ] = vvenc::GOPEntry(  'B',    7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7         },       2,   {  -1,  -9, -25           } );
+        c->m_GOPList[ 10 ] = vvenc::GOPEntry(  'B',   12,    3,       -5.4095,  0.2571,  1.0,         3,             3,   {  4,  8, 12,  6     },       2,   {  -4, -20                } );
+        c->m_GOPList[ 11 ] = vvenc::GOPEntry(  'B',   10,    5,       -4.4895,  0.1947,  1.0,         4,             4,   {  2,  4,  6, 10     },       3,   {  -2,  -6, -22           } );
+        c->m_GOPList[ 12 ] = vvenc::GOPEntry(  'B',    9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5,  9         },       2,   {  -1,  -3,  -7, -23      } );
+        c->m_GOPList[ 13 ] = vvenc::GOPEntry(  'B',   11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11         },       2,   {  -1,  -5, -21           } );
+        c->m_GOPList[ 14 ] = vvenc::GOPEntry(  'B',   14,    5,       -4.4895,  0.1947,  1.0,         4,             4,   {  2,  4,  6, 14     },       2,   {  -2, -18                } );
+        c->m_GOPList[ 15 ] = vvenc::GOPEntry(  'B',   13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13         },       2,   {  -1,  -3, -19           } );
+        c->m_GOPList[ 16 ] = vvenc::GOPEntry(  'B',   15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 15     },       2,   {  -1, -17                } );
+        c->m_GOPList[ 17 ] = vvenc::GOPEntry(  'B',   24,    1,       -4.5000,  0.1900,  1.0,         2,             3,   {  8, 16, 24         },       1,   {  -8                     } );
+        c->m_GOPList[ 18 ] = vvenc::GOPEntry(  'B',   20,    3,       -5.4095,  0.2571,  1.0,         3,             3,   {  4, 12, 20         },       2,   {  -4, -12                } );
+        c->m_GOPList[ 19 ] = vvenc::GOPEntry(  'B',   18,    5,       -4.4895,  0.1947,  1.0,         4,             3,   {  2, 10, 18         },       3,   {  -2,  -6, -14           } );
+        c->m_GOPList[ 20 ] = vvenc::GOPEntry(  'B',   17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 17         },       2,   {  -1,  -3,  -7, -15      } );
+        c->m_GOPList[ 21 ] = vvenc::GOPEntry(  'B',   19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19         },       2,   {  -1,  -5, -13           } );
+        c->m_GOPList[ 22 ] = vvenc::GOPEntry(  'B',   22,    5,       -4.4895,  0.1947,  1.0,         4,             3,   {  2,  6, 22         },       3,   {  -2, -10, 4             } );
+        c->m_GOPList[ 23 ] = vvenc::GOPEntry(  'B',   21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21         },       2,   {  -1,  -3, -11           } );
+        c->m_GOPList[ 24 ] = vvenc::GOPEntry(  'B',   23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23     },       2,   {  -1, -9                 } );
+        c->m_GOPList[ 25 ] = vvenc::GOPEntry(  'B',   28,    3,       -5.4095,  0.2571,  1.0,         3,             4,   {  4,  8, 12, 28     },       1,   {  -4                     } );
+        c->m_GOPList[ 26 ] = vvenc::GOPEntry(  'B',   26,    5,       -4.4895,  0.1947,  1.0,         4,             4,   {  2,  6, 10, 26     },       2,   {  -2, -6                 } );
+        c->m_GOPList[ 27 ] = vvenc::GOPEntry(  'B',   25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5,  9, 25     },       2,   {  -1, -3, -7             } );
+        c->m_GOPList[ 28 ] = vvenc::GOPEntry(  'B',   27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27     },       2,   {  -1, -5                 } );
+        c->m_GOPList[ 29 ] = vvenc::GOPEntry(  'B',   30,    5,       -4.4895,  0.1947,  1.0,         4,             4,   {  2,  6, 14, 30     },       1,   {  -2                     } );
+        c->m_GOPList[ 30 ] = vvenc::GOPEntry(  'B',   29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13, 29     },       2,   {  -1, -3                 } );
+        c->m_GOPList[ 31 ] = vvenc::GOPEntry(  'B',   31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 15, 31 },       1,   {  -1                     } );
       }
     }
-    int numReorder = 0;
-    for(int j=0; j<highestDecodingNumberWithLowerPOC; j++)
+    else
     {
-      if(c->m_GOPList[j].m_temporalId <= c->m_GOPList[i].m_temporalId &&
-          c->m_GOPList[j].m_POC > c->m_GOPList[i].m_POC)
-      {
-        numReorder++;
-      }
+      vvenc_confirmParameter( c, true, "gop auto configuration only supported for gop size (1,8,16,32)" );
     }
-    if(numReorder > c->m_maxNumReorderPics[c->m_GOPList[i].m_temporalId])
-    {
-      c->m_maxNumReorderPics[c->m_GOPList[i].m_temporalId] = numReorder;
-    }
-  }
-
-  for(int i=0; i < VVENC_MAX_TLAYER-1; i++)
-  {
-    // a lower layer can not have higher value of m_numReorderPics than a higher layer
-    if( c->m_maxNumReorderPics[i+1] < c->m_maxNumReorderPics[i])
-    {
-      c->m_maxNumReorderPics[i+1] = c->m_maxNumReorderPics[i];
-    }
-    // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
-    if( c->m_maxNumReorderPics[i] > c->m_maxDecPicBuffering[i] - 1)
-    {
-      c->m_maxDecPicBuffering[i] = c->m_maxNumReorderPics[i] + 1;
-    }
-    // a lower layer can not have higher value of c->m_uiMaxDecPicBuffering than a higher layer
-    if( c->m_maxDecPicBuffering[i+1] < c->m_maxDecPicBuffering[i])
-    {
-      c->m_maxDecPicBuffering[i+1] = c->m_maxDecPicBuffering[i];
-    }
-  }
-
-  // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
-  if( c->m_maxNumReorderPics[VVENC_MAX_TLAYER-1] > c->m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] - 1)
-  {
-    c->m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] = c->m_maxNumReorderPics[VVENC_MAX_TLAYER-1] + 1;
   }
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
-    vvenc::msg( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
+    msg.log( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
     c->m_allowDisFracMMVD = false;
   }
 
@@ -2022,20 +1483,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // finalize initialization
   //
 
-
-  // coding structure
-  c->m_numRPLList0 = 0;
-  for ( int i = 0; i < VVENC_MAX_GOP; i++ )
-  {
-    if ( c->m_RPLList0[ i ].m_POC != -1 )
-      c->m_numRPLList0++;
-  }
-  c->m_numRPLList1 = 0;
-  for ( int i = 0; i < VVENC_MAX_GOP; i++ )
-  {
-    if ( c->m_RPLList1[ i ].m_POC != -1 )
-      c->m_numRPLList1++;
-  }
 
   c->m_PROF &= bool(c->m_Affine);
   if (c->m_Affine > 1)
@@ -2051,6 +1498,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
+  
+  if( c->m_deblockLastTLayers > 0 )
+  {
+    const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                  "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
+    vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
+    c->m_loopFilterOffsetInPPS = false;
+  }
 
   c->m_configDone = true;
 
@@ -2063,7 +1518,7 @@ static bool checkCfgParameter( vvenc_config *c )
 {
   // run base check first
   vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
-  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 
+  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_STILL_PICTURE
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_444
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE
@@ -2071,14 +1526,20 @@ static bool checkCfgParameter( vvenc_config *c )
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE
                            && c->m_profile != vvencProfile::  VVENC_MULTILAYER_MAIN_10_444
                            && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE),
-                              "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+                              "unsupported profile. currently only supporting auto,main_10,main_10_still_picture");
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,    "Error: FastInterSearchMode parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_OFF || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,     "Error: FastInterSearchMode parameter out of range [0...3]" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0
+                          || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS
+                          || c->m_motionEstimationSearchMethod == VVENC_MESEARCH_DEPRECATED,                                                 "Error: FastSearch parameter out of range [0,1,3,4]");
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0
+                          || c->m_motionEstimationSearchMethodSCC == 1
+                          || c->m_motionEstimationSearchMethodSCC > 3,                                                                       "Error: FastSearchSCC parameter out of range [0,2,3]" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
+
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
 
   switch ( c->m_conformanceWindowMode)
   {
@@ -2095,11 +1556,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       break;
   }
@@ -2150,7 +1611,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
   vvenc_confirmParameter( c, c->m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
-  vvenc_confirmParameter( c, c->m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
 
   if( c->m_DepQuantEnabled )
   {
@@ -2199,16 +1659,12 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
+  vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be greater than or equal to 1" );
   vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
-  vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
-  vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to gop size + N frames for MCTF" );
-
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 4,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
+  vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
@@ -2220,13 +1676,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,                "MCTF parameter list sizes differ" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4,          "MCTFSpeed exceeds supported range (0..4)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8,                                       "MCTFUnitSize is smaller than 8" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > 64,                                      "MCTFUnitSize is larger than 64" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize & ( c->m_vvencMCTF.MCTFUnitSize - 1 ),     "MCTFUnitSize is not a power of 2" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
@@ -2265,33 +1719,25 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
   vvenc_confirmParameter( c, c->m_BCW < 0 || c->m_BCW > 2,                     "BCW out of range [0..2]");
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
-#if QTBTT_SPEED3
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
-#else
-  vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
-#endif
-#if FASTTT_TH
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
-#endif
+  vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
+  const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
-  if( 1 << ( c->m_FastInferMerge & 7 ) > c->m_GOPSize )
+  if( ( c->m_FastInferMerge & 7 ) > maxTLayer )
   {
     const int hbm = c->m_FastInferMerge >> 3;
-    const int lbm = std::max<int>( 7, log2( c->m_GOPSize ) );
+    const int lbm = std::min<int>( 7, maxTLayer );
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
-#if QTBTT_SPEED3
   c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp > 2) ? (c->m_qtbttSpeedUp - 2) : 0;
   const int QTBTSMModeMap[] = { 0, 1, 3, 4, 5, 7 };
   c->m_qtbttSpeedUpMode = QTBTSMModeMap[c->m_qtbttSpeedUpMode];
-#endif
-#if FASTTT_TH
   static const float TT_THRESHOLDS[7] = { 1.1f, 1.075f, 1.05f, 1.025f, 1.0f,  0.975f, 0.95f };
   c->m_fastTT_th = c->m_fastTTSplit ? TT_THRESHOLDS[c->m_fastTTSplit - 1] : 0;
-#endif
 
   if( c->m_alf )
   {
@@ -2299,15 +1745,21 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_useFastMrg < 0 || c->m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
-  vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 3,   "FastMIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_meReduceTap < 0 || c->m_meReduceTap > 2, "ReduceFilterME out of range [0..2]" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
+  vvenc_confirmParameter( c, c->m_LookAhead < -1 || c->m_LookAhead > 1,          "Look-ahead out of range [-1..1]" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
+  vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
@@ -2338,9 +1790,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if (c->m_usePerceptQPA && c->m_dualITree && (c->m_internChromaFormat != VVENC_CHROMA_400) && (c->m_chromaCbQpOffsetDualTree != 0 || c->m_chromaCrQpOffsetDualTree != 0 || c->m_chromaCbCrQpOffsetDualTree != 0))
   {
-    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
-    vvenc::msg(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
+    msg.log( VVENC_WARNING, "***************************************************************************\n");
+    msg.log( VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    msg.log( VVENC_WARNING, "***************************************************************************\n");
   }
 
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
@@ -2368,6 +1820,12 @@ static bool checkCfgParameter( vvenc_config *c )
   const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
   vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
+  if (c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth >= pow(10, (maxTLayer + 1)))
+  {
+    msg.log(VVENC_WARNING, "Warning: MaxMTTHierarchyDepth>=10 & larger than maxTLayer\n");
+  }
+  vvenc_confirmParameter(c, c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth < pow(10, maxTLayer ), "MaxMTTHierarchyDepth>=10 & not set for all TLs");
+
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -2385,7 +1843,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
-  vvenc_confirmParameter(c, c->m_maxTempLayer > 1 && c->m_maxTempLayer - c->m_alfSpeed <= 0,      "ALFSpeed disables ALF for this temporal configuration. Disable ALF if intended, or turn off ALFSpeed!");
+
+  vvenc_confirmParameter(c, c->m_alfUnitSize < c->m_CTUSize,                                      "ALF Unit Size must be greater than or equal to CTUSize");
+  vvenc_confirmParameter(c, c->m_alfUnitSize % c->m_CTUSize != 0,                                 "ALF Unit Size must be a multiple of CTUSize");
+
+  vvenc_confirmParameter(c, maxTLayer > 0 && maxTLayer - c->m_alfSpeed <= 0,                      "ALFSpeed disables ALF for this temporal configuration. Disable ALF if intended, or turn off ALFSpeed!");
   vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_maxParallelFrames < 0,                                           "MaxParallelFrames out of range" );
@@ -2402,8 +1864,10 @@ static bool checkCfgParameter( vvenc_config *c )
 #if ENABLE_TRACING
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
-    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
   }
+
+  vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
 
   vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
   vvenc_confirmParameter(c,((c->m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
@@ -2418,9 +1882,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_maxNumAffineMergeCand > vvenc::AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  vvenc_confirmParameter(c, (c->m_hrdParametersPresent>0) && (0 == c->m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
-  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (c->m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (c->m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (!c->m_hrdParametersPresent), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (!c->m_hrdParametersPresent),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = c->m_CTUSize;
@@ -2433,55 +1896,47 @@ static bool checkCfgParameter( vvenc_config *c )
     }
   }
 
-  if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
-  {
-  }
-  else
-  {
-    vvenc_confirmParameter(c,  c->m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
-  }
-
-  int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
-  bool verifiedGOP=false;
-  bool errorGOP=false;
-  int checkGOP=1;
-  int refList[VVENC_MAX_NUM_REF_PICS+1] = {0};
-  bool isOK[VVENC_MAX_GOP];
-  for(int i=0; i<VVENC_MAX_GOP; i++)
-  {
-    isOK[i]=false;
-  }
-  int numOK=0;
-  vvenc_confirmParameter(c,  c->m_IntraPeriod >=0&&(c->m_IntraPeriod%c->m_GOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
+  vvenc_confirmParameter(c,  c->m_IntraPeriod != 1 && c->m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
   vvenc_confirmParameter(c,  c->m_temporalSubsampleRatio < 1, "TemporalSubsampleRatio must be greater than 0");
 
-  for(int i=0; i<c->m_GOPSize; i++)
+  if( c->m_GOPList[ 0 ].m_POC != -1 )
   {
-    if (c->m_GOPList[i].m_POC == c->m_GOPSize * multipleFactor)
-    {
-      vvenc_confirmParameter(c,  c->m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
-    }
-  }
-
-  if ( (c->m_IntraPeriod != 1) && !c->m_loopFilterOffsetInPPS && (!c->m_bLoopFilterDisable) )
-  {
+    int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
     for(int i=0; i<c->m_GOPSize; i++)
     {
-      for( int comp = 0; comp < 3; comp++ )
+      if (c->m_GOPList[i].m_POC == c->m_GOPSize * multipleFactor)
       {
-        vvenc_confirmParameter(c,  (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
-        vvenc_confirmParameter(c,  (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+        vvenc_confirmParameter(c,  c->m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
       }
+    }
+
+    if ( (c->m_IntraPeriod != 1) && !c->m_loopFilterOffsetInPPS && (!c->m_bLoopFilterDisable) )
+    {
+      for(int i=0; i<c->m_GOPSize; i++)
+      {
+        for( int comp = 0; comp < 3; comp++ )
+        {
+          //TODO: c->m_GOPList[i].m_tcOffsetDiv2 and c->m_GOPList[i].m_betaOffsetDiv2 are checked with the luma value also for the chroma components (currently not used or all values are equal)
+          vvenc_confirmParameter(c,  (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+          vvenc_confirmParameter(c,  (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+        }
+      }
+    }
+
+    for(int i=0; i<c->m_GOPSize; i++)
+    {
+      vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+      vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset + c->m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+      vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+      vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset + c->m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+    }
+
+    for(int i=0; i<c->m_GOPSize; i++)
+    {
+      vvenc_confirmParameter(c, c->m_GOPList[i].m_sliceType!='B' && c->m_GOPList[i].m_sliceType!='P' && c->m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
     }
   }
 
-  for(int i=0; i<c->m_GOPSize; i++)
-  {
-    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset + c->m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
-    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset + c->m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
-  }
   vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
   vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[0]  + c->m_chromaCbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
   vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
@@ -2489,202 +1944,13 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_fastLocalDualTreeMode < 0 || c->m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
 
-  int extraRPLs = 0;
-  int numRefs   = 1;
-  //start looping through frames in coding order until we can verify that the GOP structure is correct.
-  while (!verifiedGOP && !errorGOP)
-  {
-    int curGOP = (checkGOP - 1) % c->m_GOPSize;
-    int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
-    if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
-    {
-      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
-      errorGOP = true;
-    }
-    else
-    {
-      //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
-      bool beforeI = false;
-      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
-      {
-        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-        if (absPOC < 0)
-        {
-          beforeI = true;
-        }
-        else
-        {
-          bool found = false;
-          for (int j = 0; j<numRefs; j++)
-          {
-            if (refList[j] == absPOC)
-            {
-              found = true;
-            }
-          }
-          if (!found)
-          {
-            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
-            errorGOP = true;
-          }
-        }
-      }
-      if (!beforeI && !errorGOP)
-      {
-        //all ref frames were present
-        if (!isOK[curGOP])
-        {
-          numOK++;
-          isOK[curGOP] = true;
-          if (numOK == c->m_GOPSize)
-          {
-            verifiedGOP = true;
-          }
-        }
-      }
-      else
-      {
-        //create a new RPLEntry for this frame containing all the reference pictures that were available (POC > 0)
-        int newRefs0 = 0;
-        for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
-        {
-          int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-          if (absPOC >= 0)
-          {
-            newRefs0++;
-          }
-        }
-        int numPrefRefs0 = c->m_RPLList0[curGOP].m_numRefPicsActive;
-
-        int newRefs1 = 0;
-        for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
-        {
-          int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
-          if (absPOC >= 0)
-          {
-            newRefs1++;
-          }
-        }
-        int numPrefRefs1 = c->m_RPLList1[curGOP].m_numRefPicsActive;
-
-        for (int offset = -1; offset>-checkGOP; offset--)
-        {
-          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList0[offGOP].m_POC;
-          if (offPOC >= 0 && c->m_RPLList0[offGOP].m_temporalId <= c->m_RPLList0[curGOP].m_temporalId)
-          {
-            bool newRef = false;
-            for (int i = 0; i<(newRefs0 + newRefs1); i++)
-            {
-              if (refList[i] == offPOC)
-              {
-                newRef = true;
-              }
-            }
-            for (int i = 0; i<newRefs0; i++)
-            {
-              if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
-              {
-                newRef = false;
-              }
-            }
-            if (newRef)
-            {
-              newRefs0++;
-            }
-          }
-          if (newRefs0 >= numPrefRefs0)
-          {
-            break;
-          }
-        }
-
-        for (int offset = -1; offset>-checkGOP; offset--)
-        {
-          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList1[offGOP].m_POC;
-          if (offPOC >= 0 && c->m_RPLList1[offGOP].m_temporalId <= c->m_RPLList1[curGOP].m_temporalId)
-          {
-            bool newRef = false;
-            for (int i = 0; i<(newRefs0 + newRefs1); i++)
-            {
-              if (refList[i] == offPOC)
-              {
-                newRef = true;
-              }
-            }
-            for (int i = 0; i<newRefs1; i++)
-            {
-              if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
-              {
-                newRef = false;
-              }
-            }
-            if (newRef)
-            {
-              newRefs1++;
-            }
-          }
-          if (newRefs1 >= numPrefRefs1)
-          {
-            break;
-          }
-        }
-
-        curGOP = c->m_GOPSize + extraRPLs;
-        extraRPLs++;
-      }
-      numRefs = 0;
-      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
-      {
-        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
-        if (absPOC >= 0)
-        {
-          refList[numRefs] = absPOC;
-          numRefs++;
-        }
-      }
-      for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
-      {
-        int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
-        if (absPOC >= 0)
-        {
-          bool alreadyExist = false;
-          for (int j = 0; !alreadyExist && j < numRefs; j++)
-          {
-            if (refList[j] == absPOC)
-            {
-              alreadyExist = true;
-            }
-          }
-          if (!alreadyExist)
-          {
-            refList[numRefs] = absPOC;
-            numRefs++;
-          }
-        }
-      }
-      refList[numRefs] = curPOC;
-      numRefs++;
-    }
-    checkGOP++;
-  }
-  vvenc_confirmParameter(c, errorGOP, "Invalid GOP structure given");
-
-  for(int i=0; i<c->m_GOPSize; i++)
-  {
-    vvenc_confirmParameter(c, c->m_GOPList[i].m_sliceType!='B' && c->m_GOPList[i].m_sliceType!='P' && c->m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
-  }
-
   vvenc_confirmParameter(c,  c->m_vvencMCTF.MCTF > 2 || c->m_vvencMCTF.MCTF < 0, "MCTF out of range" );
 
   if( c->m_vvencMCTF.MCTF )
   {
     if( c->m_vvencMCTF.MCTFFrames[0] == 0 )
     {
-      vvenc::msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+      msg.log( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
@@ -2692,14 +1958,18 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if( c->m_fastForwardToPOC != -1 )
   {
-    if( c->m_cabacInitPresent )  { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
-    if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
+    if( c->m_cabacInitPresent ) msg.log( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
+    if( c->m_alf )              msg.log( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
   }
 
-  if( c->m_picPartitionFlag )
+  if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
+    if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
+
     checkCfgPicPartitioningParameter( c );
   }
+  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 && !c->m_LookAhead ), "Debug-bitstream for the rate-control in one pass mode is not supported yet" );
+  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && c->m_maxParallelFrames > 1 && ( c->m_LookAhead || c->m_RCTargetBitrate > 0 ), "Debug-bitstream in frame-parallel mode and enabled rate-control or look-ahead is not supported yet" );
 
   return( c->m_confirmFailed );
 }
@@ -2714,51 +1984,92 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
   pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
 
-  int i, numTileColumnWidths, numTileRowHeights;
+  int lastNonZeroColumn = -1, lastNonZeroRow = -1;
+  bool validCfg = true;
+  checkCfgInputArrays( c, lastNonZeroColumn, lastNonZeroRow, validCfg );
+  if( !validCfg ) return;
 
-  // set default tile column if not provided
-  if( c->m_tileColumnWidth[0] == 0 )
-  {
-    c->m_tileColumnWidth[0] = pps.picWidthInCtu;
-  }
-  // set default tile row if not provided
-  if( c->m_tileRowHeight[0] == 0 )
-  {
-    c->m_tileRowHeight[0] = pps.picHeightInCtu;
-  }
+  int numTileColumnWidths, numTileRowHeights;
 
-  // remove any tile columns that can be specified implicitly
-  if( c->m_tileColumnWidth[1] > 0 )
+  bool colWidth_all_zero  = lastNonZeroColumn == -1;
+  bool rowHeight_all_zero = lastNonZeroRow == -1;
+
+  //number of tiles is set explicitly, e.g. Tiles=2x2
+  //TileColumnWidthArray and TileRowHeightArray have to be not set
+  if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    i = 9;
-    while( i > 0 && c->m_tileColumnWidth[i-1] == c->m_tileColumnWidth[i] )
+    vvenc_confirmParameter( c, !colWidth_all_zero  && ( lastNonZeroColumn + 1 ) != c->m_numTileCols, "Explicit number of tile columns and column widths are given, but not consistent!" );
+    vvenc_confirmParameter( c, !rowHeight_all_zero && ( lastNonZeroRow    + 1 ) != c->m_numTileRows, "Explicit number of tile rows and column heights are given, but not consistent!" );
+
+    if( !colWidth_all_zero || !rowHeight_all_zero ) return;
+
+    if( c->m_numTileCols > 1 )
     {
-      c->m_tileColumnWidth[i] = 0;
-      i--;
+      unsigned int tileWidth = pps.picWidthInCtu / c->m_numTileCols;
+      if( tileWidth * c->m_numTileCols < pps.picWidthInCtu ) tileWidth++;
+      c->m_tileColumnWidth[0] = tileWidth;
     }
-    numTileColumnWidths = i;
-  }
-  else
-  {
+    else
+    {
+      c->m_tileColumnWidth[0] = pps.picWidthInCtu;
+    }
+    if( c->m_numTileRows > 1 )
+    {
+      unsigned int tileHeight = pps.picHeightInCtu / c->m_numTileRows;
+      if( tileHeight * c->m_numTileRows < pps.picHeightInCtu ) tileHeight++;
+      c->m_tileRowHeight[0] = tileHeight;
+    }
+    else
+    {
+      c->m_tileRowHeight[0] = pps.picHeightInCtu;
+    }
+
     numTileColumnWidths = 1;
-  }
-
-  // remove any tile rows that can be specified implicitly
-  if( c->m_tileRowHeight[1] > 0 )
-  {
-    i = 9;
-    while( i > 0 && c->m_tileRowHeight[i-1] == c->m_tileRowHeight[i] )
-    {
-      c->m_tileRowHeight[i] = 0;
-      i--;
-    }
-    numTileRowHeights = i;
+    numTileRowHeights   = 1;
   }
   else
   {
-    numTileRowHeights = 1;
-  }
+    // set default tile column if not provided
+    if( colWidth_all_zero )
+    {
+      c->m_tileColumnWidth[0] = pps.picWidthInCtu;
+    }
+    // set default tile row if not provided
+    if( rowHeight_all_zero )
+    {
+      c->m_tileRowHeight[0] = pps.picHeightInCtu;
+    }
 
+    // remove any tile columns that can be specified implicitly
+    if( c->m_tileColumnWidth[1] > 0 )
+    {
+      while( lastNonZeroColumn > 0 && c->m_tileColumnWidth[lastNonZeroColumn-1] == c->m_tileColumnWidth[lastNonZeroColumn] )
+      {
+        c->m_tileColumnWidth[lastNonZeroColumn] = 0;
+        lastNonZeroColumn--;
+      }
+      numTileColumnWidths = lastNonZeroColumn+1;
+    }
+    else
+    {
+      numTileColumnWidths = 1;
+    }
+
+    // remove any tile rows that can be specified implicitly
+    if( c->m_tileRowHeight[1] > 0 )
+    {
+      while( lastNonZeroRow > 0 && c->m_tileRowHeight[lastNonZeroRow-1] == c->m_tileRowHeight[lastNonZeroRow] )
+      {
+        c->m_tileRowHeight[lastNonZeroRow] = 0;
+        lastNonZeroRow--;
+      }
+      numTileRowHeights = lastNonZeroRow+1;
+    }
+    else
+    {
+      numTileRowHeights = 1;
+    }
+  }
   // setup tiles in temporary PPS structure
   uint32_t remSize = pps.picWidthInCtu;
   int colIdx;
@@ -2801,7 +2112,55 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   c->m_numTileCols = pps.numTileCols;
   c->m_numTileRows = pps.numTileRows;
 
-  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+  for( int col = 0; col < pps.numTileCols; col++ ) c->m_tileColumnWidth[col] = pps.tileColWidth [col];
+  for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
+
+  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loopfilter across boundaries doesn't work multi-threaded yet" );
+  vvenc_confirmParameter( c, c->m_treatAsSubPic && ( c->m_numTileCols > 1 || c->m_numTileRows > 1 ), "TreatAsSubPic and Tiles not supported yet");
+}
+
+static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )
+{
+  int lastNonZeroIdx = -1;
+  for( int i = 9; i >= 0; i-- )
+  {
+    if( c->m_tileColumnWidth[i] != 0 )
+    {
+      lastNonZeroIdx = i;
+      break;
+    }
+  }
+  lastNonZeroCol = lastNonZeroIdx;
+
+  lastNonZeroIdx = -1;
+
+  for( int i = 9; i >= 0; i-- )
+  {
+    if( c->m_tileRowHeight[i] != 0 )
+    {
+      lastNonZeroIdx = i;
+      break;
+    }
+  }
+  lastNonZeroRow = lastNonZeroIdx;
+
+  if( lastNonZeroCol > 0 )
+  {
+    for( int i = 0; i < lastNonZeroCol; i++ )
+    {
+      vvenc_confirmParameter( c, c->m_tileColumnWidth[i] == 0, "Tile column width cannot be 0! Check your TileColumnWidthArray" );
+      cfgIsValid = c->m_tileColumnWidth[i] != 0;
+    }
+  }
+  if( lastNonZeroRow > 0 )
+  {
+    for( int i = 0; i < lastNonZeroRow; i++ )
+    {
+      vvenc_confirmParameter( c, c->m_tileRowHeight[i] == 0, "Tile row height cannot be 0! Check your TileRowHeightArray" );
+      cfgIsValid = c->m_tileRowHeight[i] != 0;
+    }
+  }
+
 }
 
 VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
@@ -2811,7 +2170,18 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_SourceWidth         = width;                    // luminance width of input picture
   c->m_SourceHeight        = height;                   // luminance height of input picture
 
-  c->m_FrameRate           = framerate;                // temporal rate (fps)
+  c->m_FrameRate           = framerate;                // temporal rate (fps num)
+  c->m_FrameScale          = 1;                        // temporal scale (fps denum)
+
+  switch( framerate )
+  {
+    case 23:  c->m_FrameRate = 24000;  c->m_FrameScale = 1001; break;
+    case 29:  c->m_FrameRate = 30000;  c->m_FrameScale = 1001; break;
+    case 59:  c->m_FrameRate = 60000;  c->m_FrameScale = 1001; break;
+    case 119: c->m_FrameRate = 120000; c->m_FrameScale = 1001; break;
+    default: break;
+  }
+
   c->m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
 
   c->m_inputBitDepth[0]    = 8;                        // input bitdepth
@@ -2846,6 +2216,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_log2DiffMaxMinCodingBlockSize   = 5;
   c->m_bUseASR                         = true;
   c->m_bUseHADME                       = true;
+  c->m_fastHad                         = false;
   c->m_useRDOQTS                       = true;
   c->m_useSelectiveRDOQ                = false;
   c->m_fastQtBtEnc                     = true;
@@ -2905,13 +2276,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   switch( preset )
   {
     case vvencPresetMode::VVENC_FIRSTPASS:
-      c->m_DMVR                            = 0;
 
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2922,16 +2292,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 16;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
-      c->m_contentBasedFastQtbt            = 0;
-      c->m_usePbIntraFast                  = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 2;
@@ -2942,6 +2310,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_RDOQ                            = 2;
@@ -2957,13 +2326,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       break;
 
     case vvencPresetMode::VVENC_FASTER:
-      c->m_DMVR                            = 1;
 
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT00
@@ -2974,15 +2342,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
-      c->m_contentBasedFastQtbt            = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
       c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2994,11 +2360,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
+      c->m_alfUnitSize                     = 128;
       c->m_ccalf                           = 1;
+      c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
@@ -3017,7 +2386,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize64 QT44MTT10
@@ -3028,46 +2397,43 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
-      c->m_maxMTTDepthIChroma              = 1;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
-      c->m_qtbttSpeedUp                    = 3;
-#if FASTTT_TH
+      // speedups
+      c->m_qtbttSpeedUp                    = 7;
       c->m_fastTTSplit                     = 0;
-#endif
-      c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 2;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = false;
+      c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
-      c->m_FIMMode                         = 2;
+      c->m_FIMMode                         = 3;
       c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
-      // tools                             
-      c->m_RDOQ                            = 2;
-      c->m_SignDataHidingEnabled           = 1;
+      // tools
       c->m_Affine                          = 2;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
+      c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_AMVRspeed                       = 5;
-      c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 2;
+      c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MMVD                            = 3;
-      c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
       c->m_PROF                            = 1;
       c->m_SbTMVP                          = 1;
@@ -3083,7 +2449,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -3094,15 +2460,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 3;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -3113,7 +2477,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
       c->m_numIntraModesFullRD             = -1;
-      c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -3122,6 +2487,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
+      c->m_CIIP                            = 0;
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
@@ -3133,9 +2499,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
-      c->m_useFastMIP                      = 4;
+      c->m_useFastMIP                      = 3;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
@@ -3154,7 +2520,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT32
@@ -3165,15 +2531,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 2;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 5;
-#endif
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -3185,6 +2549,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -3206,7 +2571,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 3;
@@ -3228,7 +2593,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND;
 
       // partitioning: CTUSize128 QT44MTT33
@@ -3237,17 +2602,15 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_maxMTTDepth                     = 3;
+      c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
-      c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 1;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 1;
-#endif
-      c->m_contentBasedFastQtbt            = 0;
+      c->m_contentBasedFastQtbt            = false;
+      c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 1;
       c->m_fastLocalDualTreeMode           = 1;
@@ -3259,6 +2622,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 0;
 
       // tools
       c->m_Affine                          = 1;
@@ -3280,7 +2644,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 1;
@@ -3304,7 +2668,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SearchRange                     = 384;
       c->m_bipredSearchRange               = 4;
       c->m_minSearchWindow                 = 96;
-      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
 
       // partitioning: CTUSize128 QT44MTT21
@@ -3315,16 +2679,14 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 2;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
-      c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -3335,6 +2697,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 3;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -3358,7 +2721,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
-      c->m_useFastMIP                      = 4;
+      c->m_useFastMIP                      = 3;
       c->m_MMVD                            = 2;
       c->m_MRL                             = 1;
       c->m_MTS                             = 1;
@@ -3391,217 +2754,303 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
   if( eMsgLevel >= VVENC_DETAILS )
   {
-  css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " " <<
-                                                        (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
-  css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
-  css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
-  css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
-  css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
-  css << "Frame/Field                            : Frame based coding\n";
-  if ( c->m_framesToBeEncoded > 0 )
-    css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
-  else
-    css << "Frame index                            : all frames\n";
+    css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
+                                                       << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
+    css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
+    css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
+    css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
+    css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
+    //css << "Frame/Field                            : Frame based coding\n";
+    if ( c->m_framesToBeEncoded > 0 )
+      css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
+    else
+      css << "Frame index                            : all frames\n";
 
-  css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
-  css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
-  css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
-  css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
-  css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
-  css << "Motion search range                    : " << c->m_SearchRange << "\n";
-  css << "Intra period                           : " << c->m_IntraPeriod << "\n";
-  css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
-  css << "QP                                     : " << c->m_QP << "\n";
-  css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
-  css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
-  css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
-  css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
-  css << "GOP size                               : " << c->m_GOPSize << "\n";
-  css << "Input queue size                       : " << c->m_InputQueueSize << "\n";
-  css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
-  css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
-  css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
-  css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
-  if (c->m_bUseSAO)
-  {
-    css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
-    css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
-  }
-  css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
+    css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
+    css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
+    css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
+    css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
+    css << "Motion search range                    : " << c->m_SearchRange << "\n";
+    css << "Intra period                           : " << c->m_IntraPeriod << "\n";
+    css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
+    css << "QP                                     : " << c->m_QP << "\n";
+    css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
+    css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
+    css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
+    css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
+    css << "GOP size                               : " << c->m_GOPSize << "\n";
+    css << "PicReordering                          : " << c->m_picReordering << "\n";
+    css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
+    css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
+    css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
+    css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
+    if (c->m_bUseSAO)
+    {
+      css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
+      css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
+    }
+    css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
 
-  if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
-  {
-    css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
-  }
-  if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
-  {
-    css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
-  }
-  css << "\n";
+    if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
+    {
+      css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
+    }
+    if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
+    {
+      css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
+    }
+    css << "\n";
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )
   {
-  // verbose output
-  css << "CODING TOOL CFG: ";
-  css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
-  css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
-  css << "CIP:" << c->m_bUseConstrainedIntraPred << " ";
-  css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
-  css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
-  if( c->m_alf )
-  {
-    css << "(NonLinLuma:" << c->m_useNonLinearAlfLuma << " ";
-    css << "NonLinChr:" << c->m_useNonLinearAlfChroma << ") ";
-  }
-  css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
-
-  css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
-  css << "Slices:"<< c->m_numSlicesInPic << " ";
-
-  const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
-  css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
-  css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
-  css << "TMVP:" << c->m_TMVPModeId << " ";
-
-  css << "DQ:" << c->m_DepQuantEnabled << " ";
-  css << "SDH:" << c->m_SignDataHidingEnabled << " ";
-  css << "CST:" << c->m_dualITree << " ";
-  css << "BDOF:" << c->m_BDOF << " ";
-  css << "DMVR:" << c->m_DMVR << " ";
-  css << "MTSImplicit:" << c->m_MTSImplicit << " ";
-  css << "SBT:" << c->m_SBT << " ";
-  css << "JCbCr:" << c->m_JointCbCrMode << " ";
-  css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
-  css << "AMVR:" << c->m_AMVRspeed << " ";
-  css << "SMVD:" << c->m_SMVD << " ";
-
-  css << "LMCS:" << c->m_lumaReshapeEnable << " ";
-  if( c->m_lumaReshapeEnable )
-  {
-    css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
-    css << "Opt:" << c->m_adpOption << "";
-    if( c->m_adpOption > 0 )
+    // verbose output
+    css << "CODING TOOL CFG: ";
+    css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+    css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
+    css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
+    css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
+    if( c->m_alf )
     {
-      css << " CW:" << c->m_initialCW << "";
+      css << "(NonLinLuma:" << c->m_useNonLinearAlfLuma << " ";
+      css << "NonLinChr:" << c->m_useNonLinearAlfChroma << ") ";
     }
-    css << ") ";
-  }
-  css << "CIIP:" << c->m_CIIP << " ";
-  css << "MIP:" << c->m_MIP << " ";
-  css << "AFFINE:" << c->m_Affine << " ";
-  if( c->m_Affine )
-  {
-    css << "(PROF:" << c->m_PROF << ", ";
-    css << "Type:" << c->m_AffineType << ") ";
-  }
-  css << "MMVD:" << c->m_MMVD << " ";
-  if( c->m_MMVD )
-    css << "DisFracMMVD:" << c->m_allowDisFracMMVD << " ";
-  css << "SbTMVP:" << c->m_SbTMVP << " ";
-  css << "GPM:" << c->m_Geo << " ";
-  css << "LFNST:" << c->m_LFNST << " ";
-  css << "MTS:" << c->m_MTS << " ";
-  if( c->m_MTS )
-  {
-    css << "(IntraCand:" << c->m_MTSIntraMaxCand << ") ";
-  }
-  css << "ISP:" << c->m_ISP << " ";
-  css << "TS:" << c->m_TS << " ";
-  if( c->m_TS )
-  {
-    css << "TSLog2MaxSize:" << c->m_TSsize << " ";
-    css << "useChromaTS:" << c->m_useChromaTS << " ";
-  }
-  css << "BDPCM:" << c->m_useBDPCM << " ";
-  css << "IBC:" << c->m_IBCMode << " ";
-  css << "BCW:" << c->m_BCW << " ";
+    css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
 
-  css << "\nENC. ALG. CFG: ";
-  css << "QPA:" << c->m_usePerceptQPA << " ";
-  css << "HAD:" << c->m_bUseHADME << " ";
-  css << "RDQ:" << c->m_RDOQ << " ";
-  css << "RDQTS:" << c->m_useRDOQTS << " ";
-  css << "ASR:" << c->m_bUseASR << " ";
-  css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
-  css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
-  css << "EDO:" << c->m_EDO << " ";
-  css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-  if( c->m_vvencMCTF.MCTF )
-  {
-    css << "[L:" << c->m_vvencMCTF.MCTFNumLeadFrames << ", T:" << c->m_vvencMCTF.MCTFNumTrailFrames << "] ";
-  }
+    css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
+    css << "Slices:"<< c->m_numSlicesInPic << " ";
 
-  css << "\nFAST TOOL CFG: ";
-  css << "ECU:" << c->m_useEarlyCU << " ";
-  css << "FEN:" << c->m_fastInterSearchMode << " ";
-  css << "FDM:" << c->m_useFastDecisionForMerge << " ";
-  css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
-  if( c->m_motionEstimationSearchMethodSCC )
-  {
-    css << "(SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
-  }
-  css << "LCTUFast:" << c->m_useFastLCTU << " ";
-  css << "FastMrg:" << c->m_useFastMrg << " ";
-  css << "PBIntraFast:" << c->m_usePbIntraFast << " ";
-  css << "AMaxBT:" << c->m_useAMaxBT << " ";
-  css << "FastQtBtEnc:" << c->m_fastQtBtEnc << " ";
-  css << "ContentBasedFastQtbt:" << c->m_contentBasedFastQtbt << " ";
-  if( c->m_MIP )
-  {
-    css << "FastMIP:" << c->m_useFastMIP << " ";
-  }
-  css << "FastIntraTools:" << c->m_FastIntraTools << " ";
-  css << "IntraEstDecBit:" << c->m_IntraEstDecBit << " ";
-  css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
-  css << "IntegerET:" << c->m_bIntegerET << " ";
-  css << "FastSubPel:" << c->m_fastSubPel << " ";
-  css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
-#if FASTTT_TH
-  css << "FastTTSplit:" << c->m_fastTTSplit << " ";
-#endif
-  if( c->m_IBCMode )
-  {
-    css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
-  }
-  css << "FIM:" << c->m_FIMMode << " ";
-  if( c->m_FastInferMerge )
-  {
-    css << "(" << c->m_FastInferMerge << ") ";
-  }
-  if( c->m_alf )
-  {
-    css << "ALFSpeed:" << c->m_alfSpeed << " ";
-  }
-  if( c->m_quantThresholdVal & 1 )
-    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
-  else
-    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
+    const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
+    css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
+    css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
+    css << "TMVP:" << c->m_TMVPModeId << " ";
 
-  css << "\nRATE CONTROL CFG: ";
-  css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
-  if ( c->m_RCTargetBitrate > 0 )
-  {
-    css << "Passes:" << c->m_RCNumPasses << " ";
-    css << "Pass:" << c->m_RCPass << " ";
-    css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
-    css << "RCInitialQP:" << c->m_RCInitialQP << " ";
-    css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
-  }
+    css << "DQ:" << c->m_DepQuantEnabled << " ";
+    css << "SDH:" << c->m_SignDataHidingEnabled << " ";
+    css << "CST:" << c->m_dualITree << " ";
+    css << "BDOF:" << c->m_BDOF << " ";
+    css << "DMVR:" << c->m_DMVR << " ";
+    css << "MTSImplicit:" << c->m_MTSImplicit << " ";
+    css << "SBT:" << c->m_SBT << " ";
+    css << "JCbCr:" << c->m_JointCbCrMode << " ";
+    css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
+    css << "AMVR:" << c->m_AMVRspeed << " ";
+    css << "SMVD:" << c->m_SMVD << " ";
 
-  css << "\nPARALLEL PROCESSING CFG: ";
-  css << "NumThreads:" << c->m_numThreads << " ";
-  css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
-  css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
-  css << "WF:" << c->m_entropyCodingSyncEnabled << "";
-  css << "\n";
+    css << "LMCS:" << c->m_lumaReshapeEnable << " ";
+    if( c->m_lumaReshapeEnable )
+    {
+      css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
+      css << "Opt:" << c->m_adpOption << "";
+      if( c->m_adpOption > 0 )
+      {
+        css << " CW:" << c->m_initialCW << "";
+      }
+      css << ") ";
+    }
+    css << "CIIP:" << c->m_CIIP << " ";
+    css << "MIP:" << c->m_MIP << " ";
+    css << "AFFINE:" << c->m_Affine << " ";
+    if( c->m_Affine )
+    {
+      css << "(PROF:" << c->m_PROF << ", ";
+      css << "Type:" << c->m_AffineType << ") ";
+    }
+    css << "MMVD:" << c->m_MMVD << " ";
+    if( c->m_MMVD )
+      css << "DisFracMMVD:" << c->m_allowDisFracMMVD << " ";
+    css << "SbTMVP:" << c->m_SbTMVP << " ";
+    css << "GPM:" << c->m_Geo << " ";
+    css << "LFNST:" << c->m_LFNST << " ";
+    css << "MTS:" << c->m_MTS << " ";
+    if( c->m_MTS )
+    {
+      css << "(IntraCand:" << c->m_MTSIntraMaxCand << ") ";
+    }
+    css << "ISP:" << c->m_ISP << " ";
+    css << "TS:" << c->m_TS << " ";
+    if( c->m_TS )
+    {
+      css << "TSLog2MaxSize:" << c->m_TSsize << " ";
+      css << "useChromaTS:" << c->m_useChromaTS << " ";
+    }
+    css << "BDPCM:" << c->m_useBDPCM << " ";
+    css << "IBC:" << c->m_IBCMode << " ";
+    css << "BCW:" << c->m_BCW << " ";
+
+    css << "\nENC. ALG. CFG: ";
+    css << "QPA:" << c->m_usePerceptQPA << " ";
+    css << "HAD:" << c->m_bUseHADME << " ";
+    if( c->m_fastHad ) css << "(fast) ";
+    css << "RDQ:" << c->m_RDOQ << " ";
+    css << "RDQTS:" << c->m_useRDOQTS << " ";
+    css << "ASR:" << c->m_bUseASR << " ";
+    css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
+    css << "EDO:" << c->m_EDO << " ";
+    css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
+
+    css << "\nPRE-ANALYSIS CFG: ";
+    css << "STA:" << c->m_sliceTypeAdapt << " ";
+    css << "LeadFrames:" << c->m_leadFrames << " ";
+    css << "TrailFrames:" << c->m_trailFrames << " ";
+
+    css << "\nFAST TOOL CFG: ";
+    css << "ECU:" << c->m_useEarlyCU << " ";
+    css << "FEN:" << c->m_fastInterSearchMode << " ";
+    css << "FDM:" << c->m_useFastDecisionForMerge << " ";
+    css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
+    if( c->m_motionEstimationSearchMethodSCC )
+    {
+      css << "(SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
+    }
+    css << "LCTUFast:" << c->m_useFastLCTU << " ";
+    css << "FastMrg:" << c->m_useFastMrg << " ";
+    css << "PBIntraFast:" << c->m_usePbIntraFast << " ";
+    css << "AMaxBT:" << c->m_useAMaxBT << " ";
+    css << "FastQtBtEnc:" << c->m_fastQtBtEnc << " ";
+    css << "ContentBasedFastQtbt:" << c->m_contentBasedFastQtbt << " ";
+    if( c->m_MIP )
+    {
+      css << "FastMIP:" << c->m_useFastMIP << " ";
+    }
+    css << "FastIntraTools:" << c->m_FastIntraTools << " ";
+    css << "IntraEstDecBit:" << c->m_IntraEstDecBit << " ";
+    css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
+    css << "IntegerET:" << c->m_bIntegerET << " ";
+    css << "FastSubPel:" << c->m_fastSubPel << " ";
+    css << "ReduceFilterME:" << c->m_meReduceTap << " ";
+    css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
+    css << "FastTTSplit:" << c->m_fastTTSplit << " ";
+    if( c->m_IBCMode )
+    {
+      css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
+    }
+    css << "FIM:" << c->m_FIMMode << " ";
+    if( c->m_FastInferMerge )
+    {
+      css << "(" << c->m_FastInferMerge << ") ";
+    }
+    if( c->m_alf )
+    {
+      css << "ALFSpeed:" << c->m_alfSpeed << " ";
+    }
+    if( c->m_quantThresholdVal & 1 )
+      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+    else
+      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
+
+    css << "\nRATE CONTROL CFG: ";
+    css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
+    if ( c->m_RCTargetBitrate > 0 )
+    {
+      css << "Passes:" << c->m_RCNumPasses << " ";
+      css << "Pass:" << c->m_RCPass << " ";
+      css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
+      css << "RCInitialQP:" << c->m_RCInitialQP << " ";
+      css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
+    }
+    css << "LookAhead:" << c->m_LookAhead << " ";
+
+    css << "\nPARALLEL PROCESSING CFG: ";
+    css << "NumThreads:" << c->m_numThreads << " ";
+    css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+    if( c->m_picPartitionFlag )
+    {
+      css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
+    }
+    css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
+    css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
+    css << "\n";
   }
 
   vvenc_cfgString = css.str();
   return vvenc_cfgString.c_str();
 }
+
+VVENC_DECL void vvenc_set_msg_callback( vvenc_config *cfg, void *msgCtx, vvencLoggingCallback msgFnc )
+{
+  if( cfg )
+  {
+    cfg->m_msgCtx = msgCtx;
+    cfg->m_msgFnc = msgFnc;
+  }
+}
+
+
+VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *value)
+{
+  if ( !name )
+  {
+    return VVENC_PARAM_BAD_NAME;
+  }
+
+  bool bError = false;
+
+  std::string n(name);
+  std::string v(value);
+  std::transform( n.begin(), n.end(), n.begin(), ::tolower );
+
+  if ( name[0] == '-'  || name[1] == '-' ) // name prefix given - not supported
+  {
+    return VVENC_PARAM_BAD_NAME;
+  }
+  else
+  {
+    std::string namePrefix="--";  // add long option name prefix
+    n = namePrefix;
+    n.append(name);
+  }
+
+  if (!value)
+  {
+    v = "true";
+  }
+  else if (value[0] == '=')
+  {
+    value += 1;
+    v = value;
+  }
+
+  char *argv[2];
+  argv[0]=(char*)n.c_str();
+  argv[1]=(char*)v.c_str();
+
+  int ret = vvenc_set_param_list ( c, 2, argv);
+  if( ret != 0 )
+  {
+    return ret;
+  }
+
+  return bError ? VVENC_PARAM_BAD_VALUE : 0;
+}
+
+VVENC_DECL int vvenc_set_param_list( vvenc_config *c, int argc, char* argv[] )
+{
+  if ( !argc || !c )
+  {
+    return -1;
+  }
+
+  apputils::VVEncAppCfg cVVEncAppCfg;
+  std::stringstream cssO;
+  int ret =  cVVEncAppCfg.parse( argc, argv, c, cssO );
+
+  if( !cssO.str().empty() )
+  {    
+    vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+    vvencMsgLevel msgLvl = VVENC_INFO;
+    if( ret < 0 ) msgLvl = VVENC_ERROR;
+    else if( ret == 2 ) msgLvl = VVENC_WARNING;
+
+    msg.log( msgLvl , "%s\n", cssO.str().c_str());
+  }
+
+  return ret;
+}
+
 
 VVENC_NAMESPACE_END
 

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -335,6 +331,120 @@ void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int h
   }
 }
 
+uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++) // center cols
+    {
+      const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
+                             - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+      saAct += abs (s);
+    }
+    pSrc += iSrcStride;
+  }
+  return saAct;
+}
+
+uint64_t HDHighPassCore  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride)
+{
+  uint64_t taAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++)  // cnt cols
+    {
+      const int t = (int) pSrc[x] - (int) pSM1[x];
+      taAct += (1 + 3 * abs (t)) >> 1;
+    }
+    pSrc += iSrcStride;
+    pSM1 += iSM1Stride;
+  }
+  return taAct;
+}
+
+uint64_t  HDHighPass2Core  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++)  // cnt cols
+    {
+      const int t = (int) pSrc[x] - 2 * (int) pSM1[x] + (int) pSM2[x];
+      taAct += abs (t);
+    }
+    pSrc += iSrcStride;
+    pSM1 += iSM1Stride;
+    pSM2 += iSM2Stride;
+  }
+  return taAct;
+}
+uint64_t AvgHighPassWithDownsamplingCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+ for (int y = 2; y < height - 2; y += 2)
+ {
+   for (int x = 2; x < width - 2; x += 2)
+   {
+     const int f = 12 * ((int)pSrc[ y   *iSrcStride + x  ] + (int)pSrc[ y   *iSrcStride + x+1] + (int)pSrc[(y+1)*iSrcStride + x  ] + (int)pSrc[(y+1)*iSrcStride + x+1])
+                  - 3 * ((int)pSrc[(y-1)*iSrcStride + x  ] + (int)pSrc[(y-1)*iSrcStride + x+1] + (int)pSrc[(y+2)*iSrcStride + x  ] + (int)pSrc[(y+2)*iSrcStride + x+1])
+                  - 3 * ((int)pSrc[ y   *iSrcStride + x-1] + (int)pSrc[ y   *iSrcStride + x+2] + (int)pSrc[(y+1)*iSrcStride + x-1] + (int)pSrc[(y+1)*iSrcStride + x+2])
+                  - 2 * ((int)pSrc[(y-1)*iSrcStride + x-1] + (int)pSrc[(y-1)*iSrcStride + x+2] + (int)pSrc[(y+2)*iSrcStride + x-1] + (int)pSrc[(y+2)*iSrcStride + x+2])
+                      - ((int)pSrc[(y-2)*iSrcStride + x-1] + (int)pSrc[(y-2)*iSrcStride + x  ] + (int)pSrc[(y-2)*iSrcStride + x+1] + (int)pSrc[(y-2)*iSrcStride + x+2]
+                       + (int)pSrc[(y+3)*iSrcStride + x-1] + (int)pSrc[(y+3)*iSrcStride + x  ] + (int)pSrc[(y+3)*iSrcStride + x+1] + (int)pSrc[(y+3)*iSrcStride + x+2]
+                       + (int)pSrc[(y-1)*iSrcStride + x-2] + (int)pSrc[ y   *iSrcStride + x-2] + (int)pSrc[(y+1)*iSrcStride + x-2] + (int)pSrc[(y+2)*iSrcStride + x-2]
+                       + (int)pSrc[(y-1)*iSrcStride + x+3] + (int)pSrc[ y   *iSrcStride + x+3] + (int)pSrc[(y+1)*iSrcStride + x+3] + (int)pSrc[(y+2)*iSrcStride + x+3]);
+     saAct += (uint64_t) abs(f);
+   }
+ }
+ return saAct;
+}
+uint64_t AvgHighPassWithDownsamplingDiff1stCore (const int width, const int  height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride)
+{
+  uint64_t taAct = 0;
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  pSrcM1-=iSrcM1Stride;
+  pSrcM1-=iSrcM1Stride;
+
+  for (uint32_t y = 2; y < height-2; y += 2)
+  {
+    for (uint32_t x = 2; x < width-2; x += 2)
+    {
+      const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
+                 - ((int)pSrcM1[y*iSrcM1Stride + x] + (int)pSrcM1[y*iSrcM1Stride + x+1] + (int)pSrcM1[(y+1)*iSrcM1Stride + x] + (int)pSrcM1[(y+1)*iSrcM1Stride + x+1]);
+      taAct += (1 + 3 * abs (t)) >> 1;
+    }
+  }
+  return (taAct );
+}
+
+uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int height,const Pel* pSrc,const Pel* pSrcM1,const Pel* pSrcM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  pSrcM1-=iSM1Stride;
+  pSrcM1-=iSM1Stride;
+  pSrcM2-=iSM2Stride;
+  pSrcM2-=iSM2Stride;
+
+  for (uint32_t y = 2; y < height-2; y += 2)
+  {
+    for (uint32_t x = 2; x < width-2; x += 2)
+    {
+      const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
+                            - 2 * ((int)pSrcM1[y*iSM1Stride + x] + (int)pSrcM1[y*iSM1Stride + x+1] + (int)pSrcM1[(y+1)*iSM1Stride + x] + (int)pSrcM1[(y+1)*iSM1Stride + x+1])
+                            + (int)pSrcM2[y*iSM2Stride + x] + (int)pSrcM2[y*iSM2Stride + x+1] + (int)pSrcM2[(y+1)*iSM2Stride + x] + (int)pSrcM2[(y+1)*iSM2Stride + x+1];
+      taAct += (uint64_t) abs(t);
+    }
+  }
+  return (taAct);
+}
+
 PelBufferOps::PelBufferOps()
 {
   isInitX86Done = false;
@@ -379,6 +489,12 @@ PelBufferOps::PelBufferOps()
   applyLut          = applyLutCore;
 
   fillPtrMap        = fillMapPtr_Core;
+  AvgHighPassWithDownsampling = AvgHighPassWithDownsamplingCore;
+  AvgHighPass = AvgHighPassCore;
+  AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1stCore;
+  AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
+  HDHighPass = HDHighPassCore;
+  HDHighPass2 = HDHighPass2Core;
 }
 
 PelBufferOps g_pelBufOP = PelBufferOps();
@@ -578,6 +694,53 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
 #undef SUBS_OP
 #undef SUBS_INC
   }
+}
+
+template<>
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int& varv) const
+{
+  CHECK( Org.width != Org.height, "Incompatible size!" );
+  int stride = Org.stride;
+  const Pel* src;
+  Pel data;
+  double variance=0;
+  double mean=0;
+  int64_t sum[4]={0,0,0,0};
+  int64_t sum_sqr[4]={0,0,0,0};
+  uint32_t halfsize =size>>1;
+  uint32_t off[4]={0,halfsize,size*halfsize,size*halfsize+halfsize};
+  int n,x,y;
+
+  for( n = 0; n < 4; n++)
+  {
+    src = Org.buf+off[n];
+    for( y = 0; y < halfsize; y++)
+    {
+      for(x = 0; x < halfsize; x++)
+      {
+        data=src[y*stride+x];
+        sum[n]+=data;
+        sum_sqr[n]+= data*data;
+      }
+    }
+  }
+  int num=size*(size>>1);
+  // varhu
+  mean=(double)(sum[0]+sum[1])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[1])/(num) - (mean*mean);
+  varh =(int)(variance+0.5);
+  // varhl
+  mean=(double)(sum[2]+sum[3])/(num);
+  variance =  (double)(sum_sqr[2]+sum_sqr[3])/(num) - (mean*mean);
+  varh +=(int)(variance+0.5);
+  // varvl
+  mean=(double)(sum[0]+sum[2])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[2])/(num) - (mean*mean);
+  varv =(int)(variance+0.5);
+  // varvr
+  mean=(double)(sum[1]+sum[3])/(num);
+  variance =  (double)(sum_sqr[1]+sum_sqr[3])/(num) - (mean*mean);
+  varv +=(int)(variance+0.5);
 }
 
 template<>

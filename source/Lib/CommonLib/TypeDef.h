@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -61,9 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <cassert>
 
-#include "vvenc/vvencCfg.h"
-
-typedef struct vvenc_config VVEncCfg;
+#include "EncoderLib/EncCfg.h"
 
 typedef vvencChromaFormat ChromaFormat;
 typedef vvencSliceType    SliceType;
@@ -72,12 +66,6 @@ typedef vvencSliceType    SliceType;
 //! \{
 
 namespace vvenc {
-
-#define FASTTT_TH                                         1
-
-#define JVET_V0056_MCTF                                   1 // JVET-V0056: Changes to MCTF
-
-#define QTBTT_SPEED3                                      1
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
@@ -98,11 +86,17 @@ namespace vvenc {
 #endif
 
 #ifndef ENABLE_TRACING
-#define ENABLE_TRACING                                    0 // DISABLED by default (enable only when debugging, requires 15% run-time in decoding) -- see documentation in 'doc/DTrace for NextSoftware.pdf'
+#define ENABLE_TRACING                                    0 // DISABLED by default (enable only when debugging, requires additional runtime)
 #endif
 
 #ifndef ENABLE_TIME_PROFILING
 #define ENABLE_TIME_PROFILING                             0 // DISABLED by default (can be enabled by project configuration or make command)
+#endif
+#ifndef ENABLE_TIME_PROFILING_MT_MODE
+#define ENABLE_TIME_PROFILING_MT_MODE                   ( 0 && ENABLE_TIME_PROFILING )
+#endif
+#ifndef ENABLE_TIME_PROFILING_TL
+#define ENABLE_TIME_PROFILING_TL                          0 // DISABLED by default (can be enabled by project configuration or make command)
 #endif
 #ifndef ENABLE_TIME_PROFILING_PIC_TYPES
 #define ENABLE_TIME_PROFILING_PIC_TYPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
@@ -112,8 +106,8 @@ namespace vvenc {
 #endif
 #ifndef ENABLE_TIME_PROFILING_CU_SHAPES
 #define ENABLE_TIME_PROFILING_CU_SHAPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
-#endif
-#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
+#endif  
+#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_TL || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
 
 #ifndef ENABLE_CU_MODE_COUNTERS
 #define ENABLE_CU_MODE_COUNTERS                           0
@@ -127,6 +121,8 @@ namespace vvenc {
 
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
+
+#define CLEAR_AND_CHECK_TUIDX                             0 ///< add additional checks to tu-map management (not accessing the map when dirty)
 
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -148,6 +144,7 @@ namespace vvenc {
 #define ENABLE_SIMD_OPT_MCTF                            ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for MCTF
 #define ENABLE_SIMD_TRAFO                               ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for Transformation
 #define ENABLE_SIMD_OPT_QUANT                           ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for Quantization
+#define ENABLE_SIMD_LOG2                                ( 1 && ENABLE_SIMD_OPT )                            ///< use SIMD intrisic to calculate log2
 
 #if ENABLE_SIMD_OPT_BUFFER
 #define ENABLE_SIMD_OPT_BCW                               1                                                 ///< SIMD optimization for GBi
@@ -218,14 +215,14 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 #define CHROMA_444 VVENC_CHROMA_444
 #define NUM_CHROMA_FORMAT VVENC_NUM_CHROMA_FORMAT
 
-enum ChannelType
+enum ChannelType : int8_t
 {
   CH_L = 0,
   CH_C = 1,
   MAX_NUM_CH = 2
 };
 
-enum ComponentID
+enum ComponentID : int8_t
 {
   COMP_Y          = 0,
   COMP_Cb         = 1,
@@ -235,14 +232,14 @@ enum ComponentID
   MAX_NUM_TBLOCKS = MAX_NUM_COMP
 };
 
-enum ApsType
+enum ApsType : int8_t
 {
   ALF_APS = 0,
   LMCS_APS = 1,
   SCALING_LIST_APS = 2,
 };
 
-enum QuantFlags
+enum QuantFlags : int8_t
 {
   Q_INIT           = 0x0,
   Q_USE_RDOQ       = 0x1,
@@ -251,7 +248,7 @@ enum QuantFlags
 };
 
 //EMT transform tags
-enum TransType
+enum TransType : int8_t
 {
   DCT2 = 0,
   DCT8 = 1,
@@ -259,7 +256,7 @@ enum TransType
   NUM_TRANS_TYPE = 3
 };
 
-enum MTSIdx
+enum MTSIdx : int8_t
 {
   MTS_DCT2_DCT2 = 0,
   MTS_SKIP = 1,
@@ -269,7 +266,7 @@ enum MTSIdx
   MTS_DCT8_DCT8 = 5
 };
 
-enum ISPType
+enum ISPType : int8_t
 {
   NOT_INTRA_SUBPARTITIONS       = 0,
   HOR_INTRA_SUBPARTITIONS       = 1,
@@ -278,7 +275,7 @@ enum ISPType
   INTRA_SUBPARTITIONS_RESERVED  = 4
 };
 
-enum SbtIdx
+enum SbtIdx : int8_t
 {
   SBT_OFF_DCT  = 0,
   SBT_VER_HALF = 1,
@@ -289,14 +286,14 @@ enum SbtIdx
   SBT_OFF_MTS, //note: must be after all SBT modes, only used in fast algorithm to discern the best mode is inter EMT
 };
 
-enum SbtPos
+enum SbtPos : int8_t
 {
   SBT_POS0 = 0,
   SBT_POS1 = 1,
   NUMBER_SBT_POS
 };
 
-enum SbtMode
+enum SbtMode : int8_t
 {
   SBT_VER_H0 = 0,
   SBT_VER_H1 = 1,
@@ -309,36 +306,21 @@ enum SbtMode
   NUMBER_SBT_MODE
 };
 
-enum TreeType
+enum TreeType : int8_t
 {
   TREE_D = 0, //default tree status (for single-tree slice, TREE_D means joint tree; for dual-tree I slice, TREE_D means TREE_L for luma and TREE_C for chroma)
   TREE_L = 1, //separate tree only contains luma (may split)
   TREE_C = 2, //separate tree only contains chroma (not split), to avoid small chroma block
 };
 
-enum ModeType
+enum ModeType : int8_t
 {
   MODE_TYPE_ALL = 0, //all modes can try
   MODE_TYPE_INTER = 1, //can try inter
   MODE_TYPE_INTRA = 2, //can try intra, ibc, palette
 };
 
-enum MATRIX_COEFFICIENTS // Table E.5 (Matrix coefficients)
-{
-  MATRIX_COEFFICIENTS_RGB                           = 0,
-  MATRIX_COEFFICIENTS_BT709                         = 1,
-  MATRIX_COEFFICIENTS_UNSPECIFIED                   = 2,
-  MATRIX_COEFFICIENTS_RESERVED_BY_ITUISOIEC         = 3,
-  MATRIX_COEFFICIENTS_USFCCT47                      = 4,
-  MATRIX_COEFFICIENTS_BT601_625                     = 5,
-  MATRIX_COEFFICIENTS_BT601_525                     = 6,
-  MATRIX_COEFFICIENTS_SMPTE240                      = 7,
-  MATRIX_COEFFICIENTS_YCGCO                         = 8,
-  MATRIX_COEFFICIENTS_BT2020_NON_CONSTANT_LUMINANCE = 9,
-  MATRIX_COEFFICIENTS_BT2020_CONSTANT_LUMINANCE     = 10,
-};
-
-enum DeblockEdgeDir
+enum DeblockEdgeDir : int8_t
 {
   EDGE_VER     = 0,
   EDGE_HOR     = 1,
@@ -346,7 +328,7 @@ enum DeblockEdgeDir
 };
 
 /// supported prediction type
-enum PredMode
+enum PredMode : int8_t
 {
   MODE_INTER                 = 0,     ///< inter-prediction mode
   MODE_INTRA                 = 1,     ///< intra-prediction mode
@@ -356,7 +338,7 @@ enum PredMode
 };
 
 /// reference list index
-enum RefPicList
+enum RefPicList : int8_t
 {
   REF_PIC_LIST_0               = 0,   ///< reference list 0
   REF_PIC_LIST_1               = 1,   ///< reference list 1
@@ -368,7 +350,7 @@ enum RefPicList
 #define L1 REF_PIC_LIST_1
 
 /// distortion function index
-enum DFunc
+enum DFunc : uint8_t
 {
   DF_SSE             = 0,             ///< general size SSE
   DF_SSE2            = DF_SSE+1,      ///<   2xM SSE
@@ -397,16 +379,26 @@ enum DFunc
   DF_HAD64           = DF_HAD+6,      ///<  64xM HAD
   DF_HAD128          = DF_HAD+7,      ///< 16NxM HAD
 
-  DF_HAD_2SAD                  = 24,  //tbd th remove
+  DF_HAD_2SAD        = 24,            //tbd th remove
 
-  DF_SAD_WITH_MASK = 25,
-  DF_TOTAL_FUNCTIONS = 26,
+  DF_SAD_WITH_MASK   = 25,
+  
+  DF_HAD_fast        = 26,            ///< general size Hadamard
+  DF_HAD2_fast       = DF_HAD_fast+1,      ///<   2xM fast HAD
+  DF_HAD4_fast       = DF_HAD_fast+2,      ///<   4xM fast HAD
+  DF_HAD8_fast       = DF_HAD_fast+3,      ///<   8xM fast HAD
+  DF_HAD16_fast      = DF_HAD_fast+4,      ///<  16xM fast HAD
+  DF_HAD32_fast      = DF_HAD_fast+5,      ///<  32xM fast HAD
+  DF_HAD64_fast      = DF_HAD_fast+6,      ///<  64xM fast HAD
+  DF_HAD128_fast     = DF_HAD_fast+7,      ///< 16NxM fast HAD
 
-  DF_SSE_WTD         = 0xfedc          // out of func scope
+  DF_TOTAL_FUNCTIONS = 34,
+
+  DF_SSE_WTD         = 0xf2u          // out of func scope
 };
 
 /// motion vector predictor direction used in AMVP
-enum MvpDir
+enum MvpDir : int8_t
 {
   MD_LEFT = 0,          ///< MVP of left block
   MD_ABOVE,             ///< MVP of above block
@@ -415,21 +407,23 @@ enum MvpDir
   MD_ABOVE_LEFT         ///< MVP of above left block
 };
 
-enum TransformDirection
+enum TransformDirection : int8_t
 {
   TRANSFORM_FORWARD              = 0,
-  TRANSFORM_INVERSE              = 1,
-  TRANSFORM_NUMBER_OF_DIRECTIONS = 2
+  TRANSFORM_INVERSE              = 0,
+  TRANSFORM_NUMBER_OF_DIRECTIONS = 1
+  //TRANSFORM_INVERSE              = 1,
+  //TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
-enum CoeffScanGroupType
+enum CoeffScanGroupType : int8_t
 {
   SCAN_UNGROUPED   = 0,
   SCAN_GROUPED_4x4 = 1,
   SCAN_NUMBER_OF_GROUP_TYPES = 2
 };
 
-enum ScalingListSize
+enum ScalingListSize : int8_t
 {
   SCALING_LIST_1x1 = 0,
   SCALING_LIST_2x2,
@@ -444,7 +438,7 @@ enum ScalingListSize
   SCALING_LIST_LAST_CODED = SCALING_LIST_64x64
 };
 
-enum SAOMode //mode
+enum SAOMode : int8_t //mode
 {
   SAO_MODE_OFF = 0,
   SAO_MODE_NEW,
@@ -452,7 +446,7 @@ enum SAOMode //mode
   NUM_SAO_MODES
 };
 
-enum SAOModeMergeTypes
+enum SAOModeMergeTypes : int8_t
 {
   SAO_MERGE_LEFT =0,
   SAO_MERGE_ABOVE,
@@ -460,7 +454,7 @@ enum SAOModeMergeTypes
 };
 
 
-enum SAOModeNewTypes
+enum SAOModeNewTypes : int8_t
 {
   SAO_TYPE_START_EO =0,
   SAO_TYPE_EO_0 = SAO_TYPE_START_EO,
@@ -475,7 +469,7 @@ enum SAOModeNewTypes
 };
 #define NUM_SAO_EO_TYPES_LOG2 2
 
-enum SAOEOClasses
+enum SAOEOClasses : int8_t
 {
   SAO_CLASS_EO_FULL_VALLEY = 0,
   SAO_CLASS_EO_HALF_VALLEY = 1,
@@ -488,24 +482,19 @@ enum SAOEOClasses
 #define NUM_SAO_BO_CLASSES_LOG2  5
 #define NUM_SAO_BO_CLASSES       (1<<NUM_SAO_BO_CLASSES_LOG2)
 
-enum SPSExtensionFlagIndex
+enum SPSExtensionFlagIndex : int8_t
 {
   SPS_EXT__REXT           = 0,
-//SPS_EXT__MVHEVC         = 1, //for use in future versions
-//SPS_EXT__SHVC           = 2, //for use in future versions
-  SPS_EXT__NEXT           = 3,
   NUM_SPS_EXTENSION_FLAGS = 8
 };
 
-enum PPSExtensionFlagIndex
+enum PPSExtensionFlagIndex : int8_t
 {
   PPS_EXT__REXT           = 0,
-//PPS_EXT__MVHEVC         = 1, //for use in future versions
-//PPS_EXT__SHVC           = 2, //for use in future versions
   NUM_PPS_EXTENSION_FLAGS = 8
 };
 
-enum MergeType
+enum MergeType : int8_t
 {
   MRG_TYPE_DEFAULT_N        = 0, // 0
   MRG_TYPE_SUBPU_ATMVP,
@@ -517,7 +506,7 @@ enum MergeType
 // Encoder modes to try out
 //////////////////////////////////////////////////////////////////////////
 
-enum ImvMode
+enum ImvMode : int8_t
 {
  IMV_OFF = 0,
  IMV_FPEL,
@@ -642,7 +631,7 @@ public:
 };
 
 
-enum RESHAPE_SIGNAL_TYPE
+enum RESHAPE_SIGNAL_TYPE : int8_t
 {
   RESHAPE_SIGNAL_SDR = 0,
   RESHAPE_SIGNAL_PQ  = 1,
@@ -692,7 +681,7 @@ template<typename T, size_t N>
 class static_vector
 {
   T _arr[ N ];
-  size_t _size;
+  size_t _size = 0;
 
 public:
 
@@ -708,26 +697,32 @@ public:
 
   static const size_type max_num_elements = N;
 
-  static_vector() : _size( 0 )                                 { }
-  static_vector( size_t N_ ) : _size( N_ )                     { }
-  static_vector( size_t N_, const T& _val ) : _size( 0 )       { resize( N_, _val ); }
+  static_vector()                                  { }
+  static_vector( size_t N_ ) : _size( N_ )         { }
+  static_vector( size_t N_, const T& _val )        { resize( N_, _val ); }
   template<typename It>
-  static_vector( It _it1, It _it2 ) : _size( 0 )               { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
-  static_vector( std::initializer_list<T> _il ) : _size( 0 )
+  static_vector( It _it1, It _it2 )                { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
+  static_vector( std::initializer_list<T> _il )
   {
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
     CHECKD( _size > N, "capacity exceeded" );
   }
+  static_vector( const static_vector<T, N>& other ) : _size( other._size )
+  {
+    static_assert( std::is_trivially_copyable<T>::value, "the type has to be trivially copyable!" );
+
+    memcpy( _arr, other._arr, sizeof( T ) * _size );
+  }
   static_vector& operator=( std::initializer_list<T> _il )
   {
     _size = 0;
 
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
@@ -769,34 +764,37 @@ public:
 
   iterator        insert( const_iterator _pos, const T& _val )
                                                 { CHECKD( _size >= N, "capacity exceeded" );
+                                                  iterator dst = _arr + ( _pos - _arr );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + 1] = _arr[i];
-                                                  *const_cast<iterator>( _pos ) = _val;
+                                                  *dst = _val;
                                                   _size++;
-                                                  return const_cast<iterator>( _pos ); }
+                                                  return dst; }
 
   iterator        insert( const_iterator _pos, T&& _val )
                                                 { CHECKD( _size >= N, "capacity exceeded" );
+                                                  iterator dst = _arr + ( _pos - _arr );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + 1] = _arr[i];
-                                                  *const_cast<iterator>( _pos ) = std::forward<T>( _val );
-                                                  _size++; return const_cast<iterator>( _pos ); }
+                                                  *dst = std::forward<T>( _val );
+                                                  _size++;
+                                                  return dst; }
   template<class InputIt>
   iterator        insert( const_iterator _pos, InputIt first, InputIt last )
                                                 { const difference_type numEl = last - first;
                                                   CHECKD( _size + numEl >= N, "capacity exceeded" );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + numEl] = _arr[i];
-                                                  iterator it = const_cast<iterator>( _pos ); _size += numEl;
+                                                  iterator it = _arr + ( _pos - _arr ); _size += numEl; iterator ret = it;
                                                   while( first != last ) *it++ = *first++;
-                                                  return const_cast<iterator>( _pos ); }
+                                                  return ret; }
 
   iterator        insert( const_iterator _pos, size_t numEl, const T& val )
                                                 { //const difference_type numEl = last - first;
                                                   CHECKD( _size + numEl >= N, "capacity exceeded" );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + numEl] = _arr[i];
-                                                  iterator it = const_cast<iterator>( _pos ); _size += numEl;
+                                                  iterator it = _arr + ( _pos - _arr ); _size += numEl; iterator ret = it;
                                                   for ( int k = 0; k < numEl; k++) *it++ = val;
-                                                  return const_cast<iterator>( _pos ); }
-
-  void            erase( const_iterator _pos )  { iterator it   = const_cast<iterator>( _pos ) - 1;
+                                                  return ret; }
+  
+  void            erase( const_iterator _pos )  { iterator it   = begin() + ( _pos - 1 - begin() );
                                                   iterator last = end() - 1;
                                                   while( ++it != last ) *it = *( it + 1 );
                                                   _size--; }
@@ -897,6 +895,69 @@ struct XUCache
   CUCache cuCache;
   TUCache tuCache;
 };
+
+
+typedef struct GOPEntry : vvencGOPEntry
+{
+  int       m_codingNum;
+  int       m_gopNum;
+  int       m_defaultRPLIdx;
+  int       m_mctfIndex;
+  bool      m_isSTSA;
+  bool      m_useBckwdOnly;
+  bool      m_isStartOfGop;
+  bool      m_isStartOfIntra;
+
+  void setDefaultGOPEntry()
+  {
+    vvenc_GOPEntry_default( this );
+    m_codingNum        = -1;
+    m_gopNum           = -1;
+    m_defaultRPLIdx    = -1;
+    m_mctfIndex        = -1;
+    m_isSTSA           = false;
+    m_useBckwdOnly     = false;
+    m_isStartOfGop     = false;
+    m_isStartOfIntra   = false;
+  }
+
+  void copyFromGopCfg( const vvencGOPEntry& cfgEntry )
+  {
+    this->vvencGOPEntry::operator=( cfgEntry );
+  }
+
+  GOPEntry() = default;
+
+  GOPEntry( char sliceType, int poc, int qpOffset, double qpOffsetModelOffset, double qpOffsetModelScale, double qpFactor, int temporalId, int numRefPicsActiveL0, const std::vector<int>& deltaRefPicsL0, int numRefPicsActiveL1, const std::vector<int>& deltaRefPicsL1 )
+  {
+    setDefaultGOPEntry();
+    m_sliceType             = sliceType;
+    m_POC                   = poc;
+    m_QPOffset              = qpOffset;
+    m_QPOffsetModelOffset   = qpOffsetModelOffset;
+    m_QPOffsetModelScale    = qpOffsetModelScale;
+    m_QPFactor              = qpFactor;
+    m_temporalId            = temporalId;
+    m_numRefPicsActive[ 0 ] = numRefPicsActiveL0;
+    m_numRefPics[ 0 ]       = (int)deltaRefPicsL0.size();
+    CHECK( m_numRefPicsActive[ 0 ] > m_numRefPics[ 0 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 0 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 0 ]; i++ )
+    {
+      m_deltaRefPics[ 0 ][ i ] = deltaRefPicsL0[ i ];
+    }
+    m_numRefPicsActive[ 1 ] = numRefPicsActiveL1;
+    m_numRefPics[ 1 ]       = (int)deltaRefPicsL1.size();
+    CHECK( m_numRefPicsActive[ 1 ] > m_numRefPics[ 1 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 1 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 1 ]; i++ )
+    {
+      m_deltaRefPics[ 1 ][ i ] = deltaRefPicsL1[ i ];
+    }
+  }
+
+} GOPEntry;
+
 
 } // namespace vvenc
 

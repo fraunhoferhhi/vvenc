@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -114,6 +110,12 @@ struct PelBufferOps
   void ( *weightCiip)     ( Pel* res, const Pel* intra, const int numSamples, int numIntra );
   void ( *applyLut )      ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, ptrdiff_t dstStride, int width, int height, const Pel* lut );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
+  uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
+  uint64_t ( *AvgHighPass )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
+  uint64_t ( *AvgHighPassWithDownsamplingDiff1st ) (const int width, const int height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride);
+  uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
+  uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
+  uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
 };
 
 extern PelBufferOps g_pelBufOP;
@@ -130,9 +132,15 @@ struct AreaBuf : public Size
   AreaBuf( T *_buf, const int& _stride, const Size& size )                                : Size( size ),            buf( _buf ), stride( _stride )    { }
   AreaBuf( T *_buf, const SizeType& _width, const SizeType& _height )                     : Size( _width, _height ), buf( _buf ), stride( _width )     { }
   AreaBuf( T *_buf, const int& _stride, const SizeType& _width, const SizeType& _height ) : Size( _width, _height ), buf( _buf ), stride( _stride )    { }
-//  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                         : Size( other ),           buf( other.buf ), stride( other.stride ) { }
 
-  operator AreaBuf<const T>() const { auto ret = *reinterpret_cast< const AreaBuf<const T>* >( this ); return ret; }
+  AreaBuf( const AreaBuf& )  = default;
+  AreaBuf(       AreaBuf&& ) = default;
+  AreaBuf& operator=( const AreaBuf& )  = default;
+  AreaBuf& operator=(       AreaBuf&& ) = default;
+
+  // conversion from AreaBuf<const T> to AreaBuf<T>
+  template<bool T_IS_CONST = std::is_const<T>::value>
+  AreaBuf( const AreaBuf<typename std::remove_const_t<T>>& other, std::enable_if_t<T_IS_CONST>* = 0) : Size( other ), buf( other.buf ), stride( other.stride ) { }
 
   void fill                 ( const T &val );
   void memset               ( const int val );
@@ -142,7 +150,8 @@ struct AreaBuf : public Size
   void copyClip             ( const AreaBuf<const T>& src, const ClpRng& clpRng);
 
   void subtract             ( const AreaBuf<const T>& minuend, const AreaBuf<const T>& subtrahend );
-  void extendBorderPel(unsigned marginX, unsigned marginY);
+  void calcVarianceSplit    ( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv ) const;
+  void extendBorderPel      ( unsigned marginX, unsigned marginY );
 
   void addAvg               ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng );
   T    getAvg               () const;
@@ -365,6 +374,15 @@ void AreaBuf<T>::subtract( const AreaBuf<const T>& minuend, const AreaBuf<const 
 
 template<>
 void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend );
+
+template<typename T>
+void AreaBuf<T>::calcVarianceSplit( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv ) const 
+{
+  THROW( "Type not supported" );
+}
+
+template<>
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int&varv ) const;
 
 template<typename T>
 void AreaBuf<T>::copyClip( const AreaBuf<const T>& src, const ClpRng& clpRng )
@@ -668,10 +686,14 @@ struct UnitBuf
   UnitBuf( const ChromaFormat _chromaFormat, const AreaBuf<T>&  blkY, const AreaBuf<T>&  blkCb, const AreaBuf<T>  &blkCr ) : chromaFormat( _chromaFormat ), bufs{ blkY, blkCb, blkCr } { }
   UnitBuf( const ChromaFormat _chromaFormat,       AreaBuf<T>&& blkY,       AreaBuf<T>&& blkCb,       AreaBuf<T> &&blkCr ) : chromaFormat( _chromaFormat ), bufs{ std::forward<AreaBuf<T> >(blkY), std::forward<AreaBuf<T> >(blkCb), std::forward<AreaBuf<T> >(blkCr) } { }
 
-  operator UnitBuf<const T>() const
-  {
-    return UnitBuf<const T>( chromaFormat, ConstUnitBufBuffers( bufs.begin(), bufs.end() ) );
-  }
+  UnitBuf( const UnitBuf& other )  = default;
+  UnitBuf(       UnitBuf&& other ) = default;
+  UnitBuf& operator=( const UnitBuf& other )  = default;
+  UnitBuf& operator=(       UnitBuf&& other ) = default;
+
+  // conversion from UnitBuf<const T> to UnitBuf<T>
+  template<bool T_IS_COST = std::is_const<T>::value>
+  UnitBuf( const UnitBuf<typename std::remove_const<T>::type>& other, std::enable_if<T_IS_COST>* = 0 ) : chromaFormat( other.chromaFormat ), bufs( other.bufs.begin(), other.bufs.end() ) { }
 
         AreaBuf<T>& get( const ComponentID comp )        { return bufs[comp]; }
   const AreaBuf<T>& get( const ComponentID comp )  const { return bufs[comp]; }
@@ -713,7 +735,7 @@ typedef UnitBuf<const TCoeff> CCoeffUnitBuf;
 template<typename T>
 void UnitBuf<T>::fill( const T &val )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].fill( val );
   }
@@ -724,7 +746,7 @@ void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other)
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
 
-  for(size_t i = 0; i < bufs.size(); i++)
+  for( int i = 0; i < bufs.size(); i++)
   {
     if( bufs[ i ].buf != nullptr && other.bufs[ i ].buf != nullptr )
       bufs[i].copyFrom( other.bufs[i] );
@@ -737,7 +759,7 @@ void UnitBuf<T>::subtract( const UnitBuf<const T>& minuend, const UnitBuf<const 
   CHECK( chromaFormat != minuend.chromaFormat, "Incompatible formats" );
   CHECK( chromaFormat != subtrahend.chromaFormat, "Incompatible formats");
 
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].subtract( minuend.bufs[i], subtrahend.bufs[i] );
   }
@@ -749,11 +771,11 @@ void UnitBuf<T>::copyClip(const UnitBuf<const T> &src, const ClpRngs &clpRngs, c
   CHECK( chromaFormat != src.chromaFormat, "Incompatible formats" );
 
   CHECK(lumaOnly && chromaOnly, "Not allowed to have both lumaOnly and chromaOnly selected");
-  const size_t compStart = chromaOnly ? 1 : 0;
-  const size_t compEnd = lumaOnly ? 1 : bufs.size();
-  for (size_t i = compStart; i < compEnd; i++)
+  const int compStart = chromaOnly ? 1 : 0;
+  const int compEnd   = lumaOnly   ? 1 : ( int ) bufs.size();
+  for( int i = compStart; i < compEnd; i++ )
   {
-    bufs[i].copyClip( src.bufs[i], clpRngs.comp[i] );
+    bufs[i].copyClip( src.bufs[i], clpRngs[i] );
   }
 }
 
@@ -763,44 +785,44 @@ void UnitBuf<T>::reconstruct(const UnitBuf<const T>& pred, const UnitBuf<const T
   CHECK( chromaFormat != pred.chromaFormat, "Incompatible formats" );
   CHECK( chromaFormat != resi.chromaFormat, "Incompatible formats" );
 
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
-    bufs[i].reconstruct( pred.bufs[i], resi.bufs[i], clpRngs.comp[i] );
+    bufs[i].reconstruct( pred.bufs[i], resi.bufs[i], clpRngs[i] );
   }
 }
 
 template<typename T>
 void UnitBuf<T>::addAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
-  const size_t istart = chromaOnly ? 1 : 0;
-  const size_t iend   = lumaOnly   ? 1 : bufs.size();
+  const int istart = chromaOnly ? 1 : 0;
+  const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
 
   CHECK( lumaOnly && chromaOnly, "should not happen" );
 
-  for( size_t i = istart; i < iend; i++)
+  for( int i = istart; i < iend; i++)
   {
-    bufs[i].addAvg( other1.bufs[i], other2.bufs[i], clpRngs.comp[i]);
+    bufs[i].addAvg( other1.bufs[i], other2.bufs[i], clpRngs[i]);
   }
 }
 
 template<typename T>
 void UnitBuf<T>::addWeightedAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx /* = BCW_DEFAULT */, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
-  const size_t istart = chromaOnly ? 1 : 0;
-  const size_t iend = lumaOnly ? 1 : bufs.size();
+  const int istart = chromaOnly ? 1 : 0;
+  const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
 
-  CHECK(lumaOnly && chromaOnly, "should not happen");
+  CHECK( lumaOnly && chromaOnly, "should not happen" );
 
-  for (size_t i = istart; i < iend; i++)
+  for ( int i = istart; i < iend; i++)
   {
-    bufs[i].addWeightedAvg(other1.bufs[i], other2.bufs[i], clpRngs.comp[i], BcwIdx);
+    bufs[i].addWeightedAvg(other1.bufs[i], other2.bufs[i], clpRngs[i], BcwIdx);
   }
 }
 
 template<typename T>
 void UnitBuf<T>::extendBorderPelTop   ( int x, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -811,7 +833,7 @@ void UnitBuf<T>::extendBorderPelTop   ( int x, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelBot   ( int x, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -822,7 +844,7 @@ void UnitBuf<T>::extendBorderPelBot   ( int x, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelLft   ( int y, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -833,7 +855,7 @@ void UnitBuf<T>::extendBorderPelLft   ( int y, int size, int margin )
 template<typename T>
 void UnitBuf<T>::extendBorderPelRgt   ( int y, int size, int margin )
 {
-  for( size_t i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
@@ -846,14 +868,14 @@ void UnitBuf<T>::extendBorderPel( unsigned margin, bool scaleMargin )
 {
   if( ! scaleMargin )
   {
-    for( size_t i = 0; i < bufs.size(); i++ )
+    for( int i = 0; i < bufs.size(); i++ )
     {
       bufs[i].extendBorderPel( margin, margin );
     }
   }
   else
   {
-    for (unsigned i = 0; i < bufs.size(); i++)
+    for ( int i = 0; i < bufs.size(); i++)
     {
       bufs[i].extendBorderPel(margin >> getComponentScaleX(ComponentID(i), chromaFormat), margin >> getComponentScaleY(ComponentID(i), chromaFormat));
     }
@@ -863,7 +885,7 @@ void UnitBuf<T>::extendBorderPel( unsigned margin, bool scaleMargin )
 template<typename T>
 void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 {
-  for( unsigned i = 0; i < bufs.size(); i++ )
+  for( int i = 0; i < bufs.size(); i++ )
   {
     bufs[i].padBorderPel( margin >> getComponentScaleX( ComponentID( i ), chromaFormat ), margin >> getComponentScaleY( ComponentID( i ), chromaFormat ), dir );
   }
@@ -872,7 +894,7 @@ void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 template<typename T>
 void UnitBuf<T>::removeHighFreq( const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs)
 {
-  bufs[0].removeHighFreq(other.bufs[0], bClip, clpRngs.comp[0]);
+  bufs[0].removeHighFreq(other.bufs[0], bClip, clpRngs[0]);
 }
 
 template<typename T>
@@ -959,23 +981,31 @@ private:
 
 struct CompStorage : public PelBuf
 {
-  CompStorage () { m_memory = nullptr; }
-  ~CompStorage() { if (valid()) delete [] m_memory; }
+  ~CompStorage() { if( valid() ) delete[] m_memory; }
 
+  void compactResize( const Size& size )
+  {
+    CHECK( size.area() > m_allocSize, "Resizing causes buffer overflow!" );
+    Size::operator=( size );
+    stride = size.width;
+  }
   void create( const Size& size )
   {
     CHECK( m_memory, "Trying to re-create an already initialized buffer" );
-    m_memory = new Pel [ size.area() ];
-    *static_cast<PelBuf*>(this) = PelBuf( m_memory, size );
+    m_allocSize = size.area();
+    m_memory = new Pel[m_allocSize];
+    PelBuf::operator=( PelBuf( m_memory, size ) );
   }
   void destroy()
   {
-    if (valid()) delete [] m_memory;
-    m_memory = nullptr;
+    if( valid() ) delete[] m_memory;
+    m_memory    = nullptr;
+    m_allocSize = 0;
   }
   bool valid() { return m_memory != nullptr; }
 private:
-  Pel* m_memory;
+  ptrdiff_t m_allocSize = 0;
+  Pel*      m_memory    = nullptr;
 };
 
 template<int NumEntries>

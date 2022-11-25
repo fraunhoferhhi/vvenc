@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+The copyright in this software is being made available under the Clear BSD
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -53,6 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/CommonDef.h"
+#include "Utilities/MsgLog.h"
 
 #include "vvenc/vvencCfg.h"
 
@@ -67,12 +64,15 @@ namespace vvenc {
   struct TRCPassStats
   {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
-                  uint32_t _numBits, double _psnrY, bool _isIntra, int _tempLayer ) :
+                  const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
+                  const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
-                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), 
-                  tempLayer( _tempLayer ),
-                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
-                  {}
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
+                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ),
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
+                  {
+                    std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
+                  }
     int       poc;
     int       qp;
     double    lambda;
@@ -81,37 +81,43 @@ namespace vvenc {
     double    psnrY;
     bool      isIntra;
     int       tempLayer;
-
+    bool      isStartOfIntra;
+    bool      isStartOfGop;
+    int       gopNum;
+    uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
     bool      isNewScene;
     bool      refreshParameters;
     double    frameInGopRatio;
     int       targetBits;
+    bool      addedToList;
   };
 
   class EncRCSeq
   {
   public:
     EncRCSeq();
-    virtual ~EncRCSeq();
+    ~EncRCSeq();
 
-    void create( bool twoPass, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
-    virtual void destroy();
-    virtual void updateAfterPic( int bits, int tgtBits );
+    void create( bool twoPass, bool lookAhead, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
+    void destroy();
+    void updateAfterPic (const int actBits, const int tgtBits);
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
-    int             totalFrames;
+    bool            isLookAhead;
+    unsigned        framesCoded;
     int             targetRate;
     int             frameRate;
     int             gopSize;
-    int             intraPeriod;
+    unsigned        intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
+    int64_t         bitsUsedIn1stPass;
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
+    unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
-    double          lastIntraLambda;
     int             lastIntraQP;
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
@@ -122,28 +128,26 @@ namespace vvenc {
   {
   public:
     EncRCPic();
-    virtual ~EncRCPic();
+    ~EncRCPic();
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
-    virtual void destroy();
-    virtual void updateCtuMSE(const unsigned int ctuAddress, const double distortion);
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp);
-    void   updateAfterPicture( int actualTotalBits, double averageQP, bool isIRAP );
+    void   destroy();
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
+    void   updateAfterPicture (const int actualTotalBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
-    int     tmpTargetBits; // only for 2p RC
-    int     picQPOffsetQPA;
+    int     tmpTargetBits;
     int     poc;
-    double  picLambdaOffsetQPA;
+    uint16_t visActSteady;
 
   protected:
     int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
 
     EncRCSeq* encRCSeq;
     int     frameLevel;
-    int     picActualBits;          // the whole picture, including header
-    int     picQP;                  // in integer form
+    int     picActualBits;   // the whole picture, including header
+    int     picQP;           // in integer form
     bool    isNewScene;
     bool    refreshParams;
   };
@@ -151,42 +155,42 @@ namespace vvenc {
   class RateCtrl
   {
   public:
-    RateCtrl();
-    virtual ~RateCtrl();
+    RateCtrl(MsgLog& logger);
+    ~RateCtrl();
 
-    virtual void init( const VVEncCfg& encCfg );
-    virtual void destroy();
+    void init( const VVEncCfg& encCfg );
+    void destroy();
+    int  getBaseQP();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
-    void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
-                         const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
-    void processFirstPassData (const int secondPassBaseQP);
-    void processGops (const int secondPassBaseQP);
-    uint64_t getTotalBitsInFirstPass();
-    void detectNewScene();
-    void adaptToSceneChanges();
-    virtual void xUpdateAfterPicRC( const Picture* pic );
-    virtual void xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr, std::mutex* mutex, const double lambda );
-    virtual void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
-    virtual void setFinalLambda( const double lambda );
+    void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
+                         const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
+                         const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+    void processFirstPassData( const bool flush, const int poc = -1 );
+    void processGops();
+    void updateMinNoiseLevelsGop( int flush, int poc );
+    double getAverageBitsFromFirstPass();
+    void detectSceneCuts();
+    void xUpdateAfterPicRC( const Picture* pic );
+    void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
-    virtual void initRCGOP( const int numberOfPictures );
-    virtual void destroyRCGOP();
-
-
-    std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
+    std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
-    std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    std::vector<uint8_t>*    getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    const uint8_t*           getMinNoiseLevels() { return m_minNoiseLevels; }
+    int                      lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
     std::list<EncRCPic*>    m_listRCPictures;
-    EncRCSeq*   encRCSeq;
-    EncRCPic*   encRCPic;
-    std::mutex  rcMutex;
-    int         flushPOC;
-    int         rcPass;
-    bool        rcIsFinalPass;
+    EncRCSeq*               encRCSeq;
+    EncRCPic*               encRCPic;
+    int                     flushPOC;
+    int                     rcPass;
+    bool                    rcIsFinalPass;
     const VVEncCfg*         m_pcEncCfg;
 
   protected:
+    MsgLog&                 msg;
+
+    void xProcessFirstPassData( const bool flush, const int poc );
     void storeStatsData( const TRCPassStats& statsData );
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
@@ -197,11 +201,17 @@ namespace vvenc {
 
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
 #endif
+    int                     m_numPicStatsTotal;
+    int                     m_numPicAddedToList;
+    int                     m_updateNoisePoc;
+    bool                    m_resetNoise;
+    uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
   };
 
 }

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -50,6 +46,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/Unit.h"
+#include "EncoderLib/EncStage.h"
 #include <sstream>
 #include <map>
 #include <deque>
@@ -67,12 +64,8 @@ struct MotionVector
 {
   int x, y;
   int error;
-#if JVET_V0056_MCTF
-  int noise;
-  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX), noise(0) {}
-#else
+  //int noise;
   MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
-#endif
 
   void set(int vectorX, int vectorY, int errorValue) { x = vectorX; y = vectorY; error = errorValue; }
 };
@@ -124,109 +117,71 @@ struct TemporalFilterSourcePicInfo
 
 struct Picture;
 
-class MCTF
+class MCTF : public EncStage
 {
 public:
   MCTF();
-  ~MCTF();
+  virtual ~MCTF();
 
-  void init( const int internalBitDepth[MAX_NUM_CH],
-             const int width,
-             const int height,
-             const int ctuSize,
-             const ChromaFormat inputChroma,
-             const int qp,
-             const vvencMCTF MCTFCfg,
-             const int framesToBeEncoded,
-             NoMallocThreadPool* threadPool );
-  void uninit();
+  void init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool );
 
-  void addLeadFrame ( const vvencYUVBuffer& yuvInBuf );
-  void addTrailFrame( const vvencYUVBuffer& yuvInBuf );
-
-  int getNumLeadFrames()  const { return (int)m_leadFifo.size(); };
-  int getNumTrailFrames() const { return (int)m_trailFifo.size(); };
-
-  int getCurDelay() const { return m_cur_delay; }
-
-  void assignQpaBufs( Picture* pic );
-  void filter( Picture* pic );
- 
+protected:
+  virtual void initPicture    ( Picture* pic );
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 private:
+  void filter( const std::deque<Picture*>& picFifo, int filterIdx );
+
 #ifdef TARGET_SIMD_X86
   void initMCTF_X86();
   template <X86_VEXT vext>
   void _initMCTF_X86();
 #endif
 
-  int ( *m_motionErrorLumaIntX )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror );
-  int ( *m_motionErrorLumaInt8 )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror );
-  
-  int ( *m_motionErrorLumaFracX )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
-  int ( *m_motionErrorLumaFrac8 )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+  int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
+  int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
+
+  int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+  int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+
+  void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
+
+  void( *m_applyBlock )( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts, double weightScaling, double sigmaSq );
 
 private:
-  // Private static member variables
   static const double   m_chromaFactor;
   static const double   m_sigmaMultiplier;
   static const double   m_sigmaZeroPoint;
   static const int      m_range;
   static const int      m_motionVectorFactor;
   static const int      m_padding;
-  static const int16_t  m_interpolationFilter[16][8];
-#if JVET_V0056_MCTF
+  static const int16_t  m_interpolationFilter4[16][4];
+  static const int16_t  m_interpolationFilter8[16][8];
   static const double   m_refStrengths[3][4];
-#else
-  static const double   m_refStrengths[3][2];
-#endif
 
-  // Private member variables
-  int64_t               m_input_cnt;
-  int                   m_cur_delay;
-  int                   m_internalBitDepth[MAX_NUM_CH];
-  ChromaFormat          m_chromaFormatIDC;
-  int                   m_QP;
-  std::vector<int>      m_FilterFrames;
-  std::vector<double>   m_FilterStrengths;
-  Area                  m_area;
-  int                   m_ctuSize;
-  bool                  m_filterFutureReference;
-  int                   m_MCTFMode;
-  int                   m_numLeadFrames;
-  int                   m_numTrailFrames;
-  int                   m_framesToBeEncoded;
-  int                   m_MCTFSpeedVal;
+  const VVEncCfg*       m_encCfg;
   NoMallocThreadPool*   m_threadPool;
+  int                   m_filterPoc;
+  Area                  m_area;
+  int                   m_MCTFSpeedVal;
+  Picture*              m_lastPicIn;
+  bool                  m_lowResFltSearch = false;  // TODO: use this to select high/low-res filter (6/4 tap) for motion search
+  bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
+  int                   m_searchPttrn     = 0;
+  int                   m_mctfUnitSize;
 
-  std::deque<Picture*>  m_picFifo;
-  std::deque<Picture*>  m_leadFifo;
-  std::deque<Picture*>  m_trailFifo;
+  void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
 
-  // Private functions
-  Picture* createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc );
-  void subsampleLuma(const PelStorage &input, PelStorage &output, const int factor = 2) const;
+  int motionErrorLuma   (const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
 
-  int motionErrorLuma(const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
-
-  bool estimateLumaLn( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
+  bool estimateLumaLn   ( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const;
 
   void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int bs,
     const Array2D<MotionVector> *previous=0, const int factor = 1, const bool doubleRes = false) const;
 
-#if JVET_V0056_MCTF
-  void bilateralFilter(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
-  
-  void xFinalizeBlkLine(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
-    std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
-#else
-  void bilateralFilter(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
-  
-  void xFinalizeBlkLine(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
-    std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], const std::vector<double> refStrengthCh[MAX_NUM_CH]) const;
-#endif
+  void bilateralFilter  (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
 
-  void applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const;
+  void xFinalizeBlkLine (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
 
 }; // END CLASS DEFINITION MCTF
 

@@ -1,20 +1,15 @@
+The Fraunhofer Versatile Video Encoding Library is based on the official ITU/ISO/IEC VVC 
+Test Model (VTM) reference software whose copyright holders are indicated in the copyright 
+notices of its source files. The VVC Test Model (VTM) reference software is licensed under 
+the following 3-Clause BSD License: 
+
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
-the Software are granted under this license.
+License, included below. This software may be subject to other third party
+and contributor rights, including patent rights, and no such rights are
+granted under this license.   
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
-
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2010-2022, ITU/ISO/IEC
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -25,7 +20,7 @@ modification, are permitted provided that the following conditions are met:
  * Redistributions in binary form must reproduce the above copyright notice,
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
+ * Neither the name of the ITU/ISO/IEC nor the names of its contributors may
    be used to endorse or promote products derived from this software without
    specific prior written permission.
 
@@ -40,17 +35,4 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
-
-
-------------------------------------------------------------------------------------------- */
-
-#if !defined( resource_version_h )
-#  define resource_version_h
-
-// pick up top level version information.
-#  include "vvenc/version.h"
-
-#  define VS_FILE_VERSION VVENC_VS_VERSION
-#  define VS_FILE_VERSION_STR VVENC_VS_VERSION_STR
-
-#endif
+----------------------------------------------------------------------------- */

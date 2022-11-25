@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -61,15 +57,18 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if ENABLE_TIME_PROFILING_MT_MODE
+thread_local std::unique_ptr<TProfiler> ptls;
+#endif
 
-NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName )
+NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName, const VVEncCfg* encCfg )
   : m_poolName( threadPoolName )
   , m_threads ( numThreads < 0 ? std::thread::hardware_concurrency() : numThreads )
 {
   int tid = 0;
   for( auto& t: m_threads )
   {
-    t = std::thread( &NoMallocThreadPool::threadProc, this, tid++ );
+    t = std::thread( &NoMallocThreadPool::threadProc, this, tid++, *encCfg );
   }
 }
 
@@ -137,13 +136,21 @@ void NoMallocThreadPool::waitForThreads()
   }
 }
 
-void NoMallocThreadPool::threadProc( int threadId )
+void NoMallocThreadPool::threadProc( int threadId, const VVEncCfg& encCfg )
 {
 #if __linux
   if( !m_poolName.empty() )
   {
     std::string threadName( m_poolName + std::to_string( threadId ) );
     pthread_setname_np( pthread_self(), threadName.c_str() );
+  }
+#endif
+#if ENABLE_TIME_PROFILING_MT_MODE
+  ptls.reset( timeProfilerCreate( encCfg ) );
+  {
+    std::unique_lock< std::mutex > lock( m_nextFillSlotMutex );
+    TProfiler *tp = ptls.get();
+    profilers.push_back( tp );
   }
 #endif
 
@@ -219,7 +226,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
         if( std::any_of( t.barriers.cbegin(), t.barriers.cend(), []( const Barrier* b ) { return b && b->isBlocked(); } ) )
         {
           // reschedule
-          t.state.store( WAITING, std::memory_order_relaxed );
+          t.state.store( WAITING );
           continue;
         }
         t.barriers.clear();   // clear barriers, so we don't need to check them on the next try (we assume they won't get locked again)
@@ -227,7 +234,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
       if( t.readyCheck && t.readyCheck( threadId, t.param ) == false )
       {
         // reschedule
-        t.state.store( WAITING, std::memory_order_relaxed );
+        t.state.store( WAITING );
         continue;
       }
 

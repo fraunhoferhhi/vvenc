@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -341,8 +337,8 @@ void simdFilter5x5Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
 
 
   const __m128i mmOffset = _mm_set1_epi32(ROUND);
-  const __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  const __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  const __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  const __m128i mmMax = _mm_set1_epi16( clpRng.max() );
 
   __m128i params[2][3];
   __m128i fs   = _mm_loadu_si128((__m128i *) filterSet);
@@ -496,8 +492,8 @@ void simdFilter5x5Blk_AVX2( const AlfClassifier *, const PelUnitBuf& recDst, con
   Pel*       dst = dstBuffer.buf + blkDst.y * dstStride + blkDst.x;
 
   const __m256i mmOffset = _mm256_set1_epi32( ROUND );
-  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min );
-  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max );
+  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min() );
+  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max() );
 
   __m256i params[2][3];
   __m256i fs   = _mm256_castsi128_si256( _mm_loadu_si128( ( __m128i* ) filterSet ) );
@@ -698,8 +694,8 @@ void simdFilter7x7Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
 
   const __m128i mmOffset = _mm_set1_epi32(ROUND);
   const __m128i mmOffset1 = _mm_set1_epi32((1 << ((SHIFT_P3) - 1)) - ROUND);
-  const __m128i mmMin = _mm_set1_epi16( clpRng.min );
-  const __m128i mmMax = _mm_set1_epi16( clpRng.max );
+  const __m128i mmMin = _mm_set1_epi16( clpRng.min() );
+  const __m128i mmMax = _mm_set1_epi16( clpRng.max() );
 
   for (size_t i = 0; i < height; i += STEP_Y)
   {
@@ -894,8 +890,8 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
   Pel*       dst = dstBuffer.buf + blkDst.y * dstStride + blkDst.x;
 
   const __m256i mmOffset = _mm256_set1_epi32( ROUND );
-  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min );
-  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max );
+  const __m256i mmMin    = _mm256_set1_epi16( clpRng.min() );
+  const __m256i mmMax    = _mm256_set1_epi16( clpRng.max() );
 
   for (size_t i = 0; i < height; i += STEP_Y)
   {
@@ -1233,11 +1229,11 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           xsum      = _mm_add_epi32( xsum, xin0 );
           xsum      = _mm_srai_epi32( xsum, scaleBits );
           
-          xin0      = _mm_set1_epi32( 1 << clpRngs.comp[compId].bd >> 1 );
+          xin0      = _mm_set1_epi32( 1 << clpRngs[compId].bd >> 1 );
           xsum      = _mm_add_epi32( xsum, xin0 );
           
           xsum      = _mm_max_epi32( _mm_setzero_si128(), xsum );
-          xsum      = _mm_min_epi32( _mm_set1_epi32( clpRngs[compId].max ), xsum );
+          xsum      = _mm_min_epi32( _mm_set1_epi32( clpRngs[compId].max() ), xsum );
           xsum      = _mm_sub_epi32( xsum, xin0 );
           xsum      = _mm_packs_epi32( xsum, xsum );
           
@@ -1271,7 +1267,7 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           xin0 = _mm_add_epi16( xsum, xin1 );
           
           xin0 = _mm_max_epi16( _mm_setzero_si128(), xin0 );
-          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max ), xin0 );
+          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max() ), xin0 );
           
           _mm_storel_epi64( ( __m128i* ) &srcSelf[0], xin0 );
         }
@@ -1334,9 +1330,9 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
   if( getChannelTypeScaleX( CH_C, nChromaFormat ) == 1 )
   {
     __m256i vfilterCoeff[4];
-    vfilterCoeff[0] = _mm256_set1_epi32( ( filterCoeff[1] & 0xffff ) | ( filterCoeff[2] << 16 ) );
-    vfilterCoeff[1] = _mm256_set1_epi32( ( filterCoeff[0] & 0xffff ) | ( filterCoeff[3] << 16 ) );
-    vfilterCoeff[2] = _mm256_set1_epi32( ( filterCoeff[4] & 0xffff ) | ( filterCoeff[5] << 16 ) );
+    vfilterCoeff[0] = _mm256_set1_epi32( ( filterCoeff[1] & 0xffff ) | ( filterCoeff[2] * (1<< 16 )) );
+    vfilterCoeff[1] = _mm256_set1_epi32( ( filterCoeff[0] & 0xffff ) | ( filterCoeff[3] * (1<< 16 )) );
+    vfilterCoeff[2] = _mm256_set1_epi32( ( filterCoeff[4] & 0xffff ) | ( filterCoeff[5] * (1<< 16 )));
     vfilterCoeff[3] = _mm256_set1_epi32( ( filterCoeff[6] & 0xffff ) );
 
     for( int i = 0; i < endHeight - startHeight; i += clsSizeY )
@@ -1407,11 +1403,11 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
           vsum = _mm256_add_epi32( vsum, vin0 );
           vsum = _mm256_srai_epi32( vsum, scaleBits );
 
-          vin0 = _mm256_set1_epi32( 1 << clpRngs.comp[compId].bd >> 1 );
+          vin0 = _mm256_set1_epi32( 1 << clpRngs[compId].bd >> 1 );
           vsum = _mm256_add_epi32( vsum, vin0 );
 
           vsum = _mm256_max_epi32( _mm256_setzero_si256(), vsum );
-          vsum = _mm256_min_epi32( _mm256_set1_epi32( clpRngs[compId].max ), vsum );
+          vsum = _mm256_min_epi32( _mm256_set1_epi32( clpRngs[compId].max() ), vsum );
           vsum = _mm256_sub_epi32( vsum, vin0 );
           vsum = _mm256_packs_epi32( vsum, vsum );
           vsum = _mm256_permute4x64_epi64( vsum, ( 0 << 0 ) + ( 2 << 2 ) + ( 2 << 4 ) + ( 3 << 6 ) );
@@ -1423,7 +1419,7 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
           xin0 = _mm_add_epi16( xin0, xin1 );
 
           xin0 = _mm_max_epi16( _mm_setzero_si128(), xin0 );
-          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max ), xin0 );
+          xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max() ), xin0 );
 
           _mm_storeu_si128( ( __m128i* ) &srcSelf[0], xin0 );
         }

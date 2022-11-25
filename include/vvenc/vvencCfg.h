@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -65,6 +61,17 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
+/* vvdecLoggingCallback:
+   callback function to receive messages of the encoder library
+  \param[in]  void* caller contex
+  \param[in]  int log level
+  \param[in]  const char* fmt
+  \param[in]  va_list args
+  \retval     none
+*/
+typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
+
+
 
 // ====================================================================================================================
 
@@ -73,11 +80,7 @@ VVENC_NAMESPACE_BEGIN
 #define VVENC_MAX_TLAYER                      7      // Explicit temporal layer QP offset - max number of temporal layer
 #define VVENC_MAX_NUM_CQP_MAPPING_TABLES      3      // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
 #define VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA 8
-#if JVET_V0056_MCTF || 1
 #define VVENC_MCTF_RANGE                      4      // max number of frames used for MCTF filtering in forward / backward direction
-#else
-#define VVENC_MCTF_RANGE                      2      // max number of frames used for MCTF filtering in forward / backward direction
-#endif
 #define VVENC_MAX_NUM_COMP                    3      // max number of components
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
@@ -184,11 +187,12 @@ typedef enum
 /// supported IDR types
 typedef enum
 {
-  VVENC_DRT_NONE = 0,
-  VVENC_DRT_CRA,
-  VVENC_DRT_IDR,
-  VVENC_DRT_RECOVERY_POINT_SEI,
-  VVENC_DRT_IDR2,
+  VVENC_DRT_NONE               = 0,
+  VVENC_DRT_CRA                = 1,
+  VVENC_DRT_IDR                = 2,
+  VVENC_DRT_RECOVERY_POINT_SEI = 3,
+  VVENC_DRT_IDR2               = 4,
+  VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -263,16 +267,7 @@ typedef enum
 
 typedef enum
 {
-  VVENC_RCM_AUTO          = -1,
-  VVENC_RCM_OFF           = 0,
-  VVENC_RCM_CTU_LEVEL     = 1,
-  VVENC_RCM_PICTURE_LEVEL = 2,
-  VVENC_RCM_GOP_LEVEL     = 3
-}vvencRateControlMode;
-
-typedef enum
-{
-  VVENC_FASTINTERSEARCH_AUTO     = 0,
+  VVENC_FASTINTERSEARCH_OFF      = 0,
   VVENC_FASTINTERSEARCH_MODE1    = 1,
   VVENC_FASTINTERSEARCH_MODE2    = 2,
   VVENC_FASTINTERSEARCH_MODE3    = 3
@@ -283,7 +278,7 @@ typedef enum
 {
   VVENC_MESEARCH_FULL              = 0,
   VVENC_MESEARCH_DIAMOND           = 1,
-  VVENC_MESEARCH_SELECTIVE         = 2,
+  VVENC_MESEARCH_DEPRECATED        = 2,
   VVENC_MESEARCH_DIAMOND_ENHANCED  = 3,
   VVENC_MESEARCH_DIAMOND_FAST      = 4,
   VVENC_MESEARCH_NUMBER_OF_METHODS = 5
@@ -400,8 +395,8 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 MCTFNumLeadFrames;
-  int                 MCTFNumTrailFrames;
+  int                 MCTFUnitSize;
+  int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -415,44 +410,46 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
 
 typedef struct vvenc_config
 {
-
-  // basic config params
-  bool                m_configDone;
-  bool                m_confirmFailed;                                                   // state variable
-
-  vvencMsgLevel       m_verbosity;                                                       // encoder verbosity
-  int                 m_framesToBeEncoded;                                               // number of encoded frames
-
-  int                 m_FrameRate;                                                       // source frame-rates (Hz)
-  int                 m_FrameSkip;                                                       // number of skipped frames from the beginning
+  // core config params
   int                 m_SourceWidth;                                                     // source width in pixel
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
-  int                 m_TicksPerSecond;                                                  // ticks per second e.g. 90000 for dts generation (1..27000000)
+  int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
+  int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
+  int                 m_TicksPerSecond;                                                  // ticks per second e.g. 90000 for dts generation (1..27000000, -1: ticks per frame=1)
+  int                 m_framesToBeEncoded;                                               // number of encoded frames (default: 0, all)
+  int                 m_inputBitDepth[ 2 ];                                              // bit-depth of input pictures (2d array for luma,chroma)
 
-  vvencProfile        m_profile;
-  vvencTier           m_levelTier;
-  vvencLevel          m_level;
+  int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, else 8threads (limited to available cores))
 
-  int                 m_IntraPeriod;                                                     // period of I-slice (random access period)
+  int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
+  int                 m_RCTargetBitrate;                                                 // target bitrate in bps, (default. 0 (rc disabled))
+
+  vvencMsgLevel       m_verbosity;                                                       // encoder verbosity level
+
+  // basic config params
+
+  vvencProfile        m_profile;                                                         // profile 
+  vvencTier           m_levelTier;                                                       // Tier to use for interpretation of level (main or high)
+  vvencLevel          m_level;                                                           // level limit
+
+  int                 m_IntraPeriod;                                                     // period of I-slice in frames  (random access period)
   int                 m_IntraPeriodSec;                                                  // period of I-slice in seconds (random access period)
   vvencDecodingRefreshType m_DecodingRefreshType;                                        // random access type
-  int                 m_GOPSize;                                                          // GOP size of hierarchical structure
+  int                 m_GOPSize;                                                         // GOP size of hierarchical structure
 
-  int                 m_QP;                                                              // QP value of key-picture (integer)
-  bool                m_usePerceptQPA;                                                   // Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+  int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
+  int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
+  bool                m_cfgUnused1;                                                      // TODO: remove unused memory from configuration
 
-  int                 m_RCTargetBitrate;
-  int                 m_RCNumPasses;
-  int                 m_RCPass;
+  int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
-  vvencSegmentMode    m_SegmentMode;
+  vvencHDRMode        m_HdrMode;                                                         // High Dynamic Range mode (default: off)
+  vvencSegmentMode    m_SegmentMode;                                                     // segment position for segment concatenation (only needed, when multiple separate segments are used)
 
-  int                 m_numThreads;                                                      // number of worker threads
+  bool                m_usePerceptQPA;                                                   // usage of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
 
-  int                 m_inputBitDepth   [ 2 ];                                           // bit-depth of input file
-  int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted)
-
-  vvencHDRMode        m_HdrMode;
+  uint32_t            m_numTileCols;                                                     // number of tile columns
+  uint32_t            m_numTileRows;                                                     // number of tile rows
 
   // expert config params
   int                 m_conformanceWindowMode;
@@ -480,17 +477,19 @@ typedef struct vvenc_config
   unsigned            m_bitDepthConstraintValue;
   bool                m_intraOnlyConstraintFlag;
 
-  int                 m_InputQueueSize;                                                  // Size of frame input queue
   bool                m_rewriteParamSets;                                                // Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
-  vvencRPLEntry       m_RPLList0[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file
-  vvencRPLEntry       m_RPLList1[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file
-  vvencGOPEntry       m_GOPList [ VVENC_MAX_GOP ];                                       // the coding structure entries from the config file
-  int                 m_maxDecPicBuffering[ VVENC_MAX_TLAYER ];                          // total number of pictures in the decoded picture buffer
-  int                 m_maxNumReorderPics [ VVENC_MAX_TLAYER ];                          // total number of reorder pictures
-  int                 m_maxTempLayer;                                                    // Max temporal layer
-  int                 m_numRPLList0;
-  int                 m_numRPLList1;
+
+  vvencRPLEntry       m_cfgUnused2[ 64 ];                                                // TODO: remove unused memory from configuration
+  vvencRPLEntry       m_cfgUnused3[ 64 ];                                                // TODO: remove unused memory from configuration
+
+  vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
+
+  int                 m_cfgUnused4[ 7 ];                                                 // TODO: remove unused memory from configuration
+  int                 m_cfgUnused5[ 7 ];                                                 // TODO: remove unused memory from configuration
+  int                 m_cfgUnused6;                                                      // TODO: remove unused memory from configuration
+  int                 m_cfgUnused7;                                                      // TODO: remove unused memory from configuration
+  int                 m_cfgUnused8;                                                      // TODO: remove unused memory from configuration
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;
@@ -539,7 +538,7 @@ typedef struct vvenc_config
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
-  unsigned            m_maxMTTDepthIChroma;
+  int                 m_maxMTTDepthIChroma;
   unsigned            m_maxBT[3];
   unsigned            m_maxTT[3];
   bool                m_dualITree;
@@ -567,7 +566,7 @@ typedef struct vvenc_config
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
-  bool                m_bUseConstrainedIntraPred;                                        // flag for using constrained intra prediction
+  bool                m_cfgUnused9;                                                      // TODO: remove unused memory from configuration
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
 
@@ -591,7 +590,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
+  bool                m_cfgUnused12;
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME
@@ -650,7 +649,7 @@ typedef struct vvenc_config
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
   int                 m_loopFilterBetaOffsetDiv2[3];                                     // beta offset for deblocking filter
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
-  int                 m_deblockingFilterMetric;
+  int                 m_cfgUnused10;                                                     // TODO: remove unused memory from configuration
 
   bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
   bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
@@ -663,7 +662,7 @@ typedef struct vvenc_config
 
   bool                m_decodingParameterSetEnabled;                                     // enable decoding parameter set
   int                 m_vuiParametersPresent;                                            // enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
-  int                 m_hrdParametersPresent;                                            // enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
+  bool                m_hrdParametersPresent;                                            // enable generation or HRD parameters; 0: off 1: enable
   bool                m_aspectRatioInfoPresent;                                          // Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc;                                                  // aspect_ratio_idc
   int                 m_sarWidth;                                                        // horizontal size of the sample aspect ratio
@@ -678,7 +677,7 @@ typedef struct vvenc_config
   int                 m_chromaSampleLocType;                                             // Specifies the location of chroma samples for progressive content
   bool                m_overscanInfoPresent;                                             // Signals whether overscan_appropriate_flag is present
   bool                m_overscanAppropriateFlag;                                         // Indicates whether conformant decoded pictures are suitable for display using overscan
-  bool                m_videoSignalTypePresent;                                          // Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  bool                m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
   bool                m_videoFullRangeFlag;                                              // Indicates the black level and range of luma and chroma signals
 
   unsigned int        m_masteringDisplay[10];                                            // mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
@@ -700,28 +699,23 @@ typedef struct vvenc_config
 
   int                 m_quantThresholdVal;
   int                 m_qtbttSpeedUp;
-#if 1//QTBTT_SPEED3
   int                 m_qtbttSpeedUpMode;
-#endif
-#if 1//FASTTT_TH
   int                 m_fastTTSplit;
   float               m_fastTT_th;
-#endif
 
   int                 m_fastLocalDualTreeMode;
 
   int                 m_maxParallelFrames;
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+  bool                m_tileParallelCtuEnc;
 
   bool                m_picPartitionFlag;
   unsigned int        m_tileColumnWidth[10];
   unsigned int        m_tileRowHeight[10];
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
-  uint32_t            m_numTileCols;                                                     // derived number of tile columns
-  uint32_t            m_numTileRows;                                                     // derived number of tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
-  
+
   // decode bitstream options
   int                 m_switchPOC;                                                       // dbg poc.
   int                 m_switchDQP;                                                       // switch DQP.
@@ -742,17 +736,162 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
+  // reserved parameters for internal use
+  int                 m_reservedInt[3];
+  int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
+  int                 m_meReduceTap;                                                     // Reduce filter taps during motion search (0 - don't, use full 8-tap fitler; 1 - use 6-tap fitlers; 2 - use chroma 4-tap filters)
+  int                 m_deblockLastTLayers;
+  int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
+  int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
+  int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
+  int                 m_explicitAPSid;
+  
+  bool                m_picReordering;
+  bool                m_reservedFlag[5];
+  bool                m_addGOP32refPics;
+  bool                m_fastHad;
+  bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
+  bool                m_treatAsSubPic;
+
+  double              m_reservedDouble[10];
+
+  // internal state variables
+  bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )
+  bool                m_confirmFailed;                                                   // state variable, Private context used for internal data ( do not change )
+  vvencLoggingCallback m_msgFnc;                                                         // logger callback function (internal info/errors will use this function to return log messages)
+  void                *m_msgCtx;                                                         // caller context ( if not needed null )
 
 }vvenc_config;
 
+/* vvenc_config_default
+  This method initializes the vvenc_config parameters to default values (constructor).
+ \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+ \retval     none
+ \pre        None
+*/
 VVENC_DECL void vvenc_config_default( vvenc_config *cfg );
 
-VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
-
+/* vvenc_init_default
+  This method initializes the vvenc_config parameters to default values by using all required
+  parameters size, framerate, bitrate, qp, preset.
+ \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+ \param[in]  width  source width in pixel
+ \param[in]  height source height in pixel
+ \param[in]  framerate source frame-rates (Hz)
+ \param[in]  targetbitrate bitrate in bps (0: use fix qp, >0: enable rate control)
+ \param[in]  qp QP value of key-picture (integer in range 0 to 63, default: 32)
+ \param[in]  preset enum of used preset (default: VVENC_MEDIUM)
+ \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
+ \pre        None
+*/
 VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset );
 
+/* vvenc_init_preset
+  This method overwrites encoder parameter by using a preset.
+ \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+ \param[in]  preset enum of used preset (default: VVENC_MEDIUM)
+ \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
+ \pre        vvenc_config_default() or vvenc_init_default() must be called first 
+*/
+VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
+
+
+/* vvenc_set_logging_callback
+ This method registers a log message callback function.
+ This callback is automatically used when calling vvenc_encoder_open().
+ If no such function has been registered, the library will omit all messages.
+ \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+ \param[in]  msgCtx pointer of the caller, if not needed set it to null
+ \param[in]  msgFnc Log message callback function.
+ \retval     none
+*/
+VVENC_DECL void vvenc_set_msg_callback( vvenc_config *cfg, void * msgCtx, vvencLoggingCallback msgFnc );
+
+/* vvenc_init_config_parameter (optional)
+  This method initialize the encoder parameter and sets all parameter the are not initialized yet.
+  All not initialized parameters are set to valid values.
+  Is automatically called in vvenc_encoder_open().
+ \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+  \retval    bool if true an error occurred, otherwise false.
+ \pre        vvenc_config_default() or vvenc_init_default() must be called first 
+*/
 VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *cfg );
 
+
+/* following defines should be used when using the string api interface function
+ * venc_set_param (config, optionname, value)
+*/
+
+//       macro                         mapped option name     vvenc_config parameter name
+#define VVENC_OPT_SIZE                 "size"                 // m_SourceWidthxm_SourceHeight e.g. 1920x1080
+#define VVENC_OPT_WIDTH                "sourcewidth"          // m_SourceWidth  (in pixel)
+#define VVENC_OPT_HEIGHT               "sourceheight"         // m_SourceHeight (in pixel)
+#define VVENC_OPT_FRAMERATE            "framerate"            // m_FrameRate    (fps numerator in Hz)
+#define VVENC_OPT_FRAMESCALE           "framescale"           // m_FrameScale   (fps denominator in Hz)
+#define VVENC_OPT_FPS                  "fps"                  // Framerate as fraction (num/denom)
+#define VVENC_OPT_TICKSPERSEC          "tickspersec"          // m_TicksPerSecond
+#define VVENC_OPT_INPUTBITDEPTH        "inputbitdepth"        // m_inputBitDepth
+#define VVENC_OPT_FRAMES               "framestobeencoded"    // m_framesToBeEncoded
+#define VVENC_OPT_PRESET               "preset"               // set preset like "faster,fast,medium,slow,slower
+#define VVENC_OPT_THREADS              "threads"              // m_numThreads
+#define VVENC_OPT_BITRATE              "bitrate"              // m_RCTargetBitrate
+#define VVENC_OPT_QP                   "qp"                   // m_QP
+#define VVENC_OPT_TILES                "tiles"                // number of tile column x rows in m_numTileColsxm_numTileRows, e.g. 2x2
+#define VVENC_OPT_VERBOSITY            "verbosity"            // m_verbosity
+
+#define VVENC_OPT_PROFILE               "profile"             // m_profile
+#define VVENC_OPT_LEVEL                 "level"               // m_level
+#define VVENC_OPT_TIER                  "tier"                // m_levelTier
+
+#define VVENC_OPT_REFRESHDSEC           "refreshsec"          // m_IntraPeriodSec
+#define VVENC_OPT_INTRAPERIOD           "intraperiod"         // m_IntraPeriod
+#define VVENC_OPT_DECODINGREFRESHTYPE   "decodingrefreshtype" // m_DecodingRefreshType
+#define VVENC_OPT_GOPSIZE               "gopsize"             // m_GOPSize
+
+#define VVENC_OPT_QPA                   "qpa"                 // m_usePerceptQPA
+#define VVENC_OPT_RCPASSES              "passes"              // m_RCNumPasses
+#define VVENC_OPT_RCPASS                "pass"                // m_RCPass
+#define VVENC_OPT_INTERNALBITDEPTH      "internalbitdepth"    // m_internalBitDepth
+#define VVENC_OPT_HDR                   "hdr"                 // m_HdrMode
+#define VVENC_OPT_SEGMENT               "segment"             // m_SegmentMode
+
+/* vvenc_set_param (optional)
+  This method sets one parameter by name.
+  numerical range is not checked until vvenc_init_config_parameter()
+  \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+  \param[in]  name option name as string
+              use "help", "longhelp", "fullhelp" to print available options
+  \param[in]  value option value as string
+              value=NULL means "true" for boolean options, but is a BAD_VALUE for non-booleans.
+  \retval    returns 0 on success, or returns one of the following values:
+             VVENC_BAD_VALUE occurs only if it can't even parse the value,
+             VVENC_PARAM_INFO occurs when a information should be printed (e.g. help, version)
+  \pre       vvenc_config_default() or vvenc_init_default() must be called first 
+*/
+#define VVENC_PARAM_BAD_NAME  (-1)
+#define VVENC_PARAM_BAD_VALUE (-2)
+#define VVENC_PARAM_INFO      (1)
+VVENC_DECL int vvenc_set_param(vvenc_config *cfg, const char *name, const char *value);
+
+/* vvenc_set_param_list (optional)
+  This method sets a list of parameters by name.
+  arguments must be separated as would be used in command line. e.g.: --bitrate 500000 --framerate 50
+  numerical range is not checked until vvenc_init_config_parameter()
+  \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+  \param[in]  argc number or arguments in argv string list
+  \param[in]  argv list of char* (argv[]); option name must be defined by prefix -- or -
+  \retval     returns 0 on success, > 0 if an information was printed (help), -1 on failure.
+  \pre        vvenc_config_default() or vvenc_init_default() must be called first 
+*/
+VVENC_DECL int vvenc_set_param_list(vvenc_config *c, int argc, char* argv[] );
+
+/* vvenc_get_config_as_string (optional)
+  This method returns the encoder configuration as string.
+  \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+  \param[in]  eMsgLevel verbosity level
+  \retval     const char* encoder configuration as string
+  \pre        vvenc_config_default() or vvenc_init_default() must be called first 
+*/
 VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *cfg, vvencMsgLevel eMsgLevel );
 
 #ifdef __cplusplus

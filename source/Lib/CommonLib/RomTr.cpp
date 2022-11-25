@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -368,81 +364,81 @@ namespace vvenc {
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P2[TRANSFORM_NUMBER_OF_DIRECTIONS][2][2] ) =
 {
   DEFINE_DCT2_P2_MATRIX(64),
-  DEFINE_DCT2_P2_MATRIX(64)
+  //DEFINE_DCT2_P2_MATRIX(64)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DCT2_P4_MATRIX(64,    83,    36),
-  DEFINE_DCT2_P4_MATRIX(64,    83,    36)
+  //DEFINE_DCT2_P4_MATRIX(64,    83,    36)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18),
-  DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18)
+  //DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9),
-  DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9)
+  //DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4),
-  DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4)
+  //DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P64[TRANSFORM_NUMBER_OF_DIRECTIONS][64][64] ) =
 {
   DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2),
-  DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2)
+  //DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2)
 };
 
 // DCT-8
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29),
-  DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29)
+  //DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17),
-  DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17)
+  //DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8),
-  DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8)
+  //DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4),
-  DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4)
+  //DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4)
 };
 
 // DST-7
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DST7_P4_MATRIX(29,    55,    74,    84),
-  DEFINE_DST7_P4_MATRIX(29,    55,    74,    84)
+  //DEFINE_DST7_P4_MATRIX(29,    55,    74,    84)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86),
-  DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86)
+  //DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88),
-  DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88)
+  //DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90),
-  DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90)
+  //DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90)
 };
 
 //--------------------------------------------------------------------------------------------------

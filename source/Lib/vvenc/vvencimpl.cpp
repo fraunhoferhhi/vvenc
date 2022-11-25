@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -88,11 +84,11 @@ static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits p
 
 // ====================================================================================================================
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 VVEncImpl::VVEncImpl()
 {
-
+  m_cEncoderInfo = createEncoderInfoStr();
 }
 
 VVEncImpl::~VVEncImpl()
@@ -125,33 +121,31 @@ int VVEncImpl::checkConfig( const vvenc_config& config )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const vvenc_config& config )
+int VVEncImpl::init( vvenc_config* config )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string curSimd;
-  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
-  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
+  if (nullptr == config)
+  {
+    msg.log( VVENC_ERROR, "vvenc_config is null\n" );
+    return VVENC_ERR_PARAMETER;
+  }
 
-  m_cVVEncCfgExt = config;
-  m_cVVEncCfg    = config;
+  m_cVVEncCfgExt = *config;
+  m_cVVEncCfg    = *config;
 
   if ( vvenc_init_config_parameter(&m_cVVEncCfg) ) // init auto/dependent options
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  std::stringstream cssCap;
-  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
-  m_sEncoderCapabilities = cssCap.str();
-
-  m_cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
-  m_cEncoderInfo += " ";
-  m_cEncoderInfo += m_sEncoderCapabilities;
-
+  if( config->m_msgFnc )
+  { 
+    msg.setCallback( config->m_msgCtx, config->m_msgFnc );
+  }
+  
   // initialize the encoder
-  m_pEncLib = new EncLib;
+  m_pEncLib = new EncLib ( msg );
 
 #if HANDLE_EXCEPTION
   try
@@ -162,7 +156,7 @@ int VVEncImpl::init( const vvenc_config& config )
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -195,7 +189,7 @@ int VVEncImpl::initPass( int pass, const char* statsFName )
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -223,7 +217,7 @@ int VVEncImpl::uninit()
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -366,7 +360,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -378,9 +372,38 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     {
       m_eState = INTERNAL_STATE_FINALIZED;
     }
+    else if( m_eState == INTERNAL_STATE_INITIALIZED )
+    {
+      m_eState = INTERNAL_STATE_INITIALIZED; // keep initialized state, when flushing without having encoded anything, we still can start to encode
+    }
     else
     {
       *pbEncodeDone = false;
+    }
+  }
+  else
+  {     
+    if( bFlush && m_cVVEncCfg.m_RCNumPasses == 2 && m_pEncLib->getCurPass() == 0 )
+    {
+      // process all remaining pictures of first pass on first flush packet 
+      while ( ! *pbEncodeDone )
+      {
+#if HANDLE_EXCEPTION
+        try
+#endif
+        {
+          m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, *pbEncodeDone );
+        }
+#if HANDLE_EXCEPTION
+        catch( std::exception& e )
+        {
+          msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+          m_cErrorString = e.what();
+          return VVENC_ERR_UNSPECIFIED;
+        }
+#endif 
+      }
+      m_eState = INTERNAL_STATE_FINALIZED;      
     }
   }
 
@@ -405,6 +428,63 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 
   return iRet;
 }
+
+int VVEncImpl::getParameterSets( vvencAccessUnit *pcAccessUnit )
+{
+  if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
+  if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
+
+  if( !pcAccessUnit )
+  {
+    m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+  if( pcAccessUnit->payloadSize <= 0 )
+  {
+    m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+
+  int iRet= VVENC_OK;
+
+  // reset AU data
+  vvenc_accessUnit_reset(pcAccessUnit);
+
+  AccessUnitList cAu;
+#if HANDLE_EXCEPTION
+  try
+#endif
+  {
+    m_pEncLib->getParameterSets( cAu );
+  }
+#if HANDLE_EXCEPTION
+  catch( std::exception& e )
+  {
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
+#endif
+
+  /* copy output AU */
+  if ( !cAu.empty() )
+  {
+    int sizeAu = xGetAccessUnitsSize( cAu );
+    if( pcAccessUnit->payloadSize < sizeAu )
+    {
+      std::stringstream css;
+      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << pcAccessUnit->payloadSize << ", needed " << sizeAu << ")";
+      m_cErrorString =css.str();
+      return VVENC_NOT_ENOUGH_MEM;
+    }
+
+    iRet = xCopyAu( *pcAccessUnit, cAu  );
+  }
+
+  return iRet;
+}
+
+
 
 const char* VVEncImpl::getVersionNumber()
 {
@@ -451,12 +531,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_vvencMCTF.MCTFNumLeadFrames;
+  return m_cVVEncCfg.m_leadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_vvencMCTF.MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_trailFrames;
 }
 
 int VVEncImpl::printSummary() const
@@ -645,8 +725,9 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
 ///< set message output function for encoder lib. if not set, no messages will be printed.
 void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 {
+  // DEPRECATED
   g_msgFnc    = msgFnc;
-  m_msgFncCtx = ctx;
+  g_msgFncCtx = ctx;
 }
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
@@ -667,14 +748,33 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-const char* VVEncImpl::getCompileInfoString()
+std::string VVEncImpl::getCompileInfoString()
 {
+  std::string info;
   char convBuf[ 256 ];
-  VVencCompileInfo.clear();
-  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      VVencCompileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); VVencCompileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      VVencCompileInfo += convBuf;
-  return VVencCompileInfo.c_str();
+  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      info += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); info += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      info += convBuf;
+  return info;
+}
+
+std::string VVEncImpl::createEncoderInfoStr()
+{
+  std::string cInfoStr;
+
+    // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string curSimd;
+  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
+  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
+
+  std::stringstream cssCap;
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+
+  cInfoStr  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  cInfoStr += " ";
+  cInfoStr += cssCap.str();
+
+  return cInfoStr;
 }
 
 ///< decode bitstream with limited build in decoder
@@ -683,9 +783,10 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
+  MsgLog msg;
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule );
+  g_trace_ctx = tracing_init( trcFile, trcRule, msg );
 #endif
 
   std::string filename(FileName );
@@ -693,13 +794,17 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   try
 #endif
   {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
-    if( ret )  { msg( VVENC_ERROR, "decoding failed\n"); }
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, msg, false, cPicture.poc, false );
+    if( ret )  
+    { 
+      msg.log( VVENC_ERROR, "decoding failed\n");
+      return VVENC_ERR_UNSPECIFIED; 
+    }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "decoding failed: %s\n", e.what() );
+    msg.log( VVENC_ERROR, "decoding failed: %s\n", e.what() );
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif

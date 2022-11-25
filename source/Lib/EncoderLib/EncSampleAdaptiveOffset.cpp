@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -128,7 +124,7 @@ void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisab
   {
     const PreCalcValues& pcv     = *cs.pcv;
     const int numberOfComponents = getNumberValidComponents( chromaFormat );
-    const int picTempLayer       = cs.slice->depth;
+    const int picTempLayer       = cs.slice->TLayer;
     int numCtusForSAOOff[MAX_NUM_COMP];
 
     for (int compIdx = 0; compIdx < numberOfComponents; compIdx++)
@@ -178,7 +174,7 @@ void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double
     saoEnabled[ compIdx ] = false;
   }
 
-  const int picTempLayer = slice.depth;
+  const int picTempLayer = slice.TLayer;
   for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
   {
     // enable per default
@@ -463,7 +459,7 @@ inline int EncSampleAdaptiveOffset::estIterOffset(int typeIdx, double lambda, in
       tempRate --;
     }
     // Do the dequantization before distortion calculation
-    tempOffset  = iterOffset << bitIncrease;
+    tempOffset  = iterOffset * (1<< bitIncrease);
     tempDist    = estSaoDist( count, tempOffset, diffSum, shift);
     tempCost    = ((double)tempDist + lambda * (double) tempRate);
     if(tempCost < tempMinCost)
@@ -499,11 +495,16 @@ void EncSampleAdaptiveOffset::deriveOffsets(ComponentID compIdx, const int chann
     {
       continue; //offset will be zero
     }
-
+#if (  DISTORTION_PRECISION_ADJUSTMENT(x)  == 0 )
     quantOffsets[classIdx] =
-      (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))
-                                   / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
-    quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+       (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] ) / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
+     quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+#else
+      quantOffsets[classIdx] =
+        (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))
+                                     / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
+      quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+#endif
   }
 
   // adjust offsets
@@ -791,8 +792,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
                         , Pel* srcBlk, Pel* orgBlk, int srcStride, int orgStride, int width, int height
                         , bool isLeftAvail,  bool isRightAvail, bool isAboveAvail, bool isBelowAvail, bool isAboveLeftAvail, bool isAboveRightAvail )
 {
-  int x,y, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
-  int8_t signLeft, signRight, signDown;
+  int x, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
   int64_t *diff, *count;
   Pel* srcLine, *orgLine;
   const int skipLinesR = compIdx == COMP_Y ? 5 : 3;
@@ -802,7 +802,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
   {
     SAOStatData& statsData= statsDataTypes[typeIdx];
     statsData.reset();
-
     srcLine = srcBlk;
     orgLine = orgBlk;
     diff    = statsData.diff;
@@ -811,35 +810,15 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
     {
     case SAO_TYPE_EO_0:
       {
-        diff +=2;
-        count+=2;
         endY   =  isBelowAvail ? (height - skipLinesB) : height;
         startX = (isLeftAvail  ? 0 : 1);
         endX   = (isRightAvail ? (width - skipLinesR) : (width - 1));
-
-        for (y=0; y<endY; y++)
-        {
-          signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-          for (x=startX; x<endX; x++)
-          {
-            signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-            edgeType  =  signRight + signLeft;
-            signLeft  = -signRight;
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-          }
-          srcLine  += srcStride;
-          orgLine  += orgStride;
-        }
+        calcSaoStatisticsEo0(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff);
       }
       break;
     case SAO_TYPE_EO_90:
       {
-        diff +=2;
-        count+=2;
         int8_t *signUpLine = &m_signLineBuf1[0];
-
         startX = 0;
         startY = isAboveAvail ? 0 : 1;
         endX   = (isRightAvail ? (width - skipLinesR) : width);
@@ -849,53 +828,25 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine += srcStride;
           orgLine += orgStride;
         }
-
-        Pel* srcLineAbove = srcLine - srcStride;
-        for (x=startX; x<endX; x++)
-        {
-          signUpLine[x] = (int8_t)sgn(srcLine[x] - srcLineAbove[x]);
-        }
-
-        Pel* srcLineBelow;
-        for (y=startY; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for (x=startX; x<endX; x++)
-          {
-            signDown  = (int8_t)sgn(srcLine[x] - srcLineBelow[x]);
-            edgeType  = signDown + signUpLine[x];
-            signUpLine[x]= -signDown;
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-          }
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsEo90(width,endX,startY,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
       }
       break;
     case SAO_TYPE_EO_135:
       {
         diff +=2;
         count+=2;
-        int8_t *signUpLine, *signDownLine, *signTmpLine;
-
+        int8_t *signUpLine, *signDownLine;
         signUpLine  = &m_signLineBuf1[0];
         signDownLine= &m_signLineBuf2[0];
-
         startX = isLeftAvail  ? 0 : 1;
-
         endX   = isRightAvail ? (width - skipLinesR): (width - 1);
         endY   = isBelowAvail ? (height - skipLinesB) : (height - 1);
-
         //prepare 2nd line's upper sign
         Pel* srcLineBelow = srcLine + srcStride;
         for (x=startX; x<endX+1; x++)
         {
           signUpLine[x] = (int8_t)sgn(srcLineBelow[x] - srcLine[x-1]);
         }
-
         //1st line
         Pel* srcLineAbove = srcLine - srcStride;
         firstLineStartX = isAboveLeftAvail ? 0    : 1;
@@ -908,31 +859,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         }
         srcLine  += srcStride;
         orgLine  += orgStride;
-
-
-        //middle lines
-        for (y=1; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for (x=startX; x<endX; x++)
-          {
-            signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x+1]);
-            edgeType = signDown + signUpLine[x];
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-
-            signDownLine[x+1] = -signDown;
-          }
-          signDownLine[startX] = (int8_t)sgn(srcLineBelow[startX] - srcLine[startX-1]);
-
-          signTmpLine  = signUpLine;
-          signUpLine   = signDownLine;
-          signDownLine = signTmpLine;
-
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsEo135(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine,signDownLine);
       }
       break;
     case SAO_TYPE_EO_45:
@@ -951,8 +878,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         {
           signUpLine[x] = (int8_t)sgn(srcLineBelow[x] - srcLine[x+1]);
         }
-
-
         //first line
         Pel* srcLineAbove = srcLine - srcStride;
         firstLineStartX = isAboveAvail ? startX : endX;
@@ -963,29 +888,9 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           diff [edgeType] += (orgLine[x] - srcLine[x]);
           count[edgeType] ++;
         }
-
         srcLine += srcStride;
         orgLine += orgStride;
-
-        //middle lines
-        for (y=1; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for(x=startX; x<endX; x++)
-          {
-            signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x-1]);
-            edgeType = signDown + signUpLine[x];
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-
-            signUpLine[x-1] = -signDown;
-          }
-          signUpLine[endX-1] = (int8_t)sgn(srcLineBelow[endX-1] - srcLine[endX]);
-          srcLine  += srcStride;
-          orgLine  += orgStride;
-        }
+        calcSaoStatisticsEo45(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
       }
       break;
     case SAO_TYPE_BO:
@@ -993,19 +898,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = 0;
         endX   = isRightAvail ? (width - skipLinesR) : width;
         endY   = isBelowAvail ? (height- skipLinesB) : height;
-        int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
-        for (y=0; y< endY; y++)
-        {
-          for (x=startX; x< endX; x++)
-          {
-
-            int bandIdx= srcLine[x] >> shiftBits;
-            diff [bandIdx] += (orgLine[x] - srcLine[x]);
-            count[bandIdx] ++;
-          }
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsBo(width,endX,endY,srcLine,orgLine,srcStride,orgStride,channelBitDepth,count,diff);
       }
       break;
     default:
@@ -1030,9 +923,9 @@ void EncSampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructu
 
   if (!isLoopFiltAcrossSlicePPS)
   {
-    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameTile(*cuCurr, *cuLeft);
-    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameTile(*cuCurr, *cuAbove);
-    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameTile(*cuCurr, *cuAboveLeft);
+    isLeftAvail      = (cuLeft == NULL)      ? false : CU::isSameSlice(*cuCurr, *cuLeft);
+    isAboveAvail     = (cuAbove == NULL)     ? false : CU::isSameSlice(*cuCurr, *cuAbove);
+    isAboveLeftAvail = (cuAboveLeft == NULL) ? false : CU::isSameSlice(*cuCurr, *cuAboveLeft);
   }
   else
   {
