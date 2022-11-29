@@ -1,4 +1,40 @@
 /////////////////////////////////////////
+tag 1.7.0-rc1
+
+* libvvenc:
+  - removed (unused) library parameters:
+    - vvencGOPEntry: m_CbTcOffsetDiv2, m_CbBetaOffsetDiv2, m_CrTcOffsetDiv2, m_CrBetaOffsetDiv2
+                     m_refPic, m_isEncoded, m_ltrp_in_slice_header_flag
+    - vvencReshapeCW: rspBaseQP
+  - added library parameters:
+    - extended vvencHDRMode to also include SDR color spaces
+    - vvenc_config: m_numRefPics, m_numRefPicsSCC, m_blockImportanceMapping, m_saoScc
+    - vvenc_config: changed m_sliceTypeAdapt from bool to char
+  - added support for ARM through SIMDe
+  - allowing adaptive intra period (content adaptive placement of random access points)
+  - ported block importance mapping from VTM
+    - around 1% gain for faster
+    - around 2% BD-rate gain for other presets
+  - added noise based QP clipping to RC
+  - improved SCC detector to ignore black borders
+  - added possibility of logo overlay
+  - major refactoring to separate a pre-processing step
+  - many bugfixes
+  - speedups: 20% for faster, 5% for other presets
+
+* vvencapp:
+  - added parameter "sdr" to set the SDR color space (mutually exclusive with "hdr" parameter)
+  - added parameter "logofile" specifying a JSON logo descriptor (use without value for help)
+  
+* vvencFFapp:
+  - added parameters "Sdr" and "logofile" analogue to simple app
+  - added parameters "NumRefPics" and "NumRefPicsSCC" allowing per-TL setting of number of reference pictures
+  - added parameter "BIM"
+  - changed parameters "SAO" and "STA" from flag to integer
+    - SAO=2 will only apply SAO to screen content
+    - STA=2 will start a new intra period when a content-dependent intra frame is inserted
+
+/////////////////////////////////////////
 tag 1.6.1
 
 * libvvenc:
