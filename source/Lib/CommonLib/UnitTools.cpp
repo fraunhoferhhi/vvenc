@@ -3557,11 +3557,6 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
 
 // TU tools
 
-bool TU::isNonTransformedResidualRotated(const TransformUnit& tu, const ComponentID compID)
-{
-  return tu.cs->sps->spsRExt.transformSkipRotationEnabled && tu.blocks[compID].width == 4 && tu.cu->predMode == MODE_INTRA;
-}
-
 bool TU::getCbf( const TransformUnit& tu, const ComponentID compID )
 {
   return getCbfAtDepth( tu, compID, tu.depth );
@@ -3636,6 +3631,11 @@ bool TU::getPrevTuCbfAtDepth( const TransformUnit& currentTu, const ComponentID 
 uint32_t getCtuAddr( const Position& pos, const PreCalcValues& pcv )
 {
   return ( pos.x >> pcv.maxCUSizeLog2 ) + ( pos.y >> pcv.maxCUSizeLog2 ) * pcv.widthInCtus;
+}
+
+uint32_t getCtuAddrFromCtuSize( const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus )
+{
+  return ( pos.x >> maxCUSizeLog2 ) + ( pos.y >> maxCUSizeLog2 ) * widthInCtus;
 }
 
 int getNumModesMip(const Size& block)

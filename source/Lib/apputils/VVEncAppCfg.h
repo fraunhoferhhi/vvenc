@@ -232,6 +232,24 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "yuv420_10_packed",          YUV420_10_PACKED },
 };
 
+const std::vector<SVPair<int>> SaoToIntMap =
+{
+  { "0", 0 },
+  { "1", 1 },
+  { "2", 2 },
+};
+
+const std::vector<SVPair<vvencHDRMode>> SdrModeToIntMap =
+{
+  { "off",                 VVENC_HDR_OFF },
+  { "sdr",                 VVENC_SDR_BT709},
+  { "sdr_709",             VVENC_SDR_BT709},
+  { "sdr709",              VVENC_SDR_BT709},
+  { "sdr_2020",            VVENC_SDR_BT2020},
+  { "sdr2020",             VVENC_SDR_BT2020},
+  { "sdr_470bg",           VVENC_SDR_BT470BG},
+  { "sdr470bg",            VVENC_SDR_BT470BG},
+};
 
 const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
@@ -364,6 +382,8 @@ static void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset );
 
 static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs );
 
+static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
+
 
 // ====================================================================================================================
 // Class definition
@@ -395,6 +415,7 @@ public:
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
                                                                ///< values that are not arbitrary must be quoted "\"values\""
                                                                ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
+  std::string  m_logoFileName;                                 ///< logo overlay file
 private:
   const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
 
@@ -446,6 +467,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   std::string writeCfg = "";
 
+  vvencHDRMode hdrMode = c->m_HdrMode;
+  vvencHDRMode sdrMode = c->m_HdrMode;
+
   IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &c->m_verbosity,   &MsgLevelToEnumMap );
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, c, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &c->m_SourceWidth, &c->m_SourceHeight }, true, 'x' );
@@ -455,7 +479,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<vvencTier>          toLevelTier                  ( &c->m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<vvencLevel>         toLevel                      ( &c->m_level,                       &LevelToEnumMap        );
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &c->m_SegmentMode,                 &SegmentToEnumMap      );
-  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &c->m_HdrMode,                     &HdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toSDRMode                    ( &sdrMode,                          &SdrModeToIntMap       );
+  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &hdrMode,                          &HdrModeToIntMap       );
+
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
   IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8);
@@ -498,6 +524,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToArr<char>                toDecodeBitstreams1           ( &c->m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
+
+  IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
+
+  IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
 
   po::Options opts;
   if( m_easyMode )
@@ -615,7 +645,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
+    ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt nal unit type)")
     ;
 
     opts.setSubSection("Quantization parameters");
@@ -633,9 +663,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   if( m_easyMode )
   {
-    opts.setSubSection("HDR and Color Options");
+    opts.setSubSection("HDR/SDR and Color Options");
     opts.addOptions()
-    ("hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
@@ -643,7 +675,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("VUI and SEI options");
     opts.addOptions()
-    ("Hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+    ("Sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
+                                                                                                             "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
+    ("Hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }
@@ -675,6 +709,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
 
   if( !m_easyMode )
@@ -790,6 +825,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
     
     ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
+    ("NumRefPics",                                      c->m_numRefPics,                                     "Number of reference pictures in RPL (0: default for RPL, <10: apply for all temporal layers, >=10: each decimal digit specifies the number for a temporal layer, last digit applying to the highest TL)" )
+    ("NumRefPicsSCC",                                   c->m_numRefPicsSCC,                                  "Number of reference pictures in RPL for SCC pictures (semantic analogue to NumRefPics, -1: equal to NumRefPics)" )
     ;
 
     opts.setSubSection("Low-level QT-BTT partitioning options");
@@ -893,7 +930,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
-    ("SAO",                                             c->m_bUseSAO,                                        "Enable Sample Adaptive Offset")
+    ("SAO",                                             toSaoWithScc,                                        "Enable Sample Adaptive Offset (1: always, 2: only for screen content frames)")
     ("SaoEncodingRate",                                 c->m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
     ("SaoEncodingRateChroma",                           c->m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
     ("SaoLumaOffsetBitShift",                           c->m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
@@ -1008,6 +1045,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
+    ("BIM",                                             c->m_blockImportanceMapping,                         "Block importance mapping (basic temporal RDO based on MCTF).")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -1158,31 +1196,40 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     // file check
     std::string cErr;
-    if( !apputils::YuvFileIO::checkInputFile( m_inputFileName, cErr ) )
+    if( !m_inputFileName.empty() && !apputils::FileIOHelper::checkInputFile( m_inputFileName, cErr ) )
     {
       err.warn( "Input file" ) << cErr;
     }
 
-    if( !apputils::YuvFileIO::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    if( !m_bitstreamFileName.empty() && !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
     }
 
     // check for y4m input
-    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    if ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) )
     {
-      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
+      if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
-        rcOstr << "cannot parse y4m metadata\n";
-        ret = -1;
+        err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
       }
     }
     else
     {
-      if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
+      if( apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
       {
         err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
+    }
+
+    if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
+    {
+      if( sdrMode != VVENC_HDR_OFF && hdrMode != VVENC_HDR_OFF )
+      {
+        err.error( "Dynamic range" ) << "cannot combine hdr and sdr mode. use one or another.\n";
+      }
+
+      c->m_HdrMode = (sdrMode != VVENC_HDR_OFF) ? sdrMode : hdrMode;
     }
 
     for( auto& a : argv_unhandled )
@@ -1326,6 +1373,11 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   if( ! m_RCStatsFileName.empty() )
   {
     rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+  if( ! m_logoFileName.empty() )
+  {
+    rcOstr << "error: reading of logo overlay file not supported, please disable logofile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
 #endif
@@ -1515,6 +1567,12 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
   case YUV400_10 :        appcfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
+}
+
+static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
+{
+  cfg->m_bUseSAO = !!saoVal;
+  cfg->m_saoScc  = saoVal == 2;
 }
 
 

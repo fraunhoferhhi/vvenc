@@ -93,7 +93,6 @@ private:
                                   const int          remRegBins,
                                   unsigned           goRiceZero,
                                   const uint16_t     ui16AbsGoRice,
-                                  const bool         useLimitedPrefixLength,
                                   const int          maxLog2TrDynamicRange ) const;
   inline cost_t xiGetCostSigCoeffGroup  ( const BinFracBits& fracBitsSigCG, unsigned uiSignificanceCoeffGroup ) const;
   inline cost_t xLevelCost              ( const uint32_t uiAbsLevel, const int iScaledLevel, const int iQBits, const cost_t iErrScale, const cost_t iErrScaleShift, const cost_t costSig, const BinFracBits& fracBitsPar, const BinFracBits& fracBitsGt1, const BinFracBits& fracBitsGt2, const int remRegBins, unsigned goRiceZero, const uint16_t goRiceParam, const bool extendedPrecision, const int maxLog2TrDynamicRange ) const;

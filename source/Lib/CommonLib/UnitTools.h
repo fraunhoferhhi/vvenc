@@ -76,7 +76,6 @@ namespace CU
   inline bool isInter                   (const CodingUnit &cu)                          { return cu.predMode == MODE_INTER; }
   inline bool isIBC                     (const CodingUnit &cu)                          { return cu.predMode == MODE_IBC; }
   inline bool isPLT                     (const CodingUnit &cu)                          { return cu.predMode == MODE_PLT; }
-  inline bool isRDPCMEnabled            (const CodingUnit& cu)                          { return cu.predMode == MODE_INTRA ? cu.cs->sps->spsRExt.implicitRdpcmEnabled : cu.cs->sps->spsRExt.explicitRdpcmEnabled;}
   inline bool isSameSlice               (const CodingUnit& cu, const CodingUnit& cu2)   { return cu.slice->independentSliceIdx == cu2.slice->independentSliceIdx; }
   inline bool isSameTile                (const CodingUnit& cu, const CodingUnit& cu2)   { return cu.tileIdx == cu2.tileIdx; }
   inline bool isSameSliceAndTile        (const CodingUnit& cu, const CodingUnit& cu2)   { return ( cu.slice->independentSliceIdx == cu2.slice->independentSliceIdx ) && ( cu.tileIdx == cu2.tileIdx ); }
@@ -187,7 +186,6 @@ namespace CU
 // TU tools
 namespace TU
 {
-  bool isNonTransformedResidualRotated  (const TransformUnit& tu, const ComponentID compID);
   bool getCbf                           (const TransformUnit& tu, const ComponentID compID);
   bool getCbfAtDepth                    (const TransformUnit& tu, const ComponentID compID, const unsigned depth);
   void setCbfAtDepth                    (      TransformUnit& tu, const ComponentID compID, const unsigned depth, const bool cbf);
@@ -200,6 +198,8 @@ namespace TU
 }
 
 uint32_t  getCtuAddr                    (const Position& pos, const PreCalcValues &pcv);
+uint32_t  getCtuAddrFromCtuSize         (const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus);
+
 int       getNumModesMip                (const Size& block);
 int       getMipSizeId                  (const Size& block);
 bool      allowLfnstWithMip             (const Size& block);

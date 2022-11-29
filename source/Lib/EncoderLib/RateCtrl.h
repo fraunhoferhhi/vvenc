@@ -65,10 +65,11 @@ namespace vvenc {
   {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
-                  const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
+                  const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const SceneType _scType,
+                  const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
-                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ),
+                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {
                     std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
@@ -84,6 +85,7 @@ namespace vvenc {
     bool      isStartOfIntra;
     bool      isStartOfGop;
     int       gopNum;
+    SceneType scType;
     uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
     bool      isNewScene;
     bool      refreshParameters;
@@ -133,7 +135,7 @@ namespace vvenc {
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
     void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
-    void   updateAfterPicture (const int actualTotalBits, const int averageQP);
+    void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
@@ -146,7 +148,6 @@ namespace vvenc {
 
     EncRCSeq* encRCSeq;
     int     frameLevel;
-    int     picActualBits;   // the whole picture, including header
     int     picQP;           // in integer form
     bool    isNewScene;
     bool    refreshParams;
@@ -164,10 +165,11 @@ namespace vvenc {
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
-                         const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+                         const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
+                         const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void processGops();
-    void updateMinNoiseLevelsGop( int flush, int poc );
+    void updateMinNoiseLevelsGop( const bool flush, const int poc );
     double getAverageBitsFromFirstPass();
     void detectSceneCuts();
     void xUpdateAfterPicRC( const Picture* pic );

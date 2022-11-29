@@ -56,12 +56,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef TARGET_SIMD_X86
 
-#if defined _MSC_VER
-#include <tmmintrin.h>
-#else
-#include <immintrin.h>
-#endif
-
 namespace vvenc {
 
 #define CALC_EQUAL_COEFF_8PXLS(x1,x2,y1,y2,tmp0,tmp1,tmp2,tmp3,inter0,inter1,inter2,inter3,loadLocation)       \

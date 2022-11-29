@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdarg.h>
 #include <mutex>
 
+#include "CommonLib/CommonDef.h"
 #include "vvenc/vvenc.h"
 
 namespace vvenc {
@@ -85,7 +86,7 @@ public:
       m_msgFnc( m_msgCtx, level, fmt, args );
       va_end( args );
     }
-    else if ( g_msgFnc)
+    else if ( g_msgFnc )
     {
       // global log (deprecated)
       std::unique_lock<std::mutex> _lock( m_msgMutex );

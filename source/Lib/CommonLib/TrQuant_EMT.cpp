@@ -1908,10 +1908,9 @@ void fastInverseDCT8_B32(const TCoeff *src, TCoeff *dst, int shift, int line, in
 
 #define DONT_UNDEF_SIZE_AWARE_PER_EL_OP 1
 
-}
+}   // namespace vvenc
 
 #include "Unit.h"
-#include "Buffer.h"
 
 namespace vvenc {
   

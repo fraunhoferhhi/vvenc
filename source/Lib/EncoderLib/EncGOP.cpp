@@ -1051,6 +1051,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
+  bUseDQP |= m_pcEncCfg->m_blockImportanceMapping;
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
@@ -1076,7 +1077,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.clear();
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
-  pps.useDQP                        = m_pcEncCfg->m_RCTargetBitrate > 0 ? true : bUseDQP;
+  pps.useDQP                        = bUseDQP;
 
   if ( m_pcEncCfg->m_cuChromaQpOffsetSubdiv >= 0 )
   {
@@ -1530,18 +1531,16 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->nalUnitType = naluType;
   }
 
+  const int maxTLayer  = m_pcEncCfg->m_picReordering && m_pcEncCfg->m_GOPSize > 1 ? vvenc::ceilLog2( m_pcEncCfg->m_GOPSize ) : 0;
+  const int numRefCode = pic.useScNumRefs ? m_pcEncCfg->m_numRefPicsSCC : m_pcEncCfg->m_numRefPics;
+  const int tLayer     = slice->TLayer;
+  const int numRefs    = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
+
   // reference list
-  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : slice->rpl[0]->numberOfActivePictures;
-  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : slice->rpl[1]->numberOfActivePictures;
+  slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
+  slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
   slice->constructRefPicList  ( picList, false );
 
-  if ( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
-  {
-    slice->sliceType = sliceType = VVENC_I_SLICE;
-    slice->numRefIdx[REF_PIC_LIST_0] = 0;
-    slice->numRefIdx[REF_PIC_LIST_1] = 0;
-    slice->constructRefPicList( picList, false );
-  }
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
   slice->updateRefPicCounter  ( +1 );
@@ -2443,7 +2442,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfIntra,
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
-                                  pic->minNoiseLevels );
+                                  pic->gopEntry->m_scType,
+                                  pic->m_picShared->m_minNoiseLevels );
   }
 
   //===== add PSNR =====

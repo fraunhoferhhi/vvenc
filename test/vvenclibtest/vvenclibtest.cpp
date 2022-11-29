@@ -186,7 +186,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
 
 void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {
@@ -272,8 +272,8 @@ int testLibParameterRanges()
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
 
-  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
-  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
+  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
+  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
@@ -777,7 +777,7 @@ fail:
 int checkSDKStringApiDefault()
 {
   vvenc_config c;
-  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
 
   std::vector <std::tuple<std::string, std::string>> settings;
   settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176x144") );
@@ -844,7 +844,7 @@ int checkSDKStringApiDefault()
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
-  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
 
   std::vector <std::tuple<std::string, std::string>> settings;
   settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176t144") );
@@ -992,7 +992,7 @@ int checkTimestampsDefault()
     for( auto & fps : framerates )
     {
       vvenc_config c;
-      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      vvenc_init_default( &c, 176,144, 60, VVENC_RC_OFF, 55, vvencPresetMode::VVENC_FASTER );
       c.m_internChromaFormat = VVENC_CHROMA_420;
 
       c.m_FrameRate  = std::get<0>(fps);
@@ -1022,7 +1022,7 @@ int checkTimestampsDefault()
     for( auto & fps : framerates )
     {
       vvenc_config c;
-      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      vvenc_init_default( &c, 176,144, 60, VVENC_RC_OFF, 55, vvencPresetMode::VVENC_FASTER );
       c.m_internChromaFormat = VVENC_CHROMA_420;
       c.m_FrameRate  = std::get<0>(fps);
       c.m_FrameScale = std::get<1>(fps);
@@ -1052,7 +1052,7 @@ int checkTimestampsInvalid()
     for( auto & fps : framerates )
     {
       vvenc_config c;
-      vvenc_init_default( &c, 176,144, 60, 0, 55, vvencPresetMode::VVENC_FASTER );
+      vvenc_init_default( &c, 176,144, 60, VVENC_RC_OFF, 55, vvencPresetMode::VVENC_FASTER );
       c.m_internChromaFormat = VVENC_CHROMA_420;
 
       c.m_FrameRate  = std::get<0>(fps);

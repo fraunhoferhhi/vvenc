@@ -635,35 +635,6 @@ struct VUI
   {}
 };
 
-/// SPS RExt class
-struct SPSRExt // Names aligned to text specification
-{
-  bool             transformSkipRotationEnabled;
-  bool             transformSkipContextEnabled;
-  bool             implicitRdpcmEnabled;
-  bool             explicitRdpcmEnabled;
-  bool             extendedPrecisionProcessing;
-  bool             intraSmoothingDisabled;
-  bool             highPrecisionOffsetsEnabled;
-  bool             persistentRiceAdaptationEnabled;
-  bool             cabacBypassAlignmentEnabled;
-
-  SPSRExt();
-
-  bool settingsDifferFromDefaults() const
-  {
-    return transformSkipRotationEnabled
-        || transformSkipContextEnabled
-        || implicitRdpcmEnabled
-        || explicitRdpcmEnabled
-        || extendedPrecisionProcessing
-        || intraSmoothingDisabled
-        || highPrecisionOffsetsEnabled
-        || persistentRiceAdaptationEnabled
-        || cabacBypassAlignmentEnabled;
-  }
-};
-
 
 /// SPS class
 struct SPS
@@ -779,8 +750,6 @@ struct SPS
   unsigned          vuiPayloadSize;
   VUI               vuiParameters;
 
-  SPSRExt           spsRExt;
-
 //  TimingInfo        timingInfo;
   ProfileTierLevel  profileTierLevel;
 
@@ -829,7 +798,7 @@ struct SPS
 
   SPS();
   int               getNumRPL( int idx) const { return (int)rplList[idx].size()-1;}
-  int               getMaxLog2TrDynamicRange(ChannelType channelType)                   const { return spsRExt.extendedPrecisionProcessing ? std::max<int>(15, int(bitDepths[channelType] + 6)) : 15; }
+  int               getMaxLog2TrDynamicRange(ChannelType channelType)                   const { return 15; }
   uint32_t          getMaxTbSize()                                                      const { return  1 << log2MaxTbSize;                                        }
   bool              getUseImplicitMTS     ()                                            const { return MTS && !MTSIntra; }
 
@@ -899,6 +868,8 @@ struct PPS
   std::vector<uint32_t>  tileRowHeight;                //!< tile row heights in units of CTUs
   std::vector<uint32_t>  tileColBd;                    //!< tile column left-boundaries in units of CTUs
   std::vector<uint32_t>  tileRowBd;                    //!< tile row top-boundaries in units of CTUs
+  std::vector<uint32_t>  tileColBdRgt;                 //!< tile column right-boundaries in luma samples
+  std::vector<uint32_t>  tileRowBdBot;                 //!< tile row bottom-boundaries in luma samples
   std::vector<uint32_t>  ctuToTileCol;                 //!< mapping between CTU horizontal address and tile column index
   std::vector<uint32_t>  ctuToTileRow;                 //!< mapping between CTU vertical address and tile row index
   bool                   rectSlice;                    //!< rectangular slice flag
@@ -990,6 +961,7 @@ public:
 
     return tileRowResIdx + tileRowResIdxRest;
   }
+  bool                   canFilterCtuBdry( int ctuX, int ctuY, int offX, int offY ) const { return getTileIdx( ctuX, ctuY ) == getTileIdx( ctuX + offX, ctuY + offY ) || loopFilterAcrossTilesEnabled; }
   
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
