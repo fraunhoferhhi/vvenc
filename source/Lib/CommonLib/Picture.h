@@ -229,6 +229,7 @@ public:
 
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
+  bool                          isMeanQPLimited;
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;

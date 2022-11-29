@@ -174,6 +174,7 @@ Picture::Picture()
     , ctsValid          ( false )
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
+    , isMeanQPLimited   ( false )
     , picInitialQP      ( -1 )
     , picInitialLambda  ( -1.0 )
     , picMemorySTA      ( -1 )
@@ -222,6 +223,7 @@ void Picture::reset()
   isNeededForOutput   = true;
   isFinished          = false;
   isLongTerm          = false;
+  isMeanQPLimited     = false;
   encPic              = false;
   writePic            = false;
   precedingDRAP       = false;

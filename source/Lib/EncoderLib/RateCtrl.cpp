@@ -176,7 +176,6 @@ EncRCPic::EncRCPic()
   frameLevel          = 0;
   targetBits          = 0;
   tmpTargetBits       = 0;
-  picActualBits       = 0;
   picQP               = 0;
   isNewScene          = false;
   refreshParams       = false;
@@ -234,7 +233,6 @@ void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
   frameLevel       = frameLvl;
   targetBits       = tgtBits;
 
-  picActualBits       = 0;
   picQP               = 0;
   visActSteady        = 0;
 }
@@ -289,10 +287,9 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   }
 }
 
-void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP)
+void EncRCPic::updateAfterPicture (const int picActualBits, const int averageQP)
 {
-  picActualBits = actualTotalBits;
-  picQP         = averageQP;
+  picQP = averageQP;
 
   if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update, for initRateControlPic()
   {
@@ -917,11 +914,14 @@ void RateCtrl::addRCPassStats( const int poc,
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 {
+  const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
   EncRCPic* encRCPic = pic->encRCPic;
 
-  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
+  encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
+
+  if ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && pic->isMeanQPLimited ) encRCSeq->bitsUsed += pic->actualTotalBits - clipBits;
 }
 
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )

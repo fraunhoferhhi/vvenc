@@ -135,7 +135,7 @@ namespace vvenc {
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
     void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
-    void   updateAfterPicture (const int actualTotalBits, const int averageQP);
+    void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
@@ -148,7 +148,6 @@ namespace vvenc {
 
     EncRCSeq* encRCSeq;
     int     frameLevel;
-    int     picActualBits;   // the whole picture, including header
     int     picQP;           // in integer form
     bool    isNewScene;
     bool    refreshParams;
