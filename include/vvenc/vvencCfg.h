@@ -387,6 +387,7 @@ typedef struct vvencReshapeCW
   int          adpOption;
   unsigned int initialCW;
   int          rspPicSize;
+  int          rspUnused;
   int          rspFps;
   int          rspTid;
   int          rspFpsToIp;
