@@ -1094,38 +1094,40 @@ namespace DQIntern
       if( decision.absLevel )
       {
         m_sbb.absLevels[scanInfo.insidePos] = ( uint8_t ) std::min<TCoeff>( 255, decision.absLevel );
-
-        int min4_or_5 = std::min<TCoeff>( 4 + ( decision.absLevel & 1 ), decision.absLevel );
-
-        auto adds8 = []( uint8_t a, uint8_t b )
+        
+        if( scanInfo.currNbInfoSbb.numInv )
         {
-          uint8_t c = a + b;
-          if( c < a ) c = -1;
-          return c;
-        };
+          int min4_or_5 = std::min<TCoeff>( 4 + ( decision.absLevel & 1 ), decision.absLevel );
 
-        auto update_deps = [&]( int k )
-        {
-          auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
-          ctx.sumNum++;
-          ctx.sumAbs = adds8( ctx.sumAbs, decision.absLevel );
-          ctx.sumAbs1 = ctx.sumAbs1 + min4_or_5;
-        };
+          auto adds8 = []( uint8_t a, uint8_t b )
+          {
+            uint8_t c = a + b;
+            if( c < a ) c = -1;
+            return c;
+          };
 
-        switch( scanInfo.currNbInfoSbb.numInv )
-        {
-        case 5:
-          update_deps( 4 );
-        case 4:
-          update_deps( 3 );
-        case 3:
-          update_deps( 2 );
-        case 2:
-          update_deps( 1 );
-        case 1:
-          update_deps( 0 );
-        case 0:
-          ;
+          auto update_deps = [&]( int k )
+          {
+            auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
+            ctx.sumNum++;
+            ctx.sumAbs = adds8( ctx.sumAbs, decision.absLevel );
+            ctx.sumAbs1 = ctx.sumAbs1 + min4_or_5;
+          };
+
+          switch( scanInfo.currNbInfoSbb.numInv )
+          {
+          default:
+          case 5:
+            update_deps( 4 );
+          case 4:
+            update_deps( 3 );
+          case 3:
+            update_deps( 2 );
+          case 2:
+            update_deps( 1 );
+          case 1:
+            update_deps( 0 );
+          }
         }
       }
 
