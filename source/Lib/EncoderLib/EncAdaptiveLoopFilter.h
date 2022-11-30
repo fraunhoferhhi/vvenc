@@ -329,20 +329,20 @@ public:
 private:
   std::vector<double>    m_lumaLevelToWeightPLUT;
   int                    m_alfWSSD;
-  const VVEncCfg*    m_encCfg;
-  AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
-  AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
+  const VVEncCfg*        m_encCfg;
+  AlfCovariance**        m_alfCovariance[MAX_NUM_COMP];          // [compIdx][ctbAddr][classIdx]
+  AlfCovariance*         m_alfCovarianceFrame[MAX_NUM_CH];       // [CHANNEL][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
   uint8_t*               m_ctuEnableFlagTmp2[MAX_NUM_COMP];
   uint8_t*               m_ctuAlternativeTmp[MAX_NUM_COMP];
-  AlfCovariance***       m_alfCovarianceCcAlf[2];           // [compIdx-1][shapeIdx][ctbAddr][filterIdx]
-  AlfCovariance**        m_alfCovarianceFrameCcAlf[2];      // [compIdx-1][shapeIdx][filterIdx]
+  AlfCovariance**        m_alfCovarianceCcAlf[2];           // [compIdx-1][ctbAddr][filterIdx]
+  AlfCovariance*         m_alfCovarianceFrameCcAlf[2];      // [compIdx-1][filterIdx]
 
   //for RDO
   AlfParam               m_alfParamTemp;
   ParameterSetMap<APS>*  m_apsMap;
-  AlfCovariance          m_alfCovarianceMerged[ALF_NUM_OF_FILTER_TYPES][MAX_NUM_ALF_CLASSES + 2];
-  int                    m_alfClipMerged[ALF_NUM_OF_FILTER_TYPES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF];
+  AlfCovariance          m_alfCovarianceMerged[MAX_NUM_ALF_CLASSES + 2];
+  int                    m_alfClipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF];
   CABACWriter*           m_CABACEstimator;
   CtxCache*              m_CtxCache;
   double                 m_lambda[MAX_NUM_COMP];
@@ -385,11 +385,12 @@ private:
   int                    m_numAsusInPic;
   int                    m_numCtusInAsuWidth;
   int                    m_numCtusInAsuHeight;
+  bool                   m_accumStatCTUWise;
 
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
-  void init                         ( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
+  void init                         ( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );
@@ -397,15 +398,16 @@ public:
   void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
-  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
-  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC );
+  void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
+  void getStatisticsASU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, PelStorage& alfTempCtuBuf );
   void copyCTUforALF                ( const CodingStructure& cs, int ctuPosX, int ctuPosY );
-  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
+  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
+  void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
-  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
-  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
-  void alfReconstructor             ( CodingStructure& cs );
+  void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
+  void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
+//  void alfReconstructor             ( CodingStructure& cs );
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
 private:
@@ -415,16 +417,16 @@ private:
   double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
   double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda );
-  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr );
+  void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& alfTempCtuBuf );
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
   void   copyAlfParam            ( AlfParam& alfParamDst, AlfParam& alfParamSrc, ChannelType channel );
   double mergeFiltersAndCost     ( AlfParam& alfParam, AlfFilterShape& alfShape, AlfCovariance* covFrame, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], int& uiCoeffBits );
 
-  void   getFrameStats           ( ChannelType channel, int iShapeIdx );
+  void   getFrameStats           ( ChannelType channel );
   void   getFrameStat            ( AlfCovariance* frameCov, AlfCovariance** ctbCov, uint8_t* ctbEnableFlags, uint8_t* ctbAltIdx, const int numClasses, int altIdx );
   void   getPreBlkStats          ( AlfCovariance *alfCovariace, const AlfFilterShape &shape, AlfClassifier *classifier, Pel *org, const int orgStride, Pel *rec, const int recStride,
-                                   const CompArea &areaDst, const CompArea &area, const ChannelType channel, int vbCTUHeight, int vbPos );
+                                   const CompArea &areaDst, const ChannelType channel, int vbCTUHeight, int vbPos );
   template<bool clipToBdry, bool simd>
   void   calcCovariance4         ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
   template<bool clipToBdry, bool simd>
@@ -437,11 +439,11 @@ private:
   void   mergeClasses            ( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES]);
 
 
-  double getFilterCoeffAndCost   ( CodingStructure& cs, double distUnfilter, ChannelType channel, bool bReCollectStat, int iShapeIdx, int& uiCoeffBits, bool onlyFilterCost = false );
+  double getFilterCoeffAndCost   ( CodingStructure& cs, double distUnfilter, ChannelType channel, bool bReCollectStat, int& uiCoeffBits, bool onlyFilterCost = false );
   double deriveFilterCoeffs      ( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam);
   int    deriveFilterCoefficientsPredictionMode( AlfFilterShape& alfShape, int **filterSet, int** filterCoeffDiff, const int numFilters );
   double deriveCoeffQuant        ( int *filterClipp, int *filterCoeffQuant, const AlfCovariance& cov, const AlfFilterShape& shape, const int bitDepth, const bool optimizeClip );
-  double deriveCtbAlfEnableFlags ( CodingStructure& cs, const int iShapeIdx, ChannelType channel, const double chromaWeight,
+  double deriveCtbAlfEnableFlags ( CodingStructure& cs, ChannelType channel, const double chromaWeight,
                                    const int numClasses, const int numCoeff, double& distUnfilter );
   void   roundFiltCoeff          ( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );
   void   roundFiltCoeffCCALF     ( int16_t *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );

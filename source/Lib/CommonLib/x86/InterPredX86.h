@@ -59,14 +59,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )
-  inline uint32_t _mm256_extract_epi32( __m256i vec, const int i )
-  {
-    __m128i indx = _mm_cvtsi32_si128( i );
-    __m256i val = _mm256_permutevar8x32_epi32( vec, _mm256_castsi128_si256( indx ) );
-    return         _mm_cvtsi128_si32( _mm256_castsi256_si128( val ) );
-  }
-#endif
+
 
 static inline int rightShiftMSB(int numer, int denom)
 {
@@ -637,15 +630,6 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #endif
 }
 
-#ifndef _mm_storeu_si16
-#define VVENC_mm_storeu_si16
-#define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))
-#endif // !_mm_storeu_si16
-#ifndef _mm_storeu_si32
-#define VVENC_mm_storeu_si32
-#define _mm_storeu_si32(p, a) (void)(*(int*)(p) = (int)_mm_cvtsi128_si32((a)))
-#endif // !_mm_storeu_si16
-
 template<X86_VEXT vext>
 void padDmvr_SSE( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize )
 {
@@ -848,13 +832,6 @@ void padDmvr_SSE( const Pel* src, const int srcStride, Pel* dst, const int dstSt
     }
   }
 }
-
-#ifdef VVENC_mm_storeu_si32
-#undef _mm_storeu_si32
-#endif
-#ifdef VVENC_mm_storeu_si16
-#undef _mm_storeu_si16
-#endif
 
 #if ENABLE_SIMD_OPT_BDOF
 template<X86_VEXT vext>

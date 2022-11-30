@@ -176,7 +176,6 @@ EncRCPic::EncRCPic()
   frameLevel          = 0;
   targetBits          = 0;
   tmpTargetBits       = 0;
-  picActualBits       = 0;
   picQP               = 0;
   isNewScene          = false;
   refreshParams       = false;
@@ -234,7 +233,6 @@ void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
   frameLevel       = frameLvl;
   targetBits       = tgtBits;
 
-  picActualBits       = 0;
   picQP               = 0;
   visActSteady        = 0;
 }
@@ -289,10 +287,9 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   }
 }
 
-void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP)
+void EncRCPic::updateAfterPicture (const int picActualBits, const int averageQP)
 {
-  picActualBits = actualTotalBits;
-  picQP         = averageQP;
+  picQP = averageQP;
 
   if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update, for initRateControlPic()
   {
@@ -306,6 +303,21 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 
     encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
+
+    if (frameLevel > std::max (1, int (log ((double) encRCSeq->gopSize) / log (2.0))))
+    {
+      double highTlQpCorr = 0.0;
+
+      for (int l = 2; l <= 7; l++) // stabilization when corrections differ between low and high levels
+      {
+        highTlQpCorr += encRCSeq->qpCorrection[l];
+      }
+      if (highTlQpCorr > 1.0) // attenuate low-level QP correction towards 0 when bits need to be saved
+      {
+        if (encRCSeq->qpCorrection[0] < -1.0e-9) encRCSeq->qpCorrection[0] /= highTlQpCorr;
+        if (encRCSeq->qpCorrection[1] < -1.0e-9) encRCSeq->qpCorrection[1] /= highTlQpCorr;
+      }
+    }
   }
 }
 
@@ -500,6 +512,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     { "isStartOfIntra", statsData.isStartOfIntra },
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
+    { "scType",         statsData.scType },
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -535,6 +548,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
+                                                    data[ "scType" ],
                                                     statsData.minNoiseLevels
                                                     ) );
   }
@@ -572,7 +586,8 @@ void RateCtrl::readStatsFile()
         || data.find( "tempLayer" )      == data.end() || ! data[ "tempLayer" ].is_number()
         || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
         || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
-        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number() )
+        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
+        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number() )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
@@ -587,6 +602,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfIntra" ],
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
+                                                    data[ "scType" ],
                                                     minNoiseLevels
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
@@ -767,7 +783,7 @@ void RateCtrl::detectSceneCuts()
         it->isNewScene = false;
       }
     }
-    if (it->isIntra && !it->isStartOfIntra && !needRefresh[0]) // assume scene cuts at inserted I-frames
+    if (it->scType == SCT_TL0_SCENE_CUT && !needRefresh[0]) // assume scene cuts at inserted I-frames
     {
       it->isNewScene = needRefresh[0] = true;
     }
@@ -830,7 +846,7 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::updateMinNoiseLevelsGop( int flush, int poc )
+void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
@@ -890,18 +906,22 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfIntra,
                                const bool isStartOfGop,
                                const int gopNum,
+                               const SceneType scType,
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, minNoiseLevels));
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 {
+  const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
   EncRCPic* encRCPic = pic->encRCPic;
 
-  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
+  encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
+
+  if ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && pic->isMeanQPLimited ) encRCSeq->bitsUsed += pic->actualTotalBits - clipBits;
 }
 
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
@@ -1005,7 +1025,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
-          encRcPic->clipTargetQP( getPicList(), secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
+          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
 

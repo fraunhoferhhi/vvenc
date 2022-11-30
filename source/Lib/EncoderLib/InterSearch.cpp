@@ -3457,12 +3457,14 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       minCost[i] = MAX_DOUBLE;
     }
 
-    CodingStructure &saveCS = *m_pSaveCS[0];
+    CodingStructure &saveCS = *m_pSaveCS[1];
     saveCS.pcv     = cs.pcv;
     saveCS.picture = cs.picture;
-    saveCS.area.repositionTo(currArea);
-    saveCS.clearTUs();
-    TransformUnit&  bestTU = saveCS.addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, nullptr);
+    saveCS.area.repositionTo( currArea );
+
+    TransformUnit& bestTU = saveCS.tus.empty() ? saveCS.addTU( currArea, partitioner.chType, nullptr ) : *saveCS.tus.front();
+    bestTU.initData();
+    bestTU.UnitArea::operator=( currArea );
 
     for( uint32_t c = 0; c < numTBlocks; c++ )
     {

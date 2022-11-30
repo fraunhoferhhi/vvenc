@@ -68,17 +68,7 @@ namespace vvenc {
 //! rounding with IBDI
 inline double xRoundIbdi2(int bitDepth, double x)
 {
-#if FULL_NBIT
   return ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) -0.5)));
-#else
-  if (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) == 0)
-    return ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) -0.5)));
-  else
-    return ((x) > 0) ? (int)(((int)(x) + (1 << (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) - 1)))
-                             / (1 << DISTORTION_PRECISION_ADJUSTMENT(bitDepth)))
-                     : ((int)(((int)(x) - (1 << (DISTORTION_PRECISION_ADJUSTMENT(bitDepth) - 1)))
-                              / (1 << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))));
-#endif
 }
 
 inline double xRoundIbdi(int bitDepth, double x)
@@ -204,22 +194,41 @@ void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double
   }
 }
 
-void EncSampleAdaptiveOffset::storeCtuReco( CodingStructure& cs, const UnitArea& ctuArea )
+void EncSampleAdaptiveOffset::storeCtuReco( CodingStructure& cs, const UnitArea& ctuArea, const int ctuX, const int ctuY )
 {
   const int STORE_CTU_INCREASE = 8;
-  const PreCalcValues& pcv = *cs.pcv;
   Position lPos( ctuArea.lx() + STORE_CTU_INCREASE, ctuArea.ly() + STORE_CTU_INCREASE );
-  Size     lSize( std::min( ctuArea.lwidth(), pcv.lumaWidth - lPos.x ), std::min( ctuArea.lheight(), pcv.lumaHeight - lPos.y ) );
-  if ( ctuArea.lx() == 0 )
+  Size    lSize( ctuArea.lwidth(), ctuArea.lheight() );
+
+  const bool tileBdryClip = cs.pps->getNumTiles() > 1 && !cs.pps->loopFilterAcrossTilesEnabled;
+  int startX = 0;
+  int startY = 0;
+  if( tileBdryClip )  
   {
-    lPos.x       = 0;
+    startX = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuX]] << cs.pcv->maxCUSizeLog2;
+    startY = cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuY]] << cs.pcv->maxCUSizeLog2;
+  }
+
+  if ( ctuArea.lx() == startX )
+  {
+    lPos.x       = ctuArea.lx();
     lSize.width += STORE_CTU_INCREASE;
   }
-  if ( ctuArea.ly() == 0 )
+  if ( ctuArea.ly() == startY )
   {
-    lPos.y        = 0;
+    lPos.y        = ctuArea.ly();
     lSize.height += STORE_CTU_INCREASE;
   }
+
+  int clipX = cs.pcv->lumaWidth  - lPos.x;
+  int clipY = cs.pcv->lumaHeight - lPos.y;
+  if( tileBdryClip )  
+  {
+    clipX  = cs.pps->tileColBdRgt[cs.pps->ctuToTileCol[ctuX]] - lPos.x;
+    clipY  = cs.pps->tileRowBdBot[cs.pps->ctuToTileRow[ctuY]] - lPos.y;
+  }
+  lSize.clipSize( clipX, clipY );
+
   const UnitArea relocArea( ctuArea.chromaFormat, Area( lPos, lSize ) );
   Picture& pic       = *cs.picture;
   PelUnitBuf recoYuv = pic.getRecoBuf().subBuf( relocArea );
@@ -246,6 +255,16 @@ void EncSampleAdaptiveOffset::getCtuStatistics( CodingStructure& cs, std::vector
   isRightAvail      = ( ctuArea.Y().x + pcv.maxCUSize < pcv.lumaWidth  );
   isBelowAvail      = ( ctuArea.Y().y + pcv.maxCUSize < pcv.lumaHeight );
   isAboveRightAvail = ( ( ctuArea.Y().y > 0 ) && ( isRightAvail ) );
+
+  CHECK( !cs.pps->loopFilterAcrossSlicesEnabled, "Not implemented" );
+  if( cs.pps->getNumTiles() > 1 && !cs.pps->loopFilterAcrossTilesEnabled )
+  {
+    const int ctuX    = ctuArea.lx() >> cs.pcv->maxCUSizeLog2;
+    const int ctuY    = ctuArea.ly() >> cs.pcv->maxCUSizeLog2;
+    isRightAvail      = isRightAvail      && cs.pps->canFilterCtuBdry( ctuX, ctuY,  1, 0 );
+    isBelowAvail      = isBelowAvail      && cs.pps->canFilterCtuBdry( ctuX, ctuY,  0, 1 );
+    isAboveRightAvail = isAboveRightAvail && cs.pps->canFilterCtuBdry( ctuX, ctuY,  1,-1 );
+  }
 
   //VirtualBoundaries vb;
   //bool isCtuCrossedByVirtualBoundaries = vb.isCrossedByVirtualBoundaries(xPos, yPos, width, height, cs.slice->pps);
@@ -917,9 +936,12 @@ void EncSampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructu
   const int width = cs.pcv->maxCUSize;
   const int height = cs.pcv->maxCUSize;
   const CodingUnit* cuCurr = cs.getCU(pos, CH_L, TREE_D);
-  const CodingUnit* cuLeft = cs.getCU(pos.offset(-width, 0), CH_L, TREE_D);
-  const CodingUnit* cuAbove = cs.getCU(pos.offset(0, -height), CH_L, TREE_D);
-  const CodingUnit* cuAboveLeft = cs.getCU(pos.offset(-width, -height), CH_L, TREE_D);
+  const int ctuX = pos.x >> cs.pcv->maxCUSizeLog2;
+  const int ctuY = pos.y >> cs.pcv->maxCUSizeLog2;
+  const PPS* pps = cs.slice->pps;
+  const CodingUnit* cuLeft      = ctuX > 0 &&             pps->canFilterCtuBdry( ctuX, ctuY, -1, 0 ) ? cs.getCU(pos.offset(-width, 0), CH_L, TREE_D): nullptr;
+  const CodingUnit* cuAbove     = ctuY > 0 &&             pps->canFilterCtuBdry( ctuX, ctuY, 0, -1 ) ? cs.getCU(pos.offset(0, -height), CH_L, TREE_D): nullptr;
+  const CodingUnit* cuAboveLeft = ctuY > 0 && ctuX > 0 && pps->canFilterCtuBdry( ctuX, ctuY, -1,-1 ) ? cs.getCU(pos.offset(-width, -height), CH_L, TREE_D): nullptr;
 
   if (!isLoopFiltAcrossSlicePPS)
   {

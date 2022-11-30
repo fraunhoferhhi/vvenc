@@ -75,7 +75,7 @@ struct StopClock
 {
   StopClock() : m_startTime(), m_timer() {}
 
-  int  getTimerInSec() const { return std::chrono::duration_cast<std::chrono::seconds>( m_timer ).count(); };
+  int  getTimerInSec() const { return (int)std::chrono::duration_cast<std::chrono::seconds>( m_timer ).count(); };
   void resetTimer()          { m_timer = std::chrono::steady_clock::duration::zero(); }
   void startTimer()          { m_startTime  = std::chrono::steady_clock::now(); }
   void stopTimer()           { auto endTime = std::chrono::steady_clock::now(); m_timer += endTime - m_startTime; m_startTime = endTime; }
@@ -119,7 +119,7 @@ struct Picture : public UnitArea
   void reset();
   void destroy( bool bPicHeader );
 
-  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared );
+  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ], PicShared* picShared );
   void releasePrevBuffers();
   void releaseSharedBuffers();
 
@@ -225,10 +225,11 @@ public:
 
   PelStorage                    m_picBufs[ NUM_PIC_TYPES ];
   PelStorage*                   m_sharedBufs[ NUM_PIC_TYPES ];
-  PelStorage*                   m_bufsOrigPrev[ NUM_PREV_FRAMES ];
+  PelStorage*                   m_bufsOrigPrev[ NUM_QPA_PREV_FRAMES ];
 
   std::vector<double>           ctuQpaLambda;
-  std::vector<Pel>              ctuAdaptedQP;
+  std::vector<int>              ctuAdaptedQP;
+  bool                          isMeanQPLimited;
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
@@ -247,12 +248,14 @@ public:
   bool                          useScBDPCM;
   bool                          useScIBC;
   bool                          useScLMCS;
+  bool                          useScSAO;
+  bool                          useScNumRefs;
+  int                           useScFastMrg;
   int                           useQtbttSpeedUpMode;
   int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
-  uint8_t                       minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

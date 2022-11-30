@@ -45,7 +45,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "UnitTools.h"
 #ifdef TARGET_SIMD_X86
-#include "x86/CommonDefX86.h"
+#  include "x86/CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
 #endif
 
 #include <bitset>
@@ -66,8 +67,10 @@ namespace DQIntern
 
   struct NbInfoSbb
   {
-    uint8_t   num;
-    uint8_t   inPos[5];
+    //uint8_t   num;
+    uint8_t   numInv;
+    //uint8_t   inPos[5];
+    uint8_t   invInPos[5];
   };
   struct NbInfoOut
   {
@@ -96,7 +99,7 @@ namespace DQIntern
     unsigned      sigCtxOffsetNext;
     unsigned      gtxCtxOffsetNext;
     int           nextInsidePos;
-    NbInfoSbb     nextNbInfoSbb;
+    NbInfoSbb     currNbInfoSbb;
     int           nextSbbRight;
     int           nextSbbBelow;
     int           posX;
@@ -199,6 +202,7 @@ namespace DQIntern
         for( uint32_t scanId = 0; scanId < totalValues; scanId++ )
         {
           raster2id[scanId2RP[scanId].idx] = scanId;
+          sId2NbSbb[scanId].numInv = 0;
         }
 
         for( unsigned scanId = 0; scanId < totalValues; scanId++ )
@@ -208,7 +212,6 @@ namespace DQIntern
           const int rpos = scanId2RP[scanId].idx;
           {
             //===== inside subband neighbours =====
-            NbInfoSbb&     nbSbb  = sId2NbSbb[ scanId ];
             const int      begSbb = scanId - ( scanId & (groupSize-1) ); // first pos in current subblock
             int            cpos[5];
 
@@ -218,7 +221,10 @@ namespace DQIntern
             cpos[3] = ( posY + 1 < blkHeightNZOut                             ? ( raster2id[rpos+  blockWidth] < groupSize + begSbb ? raster2id[rpos+  blockWidth] - begSbb : 0 ) : 0 );
             cpos[4] = ( posY + 2 < blkHeightNZOut                             ? ( raster2id[rpos+2*blockWidth] < groupSize + begSbb ? raster2id[rpos+2*blockWidth] - begSbb : 0 ) : 0 );
 
-            for( nbSbb.num = 0; true; )
+            int num = 0;
+            int inPos[5] = { 0, };
+
+            while( true )
             {
               int nk = -1;
               for( int k = 0; k < 5; k++ )
@@ -232,12 +238,17 @@ namespace DQIntern
               {
                 break;
               }
-              nbSbb.inPos[ nbSbb.num++ ] = uint8_t( cpos[nk] );
+              inPos[ num++ ] = uint8_t( cpos[nk] );
               cpos[nk] = 0;
             }
-            for( int k = nbSbb.num; k < 5; k++ )
+            for( int k = num; k < 5; k++ )
             {
-              nbSbb.inPos[k] = 0;
+              inPos[k] = 0;
+            }
+            for( int k = 0; k < num; k++ )
+            {
+              CHECK( sId2NbSbb[begSbb + inPos[k]].numInv >= 5, "" );
+              sId2NbSbb[begSbb + inPos[k]].invInPos[sId2NbSbb[begSbb + inPos[k]].numInv++] = scanId & ( groupSize - 1 );
             }
           }
           {
@@ -404,7 +415,7 @@ namespace DQIntern
         scanInfo.gtxCtxOffsetNext = ( diag < 1 ? 6 : 1 );
       }
       scanInfo.nextInsidePos      = nextScanIdx & m_sbbMask;
-      scanInfo.nextNbInfoSbb      = m_scanId2NbInfoSbb[ nextScanIdx ];
+      scanInfo.currNbInfoSbb      = m_scanId2NbInfoSbb[ scanIdx ];
       if( scanInfo.insidePos == 0 )
       {
         const int nextSbbPos  = m_scanSbbId2SbbPos[nextScanIdx >> m_log2SbbSize].idx;
@@ -662,9 +673,8 @@ namespace DQIntern
     const int         channelBitDepth       = sps.bitDepths[ chType ];
     const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange( chType );
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     // quant parameters
     m_QShift                    = QUANT_SHIFT  - 1 + qpPer + transformShift;
     m_QAdd                      = -( ( 3 << m_QShift ) >> 1 );
@@ -683,7 +693,7 @@ namespace DQIntern
       SCALE_BITS - 2 * (nomTransformShift + DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth)) + m_QShift + (needsSqrt2ScaleAdjustment ? 1 : 0);
     const double  qScale2       = double( qScale * qScale );
     const double  nomDistFactor = ( nomDShift < 0 ? 1.0/(double(int64_t(1)<<(-nomDShift))*qScale2*lambda) : double(int64_t(1)<<nomDShift)/(qScale2*lambda) );
-    const int64_t pow2dfShift   = (int64_t)( nomDistFactor * qScale2 ) + 1;
+    const uint32_t pow2dfShift   = (uint32_t)( nomDistFactor * qScale2 ) + 1;
     const int     dfShift       = ceilLog2( pow2dfShift );
     m_DistShift                 = 62 + m_QShift - 2*maxLog2TrDynamicRange - dfShift;
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
@@ -722,9 +732,8 @@ namespace DQIntern
     const TCoeff      minTCoeff             = -( 1 << maxLog2TrDynamicRange );
     const TCoeff      maxTCoeff             =  ( 1 << maxLog2TrDynamicRange ) - 1;
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     Intermediate_Int  shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
     Intermediate_Int  invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
     Intermediate_Int  add                   = (shift < 0) ? 0 : ((1 << shift) >> 1);
@@ -1010,9 +1019,23 @@ namespace DQIntern
       decision.prevId   = 4 | m_stateId;
     }
 
+    struct CtxAcc
+    {
+      uint8_t sumNum, sumAbs, sumAbs1;
+    };
+
   private:
+
     int64_t                   m_rdCost;
-    uint16_t                  m_absLevelsAndCtxInit[24];  // 16x8bit for abs levels + 16x16bit for ctx init id
+    union
+    {
+      uint8_t                 m_state[64];
+      struct
+      {
+        uint8_t               absLevels[16];
+        CtxAcc                ctx[16];
+      } m_sbb;
+    };
     int8_t                    m_numSigSbb;
     int                       m_remRegBins;
     int8_t                    m_refSbbCtxId;
@@ -1057,7 +1080,7 @@ namespace DQIntern
         {
           m_remRegBins -= (decision.absLevel < 2 ? decision.absLevel : 3);
         }
-        ::memcpy( m_absLevelsAndCtxInit, prvState->m_absLevelsAndCtxInit, 48*sizeof(uint8_t) );
+        ::memcpy( m_state, prvState->m_state, sizeof( m_state ) );
       }
       else
       {
@@ -1065,36 +1088,54 @@ namespace DQIntern
         m_refSbbCtxId   = -1;
         int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
         m_remRegBins = (effWidth * effHeight *ctxBinSampleRatio) / 16 - (decision.absLevel < 2 ? decision.absLevel : 3);
-        ::memset( m_absLevelsAndCtxInit, 0, 48*sizeof(uint8_t) );
+        ::memset( m_state, 0, sizeof( m_state ) );
       }
 
-      uint8_t* levels               = reinterpret_cast<uint8_t*>(m_absLevelsAndCtxInit);
-      levels[ scanInfo.insidePos ]  = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
+      if( decision.absLevel )
+      {
+        m_sbb.absLevels[scanInfo.insidePos] = ( uint8_t ) std::min<TCoeff>( 255, decision.absLevel );
+        
+        if( scanInfo.currNbInfoSbb.numInv )
+        {
+          int min4_or_5 = std::min<TCoeff>( 4 + ( decision.absLevel & 1 ), decision.absLevel );
+
+          auto adds8 = []( uint8_t a, uint8_t b )
+          {
+            uint8_t c = a + b;
+            if( c < a ) c = -1;
+            return c;
+          };
+
+          auto update_deps = [&]( int k )
+          {
+            auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
+            ctx.sumNum++;
+            ctx.sumAbs = adds8( ctx.sumAbs, decision.absLevel );
+            ctx.sumAbs1 = ctx.sumAbs1 + min4_or_5;
+          };
+
+          switch( scanInfo.currNbInfoSbb.numInv )
+          {
+          default:
+          case 5:
+            update_deps( 4 );
+          case 4:
+            update_deps( 3 );
+          case 3:
+            update_deps( 2 );
+          case 2:
+            update_deps( 1 );
+          case 1:
+            update_deps( 0 );
+          }
+        }
+      }
 
       if (m_remRegBins >= 4)
       {
-        TCoeff  tinit   = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos];
-        TCoeff  sumAbs  = tinit >> 8;
-        TCoeff  sumAbs1 = (tinit >> 3) & 31;
-        TCoeff  sumNum  = tinit & 7;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        switch( scanInfo.nextNbInfoSbb.num )
-        {
-        default:
-        case 5:
-          UPDATE(4);
-        case 4:
-          UPDATE(3);
-        case 3:
-          UPDATE(2);
-        case 2:
-          UPDATE(1);
-        case 1:
-          UPDATE(0);
-        case 0:
-          ;
-        }
-#undef UPDATE
+        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs1;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].sumNum;
         int sumGt1 = sumAbs1 - sumNum;
         int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
@@ -1104,25 +1145,7 @@ namespace DQIntern
       }
       else
       {
-        TCoeff  sumAbs = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos] >> 8;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; }
-        switch( scanInfo.nextNbInfoSbb.num )
-        {
-        default:
-        case 5:
-          UPDATE(4);
-        case 4:
-          UPDATE(3);
-        case 3:
-          UPDATE(2);
-        case 2:
-          UPDATE(1);
-        case 1:
-          UPDATE(0);
-        case 0:
-          ;
-        }
-#undef UPDATE
+        TCoeff  sumAbs = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
         sumAbs       = std::min<TCoeff>(31, sumAbs);
         m_goRicePar  = g_auiGoRiceParsCoeff[sumAbs];
         m_goRiceZero = g_auiGoRicePosCoeff0(m_stateId, m_goRicePar);
@@ -1142,29 +1165,43 @@ namespace DQIntern
         CHECK( decision.absLevel != 0, "cannot happen" );
         prvState    = skipStates + ( decision.prevId - 4 );
         m_numSigSbb = 0;
-        ::memset( m_absLevelsAndCtxInit, 0, 16*sizeof(uint8_t) );
+        ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
       else if( decision.prevId  >= 0 )
       {
-        prvState    = prevStates            +   decision.prevId;
-        m_numSigSbb = prvState->m_numSigSbb + !!decision.absLevel;
-        ::memcpy( m_absLevelsAndCtxInit, prvState->m_absLevelsAndCtxInit, 16*sizeof(uint8_t) );
+        prvState     = prevStates            +   decision.prevId;
+        m_numSigSbb  = prvState->m_numSigSbb + !!decision.absLevel;
+        ::memcpy( m_sbb.absLevels, prvState->m_sbb.absLevels, sizeof( m_sbb.absLevels ) );
       }
       else
       {
-        m_numSigSbb = 1;
-        ::memset( m_absLevelsAndCtxInit, 0, 16*sizeof(uint8_t) );
+        m_numSigSbb   = 1;
+        ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
-      reinterpret_cast<uint8_t*>(m_absLevelsAndCtxInit)[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
+
+      m_sbb.absLevels[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
 
       m_commonCtx.update( scanInfo, prvState, *this );
 
-      TCoeff  tinit   = m_absLevelsAndCtxInit[ 8 + scanInfo.nextInsidePos ];
-      TCoeff  sumNum  =   tinit        & 7;
-      TCoeff  sumAbs1 = ( tinit >> 3 ) & 31;
-      TCoeff  sumGt1  = sumAbs1        - sumNum;
-      m_sigFracBits   = m_sigFracBitsArray[ scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 ) ];
-      m_coeffFracBits = m_gtxFracBitsArray[ scanInfo.gtxCtxOffsetNext + ( sumGt1  < 4 ? sumGt1  : 4 ) ];
+      if (m_remRegBins >= 4)
+      {
+        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs1;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].sumNum;
+        int sumGt1 = sumAbs1 - sumNum;
+        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
+
+        m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
+        m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
+        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
+      }
+      else
+      {
+        TCoeff  sumAbs = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
+        sumAbs       = std::min<TCoeff>(31, sumAbs);
+        m_goRicePar  = g_auiGoRiceParsCoeff[sumAbs];
+        m_goRiceZero = g_auiGoRicePosCoeff0(m_stateId, m_goRicePar);
+      }
     }
   }
 
@@ -1184,7 +1221,7 @@ namespace DQIntern
       ::memset( levels + scanInfo.scanIdx, 0, setCpSize );
     }
     sbbFlags[ scanInfo.sbbPos ] = !!currState.m_numSigSbb;
-    ::memcpy( levels + scanInfo.scanIdx, currState.m_absLevelsAndCtxInit, scanInfo.sbbSize*sizeof(uint8_t) );
+    ::memcpy( levels + scanInfo.scanIdx, currState.m_sbb.absLevels, scanInfo.sbbSize*sizeof(uint8_t) );
 
     const int       sigNSbb   = ( ( scanInfo.nextSbbRight ? sbbFlags[ scanInfo.nextSbbRight ] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[ scanInfo.nextSbbBelow ] : false ) ? 1 : 0 );
     currState.m_numSigSbb     = 0;
@@ -1201,9 +1238,10 @@ namespace DQIntern
     currState.m_refSbbCtxId   = currState.m_stateId;
     currState.m_sbbFracBits   = m_sbbFlagBits[ sigNSbb ];
 
+    ::memset( currState.m_state, 0, sizeof( currState.m_state ) );
+
     if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[ scanInfo.nextSbbBelow  + 1 ] : false ) )
     {
-      uint16_t          templateCtxInit[16];
       const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
       const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
       const uint8_t*    absLevels = levels   + scanBeg;
@@ -1229,19 +1267,11 @@ namespace DQIntern
             UPDATE(0);
           }
   #undef UPDATE
-          templateCtxInit[id] = uint16_t(sumNum) | ( uint16_t(sumAbs1) << 3 ) | ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
-        }
-        else
-        {
-          templateCtxInit[id] = 0;
+          currState.m_sbb.ctx[id].sumNum  = sumNum;
+          currState.m_sbb.ctx[id].sumAbs1 = sumAbs1;
+          currState.m_sbb.ctx[id].sumAbs  = ( uint8_t ) std::min( 127, sumAbs );
         }
       }
-      ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
-      ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
-    }
-    else
-    {
-      ::memset( currState.m_absLevelsAndCtxInit,     0,               48*sizeof(uint8_t) );
     }
   }
 
@@ -1387,8 +1417,6 @@ namespace DQIntern
 
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
-    CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
-
     //===== reset / pre-init =====
     const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
     m_quant.initQuantBlock    ( tu, compID, cQP, lambda );

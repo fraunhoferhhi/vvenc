@@ -70,6 +70,7 @@ add_compile_definitions( ${LIB_NAME_UC}_SOURCE )
 # set PRIVATE include directories for all targets in this directory
 include_directories( $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
 include_directories( . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../apputils )
+include_directories( SYSTEM ../../../thirdparty )
 
 # set common warning flags
 add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall;-Werror;-Wno-deprecated-register;-Wno-unused-const-variable;-Wno-unknown-attributes>" )
@@ -94,10 +95,19 @@ if( VVENC_ENABLE_X86_SIMD )
     set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "/arch:AVX" )
     set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "/arch:AVX2" )
   elseif( UNIX OR MINGW )
-    set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "-msse4.1" )
-    set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "-msse4.2" )
-    set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "-mavx" )
-    set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "-mavx2" )
+    include( vvencCompilerSupport )
+
+    set_if_compiler_supports_flag( FLAG_mxsave -mxsave  )
+    set_if_compiler_supports_flag( FLAG_msse41 -msse4.1 )
+    set_if_compiler_supports_flag( FLAG_msse42 -msse4.2 )
+    set_if_compiler_supports_flag( FLAG_mavx   -mavx    )
+    set_if_compiler_supports_flag( FLAG_mavx2  -mavx2   )
+
+    set_property( SOURCE ${X86_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS ${FLAG_mxsave} )
+    set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
+    set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse42}" )
+    set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx}"   )
+    set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx2}"  )
   endif()
 
   add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${SSE42_SRC_FILES} ${AVX_SRC_FILES} ${AVX2_SRC_FILES} )

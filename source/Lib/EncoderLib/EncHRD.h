@@ -56,7 +56,7 @@ namespace vvenc {
 
   protected:
     // calculate scale value of bitrate and initial delay
-    int xCalcScale( int x );
+    int xCalcScale( uint32_t x );
 
   };
 

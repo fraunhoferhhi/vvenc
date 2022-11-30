@@ -839,21 +839,21 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
   int i, isReference;
   checkLeadingPictureRestrictions(rcListPic);
 
-  bool isNeedToCheck = (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) ? false : true;
+  bool isNeedToCheck = ( nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL ) ? false : true;
 
   // loop through all pictures in the reference picture buffer
   PicList::const_iterator iterPic = rcListPic.begin();
-  while (iterPic != rcListPic.end())
+  while( iterPic != rcListPic.end() )
   {
-    Picture* pic = *(iterPic++);
+    Picture* pic = *( iterPic++ );
 
-    if ( ! pic->isReferenced )
+    if( !pic->isReferenced )
       continue;
 
     isReference = 0;
     // loop through all pictures in the Reference Picture Set
     // to see if the picture should be kept as reference picture
-    for (i = 0; isNeedToCheck && !isReference && i<pRPL0->numberOfShorttermPictures + pRPL0->numberOfLongtermPictures + pRPL0->numberOfInterLayerPictures; i++)
+    for( i = 0; isNeedToCheck && !isReference && i < pRPL0->numberOfShorttermPictures + pRPL0->numberOfLongtermPictures + pRPL0->numberOfInterLayerPictures; i++ )
     {
       if( pRPL0->isInterLayerRefPic[ i ] )
       {
@@ -863,32 +863,31 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
         if( pic->poc == poc )
         {
           isReference = 1;
-          pic->isLongTerm = true;
+          if( !pic->isLongTerm ) pic->isLongTerm = true;
         }
       }
-      else if (pic->layerId == layerId)
+      else if( pic->layerId == layerId )
       {
-      if (!(pRPL0->isLongtermRefPic[i]))
-      {
-        if (pic->poc == poc + pRPL0->refPicIdentifier[i])
+        if( !pRPL0->isLongtermRefPic[i] )
         {
-          isReference = 1;
-          pic->isLongTerm = false;
+          if( pic->poc == poc + pRPL0->refPicIdentifier[i] )
+          {
+            isReference = 1;
+            if( pic->isLongTerm ) pic->isLongTerm = false;
+          }
         }
-      }
-      else
-      {
-        int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-        int curPoc = pic->poc & (pocCycle - 1);
-        if (pic->isLongTerm && curPoc == pRPL0->refPicIdentifier[i])
+        else
         {
-          isReference = 1;
-          pic->isLongTerm = true;
+          int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
+          int curPoc = pic->poc & (pocCycle - 1);
+          if( pic->isLongTerm && curPoc == pRPL0->refPicIdentifier[i] )
+          {
+            isReference = 1;
+          }
         }
-      }
       }
     }
-    for (i = 0; isNeedToCheck && !isReference && i<pRPL1->numberOfShorttermPictures + pRPL1->numberOfLongtermPictures + pRPL1->numberOfInterLayerPictures; i++)
+    for( i = 0; isNeedToCheck && !isReference && i < pRPL1->numberOfShorttermPictures + pRPL1->numberOfLongtermPictures + pRPL1->numberOfInterLayerPictures; i++ )
     {
       if( pRPL1->isInterLayerRefPic[i] )
       {
@@ -898,29 +897,28 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
         if( pic->poc == poc )
         {
           isReference = 1;
-          pic->isLongTerm = true;
+          if( !pic->isLongTerm ) pic->isLongTerm = true;
         }
       }
       else if( pic->layerId == layerId )
       {
-      if (!(pRPL1->isLongtermRefPic[i]))
-      {
-        if (pic->poc == poc + pRPL1->refPicIdentifier[i])
+        if( !pRPL1->isLongtermRefPic[i] )
         {
-          isReference = 1;
-          pic->isLongTerm = false;
+          if( pic->poc == poc + pRPL1->refPicIdentifier[i] )
+          {
+            isReference = 1;
+            if( pic->isLongTerm ) pic->isLongTerm = false;
+          }
         }
-      }
-      else
-      {
-        int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-        int curPoc = pic->poc & (pocCycle - 1);
-        if (pic->isLongTerm && curPoc == pRPL1->refPicIdentifier[i])
+        else
         {
-          isReference = 1;
-          pic->isLongTerm = true;
+          int pocCycle = 1 << ( pic->cs->sps->bitsForPOC );
+          int curPoc = pic->poc & ( pocCycle - 1 );
+          if( pic->isLongTerm && curPoc == pRPL1->refPicIdentifier[i] )
+          {
+            isReference = 1;
+          }
         }
-      }
       }
     }
     // mark the picture as "unused for reference" if it is not in
@@ -1401,18 +1399,6 @@ void PicHeader::copyPicInfo( const PicHeader* other, bool cpyAll)
 // ------------------------------------------------------------------------------------------------
 // Sequence parameter set (SPS)
 // ------------------------------------------------------------------------------------------------
-SPSRExt::SPSRExt()
- : transformSkipRotationEnabled   (false)
- , transformSkipContextEnabled    (false)
- , implicitRdpcmEnabled           (false)
- , explicitRdpcmEnabled           (false)
- , extendedPrecisionProcessing    (false)
- , intraSmoothingDisabled         (false)
- , highPrecisionOffsetsEnabled    (false)
- , persistentRiceAdaptationEnabled(false)
- , cabacBypassAlignmentEnabled    (false)
-{
-}
 
 SPS::SPS()
 : spsId                           (  0 )
@@ -1745,6 +1731,18 @@ void PPS::initTiles()
   for( rowIdx = 0; rowIdx < numTileRows; rowIdx++ )
   {
     tileRowBd.push_back( tileRowBd[ rowIdx ] + tileRowHeight[ rowIdx ] );
+  }
+
+  // set right column bounaries
+  for( colIdx = 0; colIdx < numTileCols; colIdx++ )
+  {
+    tileColBdRgt.push_back( std::min( ( tileColBd[ colIdx ] + tileColWidth[ colIdx ] ) << log2CtuSize, picWidthInLumaSamples ) );
+  }
+
+  // set bottom row bounaries
+  for( rowIdx = 0; rowIdx < numTileRows; rowIdx++ )
+  {
+    tileRowBdBot.push_back( std::min( ( tileRowBd[ rowIdx ] + tileRowHeight[ rowIdx ] ) << log2CtuSize, picHeightInLumaSamples ) );
   }
 
   // set mapping between horizontal CTU address and tile column index

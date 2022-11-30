@@ -213,8 +213,6 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
   }
 }
 
-#define _mm_storeu_si32(p, a) (void)(*(int*)(p) = _mm_cvtsi128_si32((a)))
-
 template<X86_VEXT vext>
 static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, const CCoeffBuf& piCoef,CoeffSigBuf piQCoef,TCoeff &uiAbsSum, int &lastScanPos,TCoeff *deltaU,const int defaultQuantisationCoefficient,const int iQBits,const int64_t iAdd,const TCoeff entropyCodingMinimum,const TCoeff entropyCodingMaximum,const bool signHiding, const TCoeff m_thrVal)
 {

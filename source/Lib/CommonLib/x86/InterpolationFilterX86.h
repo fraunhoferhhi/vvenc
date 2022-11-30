@@ -61,15 +61,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if _MSC_VER <= 1900 && !defined( _mm_bslli_si128 )
-#define  _mm_bslli_si128 _mm_slli_si128
-#endif
-
-#if USE_AVX2 && !defined( _mm256_set_m128i )
-#define VVCLIB_OWN_mm256_set_m128i
-#define _mm256_set_m128i( v0, v1 ) _mm256_insertf128_si256( _mm256_castsi128_si256( v1 ), ( v0 ), 1 )
-
-#endif
 #define cond_mm_prefetch(a,b) _mm_prefetch(a,b)
 //#define cond_mm_prefetch(a,b)
 
@@ -2801,7 +2792,7 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     int vcoeffh[2];
     int vcoeffv[2];
 
-#ifndef NDEBUG
+#if !_DEBUG 
     __m128i vsrcv0, vsrcv1, vsrcv2, vsrcv3;
 #else
     __m128i

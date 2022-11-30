@@ -450,8 +450,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 
   // high level conditions and DC intra prediction
-  if(   sps.spsRExt.intraSmoothingDisabled
-    || !isLuma( chType )
+  if( !isLuma( chType )
     || useISP
     || CU::isMIP( cu, chType ) //th remove this
     || m_ipaParam.multiRefIndex
@@ -488,10 +487,13 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 }
 
+}   // namespace vvenc
+
 #ifdef TARGET_SIMD_X86
 #include "x86/CommonDefX86.h"
 #endif
 
+namespace vvenc {
 
 /** Function for deriving the simplified angular intra predictions.
 *

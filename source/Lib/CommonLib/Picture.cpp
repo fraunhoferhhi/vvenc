@@ -174,6 +174,7 @@ Picture::Picture()
     , ctsValid          ( false )
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
+    , isMeanQPLimited   ( false )
     , picInitialQP      ( -1 )
     , picInitialLambda  ( -1.0 )
     , picMemorySTA      ( -1 )
@@ -187,6 +188,9 @@ Picture::Picture()
     , useScBDPCM        ( false )
     , useScIBC          ( false )
     , useScLMCS         ( false )
+    , useScSAO          ( false )
+    , useScNumRefs      ( false )
+    , useScFastMrg      ( 0 )
     , useQtbttSpeedUpMode( 0 )
     , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
@@ -194,8 +198,7 @@ Picture::Picture()
     , encRCPic          ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
-  std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+  std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
 }
 
 void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder )
@@ -220,6 +223,7 @@ void Picture::reset()
   isNeededForOutput   = true;
   isFinished          = false;
   isLongTerm          = false;
+  isMeanQPLimited     = false;
   encPic              = false;
   writePic            = false;
   precedingDRAP       = false;
@@ -233,8 +237,7 @@ void Picture::reset()
   actualTotalBits     = 0;
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
-  std::fill_n( minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+  std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
 
   encTime.resetTimer();
 }
@@ -267,21 +270,22 @@ void Picture::destroy( bool bPicHeader )
   {
     delete psei;
   }
+
   SEIs.clear();
 }
 
-void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared )
+void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ], PicShared* picShared )
 {
   m_picShared                      = picShared;
   m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
   m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
-  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+  for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
 }
 
 void Picture::releasePrevBuffers()
 {
-  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+  for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = nullptr;
 }
 
@@ -369,12 +373,15 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
 void Picture::setSccFlags( const VVEncCfg* encCfg )
 {
-  useScME    = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
-  useScTS    = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
-  useScBDPCM = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
-  useScMCTF  = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
-  useScLMCS  = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
-  useScIBC   = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useScME      = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
+  useScTS      = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
+  useScBDPCM   = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
+  useScMCTF    = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
+  useScLMCS    = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
+  useScIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useScSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
+  useScNumRefs = isSccStrong;
+  useScFastMrg = isSccStrong ? 0 : std::max(0, encCfg->m_useFastMrg - 2);
   useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
 
   if( ( encCfg->m_qtbttSpeedUpMode & 2 ) && isSccStrong )

@@ -120,7 +120,6 @@ public:
   void (*m_filterCcAlf)             ( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const Area &blkDst, const Area &blkSrc,
                                       const ComponentID compId, const int16_t *filterCoeff, const ClpRngs &clpRngs,
                                       CodingStructure &cs, int vbCTUHeight, int vbPos);
-  void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, int ctuRsAddr );
   CcAlfFilterParam &getCcAlfFilterParam() { return m_ccAlfFilterParam; }
   uint8_t* getCcAlfControlIdc       ( const ComponentID compID)   { return m_ccAlfFilterControl[compID-1]; }
   void (*m_filter5x5Blk[2])         ( const AlfClassifier *classifier, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc,
@@ -151,8 +150,8 @@ protected:
   short                        m_chromaCoeffFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   AlfParam*                    m_alfParamChroma;
   Pel                          m_alfClippingValues[MAX_NUM_CH][MaxAlfNumClippingValues];
-  std::vector<AlfFilterShape>  m_filterShapesCcAlf[2];
-  std::vector<AlfFilterShape>  m_filterShapes[MAX_NUM_CH];
+  AlfFilterShape               m_filterShapesCcAlf[2];
+  AlfFilterShape               m_filterShapes[MAX_NUM_CH];
   AlfClassifier*               m_classifier;
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];

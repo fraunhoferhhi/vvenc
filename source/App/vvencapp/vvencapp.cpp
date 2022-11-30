@@ -210,7 +210,7 @@ int main( int argc, char* argv[] )
   apputils::VVEncAppCfg vvencappCfg = apputils::VVEncAppCfg(true); // init config in easy mode
   vvencappCfg.setPresetChangeCallback(changePreset);
   vvenc_config vvenccfg;
-  vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvenccfg, 1920, 1080, 60, VVENC_RC_OFF, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
 
   vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 
@@ -307,9 +307,9 @@ int main( int argc, char* argv[] )
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvenccfg.m_inputBitDepth[0], vvenccfg.m_MSBExtendedBitDepth[0], vvenccfg.m_internalBitDepth[0],
                                  vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput,
-                                 vvencappCfg.m_forceY4mInput ) )
+                                 vvencappCfg.m_forceY4mInput, vvencappCfg.m_logoFileName ) )
     {
-      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: failed to open input file %s\n", vvencappCfg.m_inputFileName.c_str() );
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: open input file failed: %s\n", cYuvFileInput.getLastError().c_str() );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );
@@ -345,9 +345,9 @@ int main( int argc, char* argv[] )
         vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
         vvenc_accessUnit_free_payload( &AU );
         vvenc_encoder_close( enc );
-        return -1;  
+        return -1;
       }
-      
+
       iSeqNumber=iRemSkipFrames;
     }
 

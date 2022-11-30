@@ -171,7 +171,7 @@ public:
   std::ostream& streamOutValueInPercentage( std::ostream& os, T dep, size_t w ) const
   {
     double percentage = dep ? percentageFrom( dep ) : 0.0;
-    os << std::fixed << std::setw( w - 1 ) << std::setprecision( 1 ) << percentage << "%";
+    os << std::fixed << std::setw( (int)(w - 1) ) << std::setprecision( 1 ) << percentage << "%";
  
     return os;
   }
@@ -306,7 +306,7 @@ public:
   std::ostream& streamOutNames( std::ostream& os, size_t w ) const
   {
     for( size_t i = 0; i < m_counters.size(); i++ )
-      os << std::setw( (m_counters[i].isPercentageOutput() ? w*2: w) ) << m_counters[i].getName();
+      os << std::setw( (m_counters[i].isPercentageOutput() ? (int)(w*2): (int)w) ) << m_counters[i].getName();
     return os;
   }
 
@@ -334,7 +334,7 @@ public:
   {
     for( size_t i = 0; i < m_counters.size(); i++ )
     {
-        os << std::setw( w ) << m_counters[i];
+        os << std::setw( (int)w ) << m_counters[i];
         if( m_counters[i].isPercentageOutput() )
           m_counters[i].streamOutValueInPercentage( os, m_counters[m_counters[i].getDependenceIdx()].val(), w );
     }
@@ -357,8 +357,8 @@ public:
 
           for( size_t i = 0; i < m_counters.size(); i++ )
           {
-              os << std::setw( maxW > w ? maxW: w ) << m_counters[i].getName() << ": ";
-              os << std::setw( w ) << m_counters[i];
+              os << std::setw( maxW > w ? (int)maxW: (int)w ) << m_counters[i].getName() << ": ";
+              os << std::setw( (int)w ) << m_counters[i];
               if( m_counters[i].isPercentageOutput() )
                 m_counters[i].streamOutValueInPercentage( os, m_counters[m_counters[i].getDependenceIdx()].val(), w );
               os << std::endl;

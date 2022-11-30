@@ -50,6 +50,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/Nal.h"
 
+#include <vector>
+
 //! \ingroup EncoderLib
 //! \{
 
@@ -58,18 +60,44 @@ namespace vvenc {
 class PicShared
 {
 public:
+  PicShared*       m_prevShared[ NUM_QPA_PREV_FRAMES ];
+  GOPEntry         m_gopEntry;
+  bool             m_isSccWeak;
+  bool             m_isSccStrong;
+  uint16_t         m_picVisActTL0;
+  uint16_t         m_picVisActY;
+  int              m_picMemorySTA;
+  uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
+  std::vector<int> m_ctuBimQpOffset;
+
+private:
+  PelStorage       m_origBuf;
+  PelStorage       m_filteredBuf;
+  uint64_t         m_cts;
+  int              m_maxFrames;
+  int              m_poc;
+  int              m_refCount;
+  bool             m_isLead;
+  bool             m_isTrail;
+  bool             m_ctsValid;
+
+public:
   PicShared()
-  : m_isSccWeak  ( false )
-  , m_isSccStrong( false )
-  , m_cts        ( 0 )
-  , m_maxFrames  ( -1 )
-  , m_poc        ( -1 )
-  , m_refCount   ( -1 )
-  , m_isLead     ( false )
-  , m_isTrail    ( false )
-  , m_ctsValid   ( false )
+  : m_isSccWeak   ( false )
+  , m_isSccStrong ( false )
+  , m_picVisActTL0( 0 )
+  , m_picVisActY  ( 0 )
+  , m_picMemorySTA( 0 )
+  , m_cts         ( 0 )
+  , m_maxFrames   ( -1 )
+  , m_poc         ( -1 )
+  , m_refCount    ( -1 )
+  , m_isLead      ( false )
+  , m_isTrail     ( false )
+  , m_ctsValid    ( false )
   {
-    std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
+    std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
   };
 
@@ -77,7 +105,7 @@ public:
 
   bool         isUsed()          const { return m_refCount > 0; }
   void         incUsed()               { m_refCount += 1; }
-  void         decUsed()               { CHECK( m_refCount <= 0, "release unused picture" ); if( m_refCount > 0 ) m_refCount -= 1; }
+  void         decUsed()               { CHECK( m_refCount <= 0, "invalid state: release unused picture" ); if( m_refCount > 0 ) m_refCount -= 1; }
   bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
   int          getPOC()          const { return m_poc; }
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
@@ -101,52 +129,55 @@ public:
 
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
 
-    m_isSccWeak   = false;
-    m_isSccStrong = false;
-    m_cts         = yuvInBuf->cts;
-    m_poc         = poc;
-    m_refCount    = 0;
-    m_isLead      = poc < 0;
-    m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
-    m_ctsValid    = yuvInBuf->ctsValid;
-    std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
+    m_isSccWeak    = false;
+    m_isSccStrong  = false;
+    m_picVisActTL0 = 0;
+    m_picVisActY   = 0;
+    m_picMemorySTA = 0;
+    m_cts          = yuvInBuf->cts;
+    m_poc          = poc;
+    m_refCount     = 0;
+    m_isLead       = poc < 0;
+    m_isTrail      = m_maxFrames > 0 && poc >= m_maxFrames;
+    m_ctsValid     = yuvInBuf->ctsValid;
+    m_ctuBimQpOffset.resize( 0 );
+    std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+    m_gopEntry.setDefaultGOPEntry();
   }
 
   void shareData( Picture* pic )
   {
-    PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ];
+    PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ];
     sharePrevBuffers( prevOrigBufs );
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
-    pic->isSccWeak   = m_isSccWeak;
-    pic->isSccStrong = m_isSccStrong;
-    pic->poc         = m_poc;
-    pic->cts         = m_cts;
-    pic->ctsValid    = m_ctsValid;
-    m_refCount      += 1;
-    if( ! isLeadTrail() )
-    {
-      CHECK( m_gopEntry.m_codingNum < 0, "GOP entry, coding number not initialized" );
-      CHECK( m_gopEntry.m_POC != m_poc,  "GOP entry, POC not initialized" );
-      pic->gopEntry  = &m_gopEntry;
-    }
+    pic->isSccWeak      = m_isSccWeak;
+    pic->isSccStrong    = m_isSccStrong;
+    pic->picVisActTL0   = m_picVisActTL0;
+    pic->picVisActY     = m_picVisActY;
+    pic->picMemorySTA   = m_picMemorySTA;
+    pic->poc            = m_poc;
+    pic->cts            = m_cts;
+    pic->ctsValid       = m_ctsValid;
+    pic->gopEntry       = &m_gopEntry;
+    incUsed();
   }
 
   void releaseShared( Picture* pic )
   {
     releasePrevBuffers( pic );
     pic->releaseSharedBuffers();
-    m_refCount -= 1;
-    CHECK( m_refCount < 0, "PicShared invalid state" );
+    decUsed();
   };
 
-  void sharePrevBuffers( PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ] )
+  void sharePrevBuffers( PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ] )
   {
-    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+    for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     {
       prevOrigBufs[ i ] = nullptr;
       if( m_prevShared[ i ] )
       {
-        m_prevShared[ i ]->m_refCount += 1;
+        m_prevShared[ i ]->incUsed();
         prevOrigBufs[ i ] = &( m_prevShared[ i ]->m_origBuf );
       }
     }
@@ -154,33 +185,15 @@ public:
 
   void releasePrevBuffers( Picture* pic )
   {
-    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+    for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     {
       if( m_prevShared[ i ] && pic->m_bufsOrigPrev[ i ] )
       {
-        m_prevShared[ i ]->m_refCount -= 1;
-        CHECK( m_prevShared[ i ]->m_refCount < 0, "PicShared invalid state" );
+        m_prevShared[ i ]->decUsed();
       }
     }
     pic->releasePrevBuffers();
   }
-
-public:
-  PicShared* m_prevShared[ NUM_PREV_FRAMES ];
-  GOPEntry   m_gopEntry;
-  bool       m_isSccWeak;
-  bool       m_isSccStrong;
-
-private:
-  PelStorage m_origBuf;
-  PelStorage m_filteredBuf;
-  uint64_t   m_cts;
-  int        m_maxFrames;
-  int        m_poc;
-  int        m_refCount;
-  bool       m_isLead;
-  bool       m_isTrail;
-  bool       m_ctsValid;
 };
 
 // ====================================================================================================================
@@ -189,10 +202,26 @@ private:
 
 class EncStage
 {
+private:
+  EncStage* m_nextStage;
+  PicList   m_procList;
+  PicList   m_freeList;
+  int       m_minQueueSize;
+  int       m_startPoc;
+  bool      m_flushAll;
+  bool      m_processLeadTrail;
+  bool      m_sortByPoc;
+  int       m_ctuSize;
+  bool      m_isNonBlocking;
+
+protected:
+  int       m_picCount;
+
 public:
   EncStage()
   : m_nextStage       ( nullptr )
   , m_minQueueSize    ( 0 )
+  , m_startPoc        ( 0 )
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_sortByPoc       ( false )
@@ -206,6 +235,13 @@ public:
   {
     freePicList();
   };
+
+protected:
+  virtual void initPicture    ( Picture* pic ) = 0;
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+
+public:
+  virtual void waitForFreeEncoders() {}
 
   void freePicList()
   {
@@ -223,28 +259,31 @@ public:
     m_freeList.clear();
   }
 
-  bool isStageDone() const { return m_procList.empty(); }
+  bool isStageDone() const   { return m_procList.empty(); }
+  bool isNonBlocking() const { return m_isNonBlocking; }
 
-  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, bool sortByPoc, int ctuSize, bool nonBlocking )
+  void initStage( const VVEncCfg& encCfg, int minQueueSize, int startPoc, bool processLeadTrail, bool sortByPoc, bool nonBlocking )
   {
     CHECK( processLeadTrail && ! sortByPoc, "sort by coding number only for non lead trail pics supported" );
     m_minQueueSize     = minQueueSize;
-    m_flushAll         = flushAll;
+    m_startPoc         = startPoc;
     m_processLeadTrail = processLeadTrail;
     m_sortByPoc        = sortByPoc;
-    m_ctuSize          = ctuSize;
+    m_ctuSize          = encCfg.m_CTUSize;
     m_isNonBlocking    = nonBlocking;
   }
 
   void linkNextStage( EncStage* nextStage )
   {
     m_nextStage = nextStage;
+    m_flushAll  = m_nextStage != nullptr;
   }
 
   void addPicSorted( PicShared* picShared )
   {
     // send lead trail data to next stage if not requested
-    if( ! m_processLeadTrail && picShared->isLeadTrail() )
+    if( picShared->getPOC() < m_startPoc
+        || ( ! m_processLeadTrail && picShared->isLeadTrail() ) )
     {
       if( m_nextStage )
       {
@@ -290,6 +329,7 @@ public:
     {
       for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
       {
+        CHECK( ! pic->gopEntry->m_isValid, "try to sort picture by invalid gop entry" );
         if( pic->gopEntry->m_codingNum < ( *picItr )->gopEntry->m_codingNum )
           break;
       }
@@ -339,24 +379,6 @@ public:
       } while( m_flushAll && flush && m_procList.size() );
     }
   }
-
-  bool         isNonBlocking()     { return m_isNonBlocking; }
-  virtual void waitForFreeEncoders()  {}
-protected:
-  virtual void initPicture    ( Picture* pic ) = 0;
-  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
-private:
-  EncStage* m_nextStage;
-  PicList   m_procList;
-  PicList   m_freeList;
-  int       m_minQueueSize;
-  bool      m_flushAll;
-  bool      m_processLeadTrail;
-  bool      m_sortByPoc;
-  int       m_ctuSize;
-  bool      m_isNonBlocking;
-protected:
-  int64_t   m_picCount;
 };
 
 } // namespace vvenc

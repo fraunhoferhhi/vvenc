@@ -695,15 +695,41 @@ void SampleAdaptiveOffset::SAOProcess( CodingStructure& cs, SAOBlkParam* saoBlkP
 void SampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructure& cs, const Position& pos, uint8_t& availMask ) const
 {
   const int cuSize = cs.pcv->maxCUSize;
-  const CodingUnit* cuCurr = cs.getCU(pos, CH_L, TREE_D);
-  const CodingUnit* cuLeft = cs.getCU(pos.offset(-cuSize, 0), CH_L, TREE_D);
-  const CodingUnit* cuRight = cs.getCU(pos.offset(cuSize, 0), CH_L, TREE_D);
-  const CodingUnit* cuAbove = cs.getCU(pos.offset(0, -cuSize), CH_L, TREE_D);
-  const CodingUnit* cuBelow = cs.getCU(pos.offset(0, cuSize), CH_L, TREE_D);
-  const CodingUnit* cuAboveLeft = cs.getCU(pos.offset(-cuSize, -cuSize), CH_L, TREE_D);
-  const CodingUnit* cuAboveRight = cs.getCU(pos.offset(cuSize, -cuSize), CH_L, TREE_D);
-  const CodingUnit* cuBelowLeft = cs.getCU(pos.offset(-cuSize, cuSize), CH_L, TREE_D);
-  const CodingUnit* cuBelowRight = cs.getCU(pos.offset(cuSize, cuSize), CH_L, TREE_D);
+  CodingUnit *cuLeft, *cuRight, *cuAbove, *cuBelow, *cuAboveLeft, *cuAboveRight, *cuBelowLeft, *cuBelowRight;
+  const CodingUnit *cuCurr = cs.getCU( pos, CH_L, TREE_D );
+
+  if (!cs.pps->getSubPicFromCU(*cuCurr).loopFilterAcrossSubPicEnabled)
+  {
+    THROW("no support");
+  }
+
+  if( !cs.pps->loopFilterAcrossSlicesEnabled || !cs.pps->loopFilterAcrossTilesEnabled )
+  {
+    const int ctuX = pos.x >> cs.pcv->maxCUSizeLog2;
+    const int ctuY = pos.y >> cs.pcv->maxCUSizeLog2;
+    const PPS* pps = cs.slice->pps;
+    const int wCtu = pps->pcv->widthInCtus;
+    const int hCtu = pps->pcv->heightInCtus;
+    cuLeft       = ctuX > 0                   && pps->canFilterCtuBdry( ctuX, ctuY, -1, 0 ) ? cs.getCU( pos.offset( -cuSize, 0       ), CH_L, TREE_D ): nullptr;
+    cuRight      = ctuX < wCtu                && pps->canFilterCtuBdry( ctuX, ctuY,  1, 0 ) ? cs.getCU( pos.offset( cuSize , 0       ), CH_L, TREE_D ): nullptr;
+    cuAbove      =                ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY,  0,-1 ) ? cs.getCU( pos.offset( 0      , -cuSize ), CH_L, TREE_D ): nullptr;
+    cuBelow      =                ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY,  0, 1 ) ? cs.getCU( pos.offset( 0      , cuSize  ), CH_L, TREE_D ): nullptr;
+    cuAboveLeft  = ctuX > 0    && ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY, -1,-1 ) ? cs.getCU( pos.offset( -cuSize, -cuSize ), CH_L, TREE_D ): nullptr;
+    cuAboveRight = ctuX < wCtu && ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY,  1,-1 ) ? cs.getCU( pos.offset( cuSize , -cuSize ), CH_L, TREE_D ): nullptr;
+    cuBelowLeft  = ctuX > 0    && ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY, -1, 1 ) ? cs.getCU( pos.offset( -cuSize, cuSize  ), CH_L, TREE_D ): nullptr;
+    cuBelowRight = ctuX < wCtu && ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY,  1, 1 ) ? cs.getCU( pos.offset( cuSize , cuSize  ), CH_L, TREE_D ): nullptr;
+  }
+  else
+  {
+    cuLeft       = cs.getCU( pos.offset( -cuSize,       0 ), CH_L, TREE_D );
+    cuRight      = cs.getCU( pos.offset(  cuSize,       0 ), CH_L, TREE_D );
+    cuAbove      = cs.getCU( pos.offset(       0, -cuSize ), CH_L, TREE_D );
+    cuBelow      = cs.getCU( pos.offset(       0,  cuSize ), CH_L, TREE_D );
+    cuAboveLeft  = cs.getCU( pos.offset( -cuSize, -cuSize ), CH_L, TREE_D );
+    cuAboveRight = cs.getCU( pos.offset(  cuSize, -cuSize ), CH_L, TREE_D );
+    cuBelowLeft  = cs.getCU( pos.offset( -cuSize,  cuSize ), CH_L, TREE_D );
+    cuBelowRight = cs.getCU( pos.offset(  cuSize,  cuSize ), CH_L, TREE_D );
+  }
   availMask = 0;
 
   // check cross slice flags
@@ -743,11 +769,6 @@ void SampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructure&
     availMaskTile |= (availMask&BelowLeftAvail  && CU::isSameTile(*cuCurr, *cuBelowLeft)) ? BelowLeftAvail : 0;
     availMaskTile |= (availMask&BelowRightAvail && CU::isSameTile(*cuCurr, *cuBelowRight)) ? BelowRightAvail : 0;
     availMask = availMaskTile;
-  }
-
-  if (!cs.pps->getSubPicFromCU(*cuCurr).loopFilterAcrossSubPicEnabled)
-  {
-    THROW("no support");
   }
 }
 

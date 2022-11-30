@@ -95,6 +95,7 @@ private:
   bool                    m_useAdpCW;
   uint16_t                m_initCWAnalyze;
   vvencReshapeCW          m_reshapeCW;
+  int                     m_rspBaseQP;
   Pel                     m_cwLumaWeight[PIC_CODE_CW_BINS];
   double                  m_chromaWeight;
   int                     m_chromaAdj;

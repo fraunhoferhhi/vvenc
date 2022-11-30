@@ -53,6 +53,19 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+  double filterAndCalculateAverageActivity ( const Pel* pSrc,
+                                             const int iSrcStride,
+                                             const int height,
+                                             const int width,
+                                             const Pel* pSM1,
+                                             const int iSM1Stride,
+                                             const Pel* pSM2,
+                                             const int iSM2Stride,
+                                             uint32_t frameRate,
+                                             const uint32_t bitDepth,
+                                             const bool isUHD,
+                                             unsigned* minVA );
+
   // BitAllocation functions
   namespace BitAllocation
   {
@@ -77,8 +90,6 @@ namespace vvenc {
                                  std::vector<int>& ctuPumpRedQP,
                                  const uint32_t ctuRsAddr,
                                  const int baseQP );
-    double getPicVisualActivity( const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr );
-    bool isTempLayer0IntraFrame( const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass );
   }
 
 } // namespace vvenc
