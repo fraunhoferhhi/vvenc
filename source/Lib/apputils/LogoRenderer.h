@@ -94,6 +94,7 @@ struct LogoOverlay
   LogoRenderOptions  renderOpts;
 };
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
 inline void to_json( json& j, const LogoInputOptions& l)
 {
   j = json{
@@ -151,6 +152,7 @@ inline void from_json(const json& j, LogoOverlay& l )
   j.at("input_opts").get_to(l.inputOpts);
   j.at("render_opts").get_to(l.renderOpts);
 }
+#endif
 
 class LogoRenderer
 {
