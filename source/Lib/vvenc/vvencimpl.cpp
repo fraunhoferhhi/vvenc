@@ -229,7 +229,7 @@ int VVEncImpl::uninit()
 #endif
   }
 
-#if defined( __linux__ )
+#if defined( __linux__ ) && defined( __GLIBC__ )
   malloc_trim(0);   // free unused heap memory
 #endif
 
@@ -427,7 +427,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     iRet = xCopyAu( *pcAccessUnit, cAu  );
   }
 
-#if defined( __linux__ )
+#if defined( __linux__ ) && defined( __GLIBC__ )
   malloc_trim(0);   // free unused heap memory
 #endif
 
