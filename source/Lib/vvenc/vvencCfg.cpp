@@ -1258,8 +1258,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
 
   // set number of lead / trail frames in segment mode
-  const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
-  const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
+  const int staFrames  = c->m_sliceTypeAdapt                       ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF || c->m_usePerceptQPA ? VVENC_MCTF_RANGE : 0;
   switch( c->m_SegmentMode )
   {
     case VVENC_SEG_FIRST:

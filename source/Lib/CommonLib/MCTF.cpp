@@ -586,7 +586,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;
   bool  isFilterThisFrame      = mctfIdx >= 0;
 
-  int dropFrames = 0;
+  int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
   if( mctfIdx >= 0 )
   {
     const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1);
@@ -601,12 +601,12 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( ( overallStrength <= 1.0 || !m_encCfg->m_usePerceptQPA ) && !pic->useScMCTF )
+  if( !pic->useScMCTF )
   {
     isFilterThisFrame = false;
   }
 
-  if ( isFilterThisFrame )
+  if ( isFilterThisFrame || ( pic->gopEntry->m_isStartOfGop && m_encCfg->m_usePerceptQPA ) )
   {
     const PelStorage& origBuf = pic->getOrigBuffer();
           PelStorage& fltrBuf = pic->getFilteredOrigBuffer();

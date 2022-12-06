@@ -235,7 +235,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_maxNumPicShared += 1;
 
   // MCTF
-  if( m_encCfg.m_vvencMCTF.MCTF )
+  if( m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA )
   {
     m_MCTF = new MCTF();
     const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
@@ -498,7 +498,7 @@ PicShared* EncLib::xGetFreePicShared()
       return nullptr;
 
     picShared = new PicShared();
-    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
+    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA );
     m_picSharedList.push_back( picShared );
   }
   CHECK( picShared == nullptr, "out of memory" );
