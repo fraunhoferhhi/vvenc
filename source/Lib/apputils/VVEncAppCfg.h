@@ -1224,7 +1224,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
     {
-      if( sdrMode != VVENC_HDR_OFF && hdrMode != VVENC_HDR_OFF )
+      if( sdrMode != hdrMode && sdrMode != VVENC_HDR_OFF && hdrMode != VVENC_HDR_OFF )
       {
         err.error( "Dynamic range" ) << "cannot combine hdr and sdr mode. use one or another.\n";
       }
