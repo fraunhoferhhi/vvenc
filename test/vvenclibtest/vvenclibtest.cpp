@@ -1009,6 +1009,11 @@ int checkTimestampsDefault()
 
   framerates.clear();
   tickspersecVec.clear();
+  framerates.push_back(std::make_tuple( 25,1) );
+  framerates.push_back(std::make_tuple( 30,1) );
+  framerates.push_back(std::make_tuple( 50,1) );
+  framerates.push_back(std::make_tuple( 60,1) );
+  framerates.push_back(std::make_tuple( 120,1) );
   framerates.push_back(std::make_tuple( 25000,1001) );
   framerates.push_back(std::make_tuple( 30000,1001) );
   framerates.push_back(std::make_tuple( 60000,1001) );
