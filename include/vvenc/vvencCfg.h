@@ -421,7 +421,7 @@ typedef struct vvenc_config
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
   int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
   int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
-  int                 m_TicksPerSecond;                                                  // ticks per second e.g. 90000 for dts generation (1..27000000, -1: ticks per frame=1)
+  int                 m_TicksPerSecond;                                                  // ticks per second for dts generation (default: 27000000, 1..27000000, -1: ticks per frame=1)
   int                 m_framesToBeEncoded;                                               // number of encoded frames (default: 0, all)
   int                 m_inputBitDepth[ 2 ];                                              // bit-depth of input pictures (2d array for luma,chroma)
 
