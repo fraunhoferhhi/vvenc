@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.7.0-rc1
+tag 1.7.0
 
 * libvvenc:
   - removed (unused) library parameters:
