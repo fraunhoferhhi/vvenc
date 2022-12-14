@@ -113,6 +113,13 @@ struct FinishTaskParam {
   FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
 };
 
+struct PicAps{
+  int poc;
+  int tid;
+  ParameterSetMap<APS>*     apsMap;
+  PicAps( int _p, int _t, ParameterSetMap<APS>* _apsMap ) : poc(_p), tid(_t), apsMap(_apsMap) {}
+};
+
 // ====================================================================================================================
 
 class EncGOP : public EncStage
@@ -144,7 +151,6 @@ private:
   BlkStat                   m_BlkStat;
   FFwdDecoder               m_ffwdDecoder;
 
-  ParameterSetMap<APS>      m_gopApsMap;
   ParameterSetMap<SPS>      m_spsMap;
   ParameterSetMap<PPS>      m_ppsMap;
   EncHRD                    m_EncHRD;
@@ -171,6 +177,7 @@ private:
   std::list<Picture*>       m_gopEncListOutput;
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
+  std::deque<PicAps>        m_picApsList;
 
   std::vector<int>          m_globalCtuQpVector;
 
@@ -220,7 +227,7 @@ private:
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
   void xInitLMCS                      ( Picture& pic );
   void xSelectReferencePictureList    ( Slice* slice ) const;
-  void xSyncAlfAps                    ( Picture& pic, ParameterSetMap<APS>& dst, const ParameterSetMap<APS>& src );
+  void xSyncAlfAps                    ( Picture& pic );
 
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );

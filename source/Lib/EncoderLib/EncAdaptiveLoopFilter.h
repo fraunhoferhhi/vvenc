@@ -395,7 +395,7 @@ public:
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );
   void alfEncoderCtb                ( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight );
-  void initCABACEstimator           ( Slice* pcSlice, ParameterSetMap<APS>* apsMap );
+  void initCABACEstimator           ( Slice* pcSlice );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
   int  getApsIdStart                () { return m_apsIdStart; }
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf );

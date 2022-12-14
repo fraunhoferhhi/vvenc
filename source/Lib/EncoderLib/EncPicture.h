@@ -91,7 +91,7 @@ class EncPicture
                                   RateCtrl& rateCtrl,
                                   NoMallocThreadPool* threadPool );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
-    void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
+    void skipCompressPicture    ( Picture& pic );
     void finalizePicture        ( Picture& pic );
 
   protected:
