@@ -331,7 +331,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
   c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
   c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
-  c->m_TicksPerSecond                          = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
+  c->m_TicksPerSecond                          = 27000000;      ///< ticks per second for dts generation (default: 27000000, 1..27000000, -1: ticks per frame=1)
 
   c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
 
@@ -710,7 +710,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
   vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
-  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framescale. Use 27000000 for NTSC content" );
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
 
@@ -1258,8 +1258,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
 
   // set number of lead / trail frames in segment mode
-  const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
-  const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
+  const int staFrames  = c->m_sliceTypeAdapt                       ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF || c->m_usePerceptQPA ? VVENC_MCTF_RANGE : 0;
   switch( c->m_SegmentMode )
   {
     case VVENC_SEG_FIRST:
@@ -2292,7 +2292,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
     default: break;
   }
 
-  c->m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
+  c->m_TicksPerSecond      = 27000000;                 // ticks per second for dts generation
 
   c->m_inputBitDepth[0]    = 8;                        // input bitdepth
   c->m_internalBitDepth[0] = 10;                       // internal bitdepth

@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.7.0-rc1
+tag 1.7.0
 
 * libvvenc:
   - removed (unused) library parameters:
@@ -10,6 +10,8 @@ tag 1.7.0-rc1
     - extended vvencHDRMode to also include SDR color spaces
     - vvenc_config: m_numRefPics, m_numRefPicsSCC, m_blockImportanceMapping, m_saoScc
     - vvenc_config: changed m_sliceTypeAdapt from bool to char
+  - changed library parameters:
+    - m_TicksPerSecond new default 27000000 (old: 90000) to support all NTSC frame rates
   - added support for ARM through SIMDe
   - allowing adaptive intra period (content adaptive placement of random access points)
   - ported block importance mapping from VTM
