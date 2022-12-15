@@ -1207,21 +1207,20 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     }
 
     // check for y4m input
-    if ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) )
-    {
-      if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
-      {
-        err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
-      }
-    }
-    else if( apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
+    bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+    if( !isY4m && apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
     {
       err.warn( "Input file" ) << "Y4M file signature detected. Enable Y4M mode.\n";
+      isY4m = true;
+      m_forceY4mInput = true;
+    }
+
+    if ( isY4m )
+    {
       if( 0 > apputils::FileIOHelper::parseY4mHeader( m_inputFileName, *c, m_inputFileChromaFormat ))
       {
         err.error( "y4m parser" ) << "cannot parse y4m metadata.\n";
       }
-      m_forceY4mInput = true;
     }
 
     if( sdrMode != VVENC_HDR_OFF || hdrMode != VVENC_HDR_OFF )
