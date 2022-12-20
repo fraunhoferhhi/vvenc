@@ -574,14 +574,13 @@ void AdaptiveLoopFilter::reconstructCoeff( AlfParam& alfParam, ChannelType chann
   }
 }
 
-void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH] )
+void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int inputBitDepth[MAX_NUM_CH] )
 {
   std::memcpy( m_inputBitDepth, inputBitDepth, sizeof( m_inputBitDepth ) );
   m_picWidth     = picWidth;
   m_picHeight    = picHeight;
   m_maxCUWidth   = maxCUWidth;
   m_maxCUHeight  = maxCUHeight;
-  m_maxCUDepth   = maxCUDepth;
   m_chromaFormat = format;
 
   m_numCTUsInWidth  = ( m_picWidth / m_maxCUWidth ) + ( ( m_picWidth % m_maxCUWidth ) ? 1 : 0 );
