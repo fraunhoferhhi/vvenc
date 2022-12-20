@@ -548,8 +548,8 @@ typedef struct vvenc_config
   unsigned            m_maxBT[3];
   unsigned            m_maxTT[3];
   bool                m_dualITree;
-  unsigned            m_MaxCodingDepth;                                                  // max. total CU depth - includes depth of transform-block structure
-  unsigned            m_log2DiffMaxMinCodingBlockSize;                                   // difference between largest and smallest CU depth
+  unsigned            m_cfgUnused9;                                                      // TODO: remove unused memory from configuration
+  unsigned            m_cfgUnused10;
   int                 m_log2MaxTbSize;
   int                 m_log2MinCodingBlockSize;
 
@@ -572,7 +572,7 @@ typedef struct vvenc_config
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
-  bool                m_cfgUnused9;                                                      // TODO: remove unused memory from configuration
+  bool                m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
 
@@ -596,7 +596,7 @@ typedef struct vvenc_config
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
-  bool                m_cfgUnused10;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused12;                                                     // TODO: remove unused memory from configuration
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME
@@ -655,7 +655,7 @@ typedef struct vvenc_config
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
   int                 m_loopFilterBetaOffsetDiv2[3];                                     // beta offset for deblocking filter
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
-  int                 m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused13;                                                     // TODO: remove unused memory from configuration
 
   bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
   bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
@@ -683,7 +683,7 @@ typedef struct vvenc_config
   int                 m_chromaSampleLocType;                                             // Specifies the location of chroma samples for progressive content
   bool                m_overscanInfoPresent;                                             // Signals whether overscan_appropriate_flag is present
   bool                m_overscanAppropriateFlag;                                         // Indicates whether conformant decoded pictures are suitable for display using overscan
-  bool                m_cfgUnused12;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused14;                                                     // TODO: remove unused memory from configuration
   bool                m_videoFullRangeFlag;                                              // Indicates the black level and range of luma and chroma signals
 
   unsigned int        m_masteringDisplay[10];                                            // mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
