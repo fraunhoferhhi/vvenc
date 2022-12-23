@@ -146,7 +146,6 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
       //error += diff * diff;
     }
     
-    xsum   = _mm_hadd_epi32   ( xsum, xsum );
     xerror = _mm_hadd_epi32   ( xerror, xsum );
     error  = _mm_cvtsi128_si32( xerror );
 
@@ -260,7 +259,6 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
 
           xsum = _mm256_sub_epi16( xsum, xorg );
           xsum = _mm256_madd_epi16( xsum, xsum );
-          xsum = _mm256_hadd_epi32( xsum, xsum );
         
           __m128i
           ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
