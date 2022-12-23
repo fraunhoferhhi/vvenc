@@ -63,6 +63,7 @@ template<X86_VEXT vext>
 int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
   int error = 0;
+  __m128i xerror = _mm_setzero_si128();
 
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
@@ -101,10 +102,8 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
       __m128i
       xtmp = _mm256_extractf128_si256( vsum, 1 );
       xtmp = _mm_add_epi32( xtmp, _mm256_castsi256_si128( vsum ) );
-      xtmp = _mm_hadd_epi32( xtmp, xtmp );
-
-      error += _mm_extract_epi32( xtmp, 1 );
-      error += _mm_extract_epi32( xtmp, 0 );
+      xerror = _mm_hadd_epi32( xerror, xtmp );
+      error = _mm_cvtsi128_si32( xerror );
 
       if( error > besterror )
       {
@@ -112,6 +111,9 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
       }
     }
 
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    error = _mm_cvtsi128_si32( xerror );
     return error;
   }
 #endif
@@ -120,7 +122,7 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
     const Pel* origRowStart   = org + y1 * origStride;
     const Pel* bufferRowStart = buf + y1 * buffStride;
 
-    __m128i xsum = _mm_setzero_si128();
+    __m128i xsum   = _mm_setzero_si128();
 
     for( int x1 = 0; x1 < w; x1 += 8 )
     {
@@ -145,8 +147,8 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
     }
     
     xsum   = _mm_hadd_epi32   ( xsum, xsum );
-    error += _mm_extract_epi32( xsum, 0 );
-    error += _mm_extract_epi32( xsum, 1 );
+    xerror = _mm_hadd_epi32   ( xerror, xsum );
+    error  = _mm_cvtsi128_si32( xerror );
 
     if( error > besterror )
     {
@@ -154,6 +156,9 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
     }
   }
 
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  error  = _mm_cvtsi128_si32( xerror );
   return error;
 }
 
@@ -162,6 +167,7 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
 {
   int error = 0;
   const int base = -3;
+  __m128i xerror = _mm_setzero_si128();
   
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
@@ -258,9 +264,8 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
         
           __m128i
           ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
-
-          error += _mm_extract_epi32( ysum, 0 );
-          error += _mm_extract_epi32( ysum, 1 );
+          xerror = _mm_hadd_epi32( xerror, ysum );
+          error = _mm_cvtsi128_si32( xerror );
 
           if( error > besterror )
           {
@@ -273,6 +278,10 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
         }
       }
     }
+
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    error  = _mm_cvtsi128_si32( xerror );
 
     return error;
   }
@@ -362,10 +371,8 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
 
         xsum = _mm_sub_epi16 ( xsum, xorg );
         xsum = _mm_madd_epi16( xsum, xsum );
-        xsum = _mm_hadd_epi32( xsum, xsum );
-
-        error += _mm_extract_epi32( xsum, 0 );
-        error += _mm_extract_epi32( xsum, 1 );
+        xerror = _mm_hadd_epi32( xerror, xsum );
+        error  = _mm_cvtsi128_si32( xerror );
 
         //sum = 0;
         //sum += yFilter[1] * tempArray[y1 + 1][x1];
@@ -405,6 +412,10 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
     }
   }
 
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  error  = _mm_cvtsi128_si32( xerror );
+
   return error;
 }
 
@@ -414,6 +425,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 {
   int error = 0;
   const int base = -1;
+  __m128i xerror = _mm_setzero_si128();
   
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
@@ -504,10 +516,8 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
           __m128i
           ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
-          ysum = _mm_hadd_epi32( ysum, ysum );
-
-          error += _mm_extract_epi32( ysum, 0 );
-          error += _mm_extract_epi32( ysum, 1 );
+          xerror = _mm_hadd_epi32( xerror, ysum );
+          error = _mm_cvtsi128_si32( xerror );
 
           if( error > besterror )
           {
@@ -524,6 +534,11 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
     }
 
     GCC_WARNING_RESET
+    
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    xerror = _mm_hadd_epi32( xerror, xerror );
+    error  = _mm_cvtsi128_si32( xerror );
+
     return error;
   }
 #endif 
@@ -602,10 +617,8 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
         xsum = _mm_sub_epi16 ( xsum, xorg );
         xsum = _mm_madd_epi16( xsum, xsum );
-        xsum = _mm_hadd_epi32( xsum, xsum );
-
-        error += _mm_extract_epi32( xsum, 0 );
-        error += _mm_extract_epi32( xsum, 1 );
+        xerror = _mm_hadd_epi32( xerror, xsum );
+        error = _mm_cvtsi128_si32( xerror );
 
         //sum = 0;
         //sum += yFilter[1] * tempArray[y1 + 1][x1];
@@ -640,6 +653,10 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
       }
     }
   }
+
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  xerror = _mm_hadd_epi32( xerror, xerror );
+  error  = _mm_cvtsi128_si32( xerror );
 
   return error;
 }
