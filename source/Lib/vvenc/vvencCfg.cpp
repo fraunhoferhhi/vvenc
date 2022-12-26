@@ -468,8 +468,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_maxBT[0]=32;  c->m_maxBT[1]=128;  c->m_maxBT[2]=64;
   c->m_maxTT[0]=32;  c->m_maxTT[1]=64;  c->m_maxTT[2]=32;
   c->m_dualITree                               = true;
-  c->m_MaxCodingDepth                          = 0;                                     ///< max. total CU depth - includes depth of transform-block structure
-  c->m_log2DiffMaxMinCodingBlockSize           = 0;                                     ///< difference between largest and smallest CU depth
   c->m_log2MaxTbSize                           = 6;
   c->m_log2MinCodingBlockSize                  = 2;
 
@@ -1055,7 +1053,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   case 1:
     {
       // automatic padding to minimum CU size
-      const int minCuSize = 1 << ( vvenc::MIN_CU_LOG2 + 1 );
+      const int minCuSize = std::max( 1 << ( vvenc::MIN_CU_LOG2 + 1 ), 1 << c->m_log2MinCodingBlockSize );
       if (c->m_SourceWidth % minCuSize)
       {
         c->m_aiPad[0] = c->m_confWinRight  = ((c->m_SourceWidth / minCuSize) + 1) * minCuSize - c->m_SourceWidth;
@@ -1155,14 +1153,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i];
     }
   }
-
-  const int minCuSize = 1 << vvenc::MIN_CU_LOG2;
-  c->m_MaxCodingDepth = 0;
-  while( ( c->m_CTUSize >> c->m_MaxCodingDepth ) > minCuSize )
-  {
-    c->m_MaxCodingDepth++;
-  }
-  c->m_log2DiffMaxMinCodingBlockSize = c->m_MaxCodingDepth;
 
   int fps = c->m_FrameRate/c->m_FrameScale;
 
@@ -1907,30 +1897,27 @@ static bool checkCfgParameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "Configuration warning: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets!\n\n");
   }
 
-  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
-  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_vvencMCTF.MCTF == 0,                        "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                       "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_vvencMCTF.MCTF == 0,                           "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
-  vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                           "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
 
-  vvenc_confirmParameter(c, c->m_MaxCodingDepth > vvenc::MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
-  vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  vvenc_confirmParameter(c, c->m_CTUSize < 32,                                                                       "CTUSize must be greater than or equal to 32");
-  vvenc_confirmParameter(c, c->m_CTUSize > 128,                                                                      "CTUSize must be less than or equal to 128");
-  vvenc_confirmParameter(c, c->m_CTUSize != 32 && c->m_CTUSize != 64 && c->m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
-  vvenc_confirmParameter(c, c->m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
-  vvenc_confirmParameter(c, (c->m_CTUSize  >> ( c->m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
-  vvenc_confirmParameter(c, (c->m_PadSourceWidth  % std::max( 8, int(c->m_CTUSize  >> ( c->m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
-  vvenc_confirmParameter(c, c->m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
-  vvenc_confirmParameter(c, c->m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
+  vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
+  vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
+  vvenc_confirmParameter(c, c->m_CTUSize < 32,                                                                          "CTUSize must be greater than or equal to 32");
+  vvenc_confirmParameter(c, c->m_CTUSize > 128,                                                                         "CTUSize must be less than or equal to 128");
+  vvenc_confirmParameter(c, c->m_CTUSize != 32 && c->m_CTUSize != 64 && c->m_CTUSize != 128,                            "CTUSize must be a power of 2 (32, 64, or 128)");
+  vvenc_confirmParameter(c, (c->m_PadSourceWidth  % std::max( 8, 1 << c->m_log2MinCodingBlockSize )) != 0,              "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  vvenc_confirmParameter(c, (c->m_PadSourceHeight % std::max( 8, 1 << c->m_log2MinCodingBlockSize )) != 0,              "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  vvenc_confirmParameter(c, c->m_log2MaxTbSize > 6,                                                                     "Log2MaxTbSize must be 6 or smaller." );
+  vvenc_confirmParameter(c, c->m_log2MaxTbSize < 5,                                                                     "Log2MaxTbSize must be 5 or greater." );
 
-  vvenc_confirmParameter( c, c->m_log2MinCodingBlockSize < 2,                                                         "Log2MinCodingBlockSize must be 2 or greater." );
-  vvenc_confirmParameter( c, c->m_CTUSize < ( 1 << c->m_log2MinCodingBlockSize ),                                        "Log2MinCodingBlockSize must be smaller than max CTU size." );
-  vvenc_confirmParameter( c, c->m_MinQT[ 0 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for I slices" );
-  vvenc_confirmParameter( c, c->m_MinQT[ 1 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for non I slices" );
-
+  vvenc_confirmParameter( c, c->m_log2MinCodingBlockSize < 2,                                                           "Log2MinCodingBlockSize must be 2 or greater." );
+  vvenc_confirmParameter( c, c->m_CTUSize < ( 1 << c->m_log2MinCodingBlockSize ),                                       "Log2MinCodingBlockSize must be smaller than max CTU size." );
+  vvenc_confirmParameter( c, c->m_MinQT[ 0 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                    "Log2MinCodingBlockSize must be greater than min QT size for I slices" );
+  vvenc_confirmParameter( c, c->m_MinQT[ 1 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                    "Log2MinCodingBlockSize must be greater than min QT size for non I slices" );
   const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
-  vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
+  vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ),                "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
   if( c->m_maxMTTDepth >= 10 && c->m_maxMTTDepth >= pow( 10, ( maxTLayer + 1 ) ) )
   {
@@ -1978,10 +1965,6 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
-
-  vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
-  vvenc_confirmParameter(c,((c->m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
-
 
   vvenc_confirmParameter(c, c->m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
   vvenc_confirmParameter(c, c->m_maxNumMergeCand > vvenc::MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
@@ -2319,10 +2302,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   std::copy(qpVals.begin(), qpVals.end(), c->m_qpOutValsCb);
 
   // basic settings
+  c->m_log2MinCodingBlockSize          = 2;
   c->m_intraQPOffset                   = -3;
   c->m_lambdaFromQPEnable              = true;
-  c->m_MaxCodingDepth                  = 5;
-  c->m_log2DiffMaxMinCodingBlockSize   = 5;
   c->m_bUseASR                         = true;
   c->m_bUseHADME                       = true;
   c->m_fastHad                         = false;
@@ -2401,7 +2383,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 16;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
@@ -2454,7 +2435,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
@@ -2512,7 +2492,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
@@ -2577,7 +2556,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 3;
@@ -2650,7 +2628,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 2;
@@ -2723,7 +2700,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 1;
@@ -2798,7 +2774,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
-      c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
       c->m_qtbttSpeedUp                    = 2;
@@ -2889,7 +2864,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
     css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
-    css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
+    css << "CU size                                : " << c->m_CTUSize << "\n";
     css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
     css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
     css << "Motion search range                    : " << c->m_SearchRange << "\n";
