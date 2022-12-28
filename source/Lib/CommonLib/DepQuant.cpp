@@ -1110,9 +1110,8 @@ namespace DQIntern
           auto update_deps = [&]( int k )
           {
             auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
-            ctx.tplAcc += 32;
+            ctx.tplAcc += 32 + min4_or_5;
             ctx.sumAbs  = adds8( ctx.sumAbs, decision.absLevel );
-            ctx.tplAcc += min4_or_5;
           };
 
           switch( scanInfo.currNbInfoSbb.numInv )
