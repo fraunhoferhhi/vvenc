@@ -162,9 +162,10 @@ public:
 
   unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
   {
-    const uint32_t posY     = m_scan[scanPos].y;
-    const uint32_t posX     = m_scan[scanPos].x;
-    const uint32_t blkPos   = m_scan[scanPos].idx;
+    const auto scanEl       = m_scan[scanPos];
+    const uint32_t posY     = scanEl.y;
+    const uint32_t posX     = scanEl.x;
+    const uint32_t blkPos   = scanEl.idx;
     const int      diag     = posX + posY;
     const int      tplVal   = m_tplBuf[blkPos].ctxTpl;
     const int      numPos   = tplVal >> 5u;
@@ -185,9 +186,10 @@ public:
   {
     CHECKD( absLevel1, "Shound not be called if '0'!" );
 
-    const uint32_t posY   = m_scan[scanPos].y;
-    const uint32_t posX   = m_scan[scanPos].x;
-    const uint32_t blkPos = m_scan[scanPos].idx;
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const uint32_t blkPos = scanEl.idx;
 
     auto update_deps = [&]( int offset )
     {
