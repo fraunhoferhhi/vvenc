@@ -183,6 +183,8 @@ public:
 
   void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
   {
+    CHECKD( absLevel1, "Shound not be called if '0'!" );
+
     const uint32_t posY   = m_scan[scanPos].y;
     const uint32_t posX   = m_scan[scanPos].x;
     const uint32_t blkPos = m_scan[scanPos].idx;
