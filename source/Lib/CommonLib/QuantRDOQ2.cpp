@@ -1008,7 +1008,12 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
               {
                 int iScanPosTmp = subSetId * iCGSize + iScanPosinCG;
                 uint32_t uiBlkPos = cctx.blockPos( iScanPosTmp );
-                piDstCoeff[uiBlkPos] = 0;
+                if( piDstCoeff[uiBlkPos] )
+                {
+                  int absLevel = abs( piDstCoeff[uiBlkPos] );
+                  cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
+                  piDstCoeff[uiBlkPos] = 0;
+                }
               }
               uiAbsSumCG = 0;
               if( lastSubSetId == subSetId ) {
@@ -1074,7 +1079,13 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         } //end for
         for( int iScanPosTmp = bestLastIdxP1; iScanPosTmp <= iLastScanPos; iScanPosTmp++ )
         {
-          piDstCoeff[cctx.blockPos( iScanPosTmp )] = 0;
+          const int uiBlkPos = cctx.blockPos( iScanPosTmp );
+          if( piDstCoeff[uiBlkPos] )
+          {
+            int absLevel = abs( piDstCoeff[uiBlkPos] );
+            cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
+            piDstCoeff[uiBlkPos] = 0;
+          }
         }
         iLastScanPos = bestLastIdxP1 - 1;
       }
@@ -1140,7 +1151,11 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
                 iMinCostPos   = n;
               }
             }
+            const int oldAbsVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            if( oldAbsVal ) cctx.remAbsVal1stPass( iMinCostPos + iSubPos, std::min( oldAbsVal, 4 + ( oldAbsVal & 1 ) ) );
             piDstCoeff[ cctx.blockPos( iMinCostPos + iSubPos ) ] += piAddSBH[iMinCostPos];
+            const int absVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            if( absVal ) cctx.absVal1stPass( iMinCostPos + iSubPos, std::min( absVal, 4 + ( absVal & 1 ) ) );
             uiAbsSumCG   += piAddSBH[iMinCostPos];
             iCodedCostCG += iMinCostDelta;
           }

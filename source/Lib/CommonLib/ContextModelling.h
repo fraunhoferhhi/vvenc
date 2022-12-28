@@ -204,6 +204,30 @@ public:
     if( posX > 1 ) update_deps( 2 );
     if( posX > 0 ) update_deps( 1 );
   }
+  
+
+  void remAbsVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  {
+    CHECKD( absLevel1, "Shound not be called if '0'!" );
+
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const uint32_t blkPos = scanEl.idx;
+
+    auto update_deps = [&]( int offset )
+    {
+      auto& ctx   = m_tplBuf[blkPos - offset];
+      ctx.ctxTpl -= uint8_t( 32 + absLevel1 );
+    };
+
+    if( posY > 1 ) update_deps( 2 * m_width );
+    if( posY > 0
+     && posX > 0 ) update_deps( m_width + 1 );
+    if( posY > 0 ) update_deps( m_width );
+    if( posX > 1 ) update_deps( 2 );
+    if( posX > 0 ) update_deps( 1 );
+  }
 
   uint8_t ctxOffsetAbs()
   {
