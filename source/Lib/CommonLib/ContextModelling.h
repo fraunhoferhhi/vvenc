@@ -183,8 +183,6 @@ public:
 
   void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
   {
-    if( !absLevel1 ) return;
-
     const uint32_t posY   = m_scan[scanPos].y;
     const uint32_t posX   = m_scan[scanPos].x;
     const uint32_t blkPos = m_scan[scanPos].idx;
