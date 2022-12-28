@@ -477,7 +477,7 @@ static inline cost_t _dist( cost_t iErr, cost_t iErrScale, int64_t iErrScaleShif
 template< bool bSBH, bool bUseScalingList >
 int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &compID, const CCoeffBuf &pSrc, TCoeff &uiAbsSum, const QpParam &cQP, const Ctx &ctx )
 {
-  CoeffCodingContext cctx( tu, compID, bSBH );
+  CoeffCodingContext cctx( tu, compID, bSBH, m_tplBuf );
   const FracBitsAccess& fracBits = ctx.getFracBitsAcess();
 
   const SPS &sps            = *tu.cs->sps;
@@ -716,7 +716,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
       if( iScanPos != iLastScanPos )
       {
-        ctxIdSig = cctx.sigCtxIdAbs( iScanPos, piDstCoeff, 0 );
+        ctxIdSig = cctx.sigCtxIdAbsWithAcc( iScanPos, 0 );
       }
       uint8_t     ctxOffset     = cctx.ctxOffsetAbs();
       uint32_t    uiParCtx      = cctx.parityCtxIdAbs   ( ctxOffset );
@@ -945,7 +945,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         {
           uiAbsSumCG    += uiLevel;
           iNZbeforePos0 += iScanPosinCG; // hack-> just add instead of checking iScanPosinCG >0 and increment
-          cctx.setSigGroup();          
+          cctx.absVal1stPass( iScanPos, std::min<TCoeff>( 4 + ( uiLevel & 1 ), uiLevel ) );
+          cctx.setSigGroup();
         }
       }
 
