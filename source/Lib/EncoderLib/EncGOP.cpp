@@ -584,16 +584,15 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   Slice& slice   = *pic.cs->slice;
   const SPS& sps = *slice.sps;
 
-  ParameterSetMap<APS>& dst = pic.picApsMap;
-  
-  // get ref APS
-  // 
-
   if( m_pcEncCfg->m_numThreads > 0 && slice.isIntra() )
   {
-    // intra picture don't have any references so it can be started before the previous picture in coding order is finished
+    // reset APS propagation on Intra-Slice
     return;
   }
+
+  // get reference-APS
+  // We refer to APS from the previous picture in sequential coding order
+  // In parallelization case (parallel frames at the same temporal layer), we refer to APS from lower temporal layer
 
   PicAps* refAps = nullptr;
   auto curApsItr = std::find_if( m_picApsList.begin(), m_picApsList.end(), [&pic]( auto p ) { return p.poc == pic.poc; } );
@@ -604,7 +603,7 @@ void EncGOP::xSyncAlfAps( Picture& pic )
     {
       auto r_begin = std::reverse_iterator<std::deque<PicAps>::iterator>(curApsItr);
       auto r_end   = std::reverse_iterator<std::deque<PicAps>::iterator>(m_picApsList.begin());
-      auto refApsItr = ( pic.TLayer > 0 ) ? std::find_if( r_begin, r_end, [&pic]( auto p ) { return p.tid < pic.TLayer; } ):
+      auto refApsItr = ( pic.TLayer > 0 ) ? std::find_if( r_begin, r_end, [&pic]( auto p ) { return p.tid  < pic.TLayer; } ):
                                             std::find_if( r_begin, r_end, [&pic]( auto p ) { return p.tid == pic.TLayer; } );
       if( refApsItr == r_end )
         return;
@@ -620,7 +619,10 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   if( !refAps )
     return;
 
+  // copy ref APSs to current picture
+
   const ParameterSetMap<APS>& src = *refAps->apsMap;
+  ParameterSetMap<APS>&       dst = pic.picApsMap;
 
   if ( sps.alfEnabled )
   {
@@ -655,6 +657,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 
   if( m_pcEncCfg->m_alfTempPred )
   {
+    // Establish reference APS for current picture
     xSyncAlfAps( *pic );
   }
 
