@@ -106,7 +106,7 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_bdpcm                     (bdpcm)
   , m_tplBuf                    (tplBuf)
 {
-  if( tplBuf && tu.mtsIdx[ component ] != MTS_SKIP )
+  if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
     memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );
 }
 
