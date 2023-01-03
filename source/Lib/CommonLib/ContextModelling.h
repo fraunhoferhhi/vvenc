@@ -56,12 +56,19 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-namespace vvenc {
+namespace vvenc
+{
+
+struct CtxTpl
+{
+  // lower 5 bits are absSum1, upper 3 bits are numPos
+  uint8_t ctxTpl;
+};
 
 struct CoeffCodingContext
 {
 public:
-  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false );
+  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, CtxTpl* tplBuf = nullptr, bool bdpcm = false );
 public:
   void  initSubblock    ( int SubsetId, bool sigGroupFlag = false );
 public:
@@ -141,7 +148,6 @@ public:
     }
 #undef UPDATE
 
-
     int ctxOfs = std::min((sumAbs+1)>>1, 3) + ( diag < 2 ? 4 : 0 );
 
     if( m_chType == CH_L )
@@ -152,6 +158,75 @@ public:
     m_tmplCpDiag = diag;
     m_tmplCpSum1 = sumAbs - numPos;
     return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+  }
+
+  unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
+  {
+    const auto scanEl       = m_scan[scanPos];
+    const uint32_t posY     = scanEl.y;
+    const uint32_t posX     = scanEl.x;
+    const uint32_t blkPos   = scanEl.idx;
+    const int      diag     = posX + posY;
+    const int      tplVal   = m_tplBuf[blkPos].ctxTpl;
+    const int      numPos   = tplVal >> 5u;
+    const int      sumAbs   = tplVal & 31;
+
+    int ctxOfs = std::min( ( sumAbs + 1 ) >> 1, 3 ) + ( diag < 2 ? 4 : 0 );
+
+    if( isLuma( m_chType ) )
+    {
+      ctxOfs += diag < 5 ? 4 : 0;
+    }
+    m_tmplCpDiag = diag;
+    m_tmplCpSum1 = sumAbs - numPos;
+    return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+  }
+
+  void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  {
+    CHECKD( absLevel1, "Shound not be called if '0'!" );
+
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const uint32_t blkPos = scanEl.idx;
+
+    auto update_deps = [&]( int offset )
+    {
+      auto& ctx   = m_tplBuf[blkPos - offset];
+      ctx.ctxTpl += uint8_t( 32 + absLevel1 );
+    };
+
+    if( posY > 1 ) update_deps( 2 * m_width );
+    if( posY > 0
+     && posX > 0 ) update_deps( m_width + 1 );
+    if( posY > 0 ) update_deps( m_width );
+    if( posX > 1 ) update_deps( 2 );
+    if( posX > 0 ) update_deps( 1 );
+  }
+  
+
+  void remAbsVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  {
+    CHECKD( absLevel1, "Shound not be called if '0'!" );
+
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const uint32_t blkPos = scanEl.idx;
+
+    auto update_deps = [&]( int offset )
+    {
+      auto& ctx   = m_tplBuf[blkPos - offset];
+      ctx.ctxTpl -= uint8_t( 32 + absLevel1 );
+    };
+
+    if( posY > 1 ) update_deps( 2 * m_width );
+    if( posY > 0
+     && posX > 0 ) update_deps( m_width + 1 );
+    if( posY > 0 ) update_deps( m_width );
+    if( posX > 1 ) update_deps( 2 );
+    if( posX > 0 ) update_deps( 1 );
   }
 
   uint8_t ctxOffsetAbs()
@@ -409,6 +484,7 @@ private:
   int                       m_remainingContextBins;
   std::bitset<MLS_GRP_NUM>  m_sigCoeffGroupFlag;
   const bool                m_bdpcm;
+  CtxTpl*                   m_tplBuf;
 };
 
 

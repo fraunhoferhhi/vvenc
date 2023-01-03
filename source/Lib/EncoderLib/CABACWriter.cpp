@@ -2261,7 +2261,7 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   bool signHiding  = cu.cs->slice->signDataHidingEnabled;
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, signHiding );
+  CoeffCodingContext  cctx    ( tu, compID, signHiding, m_tplBuf );
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
 
   // determine and set last coeff position and sig group flags
@@ -2540,8 +2540,6 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
     }
   }
 
-  uint8_t   ctxOffset[16];
-
   //===== encode absolute values =====
   const int inferSigPos   = nextSigPos != cctx.scanPosLast() ? ( cctx.isNotFirst() ? minSubPos : -1 ) : nextSigPos;
   int       firstNZPos    = nextSigPos;
@@ -2554,28 +2552,29 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
 
   for( ; nextSigPos >= minSubPos && remRegBins >= 4; nextSigPos-- )
   {
-    TCoeff    Coeff      = coeff[ cctx.blockPos( nextSigPos ) ];
+    const int blkPos     = cctx.blockPos( nextSigPos );
+    TCoeff    Coeff      = coeff[ blkPos ];
     unsigned  sigFlag    = ( Coeff != 0 );
     if( numNonZero || nextSigPos != inferSigPos )
     {
-      const unsigned sigCtxId = cctx.sigCtxIdAbs( nextSigPos, coeff, state );
+      const unsigned sigCtxId = cctx.sigCtxIdAbsWithAcc( nextSigPos, state );
       m_BinEncoder.encodeBin( sigFlag, sigCtxId );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "sig_bin() bin=%d ctx=%d\n", sigFlag, sigCtxId );
       remRegBins--;
     }
     else if( nextSigPos != cctx.scanPosLast() )
     {
-      cctx.sigCtxIdAbs( nextSigPos, coeff, state ); // required for setting variables that are needed for gtx/par context selection
+      cctx.sigCtxIdAbsWithAcc( nextSigPos, state ); // required for setting variables that are needed for gtx/par context selection
     }
 
     if( sigFlag )
     {
-      uint8_t&  ctxOff  = ctxOffset[ nextSigPos - minSubPos ];
-      ctxOff            = cctx.ctxOffsetAbs();
+      uint8_t ctxOff = cctx.ctxOffsetAbs();
       numNonZero++;
       firstNZPos  = nextSigPos;
       lastNZPos   = std::max<int>( lastNZPos, nextSigPos );
-      remAbsLevel = abs( Coeff ) - 1;
+      int absLevel= abs( Coeff );
+      remAbsLevel = absLevel - 1;
 
       if( nextSigPos != cctx.scanPosLast() ) signPattern <<= 1;
       if( Coeff < 0 )                        signPattern++;
@@ -2598,6 +2597,8 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
         DTRACE(g_trace_ctx, D_SYNTAX_RESI, "gt2_flag() bin=%d ctx=%d\n", gt2, cctx.greater2CtxIdAbs(ctxOff));
         remRegBins--;
       }
+
+      cctx.absVal1stPass( nextSigPos, std::min<TCoeff>( 4 + ( absLevel & 1 ), absLevel ) );
     }
 
     state = ( stateTransTable >> ((state<<2)+((Coeff&1)<<1)) ) & 3;
@@ -2659,7 +2660,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_codingTS() etype=%d pos=(%d,%d) size=%dx%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height );
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)]);
+  CoeffCodingContext  cctx    ( tu, compID, false, nullptr, tu.cu->bdpcmM[toChannelType(compID)]);
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);
