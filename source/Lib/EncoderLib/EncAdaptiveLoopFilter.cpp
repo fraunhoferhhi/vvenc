@@ -1689,7 +1689,6 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
     {
       aps = m_apsMap->allocatePS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
       aps->temporalId = cs.slice->TLayer;
-      cs.slice->alfAps[ccAlfCbApsId] = m_apsMap->getPS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
     }
     aps->ccAlfParam.ccAlfFilterEnabled[COMP_Cb - 1] = 1;
     aps->ccAlfParam.ccAlfFilterCount[COMP_Cb - 1] = m_ccAlfFilterParam.ccAlfFilterCount[COMP_Cb - 1];
@@ -1713,9 +1712,10 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
     // In case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
     // Otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
     // In case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-    if( m_encCfg->m_maxParallelFrames > 0 && m_encCfg->m_alfTempPred )
+    if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
       m_apsIdStart = ccAlfCbApsId < m_apsIdStart ? ccAlfCbApsId: m_apsIdStart;
     cs.slice->ccAlfCbEnabled = true;
+    cs.slice->alfAps[ccAlfCbApsId] = m_apsMap->getPS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
   else
   {
@@ -1729,7 +1729,6 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
     {
       aps = m_apsMap->allocatePS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
       aps->temporalId = cs.slice->TLayer;
-      cs.slice->alfAps[ccAlfCrApsId] = m_apsMap->getPS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
     }
     aps->ccAlfParam.ccAlfFilterEnabled[COMP_Cr - 1] = 1;
     aps->ccAlfParam.ccAlfFilterCount[COMP_Cr - 1] = m_ccAlfFilterParam.ccAlfFilterCount[COMP_Cr - 1];
@@ -1753,9 +1752,10 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
     // In case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
     // Otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
     // In case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-    if( m_encCfg->m_maxParallelFrames > 0 && m_encCfg->m_alfTempPred )
+    if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
       m_apsIdStart = ccAlfCrApsId < m_apsIdStart ? ccAlfCrApsId: m_apsIdStart;
     cs.slice->ccAlfCrEnabled = true;
+    cs.slice->alfAps[ccAlfCrApsId] = m_apsMap->getPS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
   else
   {
