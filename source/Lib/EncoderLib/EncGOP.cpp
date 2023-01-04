@@ -1185,7 +1185,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
 
   xInitPPSforTiles( pps, sps );
 
-  pps.pcv            = new PreCalcValues( sps, pps, true );
+  pps.pcv            = new PreCalcValues( sps, pps, m_pcEncCfg, true );
 }
 
 void EncGOP::xInitPPSforTiles(PPS &pps,const SPS &sps) const

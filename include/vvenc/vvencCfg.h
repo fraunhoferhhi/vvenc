@@ -542,6 +542,7 @@ typedef struct vvenc_config
 
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
+  unsigned            m_MaxQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma // TODO (jb): move
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
   int                 m_maxMTTDepthIChroma;

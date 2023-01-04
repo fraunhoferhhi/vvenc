@@ -567,6 +567,9 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
     partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
   }
 
+  minDepth = std::max<unsigned>( minDepth, cs.pcv->getMinDepth( cs.slice->sliceType, partitioner.chType ) );
+  maxDepth = std::min<unsigned>( maxDepth, cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType ) );
+
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
 

@@ -1562,7 +1562,7 @@ protected:
 class PreCalcValues
 {
 public:
-  PreCalcValues( const SPS& sps, const PPS& pps, bool _isEncoder )
+  PreCalcValues( const SPS& sps, const PPS& pps, const VVEncCfg* encCfg, bool _isEncoder )
     : chrFormat           ( sps.chromaFormatIdc )
     , maxCUSize           ( sps.CTUSize )
     , maxCUSizeMask       ( maxCUSize  - 1 )
@@ -1585,7 +1585,15 @@ public:
     , maxBtSize           { sps.maxBTSize[0], sps.maxBTSize[1], sps.maxBTSize[2] }
     , maxTtSize           { sps.maxTTSize[0], sps.maxTTSize[1], sps.maxTTSize[2] }
     , minQtSize           { sps.minQTSize[0], sps.minQTSize[1], sps.minQTSize[2] }
-  {}
+    , maxQtSize           { sps.CTUSize,      sps.CTUSize,      sps.CTUSize }
+  {
+    if( encCfg )
+    {
+      maxQtSize[ 0 ] = encCfg->m_MaxQT[ 0 ];
+      maxQtSize[ 1 ] = encCfg->m_MaxQT[ 1 ];
+      maxQtSize[ 2 ] = encCfg->m_MaxQT[ 2 ];
+    }
+  }
 
   const ChromaFormat chrFormat;
   const unsigned     maxCUSize;
@@ -1612,6 +1620,7 @@ private:
   const unsigned     maxBtSize  [3];
   const unsigned     maxTtSize  [3];
   const unsigned     minQtSize  [3];
+        unsigned     maxQtSize  [3];  // TODO (jb): fix
 
   unsigned getValIdx      ( const Slice &slice, const ChannelType chType ) const;
 
@@ -1621,6 +1630,7 @@ public:
   unsigned getMaxBtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMaxTtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMinQtSize   ( const Slice &slice, const ChannelType chType ) const;
+  unsigned getMinDepth    ( const SliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == VVENC_I_SLICE ? (chType == CH_L ? maxQtSize[0] : maxQtSize[2]) : maxQtSize[1]); }
   unsigned getMaxDepth    ( const SliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == VVENC_I_SLICE ? (chType == CH_L ? minQtSize[0] : minQtSize[2]) : minQtSize[1]); }
   Area     getCtuArea     ( const int ctuPosX, const int ctuPosY ) const;
 };
