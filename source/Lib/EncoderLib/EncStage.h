@@ -69,6 +69,7 @@ public:
   int              m_picMemorySTA;
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
   std::vector<int> m_ctuBimQpOffset;
+  int              m_picAuxQpOffset; // auxiliary QP offset per frame, for combination of RC and BIM (and possibly other tools)
 
 private:
   PelStorage       m_origBuf;
@@ -83,18 +84,19 @@ private:
 
 public:
   PicShared()
-  : m_isSccWeak   ( false )
-  , m_isSccStrong ( false )
-  , m_picVisActTL0( 0 )
-  , m_picVisActY  ( 0 )
-  , m_picMemorySTA( 0 )
-  , m_cts         ( 0 )
-  , m_maxFrames   ( -1 )
-  , m_poc         ( -1 )
-  , m_refCount    ( -1 )
-  , m_isLead      ( false )
-  , m_isTrail     ( false )
-  , m_ctsValid    ( false )
+  : m_isSccWeak     ( false )
+  , m_isSccStrong   ( false )
+  , m_picVisActTL0  ( 0 )
+  , m_picVisActY    ( 0 )
+  , m_picMemorySTA  ( 0 )
+  , m_picAuxQpOffset( 0 )
+  , m_cts           ( 0 )
+  , m_maxFrames     ( -1 )
+  , m_poc           ( -1 )
+  , m_refCount      ( -1 )
+  , m_isLead        ( false )
+  , m_isTrail       ( false )
+  , m_ctsValid      ( false )
   {
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
@@ -141,6 +143,7 @@ public:
     m_isTrail      = m_maxFrames > 0 && poc >= m_maxFrames;
     m_ctsValid     = yuvInBuf->ctsValid;
     m_ctuBimQpOffset.resize( 0 );
+    m_picAuxQpOffset = 0;
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
