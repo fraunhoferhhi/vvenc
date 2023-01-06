@@ -57,7 +57,7 @@ namespace vvenc {
 
 static const int prefix_ctx[7]  = { 0, 0, 0, 3, 6, 10, 15 };
 
-CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm )
+CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, CtxTpl* tplBuf, bool bdpcm )
   : m_compID                    (component)
   , m_chType                    (toChannelType(m_compID))
   , m_width                     (tu.block(m_compID).width)
@@ -104,7 +104,10 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_tsSignFlagCtxSet          (Ctx::TsResidualSign)
   , m_sigCoeffGroupFlag         ()
   , m_bdpcm                     (bdpcm)
+  , m_tplBuf                    (tplBuf)
 {
+  if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
+    memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );
 }
 
 void CoeffCodingContext::initSubblock( int SubsetId, bool sigGroupFlag )

@@ -360,9 +360,9 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
         if (picOrig.buf == picPrv1.buf) // replace temporal visual activity with min motion error
         {
-          hpEner[1] = pic->m_picShared->m_minNoiseLevels[pic->ctuAdaptedQP[ctuRsAddr] >> (bitDepth - 3)] * (bitDepth == 10 ? 1.5 : 0.375);
+          hpEner[1] = pic->m_picShared->m_minNoiseLevels[pic->ctuAdaptedQP[ctuRsAddr] >> (bitDepth - 3)] * (bitDepth >= 10 ? 1.5 : 0.375);
 
-          if (hpEner[1] < 255.0 * (bitDepth == 10 ? 1.5 : 0.375)) // level in first frame
+          if (hpEner[1] < (bitDepth >= 10 ? 382.5 : 95.625)) // levels in first frame
           {
             hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
             pic->ctuQpaLambda[ctuRsAddr] += hpEner[1]; // add noise level to mean visual activity
@@ -409,15 +409,6 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
           averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
         }
-        // add mean delta-QP of block importance mapping (BIM) detection if available
-        if (isBIM)
-        {
-          const std::vector<int>* bimQpOffsets = &pic->m_picShared->m_ctuBimQpOffset;
-          const int bimQpOffsetsSum = std::accumulate (bimQpOffsets->begin(), bimQpOffsets->end(), 0);
-          const int bimQPORoundOffs = (int) bimQpOffsets->size() >> 2;
-
-          averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + (bimQpOffsetsSum + (bimQpOffsetsSum < 0 ? -bimQPORoundOffs : bimQPORoundOffs)) / (int) bimQpOffsets->size());
-        }
       }
 
       if (optChromaQPOffsets != nullptr) // adapts sliceChromaQpOffsetIntraOrPeriodic
@@ -440,15 +431,6 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       if (meanLuma == MAX_UINT) meanLuma = pic->getOrigBuf().Y().getAvg();
 
       averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + lumaDQPOffset (meanLuma, bitDepth));
-    }
-    // add averaged delta-QP of block importance mapping (BIM) detection if available
-    if (isBIM)
-    {
-      const std::vector<int>* bimQpOffsets = &pic->m_picShared->m_ctuBimQpOffset;
-      const int bimQpOffsetsSum = std::accumulate (bimQpOffsets->begin(), bimQpOffsets->end(), 0);
-      const int bimQPORoundOffs = (int) bimQpOffsets->size() >> 2;
-
-      averageAdaptedLumaQP = Clip3 (0, MAX_QP, averageAdaptedLumaQP + (bimQpOffsetsSum + (bimQpOffsetsSum < 0 ? -bimQPORoundOffs : bimQPORoundOffs)) / (int) bimQpOffsets->size());
     }
   }
 
@@ -582,7 +564,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
       pic->isMeanQPLimited = (encCfg->m_RCTargetBitrate > 0) && isEncPass && (averageAdaptedLumaQP > sliceQP);
     }
-    else if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (averageAdaptedLumaQP + 1 < aaQP))
+    else if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (averageAdaptedLumaQP + 1 < aaQP))
     {
       const int lrQpDiff = (aaQP - averageAdaptedLumaQP) >> (encCfg->m_QP <= MAX_QP_PERCEPT_QPA ? 2 : 1); // for monotonous rate change at low rates
 
