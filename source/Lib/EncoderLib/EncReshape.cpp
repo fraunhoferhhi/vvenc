@@ -1076,7 +1076,7 @@ void EncReshape::initLUTfromdQPModel()
     absDeltaCW = (deltaCW < 0) ? (-deltaCW) : deltaCW;
     if (absDeltaCW > maxAbsDeltaCW)     {      maxAbsDeltaCW = absDeltaCW;    }
   }
-  m_sliceReshapeInfo.maxNbitsNeededDeltaCW = std::max(1, 1 + floorLog2(maxAbsDeltaCW));
+  m_sliceReshapeInfo.maxNbitsNeededDeltaCW = 1 + floorLog2(std::max(1, maxAbsDeltaCW));
 
   for (int i = 0; i < pwlFwdLUTsize; i++)
   {
@@ -1160,7 +1160,7 @@ void EncReshape::constructReshaperLMCS()
     absDeltaCW = (deltaCW < 0) ? (-deltaCW) : deltaCW;
     if (absDeltaCW > maxAbsDeltaCW) { maxAbsDeltaCW = absDeltaCW; }
   }
-  m_sliceReshapeInfo.maxNbitsNeededDeltaCW = std::max(1, 1 + floorLog2(maxAbsDeltaCW));
+  m_sliceReshapeInfo.maxNbitsNeededDeltaCW = 1 + floorLog2(std::max(1, maxAbsDeltaCW));
 
   histLenth = m_initCW;
   log2HistLenth = floorLog2(histLenth);
