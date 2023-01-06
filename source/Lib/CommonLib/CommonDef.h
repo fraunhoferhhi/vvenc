@@ -669,6 +669,10 @@ static inline unsigned int bit_scan_reverse( int a )
 #if ENABLE_SIMD_LOG2
 static inline int floorLog2( int val )
 {
+  if( val == 0 )
+  {
+    return -1;
+  }
   return bit_scan_reverse( val );
 }
 #else
