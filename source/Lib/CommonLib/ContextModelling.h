@@ -184,7 +184,7 @@ public:
 
   void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
   {
-    CHECKD( absLevel1, "Shound not be called if '0'!" );
+    CHECKD( !absLevel1, "Shound not be called if '0'!" );
 
     const auto scanEl     = m_scan[scanPos];
     const uint32_t posY   = scanEl.y;
@@ -208,7 +208,7 @@ public:
 
   void remAbsVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
   {
-    CHECKD( absLevel1, "Shound not be called if '0'!" );
+    CHECKD( !absLevel1, "Shound not be called if '0'!" );
 
     const auto scanEl     = m_scan[scanPos];
     const uint32_t posY   = scanEl.y;
