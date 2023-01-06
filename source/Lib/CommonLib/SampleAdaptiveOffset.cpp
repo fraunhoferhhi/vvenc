@@ -708,16 +708,16 @@ void SampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructure&
     const int ctuX = pos.x >> cs.pcv->maxCUSizeLog2;
     const int ctuY = pos.y >> cs.pcv->maxCUSizeLog2;
     const PPS* pps = cs.slice->pps;
-    const int wCtu = pps->pcv->widthInCtus;
-    const int hCtu = pps->pcv->heightInCtus;
+    const int Xmax = pps->pcv->widthInCtus  - 1;
+    const int Ymax = pps->pcv->heightInCtus - 1;
     cuLeft       = ctuX > 0                   && pps->canFilterCtuBdry( ctuX, ctuY, -1, 0 ) ? cs.getCU( pos.offset( -cuSize, 0       ), CH_L, TREE_D ): nullptr;
-    cuRight      = ctuX < wCtu                && pps->canFilterCtuBdry( ctuX, ctuY,  1, 0 ) ? cs.getCU( pos.offset( cuSize , 0       ), CH_L, TREE_D ): nullptr;
+    cuRight      = ctuX < Xmax                && pps->canFilterCtuBdry( ctuX, ctuY,  1, 0 ) ? cs.getCU( pos.offset( cuSize , 0       ), CH_L, TREE_D ): nullptr;
     cuAbove      =                ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY,  0,-1 ) ? cs.getCU( pos.offset( 0      , -cuSize ), CH_L, TREE_D ): nullptr;
-    cuBelow      =                ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY,  0, 1 ) ? cs.getCU( pos.offset( 0      , cuSize  ), CH_L, TREE_D ): nullptr;
+    cuBelow      =                ctuY < Ymax && pps->canFilterCtuBdry( ctuX, ctuY,  0, 1 ) ? cs.getCU( pos.offset( 0      , cuSize  ), CH_L, TREE_D ): nullptr;
     cuAboveLeft  = ctuX > 0    && ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY, -1,-1 ) ? cs.getCU( pos.offset( -cuSize, -cuSize ), CH_L, TREE_D ): nullptr;
-    cuAboveRight = ctuX < wCtu && ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY,  1,-1 ) ? cs.getCU( pos.offset( cuSize , -cuSize ), CH_L, TREE_D ): nullptr;
-    cuBelowLeft  = ctuX > 0    && ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY, -1, 1 ) ? cs.getCU( pos.offset( -cuSize, cuSize  ), CH_L, TREE_D ): nullptr;
-    cuBelowRight = ctuX < wCtu && ctuY < hCtu && pps->canFilterCtuBdry( ctuX, ctuY,  1, 1 ) ? cs.getCU( pos.offset( cuSize , cuSize  ), CH_L, TREE_D ): nullptr;
+    cuAboveRight = ctuX < Xmax && ctuY > 0    && pps->canFilterCtuBdry( ctuX, ctuY,  1,-1 ) ? cs.getCU( pos.offset( cuSize , -cuSize ), CH_L, TREE_D ): nullptr;
+    cuBelowLeft  = ctuX > 0    && ctuY < Ymax && pps->canFilterCtuBdry( ctuX, ctuY, -1, 1 ) ? cs.getCU( pos.offset( -cuSize, cuSize  ), CH_L, TREE_D ): nullptr;
+    cuBelowRight = ctuX < Xmax && ctuY < Ymax && pps->canFilterCtuBdry( ctuX, ctuY,  1, 1 ) ? cs.getCU( pos.offset( cuSize , cuSize  ), CH_L, TREE_D ): nullptr;
   }
   else
   {
