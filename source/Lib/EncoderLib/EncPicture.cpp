@@ -161,6 +161,28 @@ void EncPicture::finalizePicture( Picture& pic )
   {
     pic.picBlkStat.storeBlkSize( pic );
   }
+
+  // copy ALF APSs to global list
+  CHECK( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred && !pic.picApsGlobal, "Missing APS from top level" );
+  if( pic.picApsGlobal )
+  {
+    CHECK( pic.picApsGlobal->poc != pic.poc, "Global APS POC must be consistent with picture poc" );
+    const ParameterSetMap<APS>& src = pic.picApsMap;
+    ParameterSetMap<APS>&       dst = pic.picApsGlobal->apsMap;
+    for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+    {
+      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+      const APS* srcAPS = src.getPS( apsMapIdx );
+      if( srcAPS )
+      {
+        APS* dstAPS = dst.allocatePS( apsMapIdx );
+        *dstAPS = *srcAPS;
+      }
+    }
+    dst.setApsIdStart( src.getApsIdStart() );
+    pic.picApsGlobal->tid = pic.TLayer; // signal that APS is initialized
+  }
+
   // cleanup
   if( pic.encPic )
   {

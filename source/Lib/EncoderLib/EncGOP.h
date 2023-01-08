@@ -113,13 +113,6 @@ struct FinishTaskParam {
   FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
 };
 
-struct PicAps{
-  int poc;
-  int tid;
-  ParameterSetMap<APS>*     apsMap;
-  PicAps( int _p, int _t, ParameterSetMap<APS>* _apsMap ) : poc(_p), tid(_t), apsMap(_apsMap) {}
-};
-
 // ====================================================================================================================
 
 class EncGOP : public EncStage
@@ -177,7 +170,7 @@ private:
   std::list<Picture*>       m_gopEncListOutput;
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
-  std::deque<PicAps>        m_picApsList;
+  std::deque<PicApsGlobal*>       m_globalApsList;
 
   std::vector<int>          m_globalCtuQpVector;
 
