@@ -399,7 +399,12 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
     unsigned areaSize = tu->blocks[i].area();
     m_offsets[i] += areaSize;
 
-    if( tuInit )
+    const bool cpyRsi = tuInit &&
+                      ( tuInit->cbf[i] ||
+                 ( i && tuInit->jointCbCr && numCh > 1 && ( TU::getCbf( *tuInit, COMP_Cb ) || TU::getCbf( *tuInit, COMP_Cr ) ) )
+                      );
+
+    if( cpyRsi )
       memcpy( coeffs[i], tu->m_coeffs[i], areaSize * sizeof( TCoeffSig ) );
   }
 

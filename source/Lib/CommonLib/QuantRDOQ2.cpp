@@ -477,7 +477,7 @@ static inline cost_t _dist( cost_t iErr, cost_t iErrScale, int64_t iErrScaleShif
 template< bool bSBH, bool bUseScalingList >
 int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &compID, const CCoeffBuf &pSrc, TCoeff &uiAbsSum, const QpParam &cQP, const Ctx &ctx )
 {
-  CoeffCodingContext cctx( tu, compID, bSBH );
+  CoeffCodingContext cctx( tu, compID, bSBH, m_tplBuf );
   const FracBitsAccess& fracBits = ctx.getFracBitsAcess();
 
   const SPS &sps            = *tu.cs->sps;
@@ -716,7 +716,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
       if( iScanPos != iLastScanPos )
       {
-        ctxIdSig = cctx.sigCtxIdAbs( iScanPos, piDstCoeff, 0 );
+        ctxIdSig = cctx.sigCtxIdAbsWithAcc( iScanPos, 0 );
       }
       uint8_t     ctxOffset     = cctx.ctxOffsetAbs();
       uint32_t    uiParCtx      = cctx.parityCtxIdAbs   ( ctxOffset );
@@ -945,7 +945,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         {
           uiAbsSumCG    += uiLevel;
           iNZbeforePos0 += iScanPosinCG; // hack-> just add instead of checking iScanPosinCG >0 and increment
-          cctx.setSigGroup();          
+          cctx.absVal1stPass( iScanPos, std::min<TCoeff>( 4 + ( uiLevel & 1 ), uiLevel ) );
+          cctx.setSigGroup();
         }
       }
 
@@ -1007,7 +1008,12 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
               {
                 int iScanPosTmp = subSetId * iCGSize + iScanPosinCG;
                 uint32_t uiBlkPos = cctx.blockPos( iScanPosTmp );
-                piDstCoeff[uiBlkPos] = 0;
+                if( piDstCoeff[uiBlkPos] )
+                {
+                  int absLevel = abs( piDstCoeff[uiBlkPos] );
+                  cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
+                  piDstCoeff[uiBlkPos] = 0;
+                }
               }
               uiAbsSumCG = 0;
               if( lastSubSetId == subSetId ) {
@@ -1073,7 +1079,13 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         } //end for
         for( int iScanPosTmp = bestLastIdxP1; iScanPosTmp <= iLastScanPos; iScanPosTmp++ )
         {
-          piDstCoeff[cctx.blockPos( iScanPosTmp )] = 0;
+          const int uiBlkPos = cctx.blockPos( iScanPosTmp );
+          if( piDstCoeff[uiBlkPos] )
+          {
+            int absLevel = abs( piDstCoeff[uiBlkPos] );
+            cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
+            piDstCoeff[uiBlkPos] = 0;
+          }
         }
         iLastScanPos = bestLastIdxP1 - 1;
       }
@@ -1139,7 +1151,11 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
                 iMinCostPos   = n;
               }
             }
+            const int oldAbsVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            if( oldAbsVal ) cctx.remAbsVal1stPass( iMinCostPos + iSubPos, std::min( oldAbsVal, 4 + ( oldAbsVal & 1 ) ) );
             piDstCoeff[ cctx.blockPos( iMinCostPos + iSubPos ) ] += piAddSBH[iMinCostPos];
+            const int absVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            if( absVal ) cctx.absVal1stPass( iMinCostPos + iSubPos, std::min( absVal, 4 + ( absVal & 1 ) ) );
             uiAbsSumCG   += piAddSBH[iMinCostPos];
             iCodedCostCG += iMinCostDelta;
           }

@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "EncSlice.h"
+#include "EncStage.h"
 #include "EncLib.h"
 #include "EncPicture.h"
 #include "BitAllocation.h"
@@ -408,7 +409,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
     }
     else
     {
-      if ( ! ( qp == -lumaQpBDOffset ) )
+      if( qp != -lumaQpBDOffset )
       {
         const GOPEntry &gopEntry = *(slice->pic->gopEntry);
         // adjust QP according to the QP offset for the GOP entry.
@@ -417,8 +418,13 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
         // adjust QP according to QPOffsetModel for the GOP entry.
         double dqpOffset = qp * gopEntry.m_QPOffsetModelScale + gopEntry.m_QPOffsetModelOffset + 0.5;
         int qpOffset = (int)floor( Clip3<double>( 0.0, 3.0, dqpOffset ) );
-        qp += qpOffset ;
+        qp += qpOffset;
       }
+    }
+
+    if( m_pcEncCfg->m_blockImportanceMapping && !slice->pic->m_picShared->m_ctuBimQpOffset.empty() )
+    {
+      qp += slice->pic->m_picShared->m_picAuxQpOffset;
     }
   }
   qp = Clip3( -lumaQpBDOffset, MAX_QP, qp );
