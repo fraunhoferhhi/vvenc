@@ -1021,7 +1021,8 @@ namespace DQIntern
 
     struct CtxAcc
     {
-      uint8_t sumNum, sumAbs, sumAbs1;
+      // tplAcc: lower 5 bits are absSum1, upper 3 bits are numPos
+      uint8_t tplAcc, sumAbs;
     };
 
   private:
@@ -1029,7 +1030,7 @@ namespace DQIntern
     int64_t                   m_rdCost;
     union
     {
-      uint8_t                 m_state[64];
+      uint8_t                 m_state[48];
       struct
       {
         uint8_t               absLevels[16];
@@ -1109,9 +1110,8 @@ namespace DQIntern
           auto update_deps = [&]( int k )
           {
             auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
-            ctx.sumNum++;
-            ctx.sumAbs = adds8( ctx.sumAbs, decision.absLevel );
-            ctx.sumAbs1 = ctx.sumAbs1 + min4_or_5;
+            ctx.tplAcc += 32 + min4_or_5;
+            ctx.sumAbs  = adds8( ctx.sumAbs, decision.absLevel );
           };
 
           switch( scanInfo.currNbInfoSbb.numInv )
@@ -1134,8 +1134,8 @@ namespace DQIntern
       if (m_remRegBins >= 4)
       {
         TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
-        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs1;
-        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].sumNum;
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
         int sumGt1 = sumAbs1 - sumNum;
         int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
@@ -1186,8 +1186,8 @@ namespace DQIntern
       if (m_remRegBins >= 4)
       {
         TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
-        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs1;
-        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].sumNum;
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
         int sumGt1 = sumAbs1 - sumNum;
         int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
@@ -1267,9 +1267,8 @@ namespace DQIntern
             UPDATE(0);
           }
   #undef UPDATE
-          currState.m_sbb.ctx[id].sumNum  = sumNum;
-          currState.m_sbb.ctx[id].sumAbs1 = sumAbs1;
-          currState.m_sbb.ctx[id].sumAbs  = ( uint8_t ) std::min( 127, sumAbs );
+          currState.m_sbb.ctx[id].tplAcc = ( sumNum << 5 ) | sumAbs1;
+          currState.m_sbb.ctx[id].sumAbs = ( uint8_t ) std::min( 127, sumAbs );
         }
       }
     }

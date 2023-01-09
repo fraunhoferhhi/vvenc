@@ -1079,9 +1079,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     m_cSliceDecoder.create();
     if( sps->alfEnabled )
     {
-      const int maxDepth = floorLog2(sps->CTUSize) - sps->log2MinCodingBlockSize;
-
-      m_cALF.create( sps->maxPicWidthInLumaSamples, sps->maxPicHeightInLumaSamples, sps->chromaFormatIdc, sps->CTUSize, sps->CTUSize, maxDepth, sps->bitDepths.recon );
+      m_cALF.create( sps->maxPicWidthInLumaSamples, sps->maxPicHeightInLumaSamples, sps->chromaFormatIdc, sps->CTUSize, sps->CTUSize, sps->bitDepths.recon );
     }
     pSlice->ccAlfFilterControl[0] = m_cALF.m_ccAlfFilterControl[COMP_Cb-1];
     pSlice->ccAlfFilterControl[1] = m_cALF.m_ccAlfFilterControl[COMP_Cr-1];
