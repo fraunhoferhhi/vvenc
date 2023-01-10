@@ -606,6 +606,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     isFilterThisFrame = false;
   }
 
+  pic->m_picShared->m_picAuxQpOffset = 0;
+
   if ( isFilterThisFrame || ( pic->gopEntry->m_isStartOfGop && m_encCfg->m_usePerceptQPA ) )
   {
     const PelStorage& origBuf = pic->getOrigBuffer();
@@ -732,7 +734,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
       if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
-        const double weight = std::min( 1.0, overallStrength ); // was pic->TLayer > 1 ? 0.6 : 1;
+        const double weight = std::min( 1.0, overallStrength );
+        int sumCtuQpOffsets = 0;
 
         for( int i = 0; i < numCtu; i++ )
         {
@@ -761,6 +764,13 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           }
 
           pic->m_picShared->m_ctuBimQpOffset[i] = qpOffset;
+          sumCtuQpOffsets += qpOffset;
+        }
+
+        pic->m_picShared->m_picAuxQpOffset = ( sumCtuQpOffsets + ( sumCtuQpOffsets < 0 ? -(numCtu >> 1) : numCtu >> 1 ) ) / numCtu; // pic average
+        for( int i = 0; i < numCtu; i++ )
+        {
+          pic->m_picShared->m_ctuBimQpOffset[i] -= pic->m_picShared->m_picAuxQpOffset; // delta-QP relative to above average, see xGetQPForPicture
         }
       }
       else
