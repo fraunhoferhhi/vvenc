@@ -254,7 +254,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
             refMainIndex+=8;
 
-            src2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex     - 1] ) );
+            src1 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex     - 1] ) );
             src2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex + 4 - 1] ) );
 
             src1 = _mm256_shuffle_epi8(src1,shflmask1);									// -1 0 1 2  0 1 2 3 1 2 3 4  2 3 4 5
