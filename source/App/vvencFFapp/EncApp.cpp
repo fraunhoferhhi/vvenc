@@ -219,7 +219,7 @@ int EncApp::encode()
   vvenc_get_config( m_encCtx, &vvencCfg);
 
   std::stringstream css;
-  css << appCfg.getAppConfigAsString( vvencCfg.m_verbosity );
+  css << appCfg.getAppConfigAsString( &vvencCfg, vvencCfg.m_verbosity );
   css << vvenc_get_config_as_string( &vvencCfg, vvencCfg.m_verbosity);
   css << std::endl;
 

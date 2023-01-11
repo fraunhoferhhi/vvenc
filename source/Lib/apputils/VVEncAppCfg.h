@@ -1293,7 +1293,59 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
   return ret;
 }
 
-virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
+static inline std::string getDynamicRangeStr( int dynamicRange )
+{
+  std::string cT;
+  switch( dynamicRange )
+  {
+    case VVENC_HDR_OFF            : cT = "SDR"; break;
+    case VVENC_HDR_PQ             : cT = "HDR10/PQ"; break;
+    case VVENC_HDR_HLG            : cT = "HDR HLG"; break;
+    case VVENC_HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
+    case VVENC_HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
+    case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
+    case VVENC_SDR_BT709          : cT = "SDR BT.709"; break;
+    case VVENC_SDR_BT2020         : cT = "SDR BT.2020"; break;
+    case VVENC_SDR_BT470BG        : cT = "SDR BT.470 B/G"; break;
+    default                       : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned int height, int bitdepth, bool packed = false )
+{
+  int64_t packetCount = 0;
+
+  if( !strcmp( fileName.c_str(), "-" ) )
+  {
+    return -1;
+  }
+
+  std::fstream fhandle;
+  fhandle.open( fileName.c_str(), std::ios::binary | std::ios::in );
+  if( fhandle.fail() )
+    return -1;
+
+  fhandle.seekg( 0, std::ios::end );
+  std::streamoff filelength = fhandle.tellg();
+  fhandle.close();
+
+  unsigned int uiBitsPerPx = bitdepth == 8 ? 12 : 24;
+  size_t frameSize = (width * height * uiBitsPerPx) >> 3;
+
+  if ( packed && bitdepth == 10 )
+  {
+    size_t stride = width * 5 / 4;
+    size_t lumaSize = stride * height;
+    size_t chromaSize = lumaSize >> 2;
+    frameSize = lumaSize + chromaSize + chromaSize;
+  }
+
+  packetCount = (int64_t)filelength / frameSize;
+  return packetCount;
+}
+
+virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
   if( eMsgLevel >= VVENC_DETAILS )
@@ -1302,6 +1354,48 @@ virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
     css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
     css << "Reconstruction File                    : " << m_reconFileName << "\n";
     css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
+  }
+  else if( eMsgLevel >= VVENC_INFO )
+  {
+    css << "Input     File : " << m_inputFileName << "\n";
+    css << "Bitstream File : " << m_bitstreamFileName << "\n";
+  }
+
+  if ( c )
+  {
+    if( eMsgLevel >= VVENC_INFO )
+    {
+      std::string inputFmt;
+      if( c->m_inputBitDepth[ 0 ] == 8 )
+        inputFmt="yuv420p";
+      else if( c->m_inputBitDepth[ 0 ] == 10 )
+        inputFmt= m_packedYUVInput ? "yuv420p10(packed)" : "yuv420p10";       
+
+      std::stringstream frames;
+
+      int64_t skipCount =  m_FrameSkip * c->m_temporalSubsampleRatio;
+      if( strcmp( m_inputFileName.c_str(), "-" ) )
+      {
+        int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
+        int64_t framesToEncode = c->m_framesToBeEncoded > 0 ? (c->m_framesToBeEncoded >= frameCount ? frameCount-1 : (c->m_framesToBeEncoded + skipCount-1) ) : frameCount-1;
+        frames << "frames " << skipCount << " - " << framesToEncode << " of " <<  std::to_string(frameCount);
+      }
+      else 
+      {
+        if ( c->m_framesToBeEncoded > 0 )
+          frames << "frames " << skipCount << " - " << c->m_framesToBeEncoded-1 << " of all";
+        else
+          frames << "frames " << skipCount << " - all of all";
+      }
+    
+      if( eMsgLevel >= VVENC_DETAILS )
+        css << "Real     Format                        : ";
+      else
+        css << "Real Format    : ";
+
+      css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
+          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << frames.str() << "\n";
+    }
   }
 
   return css.str();
