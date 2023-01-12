@@ -1206,6 +1206,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       err.warn( "Bitstream file" ) << cErr;
     }
 
+      err.warn( "hey" ) << "Y4M hey\n";
+
     // check for y4m input
     bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
     if( !isY4m && apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
@@ -1348,6 +1350,8 @@ static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned
 virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
+   bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+
   if( eMsgLevel >= VVENC_DETAILS )
   {
     css << "Input          File                    : " << m_inputFileName << "\n";
@@ -1357,7 +1361,8 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
   }
   else if( eMsgLevel >= VVENC_INFO )
   {
-    css << "Input     File : " << m_inputFileName << "\n";
+
+    css << "Input     File : " << m_inputFileName << " (" << (isY4m ? "y4m" : "yuv") << ")\n";
     css << "Bitstream File : " << m_bitstreamFileName << "\n";
   }
 
@@ -1371,27 +1376,26 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       else if( c->m_inputBitDepth[ 0 ] == 10 )
         inputFmt= m_packedYUVInput ? "yuv420p10(packed)" : "yuv420p10";       
 
+      std::stringstream frameCountStr;
       std::stringstream framesStr;
+
       if( strcmp( m_inputFileName.c_str(), "-" ) )
       {
         int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
-        int64_t framesToEncode = c->m_framesToBeEncoded > 0 ? (c->m_framesToBeEncoded >= frameCount ? frameCount-1 : (c->m_framesToBeEncoded + m_FrameSkip-1) ) : frameCount-1;
-        if ( framesToEncode )
-          framesStr << "frames " << m_FrameSkip << " .. " << framesToEncode << " of " <<  std::to_string(frameCount);
-        else 
-          framesStr << "frame 1 of " <<  std::to_string(frameCount);
+        frameCountStr << frameCount << (frameCount > 1 ? " frames" : " frame");
+
+        int64_t framesToEncode = (c->m_framesToBeEncoded == 0 || c->m_framesToBeEncoded >= frameCount) ? frameCount : c->m_framesToBeEncoded;
+        framesStr << "encode " << ( framesToEncode > 1 ? " frames " : " frame ");
       }
       else 
       {
-        if ( c->m_framesToBeEncoded > 0 )
-          framesStr << "frames " << m_FrameSkip << " .. " << c->m_framesToBeEncoded-1;
-        else
-          framesStr << "frames " << m_FrameSkip << " .. eof";
+        framesStr << "encode " << ( c->m_framesToBeEncoded > 1 ? " frames " : " frame ");
       }
+
+      if ( m_FrameSkip )
+        framesStr << "skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
       if ( c->m_temporalSubsampleRatio > 1 )
-      {
-        framesStr << " (TemporalSubsampleRatio=" << c->m_temporalSubsampleRatio << ")";
-      }  
+        framesStr << "TemporalSubsampleRatio=" << c->m_temporalSubsampleRatio << " ";
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
@@ -1399,7 +1403,12 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
         css << "Real Format    : ";
 
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
-          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << framesStr.str() << "\n";
+          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << frameCountStr.str() << "\n";
+      
+      if( eMsgLevel >= VVENC_DETAILS )
+        css << "                                       : " << framesStr.str() << "\n";
+      else
+        css << "               : " << framesStr.str() << "\n";
     }
   }
 
