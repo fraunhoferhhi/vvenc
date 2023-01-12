@@ -1206,8 +1206,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       err.warn( "Bitstream file" ) << cErr;
     }
 
-      err.warn( "hey" ) << "Y4M hey\n";
-
     // check for y4m input
     bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
     if( !isY4m && apputils::FileIOHelper::isY4mHeaderAvailable( m_inputFileName ) )
