@@ -1371,22 +1371,24 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       else if( c->m_inputBitDepth[ 0 ] == 10 )
         inputFmt= m_packedYUVInput ? "yuv420p10(packed)" : "yuv420p10";       
 
-      std::stringstream frames;
-
-      int64_t skipCount =  m_FrameSkip * c->m_temporalSubsampleRatio;
+      std::stringstream framesStr;
       if( strcmp( m_inputFileName.c_str(), "-" ) )
       {
         int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
-        int64_t framesToEncode = c->m_framesToBeEncoded > 0 ? (c->m_framesToBeEncoded >= frameCount ? frameCount-1 : (c->m_framesToBeEncoded + skipCount-1) ) : frameCount-1;
-        frames << "frames " << skipCount << " - " << framesToEncode << " of " <<  std::to_string(frameCount);
+        int64_t framesToEncode = c->m_framesToBeEncoded > 0 ? (c->m_framesToBeEncoded >= frameCount ? frameCount-1 : (c->m_framesToBeEncoded + m_FrameSkip-1) ) : frameCount-1;
+        framesStr << "frames " << m_FrameSkip << " .. " << framesToEncode << " of " <<  std::to_string(frameCount);
       }
       else 
       {
         if ( c->m_framesToBeEncoded > 0 )
-          frames << "frames " << skipCount << " - " << c->m_framesToBeEncoded-1 << " of all";
+          framesStr << "frames " << m_FrameSkip << " .. " << c->m_framesToBeEncoded-1;
         else
-          frames << "frames " << skipCount << " - all of all";
+          framesStr << "frames " << m_FrameSkip << " .. eof";
       }
+      if ( c->m_temporalSubsampleRatio > 1 )
+      {
+        framesStr << " (TemporalSubsampleRatio=" << c->m_temporalSubsampleRatio << ")";
+      }  
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
@@ -1394,7 +1396,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
         css << "Real Format    : ";
 
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
-          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << frames.str() << "\n";
+          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << framesStr.str() << "\n";
     }
   }
 
