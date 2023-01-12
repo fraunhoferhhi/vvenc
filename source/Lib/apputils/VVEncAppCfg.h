@@ -1376,7 +1376,10 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       {
         int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
         int64_t framesToEncode = c->m_framesToBeEncoded > 0 ? (c->m_framesToBeEncoded >= frameCount ? frameCount-1 : (c->m_framesToBeEncoded + m_FrameSkip-1) ) : frameCount-1;
-        framesStr << "frames " << m_FrameSkip << " .. " << framesToEncode << " of " <<  std::to_string(frameCount);
+        if ( framesToEncode )
+          framesStr << "frames " << m_FrameSkip << " .. " << framesToEncode << " of " <<  std::to_string(frameCount);
+        else 
+          framesStr << "frame 1 of " <<  std::to_string(frameCount);
       }
       else 
       {
