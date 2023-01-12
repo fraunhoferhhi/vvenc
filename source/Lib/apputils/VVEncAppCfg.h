@@ -1359,8 +1359,14 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
   }
   else if( eMsgLevel >= VVENC_INFO )
   {
+    std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
+    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+    std::string format = isY4m ? "y4m" : "yuv";
+    if( format != ext )
+      css << "Input     File : " << m_inputFileName << " (" << format << ")\n";
+    else
+      css << "Input     File : " << m_inputFileName << "\n";
 
-    css << "Input     File : " << m_inputFileName << " (" << (isY4m ? "y4m" : "yuv") << ")\n";
     css << "Bitstream File : " << m_bitstreamFileName << "\n";
   }
 
@@ -1387,13 +1393,13 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       }
       else 
       {
-        framesStr << "encode " << ( c->m_framesToBeEncoded > 1 ? " frames " : " frame ");
+        framesStr << "encode "  << c->m_framesToBeEncoded << ( c->m_framesToBeEncoded > 1 ? " frames " : " frame ");
       }
 
       if ( m_FrameSkip )
-        framesStr << "skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
+        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
       if ( c->m_temporalSubsampleRatio > 1 )
-        framesStr << "TemporalSubsampleRatio=" << c->m_temporalSubsampleRatio << " ";
+        framesStr << " temporalSubsampleRatio:" << c->m_temporalSubsampleRatio << " ";
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
@@ -1401,7 +1407,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
         css << "Real Format    : ";
 
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
-          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << " " << frameCountStr.str() << "\n";
+          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
       
       if( eMsgLevel >= VVENC_DETAILS )
         css << "                                       : " << framesStr.str() << "\n";
