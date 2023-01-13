@@ -2861,14 +2861,14 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     if ( c->m_RCTargetBitrate > 0 )
     {
       if( c->m_RCTargetBitrate < 1000000 )
-        css << "VBR " <<  (double)c->m_RCTargetBitrate/1000.0 << " kbps ";
+        css << "VBR  " <<  (double)c->m_RCTargetBitrate/1000.0 << " kbps  ";
       else
-        css << "VBR " <<  (double)c->m_RCTargetBitrate/1000000.0 << " Mbps ";
+        css << "VBR  " <<  (double)c->m_RCTargetBitrate/1000000.0 << " Mbps  ";
       if( c->m_RCNumPasses == 2 )
       {
         css << "twopass";
         if ( c->m_RCPass >= 0 )
-          css  << " pass " << c->m_RCPass << "/2";
+          css  << "  pass " << c->m_RCPass << "/2";
       }
       else
         css << "singlepass";

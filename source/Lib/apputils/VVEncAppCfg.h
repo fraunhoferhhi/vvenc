@@ -1386,7 +1386,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       if( strcmp( m_inputFileName.c_str(), "-" ) )
       {
         int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
-        frameCountStr << frameCount << (frameCount > 1 ? "frames" : "frame");
+        frameCountStr << frameCount << (frameCount > 1 ? " frames" : " frame");
 
         int64_t framesToEncode = (c->m_framesToBeEncoded == 0 || c->m_framesToBeEncoded >= frameCount) ? frameCount : c->m_framesToBeEncoded;
         framesStr << "encode " << framesToEncode << ( framesToEncode > 1 ? " frames " : " frame ");
@@ -1399,15 +1399,15 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       if ( m_FrameSkip )
         framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
       if ( c->m_temporalSubsampleRatio > 1 )
-        framesStr << " temporalSubsampleRatio:" << c->m_temporalSubsampleRatio << " ";
+        framesStr << " temporal subsampling " << c->m_temporalSubsampleRatio << " ";
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
       else
         css << "Real Format    : ";
 
-      css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
-          << inputFmt << " " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
+      css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
+          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
       
       if( eMsgLevel >= VVENC_DETAILS )
         css << "                                       : " << framesStr.str() << "\n";
