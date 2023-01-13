@@ -247,7 +247,7 @@ int main( int argc, char* argv[] )
   if( vvenccfg.m_verbosity >= VVENC_INFO )
   {
     std::stringstream css;
-    css << vvencappCfg.getAppConfigAsString( vvenccfg.m_verbosity );
+    css << vvencappCfg.getAppConfigAsString( &vvenccfg, vvenccfg.m_verbosity );
     css << vvenc_get_config_as_string( &vvenccfg, vvenccfg.m_verbosity);
     msgApp( nullptr, VVENC_INFO,"%s\n", css.str().c_str() );
   }
