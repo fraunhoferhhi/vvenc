@@ -384,13 +384,13 @@ int RateCtrl::getBaseQP()
   double d = (3840.0 * 2160.0) / double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight);
   const double firstQPOffset = sqrt ((d * m_pcEncCfg->m_RCTargetBitrate) / 500000.0);
   const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_pcEncCfg->m_SourceHeight)) / log (2.0)) - 7;
-  const unsigned fps = m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale;
+  const unsigned fps =  m_pcEncCfg->m_FrameRate / double(m_pcEncCfg->m_FrameScale * m_pcEncCfg->m_temporalSubsampleRatio);//encRCSeq->frameRate;
   std::list<TRCPassStats>& firstPassData = m_listRCFirstPassStats;
   int baseQP = MAX_QP;
 
   if (firstPassData.size() > 0 && fps > 0)
   {
-    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset)));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 + (32 - m_pcEncCfg->m_GOPSize) / 2 - int(0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0, sumVisAct = 0; // first-pass data
 
     for (auto& stats : firstPassData)
@@ -750,7 +750,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
 void RateCtrl::detectSceneCuts()
 {
-  const int minPocDif = encRCSeq->gopSize >> 1;
+  const int minPocDif = (encRCSeq->gopSize + 1) >> 1;
   double psnrTL01Prev = 0.0;
   int sceneCutPocPrev = -96;
   uint16_t visActPrev = 0;
@@ -799,7 +799,7 @@ void RateCtrl::detectSceneCuts()
 void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
-  const int qpOffset = Clip3 (0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9);
+  const int qpOffset = (m_pcEncCfg->m_LookAhead || (m_pcEncCfg->m_GOPSize <= 8) ? 6 : Clip3(0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9));
   const double bp1pf = getAverageBitsFromFirstPass();  // first-pass bits/frame
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
