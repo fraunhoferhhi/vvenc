@@ -384,13 +384,13 @@ int RateCtrl::getBaseQP()
   double d = (3840.0 * 2160.0) / double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight);
   const double firstQPOffset = sqrt ((d * m_pcEncCfg->m_RCTargetBitrate) / 500000.0);
   const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_pcEncCfg->m_SourceHeight)) / log (2.0)) - 7;
-  const unsigned fps =  m_pcEncCfg->m_FrameRate / double(m_pcEncCfg->m_FrameScale * m_pcEncCfg->m_temporalSubsampleRatio);//encRCSeq->frameRate;
+  const double fps = m_pcEncCfg->m_FrameRate / double(m_pcEncCfg->m_FrameScale * m_pcEncCfg->m_temporalSubsampleRatio);
   std::list<TRCPassStats>& firstPassData = m_listRCFirstPassStats;
   int baseQP = MAX_QP;
 
   if (firstPassData.size() > 0 && fps > 0)
   {
-    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 + (32 - m_pcEncCfg->m_GOPSize) / 2 - int(0.5 + firstQPOffset)));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0, sumVisAct = 0; // first-pass data
 
     for (auto& stats : firstPassData)
