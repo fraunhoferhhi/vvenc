@@ -165,9 +165,9 @@ public:
     const auto scanEl       = m_scan[scanPos];
     const uint32_t posY     = scanEl.y;
     const uint32_t posX     = scanEl.x;
-    const uint32_t blkPos   = scanEl.idx;
+    const int32_t blkPos    = scanEl.idx;
     const int      diag     = posX + posY;
-    const int      tplVal   = m_tplBuf[blkPos].ctxTpl;
+    const int      tplVal   = m_tplBuf[-blkPos].ctxTpl;
     const int      numPos   = tplVal >> 5u;
     const int      sumAbs   = tplVal & 31;
 
@@ -189,11 +189,11 @@ public:
     const auto scanEl     = m_scan[scanPos];
     const uint32_t posY   = scanEl.y;
     const uint32_t posX   = scanEl.x;
-    const uint32_t blkPos = scanEl.idx;
+    const int32_t  blkPos = scanEl.idx;
 
     auto update_deps = [&]( int offset )
     {
-      auto& ctx   = m_tplBuf[blkPos - offset];
+      auto& ctx   = m_tplBuf[-blkPos + offset];
       ctx.ctxTpl += uint8_t( 32 + absLevel1 );
     };
 
@@ -213,11 +213,11 @@ public:
     const auto scanEl     = m_scan[scanPos];
     const uint32_t posY   = scanEl.y;
     const uint32_t posX   = scanEl.x;
-    const uint32_t blkPos = scanEl.idx;
+    const int32_t  blkPos = scanEl.idx;
 
     auto update_deps = [&]( int offset )
     {
-      auto& ctx   = m_tplBuf[blkPos - offset];
+      auto& ctx   = m_tplBuf[-blkPos + offset];
       ctx.ctxTpl -= uint8_t( 32 + absLevel1 );
     };
 
