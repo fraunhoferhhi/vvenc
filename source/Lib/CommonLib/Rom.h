@@ -79,9 +79,9 @@ extern thread_local std::unique_ptr<TProfiler> ptls;
 // flexible conversion from relative to absolute index
 struct ScanElement
 {
-  uint32_t idx;
-  uint16_t x;
-  uint16_t y;
+  uint16_t idx;
+  uint8_t  x;
+  uint8_t  y;
 };
 
 

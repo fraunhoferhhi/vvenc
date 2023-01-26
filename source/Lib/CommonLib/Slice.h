@@ -984,7 +984,7 @@ struct APS
   bool                   hasPrefixNalUnitType;
   bool                   chromaPresent;
   int                    poc;
-  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false ), poc(-1)
+  APS() : apsId(MAX_UINT), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false ), poc(-1)
   { }
 };
 
