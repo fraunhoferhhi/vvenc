@@ -858,7 +858,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ? 1   : 0   ;
   if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ? 0   : 1   ;
   if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ? 0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_numThreads ? 0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = 1   ;
   if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ? 0.0 : 0.75;
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ? 0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
@@ -1958,9 +1958,8 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
-    vvenc_confirmParameter(c, c->m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
-    vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
+    vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
   }
@@ -2849,9 +2848,38 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " "
-                                                       << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
     css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << "Rate Control                           : ";
+  }
+  else if( eMsgLevel >= VVENC_INFO )
+  {
+    css << "Rate Control   : ";
+  }
+
+  if( eMsgLevel >= VVENC_INFO )        
+  {
+    if ( c->m_RCTargetBitrate > 0 )
+    {
+      if( c->m_RCTargetBitrate < 1000000 )
+        css << "VBR  " <<  (double)c->m_RCTargetBitrate/1000.0 << " kbps  ";
+      else
+        css << "VBR  " <<  (double)c->m_RCTargetBitrate/1000000.0 << " Mbps  ";
+      if( c->m_RCNumPasses == 2 )
+      {
+        css << "twopass";
+        if ( c->m_RCPass >= 0 )
+          css  << "  pass " << c->m_RCPass << "/2";
+      }
+      else
+        css << "singlepass";
+      css << "\n";
+    }
+    else
+      css << "QP " <<  c->m_QP << "\n";
+  }
+
+  if( eMsgLevel >= VVENC_DETAILS )
+  {
     css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
     css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
     css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
@@ -3048,6 +3076,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "RCInitialQP:" << c->m_RCInitialQP << " ";
       css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
     }
+    else
+    {
+      css << "QP:" << c->m_QP << " ";
+    }
+
     css << "LookAhead:" << c->m_LookAhead << " ";
 
     css << "\nPARALLEL PROCESSING CFG: ";

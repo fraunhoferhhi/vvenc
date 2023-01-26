@@ -104,7 +104,7 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_tsSignFlagCtxSet          (Ctx::TsResidualSign)
   , m_sigCoeffGroupFlag         ()
   , m_bdpcm                     (bdpcm)
-  , m_tplBuf                    (tplBuf)
+  , m_tplBuf                    (tplBuf + m_width * m_height - 1)
 {
   if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
     memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );

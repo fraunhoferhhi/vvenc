@@ -110,6 +110,13 @@ protected:
   bool     m_bResetAMaxBT;
 };
 
+struct PicApsGlobal{
+  int      poc;
+  unsigned tid;
+  ParameterSetMap<APS> apsMap;
+  PicApsGlobal( int _p ) : poc(_p), tid(MAX_UINT), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
+};
+
 struct Picture : public UnitArea
 {
   uint32_t margin;
@@ -256,6 +263,7 @@ public:
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
+  PicApsGlobal*                 picApsGlobal;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

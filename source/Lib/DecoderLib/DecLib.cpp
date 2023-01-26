@@ -94,10 +94,11 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
       ffwdDecoder.pcDecLib->setDecoderInEncoderMode        ( true );
       ffwdDecoder.pcDecLib->setDebugPOC                    ( debugPOC );
       ffwdDecoder.pcDecLib->setDecodedPictureHashSEIEnabled( true );
-      if(apsMap) ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
       msg.log( VVENC_INFO, "start to decode %s \n", bitstreamFileName.c_str() );
     }
+    if(apsMap) 
+      ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
     bool goOn = true;
     DecLib *pcDecLib = ffwdDecoder.pcDecLib;
