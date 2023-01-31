@@ -6309,7 +6309,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           _mm_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
         }
         
-        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) );
+        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) );
 
         const Pel* recYM1 = rec - 1 * recStride;
         const Pel* recY0  = rec;
@@ -6336,12 +6336,12 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v01 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
 
         if( vbDistance0 == 0 )
         {
@@ -6375,12 +6375,12 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v01 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
 
         recYM1 += recStride;
         recY0  += recStride;
@@ -6395,12 +6395,12 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v01 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
 
         recYM1 += recStride;
         recY0  += recStride;
@@ -6416,12 +6416,12 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v01 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v01 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v11 ) );
       }
       else
 #endif
@@ -6431,10 +6431,10 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
         }
 
-        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
-        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
-        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
-        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
+        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
+        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
+        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
+        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
       }
 
       if( m_alfWSSD )
