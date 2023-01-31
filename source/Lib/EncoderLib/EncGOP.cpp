@@ -635,10 +635,10 @@ void EncGOP::xSyncAlfAps( Picture& pic )
     {
       if( mtPicParallel )
       {
-        int maxApsPocDiff = std::max((ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers), 1) * m_pcEncCfg->m_GOPSize;
-        if( srcAPS->temporalId == 0 && srcAPS->poc < pic.poc - maxApsPocDiff )
+        int maxApsPocDiff = std::max((ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers - 1), 0) * m_pcEncCfg->m_GOPSize;
+        if( pic.TLayer == 0 && srcAPS->poc < pic.poc - maxApsPocDiff )
         {
-          // prevent using too old APS because they can be overwritten
+          // skip too old APS because they can be overwritten due to limited APS buffer size
           continue;
         }
       }
