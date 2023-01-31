@@ -1037,6 +1037,49 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   }
 }
 
+template<X86_VEXT vext>
+double calcVarSse( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
+{
+  // calculate average
+  __m128i xavg32 = _mm_setzero_si128();
+  __m128i xavg16 = _mm_setzero_si128();
+  const __m128i xone = _mm_set1_epi16( 1 );
+  for( int y1 = 0; y1 < h; y1++ )
+  {
+    xavg16 = _mm_setzero_si128();
+    for( int x1 = 0; x1 < w; x1 += 8 )
+    {
+      xavg16 = _mm_add_epi16( xavg16, _mm_loadu_si128( ( const __m128i* ) ( org + x1 + y1 * origStride ) ) );
+    }
+    xavg32 = _mm_add_epi32( xavg32, _mm_madd_epi16( xone, xavg16 ) );
+  }
+
+  xavg32 = _mm_hadd_epi32( xavg32, xavg32 );
+  xavg32 = _mm_hadd_epi32( xavg32, xavg32 );
+  xavg32 = _mm_shuffle_epi32( xavg32, 0 );
+  int shift = Log2( w ) + Log2( h ) - 4;
+  xavg32 = _mm_srai_epi32( xavg32, shift );
+  xavg16 = _mm_packs_epi32( xavg32, xavg32 );
+
+  // calculate variance
+  __m128i xvar = _mm_setzero_si128();
+  for( int y1 = 0; y1 < h; y1++ )
+  {
+    for( int x1 = 0; x1 < w; x1 += 8 )
+    {
+      __m128i xpix = _mm_loadu_si128( ( const __m128i* ) ( org + x1 + y1 * origStride ) );
+      xpix = _mm_slli_epi16( xpix, 4 );
+      xpix = _mm_sub_epi16( xpix, xavg16 );
+      xpix = _mm_madd_epi16( xpix, xpix );
+      xvar = _mm_add_epi64( xvar, _mm_cvtepi32_epi64( xpix ) );
+      xvar = _mm_add_epi64( xvar, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( xpix, xpix ) ) );
+    }
+  }
+
+  xvar = _mm_add_epi64( xvar, _mm_unpackhi_epi64( xvar, xvar ) );
+
+  return _mm_cvtsi128_si64( xvar ) / 256.0;
+}
 
 template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
@@ -1049,6 +1092,7 @@ void MCTF::_initMCTF_X86()
   m_applyFrac[1][0] = applyFrac6tap_SIMD_4x<vext>;
 
   m_applyBlock      = applyBlockSIMD<vext>;
+  m_calcVar         = calcVarSse<vext>;
 }
 
 template
