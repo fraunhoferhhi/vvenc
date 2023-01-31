@@ -853,60 +853,119 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
         Pel *dstPel = dst.bufAt( bx, by );
 
   int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
-  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
-  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vsw [2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vww [2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
   int minError = 9999999;
 
   for( int i = 0; i < numRefs; i++ )
   {
-    //int64_t variance = 0, diffsum = 0;
     const ptrdiff_t refStride = w;
     const Pel *     refPel    = correctedPics[i];
     __m128i xvar = _mm_setzero_si128(), xdiffsum = _mm_setzero_si128();
-    const __m128i xshufr = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, -1, -1 );
 
-    for( int y1 = 0; y1 < h; y1++ )
+    // xvar is a sum of squares of differences of 10bit unsigned values
+    //                             \----------------------------------/
+    //                                  still 10 bit
+    //                  \---------------------------------------------/
+    //                              up to 20 bit
+    // leaving 12 bit (2^6*2^6) for the sum, which is ok for blocks up to 64x64, with w and h being usually 8 or 16 (2^3 or 2^4)
+    // diffsum has double the number of entries, so one less bit
+
+    if( w == 4 )
     {
-      for( int x1 = 0; x1 < w; x1 += 8 )
+      const __m128i xshufr = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
+
+      for( int y1 = 0; y1 < h; y1++ )
       {
-        const Pel *pix0 = srcPel + srcStride * y1 + x1;
-        const Pel *ref0 = refPel + refStride * y1 + x1;
-        const Pel *pixr = pix0 + 1;
-        const Pel* refr = ref0 + 1;
-        const Pel* pixd = pix0 + srcStride;
-        const Pel* refd = ref0 + refStride;
-
-        __m128i xpix0 = _mm_loadu_si128( ( const __m128i* ) pix0 );
-        __m128i xref0 = _mm_loadu_si128( ( const __m128i* ) ref0 );
-        __m128i xpixr = _mm_loadu_si128( ( const __m128i* ) pixr );
-        __m128i xrefr = _mm_loadu_si128( ( const __m128i* ) refr );
-
-        __m128i xdiff = _mm_sub_epi16( xpix0, xref0 );
-        xvar = _mm_add_epi32( xvar, _mm_madd_epi16( xdiff, xdiff ) );
-
-        if( y1 + 1 != h )
+        for( int x1 = 0; x1 < w; x1 += 8 )
         {
-          __m128i xpixd  = _mm_loadu_si128( ( const __m128i* ) pixd );
-          __m128i xrefd  = _mm_loadu_si128( ( const __m128i* ) refd );
-          __m128i xdiffd = _mm_sub_epi16( xpixd, xrefd );
-          xdiffd = _mm_sub_epi16( xdiffd, xdiff );
-          xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffd, xdiffd ) );
-        }
+          const Pel *pix0 = srcPel + srcStride * y1 + x1;
+          const Pel *ref0 = refPel + refStride * y1 + x1;
+          const Pel *pixr = pix0 + 1;
+          const Pel* refr = ref0 + 1;
+          const Pel* pixd = pix0 + srcStride;
+          const Pel* refd = ref0 + refStride;
 
-        if( x1 + 8 == w )
+          __m128i xpix0 = _mm_loadl_epi64( ( const __m128i* ) pix0 );
+          __m128i xref0 = _mm_loadl_epi64( ( const __m128i* ) ref0 );
+          __m128i xpixr = _mm_loadl_epi64( ( const __m128i* ) pixr );
+          __m128i xrefr = _mm_loadl_epi64( ( const __m128i* ) refr );
+
+          __m128i xdiff = _mm_sub_epi16( xpix0, xref0 );
+          xvar = _mm_add_epi32( xvar, _mm_madd_epi16( xdiff, xdiff ) );
+
+          if( y1 + 1 != h )
+          {
+            __m128i xpixd  = _mm_loadl_epi64( ( const __m128i* ) pixd );
+            __m128i xrefd  = _mm_loadl_epi64( ( const __m128i* ) refd );
+            __m128i xdiffd = _mm_sub_epi16( xpixd, xrefd );
+            xdiffd = _mm_sub_epi16( xdiffd, xdiff );
+            xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffd, xdiffd ) );
+          }
+
+          if( x1 + 4 == w )
+          {
+            xpix0 = _mm_shuffle_epi8( xpix0, xshufr );
+            xpixr = _mm_shuffle_epi8( xpixr, xshufr );
+            xref0 = _mm_shuffle_epi8( xref0, xshufr );
+            xrefr = _mm_shuffle_epi8( xrefr, xshufr );
+
+            xdiff = _mm_sub_epi16( xpix0, xref0 );
+          }
+
+          __m128i xdiffr = _mm_sub_epi16( xpixr, xrefr );
+          xdiffr = _mm_sub_epi16( xdiffr, xdiff );
+          xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffr, xdiffr ) );
+        }
+      }
+    }
+    else
+    {
+      const __m128i xshufr = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, -1, -1 );
+
+      for( int y1 = 0; y1 < h; y1++ )
+      {
+        for( int x1 = 0; x1 < w; x1 += 8 )
         {
-          xpix0 = _mm_shuffle_epi8( xpix0, xshufr );
-          xpixr = _mm_shuffle_epi8( xpixr, xshufr );
-          xref0 = _mm_shuffle_epi8( xref0, xshufr );
-          xrefr = _mm_shuffle_epi8( xrefr, xshufr );
+          const Pel *pix0 = srcPel + srcStride * y1 + x1;
+          const Pel *ref0 = refPel + refStride * y1 + x1;
+          const Pel *pixr = pix0 + 1;
+          const Pel* refr = ref0 + 1;
+          const Pel* pixd = pix0 + srcStride;
+          const Pel* refd = ref0 + refStride;
 
-          xdiff = _mm_sub_epi16( xpix0, xref0 );
+          __m128i xpix0 = _mm_loadu_si128( ( const __m128i* ) pix0 );
+          __m128i xref0 = _mm_loadu_si128( ( const __m128i* ) ref0 );
+          __m128i xpixr = _mm_loadu_si128( ( const __m128i* ) pixr );
+          __m128i xrefr = _mm_loadu_si128( ( const __m128i* ) refr );
+
+          __m128i xdiff = _mm_sub_epi16( xpix0, xref0 );
+          xvar = _mm_add_epi32( xvar, _mm_madd_epi16( xdiff, xdiff ) );
+
+          if( y1 + 1 != h )
+          {
+            __m128i xpixd  = _mm_loadu_si128( ( const __m128i* ) pixd );
+            __m128i xrefd  = _mm_loadu_si128( ( const __m128i* ) refd );
+            __m128i xdiffd = _mm_sub_epi16( xpixd, xrefd );
+            xdiffd = _mm_sub_epi16( xdiffd, xdiff );
+            xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffd, xdiffd ) );
+          }
+
+          if( x1 + 8 == w )
+          {
+            xpix0 = _mm_shuffle_epi8( xpix0, xshufr );
+            xpixr = _mm_shuffle_epi8( xpixr, xshufr );
+            xref0 = _mm_shuffle_epi8( xref0, xshufr );
+            xrefr = _mm_shuffle_epi8( xrefr, xshufr );
+
+            xdiff = _mm_sub_epi16( xpix0, xref0 );
+          }
+
+          __m128i xdiffr = _mm_sub_epi16( xpixr, xrefr );
+          xdiffr = _mm_sub_epi16( xdiffr, xdiff );
+          xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffr, xdiffr ) );
         }
-
-        __m128i xdiffr = _mm_sub_epi16( xpixr, xrefr );
-        xdiffr = _mm_sub_epi16( xdiffr, xdiff );
-        xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffr, xdiffr ) );
       }
     }
 
@@ -914,31 +973,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     xvar = _mm_hadd_epi32( xvar, xvar );
     int64_t variance = _mm_cvtsi128_si32( xvar );
     int64_t diffsum  = _mm_extract_epi32( xvar, 1 );
-    //for( int y1 = 0; y1 < h; y1++ )
-    //{
-    //  for( int x1 = 0; x1 < w; x1++ )
-    //  {
-    //    const Pel pix = *( srcPel + srcStride * y1 + x1 );
-    //    const Pel ref = *( refPel + refStride * y1 + x1 );
-    //
-    //    const int diff = pix - ref;
-    //    variance += diff * diff;
-    //    if( x1 != w - 1 )
-    //    {
-    //      const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
-    //      const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
-    //      const int diffR = pixR - refR;
-    //      diffsum += ( diffR - diff ) * ( diffR - diff );
-    //    }
-    //    if( y1 != h - 1 )
-    //    {
-    //      const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
-    //      const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
-    //      const int diffD = pixD - refD;
-    //      diffsum += ( diffD - diff ) * ( diffD - diff );
-    //    }
-    //  }
-    //}
+
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;
     vnoise[i] = ( int ) ( ( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) ) + 0.5 );
