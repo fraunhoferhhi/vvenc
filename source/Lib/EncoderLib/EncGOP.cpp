@@ -585,8 +585,9 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
 void EncGOP::xSyncAlfAps( Picture& pic )
 {
   Slice& slice = *pic.cs->slice;
+  const bool mtPicParallel = m_pcEncCfg->m_numThreads > 0;
 
-  if( m_pcEncCfg->m_numThreads > 0 && slice.isIntra() )
+  if( mtPicParallel && slice.isIntra() )
   {
     // reset APS propagation on Intra-Slice in MT-mode
     return;
@@ -601,7 +602,7 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
   if( curApsItr != m_globalApsList.begin() )
   {
-    if( m_pcEncCfg->m_numThreads > 0 )
+    if( mtPicParallel )
     {
       auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
       auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
@@ -632,6 +633,16 @@ void EncGOP::xSyncAlfAps( Picture& pic )
     const APS* srcAPS = src.getPS( apsMapIdx );
     if ( srcAPS )
     {
+      if( mtPicParallel )
+      {
+        int maxApsPocDiff = std::max((ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers), 1) * m_pcEncCfg->m_GOPSize;
+        if( srcAPS->temporalId == 0 && srcAPS->poc < pic.poc - maxApsPocDiff )
+        {
+          // prevent using too old APS because they can be overwritten
+          continue;
+        }
+      }
+
       APS* dstAPS = dst.allocatePS( apsMapIdx );
       *dstAPS = *srcAPS;
       dst.clearChangedFlag( apsMapIdx );
