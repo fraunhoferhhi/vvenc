@@ -6296,10 +6296,14 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
     const Pel* orgLine[4] = { &org[0], &org[orgStride], &org[2 * orgStride], &org[3 * orgStride] };
     const Pel* slfLine[4] = { &slf[0], &slf[slfStride], &slf[2 * slfStride], &slf[3 * slfStride] };
 
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    const bool hasVb = vbDistance1 == -2 || vbDistance3 == -2 || vbDistance0 == 0 || vbDistance2 == 0;
+
+#endif
     for (int j = 0; j < compArea.width; j += 4)
     {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-      if( useSimd && getChannelTypeScaleX( CH_C, m_chromaFormat ) && getChannelTypeScaleY( CH_C, m_chromaFormat ) )
+      if( useSimd && getChannelTypeScaleX( CH_C, m_chromaFormat ) && getChannelTypeScaleY( CH_C, m_chromaFormat ) && !hasVb )
       {
         for( int ii = 0; ii < 4; ii++ )
         {
@@ -6309,31 +6313,28 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           _mm_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
         }
         
-        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) );
+        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) );
 
         const Pel* recYM1 = rec - 1 * recStride;
         const Pel* recY0  = rec;
         const Pel* recYP1 = rec + 1 * recStride;
         const Pel* recYP2 = rec + 2 * recStride;
 
-        // assume 420, so vbDistance can only be a multiple of 2, so only -2 and 0 have to be handled
-        if( vbDistance0 == 0 )
-        {
-          recYM1 = recY0;
-          recYP2 = recYP1 = recY0;
-        }
+        const __m128i vshuf0 = _mm_setr_epi8( 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1 );
+        const __m128i vshuf1 = _mm_setr_epi8( 2, 3, 6, 7, 10, 11, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1 );
 
-        const __m128i vshuf = _mm_setr_epi8( 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1 );
-
-        __m128i v01, v10, v11, v12, v20, v21, v22, v31;
-        v01 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYM1[+0] ), vshuf );
-        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf );
-        v11 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+0] ), vshuf );
-        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf );
-        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf );
-        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf );
-        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf );
-        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
+        __m128i v01, v10, v11, v12, v20, v21, v22, v31, v3x;
+        v01 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYM1[+0] ), vshuf0 );
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v11 = _mm_loadu_si128 ( ( const __m128i* ) &recY0 [+0] );
+        v12 = _mm_shuffle_epi8( v11, vshuf1 );
+        v11 = _mm_shuffle_epi8( v11, vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
@@ -6343,36 +6344,22 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
 
-        if( vbDistance0 == 0 )
-        {
-          rec = recLine[1] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) );
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
 
-          recYM1 = rec - 1 * recStride;
-          recY0  = rec;
-          recYP1 = rec + 1 * recStride;
-          recYP2 = rec + 2 * recStride;
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
 
-          v01 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYM1[+0] ), vshuf );
-          v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf );
-          v11 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+0] ), vshuf );
-          v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf );
-          v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf );
-          v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf );
-        }
-        else
-        {
-          recYM1 += recStride;
-          recY0  += recStride;
-          recYP1 += recStride;
-          recYP2 += recStride;
-
-          v01 = v11;
-          v10 = v20; v11 = v21; v12 = v22;
-          v21 = v31;
-        }
-        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf );
-        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf );
-        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
@@ -6382,17 +6369,29 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
 
-        recYM1 += recStride;
-        recY0  += recStride;
-        recYP1 += recStride;
-        recYP2 += recStride;
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
 
-        v01 = v11;
-        v10 = v20; v11 = v21; v12 = v22;
-        v21 = v31;
-        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf );
-        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf );
-        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
 
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
@@ -6402,19 +6401,30 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
 
-        recYM1 += recStride;
-        recY0  += recStride;
-        recYP1 += recStride;
-        if( vbDistance3 != -2 )
-          recYP2 += recStride;
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
 
-        v01 = v11;
-        v10 = v20; v11 = v21; v12 = v22;
-        v21 = v31;
-        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf );
-        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf );
-        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf );
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
 
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
+                                                                                        
         _mm_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
         _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
@@ -6431,10 +6441,10 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
         }
 
-        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
-        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
-        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
-        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleY( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
+        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
+        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
+        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
+        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
       }
 
       if( m_alfWSSD )
