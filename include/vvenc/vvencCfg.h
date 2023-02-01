@@ -464,8 +464,6 @@ typedef struct vvenc_config
   int                 m_confWinTop;
   int                 m_confWinBottom;
 
-  unsigned            m_temporalSubsampleRatio;                                          // temporal subsample ratio, 2 means code every two frames
-
   int                 m_PadSourceWidth;                                                  // source width in pixel
   int                 m_PadSourceHeight;                                                 // source height in pixel (when interlaced = field height)
 

@@ -731,7 +731,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ConfWinRight",                                    c->m_confWinRight,                                   "Right offset for window conformance mode 3")
     ("ConfWinTop",                                      c->m_confWinTop,                                     "Top offset for window conformance mode 3")
     ("ConfWinBottom",                                   c->m_confWinBottom,                                  "Bottom offset for window conformance mode 3")
-    ("TemporalSubsampleRatio",                          c->m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
     ("HorizontalPadding",                               c->m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
     ("VerticalPadding",                                 c->m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
     ("InputChromaFormat",                               toInputFileChromaFormat,                             "input file chroma format (400, 420, 422, 444)")
@@ -1398,8 +1397,6 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
 
       if ( m_FrameSkip )
         framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
-      if ( c->m_temporalSubsampleRatio > 1 )
-        framesStr << " temporal subsampling " << c->m_temporalSubsampleRatio << " ";
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
@@ -1407,7 +1404,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
         css << "Real Format    : ";
 
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
-          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
+          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
       
       if( eMsgLevel >= VVENC_DETAILS )
         css << "                                       : " << framesStr.str() << "\n";

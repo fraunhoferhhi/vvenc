@@ -768,7 +768,7 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   //--CFG_KDY
   //const int rateMultiplier = 1;
-  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale / (double)m_pcEncCfg->m_temporalSubsampleRatio;
+  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale;
   m_AnalyzeAll.setFrmRate( fps );
   m_AnalyzeI.setFrmRate( fps );
   m_AnalyzeP.setFrmRate( fps );

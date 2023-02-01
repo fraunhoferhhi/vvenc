@@ -365,15 +365,6 @@ int EncApp::encode()
       {
         outputAU( au );
       }
-
-      // temporally skip frames
-      if( vvencCfg.m_temporalSubsampleRatio > 1 && ! inputDone )
-      {
-        if( 0 != m_yuvInputFile.skipYuvFrames(vvencCfg.m_temporalSubsampleRatio - 1, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) )
-        {
-          inputDone=true;
-        }
-      }
     }
 
     // close input YUV
@@ -458,7 +449,7 @@ void EncApp::printRateSummary( int64_t framesRcvd )
   vvenc_print_summary( m_encCtx );
 
   int fps = m_vvenc_config.m_FrameRate/m_vvenc_config.m_FrameScale;
-  double time = (double) framesRcvd / fps * m_vvenc_config.m_temporalSubsampleRatio;
+  double time = (double) framesRcvd / fps;
   msgApp( VVENC_DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
   if( m_vvenc_config.m_summaryVerboseness > 0 )
   {

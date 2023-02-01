@@ -81,19 +81,6 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
 
   generalHrdParams.timeScale      = encCfg.m_FrameRate;
   generalHrdParams.numUnitsInTick = encCfg.m_FrameScale;
-  
-  if (encCfg.m_temporalSubsampleRatio > 1)
-  {
-    uint32_t temporalSubsampleRatio = encCfg.m_temporalSubsampleRatio;
-    if (double(generalHrdParams.numUnitsInTick) * temporalSubsampleRatio > std::numeric_limits<uint32_t>::max())
-    {
-      generalHrdParams.timeScale = generalHrdParams.timeScale / temporalSubsampleRatio;
-    }
-    else
-    {
-      generalHrdParams.numUnitsInTick = generalHrdParams.numUnitsInTick * temporalSubsampleRatio;
-    }
-  }
 
   bool rateCnt = (bitRate > 0);
 
