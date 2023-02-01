@@ -719,7 +719,17 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("c",                                               po::parseConfigFile,                                "configuration file name")
     ("WriteConfig",                                     writeCfg,                                           "write the encoder config into configuration file")
     ("WarnUnknowParameter,w",                           warnUnknowParameter,                                "warn for unknown configuration parameters instead of failing")
+#if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+#  else   
+#if defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, NEON), default: the highest supported extension")
+#elif defined( __wasm__ ) || defined( __wasm32__ )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, WASM), default: the highest supported extension")
+#    else
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SIMDE), default: the highest supported extension")
+#    endif
+#  endif   // !REAL_TARGET_X86
     ;
 
     opts.setSubSection("Input Options");
