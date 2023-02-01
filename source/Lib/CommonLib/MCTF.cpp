@@ -467,6 +467,34 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   }
 }
 
+double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
+{
+  // calculate average
+  int avg = 0;
+  for( int y1 = 0; y1 < h; y1++ )
+  {
+    for( int x1 = 0; x1 < w; x1++ )
+    {
+      avg = avg + *( org + x1 + y1 * origStride );
+    }
+  }
+  avg <<= 4;
+  avg = avg / ( w * h );
+
+  // calculate variance
+  int64_t variance = 0;
+  for( int y1 = 0; y1 < h; y1++ )
+  {
+    for( int x1 = 0; x1 < w; x1++ )
+    {
+      int pix = *( org + x1 + y1 * origStride ) << 4;
+      variance = variance + ( pix - avg ) * ( pix - avg );
+    }
+  }
+
+  return variance / 256.0;
+}
+
 MCTF::MCTF()
   : m_encCfg    ( nullptr )
   , m_threadPool( nullptr )
@@ -484,6 +512,7 @@ MCTF::MCTF()
   m_applyFrac[1][0]         = applyFrac8Core_6Tap;
   m_applyFrac[1][1]         = applyFrac8Core_4Tap;
   m_applyBlock              = applyBlockCore;
+  m_calcVar                 = calcVarCore;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
@@ -1026,29 +1055,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     const int w = std::min<int>( blockSize, orig.Y().width  - blockX ) & ~7;
     const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
 
-    // calculate average
-    int avg = 0;
-    for( int y1 = 0; y1 < h; y1++ )
-    {
-      for( int x1 = 0; x1 < w; x1++ )
-      {
-        avg = avg + orig.Y().at( blockX + x1, blockY + y1 );
-      }
-    }
-    avg <<= 4;
-    avg   = avg / ( w * h );
-
-    // calculate variance
-    int64_t variance = 0;
-    for( int y1 = 0; y1 < h; y1++ )
-    {
-      for( int x1 = 0; x1 < w; x1++ )
-      {
-        int pix = orig.Y().at( blockX + x1, blockY + y1 ) << 4;
-        variance = variance + ( pix - avg ) * ( pix - avg );
-      }
-    }
-    const double dvar = variance / 256.0; // 16.0 * 16.0
+    const double dvar = m_calcVar( orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h );
     const double mse  = best.error / double( w * h );
 
     best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
@@ -1143,8 +1150,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     refStrengthRow = 1;
   }
 
-  // max 64*64*8*2 = 2^(6+6+3+1)=2^16=64kbps, usually 16*16*8*2=2^(4+4+3+1)=4kbps
-  Pel* dstBufs = ( Pel* ) alloca( sizeof( Pel ) * numRefs * m_mctfUnitSize * m_mctfUnitSize );
+  // max 64*64*8*2 = 2^(6+6+3+1)=2^16=64kbps, usually 16*16*8*2=2^(4+4+3+1)=4kbps, and allow for overread of one line
+  Pel* dstBufs = ( Pel* ) alloca( sizeof( Pel ) * ( numRefs * m_mctfUnitSize * m_mctfUnitSize + m_mctfUnitSize ) );
 
   for( int c = 0; c < getNumberValidComponents( m_encCfg->m_internChromaFormat ); c++ )
   {
