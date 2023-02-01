@@ -375,7 +375,7 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   m_pcEncCfg = &encCfg;
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, (int)((double)(m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, (int)(((double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
 int RateCtrl::getBaseQP()
@@ -384,7 +384,7 @@ int RateCtrl::getBaseQP()
   double d = (3840.0 * 2160.0) / double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight);
   const double firstQPOffset = sqrt ((d * m_pcEncCfg->m_RCTargetBitrate) / 500000.0);
   const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_pcEncCfg->m_SourceHeight)) / log (2.0)) - 7;
-  const double fps = m_pcEncCfg->m_FrameRate / double(m_pcEncCfg->m_FrameScale * m_pcEncCfg->m_temporalSubsampleRatio);
+  const double fps = m_pcEncCfg->m_FrameRate / double(m_pcEncCfg->m_FrameScale);
   std::list<TRCPassStats>& firstPassData = m_listRCFirstPassStats;
   int baseQP = MAX_QP;
 
