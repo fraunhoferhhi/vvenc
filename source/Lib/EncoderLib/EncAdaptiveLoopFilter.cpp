@@ -1708,13 +1708,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       aps->apsId   = ccAlfCbApsId;
       aps->apsType = ALF_APS;
       aps->poc     = cs.slice->poc;
-
-      // set new APS start ID if required
-      // in case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
-      // otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
-      // in case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-      if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
-        m_apsIdStart = ccAlfCbApsId < m_apsIdStart ? ccAlfCbApsId: m_apsIdStart;
+      m_apsIdStart = ccAlfCbApsId;
     }
     cs.slice->ccAlfCbEnabled = true;
     cs.slice->alfAps[ccAlfCbApsId] = m_apsMap->getPS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
@@ -1750,13 +1744,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       aps->apsId      = ccAlfCrApsId;
       aps->apsType    = ALF_APS;
       aps->poc        = cs.slice->poc;
-
-      // set new APS start ID if required
-      // in case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
-      // otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
-      // in case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-      if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
-        m_apsIdStart = ccAlfCrApsId < m_apsIdStart ? ccAlfCrApsId: m_apsIdStart;
+      m_apsIdStart    = ccAlfCrApsId;
     }
     cs.slice->ccAlfCrEnabled = true;
     cs.slice->alfAps[ccAlfCrApsId] = m_apsMap->getPS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
@@ -5790,6 +5778,17 @@ std::vector<int> EncAdaptiveLoopFilter::getAvailableCcAlfApsIds(CodingStructure&
       }
     }
   }
+#if DEBUG_PRINT_APS
+  if( result.size() > 0 )
+  {
+    printf( "CCALF-USED [ %2d, TID%d ]: ", cs.slice->poc, cs.slice->TLayer );
+    for( int i = 0; i < result.size(); i++ )
+    {
+      printf( "Id%d [ %2d ],  ", result[i], cs.slice->alfAps[result[i]]->poc );
+    }
+  }
+  printf( "\n" );
+#endif
   return result;
 }
 
