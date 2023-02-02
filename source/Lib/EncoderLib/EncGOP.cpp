@@ -630,7 +630,7 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   if( mtPicParallel && pic.TLayer == 0 )
   {
     // in pic.parallel case, due to limited number of APS IDs, limit propagation of TID-0 APS
-    CHECK( slice.sps->maxTLayers > ALF_CTB_MAX_NUM_APS, "Not enough space for ALF APSs in MT mode: not implemented"  )
+    CHECK( slice.sps->maxTLayers > ALF_CTB_MAX_NUM_APS, "Not enough space for ALF APSs in MT mode: not supported"  )
     int numApsTID0 = ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers;
     int lastTakenApsPOC = pic.poc;
     while( numApsTID0 > 0 )

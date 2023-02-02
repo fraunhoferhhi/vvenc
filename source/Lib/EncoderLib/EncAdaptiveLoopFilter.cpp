@@ -5778,17 +5778,6 @@ std::vector<int> EncAdaptiveLoopFilter::getAvailableCcAlfApsIds(CodingStructure&
       }
     }
   }
-#if DEBUG_PRINT_APS
-  if( result.size() > 0 )
-  {
-    printf( "CCALF-USED [ %2d, TID%d ]: ", cs.slice->poc, cs.slice->TLayer );
-    for( int i = 0; i < result.size(); i++ )
-    {
-      printf( "Id%d [ %2d ],  ", result[i], cs.slice->alfAps[result[i]]->poc );
-    }
-  }
-  printf( "\n" );
-#endif
   return result;
 }
 
