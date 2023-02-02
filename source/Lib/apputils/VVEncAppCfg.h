@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -719,7 +719,15 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("c",                                               po::parseConfigFile,                                "configuration file name")
     ("WriteConfig",                                     writeCfg,                                           "write the encoder config into configuration file")
     ("WarnUnknowParameter,w",                           warnUnknowParameter,                                "warn for unknown configuration parameters instead of failing")
+#if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+#elif defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, NEON), default: the highest supported extension")
+#elif defined( __wasm__ ) || defined( __wasm32__ )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, WASM), default: the highest supported extension")
+#else
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SIMDE), default: the highest supported extension")
+#  endif
     ;
 
     opts.setSubSection("Input Options");
@@ -731,7 +739,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ConfWinRight",                                    c->m_confWinRight,                                   "Right offset for window conformance mode 3")
     ("ConfWinTop",                                      c->m_confWinTop,                                     "Top offset for window conformance mode 3")
     ("ConfWinBottom",                                   c->m_confWinBottom,                                  "Bottom offset for window conformance mode 3")
-    ("TemporalSubsampleRatio",                          c->m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
     ("HorizontalPadding",                               c->m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
     ("VerticalPadding",                                 c->m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
     ("InputChromaFormat",                               toInputFileChromaFormat,                             "input file chroma format (400, 420, 422, 444)")
@@ -1398,8 +1405,6 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
 
       if ( m_FrameSkip )
         framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
-      if ( c->m_temporalSubsampleRatio > 1 )
-        framesStr << " temporal subsampling " << c->m_temporalSubsampleRatio << " ";
     
       if( eMsgLevel >= VVENC_DETAILS )
         css << "Real     Format                        : ";
@@ -1407,7 +1412,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
         css << "Real Format    : ";
 
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
-          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
+          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
       
       if( eMsgLevel >= VVENC_DETAILS )
         css << "                                       : " << framesStr.str() << "\n";
