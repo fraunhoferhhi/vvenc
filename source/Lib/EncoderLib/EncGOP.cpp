@@ -585,8 +585,9 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
 void EncGOP::xSyncAlfAps( Picture& pic )
 {
   Slice& slice = *pic.cs->slice;
+  const bool mtPicParallel = m_pcEncCfg->m_numThreads > 0;
 
-  if( m_pcEncCfg->m_numThreads > 0 && slice.isIntra() )
+  if( mtPicParallel && slice.isIntra() )
   {
     // reset APS propagation on Intra-Slice in MT-mode
     return;
@@ -601,7 +602,7 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
   if( curApsItr != m_globalApsList.begin() )
   {
-    if( m_pcEncCfg->m_numThreads > 0 )
+    if( mtPicParallel )
     {
       auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
       auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
@@ -626,15 +627,48 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   // copy ref APSs to current picture
   const ParameterSetMap<APS>& src = refAps->apsMap;
   ParameterSetMap<APS>&       dst = pic.picApsMap;
-  for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+  if( mtPicParallel && pic.TLayer == 0 )
   {
-    const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
-    const APS* srcAPS = src.getPS( apsMapIdx );
-    if ( srcAPS )
+    // in pic.parallel case, due to limited number of APS IDs, limit propagation of TID-0 APS
+    CHECK( slice.sps->maxTLayers > ALF_CTB_MAX_NUM_APS, "Not enough space for ALF APSs in MT mode: not supported"  )
+    int numApsTID0 = ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers;
+    int lastTakenApsPOC = pic.poc;
+    while( numApsTID0 > 0 )
     {
-      APS* dstAPS = dst.allocatePS( apsMapIdx );
-      *dstAPS = *srcAPS;
-      dst.clearChangedFlag( apsMapIdx );
+      const APS* candAPS = nullptr;
+      int candMapIdx = 0;
+      for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+      {
+        const int mapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+        const APS* srcAPS = src.getPS( mapIdx );
+        if( srcAPS && srcAPS->apsId != MAX_UINT && srcAPS->poc < lastTakenApsPOC && ( !candAPS || srcAPS->poc > candAPS->poc ) )
+        {
+          candAPS = srcAPS;
+          candMapIdx = mapIdx;
+        }
+      }
+      if( !candAPS )
+        break;
+
+      APS* dstAPS = dst.allocatePS( candMapIdx );
+      *dstAPS = *candAPS;
+      dst.clearChangedFlag( candMapIdx );
+      lastTakenApsPOC = candAPS->poc;
+      numApsTID0--;
+    }
+  }
+  else
+  {
+    for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+    {
+      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+      const APS* srcAPS = src.getPS( apsMapIdx );
+      if( srcAPS )
+      {
+        APS* dstAPS = dst.allocatePS( apsMapIdx );
+        *dstAPS = *srcAPS;
+        dst.clearChangedFlag( apsMapIdx );
+      }
     }
   }
   dst.setApsIdStart( src.getApsIdStart() );
