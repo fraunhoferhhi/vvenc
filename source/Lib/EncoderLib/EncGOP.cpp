@@ -627,25 +627,48 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   // copy ref APSs to current picture
   const ParameterSetMap<APS>& src = refAps->apsMap;
   ParameterSetMap<APS>&       dst = pic.picApsMap;
-  for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+  if( mtPicParallel && pic.TLayer == 0 )
   {
-    const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
-    const APS* srcAPS = src.getPS( apsMapIdx );
-    if ( srcAPS )
+    // in pic.parallel case, due to limited number of APS IDs, limit propagation of TID-0 APS
+    CHECK( slice.sps->maxTLayers > ALF_CTB_MAX_NUM_APS, "Not enough space for ALF APSs in MT mode: not implemented"  )
+    int numApsTID0 = ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers;
+    int lastTakenApsPOC = pic.poc;
+    while( numApsTID0 > 0 )
     {
-      if( mtPicParallel )
+      const APS* candAPS = nullptr;
+      int candMapIdx = 0;
+      for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
       {
-        int maxApsPocDiff = std::max((ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers - 1), 0) * m_pcEncCfg->m_GOPSize;
-        if( pic.TLayer == 0 && srcAPS->poc < pic.poc - maxApsPocDiff )
+        const int mapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+        const APS* srcAPS = src.getPS( mapIdx );
+        if( srcAPS && srcAPS->apsId != MAX_UINT && srcAPS->poc < lastTakenApsPOC && ( !candAPS || srcAPS->poc > candAPS->poc ) )
         {
-          // skip too old APS because they can be overwritten due to limited APS buffer size
-          continue;
+          candAPS = srcAPS;
+          candMapIdx = mapIdx;
         }
       }
+      if( !candAPS )
+        break;
 
-      APS* dstAPS = dst.allocatePS( apsMapIdx );
-      *dstAPS = *srcAPS;
-      dst.clearChangedFlag( apsMapIdx );
+      APS* dstAPS = dst.allocatePS( candMapIdx );
+      *dstAPS = *candAPS;
+      dst.clearChangedFlag( candMapIdx );
+      lastTakenApsPOC = candAPS->poc;
+      numApsTID0--;
+    }
+  }
+  else
+  {
+    for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+    {
+      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+      const APS* srcAPS = src.getPS( apsMapIdx );
+      if( srcAPS )
+      {
+        APS* dstAPS = dst.allocatePS( apsMapIdx );
+        *dstAPS = *srcAPS;
+        dst.clearChangedFlag( apsMapIdx );
+      }
     }
   }
   dst.setApsIdStart( src.getApsIdStart() );
