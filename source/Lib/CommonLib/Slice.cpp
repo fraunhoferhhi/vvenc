@@ -236,7 +236,7 @@ Picture* Slice::xGetLongTermRefPic( const PicList& rcListPic, int poc, bool pocH
   while ( iterPic != rcListPic.end() )
   {
     picCand = *(iterPic);
-    if (picCand && picCand->poc != poc && picCand->isReferenced)
+    if (picCand && picCand->poc != this->poc && picCand->isReferenced)
     {
       int picPoc = picCand->poc;
       if (!pocHasMsb)
