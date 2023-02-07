@@ -213,7 +213,7 @@ void HLSWriter::xCodeRefPicList( const ReferencePictureList* rpl, bool isLongTer
 
     if( !rpl->isInterLayerRefPic[ii] )
     {
-      if (rpl->numberOfLongtermPictures)
+      if (isLongTermPresent)
       {
         WRITE_FLAG(!rpl->isLongtermRefPic[ii], "st_ref_pic_flag[ listIdx ][ rplsIdx ][ i ]");
       }
