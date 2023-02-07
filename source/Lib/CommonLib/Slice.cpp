@@ -236,7 +236,7 @@ Picture* Slice::xGetLongTermRefPic( const PicList& rcListPic, int poc, bool pocH
   while ( iterPic != rcListPic.end() )
   {
     picCand = *(iterPic);
-    if (picCand && picCand->poc != poc && picCand->isReferenced)
+    if (picCand && picCand->poc != this->poc && picCand->isReferenced)
     {
       int picPoc = picCand->poc;
       if (!pocHasMsb)
@@ -415,8 +415,8 @@ void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
         int pocBits = sps->bitsForPOC;
         int pocMask = (1 << pocBits) - 1;
         int ltrpPoc = rpl[eRefList]->refPicIdentifier[ii] & pocMask;
-        ltrpPoc += rplLocal[eRefList].deltaPocMSBPresent[ii] ? (pocMask + 1) * rplLocal[eRefList].deltaPocMSBCycleLT[ii] : 0;
-        pcRefPic = xGetLongTermRefPic(rcListPic, ltrpPoc, rplLocal[eRefList].deltaPocMSBPresent[ii]);
+        ltrpPoc += rpl[eRefList]->deltaPocMSBPresent[ii] ? (pocMask + 1) * rpl[eRefList]->deltaPocMSBCycleLT[ii] : 0;
+        pcRefPic = xGetLongTermRefPic(rcListPic, ltrpPoc, rpl[eRefList]->deltaPocMSBPresent[ii]);
         pcRefPic->isLongTerm = true;
       }
       if ( extBorder )
