@@ -1274,10 +1274,7 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
     // if rc statsfile is defined and in 1st pass, bitstream file is not needed
     if ( !(c->m_RCPass == 1 && !m_RCStatsFileName.empty()) )
     {
-      if( m_easyMode )
-        rcOstr << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
-      else
-        rcOstr << "error: bitstream file name must be specified (--BitstreamFile=bit.266)" << std::endl;
+      rcOstr << "error: bitstream file name must be specified (" << (m_easyMode ? "--output" : "--BitstreamFile") << "=bit.266)" << std::endl;
       ret = true;
     }
   }
