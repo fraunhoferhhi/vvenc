@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -1708,12 +1708,8 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       aps->apsId   = ccAlfCbApsId;
       aps->apsType = ALF_APS;
       aps->poc     = cs.slice->poc;
+      m_apsIdStart = ccAlfCbApsId;
     }
-    // In case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
-    // Otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
-    // In case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-    if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
-      m_apsIdStart = ccAlfCbApsId < m_apsIdStart ? ccAlfCbApsId: m_apsIdStart;
     cs.slice->ccAlfCbEnabled = true;
     cs.slice->alfAps[ccAlfCbApsId] = m_apsMap->getPS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
@@ -1748,12 +1744,8 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       aps->apsId      = ccAlfCrApsId;
       aps->apsType    = ALF_APS;
       aps->poc        = cs.slice->poc;
+      m_apsIdStart    = ccAlfCrApsId;
     }
-    // In case of frame parallelization and ALF temporal prediction and when ALF-filters are not transmitted, create an extra new APS for CCALF
-    // Otherwise, if current CCALF-APS doesn't contain ALF-filters the successive ALF-APS will overwrite the last CCALF-APS
-    // In case of parallelization and temporal prediction from low TIDs to higher TIDs, it is forbidden to overwrite the APSs.
-    if( m_encCfg->m_numThreads > 0 && m_encCfg->m_alfTempPred )
-      m_apsIdStart = ccAlfCrApsId < m_apsIdStart ? ccAlfCrApsId: m_apsIdStart;
     cs.slice->ccAlfCrEnabled = true;
     cs.slice->alfAps[ccAlfCrApsId] = m_apsMap->getPS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
@@ -6279,32 +6271,173 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
 
+  const bool useSimd = read_x86_extension_flags() > SCALAR;
+
   Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
   Pel yLocal[4][4];
   double weight[4][4];
 
   for (int i = 0; i < compArea.height; i += 4)
   {
-    int vbDistance0 = (((i+0) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
-    int vbDistance1 = (((i+1) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
-    int vbDistance2 = (((i+2) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
-    int vbDistance3 = (((i+3) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance0 = (((i+0) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance1 = (((i+1) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance2 = (((i+2) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance3 = (((i+3) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
 
     const Pel* recLine[4] = { &rec[0], &rec[effStride], &rec[2 * effStride], &rec[3 * effStride] };
     const Pel* orgLine[4] = { &org[0], &org[orgStride], &org[2 * orgStride], &org[3 * orgStride] };
     const Pel* slfLine[4] = { &slf[0], &slf[slfStride], &slf[2 * slfStride], &slf[3 * slfStride] };
 
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    const bool hasVb = vbDistance1 == -2 || vbDistance3 == -2 || vbDistance0 == 0 || vbDistance2 == 0;
+
+#endif
     for (int j = 0; j < compArea.width; j += 4)
     {
-      for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+      if( useSimd && getChannelTypeScaleX( CH_C, m_chromaFormat ) && getChannelTypeScaleY( CH_C, m_chromaFormat ) && !hasVb )
       {
-        yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
-      }
+        for( int ii = 0; ii < 4; ii++ )
+        {
+          __m128i vorg = _mm_loadl_epi64( ( const __m128i* ) &orgLine[ii][j] );
+          __m128i vslf = _mm_loadl_epi64( ( const __m128i* ) &slfLine[ii][j] );
+          __m128i vylc = _mm_sub_epi16( vorg, vslf );
+          _mm_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
+        }
+        
+        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) );
 
-      calcCovariance4CcAlf(ELocal,  0, recLine[0] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance0);
-      calcCovariance4CcAlf(ELocal,  4, recLine[1] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance1);
-      calcCovariance4CcAlf(ELocal,  8, recLine[2] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance2);
-      calcCovariance4CcAlf(ELocal, 12, recLine[3] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance3);
+        const Pel* recYM1 = rec - 1 * recStride;
+        const Pel* recY0  = rec;
+        const Pel* recYP1 = rec + 1 * recStride;
+        const Pel* recYP2 = rec + 2 * recStride;
+
+        const __m128i vshuf0 = _mm_setr_epi8( 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1 );
+        const __m128i vshuf1 = _mm_setr_epi8( 2, 3, 6, 7, 10, 11, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1 );
+
+        __m128i v01, v10, v11, v12, v20, v21, v22, v31, v3x;
+        v01 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYM1[+0] ), vshuf0 );
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v11 = _mm_loadu_si128 ( ( const __m128i* ) &recY0 [+0] );
+        v12 = _mm_shuffle_epi8( v11, vshuf1 );
+        v11 = _mm_shuffle_epi8( v11, vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
+
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
+
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
+
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
+
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
+
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
+
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
+                                                                                        
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v11 ) );
+      }
+      else
+#endif
+      {
+        for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+        {
+          yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
+        }
+
+        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
+        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
+        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
+        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
+      }
 
       if( m_alfWSSD )
       {
@@ -6344,7 +6477,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
       else
       {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-        if (read_x86_extension_flags() > SCALAR)
+        if( useSimd )
         {
           const __m128i mylocal0 = _mm_loadu_si128((const __m128i*) & yLocal[0][0]);
           const __m128i mylocal8 = _mm_loadu_si128((const __m128i*) & yLocal[2][0]);

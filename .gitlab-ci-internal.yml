@@ -42,6 +42,12 @@ variables:
       - make disable-lto=1 all
       - make disable-lto=1 test
 
+.build_test_macos_template:
+   extends: .build_test_template
+   script:
+      - make osx-arch=${OSX_ARCH} disable-lto=1 all
+      - make osx-arch=${OSX_ARCH} disable-lto=1 test
+
 .build_only_ubuntu2004_mingw_template:
    extends: .build_only_template_full
    script:
@@ -198,11 +204,15 @@ test_vc192x:
       - vc192x
 
 test_macos-x86_64:
-   extends: .build_test_template
+   extends: .build_test_macos_template
+   variables:
+      OSX_ARCH: x86_64
    tags:
       - macos-x86_64
 
 test_macos-arm:
-   extends: .build_test_template
+   extends: .build_test_macos_template
+   variables:
+      OSX_ARCH: arm64
    tags:
       - macos-arm

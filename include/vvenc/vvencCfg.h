@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -464,7 +464,7 @@ typedef struct vvenc_config
   int                 m_confWinTop;
   int                 m_confWinBottom;
 
-  unsigned            m_temporalSubsampleRatio;                                          // temporal subsample ratio, 2 means code every two frames
+  unsigned            m_cfgUnused15;
 
   int                 m_PadSourceWidth;                                                  // source width in pixel
   int                 m_PadSourceHeight;                                                 // source height in pixel (when interlaced = field height)
