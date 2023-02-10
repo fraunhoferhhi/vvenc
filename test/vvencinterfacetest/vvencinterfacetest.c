@@ -119,12 +119,18 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
 
   // run encoder loop
 
+#define vvenc_min_val(a, b) (((a) > (b)) ? (b) : (a))
+
   for( int frame = 0; frame < maxFrames; frame++ )
   {
     int iWhere = frame % vvencCfg->m_SourceHeight;
     for( int comp = 0; comp < 3; comp++ )
     {
-      memset( cYUVInputBuffer.planes[ comp ].ptr+iWhere, frame, cYUVInputBuffer.planes[comp].width*sizeof(int16_t));
+      uint16_t val = vvenc_min_val( frame, vvencCfg->m_internalBitDepth[0] == 8 ? 255 : 1023 );
+      for( int x = 0; x < cYUVInputBuffer.planes[comp].width; x++ )
+      {
+        cYUVInputBuffer.planes[comp].ptr[iWhere + x] = val;
+      }
     }
     ptrYUVInputBuffer = &cYUVInputBuffer; // assign dummy input buffer
     ptrYUVInputBuffer->sequenceNumber = frame;

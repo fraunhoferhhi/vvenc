@@ -708,7 +708,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         quantScale = defaultQuantScale;
         iErrScale  = defaultErrScale;
       }
-      const int iScaledLevel = abs( plSrcCoeff[uiBlkPos] ) * quantScale;
+      const int iScaledLevel = std::abs( plSrcCoeff[uiBlkPos] ) * quantScale;
       const int iAbsLevel    = ( iScaledLevel + iQOffset ) >> iQBits;
 
       //============ Set context models ===============
