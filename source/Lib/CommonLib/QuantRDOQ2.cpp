@@ -646,7 +646,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
         {
           const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
-          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) <= useThres;
+          allSmaller &= std::abs( plSrcCoeff[uiBlkPos] ) <= useThres;
         }
 
         if( allSmaller )
@@ -669,7 +669,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         if( bUseScalingList ){ quantScale = quantScaleList[uiBlkPos]; }
         else{                  quantScale = defaultQuantScale; }
         
-        const uint32_t uiMaxAbsLevel = ( abs( plSrcCoeff[uiBlkPos] ) * quantScale + iQOffset ) >> iQBits;
+        const uint32_t uiMaxAbsLevel = ( std::abs( plSrcCoeff[uiBlkPos] ) * quantScale + iQOffset ) >> iQBits;
 
         if( uiMaxAbsLevel )
         {
@@ -1010,7 +1010,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
                 uint32_t uiBlkPos = cctx.blockPos( iScanPosTmp );
                 if( piDstCoeff[uiBlkPos] )
                 {
-                  int absLevel = abs( piDstCoeff[uiBlkPos] );
+                  int absLevel = std::abs( piDstCoeff[uiBlkPos] );
                   cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
                   piDstCoeff[uiBlkPos] = 0;
                 }
@@ -1082,7 +1082,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           const int uiBlkPos = cctx.blockPos( iScanPosTmp );
           if( piDstCoeff[uiBlkPos] )
           {
-            int absLevel = abs( piDstCoeff[uiBlkPos] );
+            int absLevel = std::abs( piDstCoeff[uiBlkPos] );
             cctx.remAbsVal1stPass( iScanPosTmp, std::min( absLevel, 4 + ( absLevel & 1 ) ) );
             piDstCoeff[uiBlkPos] = 0;
           }
@@ -1151,10 +1151,10 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
                 iMinCostPos   = n;
               }
             }
-            const int oldAbsVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            const int oldAbsVal = std::abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
             if( oldAbsVal ) cctx.remAbsVal1stPass( iMinCostPos + iSubPos, std::min( oldAbsVal, 4 + ( oldAbsVal & 1 ) ) );
             piDstCoeff[ cctx.blockPos( iMinCostPos + iSubPos ) ] += piAddSBH[iMinCostPos];
-            const int absVal = abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
+            const int absVal = std::abs( piDstCoeff[cctx.blockPos( iMinCostPos + iSubPos )] );
             if( absVal ) cctx.absVal1stPass( iMinCostPos + iSubPos, std::min( absVal, 4 + ( absVal & 1 ) ) );
             uiAbsSumCG   += piAddSBH[iMinCostPos];
             iCodedCostCG += iMinCostDelta;
