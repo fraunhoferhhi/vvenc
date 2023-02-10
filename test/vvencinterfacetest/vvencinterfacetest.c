@@ -125,7 +125,7 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
   {
     for( int comp = 0; comp < 3; comp++ )
     {
-      const ptrdiff_t iWhere = ( frame % cYUVInputBuffer.planes[comp].height ) * cYUVInputBuffer.planes[comp].stride;
+      const unsigned  iWhere = ( frame % cYUVInputBuffer.planes[comp].height ) * cYUVInputBuffer.planes[comp].stride;
       const uint16_t  val    = vvenc_min_val( frame, vvencCfg->m_internalBitDepth[0] == 8 ? 255 : 1023 );
       for( int x = 0; x < cYUVInputBuffer.planes[comp].width; x++ )
       {
