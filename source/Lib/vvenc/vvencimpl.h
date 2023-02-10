@@ -130,6 +130,7 @@ public:
 private:
   int xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList );
   int xCopyAu( vvencAccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
+  static bool xVerifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth );
 
 private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;

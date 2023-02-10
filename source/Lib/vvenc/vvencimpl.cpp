@@ -340,6 +340,16 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
       }
     }
 
+    const int numComp = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
+    for( int comp = 0; comp < numComp; comp++ )
+    {
+      if ( ! xVerifyYuvPlane( pcYUVBuffer->planes[ comp ], m_cVVEncCfg.m_internalBitDepth[0] ) )
+      {     
+        m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
+        return VVENC_ERR_UNSPECIFIED;
+      }
+    }
+
     if( m_eState == INTERNAL_STATE_INITIALIZED ){ m_eState = INTERNAL_STATE_ENCODING; }
   }
   else
@@ -551,6 +561,29 @@ int VVEncImpl::printSummary() const
 
   m_pEncLib->printSummary();
   return 0;
+}
+
+bool VVEncImpl::xVerifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth )
+{
+  const int stride = yuvPlane.stride;
+  const int width  = yuvPlane.width;
+  const int height = yuvPlane.height;
+  int16_t* dst     = yuvPlane.ptr;
+
+  const int16_t mask = ~( ( 1 << bitDepth ) - 1 );
+
+  for ( int y = 0; y < height; y++, dst += stride )
+  {
+    for ( int x = 0; x < width; x++ )
+    {
+      if ( ( dst[ x ] & mask ) != 0 )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 int VVEncImpl::xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList )
