@@ -2615,17 +2615,17 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 4;
+      c->m_MinQT[ 2 ]                      = 8;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
 
       // speedups
       c->m_qtbttSpeedUp                    = 2;
-      c->m_fastTTSplit                     = 5;
-      c->m_contentBasedFastQtbt            = false;
+      c->m_fastTTSplit                     = 1;
+      c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
@@ -2635,7 +2635,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_IntraEstDecBit                  = 1;
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
-      c->m_meReduceTap                     = 0;
+      c->m_meReduceTap                     = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2652,13 +2652,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_EDO                             = 2;
       c->m_Geo                             = 1;
       c->m_AMVRspeed                       = 1;
-      c->m_ISP                             = 1;
+      c->m_ISP                             = 3;
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 3;
