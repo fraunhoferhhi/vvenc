@@ -2268,7 +2268,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
-  
+
   iRet = vvenc_init_preset( c, preset );
   return iRet;
 }
@@ -2301,6 +2301,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_RDOQ                            = 1;
   c->m_SignDataHidingEnabled           = 0;
   c->m_useFastLCTU                     = 1;
+  c->m_numRefPics                      = 0;
+  c->m_numRefPicsSCC                   = 0;
 
   // tools
   c->m_Affine                          = 0;
