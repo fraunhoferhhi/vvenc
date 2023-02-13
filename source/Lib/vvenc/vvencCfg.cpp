@@ -2638,6 +2638,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 2;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_Affine                          = 2;
@@ -2711,6 +2713,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
       c->m_meReduceTap                     = 0;
+      c->m_numRefPics                      = 222221;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_Affine                          = 1;
@@ -2786,6 +2790,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = false;
       c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 222221;
+      c->m_numRefPicsSCC                   = 0;
 
       // tools
       c->m_Affine                          = 2;
