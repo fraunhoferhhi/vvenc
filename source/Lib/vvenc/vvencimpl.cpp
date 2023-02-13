@@ -566,20 +566,18 @@ bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
   const int numComp  = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
   const int16_t mask = ~( ( 1 << m_cVVEncCfg.m_internalBitDepth[0] ) - 1 );
   int dstSum = 0;
-
   for( int comp = 0; comp < numComp; comp++ )
   {
     vvencYUVPlane& plane = pcYUVBuffer->planes[ comp ];
     int16_t* dst     = plane.ptr;
-    for ( int y = 0; y < plane.height; y++, dst += plane.stride )
+    for( int y = 0; y < plane.height; y++, dst += plane.stride )
     {
-      for ( int x = 0; x < plane.width; x++ )
+      for( int x = 0; x < plane.width; x++ )
       {
         dstSum |= dst[ x ] & mask;
       }
     }
   }
-
   return (dstSum != 0) ? false : true;
 }
 
