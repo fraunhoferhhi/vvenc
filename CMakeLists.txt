@@ -73,7 +73,7 @@ set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time o
 
 set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE BOOL   "Enable use of thirdparty json library" )
 
-set( VVENC_ENABLE_FULLFEATURE_APP		    OFF CACHE BOOL   "Build the full-feature app: vvencFFapp" )
+set( VVENC_INSTALL_FULLFEATURE_APP		    OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
