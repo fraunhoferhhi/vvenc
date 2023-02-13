@@ -568,15 +568,11 @@ bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
 
   for( int comp = 0; comp < numComp; comp++ )
   {
-    vvencYUVPlane& yuvPlane = pcYUVBuffer->planes[ comp ];
-    const int stride = yuvPlane.stride;
-    const int width  = yuvPlane.width;
-    const int height = yuvPlane.height;
-    int16_t* dst     = yuvPlane.ptr;
-
-    for ( int y = 0; y < height; y++, dst += stride )
+    vvencYUVPlane& plane = pcYUVBuffer->planes[ comp ];
+    int16_t* dst     = plane.ptr;
+    for ( int y = 0; y < plane.height; y++, dst += plane.stride )
     {
-      for ( int x = 0; x < width; x++ )
+      for ( int x = 0; x < plane.width; x++ )
       {
         if ( ( dst[ x ] & mask ) != 0 )
         {
