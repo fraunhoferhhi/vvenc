@@ -340,14 +340,10 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
       }
     }
 
-    const int numComp = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
-    for( int comp = 0; comp < numComp; comp++ )
-    {
-      if ( ! xVerifyYuvPlane( pcYUVBuffer->planes[ comp ], m_cVVEncCfg.m_internalBitDepth[0] ) )
-      {     
-        m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
-        return VVENC_ERR_UNSPECIFIED;
-      }
+    if ( ! xVerifyYUVBuffer( pcYUVBuffer ) )
+    {     
+      m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
+      return VVENC_ERR_UNSPECIFIED;
     }
 
     if( m_eState == INTERNAL_STATE_INITIALIZED ){ m_eState = INTERNAL_STATE_ENCODING; }
@@ -563,22 +559,29 @@ int VVEncImpl::printSummary() const
   return 0;
 }
 
-bool VVEncImpl::xVerifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth )
+bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
 {
-  const int stride = yuvPlane.stride;
-  const int width  = yuvPlane.width;
-  const int height = yuvPlane.height;
-  int16_t* dst     = yuvPlane.ptr;
+  if( pcYUVBuffer == nullptr ){ return false; }
 
-  const int16_t mask = ~( ( 1 << bitDepth ) - 1 );
+  const int numComp  = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
+  const int16_t mask = ~( ( 1 << m_cVVEncCfg.m_internalBitDepth[0] ) - 1 );
 
-  for ( int y = 0; y < height; y++, dst += stride )
+  for( int comp = 0; comp < numComp; comp++ )
   {
-    for ( int x = 0; x < width; x++ )
+    vvencYUVPlane& yuvPlane = pcYUVBuffer->planes[ comp ];
+    const int stride = yuvPlane.stride;
+    const int width  = yuvPlane.width;
+    const int height = yuvPlane.height;
+    int16_t* dst     = yuvPlane.ptr;
+
+    for ( int y = 0; y < height; y++, dst += stride )
     {
-      if ( ( dst[ x ] & mask ) != 0 )
+      for ( int x = 0; x < width; x++ )
       {
-        return false;
+        if ( ( dst[ x ] & mask ) != 0 )
+        {
+          return false;
+        }
       }
     }
   }
