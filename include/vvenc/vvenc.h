@@ -118,7 +118,7 @@ typedef struct vvencYUVBuffer
 {
   vvencYUVPlane planes[ 3 ];           // plane buffer for 3 components (yuv)
   uint64_t      sequenceNumber;        // sequence number of the picture
-  uint64_t      cts;                   // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  uint64_t      cts;                   // composition time stamp in TicksPerSecond
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
