@@ -565,6 +565,7 @@ bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
 
   const int numComp  = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
   const int16_t mask = ~( ( 1 << m_cVVEncCfg.m_internalBitDepth[0] ) - 1 );
+  int dstSum = 0;
 
   for( int comp = 0; comp < numComp; comp++ )
   {
@@ -574,15 +575,12 @@ bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
     {
       for ( int x = 0; x < plane.width; x++ )
       {
-        if ( ( dst[ x ] & mask ) != 0 )
-        {
-          return false;
-        }
+        dstSum |= dst[ x ] & mask;
       }
     }
   }
 
-  return true;
+  return (dstSum != 0) ? false : true;
 }
 
 int VVEncImpl::xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList )
