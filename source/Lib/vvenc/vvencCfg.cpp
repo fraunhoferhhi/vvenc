@@ -2622,7 +2622,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
             c->m_usePbIntraFast                  = 2;
             c->m_useFastMrg                      = 3;
             c->m_fastLocalDualTreeMode           = 1;
-            c->m_fastSubPel                      = 1;
+            c->m_fastSubPel                      = 2;
             c->m_FastIntraTools                  = 0;
             c->m_FIMMode                         = 4;
             c->m_useEarlyCU                      = 2;
