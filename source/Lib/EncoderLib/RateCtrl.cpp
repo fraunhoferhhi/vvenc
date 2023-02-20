@@ -1045,12 +1045,22 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           {
             encRCSeq->bitsUsedIn1stPass += it->numBits;
 
+#if !POSS_FIX
             if ( (sliceQP > 0) && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0) )
             {
               sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
               lambda *= 0.7937; // * pow (2, -1/3)
             }
+#endif
           }
+      
+#if POSS_FIX
+          if ( (sliceQP > 0) && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0) )
+          {
+            sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
+            lambda *= 0.7937; // * pow (2, -1/3)
+          }
+#endif
           if ( it->isIntra ) // update history, for parameter clipping in subsequent key frames
           {
             encRcSeq->lastIntraQP = sliceQP;
