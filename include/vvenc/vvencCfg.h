@@ -592,7 +592,7 @@ typedef struct vvenc_config
   int                 m_IntraEstDecBit;                                                  // Intra estimation decimation factor.
 
   int                 m_RCInitialQP;
-  bool                m_RCForceIntraQP;
+  bool                m_cfgUnused16;                                                     // TODO: remove unused memory from configuration
 
   int                 m_motionEstimationSearchMethod;
   int                 m_motionEstimationSearchMethodSCC;
