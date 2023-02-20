@@ -508,7 +508,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraEstDecBit                          = 1;
 
   c->m_RCInitialQP                             = 0;
-  c->m_RCForceIntraQP                          = false;
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
   c->m_motionEstimationSearchMethodSCC         = 0;
@@ -3075,7 +3074,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "Pass:" << c->m_RCPass << " ";
       css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
       css << "RCInitialQP:" << c->m_RCInitialQP << " ";
-      css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
     }
     else
     {

@@ -295,6 +295,88 @@ static void clipQPValToEstimatedMinimStats (const uint8_t* minNoiseLevels, const
   }
 }
 
+static int refineDeltaQpDistribution (Picture* const pic, const VVEncCfg* encCfg,   const int sliceQP,
+                                      const double sliceLambda, const int rcQpDiff, const int bitDepth,
+                                      const uint32_t startAddr, const uint32_t endAddr, const int qpSum,
+                                      const uint32_t tempLayer, const bool isIntra, const bool isEncPass,
+                                      const uint8_t* minNoiseLevels, std::vector<int>& ctuAvgLuma)
+{
+  const double resRatio = (isEncPass ? sqrt (double (encCfg->m_SourceWidth * encCfg->m_SourceHeight) / (3840.0 * 2160.0)) : 0.0);
+  const int ctusInSlice = int (endAddr - startAddr);
+  const int targetQpSum = (encCfg->m_RCTargetBitrate > 0 ? sliceQP * ctusInSlice : qpSum);
+  int blockQpSum = 0, tempLumaQP;
+  double blockLambda;
+  bool isLimited = false;
+
+  for (uint32_t ctuRsAddr = startAddr; ctuRsAddr < endAddr; ctuRsAddr++)
+  {
+    int clippedLumaQP = std::max (0, pic->ctuAdaptedQP[ctuRsAddr] + rcQpDiff);
+
+    if (isEncPass)
+    {
+      tempLumaQP = clippedLumaQP; // CTU QP before clipping for diff calculation below
+
+      clipQPValToEstimatedMinimStats (minNoiseLevels, bitDepth, ctuAvgLuma[ctuRsAddr - startAddr], resRatio, (isIntra ? encCfg->m_intraQPOffset >> 1 : std::min (4, (int) tempLayer)), clippedLumaQP);
+      if (clippedLumaQP > tempLumaQP)
+      {
+        ctuAvgLuma[ctuRsAddr - startAddr] = -1; // mark CTU as being processed already
+        isLimited = isEncPass;
+      }
+    }
+
+    clippedLumaQP = std::min (MAX_QP, clippedLumaQP);
+
+    blockLambda = sliceLambda * pow (2.0, double (clippedLumaQP - sliceQP) / 3.0);
+    blockQpSum += clippedLumaQP;
+
+    pic->ctuQpaLambda[ctuRsAddr] = blockLambda;  // store modified CTU lambdas and QPs
+    pic->ctuAdaptedQP[ctuRsAddr] = clippedLumaQP;
+  }
+
+  if (blockQpSum > targetQpSum && isLimited) // CTU QPs limited, so distribute saved rate among nonlimited CTUs
+  {
+    int maxCtuQP = 0, minCtuQP = MAX_QP;
+
+    for (uint32_t ctuRsAddr = startAddr; ctuRsAddr < endAddr; ctuRsAddr++) // find max
+    {
+      if (ctuAvgLuma[ctuRsAddr - startAddr] >= 0 && pic->ctuAdaptedQP[ctuRsAddr] > maxCtuQP) // nonlimited CTUs
+      {
+        maxCtuQP = pic->ctuAdaptedQP[ctuRsAddr];
+      }
+      if (pic->ctuAdaptedQP[ctuRsAddr] < minCtuQP)
+      {
+        minCtuQP = pic->ctuAdaptedQP[ctuRsAddr];
+      }
+    }
+
+    minCtuQP = std::max (0, minCtuQP);
+
+    while (maxCtuQP > minCtuQP && blockQpSum > targetQpSum) // spend rate starting at max QPs, then go downward
+    {
+      for (uint32_t ctuRsAddr = startAddr; ctuRsAddr < endAddr; ctuRsAddr++) // reduce
+      {
+        if (ctuAvgLuma[ctuRsAddr - startAddr] >= 0 && pic->ctuAdaptedQP[ctuRsAddr] == maxCtuQP)
+        {
+          tempLumaQP = std::max (0, pic->ctuAdaptedQP[ctuRsAddr] - 1);
+
+          ctuAvgLuma[ctuRsAddr - startAddr] = -1; // mark CTU as being reduced already
+          blockLambda = sliceLambda * pow (2.0, double (tempLumaQP - sliceQP) / 3.0);
+          if (tempLumaQP < pic->ctuAdaptedQP[ctuRsAddr]) blockQpSum--;
+
+          pic->ctuQpaLambda[ctuRsAddr] = blockLambda; // store reduced lambdas and QPs
+          pic->ctuAdaptedQP[ctuRsAddr] = tempLumaQP;
+        }
+
+        if (blockQpSum <= targetQpSum) break;
+      }
+
+      maxCtuQP--;
+    }
+  }
+
+  return (blockQpSum - 1 + ((ctusInSlice + 1) >> 1)) / ctusInSlice;
+}
+
 // public functions
 
 int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
@@ -532,36 +614,17 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       pic->ctuAdaptedQP[ctuRsAddr] = adaptedLumaQP;
     }
 
+    meanLuma = std::max (0, averageAdaptedLumaQP + 1);
     averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
 
     if ((encCfg->m_RCTargetBitrate > 0 && averageAdaptedLumaQP != sliceQP) || (isEncPass)) // QP/rate control
     {
       const int rcQpDiff = (encCfg->m_RCTargetBitrate > 0 ? sliceQP - averageAdaptedLumaQP : 0);
 
-      averageAdaptedLumaQP = -1;
-      for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
-      {
-        int clippedLumaQP = pic->ctuAdaptedQP[ctuRsAddr] + rcQpDiff;
-
-        if (isEncPass)
-        {
-          const double resRatio = sqrt (double (encCfg->m_SourceWidth * encCfg->m_SourceHeight) / (3840.0 * 2160.0));
-
-          meanLuma = ctuAvgLuma[ctuRsAddr - ctuStartAddr];
-          clipQPValToEstimatedMinimStats (minNoiseLevels, bitDepth, meanLuma, resRatio, (slice->isIntra() ? encCfg->m_intraQPOffset >> 1 : std::min (4, (int) slice->TLayer)), clippedLumaQP);
-        }
-        clippedLumaQP = Clip3 (0, MAX_QP, clippedLumaQP);
-
-        averageAdaptedLambda = sliceLambda * pow (2.0, double (clippedLumaQP - sliceQP) / 3.0);
-        averageAdaptedLumaQP += clippedLumaQP;
-
-        pic->ctuQpaLambda[ctuRsAddr] = averageAdaptedLambda; // store mod. lambda, QP
-        pic->ctuAdaptedQP[ctuRsAddr] = clippedLumaQP;
-      }
+      averageAdaptedLumaQP = refineDeltaQpDistribution (pic, encCfg, sliceQP, sliceLambda, rcQpDiff, bitDepth, ctuStartAddr, ctuBoundingAddr,
+                                                        meanLuma, slice->TLayer, slice->isIntra(), isEncPass, minNoiseLevels, ctuAvgLuma);
 
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
-      averageAdaptedLumaQP = (averageAdaptedLumaQP + ((nCtu + 1) >> 1)) / nCtu;
-
       pic->isMeanQPLimited = (encCfg->m_RCTargetBitrate > 0) && isEncPass && (averageAdaptedLumaQP > sliceQP);
     }
     else if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (averageAdaptedLumaQP + 1 < aaQP))
