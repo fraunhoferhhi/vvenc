@@ -584,7 +584,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   {
     createCoeffs();
     createTempBuffers( false );
-    initStructData( MAX_INT, false, nullptr, true );
+    initStructData( MAX_INT, false, nullptr );
   }
 }
 
@@ -601,6 +601,8 @@ void CodingStructure::createTempBuffers( const bool isTopLayer )
 
     m_cuPtr[i]      = _area > 0 ? new CodingUnit*    [_area] : nullptr;
   }
+
+  clearCUs( true );
 
   for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
   {
@@ -960,10 +962,10 @@ void CodingStructure::compactResize( const UnitArea& _area )
   area = _area;
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area, bool force )
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
 {
-  clearTUs( force );
-  clearCUs( force );
+  clearTUs( false );
+  clearCUs( false );
 
   if( _area ) compactResize( *_area );
 
@@ -972,7 +974,7 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
     currQP[0] = currQP[1] = QP;
   }
 
-  if (!skipMotBuf && (!parent || ((!slice->isIntra() || slice->sps->IBC) && !m_isTuEnc)))
+  if( !skipMotBuf && ( !parent || ( ( !slice->isIntra() || slice->sps->IBC ) && !m_isTuEnc ) ) )
   {
     getMotionBuf().memset( 0 );
   }

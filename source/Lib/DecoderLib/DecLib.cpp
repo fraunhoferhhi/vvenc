@@ -157,7 +157,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
                   pcEncPic->createTempBuffers( pic->cs->pcv->maxCUSize );
                   pcEncPic->cs->createCoeffs();
                   pcEncPic->cs->createTempBuffers( true );
-                  pcEncPic->cs->initStructData( MAX_INT, false, nullptr, true );
+                  pcEncPic->cs->initStructData( MAX_INT, false, nullptr );
 
                   CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
 
@@ -1028,7 +1028,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     m_pic->createTempBuffers( m_pic->cs->pps->pcv->maxCUSize );
     m_pic->cs->createCoeffs();
     m_pic->cs->createTempBuffers( true );
-    m_pic->cs->initStructData( MAX_INT, false, nullptr, true );
+    m_pic->cs->initStructData( MAX_INT, false, nullptr );
 
     m_pic->allocateNewSlice();
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice

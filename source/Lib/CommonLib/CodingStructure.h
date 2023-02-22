@@ -159,7 +159,7 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr, bool force = false );
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = true, const UnitArea* area = nullptr );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
   void compactResize   ( const UnitArea& area );
 
