@@ -49,6 +49,8 @@ jobs:
         cmake --build .
       if: matrix.config.os != 'windows-2019'
     - run: |
+        git submodule init
+        git submodule update --recursive
         mkdir build
         cd build
         cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release"
