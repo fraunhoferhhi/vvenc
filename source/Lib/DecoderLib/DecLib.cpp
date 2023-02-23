@@ -228,6 +228,14 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
                     }
                   }
 
+                  for( const auto* slice : pcEncPic->slices )
+                  {
+                    for( int ctu : slice->sliceMap.ctuAddrInSlice )
+                    {
+                      pcEncPic->ctuSlice[ctu] = slice;
+                    }
+                  }
+
                   pcEncPic->cs->slice = pcEncPic->slices[ 0 ];
                   pcEncPic->cs->picHeader->copyPicInfo( pic->cs->picHeader, false );
                   for( auto& cu: pcEncPic->cs->cus)

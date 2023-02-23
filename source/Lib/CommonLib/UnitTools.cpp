@@ -3030,11 +3030,13 @@ void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
             }
           }
         }
+        return;
       }
       else
       {
-        mb.fill( mi );
       }
+
+      mb.fill( mi );
     }
   }
   else if( cu.mergeType == MRG_TYPE_SUBPU_ATMVP )
