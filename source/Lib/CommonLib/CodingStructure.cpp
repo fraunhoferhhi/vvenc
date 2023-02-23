@@ -83,11 +83,8 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , bestParent      ( nullptr )
   , resetIBCBuffer  ( false )
 {
-  for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
-  {
-    m_coeffs[ i ] = nullptr;
-    m_offsets[ i ] = 0;
-  }
+  m_coeffs     = nullptr;
+  m_cffoffsets = 0;
 
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
@@ -394,10 +391,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
       continue;
     }
 
-    coeffs[i] = m_coeffs[i] + m_offsets[i];
+    coeffs[i] = m_coeffs + m_cffoffsets;
 
     unsigned areaSize = tu->blocks[i].area();
-    m_offsets[i] += areaSize;
+    m_cffoffsets += areaSize;
 
     const bool cpyRsi = tuInit &&
                       ( tuInit->cbf[i] ||
@@ -671,24 +668,22 @@ void CodingStructure::rebindPicBufs()
 void CodingStructure::createCoeffs()
 {
   const unsigned numComp = getNumberValidComponents( area.chromaFormat );
+  size_t coeffArea = 0;
   for( unsigned i = 0; i < numComp; i++ )
   {
-    unsigned _area = area.blocks[i].area();
-    m_coeffs[i] = _area > 0 ? ( TCoeffSig* ) xMalloc( TCoeffSig, _area ) : nullptr;
+    size_t _area = area.blocks[i].area();
+    coeffArea += _area;
   }
 
-  for( unsigned i = 0; i < numComp; i++ )
-  {
-    m_offsets[i] = 0;
-  }
+  m_coeffs     = ( TCoeffSig* ) xMalloc( TCoeffSig, coeffArea );
+  m_cffoffsets = 0;
 }
 
 void CodingStructure::destroyCoeffs()
 {
-  for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
-  {
-    if( m_coeffs[i] ) { xFree( m_coeffs[i] ); m_coeffs[i] = nullptr; }
-  }
+  if( m_coeffs ) xFree( m_coeffs );
+  m_coeffs     = nullptr;
+  m_cffoffsets = 0;
 }
 
 void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer, PelStorage* pRspBuffer )
