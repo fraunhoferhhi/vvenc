@@ -202,8 +202,8 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
     m_pTempCS[i] = new CodingStructure( m_unitCache, nullptr );
     m_pBestCS[i] = new CodingStructure( m_unitCache, nullptr );
 
-    m_pTempCS[i]->create( chromaFormat, area, false );
-    m_pBestCS[i]->create( chromaFormat, area, false );
+    m_pTempCS[i]->createForSearch( chromaFormat, area );
+    m_pBestCS[i]->createForSearch( chromaFormat, area );
 
     m_pOrgBuffer[i].create( chromaFormat, area );
     m_pRspBuffer[i].create( CHROMA_400, area );
@@ -212,8 +212,8 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
   m_pBestCS2 = new CodingStructure( m_unitCache, nullptr );
 
-  m_pTempCS2->create( chromaFormat, ctuArea, false );
-  m_pBestCS2->create( chromaFormat, ctuArea, false );
+  m_pTempCS2->createForSearch( chromaFormat, ctuArea );
+  m_pBestCS2->createForSearch( chromaFormat, ctuArea );
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
   m_tempQpDiff = 0;
@@ -497,7 +497,7 @@ void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& be
   if( partitioner.isSepTree( *tempCS ) && isChroma( partitioner.chType ) )
   {
     Position lumaRefPos( uiLPelX, uiTPelY );
-    CodingUnit* colLumaCu = bestCS->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+    CodingUnit* colLumaCu = bestCS->lumaCS->getCU( lumaRefPos, CH_L, TREE_D );
 
     if( colLumaCu )
     {
@@ -712,7 +712,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         const ChromaFormat chromaFm = tempCS->area.chromaFormat;
         const Position chromaCentral (tempCS->area.Cb().chromaPos().offset (tempCS->area.Cb().chromaSize().width >> 1, tempCS->area.Cb().chromaSize().height >> 1));
         const Position lumaRefPos (chromaCentral.x << getChannelTypeScaleX (CH_C, chromaFm), chromaCentral.y << getChannelTypeScaleY (CH_C, chromaFm));
-        const CodingUnit* colLumaCu = bestCS->refCS->getCU (lumaRefPos, CH_L, TREE_D);
+        const CodingUnit* colLumaCu = bestCS->lumaCS->getCU (lumaRefPos, CH_L, TREE_D);
         // update qp
         qp = colLumaCu->qp;
       }
@@ -769,9 +769,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
               const bool skipAltHpelIF = ( int( ( encTestMode.opts & ETO_IMV ) >> ETO_IMV_SHIFT ) == 4 ) && ( bestIntPelCost > 1.25 * bestCS->cost );
               if (!skipAltHpelIF)
               {
-                tempCS->bestCS = bestCS;
                 xCheckRDCostInterIMV(tempCS, bestCS, partitioner, encTestMode );
-                tempCS->bestCS = nullptr;
               }
             }
           }
@@ -1266,8 +1264,8 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     tempCS->initSubStructure( *tempCSChroma, partitioner.chType, partitioner.currArea(), false );
     tempCS->initSubStructure( *bestCSChroma, partitioner.chType, partitioner.currArea(), false );
     m_CABACEstimator->determineNeighborCus( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType );
-    tempCSChroma->refCS = tempCS;
-    bestCSChroma->refCS = tempCS;
+    tempCSChroma->lumaCS = tempCS;
+    bestCSChroma->lumaCS = tempCS;
     xCompressCU( tempCSChroma, bestCSChroma, partitioner );
 
     //attach chromaCS to luma CS and update cost

@@ -177,7 +177,7 @@ bool CU::checkCCLMAllowed(const CodingUnit& cu)
     {
       //disallow CCLM if luma 64x64 block uses BT or TT or NS with ISP
       const Position lumaRefPos( cu.chromaPos().x << getComponentScaleX( COMP_Cb, cu.chromaFormat ), cu.chromaPos().y << getComponentScaleY( COMP_Cb, cu.chromaFormat ) );
-      const CodingUnit* colLumaCu = cu.cs->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+      const CodingUnit* colLumaCu = cu.cs->lumaCS->getCU( lumaRefPos, CH_L, TREE_D );
 
       if( colLumaCu->lwidth() < 64 || colLumaCu->lheight() < 64 ) //further split at 64x64 luma node
       {
@@ -706,7 +706,7 @@ const CodingUnit& CU::getCoLocatedLumaPU(const CodingUnit& cu)
   Position              topLeftPos = cu.blocks[cu.chType].lumaPos();
   Position              refPos     = topLeftPos.offset(cu.blocks[cu.chType].lumaSize().width  >> 1,
                                                        cu.blocks[cu.chType].lumaSize().height >> 1);
-  const CodingUnit& lumaCU     = CU::isSepTree(cu) ? *cu.cs->refCS->getCU(refPos, CH_L, TREE_D)
+  const CodingUnit& lumaCU     = CU::isSepTree(cu) ? *cu.cs->lumaCS->getCU(refPos, CH_L, TREE_D)
                                                 : *cu.cs->getCU(topLeftPos, CH_L, TREE_D);
 
   return lumaCU;

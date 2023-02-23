@@ -73,8 +73,7 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   : area            ()
   , picture         ( nullptr )
   , parent          ( nullptr )
-  , refCS           ( nullptr )
-  , bestCS          ( nullptr )
+  , lumaCS          ( nullptr )
   , picHeader       ( nullptr )
   , m_isTuEnc       ( false )
   , m_cuCache       ( unitCache.cuCache )
@@ -105,7 +104,7 @@ void CodingStructure::destroy()
 {
   picture   = nullptr;
   parent    = nullptr;
-  refCS     = nullptr;
+  lumaCS     = nullptr;
 
   m_pred.destroy();
   m_resi.destroy();
@@ -533,11 +532,9 @@ void CodingStructure::allocateVectorsAtPicLevel()
 
 
 
-void CodingStructure::create(const ChromaFormat _chromaFormat, const Area& _area, const bool isTopLayer)
+void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const Area& _area )
 {
-  createInternals( UnitArea( _chromaFormat, _area ), isTopLayer );
-
-  if( isTopLayer ) return;
+  createInternals( UnitArea( _chromaFormat, _area ), false );
 
   m_reco.create( area );
   m_pred.create( area );
@@ -545,18 +542,11 @@ void CodingStructure::create(const ChromaFormat _chromaFormat, const Area& _area
   m_rspreco.create( CHROMA_400, area.Y() );
 }
 
-void CodingStructure::create(const UnitArea& _unit, const bool isTopLayer, const PreCalcValues* _pcv)
+void CodingStructure::createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv )
 {
   pcv = _pcv;
 
-  createInternals( _unit, isTopLayer );
-
-  if( isTopLayer ) return;
-
-  m_reco.create( area );
-  m_pred.create( area );
-  m_resi.create( area );
-  m_rspreco.create( CHROMA_400, area.Y() );
+  createInternals( _unit, true );
 }
 
 void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLayer )
@@ -568,7 +558,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
   picture = nullptr;
   parent  = nullptr;
-  refCS   = nullptr;
+  lumaCS  = nullptr;
 
   unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
   m_motionBuf = new MotionInfo[_lumaAreaScaled];
@@ -712,7 +702,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   subStruct.parent    = this;
   subStruct.picture   = picture;
-  subStruct.refCS     = picture->cs;
+  subStruct.lumaCS     = picture->cs;
 
   subStruct.sps       = sps;
   subStruct.vps       = vps;
@@ -991,11 +981,7 @@ void CodingStructure::clearTUs( bool force )
   if( !m_numTUs && !force ) return;
 
 #endif
-  int numCh = getNumberValidComponents( area.chromaFormat );
-  for( int i = 0; i < numCh; i++ )
-  {
-    m_offsets[i] = 0;
-  }
+  m_cffoffsets = 0;
 
   for( auto &pcu : cus )
   {

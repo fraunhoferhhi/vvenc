@@ -87,8 +87,7 @@ public:
 
   Picture*         picture;
   CodingStructure* parent;
-  CodingStructure* refCS;
-  CodingStructure* bestCS;
+  CodingStructure* lumaCS;
   Slice*           slice;
 
   UnitScale        unitScale[MAX_NUM_COMP];
@@ -107,8 +106,8 @@ public:
   const PreCalcValues* pcv;
 
   CodingStructure( XUCache& unitCache, std::mutex* mutex );
-  void create( const UnitArea& _unit, const bool isTopLayer, const PreCalcValues* _pcv );
-  void create( const ChromaFormat _chromaFormat, const Area& _area, const bool isTopLayer );
+  void createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv );
+  void createForSearch( const ChromaFormat _chromaFormat, const Area& _area );
   void destroy();
   void releaseIntermediateData();
 
