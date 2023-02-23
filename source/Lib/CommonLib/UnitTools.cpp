@@ -316,7 +316,7 @@ void CU::saveMotionInHMVP( const CodingUnit& cu, const bool isToBeDone )
   if (!cu.geo && !cu.affine && !isToBeDone)
   {
     MotionInfo puMi = cu.getMotionInfo();
-    HPMVInfo     mi ( puMi, ( puMi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL );
+    HPMVInfo     mi ( puMi, ( puMi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
 
     const unsigned log2ParallelMergeLevel = (cu.cs->sps->log2ParallelMergeLevelMinus2 + 2);
     const unsigned xBr = cu.Y().width + cu.Y().x;
@@ -790,9 +790,10 @@ void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int
   const CodingUnit* cuLeft = cs.getCURestricted(posLB.offset(-1, 0), cu, cu.chType);
   bool isGt4x4 = cu.lwidth() * cu.lheight() > 16;
   const bool isAvailableA1 = cuLeft && cu != *cuLeft && CU::isIBC(*cuLeft);
-  if (isGt4x4 && isAvailableA1)
+  if( isGt4x4 && isAvailableA1 )
   {
-    miLeft = cuLeft->getMotionInfo(posLB.offset(-1, 0));
+    miLeft             = cuLeft->getMotionInfo( posLB.offset( -1, 0 ) );
+    miLeft.miRefIdx[0] = MI_NOT_VALID + 1;
 
     // get Inter Dir
     mrgCtx.interDirNeighbours[cnt] = miLeft.interDir();
@@ -816,9 +817,10 @@ void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int
   bool isAvailableB1 = cuAbove && cu != *cuAbove && CU::isIBC(*cuAbove);
   if (isGt4x4 && isAvailableB1)
   {
-    miAbove = cuAbove->getMotionInfo(posRT.offset(0, -1));
+    miAbove             = cuAbove->getMotionInfo( posRT.offset( 0, -1 ) );
+    miAbove.miRefIdx[0] = MI_NOT_VALID + 1;
 
-    if (!isAvailableA1 || (miAbove != miLeft))
+    if( !isAvailableA1 || ( miAbove != miLeft ) )
     {
       // get Inter Dir
       mrgCtx.interDirNeighbours[cnt] = miAbove.interDir();
@@ -838,11 +840,9 @@ void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int
   {
     return;
   }
-
-  if (cnt != maxNumMergeCand)
+  else
   {
-    bool bFound = addMergeHMVPCand(cs, mrgCtx, mrgCandIdx, maxNumMergeCand, cnt, isAvailableA1, miLeft, isAvailableB1,
-      miAbove, true, isGt4x4);
+    bool bFound = addMergeHMVPCand( cs, mrgCtx, mrgCandIdx, maxNumMergeCand, cnt, isAvailableA1, miLeft, isAvailableB1, miAbove, true, isGt4x4 );
 
     if (bFound)
     {
@@ -2181,7 +2181,7 @@ void CU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, cons
       const RefPicList refPicListIndex = (predictorSource == 0) ? refPicList : refPicList2nd;
       const int        neibRefIdx = neibMi.mhRefIdx[refPicListIndex];
 
-      if (neibRefIdx >= 0 && (CU::isIBC(cu) || (currRefPOC == slice.getRefPOC(refPicListIndex, neibRefIdx))))
+      if (neibRefIdx != MH_NOT_VALID && (CU::isIBC(cu) || (currRefPOC == slice.getRefPOC(refPicListIndex, neibRefIdx))))
       {
         Mv pmv = neibMi.mv[refPicListIndex];
         pmv.roundTransPrecInternal2Amvr(cu.imv);
@@ -2996,29 +2996,33 @@ void clipColPos(int& posX, int& posY, const CodingUnit& cu)
 void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
 {
   MotionBuf mb = cu.getMotionBuf();
-  if( !cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N )
+
+  if( !cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N || cu.mergeType == MRG_TYPE_IBC )
   {
-    MotionInfo mi;
+    bool isIBC   = CU::isIBC( cu );
+    bool isInter = !CU::isIntra( cu ) && !isIBC;
 
-    bool isInter  = !CU::isIntra(cu) && !CU::isIBC(cu);
-
-    if( isInter )
+    if( isInter || isIBC )
     {
+      MotionInfo mi;
+
       for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
       {
         mi.mv[i]       = cu.mv[i][0];
-        mi.miRefIdx[i] = cu.refIdx[i] + 1;
+        mi.miRefIdx[i] = isIBC ? MI_NOT_VALID : cu.refIdx[i] + 1;
       }
-      if (cu.affine)
+
+      if( cu.affine )
       {
-        for (int y = 0; y < mb.height; y++)
+        for( int y = 0; y < mb.height; y++ )
         {
-          for (int x = 0; x < mb.width; x++)
+          for( int x = 0; x < mb.width; x++ )
           {
-            MotionInfo &dest = mb.at(x, y);
-            for (int i = 0; i < NUM_REF_PIC_LIST_01; i++)
+            MotionInfo& dest = mb.at( x, y );
+
+            for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
             {
-              if (mi.miRefIdx[i] == MI_NOT_VALID)
+              if( mi.miRefIdx[i] == MI_NOT_VALID )
               {
                 dest.mv[i] = Mv();
               }
@@ -3026,20 +3030,17 @@ void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
             }
           }
         }
-        return;
+      }
+      else
+      {
+        mb.fill( mi );
       }
     }
-
-    mb.fill( mi );
   }
-  else if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
+  else if( cu.mergeType == MRG_TYPE_SUBPU_ATMVP )
   {
-    CHECK(mrgCtx.subPuMvpMiBuf.area() == 0 || !mrgCtx.subPuMvpMiBuf.buf, "Buffer not initialized");
-    mb.copyFrom(mrgCtx.subPuMvpMiBuf);
-  }
-  else if(cu.mergeType == MRG_TYPE_IBC)
-  {
-    mb.memset( 0 );
+    CHECK( mrgCtx.subPuMvpMiBuf.area() == 0 || !mrgCtx.subPuMvpMiBuf.buf, "Buffer not initialized" );
+    mb.copyFrom( mrgCtx.subPuMvpMiBuf );
   }
 }
 

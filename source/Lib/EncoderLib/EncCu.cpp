@@ -920,19 +920,18 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
   }
-  if ((!slice.isIntra() || slice.sps->IBC)
+  if( ( !slice.isIntra() || slice.sps->IBC )
     && partitioner.chType == CH_L
-    && bestCS->cus.size() == 1 && (bestCS->cus.back()->predMode == MODE_INTER || bestCS->cus.back()->predMode == MODE_IBC)
-    && bestCS->area.Y() == (*bestCS->cus.back()).Y()
-    )
+    && bestCS->cus.size() == 1 && ( bestCS->cus.back()->predMode == MODE_INTER || bestCS->cus.back()->predMode == MODE_IBC )
+    && bestCS->area.Y() == (*bestCS->cus.back()).Y() )
   {
     const CodingUnit& cu = *bestCS->cus.front();
     bool isIbcSmallBlk = CU::isIBC(cu) && (cu.lwidth() * cu.lheight() <= 16);
     if (!cu.affine && !cu.geo && !isIbcSmallBlk)
     {
       const MotionInfo &mi = cu.getMotionInfo();
-      HPMVInfo hMi( mi, ( mi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL );
-      cu.cs->addMiToLut( CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
+      HPMVInfo hMi( mi, ( mi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
+      cu.cs->addMiToLut( CU::isIBC( cu ) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi );
     }
   }
 

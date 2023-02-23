@@ -618,26 +618,26 @@ void CodingStructure::destroyTempBuffers()
   std::vector<Mv>().swap( m_dmvrMvCache );
 }
 
-void CodingStructure::addMiToLut(static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> &lut, const HPMVInfo &mi)
+void CodingStructure::addMiToLut( static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS>& lut, const HPMVInfo& mi )
 {
   size_t currCnt = lut.size();
 
   bool pruned      = false;
   int  sameCandIdx = 0;
 
-  for (int idx = 0; idx < currCnt; idx++)
+  for( int idx = 0; idx < currCnt; idx++ )
   {
-    if (lut[idx] == mi)
+    if( lut[idx] == mi )
     {
       sameCandIdx = idx;
-      pruned      = true;
+      pruned = true;
       break;
     }
   }
 
-  if (pruned || currCnt == lut.capacity())
+  if( pruned || currCnt == lut.capacity() )
   {
-    lut.erase(lut.begin() + sameCandIdx);
+    lut.erase( lut.begin() + sameCandIdx );
   }
 
   lut.push_back(mi);

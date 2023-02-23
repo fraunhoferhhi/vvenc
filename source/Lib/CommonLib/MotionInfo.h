@@ -116,8 +116,6 @@ struct MotionInfo
   {
     if (interDir() != mi.interDir()) return false;
 
-    if (interDir() == 0) return true;
-
     if (interDir() != 2)
     {
       if (miRefIdx[0] != mi.miRefIdx[0]) return false;
@@ -152,18 +150,18 @@ struct MotionInfo
 struct HPMVInfo
 {
   Mv       mv      [NUM_REF_PIC_LIST_01];
-  int8_t   mhRefIdx[NUM_REF_PIC_LIST_01] = { NOT_VALID, NOT_VALID };
+  int8_t   mhRefIdx[NUM_REF_PIC_LIST_01] = { MH_NOT_VALID, MH_NOT_VALID };
 
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;;
 
   HPMVInfo() = default;
-  HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf )
+  HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf, bool isIBC )
   {
     mv[0] = mi.mv[0];
     mv[1] = mi.mv[1];
 
-    mhRefIdx[0] = mi.miRefIdx[0] - 1;
+    mhRefIdx[0] = mi.miRefIdx[0] - ( isIBC ? 0 : 1 );
     mhRefIdx[1] = mi.miRefIdx[1] - 1;
 
     BcwIdx       = _bcwIdx;
@@ -200,21 +198,21 @@ struct HPMVInfo
   bool operator==( const MotionInfo& mi ) const
   {
     if( interDir() != mi.interDir() ) return false;
-
+  
     if( interDir() == 0 ) return true;
-
+  
     if( interDir() != 2 )
     {
       if( mhRefIdx[0] != mi.miRefIdx[0] - 1 ) return false;
       if( mv[0]       != mi.mv[0]           ) return false;
     }
-
+  
     if( interDir() != 1 )
     {
       if( mhRefIdx[1] != mi.miRefIdx[1] - 1 ) return false;
       if( mv[1]       != mi.mv[1]           ) return false;
     }
-
+  
     return true;
   }
 
