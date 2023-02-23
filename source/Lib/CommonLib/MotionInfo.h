@@ -114,19 +114,11 @@ struct MotionInfo
 
   bool operator==( const MotionInfo& mi ) const
   {
-    if (interDir() != mi.interDir()) return false;
+    if( miRefIdx[0] != mi.miRefIdx[0] ) return false;
+    if( miRefIdx[0] != MI_NOT_VALID && mv[0] != mi.mv[0] ) return false;
 
-    if (interDir() != 2)
-    {
-      if (miRefIdx[0] != mi.miRefIdx[0]) return false;
-      if (mv[0]       != mi.mv[0])       return false;
-    }
-
-    if (interDir() != 1)
-    {
-      if (miRefIdx[1] != mi.miRefIdx[1]) return false;
-      if (mv[1]       != mi.mv[1])       return false;
-    }
+    if( miRefIdx[1] != mi.miRefIdx[1] ) return false;
+    if( miRefIdx[1] != MI_NOT_VALID && mv[1] != mi.mv[1] ) return false;
 
     return true;
   }
@@ -178,41 +170,23 @@ struct HPMVInfo
 
   bool operator==( const HPMVInfo& mi ) const
   {
-    if( interDir() != mi.interDir() ) return false;
+    if( mhRefIdx[0] != mi.mhRefIdx[0] ) return false;
+    if( mhRefIdx[0] != MH_NOT_VALID && mv[0] != mi.mv[0] ) return false;
 
-    if( interDir() != 2 )
-    {
-      if( mhRefIdx[0] != mi.mhRefIdx[0] ) return false;
-      if( mv[0]       != mi.mv[0]       ) return false;
-    }
-
-    if( interDir() != 1 )
-    {
-      if( mhRefIdx[1] != mi.mhRefIdx[1] ) return false;
-      if( mv[1]       != mi.mv[1]       ) return false;
-    }
+    if( mhRefIdx[1] != mi.mhRefIdx[1] ) return false;
+    if( mhRefIdx[1] != MH_NOT_VALID && mv[1] != mi.mv[1] ) return false;
 
     return true;
   }
   
   bool operator==( const MotionInfo& mi ) const
   {
-    if( interDir() != mi.interDir() ) return false;
-  
-    if( interDir() == 0 ) return true;
-  
-    if( interDir() != 2 )
-    {
-      if( mhRefIdx[0] != mi.miRefIdx[0] - 1 ) return false;
-      if( mv[0]       != mi.mv[0]           ) return false;
-    }
-  
-    if( interDir() != 1 )
-    {
-      if( mhRefIdx[1] != mi.miRefIdx[1] - 1 ) return false;
-      if( mv[1]       != mi.mv[1]           ) return false;
-    }
-  
+    if( mhRefIdx[0] != mi.miRefIdx[0] - 1 ) return false;
+    if( mhRefIdx[0] != MH_NOT_VALID && mv[0] != mi.mv[0] ) return false;
+
+    if( mhRefIdx[1] != mi.miRefIdx[1] - 1 ) return false;
+    if( mhRefIdx[1] != MH_NOT_VALID && mv[1] != mi.mv[1] ) return false;
+
     return true;
   }
 

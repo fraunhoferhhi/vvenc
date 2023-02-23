@@ -2240,7 +2240,7 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
         if (mi[idx0].miRefIdx[l] == mi[idx1].miRefIdx[l])
         {
           dir |= (l + 1);
-          refIdx[l] = mi[idx0].miRefIdx[l];
+          refIdx[l] = mi[idx0].miRefIdx[l] - 1;
         }
       }
     }

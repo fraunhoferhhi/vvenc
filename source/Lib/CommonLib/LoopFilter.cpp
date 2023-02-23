@@ -1366,8 +1366,8 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   }
 
   // pcSlice->isInterP()
-  CHECK( CU::isInter( cuP ) && 0 > miP.miRefIdx[0] - 1, "Invalid reference picture list index" );
-  CHECK( CU::isInter( cuP ) && 0 > miQ.miRefIdx[0] - 1, "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miP.miRefIdx[0], "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miQ.miRefIdx[0], "Invalid reference picture list index" );
 
   const Picture *piRefP0 = ( CU::isIBC( cuP ) ? sliceP.pic : sliceP.getRefPic( REF_PIC_LIST_0, miP.miRefIdx[0] - 1 ) );
   const Picture *piRefQ0 = ( CU::isIBC( cuQ ) ? sliceQ.pic : sliceQ.getRefPic( REF_PIC_LIST_0, miQ.miRefIdx[0] - 1 ) );
