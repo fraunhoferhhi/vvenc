@@ -1577,20 +1577,12 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       cu.BcwIdx = BCW_DEFAULT; // Reset to default for the Non-NormalMC modes.
     }
     uiHevcCost = (uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1]) ? uiCostBi : ((uiCost[0] <= uiCost[1]) ? uiCost[0] : uiCost[1]);
-#if AFFINE_NEWSPEED
     if (m_pcEncCfg->m_Affine > 2)
-#else
-    if (m_pcEncCfg->m_Affine > 1)
-#endif
     {
-#if !AFFINE_NEWSPEED
-      checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine && m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
-#endif
       if (cu.slice->TLayer > 3)
       {
         checkAffine = false;
       }
-#if AFFINE_NEWSPEED
       else
       {
         if (((m_pcEncCfg->m_Affine == 4) && (cu.slice->TLayer >= 2)) || (m_pcEncCfg->m_Affine == 5))
@@ -1598,7 +1590,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine && m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
         }
       }
-#endif
     }
     if (cu.Y().width > 8 && cu.Y().height > 8 && cu.slice->sps->Affine && checkAffine)
     {
