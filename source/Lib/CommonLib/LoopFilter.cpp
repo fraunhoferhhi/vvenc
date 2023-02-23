@@ -925,9 +925,6 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
 {
   const PreCalcValues &pcv = *cu.cs->pcv;
 
-  if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[cu.chType].pos(), cu.chType, pcv ) )
-    return;
-
   ChannelType start = CH_L;
   ChannelType end   = CH_C;
 
@@ -957,6 +954,9 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
   for( int ct = start; ct <= end; ct++ )
   {
     const ChannelType ch  = ( ChannelType ) ct;
+    if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[ch].pos(), ch, pcv ) )
+      continue;
+
     const TreeType    tt  = isLuma( ch ) ? TREE_L : TREE_C;
     const TreeType    ttfst = isLuma( start ) ? TREE_L : TREE_C;
     const bool        vld = isLuma( ch ) ? currTU.Y().valid() : currTU.Cb().valid();
