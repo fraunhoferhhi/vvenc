@@ -437,11 +437,11 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
 
 CodingUnit& CodingUnit::operator=( const MotionInfo& mi )
 {
-  interDir = mi.interDir;
+  interDir = mi.interDir();
 
   for( uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++ )
   {
-    refIdx[i] = mi.refIdx[i];
+    refIdx[i] = mi.miRefIdx[i] - 1;
     mv [i][0] = mi.mv[i];
   }
 

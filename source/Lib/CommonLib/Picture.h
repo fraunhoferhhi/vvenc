@@ -200,6 +200,7 @@ public:
   const DCI*                    dci;
   ParameterSetMap<APS>          picApsMap;
   std::deque<Slice*>            slices;
+  std::vector<Slice*>           ctuSlice;
   ReshapeData                   reshapeData;
   SEIMessages                   SEIs;
   BlkStat                       picBlkStat;

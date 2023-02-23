@@ -114,6 +114,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
+  std::fill( pic.ctuSlice.begin(), pic.ctuSlice.end(), pic.slices[0] );
   m_SliceEncoder.compressSlice( &pic );
 
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
