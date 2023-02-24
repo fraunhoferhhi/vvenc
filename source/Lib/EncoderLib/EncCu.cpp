@@ -1559,7 +1559,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   tempCS->initStructData( encTestMode.qp );
 
   MergeCtx mergeCtx;
-  bool affineMrgAvail =!((m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
+  bool affineMrgAvail = !((m_pcEncCfg->m_Affine > 2) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
     && (m_pcEncCfg->m_Affine || sps.SbtMvp) && m_pcEncCfg->m_maxNumAffineMergeCand
     && !(bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8);
 
