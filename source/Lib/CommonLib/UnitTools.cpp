@@ -1542,9 +1542,11 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
   {
     auto& neibMi = cu.cs->motionLut.lutIbc;
     HPMVInfo miNeighbor = neibMi[cand];
-    if (isAddNeighborMvIBC(miNeighbor.mv[0], mvPred, nbPred))
+    Mv neibMv = miNeighbor.mv[0];
+    neibMv.changePrecision( MvPrecision::MV_PRECISION_INTERNAL, MvPrecision::MV_PRECISION_INT );
+    if (isAddNeighborMvIBC( neibMv, mvPred, nbPred))
     {
-      mvPred[nbPred++] = miNeighbor.mv[0];
+      mvPred[nbPred++] = neibMv;
     }
   }
 
