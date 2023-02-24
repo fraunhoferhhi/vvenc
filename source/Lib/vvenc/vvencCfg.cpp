@@ -1564,7 +1564,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if (c->m_Affine > 1)
   {
     c->m_PROF = bool(c->m_Affine);
-    c->m_AffineType = (c->m_Affine == 2) ? true : false;
+    c->m_AffineType = (c->m_Affine > 1) ? true : false;
   }
 
   // check char array and reset them, if they seems to be unset
@@ -1787,7 +1787,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_EDO < 0 || c->m_EDO > 2,                    "EDO out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_TMVPModeId < 0 || c->m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_AMVRspeed < 0 || c->m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
-  vvenc_confirmParameter( c, c->m_Affine < 0 || c->m_Affine > 2,              "Affine out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_Affine < 0 || c->m_Affine > 5,              "Affine out of range [0..5]" );
   vvenc_confirmParameter( c, c->m_MMVD < 0 || c->m_MMVD > 4,                  "MMVD out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_SMVD < 0 || c->m_SMVD > 3,                  "SMVD out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 3,                  "Geo out of range [0..3]" );
@@ -2501,7 +2501,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_Affine                          = 2;
+      c->m_Affine                          = 5;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
       c->m_alfUnitSize                     = 128;
@@ -2568,7 +2568,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_Affine                          = 2;
+      c->m_Affine                          = 5;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
@@ -2641,7 +2641,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_Affine                          = 2;
+      c->m_Affine                          = 5;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
@@ -2793,7 +2793,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_Affine                          = 2;
+      c->m_Affine                          = 5;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
