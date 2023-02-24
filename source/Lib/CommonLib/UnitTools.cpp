@@ -1488,6 +1488,53 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   return true;
 }
 
+static void isAddNeighborMvIBC( const Mv& currMv, Mv* neighborMvs, int& numNeighborMv )
+{
+  Mv bv = currMv;
+  bv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
+
+  bool existed = false;
+  for( uint32_t cand = 0; cand < numNeighborMv && !existed; cand++ )
+  {
+    if( currMv == neighborMvs[cand] )
+    {
+      existed = true;
+    }
+  }
+
+  if( !existed )
+  {
+    neighborMvs[numNeighborMv++] = bv;
+  }
+}
+
+static bool getDerivedBvIbc( CodingUnit& cu, const Mv& currentBv, Mv& derivedMv )
+{
+  int cuPelX  = cu.lumaPos().x;
+  int cuPelY  = cu.lumaPos().y;
+  int rX      = cuPelX + currentBv.hor;
+  int rY      = cuPelY + currentBv.ver;
+  int offsetX = currentBv.hor;
+  int offsetY = currentBv.ver;
+
+  if( rX < 0 || rY < 0 || rX >= cu.cs->slice->pps->picWidthInLumaSamples || rY >= cu.cs->slice->pps->picHeightInLumaSamples )
+  {
+    return false;
+  }
+
+  const CodingUnit* neibRefCU = cu.cs->getCURestricted( cu.lumaPos().offset( offsetX, offsetY ), cu, CH_L );
+
+  if( neibRefCU && CU::isIBC( *neibRefCU ) )
+  {
+    derivedMv  = neibRefCU->mv[0][0];
+    derivedMv  . changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
+    derivedMv += currentBv;
+    return true;
+  }
+
+  return false;
+}
+
 void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
 {
   const PreCalcValues& pcv = *cu.cs->pcv;
@@ -1503,125 +1550,64 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
 
   // above-left
   const CodingUnit* aboveLeftCU = cu.cs->getCURestricted(posLT.offset(-1, -1), cu, CH_L);
-  if (aboveLeftCU && CU::isIBC(*aboveLeftCU))
+  if( aboveLeftCU && CU::isIBC( *aboveLeftCU ) )
   {
-    if (isAddNeighborMvIBC(aboveLeftCU->bv, mvPred, nbPred))
-    {
-      mvPred[nbPred++] = aboveLeftCU->bv;
-    }
+    isAddNeighborMvIBC(aboveLeftCU->mv[0][0], mvPred, nbPred);
   }
 
   // above neighbors
-  for (uint32_t dx = 0; dx < totalAboveUnits && nbPred < IBC_NUM_CANDIDATES; dx++)
+  for( uint32_t dx = 0; dx < totalAboveUnits && nbPred < IBC_NUM_CANDIDATES; dx++ )
   {
-    const CodingUnit* tmpCU = cu.cs->getCURestricted(posLT.offset((dx << log2UnitWidth), -1), cu, CH_L);
-    if (tmpCU && CU::isIBC(*tmpCU))
+    const CodingUnit* tmpCU = cu.cs->getCURestricted( posLT.offset( ( dx << log2UnitWidth ), -1 ), cu, CH_L );
+    if( tmpCU && CU::isIBC( *tmpCU ) )
     {
-      if (isAddNeighborMvIBC(tmpCU->bv, mvPred, nbPred))
-      {
-        mvPred[nbPred++] = tmpCU->bv;
-      }
+      isAddNeighborMvIBC( tmpCU->mv[0][0], mvPred, nbPred );
     }
   }
 
   // left neighbors
-  for (uint32_t dy = 0; dy < totalLeftUnits && nbPred < IBC_NUM_CANDIDATES; dy++)
+  for( uint32_t dy = 0; dy < totalLeftUnits && nbPred < IBC_NUM_CANDIDATES; dy++ )
   {
-    const CodingUnit* tmpCU = cu.cs->getCURestricted(posLT.offset(-1, (dy << log2UnitHeight)), cu, CH_L);
-    if (tmpCU && CU::isIBC(*tmpCU))
+    const CodingUnit* tmpCU = cu.cs->getCURestricted( posLT.offset( -1, ( dy << log2UnitHeight ) ), cu, CH_L );
+    if( tmpCU && CU::isIBC( *tmpCU ) )
     {
-      if (isAddNeighborMvIBC(tmpCU->bv, mvPred, nbPred))
-      {
-        mvPred[nbPred++] = tmpCU->bv;
-      }
+      isAddNeighborMvIBC( tmpCU->mv[0][0], mvPred, nbPred );
     }
   }
 
   size_t numAvaiCandInLUT = cu.cs->motionLut.lutIbc.size();
-  for (uint32_t cand = 0; cand < numAvaiCandInLUT && nbPred < IBC_NUM_CANDIDATES; cand++)
+  for( uint32_t cand = 0; cand < numAvaiCandInLUT && nbPred < IBC_NUM_CANDIDATES; cand++ )
   {
     auto& neibMi = cu.cs->motionLut.lutIbc;
-    HPMVInfo miNeighbor = neibMi[cand];
-    Mv neibMv = miNeighbor.mv[0];
-    neibMv.changePrecision( MvPrecision::MV_PRECISION_INTERNAL, MvPrecision::MV_PRECISION_INT );
-    if (isAddNeighborMvIBC( neibMv, mvPred, nbPred))
-    {
-      mvPred[nbPred++] = neibMv;
-    }
+    isAddNeighborMvIBC( neibMi[cand].mv[0], mvPred, nbPred );
   }
 
   bool isBvCandDerived[IBC_NUM_CANDIDATES];
   ::memset(isBvCandDerived, false, IBC_NUM_CANDIDATES);
 
   int curNbPred = nbPred;
-  if (curNbPred < IBC_NUM_CANDIDATES)
+  if( curNbPred < IBC_NUM_CANDIDATES )
   {
     do
     {
       curNbPred = nbPred;
-      for (uint32_t idx = 0; idx < curNbPred && nbPred < IBC_NUM_CANDIDATES; idx++)
+      for( uint32_t idx = 0; idx < curNbPred && nbPred < IBC_NUM_CANDIDATES; idx++ )
       {
-        if (!isBvCandDerived[idx])
+        if( !isBvCandDerived[idx] )
         {
-          Mv derivedBv;
-          if (getDerivedBVIBC(cu, mvPred[idx], derivedBv))
+          Mv derivedMv;
+          if( getDerivedBvIbc( cu, mvPred[idx], derivedMv ) )
           {
-            if (isAddNeighborMvIBC(derivedBv, mvPred, nbPred))
-            {
-              mvPred[nbPred++] = derivedBv;
-            }
+            derivedMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
+            isAddNeighborMvIBC( derivedMv, mvPred, nbPred );
           }
           isBvCandDerived[idx] = true;
         }
       }
-    } while (nbPred > curNbPred && nbPred < IBC_NUM_CANDIDATES);
+    } while( nbPred > curNbPred && nbPred < IBC_NUM_CANDIDATES );
   }
 }
-bool CU::isAddNeighborMvIBC(const Mv& currMv, Mv* neighborMvs, int numNeighborMv)
-{
-  bool existed = false;
-  for (uint32_t cand = 0; cand < numNeighborMv && !existed; cand++)
-  {
-    if (currMv == neighborMvs[cand])
-    {
-      existed = true;
-    }
-  }
 
-  if (!existed)
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-bool CU::getDerivedBVIBC(CodingUnit& cu, const Mv& currentMv, Mv& derivedMv)
-{
-  int   cuPelX = cu.lumaPos().x;
-  int   cuPelY = cu.lumaPos().y;
-  int rX = cuPelX + currentMv.hor;
-  int rY = cuPelY + currentMv.ver;
-  int offsetX = currentMv.hor;
-  int offsetY = currentMv.ver;
-
-  if (rX < 0 || rY < 0 || rX >= cu.cs->slice->pps->picWidthInLumaSamples || rY >= cu.cs->slice->pps->picHeightInLumaSamples)
-  {
-    return false;
-  }
-
-  const CodingUnit* neibRefCU = NULL;
-  neibRefCU = cu.cs->getCURestricted(cu.lumaPos().offset(offsetX, offsetY), cu, CH_L);
-
-  bool isIBC = (neibRefCU) ? CU::isIBC(*neibRefCU) : 0;
-  if (isIBC)
-  {
-    derivedMv = neibRefCU->bv;
-    derivedMv += currentMv;
-  }
-  return isIBC;
-}
 void CU::fillIBCMvpCand(CodingUnit& cu, AMVPInfo& amvpInfo)
 {
   AMVPInfo* pInfo = &amvpInfo;

@@ -320,10 +320,7 @@ struct InterPredictionData
   uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
   uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
   Mv          mvd     [NUM_REF_PIC_LIST_01][3];
-  //union {
   Mv          mv      [NUM_REF_PIC_LIST_01][3];
-  Mv          bv;
-  //};
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
 };
 

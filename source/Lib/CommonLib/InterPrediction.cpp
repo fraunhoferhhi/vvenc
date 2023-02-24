@@ -1929,18 +1929,18 @@ void InterPrediction::xIntraBlockCopyIBC(CodingUnit& cu, PelUnitBuf& predBuf, co
   const int shiftSampleHor = getComponentScaleX(compID, cu.chromaFormat);
   const int shiftSampleVer = getComponentScaleY(compID, cu.chromaFormat);
   const int ctuSizeLog2Ver = floorLog2(lcuWidth) - shiftSampleVer;
-  cu.bv = cu.mv[REF_PIC_LIST_0][0];
-  cu.bv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
+  Mv bv = cu.mv[REF_PIC_LIST_0][0];
+  bv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
   int refx, refy;
   if (compID == COMP_Y)
   {
-    refx = cu.Y().x + cu.bv.hor;
-    refy = cu.Y().y + cu.bv.ver;
+    refx = cu.Y().x + bv.hor;
+    refy = cu.Y().y + bv.ver;
   }
   else
   {//Cb or Cr
-    refx = cu.Cb().x + (cu.bv.hor >> shiftSampleHor);
-    refy = cu.Cb().y + (cu.bv.ver >> shiftSampleVer);
+    refx = cu.Cb().x + (bv.hor >> shiftSampleHor);
+    refy = cu.Cb().y + (bv.ver >> shiftSampleVer);
   }
   refx &= ((m_IBCBufferWidth >> shiftSampleHor) - 1);
   refy &= ((1 << ctuSizeLog2Ver) - 1);

@@ -357,7 +357,6 @@ void CodingUnit::initPuData()
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
-  bv                . setZero();
 
   mcControl         = 0;
 
@@ -411,7 +410,6 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   interDir          = other.interDir;
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
-  bv                = other.bv;
 
   if( other.mergeFlag && mvdL0SubPu )
   {

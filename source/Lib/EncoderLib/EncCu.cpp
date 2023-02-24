@@ -2722,15 +2722,18 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       mergeCtx.setMergeInfo(cu, mergeCand); // set bv info in merge mode
       const int cuPelX = cu.Y().x;
       const int cuPelY = cu.Y().y;
-      int roiWidth = cu.lwidth();
-      int roiHeight = cu.lheight();
-      const int picWidth = cu.cs->slice->pps->picWidthInLumaSamples;
+      int roiWidth     = cu.lwidth();
+      int roiHeight    = cu.lheight();
+      const int picWidth  = cu.cs->slice->pps->picWidthInLumaSamples;
       const int picHeight = cu.cs->slice->pps->picHeightInLumaSamples;
-      const unsigned int  lcuWidth = cu.cs->slice->sps->CTUSize;
-      int xPred = cu.bv.hor;
-      int yPred = cu.bv.ver;
+      const unsigned int lcuWidth = cu.cs->slice->sps->CTUSize;
+
+      Mv bv = cu.mv[0][0];
+      bv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT);
+      int xPred = bv.hor;
+      int yPred = bv.ver;
       
-      if (!m_cInterSearch.searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth)) // not valid bv derived
+      if( !m_cInterSearch.searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth ) ) // not valid bv derived
       {
         numValidBv--;
         continue;
