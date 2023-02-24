@@ -562,9 +562,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 {
   const Area& lumaArea = tempCS->area.Y();
 
-  _CASE( _AREA_AT( lumaArea, 688, 496, 16, 16 ) && tempCS->picture->poc == 32 )
-    _BREAK;
-
   Slice&   slice      = *tempCS->slice;
   const PPS &pps      = *tempCS->pps;
   const SPS &sps      = *tempCS->sps;
