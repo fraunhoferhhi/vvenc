@@ -3901,6 +3901,10 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 
   if( CU::isIntra( cu ) )
   {
+    if( isLuma( cu.chType ) )
+    {
+      cu.getMotionBuf().memset( 0 ); // clear motion buf
+    }
     xReconIntraQT( cu );
   }
   else

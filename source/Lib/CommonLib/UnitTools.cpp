@@ -74,7 +74,7 @@ UnitArea CS::getArea( const CodingStructure &cs, const UnitArea& area, const Cha
   return isDualITree( cs ) || treeType != TREE_D ? area.singleChan( chType ) : area;
 }
 
-void CS::setRefinedMotionField(CodingStructure &cs)
+void CS::setRefinedMotionField( CodingStructure& cs )
 {
   MotionBuf   mb     = cs.getMotionBuf();
   MotionInfo* orgPtr = mb.buf;

@@ -764,7 +764,7 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
     picture->getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
   }
 
-  if (!subStruct.m_isTuEnc && ((!slice->isIntra() || slice->sps->IBC) && chType != CH_C))
+  if( !subStruct.m_isTuEnc && ( ( !slice->isIntra() || slice->sps->IBC ) && chType != CH_C ) )
   {
     // copy motion buffer
     MotionBuf ownMB  = getMotionBuf          ( clippedArea );
