@@ -3341,6 +3341,112 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_saoScc                          = true;
       break;
 
+          case 63:
+                  // motion estimation
+      c->m_SearchRange                     = 128;
+      c->m_bipredSearchRange               = 1;
+      c->m_minSearchWindow                 = 96;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
+      c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+
+      // partitioning: CTUSize64 QT44MTT00
+      c->m_CTUSize                         = 64;
+      c->m_dualITree                       = 1;
+      c->m_MinQT[ 0 ]                      = 8;
+      c->m_MinQT[ 1 ]                      = 32;
+      c->m_MinQT[ 2 ]                      = 8;
+      c->m_MaxQT[ 0 ]                      = 16;
+      c->m_MaxQT[ 1 ]                      = 64;
+      c->m_MaxQT[ 2 ]                      = 16;
+      c->m_maxMTTDepth                     = 0;
+      c->m_maxMTTDepthI                    = 0;
+
+      // speedups
+      c->m_qtbttSpeedUp                    = 7;
+      c->m_fastTTSplit                     = 0;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
+      c->m_usePbIntraFast                  = 2;
+      c->m_useFastMrg                      = 3;
+      c->m_fastLocalDualTreeMode           = 1;
+      c->m_fastSubPel                      = 2;
+      c->m_FastIntraTools                  = 0;
+      c->m_FIMMode                         = 4;
+      c->m_useEarlyCU                      = 2;
+      c->m_bIntegerET                      = 1;
+      c->m_IntraEstDecBit                  = 3;
+      c->m_numIntraModesFullRD             = 1;
+      c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 1;
+      c->m_numRefPicsSCC                   = 0;
+
+      // tools
+      c->m_RDOQ                            = 2;
+      c->m_SignDataHidingEnabled           = 1;
+      c->m_LMChroma                        = 1;
+      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_MTSImplicit                     = 1;
+      // scc
+      c->m_IBCFastMethod                   = 6;
+      c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
+      break;
+
+          case 64:
+                  // motion estimation
+      c->m_SearchRange                     = 128;
+      c->m_bipredSearchRange               = 1;
+      c->m_minSearchWindow                 = 96;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
+      c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+
+      // partitioning: CTUSize64 QT44MTT00
+      c->m_CTUSize                         = 64;
+      c->m_dualITree                       = 1;
+      c->m_MinQT[ 0 ]                      = 32;
+      c->m_MinQT[ 1 ]                      = 64;
+      c->m_MinQT[ 2 ]                      = 16;
+      c->m_MaxQT[ 0 ]                      = 64;
+      c->m_MaxQT[ 1 ]                      = 64;
+      c->m_MaxQT[ 2 ]                      = 64;
+      c->m_maxMTTDepth                     = 0;
+      c->m_maxMTTDepthI                    = 0;
+
+      // speedups
+      c->m_qtbttSpeedUp                    = 7;
+      c->m_fastTTSplit                     = 0;
+      c->m_contentBasedFastQtbt            = true;
+      c->m_fastHad                         = true;
+      c->m_usePbIntraFast                  = 2;
+      c->m_useFastMrg                      = 3;
+      c->m_fastLocalDualTreeMode           = 1;
+      c->m_fastSubPel                      = 2;
+      c->m_FastIntraTools                  = 0;
+      c->m_FIMMode                         = 4;
+      c->m_useEarlyCU                      = 2;
+      c->m_bIntegerET                      = 1;
+      c->m_IntraEstDecBit                  = 3;
+      c->m_numIntraModesFullRD             = 1;
+      c->m_reduceIntraChromaModesFullRD    = true;
+      c->m_meReduceTap                     = 2;
+      c->m_numRefPics                      = 1;
+      c->m_numRefPicsSCC                   = 0;
+
+      // tools
+      c->m_RDOQ                            = 2;
+      c->m_SignDataHidingEnabled           = 1;
+      c->m_LMChroma                        = 1;
+      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_MTSImplicit                     = 1;
+      // scc
+      c->m_IBCFastMethod                   = 6;
+      c->m_TSsize                          = 3;
+      c->m_saoScc                          = true;
+      break;
+
         }
 
       break;
