@@ -1379,6 +1379,11 @@ void CU::getInterMMVDMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, con
 
 bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, const Position& _pos, Mv& rcMv, const int refIdx, bool sbFlag )
 {
+  if( CU::isIBC( cu ) )
+  {
+    return false;
+  }
+
   // don't perform MV compression when generally disabled or SbTMVP is used
   const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
   const unsigned mask  = ~( scale - 1 );
@@ -1411,10 +1416,7 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   {
     return false;
   }
-  if (CU::isIBC(cu))
-  {
-    return false;
-  }
+
   int iColRefIdx = mi.miRefIdx[eColRefPicList] - 1;
 
   if (sbFlag && !slice.checkLDC)
