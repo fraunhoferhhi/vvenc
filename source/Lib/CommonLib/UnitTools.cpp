@@ -1508,7 +1508,7 @@ static void isAddNeighborMvIBC( const Mv& currMv, Mv* neighborMvs, int& numNeigh
   }
 }
 
-static bool getDerivedBvIbc( CodingUnit& cu, const Mv& currentBv, Mv& derivedMv )
+static bool getDerivedMvIbc( CodingUnit& cu, const Mv& currentBv, Mv& derivedMv )
 {
   int cuPelX  = cu.lumaPos().x;
   int cuPelY  = cu.lumaPos().y;
@@ -1526,9 +1526,9 @@ static bool getDerivedBvIbc( CodingUnit& cu, const Mv& currentBv, Mv& derivedMv 
 
   if( neibRefCU && CU::isIBC( *neibRefCU ) )
   {
+    Mv currMv  = currentBv; currMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
     derivedMv  = neibRefCU->mv[0][0];
-    derivedMv  . changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
-    derivedMv += currentBv;
+    derivedMv += currMv;
     return true;
   }
 
@@ -1596,9 +1596,8 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
         if( !isBvCandDerived[idx] )
         {
           Mv derivedMv;
-          if( getDerivedBvIbc( cu, mvPred[idx], derivedMv ) )
+          if( getDerivedMvIbc( cu, mvPred[idx], derivedMv ) )
           {
-            derivedMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
             isAddNeighborMvIBC( derivedMv, mvPred, nbPred );
           }
           isBvCandDerived[idx] = true;
