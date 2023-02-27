@@ -395,7 +395,7 @@ int RateCtrl::getBaseQP()
 
     for (auto& stats : firstPassData)
     {
-#if PRINT_RC_DATA
+#if PRINT_RC_DATA && 0
       printf( "MANFRED %d  qp %d  numBits %d targetBits %d  lambda %f\n", stats.poc, stats.qp, stats.numBits, stats.targetBits, stats.lambda );
 #endif
       sumFrBits += stats.numBits;
