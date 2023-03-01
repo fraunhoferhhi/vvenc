@@ -88,21 +88,21 @@ struct MvField
 
   void setMvField( Mv const & cMv, const int iRefIdx )
   {
-    CHECK( iRefIdx == -1 && cMv != Mv(0,0), "Must not happen." );
+    CHECK( iRefIdx == NOT_VALID && cMv != Mv(0,0), "Must not happen." );
     mv     = cMv;
     refIdx = iRefIdx;
   }
 
   bool operator==( const MvField& other ) const
   {
-    CHECK( refIdx == -1 && mv != Mv(0,0), "Error in operator== of MvField." );
-    CHECK( other.refIdx == -1 && other.mv != Mv(0,0), "Error in operator== of MvField." );
+    CHECK( refIdx == NOT_VALID && mv != Mv(0,0), "Error in operator== of MvField." );
+    CHECK( other.refIdx == NOT_VALID && other.mv != Mv(0,0), "Error in operator== of MvField." );
     return refIdx == other.refIdx && mv == other.mv;
   }
   bool operator!=( const MvField& other ) const
   {
-    CHECK( refIdx == -1 && mv != Mv(0,0), "Error in operator!= of MvField." );
-    CHECK( other.refIdx == -1 && other.mv != Mv(0,0), "Error in operator!= of MvField." );
+    CHECK( refIdx == NOT_VALID && mv != Mv(0,0), "Error in operator!= of MvField." );
+    CHECK( other.refIdx == NOT_VALID && other.mv != Mv(0,0), "Error in operator!= of MvField." );
     return refIdx != other.refIdx || mv != other.mv;
   }
 };
@@ -153,8 +153,8 @@ struct HPMVInfo
     mv[0] = mi.mv[0];
     mv[1] = mi.mv[1];
 
-    mhRefIdx[0] = mi.miRefIdx[0] - ( isIBC ? 0 : 1 );
-    mhRefIdx[1] = mi.miRefIdx[1] - 1;
+    mhRefIdx[0] = mi.miRefIdx[0] + ( isIBC ? 1 : 0 );
+    mhRefIdx[1] = mi.miRefIdx[1];
 
     BcwIdx       = _bcwIdx;
     useAltHpelIf = _useAltHpelIf;
@@ -181,10 +181,10 @@ struct HPMVInfo
   
   bool operator==( const MotionInfo& mi ) const
   {
-    if( mhRefIdx[0] != mi.miRefIdx[0] - 1 ) return false;
+    if( mhRefIdx[0] != mi.miRefIdx[0] ) return false;
     if( mhRefIdx[0] != MH_NOT_VALID && mv[0] != mi.mv[0] ) return false;
 
-    if( mhRefIdx[1] != mi.miRefIdx[1] - 1 ) return false;
+    if( mhRefIdx[1] != mi.miRefIdx[1] ) return false;
     if( mhRefIdx[1] != MH_NOT_VALID && mv[1] != mi.mv[1] ) return false;
 
     return true;

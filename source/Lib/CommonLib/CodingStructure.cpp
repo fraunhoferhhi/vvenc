@@ -961,7 +961,7 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
   if( !skipMotBuf && ( !parent || ( ( !slice->isIntra() || slice->sps->IBC ) && !m_isTuEnc ) ) )
   {
-    getMotionBuf().memset( 0 );
+    getMotionBuf().memset( -1 );
   }
 
   m_dmvrMvCacheOffset = 0;
