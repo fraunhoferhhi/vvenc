@@ -60,7 +60,7 @@ VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
   {
     return nullptr;
   }
-  
+
   vvenc_YUVBuffer_default( yuvBuffer );
   return yuvBuffer;
 }
@@ -159,7 +159,7 @@ VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int 
   accessUnit->payload = (unsigned char*)malloc(sizeof(unsigned char) * payload_size );
   if( nullptr == accessUnit->payload )
   {
-    return nullptr;
+    return;
   }
   accessUnit->payloadSize = payload_size;
   accessUnit->payloadUsedSize = 0;
