@@ -44,8 +44,8 @@ POSSIBILITY OF SUCH DAMAGE.
   \brief   This file contains the external interface of the vvenc SDK.
 */
 
-#ifndef _VVENC_H_
-#define _VVENC_H_
+#ifndef VVENC_VVENC_H
+#define VVENC_VVENC_H
 
 #include "vvenc/vvencDecl.h"
 
@@ -447,4 +447,4 @@ VVENC_NAMESPACE_END
 }
 #endif /*__cplusplus */
 
-#endif /*_VVENC_H_*/
+#endif /*VVENC_VVENC_H*/
