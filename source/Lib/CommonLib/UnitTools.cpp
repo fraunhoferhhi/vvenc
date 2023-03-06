@@ -1496,7 +1496,7 @@ static void isAddNeighborMvIBC( const Mv& currMv, Mv* neighborMvs, int& numNeigh
   bool existed = false;
   for( uint32_t cand = 0; cand < numNeighborMv && !existed; cand++ )
   {
-    if( currMv == neighborMvs[cand] )
+    if( bv == neighborMvs[cand] )
     {
       existed = true;
     }
