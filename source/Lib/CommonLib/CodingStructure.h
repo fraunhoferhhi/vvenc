@@ -87,8 +87,7 @@ public:
 
   Picture*         picture;
   CodingStructure* parent;
-  CodingStructure* refCS;
-  CodingStructure* bestCS;
+  CodingStructure* lumaCS;
   Slice*           slice;
 
   UnitScale        unitScale[MAX_NUM_COMP];
@@ -107,8 +106,8 @@ public:
   const PreCalcValues* pcv;
 
   CodingStructure( XUCache& unitCache, std::mutex* mutex );
-  void create( const UnitArea& _unit, const bool isTopLayer, const PreCalcValues* _pcv );
-  void create( const ChromaFormat _chromaFormat, const Area& _area, const bool isTopLayer );
+  void createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv );
+  void createForSearch( const ChromaFormat _chromaFormat, const Area& _area );
   void destroy();
   void releaseIntermediateData();
 
@@ -159,7 +158,7 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr, bool force = false );
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = true, const UnitArea* area = nullptr );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
   void compactResize   ( const UnitArea& area );
 
@@ -208,8 +207,8 @@ private:
   PelStorage* m_org;
   PelStorage* m_rsporg;
 
-  TCoeffSig*  m_coeffs [MAX_NUM_COMP];
-  int         m_offsets[MAX_NUM_COMP];
+  TCoeffSig*  m_coeffs;
+  ptrdiff_t   m_cffoffsets;
 
   std::vector<Mv>   m_dmvrMvCache;
   int               m_dmvrMvCacheOffset;

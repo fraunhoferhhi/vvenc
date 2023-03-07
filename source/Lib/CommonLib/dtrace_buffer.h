@@ -167,7 +167,7 @@ inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
       for( int x = 0; x < cu.lwidth(); x += 4, i++ )
       {
         const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
-        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );
+        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.miRefIdx[eListIdx] );
       }
       DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
     }
