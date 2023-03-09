@@ -6415,7 +6415,8 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 
   }
 
-  cMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
+  cu.bv = cMv; // bv is always at integer accuracy
+  cMv.changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
   cu.mv[REF_PIC_LIST_0][0] = cMv; // store in fractional pel accuracy
 
   cu.mvpIdx[REF_PIC_LIST_0] = bvpIdxBest;
