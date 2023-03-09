@@ -1577,13 +1577,18 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       cu.BcwIdx = BCW_DEFAULT; // Reset to default for the Non-NormalMC modes.
     }
     uiHevcCost = (uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1]) ? uiCostBi : ((uiCost[0] <= uiCost[1]) ? uiCost[0] : uiCost[1]);
-
-    if (m_pcEncCfg->m_Affine > 1)
+    if (m_pcEncCfg->m_Affine > 2)
     {
-      checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine && m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
       if (cu.slice->TLayer > 3)
       {
         checkAffine = false;
+      }
+      else
+      {
+        if (((m_pcEncCfg->m_Affine == 4) && (cu.slice->TLayer >= 2)) || (m_pcEncCfg->m_Affine == 5))
+        {
+          checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine && m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
+        }
       }
     }
     if (cu.Y().width > 8 && cu.Y().height > 8 && cu.slice->sps->Affine && checkAffine)
@@ -6410,8 +6415,7 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 
   }
 
-  cu.bv = cMv; // bv is always at integer accuracy
-  cMv.changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
+  cMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
   cu.mv[REF_PIC_LIST_0][0] = cMv; // store in fractional pel accuracy
 
   cu.mvpIdx[REF_PIC_LIST_0] = bvpIdxBest;
