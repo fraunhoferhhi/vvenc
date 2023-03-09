@@ -537,7 +537,7 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
 
   m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
-  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
+  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? ( m_encCfg->m_vvencMCTF.MCTFSpeed >= 3 ? 2 : 1 ) : 0;
   m_mctfUnitSize     = m_encCfg->m_vvencMCTF.MCTFUnitSize;
 }
 
@@ -934,14 +934,14 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   {
     if( prevLineX && blockX >= prevLineX->load() ) return false;
 
-    int range = doubleRes ? 0 : 5;
+    int range = doubleRes ? 0 : ( m_searchPttrn == 2 ? 3 : 5 );
     const int stepSize = blockSize;
 
     MotionVector best;
 
     if (previous == NULL)
     {
-      range = 8;
+      range = m_searchPttrn == 2 ? 5 : 8;
     }
     else
     {
@@ -973,14 +973,15 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
     MotionVector prevBest = best;
-    for (int y2 = prevBest.y / m_motionVectorFactor - range; y2 <= prevBest.y / m_motionVectorFactor + range; y2++)
+    const int d = previous == NULL && m_searchPttrn == 2 ? 2 : 1;
+    for( int y2 = prevBest.y / m_motionVectorFactor - range; y2 <= prevBest.y / m_motionVectorFactor + range; y2 += d )
     {
-      for (int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2++)
+      for( int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2 += d )
       {
-        int error = motionErrorLuma(orig, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error);
-        if (error < best.error)
+        int error = motionErrorLuma( orig, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error );
+        if( error < best.error )
         {
-          best.set(x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, error);
+          best.set( x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, error );
         }
       }
     }
@@ -989,7 +990,8 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
 
       prevBest = best;
-      int doubleRange = m_searchPttrn ? 6 : 12;
+      static const int range[] = { 12, 6, 4 };
+      int doubleRange = range[m_searchPttrn];
 
       // first iteration, 49 - 1 or 16 checks
       for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
