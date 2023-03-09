@@ -941,7 +941,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
     if (previous == NULL)
     {
-      range = m_searchPttrn == 2 ? 5 : 8;
+      range = 8;
     }
     else
     {
