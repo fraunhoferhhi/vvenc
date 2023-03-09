@@ -162,8 +162,6 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
       }
     }
 
-    pic->ctuSlice[ctuRsAddr] = slice;
-
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
 
     cabacReader.initBitstream( ppcSubstreams[subStrmId] );

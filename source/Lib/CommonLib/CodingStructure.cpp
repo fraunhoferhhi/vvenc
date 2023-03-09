@@ -73,7 +73,8 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   : area            ()
   , picture         ( nullptr )
   , parent          ( nullptr )
-  , lumaCS          ( nullptr )
+  , refCS           ( nullptr )
+  , bestCS          ( nullptr )
   , picHeader       ( nullptr )
   , m_isTuEnc       ( false )
   , m_cuCache       ( unitCache.cuCache )
@@ -82,8 +83,11 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , bestParent      ( nullptr )
   , resetIBCBuffer  ( false )
 {
-  m_coeffs     = nullptr;
-  m_cffoffsets = 0;
+  for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    m_coeffs[ i ] = nullptr;
+    m_offsets[ i ] = 0;
+  }
 
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
@@ -104,7 +108,7 @@ void CodingStructure::destroy()
 {
   picture   = nullptr;
   parent    = nullptr;
-  lumaCS     = nullptr;
+  refCS     = nullptr;
 
   m_pred.destroy();
   m_resi.destroy();
@@ -390,10 +394,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
       continue;
     }
 
-    coeffs[i] = m_coeffs + m_cffoffsets;
+    coeffs[i] = m_coeffs[i] + m_offsets[i];
 
     unsigned areaSize = tu->blocks[i].area();
-    m_cffoffsets += areaSize;
+    m_offsets[i] += areaSize;
 
     const bool cpyRsi = tuInit &&
                       ( tuInit->cbf[i] ||
@@ -532,9 +536,11 @@ void CodingStructure::allocateVectorsAtPicLevel()
 
 
 
-void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const Area& _area )
+void CodingStructure::create(const ChromaFormat _chromaFormat, const Area& _area, const bool isTopLayer)
 {
-  createInternals( UnitArea( _chromaFormat, _area ), false );
+  createInternals( UnitArea( _chromaFormat, _area ), isTopLayer );
+
+  if( isTopLayer ) return;
 
   m_reco.create( area );
   m_pred.create( area );
@@ -542,11 +548,18 @@ void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const A
   m_rspreco.create( CHROMA_400, area.Y() );
 }
 
-void CodingStructure::createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv )
+void CodingStructure::create(const UnitArea& _unit, const bool isTopLayer, const PreCalcValues* _pcv)
 {
   pcv = _pcv;
 
-  createInternals( _unit, true );
+  createInternals( _unit, isTopLayer );
+
+  if( isTopLayer ) return;
+
+  m_reco.create( area );
+  m_pred.create( area );
+  m_resi.create( area );
+  m_rspreco.create( CHROMA_400, area.Y() );
 }
 
 void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLayer )
@@ -558,7 +571,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
   picture = nullptr;
   parent  = nullptr;
-  lumaCS  = nullptr;
+  refCS   = nullptr;
 
   unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
   m_motionBuf = new MotionInfo[_lumaAreaScaled];
@@ -571,7 +584,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   {
     createCoeffs();
     createTempBuffers( false );
-    initStructData( MAX_INT, false, nullptr );
+    initStructData( MAX_INT, false, nullptr, true );
   }
 }
 
@@ -588,8 +601,6 @@ void CodingStructure::createTempBuffers( const bool isTopLayer )
 
     m_cuPtr[i]      = _area > 0 ? new CodingUnit*    [_area] : nullptr;
   }
-
-  clearCUs( true );
 
   for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
   {
@@ -618,26 +629,26 @@ void CodingStructure::destroyTempBuffers()
   std::vector<Mv>().swap( m_dmvrMvCache );
 }
 
-void CodingStructure::addMiToLut( static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS>& lut, const HPMVInfo& mi )
+void CodingStructure::addMiToLut(static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> &lut, const HPMVInfo &mi)
 {
   size_t currCnt = lut.size();
 
   bool pruned      = false;
   int  sameCandIdx = 0;
 
-  for( int idx = 0; idx < currCnt; idx++ )
+  for (int idx = 0; idx < currCnt; idx++)
   {
-    if( lut[idx] == mi )
+    if (lut[idx] == mi)
     {
       sameCandIdx = idx;
-      pruned = true;
+      pruned      = true;
       break;
     }
   }
 
-  if( pruned || currCnt == lut.capacity() )
+  if (pruned || currCnt == lut.capacity())
   {
-    lut.erase( lut.begin() + sameCandIdx );
+    lut.erase(lut.begin() + sameCandIdx);
   }
 
   lut.push_back(mi);
@@ -658,22 +669,24 @@ void CodingStructure::rebindPicBufs()
 void CodingStructure::createCoeffs()
 {
   const unsigned numComp = getNumberValidComponents( area.chromaFormat );
-  size_t coeffArea = 0;
   for( unsigned i = 0; i < numComp; i++ )
   {
-    size_t _area = area.blocks[i].area();
-    coeffArea += _area;
+    unsigned _area = area.blocks[i].area();
+    m_coeffs[i] = _area > 0 ? ( TCoeffSig* ) xMalloc( TCoeffSig, _area ) : nullptr;
   }
 
-  m_coeffs     = ( TCoeffSig* ) xMalloc( TCoeffSig, coeffArea );
-  m_cffoffsets = 0;
+  for( unsigned i = 0; i < numComp; i++ )
+  {
+    m_offsets[i] = 0;
+  }
 }
 
 void CodingStructure::destroyCoeffs()
 {
-  if( m_coeffs ) xFree( m_coeffs );
-  m_coeffs     = nullptr;
-  m_cffoffsets = 0;
+  for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    if( m_coeffs[i] ) { xFree( m_coeffs[i] ); m_coeffs[i] = nullptr; }
+  }
 }
 
 void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer, PelStorage* pRspBuffer )
@@ -702,7 +715,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   subStruct.parent    = this;
   subStruct.picture   = picture;
-  subStruct.lumaCS     = picture->cs;
+  subStruct.refCS     = picture->cs;
 
   subStruct.sps       = sps;
   subStruct.vps       = vps;
@@ -764,7 +777,7 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
     picture->getRecoBuf( clippedArea ).copyFrom( subRecoBuf );
   }
 
-  if( !subStruct.m_isTuEnc && ( ( !slice->isIntra() || slice->sps->IBC ) && chType != CH_C ) )
+  if (!subStruct.m_isTuEnc && ((!slice->isIntra() || slice->sps->IBC) && chType != CH_C))
   {
     // copy motion buffer
     MotionBuf ownMB  = getMotionBuf          ( clippedArea );
@@ -947,10 +960,10 @@ void CodingStructure::compactResize( const UnitArea& _area )
   area = _area;
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area, bool force )
 {
-  clearTUs( false );
-  clearCUs( false );
+  clearTUs( force );
+  clearCUs( force );
 
   if( _area ) compactResize( *_area );
 
@@ -959,9 +972,9 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
     currQP[0] = currQP[1] = QP;
   }
 
-  if( !skipMotBuf && ( !parent || ( ( !slice->isIntra() || slice->sps->IBC ) && !m_isTuEnc ) ) )
+  if (!skipMotBuf && (!parent || ((!slice->isIntra() || slice->sps->IBC) && !m_isTuEnc)))
   {
-    getMotionBuf().memset( -1 );
+    getMotionBuf().memset( 0 );
   }
 
   m_dmvrMvCacheOffset = 0;
@@ -981,7 +994,11 @@ void CodingStructure::clearTUs( bool force )
   if( !m_numTUs && !force ) return;
 
 #endif
-  m_cffoffsets = 0;
+  int numCh = getNumberValidComponents( area.chromaFormat );
+  for( int i = 0; i < numCh; i++ )
+  {
+    m_offsets[i] = 0;
+  }
 
   for( auto &pcu : cus )
   {

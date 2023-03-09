@@ -91,7 +91,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
-  pic.cs->initStructData( MAX_INT, false, nullptr );
+  pic.cs->initStructData( MAX_INT, false, nullptr, true );
 
   if( pic.useScLMCS && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {
@@ -114,7 +114,6 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
-  std::fill( pic.ctuSlice.begin(), pic.ctuSlice.end(), pic.slices[0] );
   m_SliceEncoder.compressSlice( &pic );
 
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
