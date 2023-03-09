@@ -990,13 +990,13 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
 
       prevBest = best;
-      static const int range[] = { 12, 6, 4 };
-      int doubleRange = range[m_searchPttrn];
+      int doubleRange = m_searchPttrn ? 6 : 12;
+      const int d1 = m_searchPttrn == 2 ? 6 : 4;
 
-      // first iteration, 49 - 1 or 16 checks
-      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
+      // first iteration, 49 - 1 or 16 checks or 9 - 1 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += d1 )
       {
-        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 4 )
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += d1 )
         {
           if( x2 || y2 )
           {
