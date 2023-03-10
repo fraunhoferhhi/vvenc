@@ -533,11 +533,11 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_filterPoc  = 0;
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
-  const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (1<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2) };
+  const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2) };
 
   m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
-  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
+  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? ( m_encCfg->m_vvencMCTF.MCTFSpeed >= 3 ? 2 : 1 ) : 0;
   m_mctfUnitSize     = m_encCfg->m_vvencMCTF.MCTFUnitSize;
 }
 
@@ -637,7 +637,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   pic->m_picShared->m_picAuxQpOffset = 0;
 
-  if ( isFilterThisFrame || ( pic->gopEntry->m_isStartOfGop && m_encCfg->m_usePerceptQPA ) )
+  if ( isFilterThisFrame || pic->gopEntry->m_isStartOfGop )
   {
     const PelStorage& origBuf = pic->getOrigBuffer();
           PelStorage& fltrBuf = pic->getFilteredOrigBuffer();
@@ -696,7 +696,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
     }
 
-    if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA )
+    if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
     {
       const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -735,9 +735,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         }
       }
 
-      if( distFactor[0] < 3 && distFactor[1] < 3 && m_encCfg->m_usePerceptQPA )
+      if( distFactor[0] < 3 && distFactor[1] < 3 && ( m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
       {
         const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
+        double meanRmsAcrossPic = 0.0;
 
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
@@ -746,10 +747,19 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           const unsigned avgIndex = pic->getOrigBuf (ctuArea).getAvg() >> (m_encCfg->m_internalBitDepth[CH_L] - 3); // one of 8 mean level regions
 
           sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
+          meanRmsAcrossPic += bd12bScale * sumRMS[i] / blkCount[i];
+
           if (bd12bScale * sumRMS[i] < pic->m_picShared->m_minNoiseLevels[avgIndex] * blkCount[i])
           {
             pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + bd12bScale * sumRMS[i] / blkCount[i]); // scaled to 12 bit, see also QPA
           }
+        }
+
+        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0)
+        {
+          // force filter
+          fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
+          bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
         }
       }
 
@@ -924,7 +934,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   {
     if( prevLineX && blockX >= prevLineX->load() ) return false;
 
-    int range = doubleRes ? 0 : 5;
+    int range = doubleRes ? 0 : ( m_searchPttrn == 2 ? 3 : 5 );
     const int stepSize = blockSize;
 
     MotionVector best;
@@ -963,14 +973,15 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
     MotionVector prevBest = best;
-    for (int y2 = prevBest.y / m_motionVectorFactor - range; y2 <= prevBest.y / m_motionVectorFactor + range; y2++)
+    const int d = previous == NULL && m_searchPttrn == 2 ? 2 : 1;
+    for( int y2 = prevBest.y / m_motionVectorFactor - range; y2 <= prevBest.y / m_motionVectorFactor + range; y2 += d )
     {
-      for (int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2++)
+      for( int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2 += d )
       {
-        int error = motionErrorLuma(orig, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error);
-        if (error < best.error)
+        int error = motionErrorLuma( orig, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error );
+        if( error < best.error )
         {
-          best.set(x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, error);
+          best.set( x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, error );
         }
       }
     }
@@ -980,11 +991,12 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
       prevBest = best;
       int doubleRange = m_searchPttrn ? 6 : 12;
+      const int d1 = m_searchPttrn == 2 ? 6 : 4;
 
-      // first iteration, 49 - 1 or 16 checks
-      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
+      // first iteration, 49 - 1 or 16 checks or 9 - 1 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += d1 )
       {
-        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 4 )
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += d1 )
         {
           if( x2 || y2 )
           {

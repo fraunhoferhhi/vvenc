@@ -170,7 +170,7 @@ private:
   std::list<Picture*>       m_gopEncListOutput;
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
-  std::deque<PicApsGlobal*>       m_globalApsList;
+  std::deque<PicApsGlobal*> m_globalApsList;
 
   std::vector<int>          m_globalCtuQpVector;
 

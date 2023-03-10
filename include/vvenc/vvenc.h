@@ -44,8 +44,8 @@ POSSIBILITY OF SUCH DAMAGE.
   \brief   This file contains the external interface of the vvenc SDK.
 */
 
-#ifndef _VVENC_H_
-#define _VVENC_H_
+#ifndef VVENC_VVENC_H
+#define VVENC_VVENC_H
 
 #include "vvenc/vvencDecl.h"
 
@@ -118,7 +118,7 @@ typedef struct vvencYUVBuffer
 {
   vvencYUVPlane planes[ 3 ];           // plane buffer for 3 components (yuv)
   uint64_t      sequenceNumber;        // sequence number of the picture
-  uint64_t      cts;                   // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  uint64_t      cts;                   // composition time stamp in TicksPerSecond
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
@@ -447,4 +447,4 @@ VVENC_NAMESPACE_END
 }
 #endif /*__cplusplus */
 
-#endif /*_VVENC_H_*/
+#endif /*VVENC_VVENC_H*/

@@ -411,6 +411,10 @@ public:
   void    printSummary(const ChromaFormat chFmt, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths, const std::string &sFilename)
   {
     FILE* pFile = fopen (sFilename.c_str(), "at");
+    if ( nullptr == pFile )
+    {
+      return;
+    }
 
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
