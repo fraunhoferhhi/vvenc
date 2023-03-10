@@ -130,6 +130,7 @@ public:
 private:
   int xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList );
   int xCopyAu( vvencAccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
+  bool xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer );
 
 private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;

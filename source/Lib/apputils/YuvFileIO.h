@@ -336,13 +336,6 @@ public:
       if ( m_bufferChrFmt == VVENC_CHROMA_400 && comp)
         continue;
 
-      if ( ! FileIOHelper::verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
-      {
-        eof = true;
-        m_lastError = "Source image contains values outside the specified bit range!";
-        return -1;
-      }
-
       FileIOHelper::scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
     }
 
