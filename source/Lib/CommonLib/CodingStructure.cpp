@@ -707,7 +707,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   subStruct.parent    = this;
   subStruct.picture   = picture;
-  subStruct.lumaCS     = picture->cs;
+  subStruct.lumaCS    = picture->cs;
 
   subStruct.sps       = sps;
   subStruct.vps       = vps;
