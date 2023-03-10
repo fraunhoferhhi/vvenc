@@ -986,7 +986,7 @@ void CodingStructure::clearTUs( bool force )
   if( !m_numTUs && !force ) return;
 
 #endif
-  m_cffoffsets = 0;
+  memset( m_offsets, 0, sizeof( m_offsets ) );
 
   for( auto &pcu : cus )
   {
