@@ -71,6 +71,7 @@ private:
   uint32_t  m_uiNumPic;
   double    m_dFrmRate; //--CFG_KDY
   double    m_MSEyuvframe[MAX_NUM_COMP]; // sum of MSEs
+  uint32_t  m_uiLosslessFrames[MAX_NUM_COMP];
 
 public:
   virtual ~Analyze()  {}
@@ -85,7 +86,14 @@ public:
       return;
     for(uint32_t i=0; i<MAX_NUM_COMP; i++)
     {
-      m_dPSNRSum[i] += psnr[i];
+      if( psnr[i] == 999.99 )
+      {
+        m_uiLosslessFrames[i] += 1;
+      }
+      else
+      {
+        m_dPSNRSum[i] += psnr[i];
+      }
       m_MSEyuvframe[i] += MSEyuvframe[i];
     }
 
@@ -95,6 +103,7 @@ public:
   double  getBits()                   const { return  m_dAddBits;   }
   void    setBits(double numBits)     { m_dAddBits = numBits; }
   uint32_t    getNumPic()                 const { return  m_uiNumPic;   }
+  uint32_t    getLosslessFrames(ComponentID compID) const { return m_uiLosslessFrames[compID]; }
 
   void    setFrmRate  (double dFrameRate) { m_dFrmRate = dFrameRate; } //--CFG_KDY
   void    clear()
@@ -104,6 +113,7 @@ public:
     {
       m_dPSNRSum[i] = 0;
       m_MSEyuvframe[i] = 0;
+      m_uiLosslessFrames[i] = 0;
     }
     m_uiNumPic = 0;
   }
@@ -196,13 +206,13 @@ public:
            info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() ));
+                 getPsnr(COMP_Y) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) ) ) );
 
           if (printHexPsnr)
           {
             double dPsnr;
             uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / (double)getNumPic();
+            dPsnr = getPsnr(COMP_Y) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) );
 
             std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
@@ -247,13 +257,13 @@ public:
           info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() ));
+                 getPsnr(COMP_Y) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) ) ) );
 
           if (printHexPsnr)
           {
             double dPsnr;
             uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / (double)getNumPic();
+            dPsnr = getPsnr(COMP_Y) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) );
 
             std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
@@ -303,9 +313,9 @@ public:
             info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
-                   getPsnr(COMP_Y ) / (double)getNumPic(),
-                   getPsnr(COMP_Cb) / (double)getNumPic(),
-                   getPsnr(COMP_Cr) / (double)getNumPic(),
+                   getPsnr(COMP_Y ) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) ),
+                   getPsnr(COMP_Cb) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Cb) ),
+                   getPsnr(COMP_Cr) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Cr) ),
                    PSNRyuv ));
 
             if (printHexPsnr)
@@ -314,7 +324,7 @@ public:
               uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / (double)getNumPic();
+                dPsnr[i] = getPsnr((ComponentID)i) / ( (double)getNumPic() - (double)getLosslessFrames((ComponentID)i) );
 
                 std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
@@ -365,9 +375,9 @@ public:
             info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
-                   getPsnr(COMP_Y ) / (double)getNumPic(),
-                   getPsnr(COMP_Cb) / (double)getNumPic(),
-                   getPsnr(COMP_Cr) / (double)getNumPic(),
+                   getPsnr(COMP_Y ) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) ),
+                   getPsnr(COMP_Cb) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Cb) ),
+                   getPsnr(COMP_Cr) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Cr) ),
                    PSNRyuv ));
 
 
@@ -377,7 +387,7 @@ public:
               uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / (double)getNumPic();
+                dPsnr[i] = getPsnr((ComponentID)i) / ( (double)getNumPic() - (double)getLosslessFrames(COMP_Y) );
 
                 std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),

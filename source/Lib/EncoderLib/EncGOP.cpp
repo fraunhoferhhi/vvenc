@@ -2559,10 +2559,16 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
           sMctf.str().c_str(),
           uibits );
 
-      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+//      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+      std::string yPSNR = dPSNR[COMP_Y]  == 999.99 ? prnt(" [Y %7s dB    ", "inf" ) : prnt(" [Y %6.4lf dB    ", dPSNR[COMP_Y] );
+      std::string uPSNR = dPSNR[COMP_Cb] == 999.99 ? prnt("U %7s dB    ", "inf" ) : prnt("U %6.4lf dB    ", dPSNR[COMP_Cb] );
+      std::string vPSNR = dPSNR[COMP_Cr] == 999.99 ? prnt("V %7s dB]", "inf" ) : prnt("V %6.4lf dB]", dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
-      accessUnit.InfoString.append( cPSNR );
+//      accessUnit.InfoString.append( cPSNR );
+      accessUnit.InfoString.append( yPSNR );
+      accessUnit.InfoString.append( uPSNR );
+      accessUnit.InfoString.append( vPSNR );
 
       if ( m_pcEncCfg->m_printHexPsnr )
       {
