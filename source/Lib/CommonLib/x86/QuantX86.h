@@ -485,16 +485,7 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
       {
         return true;
       }
-
-      //const TCoeff   iLevel = pCoeff[uiBlockPos];
-      //const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
-      //const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
-      //
-      //if( quantisedMagnitude != 0 )
-      //{
-      //  return true;
-      //}
-    } // for n
+    }
     return false;
   }
   else
@@ -523,16 +514,7 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
       {
         return true;
       }
-
-      //const TCoeff   iLevel = pCoeff[uiBlockPos];
-      //const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
-      //const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
-      //
-      //if( quantisedMagnitude != 0 )
-      //{
-      //  return true;
-      //}
-    } // for n
+    }
     return false;
   }
   else
