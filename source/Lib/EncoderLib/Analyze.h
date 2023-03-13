@@ -181,6 +181,7 @@ public:
       }
     }
 
+    bool printLosslessPlanes = getLosslessFrames(COMP_Y) != 0 || getLosslessFrames(COMP_Cb) != 0 || getLosslessFrames(COMP_Cr) != 0;
     switch (chFmt)
     {
       case CHROMA_400:
@@ -293,7 +294,7 @@ public:
 
           if (printMSEBasedSNR)
           {
-            info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " ));
+            info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " ));
 
             if (printHexPsnr)
             {
@@ -302,7 +303,12 @@ public:
 
             if (printSequenceMSE)
             {
-              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE   " ));
+            }
+            
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("Y-Lossless  U-Lossless  V-Lossless\n"));
             }
             else
             {
@@ -335,11 +341,15 @@ public:
 
             if (printSequenceMSE)
             {
-              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
                      MSEyuv ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("  %10d  "  "%10d  "  "%10d\n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
             }
             else
             {
@@ -364,7 +374,11 @@ public:
             }
             if (printSequenceMSE)
             {
-              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE   " ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("Y-Lossless  U-Lossless  V-Lossless\n"));
             }
             else
             {
@@ -397,11 +411,15 @@ public:
             }
             if (printSequenceMSE)
             {
-              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
                      MSEyuv ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("  %10d  "  "%10d  "  "%10d\n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
             }
             else
             {
