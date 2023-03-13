@@ -1615,9 +1615,22 @@ DepQuant::~DepQuant()
   delete static_cast<DQIntern::DepQuant*>(p);
 }
 
-void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx )
+void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff& uiAbsSum, const QpParam& cQP, const Ctx& ctx )
 {
-  if( tu.cs->slice->depQuantEnabled && (tu.mtsIdx[compID] != MTS_SKIP) )
+  bool useRDOQ = tu.mtsIdx[compID] == MTS_SKIP ? m_RDOQ : m_useRDOQTS;
+  if( !tu.cu->ispMode || !isLuma( compID ) )
+  {
+    useRDOQ &= tu.blocks[compID].width  > 2;
+    useRDOQ &= tu.blocks[compID].height > 2;
+  }
+
+  if( useRDOQ && tu.cs->picture->useScSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
+  {
+    tu.getCoeffs( compID ) .memset( 0 );
+    tu.lastPos  [ compID ] =       -1;
+    uiAbsSum               =        0;
+  }
+  else if( tu.cs->slice->depQuantEnabled && tu.mtsIdx[compID] != MTS_SKIP )
   {
     //===== scaling matrix ====
     const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
