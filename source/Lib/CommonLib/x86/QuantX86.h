@@ -458,7 +458,7 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
 }
 
 template<X86_VEXT vext>
-static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int offset, int shift )
+static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
 {
 #if USE_AVX2
   if( vext >= AVX2 && ( numCoeff & 7 ) == 0 )

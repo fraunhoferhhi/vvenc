@@ -261,7 +261,7 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
   }
 }
 
-static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int offset, int shift )
+static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
 {
   for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos++ )
   {

@@ -144,7 +144,7 @@ private:
                                     const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
                                     const bool signHiding,
                                     const TCoeff m_thrVal );
-  bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int offset, int shift );
+  bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift );
 
 #ifdef TARGET_SIMD_X86
   void initQuantX86();
