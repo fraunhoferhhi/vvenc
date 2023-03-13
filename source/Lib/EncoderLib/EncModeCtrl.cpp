@@ -796,7 +796,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         }
         if( bestCS )
         {
-          if ( m_pcEncCfg->m_useEarlyCU == 2 && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+          if( m_pcEncCfg->m_useEarlyCU == 2 && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && cuECtx.nonSkipWasTested && bestCS->cus.size() == 1 )
           {
             return false;
           }
@@ -1167,6 +1167,10 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
   else if( encTestmode.type == ETM_SPLIT_TT_V )
   {
     cuECtx.bestCostTriVertSplit = tempCS->cost;
+  }
+  else if( !isModeSplit( encTestmode ) && isModeInter( encTestmode ) && tempCS->cus.size() == 1 )
+  {
+    cuECtx.nonSkipWasTested |= !tempCS->cus.front()->skip;
   }
   if (m_pcEncCfg->m_AMVRspeed && encTestmode.type == ETM_INTER_ME)
   {
