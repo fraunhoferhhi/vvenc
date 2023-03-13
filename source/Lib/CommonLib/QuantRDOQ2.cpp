@@ -352,52 +352,52 @@ inline cost_t QuantRDOQ2::xiGetICRateCost( const uint32_t     uiAbsLevel,
   }
   else
   {
-  const uint32_t cthres = 4;
-  if( uiAbsLevel >= cthres )
-  {
-    uint32_t symbol = ( uiAbsLevel - cthres ) >> 1;
-    uint32_t length;
-    const int threshold = COEF_REMAIN_BIN_REDUCTION;
-    if( symbol < ( threshold << ui16AbsGoRice ) )
+    const uint32_t cthres = 4;
+    if( uiAbsLevel >= cthres )
     {
-      length = symbol >> ui16AbsGoRice;
-      iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
+      uint32_t symbol = ( uiAbsLevel - cthres ) >> 1;
+      uint32_t length;
+      const int threshold = COEF_REMAIN_BIN_REDUCTION;
+      if( symbol < ( threshold << ui16AbsGoRice ) )
+      {
+        length = symbol >> ui16AbsGoRice;
+        iRate += ( length + 1 + ui16AbsGoRice ) << SCALE_BITS;
+      }
+      else
+      {
+        length = ui16AbsGoRice;
+        symbol = symbol - ( threshold << ui16AbsGoRice );
+        while( symbol >= ( 1 << length ) )
+        {
+          symbol -= ( 1 << ( length++ ) );
+        }
+        iRate += ( threshold + length + 1 - ui16AbsGoRice + length ) << SCALE_BITS;
+      }
+
+      iRate += fracBitsGt1.intBits[1];
+      iRate += fracBitsPar.intBits[( uiAbsLevel - 2 ) & 1];
+      iRate += fracBitsGt2.intBits[1];
+    }
+    else if( uiAbsLevel == 1 )
+    {
+      iRate += fracBitsGt1.intBits[0];
+    }
+    else if( uiAbsLevel == 2 )
+    {
+      iRate += fracBitsGt1.intBits[1];
+      iRate += fracBitsPar.intBits[0];
+      iRate += fracBitsGt2.intBits[0];
+    }
+    else if( uiAbsLevel == 3 )
+    {
+      iRate += fracBitsGt1.intBits[1];
+      iRate += fracBitsPar.intBits[1];
+      iRate += fracBitsGt2.intBits[0];
     }
     else
     {
-      length = ui16AbsGoRice;
-      symbol = symbol - ( threshold << ui16AbsGoRice );
-      while( symbol >= ( 1 << length ) )
-      {
-        symbol -= ( 1 << ( length++ ) );
-      }
-      iRate += ( threshold + length + 1 - ui16AbsGoRice + length ) << SCALE_BITS;
+      iRate = 0;
     }
-
-    iRate += fracBitsGt1.intBits[1];
-    iRate += fracBitsPar.intBits[( uiAbsLevel - 2 ) & 1];
-    iRate += fracBitsGt2.intBits[1];
-  }
-  else if( uiAbsLevel == 1 )
-  {
-    iRate += fracBitsGt1.intBits[0];
-  }
-  else if( uiAbsLevel == 2 )
-  {
-    iRate += fracBitsGt1.intBits[1];
-    iRate += fracBitsPar.intBits[0];
-    iRate += fracBitsGt2.intBits[0];
-  }
-  else if( uiAbsLevel == 3 )
-  {
-    iRate += fracBitsGt1.intBits[1];
-    iRate += fracBitsPar.intBits[1];
-    iRate += fracBitsGt2.intBits[0];
-  }
-  else
-  {
-    iRate = 0;
-  }
   }
   return xiGetICost( (int)iRate );
 }
