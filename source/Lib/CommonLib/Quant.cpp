@@ -278,7 +278,7 @@ static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
 }
 
 
-Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
+Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other, useScalingLists );
   xDeQuant  = DeQuantCore;
@@ -609,7 +609,7 @@ void Quant::dequant(const TransformUnit& tu,
   }
 }
 
-void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrVal )
+void Quant::init( int rdoq, bool bUseRDOQTS, int thrVal )
 {
 
   // TODO: pass to init() a single variable containing (quantization) flags,
@@ -617,7 +617,6 @@ void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrVal )
 
   m_RDOQ             = rdoq;
   m_useRDOQTS        = bUseRDOQTS;
-  m_useSelectiveRDOQ = useSelectiveRDOQ;
   m_thrVal           = thrVal;
 }
 

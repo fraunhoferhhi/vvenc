@@ -77,13 +77,12 @@ public:
   // initialize class
   void init(
              const Quant* otherQuant,
-             const int  rdoq                 = 0,
-             const bool bUseRDOQTS           = false,
-             const bool useSelectiveRDOQ     = false,
-             const bool scalingListsEnabled  = false,
-             const bool bEnc                 = false,
-             const bool useTransformSkipFast = false,
-             const int  thrValue             = 8
+             const int  rdoq,
+             const bool bUseRDOQTS,
+             const bool scalingListsEnabled,
+             const bool bEnc,
+             const bool useTransformSkipFast,
+             const int  thrValue            
            );
 
 public:

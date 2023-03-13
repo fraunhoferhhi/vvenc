@@ -1664,9 +1664,9 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int thrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
 {
-  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, thrVal );
+  QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
 
   static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
 }

@@ -299,7 +299,6 @@ void TrQuant::xDeQuant(const TransformUnit& tu,
 void TrQuant::init( const Quant* otherQuant,
                     const int  rdoq,
                     const bool bUseRDOQTS,
-                    const bool useSelectiveRDOQ,
                     const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
@@ -317,7 +316,7 @@ void TrQuant::init( const Quant* otherQuant,
 
   if( m_quant )
   {
-    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, thrVal );
+    m_quant->init( rdoq, bUseRDOQTS, thrVal );
   }
 }
 
