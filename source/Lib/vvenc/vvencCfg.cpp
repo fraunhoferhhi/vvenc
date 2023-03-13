@@ -3064,10 +3064,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "ALFSpeed:" << c->m_alfSpeed << " ";
     }
     if( c->m_quantThresholdVal & 1 )
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << ".5 ";
     else
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
-    css << "SelectiveRDQO: " << ( int ) c->m_useSelectiveRDOQ << " ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << " ";
+    css << "SelectiveRDQO:" << ( int ) c->m_useSelectiveRDOQ << " ";
 
     css << "\nRATE CONTROL CFG: ";
     css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
