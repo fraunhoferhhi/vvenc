@@ -461,7 +461,7 @@ template<X86_VEXT vext>
 static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int offset, int shift )
 {
 #if USE_AVX2
-  if( ( numCoeff & 7 ) == 0 )
+  if( vext >= AVX2 && ( numCoeff & 7 ) == 0 )
   {
     __m256i xqnt = _mm256_set1_epi32( quantCoeff );
     __m256i xoff = _mm256_set1_epi64x( offset );
