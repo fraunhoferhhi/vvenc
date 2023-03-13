@@ -271,11 +271,11 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
 
   if( useRDOQ )
   {
-    if (!m_useSelectiveRDOQ || xNeedRDOQ(tu, compID, piCoef, cQP))
+    if( !m_useSelectiveRDOQ || xNeedRDOQ( tu, compID, piCoef, cQP ) )
     {
       if( useTransformSkip )
       {
-        if(tu.cu->bdpcmM[toChannelType(compID)])
+        if( tu.cu->bdpcmM[toChannelType( compID )] )
         {
           forwardRDPCM( tu, compID, pSrc, uiAbsSum, cQP, ctx );
         }
@@ -291,8 +291,8 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
     }
     else
     {
-      piQCoef.fill(0);
-      uiAbsSum = 0;
+      piQCoef.fill( 0 );
+      uiAbsSum    = 0;
       tu.lastPos[compID] = -1;
     }
   }

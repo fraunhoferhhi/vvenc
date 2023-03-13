@@ -458,10 +458,106 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
 }
 
 template<X86_VEXT vext>
+static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int offset, int shift )
+{
+#if USE_AVX2
+  if( ( numCoeff & 7 ) == 0 )
+  {
+    __m256i xqnt = _mm256_set1_epi32( quantCoeff );
+    __m256i xoff = _mm256_set1_epi64x( offset );
+
+    for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos += 8 )
+    {
+      __m256i xcff  = _mm256_loadu_si256( ( const __m256i* ) &pCoeff[uiBlockPos] );
+              xcff  = _mm256_abs_epi32( xcff );
+
+      __m256i xlvl1 = _mm256_mul_epi32( xcff, xqnt );
+              xcff  = _mm256_shuffle_epi32( xcff, 1 + ( 3 << 4 ) );
+      __m256i xlvl2 = _mm256_mul_epi32( xcff, xqnt );
+              xlvl1 = _mm256_add_epi64( xlvl1, xoff );
+              xlvl2 = _mm256_add_epi64( xlvl2, xoff );
+              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
+              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+
+      __m256i xany  = _mm256_or_si256( xlvl1, xlvl2 );
+
+      if( !_mm256_testz_si256( xany, xany ) )
+      {
+        return true;
+      }
+
+      //const TCoeff   iLevel = pCoeff[uiBlockPos];
+      //const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
+      //const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
+      //
+      //if( quantisedMagnitude != 0 )
+      //{
+      //  return true;
+      //}
+    } // for n
+    return false;
+  }
+  else
+#endif
+  if( ( numCoeff & 3 ) == 0 )
+  {
+    __m128i xqnt = _mm_set1_epi32( quantCoeff );
+    __m128i xoff = _mm_set1_epi64x( offset );
+
+    for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos += 4 )
+    {
+      __m128i xcff  = _mm_loadu_si128( ( const __m128i* ) &pCoeff[uiBlockPos] );
+              xcff  = _mm_abs_epi32( xcff );
+
+      __m128i xlvl1 = _mm_mul_epi32( xcff, xqnt );
+              xcff  = _mm_shuffle_epi32( xcff, 1 + ( 3 << 4 ) );
+      __m128i xlvl2 = _mm_mul_epi32( xcff, xqnt );
+              xlvl1 = _mm_add_epi64( xlvl1, xoff );
+              xlvl2 = _mm_add_epi64( xlvl2, xoff );
+              xlvl1 = _mm_srli_epi64( xlvl1, shift );
+              xlvl2 = _mm_srli_epi64( xlvl2, shift );
+
+      __m128i xany  = _mm_or_si128( xlvl1, xlvl2 );
+
+      if( !_mm_test_all_zeros( xany, xany ) )
+      {
+        return true;
+      }
+
+      //const TCoeff   iLevel = pCoeff[uiBlockPos];
+      //const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
+      //const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
+      //
+      //if( quantisedMagnitude != 0 )
+      //{
+      //  return true;
+      //}
+    } // for n
+    return false;
+  }
+  else
+  {
+    for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos++ )
+    {
+      const TCoeff   iLevel = pCoeff[uiBlockPos];
+      const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
+      const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
+
+      if( quantisedMagnitude != 0 )
+      {
+        return true;
+      }
+    } // for n
+    return false;
+  }
+}
+
+template<X86_VEXT vext>
 void Quant::_initQuantX86()
 {
-  xDeQuant = DeQuantCoreSIMD<vext>;
-  xQuant   = QuantCoreSIMD  <vext>;
+  xDeQuant  = DeQuantCoreSIMD<vext>;
+  xQuant    = QuantCoreSIMD  <vext>;
+  xNeedRdoq = NeedRdoqSIMD   <vext>;
 }
 template void Quant::_initQuantX86<SIMDX86>();
 
