@@ -395,9 +395,6 @@ int RateCtrl::getBaseQP()
 
     for (auto& stats : firstPassData)
     {
-#if PRINT_RC_DATA && 0
-      printf( "MANFRED %d  qp %d  numBits %d targetBits %d  lambda %f\n", stats.poc, stats.qp, stats.numBits, stats.targetBits, stats.lambda );
-#endif
       sumFrBits += stats.numBits;
     }
     baseQP = int (24.5 - log (d) / log (2.0)); // QPstart, equivalent to round (24 + 2*log2 (resRatio))
@@ -1055,14 +1052,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           }
 #endif
 
-#if PRINT_RC_DATA
-#ifdef __APPLE__
-          printf("HORST %d  targetBits %d  diffEstUsed %lld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
-#else
-          printf("HORST %d  targetBits %d  diffEstUsed %ld  isNewScene %d  rfrshPrmtrs %d  qpCrrctn %f  visAct %d  firstPassSliceQP %d  numBits %d  lambda %f  preQP %d\n", it->poc, encRcPic->targetBits, (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed), it->isNewScene, it->refreshParameters, encRCSeq->qpCorrection[ frameLevel ], visAct, firstPassSliceQP, it->numBits, it->lambda, sliceQP );
-#endif
-#endif
-
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
@@ -1071,22 +1060,13 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           {
             encRCSeq->bitsUsedIn1stPass += it->numBits;
 
-#if !POSS_FIX
             if ( (sliceQP > 0) && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0) )
             {
               sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
               lambda *= 0.7937; // * pow (2, -1/3)
             }
-#endif
           }
       
-#if POSS_FIX
-          if ( (sliceQP > 0) && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0) )
-          {
-            sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
-            lambda *= 0.7937; // * pow (2, -1/3)
-          }
-#endif
           if ( it->isIntra ) // update history, for parameter clipping in subsequent key frames
           {
             encRcSeq->lastIntraQP = sliceQP;
