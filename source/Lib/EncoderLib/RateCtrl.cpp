@@ -537,7 +537,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     std::stringstream iss;
     iss << data;
     data = nlohmann::json::parse( iss.str() );
-    std::list<TRCPassStats>& listRCFirstPassStats = m_pcEncCfg->m_LookAhead ? m_firstPassCache: m_listRCFirstPassStats;
+    std::list<TRCPassStats>& listRCFirstPassStats = m_pcEncCfg->m_LookAhead ? m_firstPassCache : m_listRCFirstPassStats;
     listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
                                                     data[ "qp" ],
                                                     data[ "lambda" ],
@@ -811,12 +811,12 @@ void RateCtrl::processGops()
   gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 1
   {
-    if ( it->gopNum > gopNum )
+    if (it->gopNum > gopNum)
     {
       vecIdx++;
-      gopNum  = it->gopNum;
+      gopNum = it->gopNum;
     }
-    CHECK( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
+    CHECK (vecIdx >= (int) gopBits.size(), "array idx out of bounds");
     it->targetBits = (int) std::max (1.0, 0.5 + it->numBits * ratio);
     gopBits[vecIdx] += (uint32_t) it->numBits; // summed to gf in VCIP'21 paper
 
@@ -830,11 +830,11 @@ void RateCtrl::processGops()
   gopNum = m_listRCFirstPassStats.front().gopNum;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 2
   {
-    if ( it->gopNum > gopNum )
+    if (it->gopNum > gopNum)
     {
       vecIdx++;
       fac = 1.0 / gopBits[vecIdx];
-      gopNum  = it->gopNum;
+      gopNum = it->gopNum;
     }
     it->frameInGopRatio = (double) it->numBits * fac; // rf/gf in VCIP'21 paper
 
@@ -866,7 +866,7 @@ void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
     return;
   }
 
-  // continue with stats after last used poc 
+  // continue with stats after last used poc
   const int startPoc = m_updateNoisePoc + 1;
   auto itr           = find_if( m_listRCFirstPassStats.begin(), m_listRCFirstPassStats.end(),  [ startPoc ]( const auto& stat ) { return stat.poc == startPoc; } );
   if( itr == m_listRCFirstPassStats.end() )
@@ -1051,7 +1051,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             }
           }
 #endif
-
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
@@ -1066,7 +1065,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               lambda *= 0.7937; // * pow (2, -1/3)
             }
           }
-      
           if ( it->isIntra ) // update history, for parameter clipping in subsequent key frames
           {
             encRcSeq->lastIntraQP = sliceQP;
