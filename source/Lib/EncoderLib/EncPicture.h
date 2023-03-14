@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -91,7 +91,7 @@ class EncPicture
                                   RateCtrl& rateCtrl,
                                   NoMallocThreadPool* threadPool );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
-    void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
+    void skipCompressPicture    ( Picture& pic );
     void finalizePicture        ( Picture& pic );
 
   protected:

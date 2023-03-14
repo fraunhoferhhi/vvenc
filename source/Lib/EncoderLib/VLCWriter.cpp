@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -213,7 +213,7 @@ void HLSWriter::xCodeRefPicList( const ReferencePictureList* rpl, bool isLongTer
 
     if( !rpl->isInterLayerRefPic[ii] )
     {
-      if (rpl->numberOfLongtermPictures)
+      if (isLongTermPresent)
       {
         WRITE_FLAG(!rpl->isLongtermRefPic[ii], "st_ref_pic_flag[ listIdx ][ rplsIdx ][ i ]");
       }

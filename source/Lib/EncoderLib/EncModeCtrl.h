@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -208,6 +208,7 @@ struct ComprCUCtx
     , relatedCuIsValid      (false)
     , bestIntraMode         (0)
     , isIntra               (false)
+    , nonSkipWasTested      (false)
   {
   }
 
@@ -248,6 +249,7 @@ struct ComprCUCtx
   bool              relatedCuIsValid;
   int               bestIntraMode;
   bool              isIntra;
+  bool              nonSkipWasTested;
 };
 
 //////////////////////////////////////////////////////////////////////////

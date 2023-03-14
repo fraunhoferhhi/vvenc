@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -719,7 +719,15 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("c",                                               po::parseConfigFile,                                "configuration file name")
     ("WriteConfig",                                     writeCfg,                                           "write the encoder config into configuration file")
     ("WarnUnknowParameter,w",                           warnUnknowParameter,                                "warn for unknown configuration parameters instead of failing")
+#if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+#elif defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, NEON), default: the highest supported extension")
+#elif defined( __wasm__ ) || defined( __wasm32__ )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, WASM), default: the highest supported extension")
+#else
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SIMDE), default: the highest supported extension")
+#  endif
     ;
 
     opts.setSubSection("Input Options");
@@ -731,7 +739,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ConfWinRight",                                    c->m_confWinRight,                                   "Right offset for window conformance mode 3")
     ("ConfWinTop",                                      c->m_confWinTop,                                     "Top offset for window conformance mode 3")
     ("ConfWinBottom",                                   c->m_confWinBottom,                                  "Bottom offset for window conformance mode 3")
-    ("TemporalSubsampleRatio",                          c->m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
     ("HorizontalPadding",                               c->m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
     ("VerticalPadding",                                 c->m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
     ("InputChromaFormat",                               toInputFileChromaFormat,                             "input file chroma format (400, 420, 422, 444)")
@@ -762,7 +769,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Rate control, Perceptual Quantization");
     opts.addOptions()
     ("RCInitialQP",                                     c->m_RCInitialQP,                                    "Rate control: initial QP. With two-pass encoding, this specifies the first-pass base QP (instead of using a default QP). Activated if value is greater than zero" )
-    ("RCForceIntraQP",                                  c->m_RCForceIntraQP,                                 "Rate control: force intra QP to be equal to initial QP" )
     ("PerceptQPATempFiltIPic",                          c->m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
     ;
 
@@ -1044,7 +1050,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MmvdDisNum",                                      c->m_MmvdDisNum,                                     "Number of MMVD Distance Entries")
     ("AllowDisFracMMVD",                                c->m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
     ("MCTF",                                            c->m_vvencMCTF.MCTF,                                 "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
-    ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 3:fastest operation)")
+    ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality ... 4:fastest operation)")
     ("MCTFUnitSize",                                    c->m_vvencMCTF.MCTFUnitSize,                         "Size of MCTF operation area (block size for motion compensation).")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
@@ -1279,7 +1285,7 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
     // if rc statsfile is defined and in 1st pass, bitstream file is not needed
     if ( !(c->m_RCPass == 1 && !m_RCStatsFileName.empty()) )
     {
-      rcOstr << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
+      rcOstr << "error: bitstream file name must be specified (" << (m_easyMode ? "--output" : "--BitstreamFile") << "=bit.266)" << std::endl;
       ret = true;
     }
   }
@@ -1298,15 +1304,125 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
   return ret;
 }
 
-virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
+static inline std::string getDynamicRangeStr( int dynamicRange )
+{
+  std::string cT;
+  switch( dynamicRange )
+  {
+    case VVENC_HDR_OFF            : cT = "SDR"; break;
+    case VVENC_HDR_PQ             : cT = "HDR10/PQ"; break;
+    case VVENC_HDR_HLG            : cT = "HDR HLG"; break;
+    case VVENC_HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
+    case VVENC_HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
+    case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
+    case VVENC_SDR_BT709          : cT = "SDR BT.709"; break;
+    case VVENC_SDR_BT2020         : cT = "SDR BT.2020"; break;
+    case VVENC_SDR_BT470BG        : cT = "SDR BT.470 B/G"; break;
+    default                       : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned int height, int bitdepth, bool packed = false )
+{
+  int64_t packetCount = 0;
+
+  if( !strcmp( fileName.c_str(), "-" ) )
+  {
+    return -1;
+  }
+
+  std::fstream fhandle;
+  fhandle.open( fileName.c_str(), std::ios::binary | std::ios::in );
+  if( fhandle.fail() )
+    return -1;
+
+  fhandle.seekg( 0, std::ios::end );
+  std::streamoff filelength = fhandle.tellg();
+  fhandle.close();
+
+  unsigned int uiBitsPerPx = bitdepth == 8 ? 12 : 24;
+  size_t frameSize = (width * height * uiBitsPerPx) >> 3;
+
+  if ( packed && bitdepth == 10 )
+  {
+    size_t stride = width * 5 / 4;
+    size_t lumaSize = stride * height;
+    size_t chromaSize = lumaSize >> 2;
+    frameSize = lumaSize + chromaSize + chromaSize;
+  }
+
+  packetCount = (int64_t)filelength / frameSize;
+  return packetCount;
+}
+
+virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
+   bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+
   if( eMsgLevel >= VVENC_DETAILS )
   {
     css << "Input          File                    : " << m_inputFileName << "\n";
     css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
     css << "Reconstruction File                    : " << m_reconFileName << "\n";
     css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
+  }
+  else if( eMsgLevel >= VVENC_INFO )
+  {
+    std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
+    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+    std::string format = isY4m ? "y4m" : "yuv";
+    if( format != ext )
+      css << "Input     File : " << m_inputFileName << " (" << format << ")\n";
+    else
+      css << "Input     File : " << m_inputFileName << "\n";
+
+    css << "Bitstream File : " << m_bitstreamFileName << "\n";
+  }
+
+  if ( c )
+  {
+    if( eMsgLevel >= VVENC_INFO )
+    {
+      std::string inputFmt;
+      if( c->m_inputBitDepth[ 0 ] == 8 )
+        inputFmt="yuv420p";
+      else if( c->m_inputBitDepth[ 0 ] == 10 )
+        inputFmt= m_packedYUVInput ? "yuv420p10(packed)" : "yuv420p10";       
+
+      std::stringstream frameCountStr;
+      std::stringstream framesStr;
+
+      if( strcmp( m_inputFileName.c_str(), "-" ) )
+      {
+        int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
+        frameCountStr << frameCount << (frameCount > 1 ? " frames" : " frame");
+
+        int64_t framesToEncode = (c->m_framesToBeEncoded == 0 || c->m_framesToBeEncoded >= frameCount) ? frameCount : c->m_framesToBeEncoded;
+        framesStr << "encode " << framesToEncode << ( framesToEncode > 1 ? " frames " : " frame ");
+      }
+      else 
+      {
+        framesStr << "encode "  << c->m_framesToBeEncoded << ( c->m_framesToBeEncoded > 1 ? " frames " : " frame ");
+      }
+
+      if ( m_FrameSkip )
+        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
+    
+      if( eMsgLevel >= VVENC_DETAILS )
+        css << "Real     Format                        : ";
+      else
+        css << "Real Format    : ";
+
+      css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
+          << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
+      
+      if( eMsgLevel >= VVENC_DETAILS )
+        css << "                                       : " << framesStr.str() << "\n";
+      else
+        css << "               : " << framesStr.str() << "\n";
+    }
   }
 
   return css.str();

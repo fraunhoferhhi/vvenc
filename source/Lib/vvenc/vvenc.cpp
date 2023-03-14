@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -56,6 +56,11 @@ VVENC_NAMESPACE_BEGIN
 VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
 {
   vvencYUVBuffer* yuvBuffer = (vvencYUVBuffer*)malloc(sizeof(vvencYUVBuffer));
+  if( nullptr == yuvBuffer )
+  {
+    return nullptr;
+  }
+
   vvenc_YUVBuffer_default( yuvBuffer );
   return yuvBuffer;
 }
@@ -74,6 +79,11 @@ VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuff
 
 VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
 {
+  if ( nullptr == yuvBuffer )
+  {
+    return;
+  }
+
   for( int i = 0; i < 3; i ++ )
   {
     yuvBuffer->planes[i].ptr     = NULL;
@@ -89,6 +99,11 @@ VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
 
 VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat chFmt, const int frameWidth, const int frameHeight )
 {
+  if ( nullptr == yuvBuffer )
+  {
+    return;
+  }
+
   for ( int i = 0; i < 3; i++ )
   {
     vvencYUVPlane&    yuvPlane = yuvBuffer->planes[ i ];
@@ -102,6 +117,11 @@ VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const v
 
 VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
 {
+  if ( nullptr == yuvBuffer )
+  {
+    return;
+  }
+
   for ( int i = 0; i < 3; i++ )
   {
     if( yuvBuffer->planes[ i ].ptr )
@@ -113,6 +133,11 @@ VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
 VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc()
 {
   vvencAccessUnit* accessUnit = (vvencAccessUnit*)malloc(sizeof(vvencAccessUnit));
+  if( nullptr == accessUnit )
+  {
+    return nullptr;
+  }
+
   vvenc_accessUnit_default( accessUnit );
   return accessUnit;
 }
@@ -132,6 +157,10 @@ VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayl
 VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int payload_size )
 {
   accessUnit->payload = (unsigned char*)malloc(sizeof(unsigned char) * payload_size );
+  if( nullptr == accessUnit->payload )
+  {
+    return;
+  }
   accessUnit->payloadSize = payload_size;
   accessUnit->payloadUsedSize = 0;
 }
@@ -148,6 +177,10 @@ VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit )
 
 VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
 {
+  if( nullptr == accessUnit )
+  {
+    return;
+  }
   accessUnit->payloadUsedSize = 0;
   accessUnit->cts             = 0;
   accessUnit->dts             = 0;
@@ -167,6 +200,10 @@ VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
 
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
 {
+  if( nullptr == accessUnit )
+  {
+    return;
+  }
   accessUnit->payload         = NULL;
   accessUnit->payloadSize     = 0;
   vvenc_accessUnit_reset( accessUnit );

@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -100,7 +100,7 @@ namespace vvenc {
     EncRCSeq();
     ~EncRCSeq();
 
-    void create( bool twoPass, bool lookAhead, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
+    void create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
     void updateAfterPic (const int actBits, const int tgtBits);
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
@@ -109,12 +109,13 @@ namespace vvenc {
     bool            isLookAhead;
     unsigned        framesCoded;
     int             targetRate;
-    int             frameRate;
+    double          frameRate;
     int             gopSize;
     unsigned        intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         bitsUsedIn1stPass;
+    int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
@@ -170,6 +171,7 @@ namespace vvenc {
     void processFirstPassData( const bool flush, const int poc = -1 );
     void processGops();
     void updateMinNoiseLevelsGop( const bool flush, const int poc );
+    double updateQPstartModelVal();
     double getAverageBitsFromFirstPass();
     void detectSceneCuts();
     void xUpdateAfterPicRC( const Picture* pic );

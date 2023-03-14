@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -91,15 +91,15 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
   m_pTempCS = new CodingStructure( unitCache, nullptr );
   m_pBestCS = new CodingStructure( unitCache, nullptr );
 
-  m_pTempCS->create( chrFormat, area, false );
-  m_pBestCS->create( chrFormat, area, false );
+  m_pTempCS->createForSearch( chrFormat, area );
+  m_pBestCS->createForSearch( chrFormat, area );
 
   const int uiNumSaveLayersToAllocate = 3;
   m_pSaveCS = new CodingStructure*[uiNumSaveLayersToAllocate];
   for( int layer = 0; layer < uiNumSaveLayersToAllocate; layer++ )
   {
     m_pSaveCS[ layer ] = new CodingStructure( unitCache, nullptr );
-    m_pSaveCS[ layer ]->create( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ), false );
+    m_pSaveCS[ layer ]->createForSearch( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ) );
     m_pSaveCS[ layer ]->initStructData();
   }
 

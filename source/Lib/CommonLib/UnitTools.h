@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -179,8 +179,6 @@ namespace CU
   void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);
   void     getIbcMVPsEncOnly            (CodingUnit& cu, Mv* mvPred, int& nbPred);
-  bool     isAddNeighborMvIBC           (const Mv& currMv, Mv* neighborMvs, int numNeighborMv);
-  bool     getDerivedBVIBC              (CodingUnit& cu, const Mv& currentMv, Mv& derivedMv);
 }
 
 // TU tools

@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -411,6 +411,10 @@ public:
   void    printSummary(const ChromaFormat chFmt, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths, const std::string &sFilename)
   {
     FILE* pFile = fopen (sFilename.c_str(), "at");
+    if ( nullptr == pFile )
+    {
+      return;
+    }
 
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;

@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -397,13 +397,13 @@ void PreProcess::xDetectScc( Picture* pic ) const
   bool isSccWeak   = false;
   bool isSccStrong = false;
 
-  int SIZE_BL = 4;
+  const int SIZE_BL = 4;
   const int minLevel = 1 << (m_encCfg->m_internalBitDepth[CH_L] - (!m_encCfg->m_videoFullRangeFlag ? 4 : 6)); // 1/16th or 1/64th of range
   const int K_SC = 25;
   const Pel* piSrc = yuvOrgBuf.Y().buf;
-  uint32_t   uiStride = yuvOrgBuf.Y().stride;
-  uint32_t   uiWidth = yuvOrgBuf.Y().width;
-  uint32_t   uiHeight = yuvOrgBuf.Y().height;
+  const uint32_t uiStride = yuvOrgBuf.Y().stride;
+  const uint32_t uiWidth  = yuvOrgBuf.Y().width;
+  const uint32_t uiHeight = yuvOrgBuf.Y().height;
   int size = SIZE_BL;
   unsigned   hh, ww;
   int SizeS = SIZE_BL << 1;
@@ -414,8 +414,8 @@ void PreProcess::xDetectScc( Picture* pic ) const
   {
     for( ww = 0; ww < uiWidth; ww += SizeS )
     {
-      int Rx = ww > (uiWidth >> 1) ? 1 : 0;
-      int Ry = hh > (uiHeight >> 1) ? 1 : 0;
+      int Rx = ww >= (uiWidth  >> 1) ? 1 : 0;
+      int Ry = hh >= (uiHeight >> 1) ? 1 : 0;
       Ry = Ry << 1 | Rx;
 
       int i = ww;

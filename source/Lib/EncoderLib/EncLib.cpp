@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -349,6 +349,7 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_QP /*base QP*/  = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
 
   // preserve some settings
+  m_firstPassCfg.m_intraQPOffset   = m_encCfg.m_intraQPOffset;
   if( m_firstPassCfg.m_usePerceptQPA && ( m_firstPassCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_firstPassCfg.m_framesToBeEncoded == 1 ) )
   {
     m_firstPassCfg.m_CTUSize       = m_encCfg.m_CTUSize;

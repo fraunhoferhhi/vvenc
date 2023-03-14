@@ -16,9 +16,15 @@ macro( install_targets config_ )
            RUNTIME DESTINATION ${RUNTIME_DEST}
            LIBRARY DESTINATION ${LIBRARY_DEST}
            ARCHIVE DESTINATION ${ARCHIVE_DEST} )
-  install( TARGETS             vvencapp vvencFFapp
-           CONFIGURATIONS      ${config_}
-           RUNTIME DESTINATION ${RUNTIME_DEST} )
+  if( VVENC_INSTALL_FULLFEATURE_APP )
+	install( TARGETS             vvencapp vvencFFapp
+	         CONFIGURATIONS      ${config_}
+             RUNTIME DESTINATION ${RUNTIME_DEST} )
+  else()
+	install( TARGETS             vvencapp
+             CONFIGURATIONS      ${config_}
+             RUNTIME DESTINATION ${RUNTIME_DEST} )
+  endif()
 endmacro( install_targets )
 
 # install pdb file for static and shared libraries

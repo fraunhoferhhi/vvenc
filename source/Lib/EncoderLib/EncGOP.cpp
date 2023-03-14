@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -243,7 +243,6 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_pcEncCfg           ( nullptr )
   , m_gopCfg             ( nullptr )
   , m_pcRateCtrl         ( nullptr )
-  , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
   , m_spsMap             ( MAX_NUM_SPS )
   , m_ppsMap             ( MAX_NUM_PPS )
   , m_isPreAnalysis      ( false )
@@ -269,7 +268,7 @@ EncGOP::~EncGOP()
   if( m_pcEncCfg && ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' ) )
   {
     // reset potential decoder resources
-    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap, msg );
+    tryDecodePicture( nullptr, 0, std::string(""), m_ffwdDecoder, nullptr, msg );
   }
 
   freePicList();
@@ -287,6 +286,9 @@ EncGOP::~EncGOP()
   // cleanup parameter sets
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
+
+  for( auto& p : m_globalApsList ) if( p ) delete p;
+  m_globalApsList.clear();
 }
 
 void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis )
@@ -538,11 +540,6 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
     xWritePicture( *outPic, auList, false );
   }
 
-  if( m_pcEncCfg->m_alfTempPred )
-  {
-    xSyncAlfAps( *outPic, m_gopApsMap, outPic->picApsMap );
-  }
-
   // update pending RC
   // first pic has been written to bitstream
   // therefore we have at least for this picture a valid total bit and head bit count
@@ -585,16 +582,115 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
   m_numPicsCoded += 1;
 }
 
+void EncGOP::xSyncAlfAps( Picture& pic )
+{
+  Slice& slice = *pic.cs->slice;
+  const bool mtPicParallel = m_pcEncCfg->m_numThreads > 0;
+
+  if( mtPicParallel && slice.isIntra() )
+  {
+    // reset APS propagation on Intra-Slice in MT-mode
+    return;
+  }
+
+  // get previous APS (in coding order) to propagate from it
+  // in parallelization case (parallel pictures), we refer to APS from lower temporal layer
+  // NOTE: elements in the global APS list are following in coding order
+
+  PicApsGlobal* refAps = nullptr;
+  auto curApsItr = std::find_if( m_globalApsList.begin(), m_globalApsList.end(), [&pic]( auto p ) { return p->poc == pic.poc; } );
+  CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
+  if( curApsItr != m_globalApsList.begin() )
+  {
+    if( mtPicParallel )
+    {
+      auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
+      auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
+      auto refApsItr = ( pic.TLayer > 0 ) ? std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid  < pic.TLayer; } ):
+                                            std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid == pic.TLayer; } );
+      if( refApsItr == r_end )
+        return;
+      refAps = *refApsItr;
+    }
+    else
+    {
+      curApsItr--;
+      refAps = *curApsItr;
+    }
+  }
+
+  if( !refAps )
+    return;
+
+  CHECK( refAps->tid == MAX_UINT, "Attempt referencing from an uninitialized APS" );
+
+  // copy ref APSs to current picture
+  const ParameterSetMap<APS>& src = refAps->apsMap;
+  ParameterSetMap<APS>&       dst = pic.picApsMap;
+  if( mtPicParallel && pic.TLayer == 0 )
+  {
+    // in pic.parallel case, due to limited number of APS IDs, limit propagation of TID-0 APS
+    CHECK( slice.sps->maxTLayers > ALF_CTB_MAX_NUM_APS, "Not enough space for ALF APSs in MT mode: not supported"  )
+    int numApsTID0 = ALF_CTB_MAX_NUM_APS - (int)slice.sps->maxTLayers;
+    int lastTakenApsPOC = pic.poc;
+    while( numApsTID0 > 0 )
+    {
+      const APS* candAPS = nullptr;
+      int candMapIdx = 0;
+      for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+      {
+        const int mapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+        const APS* srcAPS = src.getPS( mapIdx );
+        if( srcAPS && srcAPS->apsId != MAX_UINT && srcAPS->poc < lastTakenApsPOC && ( !candAPS || srcAPS->poc > candAPS->poc ) )
+        {
+          candAPS = srcAPS;
+          candMapIdx = mapIdx;
+        }
+      }
+      if( !candAPS )
+        break;
+
+      APS* dstAPS = dst.allocatePS( candMapIdx );
+      *dstAPS = *candAPS;
+      dst.clearChangedFlag( candMapIdx );
+      lastTakenApsPOC = candAPS->poc;
+      numApsTID0--;
+    }
+  }
+  else
+  {
+    for( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
+    {
+      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
+      const APS* srcAPS = src.getPS( apsMapIdx );
+      if( srcAPS )
+      {
+        APS* dstAPS = dst.allocatePS( apsMapIdx );
+        *dstAPS = *srcAPS;
+        dst.clearChangedFlag( apsMapIdx );
+      }
+    }
+  }
+  dst.setApsIdStart( src.getApsIdStart() );
+}
+
 void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 {
   // decoder in encoder
   bool decPic = false;
   bool encPic = false;
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "finalpass", m_pcRateCtrl->rcIsFinalPass ? 1: 0 ) );
+
+  if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
+  {
+    // Establish reference APS for current picture
+    xSyncAlfAps( *pic );
+  }
+
   if( m_trySkipOrDecodePicture )
   {
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, pic->picApsMap, msg );
     if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
     {
       pic->picInitialQP     = -1;
@@ -611,11 +707,6 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   pic->encPic   = encPic;
   pic->isPreAnalysis = m_isPreAnalysis;
 
-  if( m_pcEncCfg->m_alfTempPred || !encPic )
-  {
-    xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-  }
-
   // compress next picture
   if( pic->encPic )
   {
@@ -623,7 +714,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
   else
   {
-    picEncoder->skipCompressPicture( *pic, m_gopApsMap );
+    picEncoder->skipCompressPicture( *pic );
   }
 
   // finish picture encoding and cleanup
@@ -711,7 +802,7 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   //--CFG_KDY
   //const int rateMultiplier = 1;
-  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale / (double)m_pcEncCfg->m_temporalSubsampleRatio;
+  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale;
   m_AnalyzeAll.setFrmRate( fps );
   m_AnalyzeI.setFrmRate( fps );
   m_AnalyzeP.setFrmRate( fps );
@@ -1377,6 +1468,19 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     m_gopEncListInput.push_back( pic );
     m_gopEncListOutput.push_back( pic );
 
+    if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
+    {
+      m_globalApsList.push_back( new PicApsGlobal( pic->poc ) );
+      CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
+      pic->picApsGlobal = m_globalApsList.back();
+      // the max size of global APS list is more than enough to support parallelization 
+      if( m_globalApsList.size() > m_pcEncCfg->m_GOPSize * ( m_pcEncCfg->m_maxParallelFrames + 1 ) )
+      {
+        delete m_globalApsList.front();
+        m_globalApsList.pop_front();
+      }
+    }
+
     // continue with next picture
     m_lastCodingNum = pic->gopEntry->m_codingNum;
 
@@ -1671,17 +1775,22 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   xInitLMCS( pic );
 
   pic.picApsMap.clearActive();
+  pic.picApsMap.setApsIdStart( ALF_CTB_MAX_NUM_APS );
   for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
   {
     const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
     APS* alfAPS = pic.picApsMap.getPS( apsMapIdx );
     if ( alfAPS )
     {
+      alfAPS->apsId      = MAX_UINT;
+      alfAPS->temporalId = MAX_INT;
+      alfAPS->poc        = MAX_INT;
       pic.picApsMap.clearChangedFlag( apsMapIdx );
       alfAPS->alfParam.reset();
       alfAPS->ccAlfParam.reset();
     }
   }
+  pic.picApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
   if( pic.poc == m_pcEncCfg->m_switchPOC )
@@ -1957,52 +2066,6 @@ void EncGOP::xSelectReferencePictureList( Slice* slice ) const
   }
 }
 
-void EncGOP::xSyncAlfAps( Picture& pic, ParameterSetMap<APS>& dst, const ParameterSetMap<APS>& src )
-{
-  Slice& slice   = *pic.cs->slice;
-  const SPS& sps = *slice.sps;
-
-  if ( sps.alfEnabled )
-  {
-    // cleanup first
-    dst.clearActive();
-    for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
-    {
-      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
-      APS* alfAPS = dst.getPS( apsMapIdx );
-      if ( alfAPS )
-      {
-        dst.clearChangedFlag( apsMapIdx );
-        alfAPS->alfParam.reset();
-      }
-    }
-    // copy
-    for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
-    {
-      const int apsMapIdx = ( i << NUM_APS_TYPE_LEN ) + ALF_APS;
-      const APS* srcAPS = src.getPS( apsMapIdx );
-      if ( srcAPS )
-      {
-        APS* dstAPS = dst.getPS( apsMapIdx );
-        if ( ! dstAPS )
-        {
-          dstAPS = dst.allocatePS( apsMapIdx );
-          dst.clearChangedFlag( apsMapIdx );
-        }
-        dst.setChangedFlag( apsMapIdx, src.getChangedFlag( apsMapIdx ) );
-        dstAPS->alfParam    = srcAPS->alfParam;
-        dstAPS->ccAlfParam  = srcAPS->ccAlfParam;
-        dstAPS->apsId       = srcAPS->apsId;
-        dstAPS->apsType     = srcAPS->apsType;
-        dstAPS->layerId     = srcAPS->layerId;
-        dstAPS->temporalId  = srcAPS->temporalId;
-        dstAPS->poc         = srcAPS->poc;
-      }
-    }
-    dst.setApsIdStart( src.getApsIdStart() );
-  }
-}
-
 void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
@@ -2094,23 +2157,6 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
       const int apsMapIdx          = ( apsId << NUM_APS_TYPE_LEN ) + ALF_APS;
       APS* aps                     = apsMap.getPS( apsMapIdx );
       bool writeAps                = aps && apsMap.getChangedFlag( apsMapIdx );
-      if ( !aps && slice->alfAps[ apsId ] )
-      {
-        aps   = apsMap.allocatePS( apsMapIdx );
-        *aps  = *slice->alfAps[ apsId ]; // copy aps from slice header
-        writeAps = true;
-      }
-      else if (slice->ccAlfCbEnabled && !aps && apsId == slice->ccAlfCbApsId)
-      {
-        writeAps = true;
-        aps = apsMap.getPS((slice->ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
-      }
-      else if (slice->ccAlfCrEnabled && !aps && apsId == slice->ccAlfCrApsId)
-      {
-        writeAps = true;
-        aps = apsMap.getPS((slice->ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
-      }
-
       if ( writeAps )
       {
         aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;

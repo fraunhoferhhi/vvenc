@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -322,7 +322,6 @@ struct InterPredictionData
   Mv          mvd     [NUM_REF_PIC_LIST_01][3];
   Mv          mv      [NUM_REF_PIC_LIST_01][3];
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
-  Mv          bv;     // block vector for IBC
 };
 
 

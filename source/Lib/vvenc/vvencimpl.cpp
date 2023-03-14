@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -340,6 +340,12 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
       }
     }
 
+    if ( ! xVerifyYUVBuffer( pcYUVBuffer ) )
+    {     
+      m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
+      return VVENC_ERR_UNSPECIFIED;
+    }
+
     if( m_eState == INTERNAL_STATE_INITIALIZED ){ m_eState = INTERNAL_STATE_ENCODING; }
   }
   else
@@ -551,6 +557,28 @@ int VVEncImpl::printSummary() const
 
   m_pEncLib->printSummary();
   return 0;
+}
+
+bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
+{
+  if( pcYUVBuffer == nullptr ){ return false; }
+
+  const int numComp  = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
+  const int16_t mask = ~( ( 1 << m_cVVEncCfg.m_internalBitDepth[0] ) - 1 );
+  int dstSum = 0;
+  for( int comp = 0; comp < numComp; comp++ )
+  {
+    vvencYUVPlane& plane = pcYUVBuffer->planes[ comp ];
+    int16_t* dst     = plane.ptr;
+    for( int y = 0; y < plane.height; y++, dst += plane.stride )
+    {
+      for( int x = 0; x < plane.width; x++ )
+      {
+        dstSum |= dst[ x ] & mask;
+      }
+    }
+  }
+  return (dstSum != 0) ? false : true;
 }
 
 int VVEncImpl::xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList )

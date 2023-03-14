@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -202,8 +202,8 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
     m_pTempCS[i] = new CodingStructure( m_unitCache, nullptr );
     m_pBestCS[i] = new CodingStructure( m_unitCache, nullptr );
 
-    m_pTempCS[i]->create( chromaFormat, area, false );
-    m_pBestCS[i]->create( chromaFormat, area, false );
+    m_pTempCS[i]->createForSearch( chromaFormat, area );
+    m_pBestCS[i]->createForSearch( chromaFormat, area );
 
     m_pOrgBuffer[i].create( chromaFormat, area );
     m_pRspBuffer[i].create( CHROMA_400, area );
@@ -212,8 +212,8 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
   m_pBestCS2 = new CodingStructure( m_unitCache, nullptr );
 
-  m_pTempCS2->create( chromaFormat, ctuArea, false );
-  m_pBestCS2->create( chromaFormat, ctuArea, false );
+  m_pTempCS2->createForSearch( chromaFormat, ctuArea );
+  m_pBestCS2->createForSearch( chromaFormat, ctuArea );
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
   m_tempQpDiff = 0;
@@ -497,7 +497,7 @@ void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& be
   if( partitioner.isSepTree( *tempCS ) && isChroma( partitioner.chType ) )
   {
     Position lumaRefPos( uiLPelX, uiTPelY );
-    CodingUnit* colLumaCu = bestCS->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+    CodingUnit* colLumaCu = bestCS->lumaCS->getCU( lumaRefPos, CH_L, TREE_D );
 
     if( colLumaCu )
     {
@@ -712,7 +712,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         const ChromaFormat chromaFm = tempCS->area.chromaFormat;
         const Position chromaCentral (tempCS->area.Cb().chromaPos().offset (tempCS->area.Cb().chromaSize().width >> 1, tempCS->area.Cb().chromaSize().height >> 1));
         const Position lumaRefPos (chromaCentral.x << getChannelTypeScaleX (CH_C, chromaFm), chromaCentral.y << getChannelTypeScaleY (CH_C, chromaFm));
-        const CodingUnit* colLumaCu = bestCS->refCS->getCU (lumaRefPos, CH_L, TREE_D);
+        const CodingUnit* colLumaCu = bestCS->lumaCS->getCU (lumaRefPos, CH_L, TREE_D);
         // update qp
         qp = colLumaCu->qp;
       }
@@ -769,9 +769,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
               const bool skipAltHpelIF = ( int( ( encTestMode.opts & ETO_IMV ) >> ETO_IMV_SHIFT ) == 4 ) && ( bestIntPelCost > 1.25 * bestCS->cost );
               if (!skipAltHpelIF)
               {
-                tempCS->bestCS = bestCS;
                 xCheckRDCostInterIMV(tempCS, bestCS, partitioner, encTestMode );
-                tempCS->bestCS = nullptr;
               }
             }
           }
@@ -922,19 +920,18 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   {
     bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
   }
-  if ((!slice.isIntra() || slice.sps->IBC)
+  if( ( !slice.isIntra() || slice.sps->IBC )
     && partitioner.chType == CH_L
-    && bestCS->cus.size() == 1 && (bestCS->cus.back()->predMode == MODE_INTER || bestCS->cus.back()->predMode == MODE_IBC)
-    && bestCS->area.Y() == (*bestCS->cus.back()).Y()
-    )
+    && bestCS->cus.size() == 1 && ( bestCS->cus.back()->predMode == MODE_INTER || bestCS->cus.back()->predMode == MODE_IBC )
+    && bestCS->area.Y() == (*bestCS->cus.back()).Y() )
   {
     const CodingUnit& cu = *bestCS->cus.front();
     bool isIbcSmallBlk = CU::isIBC(cu) && (cu.lwidth() * cu.lheight() <= 16);
     if (!cu.affine && !cu.geo && !isIbcSmallBlk)
     {
       const MotionInfo &mi = cu.getMotionInfo();
-      HPMVInfo hMi( mi, (mi.interDir == 3) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL );
-      cu.cs->addMiToLut( CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
+      HPMVInfo hMi( mi, ( mi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
+      cu.cs->addMiToLut( CU::isIBC( cu ) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi );
     }
   }
 
@@ -1266,8 +1263,8 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     tempCS->initSubStructure( *tempCSChroma, partitioner.chType, partitioner.currArea(), false );
     tempCS->initSubStructure( *bestCSChroma, partitioner.chType, partitioner.currArea(), false );
     m_CABACEstimator->determineNeighborCus( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType );
-    tempCSChroma->refCS = tempCS;
-    bestCSChroma->refCS = tempCS;
+    tempCSChroma->lumaCS = tempCS;
+    bestCSChroma->lumaCS = tempCS;
     xCompressCU( tempCSChroma, bestCSChroma, partitioner );
 
     //attach chromaCS to luma CS and update cost
@@ -1339,7 +1336,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTRA, tempCS, partitioner.chType );
 
-  tempCS->initStructData( encTestMode.qp );
+  tempCS->initStructData( encTestMode.qp, false ); // clear motion buffer
 
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
 
@@ -1559,7 +1556,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   tempCS->initStructData( encTestMode.qp );
 
   MergeCtx mergeCtx;
-  bool affineMrgAvail =!((m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
+  bool affineMrgAvail = !((m_pcEncCfg->m_Affine > 2) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
     && (m_pcEncCfg->m_Affine || sps.SbtMvp) && m_pcEncCfg->m_maxNumAffineMergeCand
     && !(bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8);
 
@@ -2722,15 +2719,18 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       mergeCtx.setMergeInfo(cu, mergeCand); // set bv info in merge mode
       const int cuPelX = cu.Y().x;
       const int cuPelY = cu.Y().y;
-      int roiWidth = cu.lwidth();
-      int roiHeight = cu.lheight();
-      const int picWidth = cu.cs->slice->pps->picWidthInLumaSamples;
+      int roiWidth     = cu.lwidth();
+      int roiHeight    = cu.lheight();
+      const int picWidth  = cu.cs->slice->pps->picWidthInLumaSamples;
       const int picHeight = cu.cs->slice->pps->picHeightInLumaSamples;
-      const unsigned int  lcuWidth = cu.cs->slice->sps->CTUSize;
-      int xPred = cu.bv.hor;
-      int yPred = cu.bv.ver;
+      const unsigned int lcuWidth = cu.cs->slice->sps->CTUSize;
+
+      Mv bv = cu.mv[0][0];
+      bv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT);
+      int xPred = bv.hor;
+      int yPred = bv.ver;
       
-      if (!m_cInterSearch.searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth)) // not valid bv derived
+      if( !m_cInterSearch.searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth ) ) // not valid bv derived
       {
         numValidBv--;
         continue;
@@ -3901,6 +3901,10 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 
   if( CU::isIntra( cu ) )
   {
+    if( isLuma( cu.chType ) )
+    {
+      cu.getMotionBuf().memset( -1 ); // clear motion buf
+    }
     xReconIntraQT( cu );
   }
   else

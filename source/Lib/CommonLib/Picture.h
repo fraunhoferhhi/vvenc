@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -110,6 +110,13 @@ protected:
   bool     m_bResetAMaxBT;
 };
 
+struct PicApsGlobal{
+  int      poc;
+  unsigned tid;
+  ParameterSetMap<APS> apsMap;
+  PicApsGlobal( int _p ) : poc(_p), tid(MAX_UINT), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
+};
+
 struct Picture : public UnitArea
 {
   uint32_t margin;
@@ -193,6 +200,7 @@ public:
   const DCI*                    dci;
   ParameterSetMap<APS>          picApsMap;
   std::deque<Slice*>            slices;
+  std::vector<const Slice*>     ctuSlice;
   ReshapeData                   reshapeData;
   SEIMessages                   SEIs;
   BlkStat                       picBlkStat;
@@ -256,6 +264,7 @@ public:
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
+  PicApsGlobal*                 picApsGlobal;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

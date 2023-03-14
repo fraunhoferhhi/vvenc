@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -79,9 +79,9 @@ extern thread_local std::unique_ptr<TProfiler> ptls;
 // flexible conversion from relative to absolute index
 struct ScanElement
 {
-  uint32_t idx;
-  uint16_t x;
-  uint16_t y;
+  uint16_t idx;
+  uint8_t  x;
+  uint8_t  y;
 };
 
 

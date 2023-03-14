@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -196,6 +196,7 @@ Picture::Picture()
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
+    , picApsGlobal      ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
@@ -325,14 +326,16 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   }
   SEIs.clear();
 
-  for (size_t i = 0; i < slices.size(); i++)
+  for( size_t i = 0; i < slices.size(); i++ )
   {
     delete slices[i];
   }
   slices.clear();
+  ctuSlice.clear();
+  ctuSlice.resize( pps.pcv->sizeInCtus, nullptr );
 
   const ChromaFormat chromaFormatIDC = sps.chromaFormatIdc;
-  const int          iWidth = pps.picWidthInLumaSamples;
+  const int          iWidth  = pps.picWidthInLumaSamples;
   const int          iHeight = pps.picHeightInLumaSamples;
 
   if( cs )
@@ -346,23 +349,23 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
     cs->pps = &pps;
     cs->sps = &sps;
     cs->vps = &_vps;
-    cs->create( UnitArea( chromaFormatIDC, Area( 0, 0, iWidth, iHeight )), true, pps.pcv );
+    cs->createPicLevel( UnitArea( chromaFormatIDC, Area( 0, 0, iWidth, iHeight )), pps.pcv );
   }
 
   cs->picture   = this;
-  cs->refCS     = cs;
+  cs->lumaCS    = cs;
   cs->slice     = nullptr;  // the slices for this picture have not been set at this point. update cs->slice after swapSliceObject()
   cs->picHeader = picHeader;
-  if ( alfAps )
+  if( alfAps )
   {
-    memcpy(cs->alfAps, alfAps, sizeof(cs->alfAps));
+    memcpy( cs->alfAps, alfAps, sizeof( cs->alfAps ) );
   }
   cs->lmcsAps = lmcsAps;
   cs->pcv     = pps.pcv;
   vps         = &_vps;
   dci         = nullptr;
 
-  if( ! m_picBufs[ PIC_RECONSTRUCTION ].valid() )
+  if( !m_picBufs[PIC_RECONSTRUCTION].valid() )
   {
     m_picBufs[ PIC_RECONSTRUCTION ].create( chromaFormat, Area( lumaPos(), lumaSize() ), sps.CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
   }
@@ -402,7 +405,7 @@ Slice* Picture::allocateNewSlice()
 
   memcpy( slice.alfAps, cs->alfAps, sizeof(cs->alfAps) );
 
-  if ( slices.size() >= 2 )
+  if( slices.size() >= 2 )
   {
     slice.copySliceInfo( slices[ slices.size() - 2 ] );
   }

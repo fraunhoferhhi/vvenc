@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -925,9 +925,6 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
 {
   const PreCalcValues &pcv = *cu.cs->pcv;
 
-  if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[cu.chType].pos(), cu.chType, pcv ) )
-    return;
-
   ChannelType start = CH_L;
   ChannelType end   = CH_C;
 
@@ -957,6 +954,9 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
   for( int ct = start; ct <= end; ct++ )
   {
     const ChannelType ch  = ( ChannelType ) ct;
+    if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[ch].pos(), ch, pcv ) )
+      continue;
+
     const TreeType    tt  = isLuma( ch ) ? TREE_L : TREE_C;
     const TreeType    ttfst = isLuma( start ) ? TREE_L : TREE_C;
     const bool        vld = isLuma( ch ) ? currTU.Y().valid() : currTU.Cb().valid();
@@ -1275,10 +1275,15 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
 
   if( sliceQ.isInterB() || sliceP.isInterB() )
   {
-    const Picture *piRefP0 = CU::isIBC( cuP ) ? sliceP.pic : 0 <= miP.refIdx[0] ? sliceP.getRefPic( REF_PIC_LIST_0, miP.refIdx[0] ) : nullptr;
-    const Picture *piRefP1 = CU::isIBC( cuP ) ? nullptr    : 0 <= miP.refIdx[1] ? sliceP.getRefPic( REF_PIC_LIST_1, miP.refIdx[1] ) : nullptr;
-    const Picture *piRefQ0 = CU::isIBC( cuQ ) ? sliceQ.pic : 0 <= miQ.refIdx[0] ? sliceQ.getRefPic( REF_PIC_LIST_0, miQ.refIdx[0] ) : nullptr;
-    const Picture *piRefQ1 = CU::isIBC( cuQ ) ? nullptr    : 0 <= miQ.refIdx[1] ? sliceQ.getRefPic( REF_PIC_LIST_1, miQ.refIdx[1] ) : nullptr;
+    const Picture *piRefP0 = CU::isIBC( cuP ) ? sliceP.pic : MI_NOT_VALID != miP.miRefIdx[0] ? sliceP.getRefPic( REF_PIC_LIST_0, miP.miRefIdx[0] ) : nullptr;
+    const Picture *piRefP1 = CU::isIBC( cuP ) ? nullptr    : MI_NOT_VALID != miP.miRefIdx[1] ? sliceP.getRefPic( REF_PIC_LIST_1, miP.miRefIdx[1] ) : nullptr;
+    const Picture *piRefQ0 = CU::isIBC( cuQ ) ? sliceQ.pic : MI_NOT_VALID != miQ.miRefIdx[0] ? sliceQ.getRefPic( REF_PIC_LIST_0, miQ.miRefIdx[0] ) : nullptr;
+    const Picture *piRefQ1 = CU::isIBC( cuQ ) ? nullptr    : MI_NOT_VALID != miQ.miRefIdx[1] ? sliceQ.getRefPic( REF_PIC_LIST_1, miQ.miRefIdx[1] ) : nullptr;
+
+    const bool hasValidMvP0 = CU::isIBC( cuP ) || MI_NOT_VALID != miP.miRefIdx[0];
+    const bool hasValidMvP1 = CU::isIBC( cuP ) || MI_NOT_VALID != miP.miRefIdx[1];
+    const bool hasValidMvQ0 = CU::isIBC( cuQ ) || MI_NOT_VALID != miQ.miRefIdx[0];
+    const bool hasValidMvQ1 = CU::isIBC( cuQ ) || MI_NOT_VALID != miQ.miRefIdx[1];
 
     unsigned uiBs = 0;
 
@@ -1286,16 +1291,16 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     if( ( piRefP0 == piRefQ0 && piRefP1 == piRefQ1 ) || ( piRefP0 == piRefQ1 && piRefP1 == piRefQ0 ) )
     {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_DBLF
-      const __m128i xmvP = _mm_unpacklo_epi64( 0 <= miP.refIdx[0] ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[0] ) : _mm_setzero_si128(), 0 <= miP.refIdx[1] ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[1] ) : _mm_setzero_si128() );
-      const __m128i xmvQ = _mm_unpacklo_epi64( 0 <= miQ.refIdx[0] ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[0] ) : _mm_setzero_si128(), 0 <= miQ.refIdx[1] ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[1] ) : _mm_setzero_si128() );
+      const __m128i xmvP = _mm_unpacklo_epi64( hasValidMvP0 ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[0] ) : _mm_setzero_si128(), hasValidMvP1 ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[1] ) : _mm_setzero_si128() );
+      const __m128i xmvQ = _mm_unpacklo_epi64( hasValidMvQ0 ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[0] ) : _mm_setzero_si128(), hasValidMvQ1 ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[1] ) : _mm_setzero_si128() );
       const __m128i xth  = _mm_set1_epi32( nThreshold - 1 );
 #else
       Mv mvP[2] = { { 0, 0 }, { 0, 0 } }, mvQ[2] = { { 0, 0 }, { 0, 0 } };
 
-      if( 0 <= miP.refIdx[0] ) { mvP[0] = miP.mv[0]; }
-      if( 0 <= miP.refIdx[1] ) { mvP[1] = miP.mv[1]; }
-      if( 0 <= miQ.refIdx[0] ) { mvQ[0] = miQ.mv[0]; }
-      if( 0 <= miQ.refIdx[1] ) { mvQ[1] = miQ.mv[1]; }
+      if( hasValidMvP0 ) { mvP[0] = miP.mv[0]; }
+      if( hasValidMvP1 ) { mvP[1] = miP.mv[1]; }
+      if( hasValidMvQ0 ) { mvQ[0] = miQ.mv[0]; }
+      if( hasValidMvQ1 ) { mvQ[1] = miQ.mv[1]; }
 #endif
       if( piRefP0 != piRefP1 )   // Different L0 & L1
       {
@@ -1366,11 +1371,11 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   }
 
   // pcSlice->isInterP()
-  CHECK( CU::isInter( cuP ) && 0 > miP.refIdx[0], "Invalid reference picture list index" );
-  CHECK( CU::isInter( cuP ) && 0 > miQ.refIdx[0], "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miP.miRefIdx[0], "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miQ.miRefIdx[0], "Invalid reference picture list index" );
 
-  const Picture *piRefP0 = ( CU::isIBC( cuP ) ? sliceP.pic : sliceP.getRefPic( REF_PIC_LIST_0, miP.refIdx[0] ) );
-  const Picture *piRefQ0 = ( CU::isIBC( cuQ ) ? sliceQ.pic : sliceQ.getRefPic( REF_PIC_LIST_0, miQ.refIdx[0] ) );
+  const Picture *piRefP0 = ( CU::isIBC( cuP ) ? sliceP.pic : sliceP.getRefPic( REF_PIC_LIST_0, miP.miRefIdx[0] ) );
+  const Picture *piRefQ0 = ( CU::isIBC( cuQ ) ? sliceQ.pic : sliceQ.getRefPic( REF_PIC_LIST_0, miQ.miRefIdx[0] ) );
 
   if( piRefP0 != piRefQ0 )
   {

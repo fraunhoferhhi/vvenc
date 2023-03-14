@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -360,7 +360,7 @@ void DecCu::xReconInter(CodingUnit &cu)
       if (!cu.affine && !cu.geo && !isIbcSmallBlk)
       {
         const MotionInfo& mi = cu.getMotionInfo();
-        HPMVInfo hMi(mi, (mi.interDir == 3) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL);
+        HPMVInfo hMi( mi, ( mi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
         cs.addMiToLut(CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
       }
     }

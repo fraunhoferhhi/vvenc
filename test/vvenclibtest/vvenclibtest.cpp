@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -1186,6 +1186,27 @@ int invalidInputInvalidPicSize( )
   return 0;
 }
 
+int invalidInputInvalidSampleRange( )
+{
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+  fillEncoderParameters( vvencParams );
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture, 1024 );
+
+  if( 0 != inputBufTest( pcYuvPicture ))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
+    return -1;
+  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
+
+  return 0;
+}
+
 int invalidInputInvalidLumaStride( )
 {
   int16_t dummy = 0;
@@ -1278,7 +1299,7 @@ int invalidldInputBuf( )
 int testInvalidInputParams()
 {
   testfunc( "invalidInputUninitialzedInputPic",              &invalidInputUninitialzedInputPic,         true );
-  testfunc( "invalidInputInvalidPicSize",                    &invalidInputInvalidPicSize,               true );
+  testfunc( "invalidInputInvalidSampleRange",                &invalidInputInvalidSampleRange,           true );
 
   testfunc( "invalidInputInvalidPicSize",                    &invalidInputInvalidPicSize,               true );
   testfunc( "invalidInputInvalidLumaStride",                 &invalidInputInvalidLumaStride,            true );

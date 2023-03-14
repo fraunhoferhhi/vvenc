@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -104,7 +104,7 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_tsSignFlagCtxSet          (Ctx::TsResidualSign)
   , m_sigCoeffGroupFlag         ()
   , m_bdpcm                     (bdpcm)
-  , m_tplBuf                    (tplBuf)
+  , m_tplBuf                    (tplBuf + m_width * m_height - 1)
 {
   if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
     memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );
@@ -249,8 +249,6 @@ void MergeCtx::setMergeInfo( CodingUnit& cu, int candIdx ) const
   cu.mvpNum [REF_PIC_LIST_1]    = NOT_VALID;
   if( CU::isIBC( cu ) )
   {
-    cu.bv   = cu.mv[REF_PIC_LIST_0][0];
-    cu.bv   .changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT ); // used for only integer resolution
     cu.imv  = cu.imv == IMV_HPEL ? 0 : cu.imv;
   }
   cu.BcwIdx = ( interDirNeighbours[candIdx] == 3 ) ? BcwIdx[candIdx] : BCW_DEFAULT;

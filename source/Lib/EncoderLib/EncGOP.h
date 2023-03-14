@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -144,7 +144,6 @@ private:
   BlkStat                   m_BlkStat;
   FFwdDecoder               m_ffwdDecoder;
 
-  ParameterSetMap<APS>      m_gopApsMap;
   ParameterSetMap<SPS>      m_spsMap;
   ParameterSetMap<PPS>      m_ppsMap;
   EncHRD                    m_EncHRD;
@@ -171,6 +170,7 @@ private:
   std::list<Picture*>       m_gopEncListOutput;
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
+  std::deque<PicApsGlobal*> m_globalApsList;
 
   std::vector<int>          m_globalCtuQpVector;
 
@@ -220,7 +220,7 @@ private:
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
   void xInitLMCS                      ( Picture& pic );
   void xSelectReferencePictureList    ( Slice* slice ) const;
-  void xSyncAlfAps                    ( Picture& pic, ParameterSetMap<APS>& dst, const ParameterSetMap<APS>& src );
+  void xSyncAlfAps                    ( Picture& pic );
 
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );

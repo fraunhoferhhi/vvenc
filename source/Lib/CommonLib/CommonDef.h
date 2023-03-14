@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -201,6 +201,8 @@ static constexpr int MAX_NUM_REF =                                     16; ///< 
 static constexpr int MAX_QP =                                          63;
 static constexpr int MAX_QP_PERCEPT_QPA =                              42; ///< max. base QP up to which CTU or sub-CTU QPA is used instead of frame QPA
 static constexpr int NOT_VALID =                                       -1;
+static constexpr int MI_NOT_VALID =                                    -1;
+static constexpr int MH_NOT_VALID =                                    -1;
 
 typedef enum
 {

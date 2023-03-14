@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -247,7 +247,7 @@ int main( int argc, char* argv[] )
   if( vvenccfg.m_verbosity >= VVENC_INFO )
   {
     std::stringstream css;
-    css << vvencappCfg.getAppConfigAsString( vvenccfg.m_verbosity );
+    css << vvencappCfg.getAppConfigAsString( &vvenccfg, vvenccfg.m_verbosity );
     css << vvenc_get_config_as_string( &vvenccfg, vvenccfg.m_verbosity);
     msgApp( nullptr, VVENC_INFO,"%s\n", css.str().c_str() );
   }

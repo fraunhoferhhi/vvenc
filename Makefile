@@ -70,6 +70,10 @@ ifneq ($(toolchainfile),)
 CONFIG_OPTIONS += -DCMAKE_TOOLCHAIN_FILE=$(toolchainfile)
 endif
 
+ifneq ($(install-ffapp),)
+CONFIG_OPTIONS += -DVVENC_INSTALL_FULLFEATURE_APP=$(install-ffapp)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
 NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)
