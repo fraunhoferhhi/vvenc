@@ -357,7 +357,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
     const int rateCtrlQpOffset = (m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead ? 1 : 0);
-    
+
     cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + rateCtrlQpOffset; // set QP offets for dual-tree
     crQP = m_pcEncCfg->m_chromaCrQpOffsetDualTree + rateCtrlQpOffset;
     cbCrQP = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree + rateCtrlQpOffset;
