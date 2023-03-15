@@ -267,7 +267,13 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     halvedAvgQP += (*it)->picQP;
   }
-  if (listPreviousPictures.size() >= 1) halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
+  if (listPreviousPictures.size() >= 1)
+  {
+    if (baseQP >= 32)
+      halvedAvgQP = int (((frameLevel + 1) * halvedAvgQP + 1 + listPreviousPictures.size()) / ((frameLevel + 2) * listPreviousPictures.size()));
+    else
+      halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
+  }
   if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
 
