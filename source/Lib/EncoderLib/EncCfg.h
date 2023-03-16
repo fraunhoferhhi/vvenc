@@ -60,6 +60,7 @@ struct VVEncCfg : public vvenc_config
   int  m_log2GopSize;
   int  m_maxTLayer;
   int  m_bimCtuSize;
+  unsigned m_MaxQT[3];
 
 private:
   void xInitCfgMembers();

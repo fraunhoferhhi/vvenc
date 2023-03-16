@@ -459,7 +459,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_CTUSize                                 = 128;
   c->m_MinQT[0] = c->m_MinQT[1] = 8;                                            ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
   c->m_MinQT[2] = 4;
-  c->m_MaxQT[0] = c->m_MaxQT[1] = c->m_MaxQT[2] = 128;
   c->m_maxMTTDepth                             = 3;
   c->m_maxMTTDepthI                            = 3;
   c->m_maxMTTDepthIChroma                      = -1;
@@ -674,7 +673,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   
   c->m_FirstPassMode                           = 0;
 
-//  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
@@ -1892,9 +1890,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
   vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
-  vvenc_confirmParameter(c, c->m_MaxQT[0] > c->m_CTUSize,                                                               "Maximum QT size should be smaller than or equal to CTUSize");
-  vvenc_confirmParameter(c, c->m_MaxQT[1] > c->m_CTUSize,                                                               "Maximum QT size should be smaller than or equal to CTUSize");
-  vvenc_confirmParameter(c, c->m_MaxQT[2] > c->m_CTUSize,                                                               "Maximum QT size should be smaller than or equal to CTUSize");
   vvenc_confirmParameter(c, c->m_CTUSize < 32,                                                                          "CTUSize must be greater than or equal to 32");
   vvenc_confirmParameter(c, c->m_CTUSize > 128,                                                                         "CTUSize must be less than or equal to 128");
   vvenc_confirmParameter(c, c->m_CTUSize != 32 && c->m_CTUSize != 64 && c->m_CTUSize != 128,                            "CTUSize must be a power of 2 (32, 64, or 128)");
@@ -2373,19 +2368,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_CTUSize                         = 64;
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 32;
+      c->m_MinQT[ 1 ]                      = 32;
       c->m_MinQT[ 2 ]                      = 16;
-      c->m_MaxQT[ 0 ]                      = 64;
-      c->m_MaxQT[ 2 ]                      = 64;
-      if( c->m_FirstPassMode == 0 )
-      {
-        c->m_MinQT[ 1 ]                    = 32;
-        c->m_MaxQT[ 1 ]                    = 64;
-      }
-      else
-      {
-        unsigned interBlockSize = c->m_SourceWidth >= 1280 && c->m_SourceHeight >= 720 ? 64 : 32;
-        c->m_MinQT[ 1 ] = c->m_MaxQT[ 1 ]  = interBlockSize;
-      }
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
 
@@ -2441,9 +2425,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 4;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_MaxQT[ 0 ]                      = 64;
-      c->m_MaxQT[ 1 ]                      = 64;
-      c->m_MaxQT[ 2 ]                      = 64;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
 
@@ -2502,9 +2483,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 4;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_MaxQT[ 0 ]                      = 64;
-      c->m_MaxQT[ 1 ]                      = 64;
-      c->m_MaxQT[ 2 ]                      = 64;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
 
@@ -2960,7 +2938,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     // verbose output
     css << "CODING TOOL CFG: ";
-    css << "CTU" << c->m_CTUSize << " QTMax" << vvenc::Log2( c->m_CTUSize / c->m_MaxQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MaxQT[1] ) << " QTMin" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+    css << "CTU" << c->m_CTUSize << " QTMin" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
     css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
     css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
     css << "ALF:" << (c->m_alf ? 1 : 0) << " ";

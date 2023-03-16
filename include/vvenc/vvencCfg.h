@@ -542,7 +542,6 @@ typedef struct vvenc_config
 
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
-  unsigned            m_MaxQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma // TODO (jb): move
   unsigned            m_maxMTTDepth;
   unsigned            m_maxMTTDepthI;
   int                 m_maxMTTDepthIChroma;
@@ -743,9 +742,7 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
-  int                 m_FirstPassMode;                                                   // Test FirstPassMode
-  // reserved parameters for internal use
-//  int                 m_reservedInt[1];
+  int                 m_FirstPassMode;
   int                 m_numRefPics;                                                      // Number of reference pictures
   int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
