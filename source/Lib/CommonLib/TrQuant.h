@@ -81,7 +81,6 @@ public:
              const bool bUseRDOQTS,
              const bool scalingListsEnabled,
              const bool bEnc,
-             const bool useTransformSkipFast,
              const int  thrValue            
            );
 

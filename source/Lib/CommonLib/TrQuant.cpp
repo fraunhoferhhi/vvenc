@@ -301,7 +301,6 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool bUseRDOQTS,
                     const bool scalingListsEnabled,
                     const bool bEnc,
-                    const bool useTransformSkipFast,
                     const int  thrVal
 )
 {
