@@ -208,6 +208,7 @@ struct ComprCUCtx
     , relatedCuIsValid      (false)
     , bestIntraMode         (0)
     , isIntra               (false)
+    , nonSkipWasTested      (false)
   {
   }
 
@@ -248,6 +249,7 @@ struct ComprCUCtx
   bool              relatedCuIsValid;
   int               bestIntraMode;
   bool              isIntra;
+  bool              nonSkipWasTested;
 };
 
 //////////////////////////////////////////////////////////////////////////
