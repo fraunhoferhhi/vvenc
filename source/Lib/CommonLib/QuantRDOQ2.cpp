@@ -489,7 +489,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
-  if( compID != COMP_Cr )
+  if( compID != COMP_Cr || !tu.cbf[COMP_Cb] )
     xInitLastPosBitsTab( cctx, uiWidth, uiHeight, chType, fracBits );
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
