@@ -257,7 +257,6 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
   const uint32_t uiHeight   = rect.height;
 
   const CCoeffBuf&  piCoef   = pSrc;
-        CoeffSigBuf piQCoef  = tu.getCoeffs(compID);
 
   const bool useTransformSkip = tu.mtsIdx[compID]==MTS_SKIP;
 
@@ -291,7 +290,6 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
     }
     else
     {
-      piQCoef.fill( 0 );
       uiAbsSum    = 0;
       tu.lastPos[compID] = -1;
     }

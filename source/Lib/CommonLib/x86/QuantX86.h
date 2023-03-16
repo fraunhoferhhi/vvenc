@@ -461,7 +461,47 @@ template<X86_VEXT vext>
 static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
 {
 #if USE_AVX2
-  if( vext >= AVX2 && ( numCoeff & 7 ) == 0 )
+  if( vext >= AVX2 && ( numCoeff & 15 ) == 0 )
+  {
+    __m256i xqnt = _mm256_set1_epi32( quantCoeff );
+    __m256i xoff = _mm256_set1_epi64x( offset );
+
+    for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos += 16 )
+    {
+      __m256i xcff  = _mm256_loadu_si256( ( const __m256i* ) &pCoeff[uiBlockPos] );
+              xcff  = _mm256_abs_epi32( xcff );
+
+      __m256i xlvl1 = _mm256_mul_epi32( xcff, xqnt );
+              xcff  = _mm256_shuffle_epi32( xcff, 1 + ( 3 << 4 ) );
+      __m256i xlvl2 = _mm256_mul_epi32( xcff, xqnt );
+              xlvl1 = _mm256_add_epi64( xlvl1, xoff );
+              xlvl2 = _mm256_add_epi64( xlvl2, xoff );
+              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
+              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+
+      __m256i xany  = _mm256_or_si256( xlvl1, xlvl2 );
+      
+              xcff  = _mm256_loadu_si256( ( const __m256i* ) &pCoeff[uiBlockPos + 8] );
+              xcff  = _mm256_abs_epi32( xcff );
+              
+              xlvl1 = _mm256_mul_epi32( xcff, xqnt );
+              xcff  = _mm256_shuffle_epi32( xcff, 1 + ( 3 << 4 ) );
+              xlvl2 = _mm256_mul_epi32( xcff, xqnt );
+              xlvl1 = _mm256_add_epi64( xlvl1, xoff );
+              xlvl2 = _mm256_add_epi64( xlvl2, xoff );
+              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
+              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+
+              xany  = _mm256_or_si256( xany, _mm256_or_si256( xlvl1, xlvl2 ) );
+
+      if( !_mm256_testz_si256( xany, xany ) )
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+  else if( vext >= AVX2 && ( numCoeff & 7 ) == 0 )
   {
     __m256i xqnt = _mm256_set1_epi32( quantCoeff );
     __m256i xoff = _mm256_set1_epi64x( offset );

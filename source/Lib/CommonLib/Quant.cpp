@@ -838,6 +838,8 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const CompArea& rect      = tu.blocks[compID];
   const uint32_t uiWidth    = rect.width;
   const uint32_t uiHeight   = rect.height;
+  const uint32_t efHeight   = std::min<unsigned>( uiHeight, JVET_C0024_ZERO_OUT_TH );
+  const uint32_t efArea     = uiWidth * efHeight;
   const int channelBitDepth = sps.bitDepths[toChannelType(compID)];
   const CCoeffBuf piCoef    = pSrc;
 
@@ -867,9 +869,9 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const int64_t iAdd = int64_t( compID == COMP_Y ? 171 : 256 ) << ( iQBits - 9 );
 
   if( !enableScalingLists )
-    return xNeedRdoq( piCoef.buf, rect.area(), defaultQuantisationCoefficient, iAdd, iQBits );
+    return xNeedRdoq( piCoef.buf, efArea, defaultQuantisationCoefficient, iAdd, iQBits );
 
-  for( int uiBlockPos = 0; uiBlockPos < rect.area(); uiBlockPos++ )
+  for( int uiBlockPos = 0; uiBlockPos < efArea; uiBlockPos++ )
   {
     const TCoeff   iLevel           = piCoef.buf[uiBlockPos];
     const int64_t  tmpLevel         = ( int64_t ) std::abs( iLevel ) * piQuantCoeff[uiBlockPos];
