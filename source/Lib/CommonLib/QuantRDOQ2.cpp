@@ -257,7 +257,6 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
   const uint32_t uiHeight   = rect.height;
 
   const CCoeffBuf&  piCoef   = pSrc;
-        CoeffSigBuf piQCoef  = tu.getCoeffs(compID);
 
   const bool useTransformSkip = tu.mtsIdx[compID]==MTS_SKIP;
 
@@ -291,7 +290,6 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
     }
     else
     {
-      piQCoef.fill( 0 );
       uiAbsSum    = 0;
       tu.lastPos[compID] = -1;
     }
@@ -477,7 +475,7 @@ static inline cost_t _dist( cost_t iErr, cost_t iErrScale, int64_t iErrScaleShif
 template< bool bSBH, bool bUseScalingList >
 int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &compID, const CCoeffBuf &pSrc, TCoeff &uiAbsSum, const QpParam &cQP, const Ctx &ctx )
 {
-  CoeffCodingContext cctx( tu, compID, bSBH, m_tplBuf );
+  CoeffCodingContext cctx( tu, compID, bSBH, false, m_tplBuf );
   const FracBitsAccess& fracBits = ctx.getFracBitsAcess();
 
   const SPS &sps            = *tu.cs->sps;
@@ -489,7 +487,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
 
-  if( compID != COMP_Cr )
+  if( compID != COMP_Cr || !tu.cbf[COMP_Cb] )
     xInitLastPosBitsTab( cctx, uiWidth, uiHeight, chType, fracBits );
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be

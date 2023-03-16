@@ -126,6 +126,46 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
   return curTLayer <= tarTL && curId == 0;
 }
 
+void initPicAuxQPOffsets( const Slice* slice, const bool isBIM ) // get m_picShared->m_picAuxQpOffset and m_picShared->m_ctuBimQpOffset if unavailable
+{
+  const Picture* slicePic = slice->pic;
+
+  if (isBIM && slicePic && slicePic->m_picShared->m_ctuBimQpOffset.empty())
+  {
+    const Picture* refPicL0 = slice->getRefPic (REF_PIC_LIST_0, 0);
+    const Picture* refPicL1 = slice->getRefPic (REF_PIC_LIST_1, 0);
+
+    if (refPicL0 && !refPicL0->m_picShared->m_ctuBimQpOffset.empty() &&
+        refPicL1 && !refPicL1->m_picShared->m_ctuBimQpOffset.empty() &&
+        refPicL0->m_picShared->m_ctuBimQpOffset.size() == refPicL1->m_picShared->m_ctuBimQpOffset.size())
+    {
+      const PicShared* pic0 = refPicL0->m_picShared;
+      const PicShared* pic1 = refPicL1->m_picShared;
+      PicShared* const picC = slicePic->m_picShared;
+      const int32_t  numCtu = (int32_t) pic0->m_ctuBimQpOffset.size();
+      int i, sumCtuQpOffset = 0;
+
+      picC->m_ctuBimQpOffset.resize (numCtu);
+
+      for (i = 0; i < numCtu; i++) // scale and merge QPs
+      {
+        const int qpOffset0 = pic0->m_ctuBimQpOffset[i] + pic0->m_picAuxQpOffset; // CTU delta-QP #1
+        const int qpOffset1 = pic1->m_ctuBimQpOffset[i] + pic1->m_picAuxQpOffset; // CTU delta-QP #2
+        const int qpOffsetC = (3 * qpOffset0 + 3 * qpOffset1 + (qpOffset0 + qpOffset1 < 0 ? 3 : 4)) >> 3; // 3 instead of 4 for correct rounding to -2
+
+        picC->m_ctuBimQpOffset[i] = qpOffsetC;
+        sumCtuQpOffset += qpOffsetC;
+      }
+
+      picC->m_picAuxQpOffset = (sumCtuQpOffset + (sumCtuQpOffset < 0 ? -(numCtu >> 1) : numCtu >> 1)) / numCtu; // pic average; delta-QP scaling: 0.75
+      for (i = 0; i < numCtu; i++) // excl. average again
+      {
+        picC->m_ctuBimQpOffset[i] -= picC->m_picAuxQpOffset; // delta-QP relative to the aux average
+      }
+    }
+  }
+}
+
 void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap, MsgLog& msg )
 {
   // check if we should decode a leading bitstream
@@ -691,21 +731,30 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   {
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, pic->picApsMap, msg );
-    if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
-    {
-      pic->picInitialQP     = -1;
-      pic->picInitialLambda = -1.0;
-      m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
-    }
   }
   else
   {
     encPic = true;
   }
+
+  // initialize next picture
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
   pic->writePic = decPic || encPic;
   pic->encPic   = encPic;
   pic->isPreAnalysis = m_isPreAnalysis;
+
+  if( pic->slices[0]->TLayer + 1 < m_pcEncCfg->m_maxTLayer ) // skip for highest two temporal levels
+  {
+    initPicAuxQPOffsets( pic->slices[0], m_pcEncCfg->m_blockImportanceMapping );
+  }
+
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    pic->picInitialQP     = -1;
+    pic->picInitialLambda = -1.0;
+
+    m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
+  }
 
   // compress next picture
   if( pic->encPic )

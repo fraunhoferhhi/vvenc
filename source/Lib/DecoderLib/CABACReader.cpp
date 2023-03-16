@@ -2762,7 +2762,7 @@ void CABACReader::residual_codingTS( TransformUnit& tu, ComponentID compID )
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_codingTS() etype=%d pos=(%d,%d) size=%dx%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height );
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, false, nullptr, tu.cu->bdpcmM[toChannelType(compID)]);
+  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)] );
   TCoeffSig*          coeff   = tu.getCoeffs( compID ).buf;
 
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
