@@ -1626,9 +1626,8 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
 
   if( useRDOQ && tu.cs->picture->useScSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
   {
-    tu.getCoeffs( compID ) .memset( 0 );
-    tu.lastPos  [ compID ] =       -1;
-    uiAbsSum               =        0;
+    tu.lastPos[compID] = -1;
+    uiAbsSum           =  0;
   }
   else if( tu.cs->slice->depQuantEnabled && tu.mtsIdx[compID] != MTS_SKIP )
   {
