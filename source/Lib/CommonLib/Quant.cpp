@@ -849,20 +849,25 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const int scalingListType     = getScalingListType( tu.cu->predMode, compID );
   CHECK( scalingListType >= SCALING_LIST_NUM, "Invalid scaling list" );
 
+  const bool        isDq        = tu.cs->slice->depQuantEnabled && !useTransformSkip;
+  const int         qpDQ        = isDq ? cQP.Qp( false ) + 1 : cQP.Qp( useTransformSkip );
+  const int         qpPer       = isDq ? qpDQ / 6 : cQP.per( useTransformSkip );
+  const int         qpRem       = isDq ? qpDQ - 6 * qpPer : cQP.rem( useTransformSkip );
+
   const uint32_t uiLog2TrWidth  = Log2( uiWidth );
   const uint32_t uiLog2TrHeight = Log2( uiHeight );
-  int *piQuantCoeff             = getQuantCoeff( scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight );
+  int *piQuantCoeff             = getQuantCoeff( scalingListType, qpRem, uiLog2TrWidth, uiLog2TrHeight );
 
   const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && ( CU::isSepTree( *tu.cu ) ? true : isLuma( compID ) );
   const bool enableScalingLists = getUseScalingList( uiWidth, uiHeight, ( useTransformSkip != 0 ), isLfnstApplied );
 
   const bool needSqrtAdjustment = TU::needsSqrt2Scale( tu, compID );
   const int defaultQuantisationCoefficient
-                                = g_quantScales[needSqrtAdjustment?1:0][cQP.rem(useTransformSkip)];
+                                = g_quantScales[needSqrtAdjustment?1:0][qpRem];
   const int iTransformShift     = getTransformShift( channelBitDepth, rect.size(), maxLog2TrDynamicRange ) + ( needSqrtAdjustment ? -1 : 0 );
 
 
-  const int iQBits              = QUANT_SHIFT + cQP.per( useTransformSkip ) + iTransformShift;
+  const int iQBits              = QUANT_SHIFT + qpPer + iTransformShift;
 
   // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
   // iAdd is different from the iAdd used in normal quantization
