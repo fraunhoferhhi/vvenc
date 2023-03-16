@@ -856,7 +856,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   float vsw [2 * VVENC_MCTF_RANGE] = { 0.0f, };
   float vww [2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
-  int minError = 9999999;
+  int minError = INT32_MAX;
 
   for( int i = 0; i < numRefs; i++ )
   {

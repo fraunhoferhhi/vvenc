@@ -955,7 +955,7 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
 {
   EncRCPic* encRcPic = new EncRCPic;
-  encRcPic->create( encRCSeq, pic.slices[ 0 ]->isIntra() ? 0 : pic.slices[ 0 ]->TLayer + 1, pic.slices[ 0 ]->poc );
+  encRcPic->create( encRCSeq, slice->isIntra() ? 0 : slice->TLayer + 1, slice->poc );
   pic.encRCPic = encRcPic;
   encRCPic = encRcPic;
 
