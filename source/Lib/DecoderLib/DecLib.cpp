@@ -961,7 +961,8 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     if (NULL == pps->pcv)
     {
-      m_parameterSetManager.getPPS( m_picHeader.ppsId )->pcv = new PreCalcValues( *sps, *pps, nullptr, false );
+      const unsigned _maxQtSize[3] = { sps->CTUSize, sps->CTUSize, sps->CTUSize };
+      m_parameterSetManager.getPPS( m_picHeader.ppsId )->pcv = new PreCalcValues( *sps, *pps, _maxQtSize, false );
     }
     m_parameterSetManager.clearSPSChangedFlag(sps->spsId);
     m_parameterSetManager.clearPPSChangedFlag(pps->ppsId);

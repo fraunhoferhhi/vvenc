@@ -1562,7 +1562,7 @@ protected:
 class PreCalcValues
 {
 public:
-  PreCalcValues( const SPS& sps, const PPS& pps, const VVEncCfg* encCfg, bool _isEncoder )
+  PreCalcValues( const SPS& sps, const PPS& pps, const unsigned _maxQtSize[3], bool _isEncoder )
     : chrFormat           ( sps.chromaFormatIdc )
     , maxCUSize           ( sps.CTUSize )
     , maxCUSizeMask       ( maxCUSize  - 1 )
@@ -1585,14 +1585,8 @@ public:
     , maxBtSize           { sps.maxBTSize[0], sps.maxBTSize[1], sps.maxBTSize[2] }
     , maxTtSize           { sps.maxTTSize[0], sps.maxTTSize[1], sps.maxTTSize[2] }
     , minQtSize           { sps.minQTSize[0], sps.minQTSize[1], sps.minQTSize[2] }
-    , maxQtSize           { sps.CTUSize,      sps.CTUSize,      sps.CTUSize }
+    , maxQtSize           { _maxQtSize[0], _maxQtSize[1], _maxQtSize[2] }
   {
-    if( encCfg )
-    {
-      maxQtSize[ 0 ] = encCfg->m_MaxQT[ 0 ];
-      maxQtSize[ 1 ] = encCfg->m_MaxQT[ 1 ];
-      maxQtSize[ 2 ] = encCfg->m_MaxQT[ 2 ];
-    }
   }
 
   const ChromaFormat chrFormat;
@@ -1620,7 +1614,7 @@ private:
   const unsigned     maxBtSize  [3];
   const unsigned     maxTtSize  [3];
   const unsigned     minQtSize  [3];
-        unsigned     maxQtSize  [3];  // TODO (jb): fix
+  const unsigned     maxQtSize  [3];
 
   unsigned getValIdx      ( const Slice &slice, const ChannelType chType ) const;
 
