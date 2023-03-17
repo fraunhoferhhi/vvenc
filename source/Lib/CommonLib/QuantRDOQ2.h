@@ -111,9 +111,9 @@ private:
   //QuantErrScale m_quantErrScale;
   int     m_lastBitsX             [MAX_NUM_CH][LAST_SIGNIFICANT_GROUPS];
   int     m_lastBitsY             [MAX_NUM_CH][LAST_SIGNIFICANT_GROUPS];
-  int*    m_errScale             [SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
-  int     m_errScaleNoScalingList[SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
-  CtxTpl  m_tplBuf               [MAX_TB_SIZEY * MAX_TB_SIZEY];
+  int*    m_errScale              [SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
+  int     m_errScaleNoScalingList [SCALING_LIST_SIZE_NUM][SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM][SCALING_LIST_REM_NUM]; ///< array of quantization matrix coefficient 4x4
+  CtxTpl  m_tplBuf                [MAX_TB_SIZEY * MAX_TB_SIZEY];
 };// END CLASS DEFINITION QuantRDOQ2
 
 } // namespace vvenc

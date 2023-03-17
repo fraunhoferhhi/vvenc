@@ -276,14 +276,6 @@ void EncPicture::xInitPicEncoder( Picture& pic )
 
   CHECK( slice != pic.slices[0], "Slice pointers don't match!" );
 
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    pic.picInitialQP     = -1;
-    pic.picInitialLambda = -1.0;
-
-    m_pcRateCtrl->initRateControlPic( pic, slice, pic.picInitialQP, pic.picInitialLambda );
-  }
-
   m_SliceEncoder.initPic( &pic );
 
   xInitSliceColFromL0Flag( slice );

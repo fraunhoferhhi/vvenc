@@ -528,6 +528,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
+  IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
 
   po::Options opts;
   if( m_easyMode )
@@ -871,7 +872,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastHAD",                                         c->m_fastHad,                                        "Use fast sub-sampled hadamard for square blocks >=32x32")
     ("RDOQ",                                            c->m_RDOQ,                                           "Rate-Distortion Optimized Quantization mode")
     ("RDOQTS",                                          c->m_useRDOQTS,                                      "Rate-Distortion Optimized Quantization mode for TransformSkip")
-    ("SelectiveRDOQ",                                   c->m_useSelectiveRDOQ,                               "Enable selective RDOQ")
+    ("SelectiveRDOQ",                                   toSelectiveRDOQ,                                     "Enable selective RDOQ (0: never, 1: always, 2: for natural content)")
 
     ("JointCbCr",                                       c->m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
     ("CabacInitPresent",                                c->m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")

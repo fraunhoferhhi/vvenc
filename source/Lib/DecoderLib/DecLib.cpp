@@ -1080,7 +1080,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     // Recursive structure
     m_cCuDecoder.init( &m_cTrQuant, &m_cIntraPred, &m_cInterPred, sps->chromaFormatIdc );
 
-    m_cTrQuant.init( nullptr, sps->getMaxTbSize(), false, false, false, false, false );
+    m_cTrQuant.init( nullptr, 0, false, false, false, false );
     // RdCost
     m_cRdCost.setCostMode ( VVENC_COST_STANDARD_LOSSY ); // not used in decoder side RdCost stuff -> set to default
     // RdCost

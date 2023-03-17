@@ -55,6 +55,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <math.h>
 #include <thread>
+#include <iomanip>
 
 #include "apputils/VVEncAppCfg.h"
 
@@ -331,7 +332,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
   c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
   c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
-  c->m_TicksPerSecond                          = 27000000;      ///< ticks per second for dts generation (default: 27000000, 1..27000000, -1: ticks per frame=1)
+  c->m_TicksPerSecond                          = VVENC_TICKS_PER_SEC_DEF; ///< ticks per second for dts generation (default: 27000000, 1..27000000, -1: ticks per frame=1)
 
   c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
 
@@ -706,7 +707,30 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
   vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond < -1 || c->m_TicksPerSecond == 0 || c->m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000, or -1 for ticks per frame=1" );
-  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framescale. Use 27000000 for NTSC content" );
+
+  std::stringstream css;
+  if ( c->m_FrameScale != 1  && c->m_FrameScale != 1001 && c->m_TicksPerSecond == VVENC_TICKS_PER_SEC_DEF )
+  {
+    double dFrameRate = c->m_FrameRate/(double)c->m_FrameScale;
+    css << "Detected non-standard Frame Rate " << c->m_FrameRate << "/" << c->m_FrameScale;
+    css << " (" << std::fixed << std:: setprecision(2) << dFrameRate <<  std::setprecision(-1) << " Hz).";
+    css << " Default TicksPerSecond (" << VVENC_TICKS_PER_SEC_DEF << ") can not be used.";
+
+    if ( c->m_FrameRate * c->m_FrameScale <= VVENC_TICKS_PER_SEC_DEF )
+    {
+      css << " possible TicksPerSecond: " << (c->m_FrameRate * c->m_FrameScale) << std::endl;
+    }
+    else
+    {
+      css << " cannot find a proper value for TicksPerSecond in the range (1-" << VVENC_TICKS_PER_SEC_DEF << ")" << std::endl;
+    }
+  }
+  else
+  {
+    css << "TicksPerSecond must be a multiple of FrameRate/Framescale (" << c->m_FrameRate << "/" << c->m_FrameScale << "). Use 27000000 for NTSC content"  << std::endl;
+  }
+  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, css.str().c_str() );
+
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
 
@@ -2259,7 +2283,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
     default: break;
   }
 
-  c->m_TicksPerSecond      = 27000000;                 // ticks per second for dts generation
+  c->m_TicksPerSecond      = VVENC_TICKS_PER_SEC_DEF;  // ticks per second for dts generation
 
   c->m_inputBitDepth[0]    = 8;                        // input bitdepth
   c->m_internalBitDepth[0] = 10;                       // internal bitdepth
@@ -2294,7 +2318,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_bUseHADME                       = true;
   c->m_fastHad                         = false;
   c->m_useRDOQTS                       = true;
-  c->m_useSelectiveRDOQ                = false;
+  c->m_useSelectiveRDOQ                = 0;
   c->m_fastQtBtEnc                     = true;
   c->m_maxNumMergeCand                 = 6;
   c->m_reshapeSignalType               = 0;
@@ -2396,6 +2420,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // tools
       c->m_blockImportanceMapping          = 1;
       c->m_RDOQ                            = 2;
+      c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
@@ -2456,6 +2481,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
+      c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
@@ -3068,9 +3094,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "ALFSpeed:" << c->m_alfSpeed << " ";
     }
     if( c->m_quantThresholdVal & 1 )
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << ".5 ";
     else
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << " ";
+    css << "SelectiveRDQO:" << ( int ) c->m_useSelectiveRDOQ << " ";
 
     css << "\nRATE CONTROL CFG: ";
     css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
