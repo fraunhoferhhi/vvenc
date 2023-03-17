@@ -2559,9 +2559,9 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
           sMctf.str().c_str(),
           uibits );
 
-      std::string yPSNR = dPSNR[COMP_Y]  == 999.99 ? prnt(" [Y %7s dB    ", "inf" ) : prnt(" [Y %6.4lf dB    ", dPSNR[COMP_Y] );
-      std::string uPSNR = dPSNR[COMP_Cb] == 999.99 ? prnt("U %7s dB    ", "inf" ) : prnt("U %6.4lf dB    ", dPSNR[COMP_Cb] );
-      std::string vPSNR = dPSNR[COMP_Cr] == 999.99 ? prnt("V %7s dB]", "inf" ) : prnt("V %6.4lf dB]", dPSNR[COMP_Cr] );
+      std::string yPSNR = isinf( dPSNR[COMP_Y]  ) ? prnt(" [Y %7s dB    ", "inf" ) : prnt(" [Y %6.4lf dB    ", dPSNR[COMP_Y] );
+      std::string uPSNR = isinf( dPSNR[COMP_Cb] ) ? prnt("U %7s dB    ", "inf" ) : prnt("U %6.4lf dB    ", dPSNR[COMP_Cb] );
+      std::string vPSNR = isinf( dPSNR[COMP_Cr] ) ? prnt("V %7s dB]", "inf" ) : prnt("V %6.4lf dB]", dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
       accessUnit.InfoString.append( yPSNR );
@@ -2578,9 +2578,9 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
               reinterpret_cast<uint8_t *>(&xPsnr[i]));
         }
 
-        std::string yPSNRHex = dPSNR[COMP_Y]  == 999.99 ? prnt(" [xY %16s", "inf") : prnt(" [xY %16" PRIx64,  xPsnr[COMP_Y] );
-        std::string uPSNRHex = dPSNR[COMP_Cb] == 999.99 ? prnt(" xU %16s", "inf") : prnt(" xU %16" PRIx64, xPsnr[COMP_Cb] ) ;
-        std::string vPSNRHex = dPSNR[COMP_Cr] == 999.99 ? prnt(" xV %16s]", "inf") : prnt(" xV %16" PRIx64 "]", xPsnr[COMP_Cr]);
+        std::string yPSNRHex = isinf( dPSNR[COMP_Y]  ) ? prnt(" [xY %16s", "inf") : prnt(" [xY %16" PRIx64,  xPsnr[COMP_Y] );
+        std::string uPSNRHex = isinf( dPSNR[COMP_Cb] ) ? prnt(" xU %16s", "inf") : prnt(" xU %16" PRIx64, xPsnr[COMP_Cb] ) ;
+        std::string vPSNRHex = isinf( dPSNR[COMP_Cr] ) ? prnt(" xV %16s]", "inf") : prnt(" xV %16" PRIx64 "]", xPsnr[COMP_Cr]);
 
         accessUnit.InfoString.append( yPSNRHex );
         accessUnit.InfoString.append( uPSNRHex );
