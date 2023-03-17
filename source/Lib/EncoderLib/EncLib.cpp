@@ -361,7 +361,7 @@ void EncLib::xInitRCCfg()
   
   if( m_firstPassCfg.m_FirstPassMode == 1 )
   {
-    unsigned interBlockSize = m_firstPassCfg.m_SourceWidth > 1024 || m_firstPassCfg.m_SourceHeight > 640 ? 64 : 32;
+    unsigned interBlockSize = m_firstPassCfg.m_SourceWidth >= 1280 && m_firstPassCfg.m_SourceHeight >= 720 ? 64 : 32;
     m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
   }
 
