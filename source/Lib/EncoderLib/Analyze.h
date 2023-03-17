@@ -86,7 +86,8 @@ public:
       return;
     for(uint32_t i=0; i<MAX_NUM_COMP; i++)
     {
-      if( isinf( psnr[i] ) )
+//      if( isinf( psnr[i] ) )
+      if( psnr[i] == MAX_DOUBLE )
       {
         m_uiLosslessFrames[i] += 1;
       }
@@ -152,7 +153,8 @@ public:
     }
 
     MSEyuv /= double(scale);  // i.e. divide by 6 for 4:2:0, 8 for 4:2:2 etc.
-    PSNRyuv = (MSEyuv == 0) ? std::numeric_limits<double>::infinity() : 10.0 * log10((maxval * maxval) / MSEyuv);
+//    PSNRyuv = (MSEyuv == 0) ? std::numeric_limits<double>::infinity() : 10.0 * log10((maxval * maxval) / MSEyuv);
+    PSNRyuv = (MSEyuv == 0) ? MAX_DOUBLE : 10.0 * log10((maxval * maxval) / MSEyuv);
   }
 
   std::string printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
@@ -177,7 +179,8 @@ public:
           const uint32_t maxval = 255 << (bitDepths[toChannelType(compID)] - 8); // fix with WPSNR: 1023 (4095) instead of 1020 (4080) for bit depth 10 (12)
           const double MSE  = m_MSEyuvframe[compID];
 
-          MSEBasedSNR[compID] = (MSE == 0) ? std::numeric_limits<double>::infinity() : 10.0 * log10((maxval * maxval) / (MSE / (double)getNumPic()));
+//          MSEBasedSNR[compID] = (MSE == 0) ? std::numeric_limits<double>::infinity() : 10.0 * log10((maxval * maxval) / (MSE / (double)getNumPic()));
+          MSEBasedSNR[compID] = (MSE == 0) ? MAX_DOUBLE : 10.0 * log10((maxval * maxval) / (MSE / (double)getNumPic()));
         }
       }
     }
