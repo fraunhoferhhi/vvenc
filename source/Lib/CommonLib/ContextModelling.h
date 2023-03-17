@@ -68,7 +68,7 @@ struct CtxTpl
 struct CoeffCodingContext
 {
 public:
-  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, CtxTpl* tplBuf = nullptr, bool bdpcm = false );
+  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false, CtxTpl* tplBuf = nullptr );
 public:
   void  initSubblock    ( int SubsetId, bool sigGroupFlag = false );
 public:

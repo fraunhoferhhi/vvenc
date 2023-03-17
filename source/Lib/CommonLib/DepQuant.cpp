@@ -1615,9 +1615,14 @@ DepQuant::~DepQuant()
   delete static_cast<DQIntern::DepQuant*>(p);
 }
 
-void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx )
+void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff& uiAbsSum, const QpParam& cQP, const Ctx& ctx )
 {
-  if( tu.cs->slice->depQuantEnabled && (tu.mtsIdx[compID] != MTS_SKIP) )
+  if( tu.cs->picture->useScSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
+  {
+    tu.lastPos[compID] = -1;
+    uiAbsSum           =  0;
+  }
+  else if( tu.cs->slice->depQuantEnabled && tu.mtsIdx[compID] != MTS_SKIP )
   {
     //===== scaling matrix ====
     const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
@@ -1664,9 +1669,9 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int thrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
 {
-  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, thrVal );
+  QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
 
   static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
 }

@@ -2315,7 +2315,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_bUseHADME                       = true;
   c->m_fastHad                         = false;
   c->m_useRDOQTS                       = true;
-  c->m_useSelectiveRDOQ                = false;
+  c->m_useSelectiveRDOQ                = 0;
   c->m_fastQtBtEnc                     = true;
   c->m_maxNumMergeCand                 = 6;
   c->m_reshapeSignalType               = 0;
@@ -2416,6 +2416,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // tools
       c->m_blockImportanceMapping          = 1;
       c->m_RDOQ                            = 2;
+      c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
@@ -2474,6 +2475,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
+      c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
@@ -3086,9 +3088,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "ALFSpeed:" << c->m_alfSpeed << " ";
     }
     if( c->m_quantThresholdVal & 1 )
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << ".5 ";
     else
-      css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
+      css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << " ";
+    css << "SelectiveRDQO:" << ( int ) c->m_useSelectiveRDOQ << " ";
 
     css << "\nRATE CONTROL CFG: ";
     css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";

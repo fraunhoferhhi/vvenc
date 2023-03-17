@@ -558,7 +558,7 @@ typedef struct vvenc_config
   bool                m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
   int                 m_RDOQ;                                                            // flag for using RD optimized quantization
   bool                m_useRDOQTS;                                                       // flag for using RD optimized quantization for transform skip
-  bool                m_useSelectiveRDOQ;                                                // flag for using selective RDOQ
+  int8_t              m_useSelectiveRDOQ;                                                // flag for using selective RDOQ
 
   bool                m_JointCbCrMode;
   int                 m_cabacInitPresent;

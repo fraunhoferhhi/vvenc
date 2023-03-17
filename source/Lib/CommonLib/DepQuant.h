@@ -63,7 +63,7 @@ public:
   virtual void quant  ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );
   virtual void dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const ComponentID compID, const QpParam& cQP );
   
-  virtual void init   ( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int dqThrVal = 8 );
+  virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8 );
 
 private:
   void* p;
