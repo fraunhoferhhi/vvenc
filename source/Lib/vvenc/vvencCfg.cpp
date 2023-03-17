@@ -2376,7 +2376,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_useChromaTS                     = 0;
   c->m_TSsize                          = 3;
 
-  // TODO (jb): set first pass config
   switch( preset )
   {
     case vvencPresetMode::VVENC_FIRSTPASS:
