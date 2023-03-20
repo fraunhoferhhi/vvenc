@@ -1192,15 +1192,12 @@ namespace DQIntern
 
       if (m_remRegBins >= 4)
       {
-        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
         TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
         TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
         int sumGt1 = sumAbs1 - sumNum;
-        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
         m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
         m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
-        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
       }
       else
       {
