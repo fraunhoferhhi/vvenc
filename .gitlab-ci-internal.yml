@@ -47,6 +47,12 @@ variables:
    script:
       - make osx-arch=${OSX_ARCH} disable-lto=1 all
       - make osx-arch=${OSX_ARCH} disable-lto=1 test
+      
+.build_test_msvc_template:
+  extends: .build_test_template
+  script:
+    - make msvc-arch=${MSVC_ARCH} disable-lto=1 all
+    - make msvc-arch=${MSVC_ARCH} disable-lto=1 test
 
 .build_only_ubuntu2004_mingw_template:
    extends: .build_only_template_full
@@ -194,24 +200,30 @@ test_ubuntu2204:
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
 
 test_vc191x:
-   extends: .build_test_template
+   extends: .build_test_msvc_template
+  variables:
+    MSVC_ARCH: x64
    tags:
       - vc191x
 
 test_vc192x:
-   extends: .build_test_template
+   extends: .build_test_msvc_template
+  variables:
+    MSVC_ARCH: x64
    tags:
       - vc192x
       
 test_vc193x_Win32:
-  extends: .build_test_template
+  extends: .build_test_msvc_template
   variables:
     MSVC_ARCH: Win32
   tags:
     - vc193x
     
 test_vc193x:
-  extends: .build_test_template
+  extends: .build_test_msvc_template
+  variables:
+    MSVC_ARCH: x64
   tags:
     - vc193x
 
