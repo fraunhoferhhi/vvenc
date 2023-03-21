@@ -267,7 +267,13 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     halvedAvgQP += (*it)->picQP;
   }
-  if (listPreviousPictures.size() >= 1) halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
+  if (listPreviousPictures.size() >= 1)
+  {
+    if (baseQP >= 32)
+      halvedAvgQP = int (((frameLevel + 1) * halvedAvgQP + 1 + listPreviousPictures.size()) / ((frameLevel + 2) * listPreviousPictures.size()));
+    else
+      halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
+  }
   if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
 
@@ -949,7 +955,7 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
 {
   EncRCPic* encRcPic = new EncRCPic;
-  encRcPic->create( encRCSeq, pic.slices[ 0 ]->isIntra() ? 0 : pic.slices[ 0 ]->TLayer + 1, pic.slices[ 0 ]->poc );
+  encRcPic->create( encRCSeq, slice->isIntra() ? 0 : slice->TLayer + 1, slice->poc );
   pic.encRCPic = encRcPic;
   encRCPic = encRcPic;
 

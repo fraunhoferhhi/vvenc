@@ -258,6 +258,7 @@ public:
   bool                          useScLMCS;
   bool                          useScSAO;
   bool                          useScNumRefs;
+  bool                          useScSelectiveRdoq;
   int                           useScFastMrg;
   int                           useQtbttSpeedUpMode;
   int                           seqBaseQp;
