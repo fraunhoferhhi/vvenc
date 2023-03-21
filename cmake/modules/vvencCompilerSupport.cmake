@@ -25,8 +25,12 @@ function( check_missing_intrinsics )
   # if building WASM -msimd128 needs to be added to all checks for supported simd-compiler flags
   _emscripten_enable_wasm_simd128()
 
-  set_if_compiler_supports_flag( FLAG_msse2 -msse2 )
-  set_if_compiler_supports_flag( FLAG_mavx  -mavx  )
+  if( NOT MSVC )
+    set_if_compiler_supports_flag( FLAG_msse2 -msse2 )
+    set_if_compiler_supports_flag( FLAG_mavx  -mavx  )
+  else()
+    set_if_compiler_supports_flag( FLAG_mavx  /arch:AVX2  )
+  endif()
 
   # SSE2
   _check_intrinsic( _mm_storeu_si16      "${FLAG_msse2}" "int16_t a = 0; _mm_storeu_si16( &a, _mm_setzero_si128() );"                )
@@ -34,6 +38,8 @@ function( check_missing_intrinsics )
   _check_intrinsic( _mm_storeu_si64      "${FLAG_msse2}" "int64_t a = 0; _mm_storeu_si64( &a, _mm_setzero_si128() );"                )
   _check_intrinsic( _mm_loadu_si32       "${FLAG_msse2}" "int32_t a = 0; __m128i x = _mm_loadu_si32( &a );"                          )
   _check_intrinsic( _mm_loadu_si64       "${FLAG_msse2}" "int64_t a = 0; __m128i x = _mm_loadu_si64( &a );"                          )
+  _check_intrinsic( _mm_cvtsi128_si64    "${FLAG_msse2}" "int64_t a = 0; a = _mm_cvtsi128_si64( _mm_setzero_si128() );"              ) 
+  _check_intrinsic( _mm_extract_epi64    "${FLAG_msse2}" "int64_t a = 0; a = _mm_extract_epi64( _mm_setzero_si128(), 0 );"           )
 
   # AVX
   _check_intrinsic( _mm256_zeroupper     "${FLAG_mavx}"  "_mm256_zeroupper();"                                                       )

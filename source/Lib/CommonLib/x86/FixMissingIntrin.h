@@ -92,6 +92,32 @@ static inline __m128i _mm_loadu_si64( const void* p )
 }
 #endif
 
+#ifdef MISSING_INTRIN_mm_cvtsi128_si64
+#if INTPTR_MAX == INT64_MAX
+#error __mm_cvtsi128_si64 has to be defined for 64-bit systems!
+#endif
+static inline int64_t _mm_cvtsi128_si64( __m128i a )
+{
+  int64_t x;
+  _mm_storel_epi64( ( __m128i* ) &x, a );
+  return x;
+}
+#endif
+
+#ifdef MISSING_INTRIN_mm_extract_epi64
+#if INTPTR_MAX == INT64_MAX
+#error _mm_extract_epi64 has to be defined for 64-bit systems!
+#endif
+static inline int64_t _mm_extract_epi64( __m128i a, int i )
+{
+  int64_t x;
+  if( i )
+    _mm_storel_epi64( ( __m128i* ) &x, _mm_unpackhi_epi64( a, a ) );
+  else
+    _mm_storel_epi64( ( __m128i* ) &x, a );
+  return x;
+}
+#endif
 
 #if defined( USE_AVX ) || defined( USE_AVX2 )
 
