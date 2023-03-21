@@ -93,7 +93,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
     }
     Sum = _mm256_hadd_epi32( Sum, Sum );
     Sum = _mm256_hadd_epi32( Sum, Sum );
-    uiRet = ( _mm_cvtsi128_si64( _mm256_castsi256_si128( Sum ) ) + _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( Sum, Sum, 0x11 ) ) ) ) >> uiShift;
+    uiRet = ( _mm_cvtsi128_si32( _mm256_castsi256_si128( Sum ) ) + _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( Sum, Sum, 0x11 ) ) ) ) >> uiShift;
 #endif
   }
   else if( ( iCols & 7 ) == 0 )
@@ -114,7 +114,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
     }
     Sum = _mm_hadd_epi32( Sum, Sum );
     Sum = _mm_hadd_epi32( Sum, Sum );
-    uiRet = _mm_cvtsi128_si64( Sum )>>uiShift;
+    uiRet = _mm_cvtsi128_si32( Sum )>>uiShift;
   }
   else
   {
@@ -133,7 +133,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
       pSrc2   += iStrideSrc2;
     }
     Sum = _mm_hadd_epi32( Sum, Sum );
-    uiRet = _mm_cvtsi128_si64( Sum )>>uiShift;
+    uiRet = _mm_cvtsi128_si32( Sum )>>uiShift;
   }
 
   return uiRet;
@@ -166,7 +166,7 @@ Distortion RdCost::xGetSSE_NxN_SIMD( const DistParam &rcDtParam )
       Sum = _mm_add_epi32( Sum, Res );
     }
     Sum = _mm_hadd_epi32( Sum, Sum );
-    uiRet = _mm_cvtsi128_si64( Sum )>>uiShift;
+    uiRet = _mm_cvtsi128_si32( Sum )>>uiShift;
   }
   else
   {
