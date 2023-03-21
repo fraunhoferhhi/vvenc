@@ -1715,6 +1715,14 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           continue;
         }
         mergeCtx.setMergeInfo( cu, uiMergeCand );
+        if( m_pcEncCfg->m_fppLinesSynchro && 
+         (  ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
+            ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+          ) )
+        {
+          // skip candidate
+          continue;
+        }
 
         CU::spanMotionInfo( cu, mergeCtx );
         cu.mvRefine = true;
@@ -1899,6 +1907,14 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             continue;
           }
           mergeCtx.setMmvdMergeCandiInfo(cu, mmvdMergeCand);
+          if( m_pcEncCfg->m_fppLinesSynchro &&
+            ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
+              ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+            ) )
+          {
+            // skip candidate
+            continue;
+          }
 
           CU::spanMotionInfo(cu, mergeCtx);
           cu.mvRefine = true;
@@ -1944,7 +1960,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           break;
         }
       }
-      m_mergeBestSATDCost = candCostList[0];
+      m_mergeBestSATDCost = !candCostList.empty() ? candCostList[0]: MAX_DOUBLE;
       if (testCIIP && isChromaEnabled(cu.cs->pcv->chrFormat) && cu.chromaSize().width != 2 )
       {
         for (uint32_t mergeCnt = 0; mergeCnt < uiNumMrgSATDCand; mergeCnt++)
@@ -2103,6 +2119,15 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
       if (!cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && (cu.lwidth() + cu.lheight() == 12))
       {
+        tempCS->initStructData(encTestMode.qp);
+        continue;
+      }
+      if( m_pcEncCfg->m_fppLinesSynchro && !m_pcEncCfg->m_useFastMrg &&
+        ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
+          ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+        ) )
+      {
+        // skip candidate
         tempCS->initStructData(encTestMode.qp);
         continue;
       }

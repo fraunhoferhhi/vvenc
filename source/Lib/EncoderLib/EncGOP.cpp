@@ -510,7 +510,12 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
         }
 
         // get next picture ready to be encoded
-        auto picItr             = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+        const VVEncCfg* encCfg = m_pcEncCfg;
+        auto picItr             = find_if( m_procList.begin(), m_procList.end(), [encCfg]( auto pic ) {
+          // if ALF enabled and ALFTempPred is used, ensure that refAps is initialized
+          return ( encCfg->m_fppLinesSynchro || pic->slices[ 0 ]->checkRefPicsReconstructed() )
+            && ( !encCfg->m_alf || ( !pic->refApsGlobal || pic->refApsGlobal->initalized ) ); } );
+
         const bool nextPicReady = picItr != m_procList.end();
 
         // check at least one picture and one pic encoder ready
@@ -633,36 +638,10 @@ void EncGOP::xSyncAlfAps( Picture& pic )
     return;
   }
 
-  // get previous APS (in coding order) to propagate from it
-  // in parallelization case (parallel pictures), we refer to APS from lower temporal layer
-  // NOTE: elements in the global APS list are following in coding order
-
-  PicApsGlobal* refAps = nullptr;
-  auto curApsItr = std::find_if( m_globalApsList.begin(), m_globalApsList.end(), [&pic]( auto p ) { return p->poc == pic.poc; } );
-  CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
-  if( curApsItr != m_globalApsList.begin() )
-  {
-    if( mtPicParallel )
-    {
-      auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
-      auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
-      auto refApsItr = ( pic.TLayer > 0 ) ? std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid  < pic.TLayer; } ):
-                                            std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid == pic.TLayer; } );
-      if( refApsItr == r_end )
-        return;
-      refAps = *refApsItr;
-    }
-    else
-    {
-      curApsItr--;
-      refAps = *curApsItr;
-    }
-  }
-
+  const PicApsGlobal* refAps = pic.refApsGlobal;
   if( !refAps )
     return;
-
-  CHECK( refAps->tid == MAX_UINT, "Attempt referencing from an uninitialized APS" );
+  CHECK( !refAps->initalized, "Attempt referencing from an uninitialized APS" );
 
   // copy ref APSs to current picture
   const ParameterSetMap<APS>& src = refAps->apsMap;
@@ -774,6 +753,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
       {
         std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
         param->pic->isReconstructed = true;
+        if( param->pic->picApsGlobal ) param->pic->picApsGlobal->initalized = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
         param->gopEncoder->m_gopEncCond.notify_one();
       }
@@ -787,6 +767,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   {
     picEncoder->finalizePicture( *pic );
     pic->isReconstructed = true;
+    if( pic->picApsGlobal ) pic->picApsGlobal->initalized = true;
     m_freePicEncoderList.push_back( picEncoder );
   }
 }
@@ -1133,7 +1114,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   }
 
   sps.alfEnabled                    = m_pcEncCfg->m_alf;
-  sps.ccalfEnabled                  = m_pcEncCfg->m_ccalf && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400;
+  sps.ccalfEnabled                  = m_pcEncCfg->m_ccalf && sps.alfEnabled && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400;
 
   sps.saoEnabled                    = m_pcEncCfg->m_bUseSAO;
   sps.jointCbCr                     = m_pcEncCfg->m_JointCbCrMode;
@@ -1491,6 +1472,60 @@ bool EncGOP::xIsSliceTemporalSwitchingPoint( const Slice* slice, const PicList& 
   return isSTSA;
 }
 
+void EncGOP::xSetupPicAps( Picture* pic )
+{
+  // manage global APS list
+  m_globalApsList.push_back( new PicApsGlobal( pic->poc, pic->TLayer ) );
+  CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
+
+  // the max size of global APS list is more than enough to support parallelization 
+  if( m_globalApsList.size() > m_pcEncCfg->m_GOPSize * ( m_pcEncCfg->m_maxParallelFrames + 1 ) )
+  {
+    delete m_globalApsList.front();
+    m_globalApsList.pop_front();
+  }
+
+  pic->picApsGlobal = m_globalApsList.back();
+
+  // determine reference APS
+  const bool mtPicParallel = m_pcEncCfg->m_numThreads > 0;
+  if( mtPicParallel && pic->slices[0]->isIntra() )
+  {
+    // reset APS propagation on Intra-Slice in MT-mode
+    return;
+  }
+
+  // get previous APS (in coding order) to propagate from it
+  // in parallelization case (parallel pictures), we refer to APS from lower temporal layer
+  // NOTE: elements in the global APS list are following in coding order
+
+  PicApsGlobal* refAps = nullptr;
+  auto curApsItr = std::find_if( m_globalApsList.begin(), m_globalApsList.end(), [pic]( auto p ) { return p->poc == pic->poc; } );
+  CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
+
+  if( curApsItr != m_globalApsList.begin() )
+  {
+    if( mtPicParallel )
+    {
+      auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
+      auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
+      auto refApsItr = ( pic->TLayer > 0 ) ? std::find_if( r_begin, r_end, [pic]( auto p ) { return p->tid  < pic->TLayer; } ):
+                                             std::find_if( r_begin, r_end, [pic]( auto p ) { return p->tid == pic->TLayer; } );
+      if( refApsItr == r_end )
+        return;
+      refAps = *refApsItr;
+    }
+    else
+    {
+      curApsItr--;
+      refAps = *curApsItr;
+    }
+  }
+
+  //CHECK( !refAps, "Faied to get reference APS" );
+  pic->refApsGlobal = refAps;
+}
+
 void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 {
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
@@ -1519,15 +1554,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 
     if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
     {
-      m_globalApsList.push_back( new PicApsGlobal( pic->poc ) );
-      CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
-      pic->picApsGlobal = m_globalApsList.back();
-      // the max size of global APS list is more than enough to support parallelization 
-      if( m_globalApsList.size() > m_pcEncCfg->m_GOPSize * ( m_pcEncCfg->m_maxParallelFrames + 1 ) )
-      {
-        delete m_globalApsList.front();
-        m_globalApsList.pop_front();
-      }
+      xSetupPicAps( pic );
     }
 
     // continue with next picture
@@ -1675,7 +1702,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
-  slice->applyReferencePictureListBasedMarking( picList, slice->rpl[0], slice->rpl[1], 0, *slice->pps );
+  slice->applyReferencePictureListBasedMarking( picList, slice->rpl[0], slice->rpl[1], 0, *slice->pps, m_pcEncCfg->m_numThreads == 0 );
 
   // nalu type refinement
   if ( xIsSliceTemporalSwitchingPoint( slice, picList ) )
@@ -1692,7 +1719,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
   slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
-  slice->constructRefPicList  ( picList, false );
+  slice->constructRefPicList  ( picList, false, m_pcEncCfg->m_numThreads == 0 );
 
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
@@ -1840,6 +1867,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     }
   }
   pic.picApsGlobal = nullptr;
+  pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
   if( pic.poc == m_pcEncCfg->m_switchPOC )

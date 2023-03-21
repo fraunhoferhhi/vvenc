@@ -529,6 +529,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
+  IStreamToInt8                     toFppLinesSynchro             ( &c->m_fppLinesSynchro );
 
   po::Options opts;
   if( m_easyMode )
@@ -1067,6 +1068,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TileColumnWidthArray",                            toTileColumnWidth,                                   "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
     ("TileRowHeightArray",                              toTileRowHeight,                                     "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
     ("TileParallelCtuEnc",                              c->m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
+    ("fppLinesSynchro",                                 toFppLinesSynchro,                                   "Number of CTU-lines synchronization due to MV restriction for FPP mode")
     ;
 
     opts.setSubSection("Coding tools");

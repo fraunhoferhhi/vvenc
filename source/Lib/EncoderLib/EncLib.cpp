@@ -412,7 +412,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     for( auto encStage : m_encStages )
     {
       encStage->runStage( flush, au );
-      isQueueEmpty &= encStage->isStageDone();
+      isQueueEmpty &= encStage->isStageDone() && m_AuList.empty();
     }
 
     if( !au.empty() )

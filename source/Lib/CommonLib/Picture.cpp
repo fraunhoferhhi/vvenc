@@ -197,6 +197,7 @@ Picture::Picture()
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
+    , refApsGlobal      ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
@@ -239,6 +240,9 @@ void Picture::reset()
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
+ 
+  if( m_ctuLineReadyA )
+    std::fill( m_ctuLineReadyA->begin(), m_ctuLineReadyA->end(), false );
 
   encTime.resetTimer();
 }
@@ -369,6 +373,11 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   {
     m_picBufs[ PIC_RECONSTRUCTION ].create( chromaFormat, Area( lumaPos(), lumaSize() ), sps.CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
   }
+  if( !m_ctuLineReadyA )
+  {
+    m_ctuLineReadyA = new std::vector<std::atomic<bool>> ( pps.pcv->heightInCtus );
+  }
+  std::fill( m_ctuLineReadyA->begin(), m_ctuLineReadyA->end(), false );
 
   sliceDataStreams.clear();
   sliceDataNumBins = 0;

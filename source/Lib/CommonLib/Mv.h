@@ -278,7 +278,7 @@ public:
 
 void clipMv ( Mv& rcMv, const Position& pos,
               const Size& size,
-              const PreCalcValues& pcv );
+              const PreCalcValues& pcv, const int fppLinesSynchro = 0 );
 void clipMv(Mv& rcMv, const Position& pos, const Size& size, const PreCalcValues& pcv, const PPS& pps,bool m_clipMvInSubPic);
 
 bool wrapClipMv( Mv& rcMv, const Position& pos,

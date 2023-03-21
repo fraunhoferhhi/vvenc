@@ -113,8 +113,10 @@ protected:
 struct PicApsGlobal{
   int      poc;
   unsigned tid;
+  bool     initalized = false;
   ParameterSetMap<APS> apsMap;
   PicApsGlobal( int _p ) : poc(_p), tid(MAX_UINT), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
+  PicApsGlobal( int _p, unsigned _t ) : poc(_p), tid(_t), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
 };
 
 struct Picture : public UnitArea
@@ -266,11 +268,13 @@ public:
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
+  PicApsGlobal*                 refApsGlobal;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
   std::vector<short>            m_alfCtbFilterIndex;
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
+  std::vector<std::atomic<bool>>* m_ctuLineReadyA = nullptr;
 
 public:
   Slice*          allocateNewSlice();
