@@ -1019,6 +1019,16 @@ namespace DQIntern
       decision.prevId   = 4 | m_stateId;
     }
 
+    inline void setRiceParam( const ScanInfo& scanInfo)
+    {
+      if( m_remRegBins >= 4 )
+      {
+        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.insidePos].sumAbs;
+        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
+        m_goRicePar = g_auiGoRiceParsCoeff[sumAll];
+      }
+    }
+
     struct CtxAcc
     {
       // tplAcc: lower 5 bits are absSum1, upper 3 bits are numPos
@@ -1133,15 +1143,12 @@ namespace DQIntern
 
       if (m_remRegBins >= 4)
       {
-        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
         TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
         TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
-        int sumGt1 = sumAbs1 - sumNum;
-        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
+        int sumGt1      = sumAbs1 - sumNum;
 
         m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
         m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
-        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
       }
       else
       {
@@ -1185,15 +1192,12 @@ namespace DQIntern
 
       if (m_remRegBins >= 4)
       {
-        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
         TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
         TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
         int sumGt1 = sumAbs1 - sumNum;
-        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
         m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
         m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
-        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
       }
       else
       {
@@ -1292,7 +1296,7 @@ namespace DQIntern
 
   private:
     void    xDecideAndUpdate  ( const TCoeff absCoeff, const ScanInfo& scanInfo, bool zeroOut, int quantCoeff);
-    void    xDecide           ( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quantCoeff );
+    void    xDecide           ( const ScanInfo& scanInfo, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quantCoeff );
 
   private:
     CommonCtx   m_commonCtx;
@@ -1344,13 +1348,13 @@ namespace DQIntern
     m_quant.init( dqTrVal );
   }
 
-  void DepQuant::xDecide( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff )
+  void DepQuant::xDecide( const ScanInfo &scanInfo, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff )
   {
     ::memcpy( decisions, startDec, 4*sizeof(Decision) );
 
     if( zeroOut )
     {
-      if( spt==SCAN_EOCSBB )
+      if( scanInfo.spt==SCAN_EOCSBB )
       {
         m_skipStates[0].checkRdCostSkipSbbZeroOut( decisions[0] );
         m_skipStates[1].checkRdCostSkipSbbZeroOut( decisions[1] );
@@ -1363,12 +1367,23 @@ namespace DQIntern
     PQData  pqData[4];
     m_quant.preQuantCoeff( absCoeff, pqData, quanCoeff );
 
-    m_prevStates[0].checkRdCosts( spt, pqData[0], pqData[2], decisions[0], decisions[2] );
-    m_prevStates[1].checkRdCosts( spt, pqData[0], pqData[2], decisions[2], decisions[0] );
-    m_prevStates[2].checkRdCosts( spt, pqData[3], pqData[1], decisions[1], decisions[3] );
-    m_prevStates[3].checkRdCosts( spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+    if( pqData[0].absLevel >= 4 || pqData[2].absLevel >= 4 )
+    {
+      m_prevStates[0].setRiceParam( scanInfo );
+      m_prevStates[1].setRiceParam( scanInfo );
+    }
+    if( pqData[1].absLevel >= 4 || pqData[3].absLevel >= 4 )
+    {
+      m_prevStates[2].setRiceParam( scanInfo );
+      m_prevStates[3].setRiceParam( scanInfo );
+    }
 
-    if( spt==SCAN_EOCSBB )
+    m_prevStates[0].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[0], decisions[2] );
+    m_prevStates[1].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[2], decisions[0] );
+    m_prevStates[2].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[1], decisions[3] );
+    m_prevStates[3].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+
+    if( scanInfo.spt==SCAN_EOCSBB )
     {
         m_skipStates[0].checkRdCostSkipSbb( decisions[0] );
         m_skipStates[1].checkRdCostSkipSbb( decisions[1] );
@@ -1386,7 +1401,7 @@ namespace DQIntern
 
     std::swap( m_prevStates, m_currStates );
 
-    xDecide( scanInfo.spt, absCoeff, lastOffset(scanInfo.scanIdx), decisions, zeroOut, quantCoeff );
+    xDecide( scanInfo, absCoeff, lastOffset(scanInfo.scanIdx), decisions, zeroOut, quantCoeff );
 
     if( scanInfo.scanIdx )
     {
