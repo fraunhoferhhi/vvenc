@@ -743,8 +743,7 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
-  // reserved parameters for internal use
-  int                 m_reservedInt[1];
+  int                 m_FirstPassMode;
   int                 m_numRefPics;                                                      // Number of reference pictures
   int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit
