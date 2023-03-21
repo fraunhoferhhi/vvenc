@@ -790,7 +790,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         const double factor = std::min( 1.0, sqrt((1920.0 * 1080.0) / double (m_encCfg->m_SourceWidth * m_encCfg->m_SourceHeight)) ) * ( (double) m_encCfg->m_QP / (MAX_QP + 1.0) );
         int sumCtuQpOffsets = 0;
 
-        meanRmsAcrossPic = (!m_encCfg->m_usePerceptQPA || maxRmsCTU == 0 || nMax < 2 ? 65535.0 : sqrt (double (sumSRmsAcrossPic - (uint64_t) maxRmsCTU * maxRmsCTU) / (nMax - 1.0)));
+        meanRmsAcrossPic = (!m_encCfg->m_usePerceptQPA || !m_encCfg->m_salienceBasedOpt || maxRmsCTU == 0 || nMax < 2 ? 65535.0 : sqrt (double (sumSRmsAcrossPic - (uint64_t) maxRmsCTU * maxRmsCTU) / (nMax - 1.0)));
 
         for( int i = 0; i < numCtu; i++ )
         {

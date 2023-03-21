@@ -57,6 +57,7 @@ struct VVEncCfg : public vvenc_config
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
   bool m_stageParallelProc;
+  bool m_salienceBasedOpt;
   int  m_log2GopSize;
   int  m_maxTLayer;
   int  m_bimCtuSize;
