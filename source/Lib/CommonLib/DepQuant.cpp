@@ -1170,19 +1170,30 @@ namespace DQIntern
       if( decision.prevId  >= 4 )
       {
         CHECK( decision.absLevel != 0, "cannot happen" );
-        prvState    = skipStates + ( decision.prevId - 4 );
-        m_numSigSbb = 0;
+        prvState     = skipStates + ( decision.prevId - 4 );
+        m_numSigSbb  = 0;
+        m_remRegBins = prvState->m_remRegBins;
         ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
       else if( decision.prevId  >= 0 )
       {
         prvState     = prevStates            +   decision.prevId;
         m_numSigSbb  = prvState->m_numSigSbb + !!decision.absLevel;
+        m_remRegBins = prvState->m_remRegBins - 1;
+        if( m_remRegBins >= 4 )
+        {
+          m_remRegBins -= ( decision.absLevel < 2 ? decision.absLevel : 3 );
+        }
         ::memcpy( m_sbb.absLevels, prvState->m_sbb.absLevels, sizeof( m_sbb.absLevels ) );
       }
       else
       {
-        m_numSigSbb   = 1;
+        m_numSigSbb  = 1;
+        m_remRegBins = ( effWidth * effHeight * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
+        if( m_remRegBins >= 4 )
+        {
+          m_remRegBins -= ( decision.absLevel < 2 ? decision.absLevel : 3 );
+        }
         ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
 
@@ -1229,15 +1240,6 @@ namespace DQIntern
 
     const int       sigNSbb   = ( ( scanInfo.nextSbbRight ? sbbFlags[ scanInfo.nextSbbRight ] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[ scanInfo.nextSbbBelow ] : false ) ? 1 : 0 );
     currState.m_numSigSbb     = 0;
-    if (prevState)
-    {
-      currState.m_remRegBins = prevState->m_remRegBins;
-    }
-    else
-    {
-      int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
-      currState.m_remRegBins = (currState.effWidth * currState.effHeight *ctxBinSampleRatio) / 16;
-    }
     currState.m_goRicePar     = 0;
     currState.m_refSbbCtxId   = currState.m_stateId;
     currState.m_sbbFracBits   = m_sbbFlagBits[ sigNSbb ];
