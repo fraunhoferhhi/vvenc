@@ -1669,7 +1669,7 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
       ptr += ptrStride;
     }
 #else
-    __m128i vval = _mm_set1_epi64x( ( int64_t ) ptr );
+    __m128i vval = _mm_set1_epi64x( ( int64_t ) val );
 
     while( height-- )
     {
