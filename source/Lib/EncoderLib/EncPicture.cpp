@@ -265,7 +265,6 @@ void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
     const uint32_t maxval = 255 << (bitDepth - 8);
     const uint32_t size   = width * height;
     const double fRefValue = (double)maxval * maxval * size;
-//    pic.psnr[comp] = uiSSDtemp ? 10.0 * log10(fRefValue / (double)uiSSDtemp) : std::numeric_limits<double>::infinity();
     pic.psnr[comp] = uiSSDtemp ? 10.0 * log10(fRefValue / (double)uiSSDtemp) : MAX_DOUBLE;
     pic.mse [comp] = (double)uiSSDtemp / size;
   }
