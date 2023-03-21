@@ -51,6 +51,7 @@ namespace vvenc {
 
 VVEncCfg::VVEncCfg()
   : m_stageParallelProc( false )
+  , m_salienceBasedOpt( true )
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
 {
