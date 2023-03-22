@@ -292,9 +292,8 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   cus.push_back( cu );
 
   Mv* prevCuMvd = cuInit ? cuInit->mvdL0SubPu : nullptr;
-
-  uint32_t idx = ++m_numCUs;
-  cu->idx  = idx;
+  
+  cu->idx        = ++m_numCUs;
   cu->mvdL0SubPu = nullptr;
 
   if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth() >= 8 && unit.Y().area() >= 128 )
@@ -1176,14 +1175,21 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
   const int ydiff  = ( pos.y >> yshift ) - ( curCu.blocks[_chType].y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curCu.blocks[_chType].x >> xshift );
 
+  if( !xdiff && !ydiff )
+  {
+    const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
+
+    return ( cu && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) ) ? cu : nullptr;
+  }
+
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
-  if( pos.x < 0 || pos.y < 0 || ( pos.x * (1 << csx) ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
+  if( pos.x < 0 || pos.y < 0 || ( pos.x * ( 1 << csx ) ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
 
-  const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
+  const CodingUnit* cu = picture->cs->getCU( pos, _chType, curCu.treeType );
 
-  return ( cu && CU::isSameSliceAndTile( *cu, curCu ) && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) ) ? cu : nullptr;
+  return ( cu && CU::isSameSliceAndTile( *cu, curCu ) ) ? cu : nullptr;
 }
 
 const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
@@ -1195,12 +1201,17 @@ const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const P
   const int ydiff  = ( pos.y >> yshift ) - ( curPos.y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curPos.x >> xshift );
 
+  if( !xdiff && !ydiff )
+  {
+    return getCU( pos, _chType, _treeType );
+  }
+
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
   if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curTileIdx ) return nullptr;
 
-  const CodingUnit* cu = getCU( pos, _chType, _treeType );
+  const CodingUnit* cu = picture->cs->getCU( pos, _chType, _treeType );
 
   return ( cu && cu->slice->independentSliceIdx == curSliceIdx && cu->tileIdx == curTileIdx ) ? cu : nullptr;
 }
