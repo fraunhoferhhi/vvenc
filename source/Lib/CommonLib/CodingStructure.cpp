@@ -1189,7 +1189,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
 
   const CodingUnit* cu = picture->cs->getCU( pos, _chType, curCu.treeType );
 
-  return ( cu && CU::isSameSliceAndTile( *cu, curCu ) ) ? cu : nullptr;
+  return ( cu && CU::isSameSlice( *cu, curCu ) ) ? cu : nullptr;
 }
 
 const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
