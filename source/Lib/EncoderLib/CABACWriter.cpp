@@ -2261,7 +2261,7 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   bool signHiding  = cu.cs->slice->signDataHidingEnabled;
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, signHiding, m_tplBuf );
+  CoeffCodingContext  cctx    ( tu, compID, signHiding, false, m_tplBuf );
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
 
   // determine and set last coeff position and sig group flags
@@ -2660,7 +2660,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_codingTS() etype=%d pos=(%d,%d) size=%dx%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height );
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, false, nullptr, tu.cu->bdpcmM[toChannelType(compID)]);
+  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)] );
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);

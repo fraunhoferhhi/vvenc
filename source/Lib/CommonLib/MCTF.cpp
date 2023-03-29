@@ -384,10 +384,10 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   const Pel maxSampleValue = clpRng.max();
 
   int vnoise[2 * VVENC_MCTF_RANGE] = { 0, };
-  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f, };
-  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vsw [2 * VVENC_MCTF_RANGE] = { 0.0f, };
+  float vww [2 * VVENC_MCTF_RANGE] = { 0.0f, };
 
-  int minError = 9999999;
+  int minError = INT32_MAX;
 
   for( int i = 0; i < numRefs; i++ )
   {
@@ -613,6 +613,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   const int mctfIdx            = pic->gopEntry ? pic->gopEntry->m_mctfIndex : -1;
   const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;
+  double   meanRmsAcrossPic    = 0.0;
+  uint64_t sumSRmsAcrossPic    = 0;
+  uint16_t nMax = 0, maxRmsCTU = 0;
   bool  isFilterThisFrame      = mctfIdx >= 0;
 
   int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
@@ -630,14 +633,14 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( !pic->useScMCTF )
+  if( !pic->useScMCTF && !pic->gopEntry->m_isStartOfGop )
   {
     isFilterThisFrame = false;
   }
 
   pic->m_picShared->m_picAuxQpOffset = 0;
 
-  if ( isFilterThisFrame || pic->gopEntry->m_isStartOfGop )
+  if ( isFilterThisFrame )
   {
     const PelStorage& origBuf = pic->getOrigBuffer();
           PelStorage& fltrBuf = pic->getFilteredOrigBuffer();
@@ -706,6 +709,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
       std::vector<double> sumError( numCtu * 2, 0 );
       std::vector<uint32_t> sumRMS( numCtu * 2, 0 ); // RMS of motion estimation error
+      std::vector<uint16_t> maxRMS( numCtu * 2, 0 ); // maximum block estimation error
       std::vector<double> blkCount( numCtu * 2, 0 );
 
       int distFactor[2] = { 3,3 };
@@ -730,6 +734,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             const auto& mvBlk = srcPic.mvs.get( x, y );
             sumError[dist * numCtu + ctuId] += mvBlk.error;
             sumRMS  [dist * numCtu + ctuId] += mvBlk.rmsme;
+            maxRMS  [dist * numCtu + ctuId] = std::max( maxRMS[dist * numCtu + ctuId], mvBlk.rmsme );
             blkCount[dist * numCtu + ctuId] += mvBlk.overlap;
           }
         }
@@ -738,24 +743,32 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 && ( m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
       {
         const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
-        double meanRmsAcrossPic = 0.0;
 
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
           const Position pos ((i % widthInCtus) * ctuSize, (i / widthInCtus) * ctuSize);
           const CompArea ctuArea  = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x, pos.y, ctuSize, ctuSize)), pic->Y());
           const unsigned avgIndex = pic->getOrigBuf (ctuArea).getAvg() >> (m_encCfg->m_internalBitDepth[CH_L] - 3); // one of 8 mean level regions
+          double meanInCTU;
 
           sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
-          meanRmsAcrossPic += bd12bScale * sumRMS[i] / blkCount[i];
-
-          if (bd12bScale * sumRMS[i] < pic->m_picShared->m_minNoiseLevels[avgIndex] * blkCount[i])
+          meanInCTU = bd12bScale * sumRMS[i] / blkCount[i];
+          meanRmsAcrossPic += meanInCTU;
+          if (meanInCTU < pic->m_picShared->m_minNoiseLevels[avgIndex])
           {
-            pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + bd12bScale * sumRMS[i] / blkCount[i]); // scaled to 12 bit, see also QPA
+            pic->m_picShared->m_minNoiseLevels[avgIndex] = uint8_t (0.5 + meanInCTU); // scaled to 12 bit, see filterAndCalculateAverageActivity()
+          }
+
+          maxRMS[i] = std::min (maxRMS[i], maxRMS[i + numCtu]);
+          maxRmsCTU = std::max (maxRmsCTU, maxRMS[i]);
+          sumSRmsAcrossPic += (uint64_t) maxRMS[i] * maxRMS[i];
+          if (maxRMS[i] > 0)
+          {
+            nMax++; // count all CTUs with non-zero motion error (excludes e.g. black borders). CTU with the motion error peak is subtracted below
           }
         }
 
-        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0)
+        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
           // force filter
           fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
@@ -774,7 +787,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
         const double weight = std::min( 1.0, overallStrength );
+        const double factor = std::min( 1.0, sqrt((1920.0 * 1080.0) / double (m_encCfg->m_SourceWidth * m_encCfg->m_SourceHeight)) ) * ( (double) m_encCfg->m_QP / (MAX_QP + 1.0) );
         int sumCtuQpOffsets = 0;
+
+        meanRmsAcrossPic = (!m_encCfg->m_usePerceptQPA || !m_encCfg->m_salienceBasedOpt || maxRmsCTU == 0 || nMax < 2 ? 65535.0 : sqrt (double (sumSRmsAcrossPic - (uint64_t) maxRmsCTU * maxRmsCTU) / (nMax - 1.0)));
 
         for( int i = 0; i < numCtu; i++ )
         {
@@ -800,6 +816,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           else if( weightedErr < m_cuTreeThresh[2] )
           {
             qpOffset = -1;
+          }
+
+          if (meanRmsAcrossPic < maxRMS[i] * factor)
+          {
+            qpOffset += int (6.0 * log (std::max ((ctuSize > 64 ? 0.625 : 0.5) * maxRMS[i] * factor, meanRmsAcrossPic) / (maxRMS[i] * factor)) / (sqrt (weight) * log (2.0)) - 0.5);
           }
 
           pic->m_picShared->m_ctuBimQpOffset[i] = qpOffset;

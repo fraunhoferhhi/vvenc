@@ -170,7 +170,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_modeCtrl.init     ( encCfg, &m_cRdCost );
   m_cIntraSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_SortedPelUnitBufs, m_unitCache );
   m_cInterSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_modeCtrl, m_cIntraSearch.getSaveCSBuf() );
-  m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, encCfg.m_useSelectiveRDOQ, false, true, false /*m_useTransformSkipFast*/, encCfg.m_quantThresholdVal );
+  m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, false, true, encCfg.m_quantThresholdVal );
 
   m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
@@ -1986,6 +1986,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     }
 
     if ((m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && (uiSadBestForQPA < MAX_DISTORTION) && (slice.TLayer == 0) // non-Intra key-frame
+       && (m_pcEncCfg->m_salienceBasedOpt)
        && (m_pcEncCfg->m_usePerceptQPA) && partitioner.currQgEnable() && (partitioner.currSubdiv == 0)) // CTU-level luma quantization group
     {
       const Picture*    pic = slice.pic;

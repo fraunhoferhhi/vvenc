@@ -261,11 +261,29 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
   }
 }
 
-Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
+static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
+{
+  for( int uiBlockPos = 0; uiBlockPos < numCoeff; uiBlockPos++ )
+  {
+    const TCoeff   iLevel = pCoeff[uiBlockPos];
+    const int64_t  tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
+    const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + offset ) >> shift );
+
+    if( quantisedMagnitude != 0 )
+    {
+      return true;
+    }
+  } // for n
+  return false;
+}
+
+
+Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other, useScalingLists );
-  xDeQuant=DeQuantCore;
-  xQuant  =QuantCore;
+  xDeQuant  = DeQuantCore;
+  xQuant    = QuantCore;
+  xNeedRdoq = needRdoqCore;
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   initQuantX86();
 #endif
@@ -591,7 +609,7 @@ void Quant::dequant(const TransformUnit& tu,
   }
 }
 
-void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrVal )
+void Quant::init( int rdoq, bool bUseRDOQTS, int thrVal )
 {
 
   // TODO: pass to init() a single variable containing (quantization) flags,
@@ -599,7 +617,6 @@ void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrVal )
 
   m_RDOQ             = rdoq;
   m_useRDOQTS        = bUseRDOQTS;
-  m_useSelectiveRDOQ = useSelectiveRDOQ;
   m_thrVal           = thrVal;
 }
 
@@ -819,49 +836,53 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
 {
   const SPS &sps            = *tu.cs->sps;
   const CompArea& rect      = tu.blocks[compID];
-  const uint32_t uiWidth        = rect.width;
-  const uint32_t uiHeight       = rect.height;
+  const uint32_t uiWidth    = rect.width;
+  const uint32_t uiHeight   = rect.height;
+  const uint32_t efHeight   = std::min<unsigned>( uiHeight, JVET_C0024_ZERO_OUT_TH );
+  const uint32_t efArea     = uiWidth * efHeight;
   const int channelBitDepth = sps.bitDepths[toChannelType(compID)];
-
   const CCoeffBuf piCoef    = pSrc;
 
-  const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+  const bool useTransformSkip      = tu.mtsIdx[compID] == MTS_SKIP;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
 
-  int scalingListType = getScalingListType(tu.cu->predMode, compID);
-  CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
+  const int scalingListType     = getScalingListType( tu.cu->predMode, compID );
+  CHECK( scalingListType >= SCALING_LIST_NUM, "Invalid scaling list" );
 
-  const uint32_t uiLog2TrWidth  = Log2(uiWidth);
-  const uint32_t uiLog2TrHeight = Log2(uiHeight);
-  int *piQuantCoeff             = getQuantCoeff(scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight);
+  const bool        isDq        = tu.cs->slice->depQuantEnabled && !useTransformSkip;
+  const int         qpDQ        = isDq ? cQP.Qp( false ) + 1 : cQP.Qp( useTransformSkip );
+  const int         qpPer       = isDq ? qpDQ / 6 : cQP.per( useTransformSkip );
+  const int         qpRem       = isDq ? qpDQ - 6 * qpPer : cQP.rem( useTransformSkip );
 
-  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
-  const bool enableScalingLists = getUseScalingList(uiWidth, uiHeight, (useTransformSkip != 0), isLfnstApplied);
+  const uint32_t uiLog2TrWidth  = Log2( uiWidth );
+  const uint32_t uiLog2TrHeight = Log2( uiHeight );
+  int *piQuantCoeff             = getQuantCoeff( scalingListType, qpRem, uiLog2TrWidth, uiLog2TrHeight );
 
-  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
-    * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
-    * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
-    * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
-    */
-  const bool needSqrtAdjustment= TU::needsSqrt2Scale( tu, compID );
-  const int defaultQuantisationCoefficient    = g_quantScales[needSqrtAdjustment?1:0][cQP.rem(useTransformSkip)];
-  const int iTransformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange) + (needSqrtAdjustment?-1:0);
+  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && ( CU::isSepTree( *tu.cu ) ? true : isLuma( compID ) );
+  const bool enableScalingLists = getUseScalingList( uiWidth, uiHeight, ( useTransformSkip != 0 ), isLfnstApplied );
+
+  const bool needSqrtAdjustment = TU::needsSqrt2Scale( tu, compID );
+  const int defaultQuantisationCoefficient
+                                = g_quantScales[needSqrtAdjustment?1:0][qpRem];
+  const int iTransformShift     = getTransformShift( channelBitDepth, rect.size(), maxLog2TrDynamicRange ) + ( needSqrtAdjustment ? -1 : 0 );
 
 
-  const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + iTransformShift;
-  assert(iQBits>=0);
+  const int iQBits              = QUANT_SHIFT + qpPer + iTransformShift;
+
   // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
-
   // iAdd is different from the iAdd used in normal quantization
-  const int64_t iAdd = int64_t(compID == COMP_Y ? 171 : 256) << (iQBits - 9);
+  const int64_t iAdd = int64_t( compID == COMP_Y ? 171 : 256 ) << ( iQBits - 9 );
 
-  for (int uiBlockPos = 0; uiBlockPos < rect.area(); uiBlockPos++)
+  if( !enableScalingLists )
+    return xNeedRdoq( piCoef.buf, efArea, defaultQuantisationCoefficient, iAdd, iQBits );
+
+  for( int uiBlockPos = 0; uiBlockPos < efArea; uiBlockPos++ )
   {
-    const TCoeff iLevel   = piCoef.buf[uiBlockPos];
-    const int64_t  tmpLevel = (int64_t)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
-    const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+    const TCoeff   iLevel           = piCoef.buf[uiBlockPos];
+    const int64_t  tmpLevel         = ( int64_t ) std::abs( iLevel ) * piQuantCoeff[uiBlockPos];
+    const TCoeff quantisedMagnitude = TCoeff( ( tmpLevel + iAdd ) >> iQBits );
 
-    if (quantisedMagnitude != 0)
+    if( quantisedMagnitude != 0 )
     {
       return true;
     }
