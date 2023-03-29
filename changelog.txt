@@ -1,4 +1,29 @@
 /////////////////////////////////////////
+tag 1.8.0-rc1
+
+* libvvenc:
+  - removed library parameters:
+    - vvenc_config::m_temporalSubsampleRatio, vvenc_config::m_MaxCodingDepth, vvenc_config::m_RCForceIntraQP,
+      vvenc_config::m_log2DiffMaxMinCodingBlockSize, 
+  - added library parameters:
+    - vvenc_config::m_FirstPassMode
+  - changed library parameters:
+    - vvenc_config::m_useSelectiveRDOQ is now an int_8, with 2 enabling selective RDOQ only for SCC
+  - QPA: added saliency detection
+  - BIM: propagation of the parameters to higher temporal layers
+  - retuned the presets:
+    - 15% speedup for faster, 10% speedup for fast, medium and slow, 5% for slower
+  - speedup of the first pass for faster preset
+  - various speedups and bugfixes
+
+* vvencapp:
+  
+* vvencFFapp:
+  - removed from default installation! Use VVENC_INSTALL_FULLFEATURE_APP CMake variable to override.
+  - removed parameters: TemporalSubsampleRatio, RCForceIntraQP
+  - added parameters: FirstPassMode
+
+/////////////////////////////////////////
 tag 1.7.0
 
 * libvvenc:

@@ -558,7 +558,7 @@ typedef struct vvenc_config
   bool                m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
   int                 m_RDOQ;                                                            // flag for using RD optimized quantization
   bool                m_useRDOQTS;                                                       // flag for using RD optimized quantization for transform skip
-  bool                m_useSelectiveRDOQ;                                                // flag for using selective RDOQ
+  int8_t              m_useSelectiveRDOQ;                                                // flag for using selective RDOQ
 
   bool                m_JointCbCrMode;
   int                 m_cabacInitPresent;
@@ -743,8 +743,7 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
-  // reserved parameters for internal use
-  int                 m_reservedInt[1];
+  int                 m_FirstPassMode;
   int                 m_numRefPics;                                                      // Number of reference pictures
   int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit

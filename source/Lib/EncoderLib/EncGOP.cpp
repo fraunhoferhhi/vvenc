@@ -126,6 +126,46 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
   return curTLayer <= tarTL && curId == 0;
 }
 
+void initPicAuxQPOffsets( const Slice* slice, const bool isBIM ) // get m_picShared->m_picAuxQpOffset and m_picShared->m_ctuBimQpOffset if unavailable
+{
+  const Picture* slicePic = slice->pic;
+
+  if (isBIM && slicePic && slicePic->m_picShared->m_ctuBimQpOffset.empty())
+  {
+    const Picture* refPicL0 = slice->getRefPic (REF_PIC_LIST_0, 0);
+    const Picture* refPicL1 = slice->getRefPic (REF_PIC_LIST_1, 0);
+
+    if (refPicL0 && !refPicL0->m_picShared->m_ctuBimQpOffset.empty() &&
+        refPicL1 && !refPicL1->m_picShared->m_ctuBimQpOffset.empty() &&
+        refPicL0->m_picShared->m_ctuBimQpOffset.size() == refPicL1->m_picShared->m_ctuBimQpOffset.size())
+    {
+      const PicShared* pic0 = refPicL0->m_picShared;
+      const PicShared* pic1 = refPicL1->m_picShared;
+      PicShared* const picC = slicePic->m_picShared;
+      const int32_t  numCtu = (int32_t) pic0->m_ctuBimQpOffset.size();
+      int i, sumCtuQpOffset = 0;
+
+      picC->m_ctuBimQpOffset.resize (numCtu);
+
+      for (i = 0; i < numCtu; i++) // scale and merge QPs
+      {
+        const int qpOffset0 = pic0->m_ctuBimQpOffset[i] + pic0->m_picAuxQpOffset; // CTU delta-QP #1
+        const int qpOffset1 = pic1->m_ctuBimQpOffset[i] + pic1->m_picAuxQpOffset; // CTU delta-QP #2
+        const int qpOffsetC = (3 * qpOffset0 + 3 * qpOffset1 + (qpOffset0 + qpOffset1 < 0 ? 3 : 4)) >> 3; // 3 instead of 4 for correct rounding to -2
+
+        picC->m_ctuBimQpOffset[i] = qpOffsetC;
+        sumCtuQpOffset += qpOffsetC;
+      }
+
+      picC->m_picAuxQpOffset = (sumCtuQpOffset + (sumCtuQpOffset < 0 ? -(numCtu >> 1) : numCtu >> 1)) / numCtu; // pic average; delta-QP scaling: 0.75
+      for (i = 0; i < numCtu; i++) // excl. average again
+      {
+        picC->m_ctuBimQpOffset[i] -= picC->m_picAuxQpOffset; // delta-QP relative to the aux average
+      }
+    }
+  }
+}
+
 void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap, MsgLog& msg )
 {
   // check if we should decode a leading bitstream
@@ -330,7 +370,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
 
   if (encCfg.m_usePerceptQPA)
   {
-    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
+    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) && encCfg.m_salienceBasedOpt ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
 
   if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
@@ -691,21 +731,30 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   {
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, pic->picApsMap, msg );
-    if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
-    {
-      pic->picInitialQP     = -1;
-      pic->picInitialLambda = -1.0;
-      m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
-    }
   }
   else
   {
     encPic = true;
   }
+
+  // initialize next picture
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
   pic->writePic = decPic || encPic;
   pic->encPic   = encPic;
   pic->isPreAnalysis = m_isPreAnalysis;
+
+  if( pic->slices[0]->TLayer + 1 < m_pcEncCfg->m_maxTLayer ) // skip for highest two temporal levels
+  {
+    initPicAuxQPOffsets( pic->slices[0], m_pcEncCfg->m_blockImportanceMapping );
+  }
+
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    pic->picInitialQP     = -1;
+    pic->picInitialLambda = -1.0;
+
+    m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
+  }
 
   // compress next picture
   if( pic->encPic )
@@ -1276,7 +1325,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
 
   xInitPPSforTiles( pps, sps );
 
-  pps.pcv            = new PreCalcValues( sps, pps, true );
+  pps.pcv            = new PreCalcValues( sps, pps, m_pcEncCfg->m_MaxQT, true );
 }
 
 void EncGOP::xInitPPSforTiles(PPS &pps,const SPS &sps) const
@@ -1474,7 +1523,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
       CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
       pic->picApsGlobal = m_globalApsList.back();
       // the max size of global APS list is more than enough to support parallelization 
-      if( m_globalApsList.size() > m_pcEncCfg->m_GOPSize * ( m_pcEncCfg->m_maxParallelFrames + 1 ) )
+      if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
       {
         delete m_globalApsList.front();
         m_globalApsList.pop_front();
@@ -2559,10 +2608,14 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
           sMctf.str().c_str(),
           uibits );
 
-      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+      std::string yPSNR = dPSNR[COMP_Y]  == MAX_DOUBLE ? prnt(" [Y %7s dB    ", "inf" ) : prnt(" [Y %6.4lf dB    ", dPSNR[COMP_Y] );
+      std::string uPSNR = dPSNR[COMP_Cb] == MAX_DOUBLE ? prnt("U %7s dB    ", "inf" ) : prnt("U %6.4lf dB    ", dPSNR[COMP_Cb] );
+      std::string vPSNR = dPSNR[COMP_Cr] == MAX_DOUBLE ? prnt("V %7s dB]", "inf" ) : prnt("V %6.4lf dB]", dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
-      accessUnit.InfoString.append( cPSNR );
+      accessUnit.InfoString.append( yPSNR );
+      accessUnit.InfoString.append( uPSNR );
+      accessUnit.InfoString.append( vPSNR );
 
       if ( m_pcEncCfg->m_printHexPsnr )
       {
@@ -2574,9 +2627,13 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
               reinterpret_cast<uint8_t *>(&xPsnr[i]));
         }
 
-        std::string cPSNRHex = prnt(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+        std::string yPSNRHex = dPSNR[COMP_Y]  == MAX_DOUBLE ? prnt(" [xY %16s", "inf") : prnt(" [xY %16" PRIx64,  xPsnr[COMP_Y] );
+        std::string uPSNRHex = dPSNR[COMP_Cb] == MAX_DOUBLE ? prnt(" xU %16s", "inf") : prnt(" xU %16" PRIx64, xPsnr[COMP_Cb] ) ;
+        std::string vPSNRHex = dPSNR[COMP_Cr] == MAX_DOUBLE ? prnt(" xV %16s]", "inf") : prnt(" xV %16" PRIx64 "]", xPsnr[COMP_Cr]);
 
-        accessUnit.InfoString.append( cPSNRHex );
+        accessUnit.InfoString.append( yPSNRHex );
+        accessUnit.InfoString.append( uPSNRHex );
+        accessUnit.InfoString.append( vPSNRHex );
       }
 
       if( printFrameMSE )
