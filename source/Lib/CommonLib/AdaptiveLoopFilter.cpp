@@ -991,54 +991,6 @@ void AdaptiveLoopFilter::filterBlk( const AlfClassifier *classifier,
         clip = fClipSet + cl.classIdx * MAX_NUM_ALF_LUMA_COEFF;
       }
 
-#if OLDMC
-      if( filtType == ALF_FILTER_7 )
-      {
-        if( transposeIdx == 1 )
-        {
-          filterCoeff = { {coef[9], coef[4], coef[10], coef[8], coef[1], coef[5], coef[11], coef[7], coef[3], coef[0], coef[2], coef[6], coef[12]} };
-          filterClipp = { {clip[9], clip[4], clip[10], clip[8], clip[1], clip[5], clip[11], clip[7], clip[3], clip[0], clip[2], clip[6], clip[12]} };
-        }
-        else if( transposeIdx == 2 )
-        {
-          filterCoeff = { {coef[0], coef[3], coef[2], coef[1], coef[8], coef[7], coef[6], coef[5], coef[4], coef[9], coef[10], coef[11], coef[12]} };
-          filterClipp = { {clip[0], clip[3], clip[2], clip[1], clip[8], clip[7], clip[6], clip[5], clip[4], clip[9], clip[10], clip[11], clip[12]} };
-        }
-        else if( transposeIdx == 3 )
-        {
-          filterCoeff = { {coef[9], coef[8], coef[10], coef[4], coef[3], coef[7], coef[11], coef[5], coef[1], coef[0], coef[2], coef[6], coef[12]} };
-          filterClipp = { {clip[9], clip[8], clip[10], clip[4], clip[3], clip[7], clip[11], clip[5], clip[1], clip[0], clip[2], clip[6], clip[12]} };
-        }
-        else
-        {
-          filterCoeff = { {coef[0], coef[1], coef[2], coef[3], coef[4], coef[5], coef[6], coef[7], coef[8], coef[9], coef[10], coef[11], coef[12]} };
-          filterClipp = { {clip[0], clip[1], clip[2], clip[3], clip[4], clip[5], clip[6], clip[7], clip[8], clip[9], clip[10], clip[11], clip[12]} };
-        }
-      }
-      else
-      {
-        if( transposeIdx == 1 )
-        {
-          filterCoeff = { {coef[4], coef[1], coef[5], coef[3], coef[0], coef[2], coef[6]} };
-          filterClipp = { {clip[4], clip[1], clip[5], clip[3], clip[0], clip[2], clip[6]} };
-        }
-        else if( transposeIdx == 2 )
-        {
-          filterCoeff = { {coef[0], coef[3], coef[2], coef[1], coef[4], coef[5], coef[6]} };
-          filterClipp = { {clip[0], clip[3], clip[2], clip[1], clip[4], clip[5], clip[6]} };
-        }
-        else if( transposeIdx == 3 )
-        {
-          filterCoeff = { {coef[4], coef[3], coef[5], coef[1], coef[0], coef[2], coef[6]} };
-          filterClipp = { {clip[4], clip[3], clip[5], clip[1], clip[0], clip[2], clip[6]} };
-        }
-        else
-        {
-          filterCoeff = { {coef[0], coef[1], coef[2], coef[3], coef[4], coef[5], coef[6]} };
-          filterClipp = { {clip[0], clip[1], clip[2], clip[3], clip[4], clip[5], clip[6]} };
-        }
-      }
-#else
       if( filtType == ALF_FILTER_7 )
       {
         if( transposeIdx == 1 )
@@ -1085,7 +1037,6 @@ void AdaptiveLoopFilter::filterBlk( const AlfClassifier *classifier,
           filterClipp = { clip[0], clip[1], clip[2], clip[3], clip[4], clip[5], clip[6] };
         }
       }
-#endif
 
       for( int ii = 0; ii < clsSizeY; ii++ )
       {
