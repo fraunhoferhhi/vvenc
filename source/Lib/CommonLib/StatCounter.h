@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -53,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 
 #ifndef THROW
-#define THROW(x)            throw( Exception( "\nERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
+#define THROW(x)            throw( Exception( "ERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
 #endif
 #ifndef CHECK
 #define CHECK(c,x)          if(c){ THROW(x); }
@@ -175,7 +171,7 @@ public:
   std::ostream& streamOutValueInPercentage( std::ostream& os, T dep, size_t w ) const
   {
     double percentage = dep ? percentageFrom( dep ) : 0.0;
-    os << std::fixed << std::setw( w - 1 ) << std::setprecision( 1 ) << percentage << "%";
+    os << std::fixed << std::setw( (int)(w - 1) ) << std::setprecision( 1 ) << percentage << "%";
  
     return os;
   }
@@ -310,7 +306,7 @@ public:
   std::ostream& streamOutNames( std::ostream& os, size_t w ) const
   {
     for( size_t i = 0; i < m_counters.size(); i++ )
-      os << std::setw( (m_counters[i].isPercentageOutput() ? w*2: w) ) << m_counters[i].getName();
+      os << std::setw( (m_counters[i].isPercentageOutput() ? (int)(w*2): (int)w) ) << m_counters[i].getName();
     return os;
   }
 
@@ -338,7 +334,7 @@ public:
   {
     for( size_t i = 0; i < m_counters.size(); i++ )
     {
-        os << std::setw( w ) << m_counters[i];
+        os << std::setw( (int)w ) << m_counters[i];
         if( m_counters[i].isPercentageOutput() )
           m_counters[i].streamOutValueInPercentage( os, m_counters[m_counters[i].getDependenceIdx()].val(), w );
     }
@@ -361,8 +357,8 @@ public:
 
           for( size_t i = 0; i < m_counters.size(); i++ )
           {
-              os << std::setw( maxW > w ? maxW: w ) << m_counters[i].getName() << ": ";
-              os << std::setw( w ) << m_counters[i];
+              os << std::setw( maxW > w ? (int)maxW: (int)w ) << m_counters[i].getName() << ": ";
+              os << std::setw( (int)w ) << m_counters[i];
               if( m_counters[i].isPercentageOutput() )
                 m_counters[i].streamOutValueInPercentage( os, m_counters[m_counters[i].getDependenceIdx()].val(), w );
               os << std::endl;
@@ -676,8 +672,8 @@ public:
     }
   }
 
-  StatCounter2D<T>&       operator[]( int id )       { return m_counters[id]; }
-  const StatCounter2D<T>& operator[]( int id ) const { return m_counters[id]; }
+  StatCounter2D<T>&       operator[]( size_t id )       { return m_counters[id]; }
+  const StatCounter2D<T>& operator[]( size_t id ) const { return m_counters[id]; }
 
   StatCounter2DSet& operator+=( const StatCounter2DSet& other ) {
     auto i1 = m_counters.begin();

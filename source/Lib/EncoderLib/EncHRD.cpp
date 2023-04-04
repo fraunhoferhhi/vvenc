@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur FÃ¶rderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -50,7 +46,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // calculate scale value of bitrate and initial delay
-int EncHRD::xCalcScale(int x)
+int EncHRD::xCalcScale(uint32_t x)
 {
   if (x==0)
   {
@@ -78,45 +74,14 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
   profileLevelTierFeatures.extractPTLInformation( sps );
 
   bool useSubCpbParams = false; //encCfg.getNoPicPartitionFlag() == false;
-  int bitRate = encCfg.m_RCTargetBitrate;
-  int cpbSize = profileLevelTierFeatures.getCpbSizeInBits();
+  uint32_t bitRate = (uint32_t)encCfg.m_RCTargetBitrate;
+  uint32_t cpbSize = (uint32_t)profileLevelTierFeatures.getCpbSizeInBits();
 
   CHECK(!(cpbSize != 0), "Unspecified error");  // CPB size may not be equal to zero. ToDo: have a better default and check for level constraints
 
-  switch (encCfg.m_FrameRate)
-  {
-  case 24:
-    generalHrdParams.numUnitsInTick = 1125000;    generalHrdParams.timeScale = 27000000;
-    break;
-  case 25:
-    generalHrdParams.numUnitsInTick = 1080000;    generalHrdParams.timeScale = 27000000;
-    break;
-  case 30:
-    generalHrdParams.numUnitsInTick = 900900;     generalHrdParams.timeScale = 27000000;
-    break;
-  case 50:
-    generalHrdParams.numUnitsInTick = 540000;     generalHrdParams.timeScale = 27000000;
-    break;
-  case 60:
-    generalHrdParams.numUnitsInTick = 450450;     generalHrdParams.timeScale = 27000000;
-    break;
-  default:
-    generalHrdParams.numUnitsInTick = 1001;       generalHrdParams.timeScale = 60000;
-    break;
-  }
+  generalHrdParams.timeScale      = encCfg.m_FrameRate;
+  generalHrdParams.numUnitsInTick = encCfg.m_FrameScale;
 
-  if (encCfg.m_temporalSubsampleRatio > 1)
-  {
-    uint32_t temporalSubsampleRatio = encCfg.m_temporalSubsampleRatio;
-    if (double(generalHrdParams.numUnitsInTick) * temporalSubsampleRatio > std::numeric_limits<uint32_t>::max())
-    {
-      generalHrdParams.timeScale = generalHrdParams.timeScale / temporalSubsampleRatio;
-    }
-    else
-    {
-      generalHrdParams.numUnitsInTick = generalHrdParams.numUnitsInTick * temporalSubsampleRatio;
-    }
-  }
   bool rateCnt = (bitRate > 0);
 
   generalHrdParams.generalNalHrdParamsPresent = rateCnt;
@@ -159,7 +124,7 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
   uint32_t duCpbSizeValue;
   uint32_t duBitRateValue = 0;
 
-  for (i = 0; i < MAX_TLAYER; i++)
+  for (i = 0; i < VVENC_MAX_TLAYER; i++)
   {
     olsHrdParams[i].fixedPicRateGeneralFlag = true;
     olsHrdParams[i].fixedPicRateWithinCvsFlag = true;

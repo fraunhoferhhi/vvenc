@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -63,18 +59,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if _MSC_VER <= 1900 && !defined( _mm256_extract_epi32 )
-  inline uint32_t _mm256_extract_epi32( __m256i vec, const int i )
-  {
-    __m128i indx = _mm_cvtsi32_si128( i );
-    __m256i val = _mm256_permutevar8x32_epi32( vec, _mm256_castsi128_si256( indx ) );
-    return         _mm_cvtsi128_si32( _mm256_castsi256_si128( val ) );
-  }
-#endif
+
 
 static inline int rightShiftMSB(int numer, int denom)
 {
-  int shiftIdx = _bit_scan_reverse(denom);
+  int shiftIdx = bit_scan_reverse(denom);
   return (numer >> shiftIdx);
 }
   
@@ -87,8 +76,8 @@ static inline void addBIOAvg4_SSE(const int16_t* src0, const int16_t* src1, int1
 
   __m128i mm_tmpx    = _mm_set1_epi32( ( tmpx & 0xffff ) | ( tmpy << 16 ) );
   __m128i mm_offset  = _mm_set1_epi32( offset );
-  __m128i vibdimin   = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax   = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
   __m128i mm_a;
   __m128i mm_b;
   __m128i mm_sum;
@@ -115,10 +104,10 @@ static inline void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, 
   const ptrdiff_t src1Stride = widthG + 2;
   const ptrdiff_t gradStride = widthG;
 
-  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 << 16 ) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 << 16 ) ), 1 );
+  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 * ( 1 << 16 )) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 * ( 1 << 16 )) ), 1 );
   __m256i mm_offset  = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi32( clpRng.min );
-  __m256i vibdimax   = _mm256_set1_epi32( clpRng.max );
+  __m256i vibdimin   = _mm256_set1_epi32( clpRng.min() );
+  __m256i vibdimax   = _mm256_set1_epi32( clpRng.max() );
   __m256i mm_a;
   __m256i mm_b;
   __m256i mm_sum;
@@ -331,25 +320,25 @@ static inline void calcBIOSums2x_AVX2(const Pel* srcY0Tmp, const Pel* srcY1Tmp, 
   tmpy0 = sumAbsGY0 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 0 ), sumAbsGY0 ) );
   tmpy1 = sumAbsGY1 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 1 ), sumAbsGY1 ) );
 #else
-  tmpx0 = sumAbsGX0 == 0 ? 0 : rightShiftMSB( sumDIX0 << 2, sumAbsGX0 );
+  tmpx0 = sumAbsGX0 == 0 ? 0 : rightShiftMSB( sumDIX0 *4, sumAbsGX0 );
   tmpx0 = Clip3( -limit, limit, tmpx0 );
 
   int mainsGxGy0 = sumSignGY_GX0 >> 12;
   int secsGxGy0  = sumSignGY_GX0 & ( ( 1 << 12 ) - 1 );
   int tmpData0   = tmpx0 * mainsGxGy0;
-  tmpData0       = ( ( tmpData0 << 12 ) + tmpx0 * secsGxGy0 ) >> 1;
-  tmpy0 = sumAbsGY0 == 0 ? 0 : rightShiftMSB( ( ( sumDIY0 << 2 ) - tmpData0 ), sumAbsGY0 );
+  tmpData0       = ( ( tmpData0 * ( 1 << 12 )) + tmpx0 * secsGxGy0 ) >> 1;
+  tmpy0 = sumAbsGY0 == 0 ? 0 : rightShiftMSB( ( ( sumDIY0 *4) - tmpData0 ), sumAbsGY0 );
   tmpy0 = Clip3( -limit, limit, tmpy0 );
 
 
-  tmpx1 = sumAbsGX1 == 0 ? 0 : rightShiftMSB( sumDIX1 << 2, sumAbsGX1 );
+  tmpx1 = sumAbsGX1 == 0 ? 0 : rightShiftMSB( sumDIX1 *4, sumAbsGX1 );
   tmpx1 = Clip3( -limit, limit, tmpx1 );
 
   int mainsGxGy1 = sumSignGY_GX1 >> 12;
   int secsGxGy1  = sumSignGY_GX1 & ( ( 1 << 12 ) - 1 );
   int tmpData1   = tmpx1 * mainsGxGy1;
-  tmpData1 = ( ( tmpData1 << 12 ) + tmpx1 * secsGxGy1 ) >> 1;
-  tmpy1 = sumAbsGY1 == 0 ? 0 : rightShiftMSB( ( ( sumDIY1 << 2 ) - tmpData1 ), sumAbsGY1 );
+  tmpData1 = ( ( tmpData1 * ( 1 << 12 )) + tmpx1 * secsGxGy1 ) >> 1;
+  tmpy1 = sumAbsGY1 == 0 ? 0 : rightShiftMSB( ( ( sumDIY1*4 ) - tmpData1 ), sumAbsGY1 );
   tmpy1 = Clip3( -limit, limit, tmpy1 );
 #endif
 
@@ -528,8 +517,8 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #if USE_AVX2
   __m256i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0, mm_src;
   __m256i mm_offset = _mm256_set1_epi16( offset );
-  __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+  __m256i vibdimin  = _mm256_set1_epi16( clpRng.min() );
+  __m256i vibdimax  = _mm256_set1_epi16( clpRng.max() );
   __m256i mm_dimin  = _mm256_set1_epi32( -dILimit );
   __m256i mm_dimax  = _mm256_set1_epi32( dILimit - 1 );
 
@@ -589,8 +578,8 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #else
   __m128i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0;
   __m128i mm_offset = _mm_set1_epi16( offset );
-  __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+  __m128i vibdimin  = _mm_set1_epi16( clpRng.min() );
+  __m128i vibdimax  = _mm_set1_epi16( clpRng.max() );
   __m128i mm_dimin  = _mm_set1_epi32( -dILimit );
   __m128i mm_dimax  = _mm_set1_epi32( dILimit - 1 );
 
@@ -642,15 +631,221 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 }
 
 template<X86_VEXT vext>
+void padDmvr_SSE( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize )
+{
+  _mm_prefetch( ( const char* )  src,            _MM_HINT_T0 );
+  _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+  if( width == 7 && padSize == 1 )
+  {
+    const __m128i sl = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    __m128i l = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) src ), sl );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride     ), l );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride     ), l );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) src ), sl );
+
+      _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l );
+      _mm_storeu_si128( ( __m128i* ) ( dst     ), l );
+    }
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst     ), l );
+  }
+  else if( width == 11 && padSize == 1 )
+  {
+    const __m128i sl = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+    __m128i l1 = _mm_shuffle_epi8( _mm_loadl_epi64( ( const __m128i* ) &src[8] ), sl );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst - 1 * dstStride + 8 ), l1 );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst - 0 * dstStride + 8 ), l1 );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+      l1 = _mm_shuffle_epi8( _mm_loadl_epi64( ( const __m128i* ) &src[8] ), sl );
+
+      _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst     ), l0 );
+      _mm_storel_epi64( ( __m128i* ) ( dst + 8 ), l1 );
+    }
+    
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst + 8 ), l1 );
+  }
+  else if( width == 15 && padSize == 2 )
+  {
+    const __m128i sl = _mm_setr_epi8(  0,  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    const __m128i sb = _mm_setr_epi8(  0,  1, 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    const __m128i se = _mm_setr_epi8( 12, 13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+    __m128i l1 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[8] ), sl );
+    __m128i b  = _mm_shuffle_epi8( l0, sb );
+    __m128i e  = _mm_shuffle_epi8( l1, se );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 2 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 2 * dstStride + 16 ), e  );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 1 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride + 16 ), e  );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 0 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride + 16 ), e  );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+      l1 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[8] ), sl );
+      b = _mm_shuffle_epi8( l0, sb );
+      e = _mm_shuffle_epi8( l1, se );
+      
+      _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+      _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+      _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+    }
+    
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+
+    dst += dstStride;
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+  }
+  else if( width == 23 && padSize == 2 )
+  {
+    const __m128i sl = _mm_setr_epi8(  0,  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    const __m128i sb = _mm_setr_epi8(  0,  1, 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    const __m128i se = _mm_setr_epi8( 12, 13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 0] );
+    __m128i l1 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 8] );
+    __m128i l2 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[16] ), sl );
+    __m128i b  = _mm_shuffle_epi8( l0, sb );
+    __m128i e  = _mm_shuffle_epi8( l2, se );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 2 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 2 * dstStride + 24 ), e );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 1 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride + 24 ), e );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 0 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride + 24 ), e );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 0] );
+      l1 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 8] );
+      l2 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[16] ), sl );
+      b  = _mm_shuffle_epi8( l0, sb );
+      e  = _mm_shuffle_epi8( l2, se );
+
+      _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+      _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+      _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+      _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+    }
+    
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+
+    dst += dstStride;
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+  }
+  else
+  {
+    // TODO: fix for 444!
+
+    g_pelBufOP.copyBuffer( ( const char* ) src, srcStride * sizeof( Pel ), ( char* ) dst, dstStride * sizeof( Pel ), width * sizeof( Pel ), height );
+
+    /*left and right padding*/
+    Pel* ptrTemp1 = dst;
+    Pel* ptrTemp2 = dst + (width - 1);
+    ptrdiff_t offset = 0;
+    for( int i = 0; i < height; i++ )
+    {
+      offset = dstStride * i;
+      for( int j = 1; j <= padSize; j++ )
+      {
+        *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
+        *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
+      }
+    }
+    /*Top and Bottom padding*/
+    int numBytes = (width + padSize + padSize) * sizeof( Pel );
+    ptrTemp1 = (dst - padSize);
+    ptrTemp2 = (dst + (dstStride * (height - 1)) - padSize);
+    for( int i = 1; i <= padSize; i++ )
+    {
+      memcpy( ptrTemp1 - (i * dstStride), (ptrTemp1), numBytes );
+      memcpy( ptrTemp2 + (i * dstStride), (ptrTemp2), numBytes );
+    }
+  }
+}
+
+#if ENABLE_SIMD_OPT_BDOF
+template<X86_VEXT vext>
 void InterPredInterpolation::_initInterPredictionX86()
 {
   xFpBiDirOptFlow     = BiOptFlowCoreSIMD<vext>;
   xFpBDOFGradFilter   = gradFilter_SSE<vext>;
   xFpProfGradFilter   = gradFilter_SSE<vext, false>;
   xFpApplyPROF        = applyPROF_SSE<vext>;
+  xFpPadDmvr          = padDmvr_SSE<vext>;
 }
 template void InterPredInterpolation::_initInterPredictionX86<SIMDX86>();
 
+#endif
 } // namespace vvenc
 
 //! \}

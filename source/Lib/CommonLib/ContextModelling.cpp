@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -61,7 +57,7 @@ namespace vvenc {
 
 static const int prefix_ctx[7]  = { 0, 0, 0, 3, 6, 10, 15 };
 
-CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm )
+CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf )
   : m_compID                    (component)
   , m_chType                    (toChannelType(m_compID))
   , m_width                     (tu.block(m_compID).width)
@@ -76,11 +72,9 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_log2BlockHeight           (Log2(m_height))
   , m_maxNumCoeff               (m_width * m_height)
   , m_signHiding                (signHide)
-  , m_extendedPrecision         (tu.cs->sps->spsRExt.extendedPrecisionProcessing)
   , m_maxLog2TrDynamicRange     (tu.cs->sps->getMaxLog2TrDynamicRange(m_chType))
-  , m_scanType                  (SCAN_DIAG)
-  , m_scan                      (g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, m_scanType, m_log2BlockWidth, m_log2BlockHeight ))
-  , m_scanCG                    (g_scanOrderRom.getScanOrder( SCAN_UNGROUPED  , m_scanType, Log2(m_widthInGroups), Log2(m_heightInGroups)))
+  , m_scan                      (getScanOrder( SCAN_GROUPED_4x4, m_log2BlockWidth, m_log2BlockHeight ))
+  , m_scanCG                    (getScanOrder( SCAN_UNGROUPED  , Log2(m_widthInGroups), Log2(m_heightInGroups)))
   , m_CtxSetLastX               (Ctx::LastX[m_chType])
   , m_CtxSetLastY               (Ctx::LastY[m_chType])
   , m_maxLastPosX               (g_uiGroupIdx[std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_width) - 1])
@@ -89,7 +83,6 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_lastOffsetY               ((m_chType == CH_C) ? 0 :prefix_ctx[ m_log2BlockHeight ])
   , m_lastShiftX                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_width >> 3) )  : (m_log2BlockWidth + 1) >> 2)
   , m_lastShiftY                ((m_chType == CH_C) ? Clip3( 0, 2, int( m_height >> 3) ) : (m_log2BlockHeight + 1) >> 2)
-//  , m_TrafoBypass               (tu.cs->sps->spsRExt.transformSkipContextEnabled &&  (tu.cu->transQuantBypass || tu.mtsIdx[compId]==MTS_SKIP))
   , m_scanPosLast               (-1)
   , m_subSetId                  (-1)
   , m_subSetPos                 (-1)
@@ -111,7 +104,10 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_tsSignFlagCtxSet          (Ctx::TsResidualSign)
   , m_sigCoeffGroupFlag         ()
   , m_bdpcm                     (bdpcm)
+  , m_tplBuf                    (tplBuf + m_width * m_height - 1)
 {
+  if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
+    memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );
 }
 
 void CoeffCodingContext::initSubblock( int SubsetId, bool sigGroupFlag )
@@ -234,23 +230,27 @@ void DeriveCtx::CtxSplit( const Partitioner& partitioner, unsigned& ctxSpl, unsi
 void MergeCtx::setMergeInfo( CodingUnit& cu, int candIdx ) const
 {
   CHECK( candIdx >= numValidMergeCand, "Merge candidate does not exist" );
-  cu.regularMergeFlag        = !(cu.ciip || cu.geo);
-  cu.mergeFlag               = true;
-  cu.mmvdMergeFlag = false;
-  cu.interDir                = interDirNeighbours[candIdx];
-  cu.imv = (!cu.geo && useAltHpelIf[candIdx]) ? IMV_HPEL : 0;
-  cu.mergeIdx                = candIdx;
-  cu.mergeType               = mrgTypeNeighbours[candIdx];
-  cu.mv     [REF_PIC_LIST_0] = mvFieldNeighbours[(candIdx << 1) + 0].mv;
-  cu.mv     [REF_PIC_LIST_1] = mvFieldNeighbours[(candIdx << 1) + 1].mv;
-  cu.mvd    [REF_PIC_LIST_0] = Mv();
-  cu.mvd    [REF_PIC_LIST_1] = Mv();
-  cu.refIdx [REF_PIC_LIST_0] = mvFieldNeighbours[( candIdx << 1 ) + 0].refIdx;
-  cu.refIdx [REF_PIC_LIST_1] = mvFieldNeighbours[( candIdx << 1 ) + 1].refIdx;
-  cu.mvpIdx [REF_PIC_LIST_0] = NOT_VALID;
-  cu.mvpIdx [REF_PIC_LIST_1] = NOT_VALID;
-  cu.mvpNum [REF_PIC_LIST_0] = NOT_VALID;
-  cu.mvpNum [REF_PIC_LIST_1] = NOT_VALID;
+  cu.regularMergeFlag           = !(cu.ciip || cu.geo);
+  cu.mergeFlag                  = true;
+  cu.mmvdMergeFlag              = false;
+  cu.interDir                   = interDirNeighbours[candIdx];
+  cu.imv                        = (!cu.geo && useAltHpelIf[candIdx]) ? IMV_HPEL : 0;
+  cu.mergeIdx                   = candIdx;
+  cu.mergeType                  = mrgTypeNeighbours[candIdx];
+  cu.mv     [REF_PIC_LIST_0][0] = mvFieldNeighbours[(candIdx << 1) + 0].mv;
+  cu.mv     [REF_PIC_LIST_1][0] = mvFieldNeighbours[(candIdx << 1) + 1].mv;
+  cu.mvd    [REF_PIC_LIST_0][0] = Mv();
+  cu.mvd    [REF_PIC_LIST_1][0] = Mv();
+  cu.refIdx [REF_PIC_LIST_0]    = mvFieldNeighbours[( candIdx << 1 ) + 0].refIdx;
+  cu.refIdx [REF_PIC_LIST_1]    = mvFieldNeighbours[( candIdx << 1 ) + 1].refIdx;
+  cu.mvpIdx [REF_PIC_LIST_0]    = NOT_VALID;
+  cu.mvpIdx [REF_PIC_LIST_1]    = NOT_VALID;
+  cu.mvpNum [REF_PIC_LIST_0]    = NOT_VALID;
+  cu.mvpNum [REF_PIC_LIST_1]    = NOT_VALID;
+  if( CU::isIBC( cu ) )
+  {
+    cu.imv  = cu.imv == IMV_HPEL ? 0 : cu.imv;
+  }
   cu.BcwIdx = ( interDirNeighbours[candIdx] == 3 ) ? BcwIdx[candIdx] : BCW_DEFAULT;
 
   CU::restrictBiPredMergeCandsOne(cu);
@@ -350,9 +350,9 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
     }
 
     cu.interDir = 3;
-    cu.mv[REF_PIC_LIST_0] = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
+    cu.mv[REF_PIC_LIST_0][0]  = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
     cu.refIdx[REF_PIC_LIST_0] = refList0;
-    cu.mv[REF_PIC_LIST_1] = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
+    cu.mv[REF_PIC_LIST_1][0]  = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
     cu.refIdx[REF_PIC_LIST_1] = refList1;
   }
   else if (refList0 != -1)
@@ -374,9 +374,9 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
       tempMv[0] = Mv(0, -offset);
     }
     cu.interDir = 1;
-    cu.mv[REF_PIC_LIST_0] = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
+    cu.mv[REF_PIC_LIST_0][0]  = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
     cu.refIdx[REF_PIC_LIST_0] = refList0;
-    cu.mv[REF_PIC_LIST_1] = Mv(0, 0);
+    cu.mv[REF_PIC_LIST_1][0]  = Mv(0, 0);
     cu.refIdx[REF_PIC_LIST_1] = -1;
   }
   else if (refList1 != -1)
@@ -398,25 +398,25 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
       tempMv[1] = Mv(0, -offset);
     }
     cu.interDir = 2;
-    cu.mv[REF_PIC_LIST_0] = Mv(0, 0);
+    cu.mv[REF_PIC_LIST_0][0]  = Mv(0, 0);
     cu.refIdx[REF_PIC_LIST_0] = -1;
-    cu.mv[REF_PIC_LIST_1] = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
+    cu.mv[REF_PIC_LIST_1][0]  = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
     cu.refIdx[REF_PIC_LIST_1] = refList1;
   }
 
-  cu.mmvdMergeFlag = true;
-  cu.mmvdMergeIdx = candIdx;
-  cu.mergeFlag = true;
-  cu.regularMergeFlag = true;
-  cu.mergeIdx = candIdx;
-  cu.mergeType = MRG_TYPE_DEFAULT_N;
-  cu.mvd[REF_PIC_LIST_0] = Mv();
-  cu.mvd[REF_PIC_LIST_1] = Mv();
+  cu.mmvdMergeFlag          = true;
+  cu.mmvdMergeIdx           = candIdx;
+  cu.mergeFlag              = true;
+  cu.regularMergeFlag       = true;
+  cu.mergeIdx               = candIdx;
+  cu.mergeType              = MRG_TYPE_DEFAULT_N;
+  cu.mvd[REF_PIC_LIST_0][0] = Mv();
+  cu.mvd[REF_PIC_LIST_1][0] = Mv();
   cu.mvpIdx[REF_PIC_LIST_0] = NOT_VALID;
   cu.mvpIdx[REF_PIC_LIST_1] = NOT_VALID;
   cu.mvpNum[REF_PIC_LIST_0] = NOT_VALID;
   cu.mvpNum[REF_PIC_LIST_1] = NOT_VALID;
-  cu.imv = mmvdUseAltHpelIf[fPosBaseIdx] ? IMV_HPEL : 0;
+  cu.imv                    = mmvdUseAltHpelIf[fPosBaseIdx] ? IMV_HPEL : 0;
 
   cu.BcwIdx = (interDirNeighbours[fPosBaseIdx] == 3) ? BcwIdx[fPosBaseIdx] : BCW_DEFAULT;
 
@@ -424,7 +424,7 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
   {
     if (cu.refIdx[refList] >= 0)
     {
-      cu.mv[refList].clipToStorageBitDepth();
+      cu.mv[refList][0].clipToStorageBitDepth();
     }
   }
 

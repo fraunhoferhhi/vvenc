@@ -1,46 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
 
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /** \file     AdaptiveLoopFilter.h
@@ -105,9 +100,9 @@ public:
   void        reconstructCoeffAPSs    ( CodingStructure& cs, bool luma, bool chroma, bool isRdo);
   void        reconstructCoeff        ( AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo = false);
   void        ALFProcess              ( CodingStructure& cs);
-  void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH] );
+  void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int inputBitDepth[MAX_NUM_CH] );
   void        destroy                 ();
-  static void deriveClassificationBlk ( AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS],
+  static void deriveClassificationBlk ( AlfClassifier *classifier,
                                        const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift,
                                        const int vbCTUHeight, int vbPos);
   void        deriveClassification    ( AlfClassifier* classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk );
@@ -121,16 +116,10 @@ public:
                                        const Area& blkDst, const Area& blk, const ComponentID compId, const short *filterSet,
                                        const short *fClipSet, const ClpRng &clpRng, const CodingStructure &cs, const int vbCTUHeight,
                                        int vbPos);
-  void (*m_deriveClassificationBlk) ( AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS], const CPelBuf& srcLuma,
-                                      const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight,
-                                      int vbPos);
+  void (*m_deriveClassificationBlk) ( AlfClassifier *classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight, int vbPos);
   void (*m_filterCcAlf)             ( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const Area &blkDst, const Area &blkSrc,
                                       const ComponentID compId, const int16_t *filterCoeff, const ClpRngs &clpRngs,
                                       CodingStructure &cs, int vbCTUHeight, int vbPos);
-  void applyCcAlfFilter             ( CodingStructure &cs, ComponentID compID, const PelBuf &dstBuf, const PelUnitBuf &recYuvExt,
-                                      uint8_t *   filterControl,
-                                      const short filterSet[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF],
-                                      const int   selectedFilterIdx);
   CcAlfFilterParam &getCcAlfFilterParam() { return m_ccAlfFilterParam; }
   uint8_t* getCcAlfControlIdc       ( const ComponentID compID)   { return m_ccAlfFilterControl[compID-1]; }
   void (*m_filter5x5Blk[2])         ( const AlfClassifier *classifier, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc,
@@ -158,16 +147,15 @@ protected:
   short                        m_clippApsLuma[ALF_CTB_MAX_NUM_APS][MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_CLASSES];
   short                        m_clipDefault[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   bool                         m_created = false;
-  short                        m_chromaCoeffFinal[MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
+  short                        m_chromaCoeffFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   AlfParam*                    m_alfParamChroma;
   Pel                          m_alfClippingValues[MAX_NUM_CH][MaxAlfNumClippingValues];
-  std::vector<AlfFilterShape>  m_filterShapesCcAlf[2];
-  std::vector<AlfFilterShape>  m_filterShapes[MAX_NUM_CH];
+  AlfFilterShape               m_filterShapesCcAlf[2];
+  AlfFilterShape               m_filterShapes[MAX_NUM_CH];
   AlfClassifier*               m_classifier;
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
-  short                        m_chromaClippFinal[MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
-  int**                        m_laplacian[NUM_DIRECTIONS];
+  short                        m_chromaClippFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   uint8_t*                     m_ctuEnableFlag[MAX_NUM_COMP];
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];
   PelStorage                   m_tempBuf;
@@ -177,10 +165,9 @@ protected:
   int                          m_picHeight;
   int                          m_maxCUWidth;
   int                          m_maxCUHeight;
-  int                          m_maxCUDepth;
-  int                          m_numCTUsInWidth;
-  int                          m_numCTUsInHeight;
-  int                          m_numCTUsInPic;
+  uint32_t                     m_numCTUsInWidth;
+  uint32_t                     m_numCTUsInHeight;
+  uint32_t                     m_numCTUsInPic;
   int                          m_alfVBLumaPos;
   int                          m_alfVBChmaPos;
   int                          m_alfVBLumaCTUHeight;

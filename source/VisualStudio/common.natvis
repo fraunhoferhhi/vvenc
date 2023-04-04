@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
-  <Type Name="VVCEncoderLib::Area">
+  <Type Name="vvenc::Picture">
+    <DisplayString>{{poc={poc}, TID={TLayer}, Rec{isReconstructed}, Ref{isReferenced}, RC{refCounter}, F{isFinished}, NFO{isNeededForOutput}  }</DisplayString>
+    <DisplayString>{{poc = {poc}, TID={TLayer}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
+  </Type>
+  <Type Name="vvenc::Area">
     <DisplayString>{{x = {x}, y = {y}, width = {width}, height = {height}}}</DisplayString>
   </Type>
 
-  <Type Name="VVCEncoderLib::CompArea">
+  <Type Name="vvenc::CompArea">
     <DisplayString Condition="compID == COMP_Y">{{(Y) x = {x}, y = {y}, width = {width}, height = {height}}}</DisplayString>
     <DisplayString Condition="compID == COMP_Cb">{{(Cb) x = {x}, y = {y}, width = {width}, height = {height}}}</DisplayString>
     <DisplayString Condition="compID == COMP_Cr">{{(Cr) x = {x}, y = {y}, width = {width}, height = {height}}}</DisplayString>
     <DisplayString Condition="compID >= MAX_NUM_COMP">invalid</DisplayString>
   </Type>
 
-  <Type Name="VVCEncoderLib::UnitArea">
+  <Type Name="vvenc::UnitArea">
     <DisplayString Condition="blocks._size > 0 &amp;&amp; ((CompArea*) blocks._arr)->width > 0">{{x = {((CompArea*) blocks._arr)->x}, y = {((CompArea*) blocks._arr)->y}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
     <DisplayString Condition="blocks._size > 1 &amp;&amp; ((CompArea*) blocks._arr)->width == 0">{{(chroma) x = {((CompArea*) blocks._arr)[1].x}, y = {((CompArea*) blocks._arr)[1].y}, width = {((CompArea*) blocks._arr)[1].width}, height = {((CompArea*) blocks._arr)[1].height}}}</DisplayString>
     <DisplayString Condition="blocks._size == 0">{{empty}}</DisplayString>
@@ -39,16 +43,16 @@
     </Expand>
   </Type>
 
-  <Type Name="VVCEncoderLib::AreaBuf&lt;*&gt;">
+  <Type Name="vvenc::AreaBuf&lt;*&gt;">
     <DisplayString>{{width = {width}, heigth = {height}, stride = {stride}}}</DisplayString>
   </Type>
 
-  <Type Name="VVCEncoderLib::CodingUnit">
+  <Type Name="vvenc::CodingUnit">
     <DisplayString Condition="blocks._size > 0 &amp;&amp; ((CompArea*) blocks._arr)->width > 0">{{CU: x = {((CompArea*) blocks._arr)->x}, y = {((CompArea*) blocks._arr)->y}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
     <DisplayString Condition="blocks._size > 1 &amp;&amp; ((CompArea*) blocks._arr)->width == 0">{{(chroma) CU: x = {((CompArea*) blocks._arr)[1].x}, y = {((CompArea*) blocks._arr)[1].y}, width = {((CompArea*) blocks._arr)[1].width}, height = {((CompArea*) blocks._arr)[1].height}}}</DisplayString>
     <DisplayString Condition="blocks._size == 0">{{empty CU}}</DisplayString>
   </Type>
-  <Type Name="VVCEncoderLib::TransformUnit">
+  <Type Name="vvenc::TransformUnit">
     <DisplayString Condition="blocks._size > 0 &amp;&amp; ((CompArea*) blocks._arr)->width > 0">{{TU: x = {((CompArea*) blocks._arr)->x}, y = {((CompArea*) blocks._arr)->y}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
     <DisplayString Condition="blocks._size > 1 &amp;&amp; ((CompArea*) blocks._arr)->width == 0">{{(chroma) TU: x = {((CompArea*) blocks._arr)[1].x}, y = {((CompArea*) blocks._arr)[1].y}, width = {((CompArea*) blocks._arr)[1].width}, height = {((CompArea*) blocks._arr)[1].height}}}</DisplayString>
     <DisplayString Condition="blocks._size == 0">{{empty TU}}</DisplayString>

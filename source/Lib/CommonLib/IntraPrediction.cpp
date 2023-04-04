@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -105,14 +101,14 @@ void xPredIntraPlanar_Core( PelBuf& pDst, const CPelBuf& pSrc )
   int bottomLeft = leftColumn[height];
   int topRight = topRow[width];
 
+  // with some optimizations gcc-8 gives spurious "-Wmaybe-uninitialized" warnings here (says leftColumn or topRow would be uninitialized here)
+  GCC_WARNING_DISABLE_maybe_uninitialized
   for( int k = 0; k < width; k++ )
   {
     bottomRow[k] = bottomLeft - topRow[k];
     topRow[k]    = topRow[k] << log2H;
   }
 
-  // with some optimizations gcc-8 gives spurious "-Wmaybe-uninitialized" warnings here (says leftColumn would be uninitialized here)
-  GCC_WARNING_DISABLE_maybe_uninitialized
   for( int k = 0; k < height; k++ )
   {
     rightColumn[k] = topRight - leftColumn[k];
@@ -283,7 +279,7 @@ void IntraPrediction::init(ChromaFormat chromaFormatIDC, const unsigned bitDepth
   {
     m_pMdlmTemp = new Pel[(2 * MAX_TB_SIZEY + 1)*(2 * MAX_TB_SIZEY + 1)];//MDLM will use top-above and left-below samples.
   }
-#if   ENABLE_SIMD_OPT_INTRAPRED
+#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_X86 )
   initIntraPredictionX86();
 #endif
 
@@ -352,7 +348,6 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   const ChannelType    channelType  = toChannelType( compID );
   const uint32_t       uiDirMode = cu.bdpcmM[channelType] ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
 
-  CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
 
 //  const int multiRefIdx = m_ipaParam.multiRefIndex;
@@ -455,8 +450,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 
   // high level conditions and DC intra prediction
-  if(   sps.spsRExt.intraSmoothingDisabled
-    || !isLuma( chType )
+  if( !isLuma( chType )
     || useISP
     || CU::isMIP( cu, chType ) //th remove this
     || m_ipaParam.multiRefIndex
@@ -493,8 +487,13 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 }
 
-#include "CommonDefX86.h"
+}   // namespace vvenc
 
+#ifdef TARGET_SIMD_X86
+#include "x86/CommonDefX86.h"
+#endif
+
+namespace vvenc {
 
 /** Function for deriving the simplified angular intra predictions.
 *
@@ -761,9 +760,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
   const int predStride = predSize + 1 + multiRefIdx;
   m_refBufferStride[area.compID] = predStride;
 
-  const bool noShift            = pcv.noChroma2x2 && area.width == 4; // don't shift on the lowest level (chroma not-split)
-  const int  unitWidth          = tuWidth  <= 2 && cu.ispMode && isLuma(area.compID) ? tuWidth  : pcv.minCUSize >> (noShift ? 0 : getComponentScaleX(area.compID, sps.chromaFormatIdc));
-  const int  unitHeight         = tuHeight <= 2 && cu.ispMode && isLuma(area.compID) ? tuHeight : pcv.minCUSize >> (noShift ? 0 : getComponentScaleY(area.compID, sps.chromaFormatIdc));
+  const int  unitWidth          = tuWidth  <= 2 && cu.ispMode && isLuma(area.compID) ? tuWidth  : pcv.minCUSize >> getComponentScaleX(area.compID, sps.chromaFormatIdc);
+  const int  unitHeight         = tuHeight <= 2 && cu.ispMode && isLuma(area.compID) ? tuHeight : pcv.minCUSize >> getComponentScaleY(area.compID, sps.chromaFormatIdc);
 
   const int  totalAboveUnits    = (predSize + (unitWidth - 1)) / unitWidth;
   const int  totalLeftUnits     = (predHSize + (unitHeight - 1)) / unitHeight;
@@ -1565,7 +1563,7 @@ void IntraPrediction::xGetLMParameters(const CodingUnit& cu, const ComponentID c
       int v = DivSigTable[normDiff] | 8;
       x += normDiff != 0;
 
-      int y = floorLog2( abs( diffC ) ) + 1;
+      int y = diffC == 0 ? 0 : floorLog2( abs( diffC ) ) + 1;
       int add = 1 << y >> 1;
       a = (diffC * v + add) >> y;
       iShift = 3 + x - y;

@@ -1,49 +1,44 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-
 
 /*
  * \ingroup CommonLib
@@ -53,79 +48,130 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefX86.h"
 
-#include <sstream>
 #include <map>
-#include <iostream>
-#include <stdint.h>
-#include <string>
+#include <cstdint>
+#include "CommonLib/CommonDef.h"
 
-#if defined( _WIN32 ) && !defined( __MINGW32__ )
-#include <intrin.h>
-#else
-#include <cpuid.h>
+
+#ifdef REAL_TARGET_X86
+# if defined( _WIN32 ) && !defined( __MINGW32__ )
+#  include <intrin.h>
+# else
+#  include <x86intrin.h>  // needed for _xgetbv, which is not provided by simd-everywhere
+#  include <cpuid.h>
+# endif
 #endif
 
 #ifdef TARGET_SIMD_X86
 
-//! \ingroup CommonLib
-//! \{
+namespace vvenc
+{
 
-namespace vvenc {
+#  if REAL_TARGET_X86
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SSE41, "SSE41" }, { SSE42, "SSE42" }, { AVX, "AVX" }, { AVX2, "AVX2" }, { AVX512, "AVX512" } };
+#  else   // !REAL_TARGET_X86
+#    if defined( REAL_TARGET_ARM )
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "NEON" } };
+#    elif defined( REAL_TARGET_WASM )
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "WASM" } };
+#    else
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "SIMDE" } };
+#    endif
+#  endif   // !REAL_TARGET_X86
 
-#if __GNUC__ // valid for GCC and clang
-#define NO_USE_SIMD __attribute__((optimize("no-tree-vectorize")))
+const std::string& vext_to_string( X86_VEXT vext )
+{
+  try
+  {
+    return vext_names.at( vext );
+  }
+  catch( std::out_of_range& )
+  {
+    THROW( "Invalid SIMD extension value " << vext );
+  }
+}
+
+X86_VEXT string_to_vext( const std::string& ext_name )
+{
+  if( ext_name.empty() )
+  {
+    return UNDEFINED;
+  }
+
+  for( auto& it: vext_names )
+  {
+    if( it.second == ext_name )
+    {
+      return it.first;
+    }
+  }
+
+  THROW( "Invalid SIMD Mode string: \"" << ext_name << "\"" );
+}
+
+#if __GNUC__   // valid for GCC and clang
+# define NO_OPT_SIMD __attribute__( ( optimize( "no-tree-vectorize" ) ) )
 #else
-#define NO_USE_SIMD
+# define NO_OPT_SIMD
 #endif
 
+#ifdef REAL_TARGET_X86
 
-#if defined ( __MINGW32__ ) && !defined (  __MINGW64__ )
+#if defined( __MINGW32__ ) && !defined( __MINGW64__ )
 # define SIMD_UP_TO_SSE42 1
 #else
 # define SIMD_UP_TO_SSE42 0
 #endif
 
+
 /* use __cpuid for windows or inline assembler for gcc and clang */
 #if defined( _WIN32 ) && !defined( __MINGW32__ )
-#define do_cpuid    __cpuid
-#define do_cpuidex  __cpuidex
-#else
-void do_cpuid(int CPUInfo[4], int InfoType)
+# define doCpuid   __cpuid
+# define doCpuidex __cpuidex
+#else   // !_WIN32
+static inline void doCpuid( int CPUInfo[4], int InfoType )
 {
-    __get_cpuid( (unsigned)InfoType, (unsigned*)&CPUInfo[0], (unsigned*)&CPUInfo[1], (unsigned*)&CPUInfo[2], (unsigned*)&CPUInfo[3] );
+  __get_cpuid( (unsigned) InfoType, (unsigned*) &CPUInfo[0], (unsigned*) &CPUInfo[1], (unsigned*) &CPUInfo[2], (unsigned*) &CPUInfo[3] );
 }
-#if !SIMD_UP_TO_SSE42
-#define do_cpuidex(cd, v0, v1) __cpuid_count(v0, v1, cd[0], cd[1], cd[2], cd[3])
-#endif
-#endif
+# if !SIMD_UP_TO_SSE42
+static inline void doCpuidex( int CPUInfo[4], int InfoType0, int InfoType1 )
+{
+  __cpuid_count( InfoType0, InfoType1, CPUInfo[0], CPUInfo[1], CPUInfo[2], CPUInfo[3] );
+}
+# endif  // !SIMD_UP_TO_SSE42
+#endif  // !_WIN32
 
-static inline int64_t xgetbv (int ctr) {
-#if (defined (_MSC_FULL_VER) && _MSC_FULL_VER >= 160040000) || (defined (__INTEL_COMPILER) && __INTEL_COMPILER >= 1200) // Microsoft or Intel compiler supporting _xgetbv intrinsic
+static inline int64_t xgetbv( int ctr )
+{
+#if( defined( _MSC_FULL_VER ) && _MSC_FULL_VER >= 160040000 )    \
+  || ( defined( __INTEL_COMPILER ) && __INTEL_COMPILER >= 1200 ) \
+  || GCC_VERSION_AT_LEAST( 8, 0 )                                \
+  || CLANG_VERSION_AT_LEAST( 9, 0 )   // Microsoft, Intel, newer GCC or newer Clang compiler supporting _xgetbv intrinsic
 
-    return _xgetbv(ctr);                                   // intrinsic function for XGETBV
+  return _xgetbv( ctr );   // intrinsic function for XGETBV
 
-#elif defined(__GNUC__)                                    // use inline assembly, Gnu/AT&T syntax
+#elif defined( __GNUC__ )   // use inline assembly, Gnu/AT&T syntax
 
-   uint32_t a, d;
-#if GCC_VERSION_AT_LEAST(4,4) || CLANG_VERSION_AT_LEAST(3,3)
-   __asm("xgetbv" : "=a"(a),"=d"(d) : "c"(ctr) : );
+  uint32_t a, d;
+#if GCC_VERSION_AT_LEAST( 4, 4 ) || CLANG_VERSION_AT_LEAST( 3, 3 )
+  __asm( "xgetbv" : "=a"( a ), "=d"( d ) : "c"( ctr ) : );
 #else
-   __asm(".byte 0x0f, 0x01, 0xd0" : "=a"(a),"=d"(d) : "c"(ctr) : );
+  __asm( ".byte 0x0f, 0x01, 0xd0" : "=a"( a ), "=d"( d ) : "c"( ctr ) : );
 #endif
-   return a | (uint64_t(d) << 32);
+  return a | ( uint64_t( d ) << 32 );
 
 #else  // #elif defined (_MSC_FULL_VER) || (defined (__INTEL_COMPILER)...) // other compiler. try inline assembly with masm/intel/MS syntax
 
-   uint32_t a, d;
-    __asm {
+  uint32_t a, d;
+  __asm {
         mov ecx, ctr
         _emit 0x0f
         _emit 0x01
         _emit 0xd0 ; // xgetbv
         mov a, eax
         mov d, edx
-    }
-   return a | (uint64_t(d) << 32);
+  }
+  return a | ( uint64_t( d ) << 32 );
 
 #endif
 }
@@ -150,102 +196,102 @@ static inline int64_t xgetbv (int ctr) {
 #define BIT_HAS_X64                    (1 << 29)
 #define BIT_HAS_XOP                    (1 << 11)
 
-
 /**
  * \brief Read instruction set extension support flags from CPU register;
  */
-NO_USE_SIMD
-X86_VEXT _get_x86_extensions()
+NO_OPT_SIMD
+static X86_VEXT _get_x86_extensions()
 {
-    int regs[4] = {0, 0, 0, 0};
-    X86_VEXT ext;
-    ext = SCALAR;
+  int      regs[4] = { 0, 0, 0, 0 };
+  X86_VEXT ext;
+  ext = SCALAR;
 
-    do_cpuid( regs, 0 );
-    if( regs[0] == 0 ) return ext;
-    do_cpuid( regs, 1 );
-    if (!(regs[2] & BIT_HAS_SSE41)) return ext;
-    ext = SSE41;
-    if (!(regs[2] & BIT_HAS_SSE42)) return ext;
-    ext = SSE42;
-#if !SIMD_UP_TO_SSE42
-    do_cpuidex( regs, 1, 1 );
-    if (!((regs[2] & BIT_HAS_AVX) == BIT_HAS_AVX ))   return ext; // first check if the cpu supports avx
-    if ((xgetbv(0) & 6) != 6)       return ext; // then see if the os uses YMM state management via XSAVE etc...
-    ext = AVX;
-// #ifdef USE_AVX2
-    do_cpuidex( regs, 7, 0 );
-    if (!(regs[1] & BIT_HAS_AVX2))  return ext;
-    ext = AVX2;
-// #endif
-#ifdef USE_AVX512
-    if ((xgetbv(0) & 0xE0) != 0xE0) return ext; // see if OPMASK state and ZMM are availabe and enabled
-    do_cpuidex( regs, 7, 0 );
-    if (!(regs[1] & BIT_HAS_AVX512F ))  return ext;
-    if (!(regs[1] & BIT_HAS_AVX512DQ))  return ext;
-    if (!(regs[1] & BIT_HAS_AVX512BW))  return ext;
-    ext = AVX512;
-#endif
-#endif
-
+  doCpuid( regs, 0 );
+  if( regs[0] == 0 )
     return ext;
+
+  doCpuid( regs, 1 );
+  if( !( regs[2] & BIT_HAS_SSE41 ) )
+    return ext;
+  ext = SSE41;
+
+  if( !( regs[2] & BIT_HAS_SSE42 ) )
+    return ext;
+  ext = SSE42;
+
+#  if SIMD_UP_TO_SSE42
+  return ext;
+#  else   //  !SIMD_UP_TO_SSE42
+
+  doCpuidex( regs, 1, 1 );
+  if( !( ( regs[2] & BIT_HAS_AVX ) == BIT_HAS_AVX ) )
+    return ext;   // first check if the cpu supports avx
+  if( ( xgetbv( 0 ) & 6 ) != 6 )
+    return ext;   // then see if the os uses YMM state management via XSAVE etc...
+#    ifndef _WIN32
+  // don't detect AVX, as there are problems with MSVC production illegal ops for AVX
+  ext = AVX;
+#    endif
+
+// #ifdef USE_AVX2
+  doCpuidex( regs, 7, 0 );
+  if( !( regs[1] & BIT_HAS_AVX2 ) )
+    return ext;
+  ext = AVX2;
+// #endif
+
+#    ifdef USE_AVX512
+  if( ( xgetbv( 0 ) & 0xE0 ) != 0xE0 )
+    return ext;   // see if OPMASK state and ZMM are availabe and enabled
+  doCpuidex( regs, 7, 0 );
+  if( !( regs[1] & BIT_HAS_AVX512F ) )
+    return ext;
+  if( !( regs[1] & BIT_HAS_AVX512DQ ) )
+    return ext;
+  if( !( regs[1] & BIT_HAS_AVX512BW ) )
+    return ext;
+  ext = AVX512;
+#    endif   //  USE_AVX512
+#  endif     // !SIMD_UP_TO_SSE42
+
+  return ext;
 }
 
-typedef std::map<std::string, X86_VEXT> translate;
-const static translate m
-{ { "SCALAR", SCALAR },{ "SSE41", SSE41 },{ "SSE42", SSE42 },
-  { "AVX", AVX },{ "AVX2", AVX2 },{ "AVX512", AVX512 } };
+#endif   // REAL_TARGET_X86
 
-NO_USE_SIMD
-X86_VEXT read_x86_extension_flags(const std::string &extStrId)
+NO_OPT_SIMD
+X86_VEXT read_x86_extension_flags( X86_VEXT request )
 {
-  //static std::atomic<bool> b_detection_finished(false);
-  static bool b_detection_finished( false );
-  static X86_VEXT ext_flags = SCALAR;
+#ifdef REAL_TARGET_X86
+  static const X86_VEXT max_supported = _get_x86_extensions();
+  static X86_VEXT       ext_flags     = max_supported;
+#else
+  static const X86_VEXT max_supported = AVX;                               // disable AVX2 for non-x86 because the SIMD-Everywhere implementation is buggy
+  static X86_VEXT       ext_flags     = SIMD_EVERYWHERE_EXTENSION_LEVEL;   // default to SSE42 for WASM and SIMD-everywhere
+#endif
 
+  if( request != UNDEFINED )
   {
-    if( !b_detection_finished )
+    if( request > max_supported )
     {
-      if( !extStrId.empty() )
-      {
-        translate::const_iterator search = m.find( extStrId );
-        if( search != m.end() )
-        {
-          ext_flags = search->second;
-        }
-        else
-        {
-          EXIT( "Mode not supported: " << ext_flags << "\n" );
-        }
-      }
-      else
-      {
-        ext_flags = _get_x86_extensions();
-      }
-
-      b_detection_finished = true;
+#ifdef REAL_TARGET_X86
+      THROW( "requested SIMD level (" << request << ") not supported by current CPU (max " << max_supported << ")." );
+#else
+      THROW( "requested SIMD level (" << request << ") not supported because the SIMD-Everywhere implementation for AVX2 is buggy." );
+#endif
     }
+
+    ext_flags = request;
   }
 
   return ext_flags;
 }
 
-const char* read_x86_extension(const std::string &extStrId)
+const std::string& read_x86_extension_name()
 {
-  static const char extension_not_available[] = "NA";
-
-  X86_VEXT vext = read_x86_extension_flags(extStrId);
-
-  for( translate::const_iterator it = m.begin(); it != m.end(); ++it )
-    if( it->second == vext )
-      return it->first.c_str();
-
-  return extension_not_available;
+  return vext_to_string( read_x86_extension_flags() );
 }
 
-} // namespace vvenc
-
-//! \}
+}   // namespace vvenc
 
 #endif // TARGET_SIMD_X86
-

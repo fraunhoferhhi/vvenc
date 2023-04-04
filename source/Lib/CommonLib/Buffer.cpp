@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -142,6 +138,37 @@ void addAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T
 
 #undef ADD_AVG_CORE_OP
 #undef ADD_AVG_CORE_INC
+}
+
+template<typename T>
+void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T* dest, int destStride, int width, int height, unsigned rshift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+#define ADD_WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src1[ADDR]*w0 + src2[ADDR]*w1 + offset ), rshift ), clpRng )
+#define ADD_WGHT_AVG_INC     \
+    src1 += src1Stride; \
+    src2 += src2Stride; \
+    dest += destStride; \
+
+  SIZE_AWARE_PER_EL_OP( ADD_WGHT_AVG_OP, ADD_WGHT_AVG_INC );
+
+#undef ADD_WGHT_AVG_OP
+#undef ADD_WGHT_AVG_INC
+}
+
+template<typename T>
+void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* dest, int destStride, int width, int height )
+{
+#define SUBS_INC                \
+  dest += destStride;  \
+  src0 += src0Stride;  \
+  src1 += src1Stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = src0[ADDR] - src1[ADDR]
+
+  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
 }
 
 void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
@@ -277,32 +304,6 @@ void copyBufferCore( const char* src, int srcStride, char* dst, int dstStride, i
   }
 }
 
-void paddingCore(Pel* ptr, int stride, int width, int height, int padSize)
-{
-  /*left and right padding*/
-  Pel* ptrTemp1 = ptr;
-  Pel* ptrTemp2 = ptr + (width - 1);
-  int offset = 0;
-  for (int i = 0; i < height; i++)
-  {
-    offset = stride * i;
-    for (int j = 1; j <= padSize; j++)
-    {
-      *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
-      *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
-    }
-  }
-  /*Top and Bottom padding*/
-  int numBytes = (width + padSize + padSize) * sizeof(Pel);
-  ptrTemp1 = (ptr - padSize);
-  ptrTemp2 = (ptr + (stride * (height - 1)) - padSize);
-  for (int i = 1; i <= padSize; i++)
-  {
-    memcpy(ptrTemp1 - (i * stride), (ptrTemp1), numBytes);
-    memcpy(ptrTemp2 + (i * stride), (ptrTemp2), numBytes);
-  }
-}
-
 void applyLutCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
 #define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
@@ -330,6 +331,120 @@ void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int h
   }
 }
 
+uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++) // center cols
+    {
+      const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
+                             - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+      saAct += abs (s);
+    }
+    pSrc += iSrcStride;
+  }
+  return saAct;
+}
+
+uint64_t HDHighPassCore  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride)
+{
+  uint64_t taAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++)  // cnt cols
+    {
+      const int t = (int) pSrc[x] - (int) pSM1[x];
+      taAct += (1 + 3 * abs (t)) >> 1;
+    }
+    pSrc += iSrcStride;
+    pSM1 += iSM1Stride;
+  }
+  return taAct;
+}
+
+uint64_t  HDHighPass2Core  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++)  // cnt cols
+    {
+      const int t = (int) pSrc[x] - 2 * (int) pSM1[x] + (int) pSM2[x];
+      taAct += abs (t);
+    }
+    pSrc += iSrcStride;
+    pSM1 += iSM1Stride;
+    pSM2 += iSM2Stride;
+  }
+  return taAct;
+}
+uint64_t AvgHighPassWithDownsamplingCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+ for (int y = 2; y < height - 2; y += 2)
+ {
+   for (int x = 2; x < width - 2; x += 2)
+   {
+     const int f = 12 * ((int)pSrc[ y   *iSrcStride + x  ] + (int)pSrc[ y   *iSrcStride + x+1] + (int)pSrc[(y+1)*iSrcStride + x  ] + (int)pSrc[(y+1)*iSrcStride + x+1])
+                  - 3 * ((int)pSrc[(y-1)*iSrcStride + x  ] + (int)pSrc[(y-1)*iSrcStride + x+1] + (int)pSrc[(y+2)*iSrcStride + x  ] + (int)pSrc[(y+2)*iSrcStride + x+1])
+                  - 3 * ((int)pSrc[ y   *iSrcStride + x-1] + (int)pSrc[ y   *iSrcStride + x+2] + (int)pSrc[(y+1)*iSrcStride + x-1] + (int)pSrc[(y+1)*iSrcStride + x+2])
+                  - 2 * ((int)pSrc[(y-1)*iSrcStride + x-1] + (int)pSrc[(y-1)*iSrcStride + x+2] + (int)pSrc[(y+2)*iSrcStride + x-1] + (int)pSrc[(y+2)*iSrcStride + x+2])
+                      - ((int)pSrc[(y-2)*iSrcStride + x-1] + (int)pSrc[(y-2)*iSrcStride + x  ] + (int)pSrc[(y-2)*iSrcStride + x+1] + (int)pSrc[(y-2)*iSrcStride + x+2]
+                       + (int)pSrc[(y+3)*iSrcStride + x-1] + (int)pSrc[(y+3)*iSrcStride + x  ] + (int)pSrc[(y+3)*iSrcStride + x+1] + (int)pSrc[(y+3)*iSrcStride + x+2]
+                       + (int)pSrc[(y-1)*iSrcStride + x-2] + (int)pSrc[ y   *iSrcStride + x-2] + (int)pSrc[(y+1)*iSrcStride + x-2] + (int)pSrc[(y+2)*iSrcStride + x-2]
+                       + (int)pSrc[(y-1)*iSrcStride + x+3] + (int)pSrc[ y   *iSrcStride + x+3] + (int)pSrc[(y+1)*iSrcStride + x+3] + (int)pSrc[(y+2)*iSrcStride + x+3]);
+     saAct += (uint64_t) abs(f);
+   }
+ }
+ return saAct;
+}
+uint64_t AvgHighPassWithDownsamplingDiff1stCore (const int width, const int  height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride)
+{
+  uint64_t taAct = 0;
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  pSrcM1-=iSrcM1Stride;
+  pSrcM1-=iSrcM1Stride;
+
+  for (uint32_t y = 2; y < height-2; y += 2)
+  {
+    for (uint32_t x = 2; x < width-2; x += 2)
+    {
+      const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
+                 - ((int)pSrcM1[y*iSrcM1Stride + x] + (int)pSrcM1[y*iSrcM1Stride + x+1] + (int)pSrcM1[(y+1)*iSrcM1Stride + x] + (int)pSrcM1[(y+1)*iSrcM1Stride + x+1]);
+      taAct += (1 + 3 * abs (t)) >> 1;
+    }
+  }
+  return (taAct );
+}
+
+uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int height,const Pel* pSrc,const Pel* pSrcM1,const Pel* pSrcM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  pSrcM1-=iSM1Stride;
+  pSrcM1-=iSM1Stride;
+  pSrcM2-=iSM2Stride;
+  pSrcM2-=iSM2Stride;
+
+  for (uint32_t y = 2; y < height-2; y += 2)
+  {
+    for (uint32_t x = 2; x < width-2; x += 2)
+    {
+      const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
+                            - 2 * ((int)pSrcM1[y*iSM1Stride + x] + (int)pSrcM1[y*iSM1Stride + x+1] + (int)pSrcM1[(y+1)*iSM1Stride + x] + (int)pSrcM1[(y+1)*iSM1Stride + x+1])
+                            + (int)pSrcM2[y*iSM2Stride + x] + (int)pSrcM2[y*iSM2Stride + x+1] + (int)pSrcM2[(y+1)*iSM2Stride + x] + (int)pSrcM2[(y+1)*iSM2Stride + x+1];
+      taAct += (uint64_t) abs(t);
+    }
+  }
+  return (taAct);
+}
+
 PelBufferOps::PelBufferOps()
 {
   isInitX86Done = false;
@@ -343,6 +458,12 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub4              = subsCore<Pel>;
+  sub8              = subsCore<Pel>;
+
+  wghtAvg4          = addWeightedAvgCore<Pel>;
+  wghtAvg8          = addWeightedAvgCore<Pel>;
+
   copyClip4         = copyClipCore<Pel>;
   copyClip8         = copyClipCore<Pel>;
 
@@ -353,11 +474,9 @@ PelBufferOps::PelBufferOps()
   linTf8            = linTfCore<Pel>;
 
   copyBuffer        = copyBufferCore;
-  padding           = paddingCore;
-#if ENABLE_SIMD_OPT_BCW
+
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
-#endif
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
@@ -370,6 +489,12 @@ PelBufferOps::PelBufferOps()
   applyLut          = applyLutCore;
 
   fillPtrMap        = fillMapPtr_Core;
+  AvgHighPassWithDownsampling = AvgHighPassWithDownsamplingCore;
+  AvgHighPass = AvgHighPassCore;
+  AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1stCore;
+  AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
+  HDHighPass = HDHighPassCore;
+  HDHighPass2 = HDHighPass2Core;
 }
 
 PelBufferOps g_pelBufOP = PelBufferOps();
@@ -377,31 +502,41 @@ PelBufferOps g_pelBufOP = PelBufferOps();
 template<>
 void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng, const int8_t BcwIdx)
 {
-  const int8_t w0 = 4;//getBcwWeight(BcwIdx, REF_PIC_LIST_0);
-  const int8_t w1 = 4; //getBcwWeight(BcwIdx, REF_PIC_LIST_1);
-  const int8_t log2WeightBase = 3; //g_BCWLog2WeightBase;
-  //
+  const int8_t w0 = getBcwWeight( BcwIdx, REF_PIC_LIST_0 );
+  const int8_t w1 = getBcwWeight( BcwIdx, REF_PIC_LIST_1 );
+  const int8_t log2WeightBase = g_BcwLog2WeightBase;
   const Pel* src0 = other1.buf;
   const Pel* src2 = other2.buf;
-  Pel* dest = buf;
+        Pel* dest =        buf;
 
-  const unsigned src1Stride = other1.stride;
-  const unsigned src2Stride = other2.stride;
-  const unsigned destStride = stride;
-  const int      clipbd     = clpRng.bd;
-  const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + log2WeightBase;
-  const int      offset     = (1 << (shiftNum - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);
+  const int src1Stride = other1.stride;
+  const int src2Stride = other2.stride;
+  const int destStride =        stride;
+  const int clipbd     = clpRng.bd;
+  const int shiftNum   = std::max<int>( 2, ( IF_INTERNAL_PREC - clipbd ) ) + log2WeightBase;
+  const int offset     = ( 1 << ( shiftNum - 1 ) ) + ( IF_INTERNAL_OFFS << log2WeightBase );
 
-#define ADD_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
-#define ADD_AVG_INC     \
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg8( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg4( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else
+  {
+#define WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
+#define WGHT_AVG_INC    \
     src0 += src1Stride; \
     src2 += src2Stride; \
     dest += destStride; \
 
-  SIZE_AWARE_PER_EL_OP(ADD_AVG_OP, ADD_AVG_INC);
+    SIZE_AWARE_PER_EL_OP( WGHT_AVG_OP, WGHT_AVG_INC );
 
-#undef ADD_AVG_OP
-#undef ADD_AVG_INC
+#undef WGHT_AVG_OP
+#undef WGHT_AVG_INC
+  }
 }
 
 template<>
@@ -519,7 +654,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
   const int      offset     = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
   if( destStride == width )
   {
     g_pelBufOP.addAvg(src0, src2, dest, width * height, shiftNum, offset, clpRng);
@@ -554,6 +689,96 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
 #undef ADD_AVG_OP
 #undef ADD_AVG_INC
   }
+}
+
+template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend )
+{
+  CHECKD( width  != minuend.width,     "Incompatible size" );
+  CHECKD( height != minuend.height,    "Incompatible size" );
+  CHECKD( width  != subtrahend.width,  "Incompatible size");
+  CHECKD( height != subtrahend.height, "Incompatible size");
+  
+        Pel* dest =            buf;
+  const Pel* mins = minuend   .buf;
+  const Pel* subs = subtrahend.buf;
+
+
+  const unsigned destStride =            stride;
+  const unsigned minsStride = minuend.   stride;
+  const unsigned subsStride = subtrahend.stride;
+
+#if ENABLE_SIMD_OPT_BUFFER
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.sub8( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else
+#endif
+  {
+#define SUBS_INC                \
+    dest +=            stride;  \
+    mins += minuend   .stride;  \
+    subs += subtrahend.stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
+
+    SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
+  }
+}
+
+template<>
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int& varv) const
+{
+  CHECK( Org.width != Org.height, "Incompatible size!" );
+  int stride = Org.stride;
+  const Pel* src;
+  Pel data;
+  double variance=0;
+  double mean=0;
+  int64_t sum[4]={0,0,0,0};
+  int64_t sum_sqr[4]={0,0,0,0};
+  uint32_t halfsize =size>>1;
+  uint32_t off[4]={0,halfsize,size*halfsize,size*halfsize+halfsize};
+  int n,x,y;
+
+  for( n = 0; n < 4; n++)
+  {
+    src = Org.buf+off[n];
+    for( y = 0; y < halfsize; y++)
+    {
+      for(x = 0; x < halfsize; x++)
+      {
+        data=src[y*stride+x];
+        sum[n]+=data;
+        sum_sqr[n]+= data*data;
+      }
+    }
+  }
+  int num=size*(size>>1);
+  // varhu
+  mean=(double)(sum[0]+sum[1])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[1])/(num) - (mean*mean);
+  varh =(int)(variance+0.5);
+  // varhl
+  mean=(double)(sum[2]+sum[3])/(num);
+  variance =  (double)(sum_sqr[2]+sum_sqr[3])/(num) - (mean*mean);
+  varh +=(int)(variance+0.5);
+  // varvl
+  mean=(double)(sum[0]+sum[2])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[2])/(num) - (mean*mean);
+  varv =(int)(variance+0.5);
+  // varvr
+  mean=(double)(sum[1]+sum[3])/(num);
+  variance =  (double)(sum_sqr[1]+sum_sqr[3])/(num) - (mean*mean);
+  varv +=(int)(variance+0.5);
 }
 
 template<>
@@ -599,7 +824,6 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   const unsigned src1Stride = pred.stride;
   const unsigned src2Stride = resi.stride;
   const unsigned destStride =      stride;
-
   if( src2Stride == width )
   {
     g_pelBufOP.reco( pred.buf, resi.buf, buf, width * height, clpRng );
@@ -688,30 +912,32 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
   }
 }
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 
 template<>
 void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other )
 {
   CHECK( width != other.height || height != other.width, "Incompatible size" );
 
-  if( ( width & 3 ) != 0 || ( height & 3 ) != 0 )
+  if( ( ( width | height ) & 7 ) == 0 )
   {
-          Pel* dst =       buf;
     const Pel* src = other.buf;
-    width          = other.height;
-    height         = other.width;
-    stride         = stride < width ? width : stride;
 
-    for( unsigned y = 0; y < other.height; y++ )
+    for( unsigned y = 0; y < other.height; y += 8 )
     {
-      for( unsigned x = 0; x < other.width; x++ )
+      Pel* dst = buf + y;
+
+      for( unsigned x = 0; x < other.width; x += 8 )
       {
-        dst[y + x*stride] = src[x + y * other.stride];
+        g_pelBufOP.transpose8x8( &src[x], other.stride, dst, stride );
+
+        dst += 8 * stride;
       }
+
+      src += 8 * other.stride;
     }
   }
-  else if( ( width & 7 ) != 0 || ( height & 7 ) != 0 )
+  else if( ( ( width | height ) & 3 ) == 0 )
   {
     const Pel* src = other.buf;
 
@@ -731,20 +957,18 @@ void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other )
   }
   else
   {
+          Pel* dst =       buf;
     const Pel* src = other.buf;
+    width          = other.height;
+    height         = other.width;
+    stride         = stride < width ? width : stride;
 
-    for( unsigned y = 0; y < other.height; y += 8 )
+    for( unsigned y = 0; y < other.height; y++ )
     {
-      Pel* dst = buf + y;
-
-      for( unsigned x = 0; x < other.width; x += 8 )
+      for( unsigned x = 0; x < other.width; x++ )
       {
-        g_pelBufOP.transpose8x8( &src[x], other.stride, dst, stride );
-
-        dst += 8 * stride;
+        dst[y + x*stride] = src[x + y * other.stride];
       }
-
-      src += 8 * other.stride;
     }
   }
 }
@@ -791,6 +1015,7 @@ PelStorage::~PelStorage()
 void PelStorage::create( const UnitArea& _UnitArea )
 {
   create( _UnitArea.chromaFormat, _UnitArea.blocks[0] );
+  m_maxArea = _UnitArea;
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
@@ -813,6 +1038,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     bufSize += area;
   }
 
+  bufSize += 1; // for SIMD DMVR on the bottom right corner, which overreads the lines by 1 sample
+
   //allocate one buffer
   m_origin[0] = ( Pel* ) xMalloc( Pel, bufSize );
 
@@ -827,6 +1054,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     bufs.push_back( PelBuf( topLeft, totalWidth, totalWidth, totalHeight ) );
     topLeft += area;
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, const unsigned _maxCUSize, const unsigned _margin, const unsigned _alignment, const bool _scaleChromaMargin )
@@ -872,6 +1101,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, c
     Pel* topLeft = m_origin[i] + totalWidth * ymargin + xmargin;
     bufs.push_back( PelBuf( topLeft, totalWidth, _area.width >> scaleX, _area.height >> scaleY ) );
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::createFromBuf( PelUnitBuf buf )
@@ -889,6 +1120,19 @@ void PelStorage::createFromBuf( PelUnitBuf buf )
   }
 }
 
+void PelStorage::compactResize( const UnitArea& area )
+{
+  CHECK( bufs.size() < area.blocks.size(), "Cannot increase buffer size when compacting!" );
+
+  for( uint32_t i = 0; i < area.blocks.size(); i++ )
+  {
+    CHECK( m_maxArea.blocks[i].area() < area.blocks[i].area(), "Cannot increase buffer size when compacting!" );
+
+    bufs[i].Size::operator=( area.blocks[i].size() );
+    bufs[i].stride = bufs[i].width;
+  }
+}
+
 void PelStorage::takeOwnership( PelStorage& other )
 {
   chromaFormat = other.chromaFormat;
@@ -903,6 +1147,9 @@ void PelStorage::takeOwnership( PelStorage& other )
     bufs[i] = PelBuf( cPelBuf.bufAt( 0, 0 ), cPelBuf.stride, cPelBuf.width, cPelBuf.height );
     std::swap( m_origin[i], other.m_origin[i]);
   }
+
+  m_maxArea = other.m_maxArea;
+
   other.destroy();
 }
 
@@ -1002,14 +1249,38 @@ const CPelUnitBuf PelStorage::getBufPart(const UnitArea& unit) const
 
 const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), CPelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), CPelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+  
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 PelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit)
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), PelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), PelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 const CPelBuf PelStorage::getCompactBuf(const CompArea& carea) const
@@ -1022,14 +1293,14 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
   pelUnitBuf.chromaFormat = chFmt;
   const int numComp = getNumberValidComponents( chFmt );
   for ( int i = 0; i < numComp; i++ )
   {
-    const YUVBuffer::Plane& src = yuvBuffer.planes[ i ];
+    const vvencYUVPlane& src = yuvBuffer.planes[ i ];
     CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
     PelBuf& dest = pelUnitBuf.bufs[i];
     CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
@@ -1067,7 +1338,7 @@ void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const 
   }
 }
 */
-void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow )
+void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow )
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
   const int numComp        = getNumberValidComponents( chFmt );
@@ -1077,7 +1348,7 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
           PelBuf area        = pelUnitBuf.get( compId );
     const int sx             = getComponentScaleX( compId, chFmt );
     const int sy             = getComponentScaleY( compId, chFmt );
-    YUVBuffer::Plane& yuvPlane = yuvBuffer.planes[ i ];
+    vvencYUVPlane& yuvPlane = yuvBuffer.planes[ i ];
     CHECK( yuvPlane.ptr != nullptr, "yuvBuffer already in use" );
     yuvPlane.ptr             = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
     yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;

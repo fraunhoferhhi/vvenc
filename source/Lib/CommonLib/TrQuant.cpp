@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -58,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "dtrace_buffer.h"
 #include "TimeProfiler.h"
+#include "SearchSpaceCounter.h"
 
 #include <stdlib.h>
 #include <memory.h>
@@ -166,15 +163,69 @@ template<int signedMode> void invTransformCbCr( PelBuf& resCb, PelBuf& resCr )
   }
 }
 
+void xFwdLfnstNxNCore(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
+{
+  const int8_t *trMat  = (size > 4) ? g_lfnstFwd8x8[mode][index][0] : g_lfnstFwd4x4[mode][index][0];
+  const int     trSize = (size > 4) ? 48 : 16;
+  int           coef;
+  int *         out = dst;
+
+  for (int j = 0; j < zeroOutSize; j++)
+  {
+    int *         srcPtr   = src;
+    const int8_t *trMatTmp = trMat;
+    coef                   = 0;
+    for (int i = 0; i < trSize; i++)
+    {
+      coef += *srcPtr++ * *trMatTmp++;
+    }
+    *out++ = (coef + 64) >> 7;
+    trMat += trSize;
+  }
+
+  ::memset(out, 0, (trSize - zeroOutSize) * sizeof(int));
+}
+
+
+void xInvLfnstNxNCore(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
+{
+  int           maxLog2TrDynamicRange = 15;
+  const TCoeff  outputMinimum         = -(1 << maxLog2TrDynamicRange);
+  const TCoeff  outputMaximum         = (1 << maxLog2TrDynamicRange) - 1;
+  const int8_t *trMat                 = (size > 4) ? g_lfnstInv8x8[mode][index][0] : g_lfnstInv4x4[mode][index][0];
+  const int     trSize                = (size > 4) ? 48 : 16;
+  int           resi;
+  int *         out                   = dst;
+
+  for( int j = 0; j < trSize; j++, trMat += 16 )
+  {
+    resi = 0;
+    const int8_t* trMatTmp = trMat;
+    int*          srcPtr   = src;
+
+    for( int i = 0; i < zeroOutSize; i++ )
+    {
+      resi += *srcPtr++ * *trMatTmp++;
+    }
+
+    *out++ = Clip3( outputMinimum, outputMaximum, ( int ) ( resi + 64 ) >> 7 );
+  }
+}
+
 // ====================================================================================================================
 // TrQuant class member functions
 // ====================================================================================================================
 TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
 {
   // allocate temporary buffers
-  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
+  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+    m_mtsCoeffs[i] = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  }
 
   {
     m_invICT      = m_invICTMem + maxAbsIctMode;
@@ -194,6 +245,13 @@ TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
     m_fwdICT[ 3]  = fwdTransformCbCr< 3>;
     m_fwdICT[-3]  = fwdTransformCbCr<-3>;
   }
+
+  m_invLfnstNxN = xInvLfnstNxNCore;
+  m_fwdLfnstNxN = xFwdLfnstNxNCore;
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
+  initTrQuantX86();
+#endif
 }
 
 TrQuant::~TrQuant()
@@ -222,6 +280,11 @@ TrQuant::~TrQuant()
     xFree( m_tmp );
     m_tmp = nullptr;
   }
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+     xFree( m_mtsCoeffs[i] );
+  }
 }
 
 void TrQuant::xDeQuant(const TransformUnit& tu,
@@ -229,17 +292,16 @@ void TrQuant::xDeQuant(const TransformUnit& tu,
                        const ComponentID   &compID,
                        const QpParam       &cQP)
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_QUANT );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
   m_quant->dequant( tu, dstCoeff, compID, cQP );
 }
 
 void TrQuant::init( const Quant* otherQuant,
                     const int  rdoq,
                     const bool bUseRDOQTS,
-                    const bool useSelectiveRDOQ,
+                    const bool scalingListsEnabled,
                     const bool bEnc,
-                    const bool useTransformSkipFast,
-                    const int  dqThrVal
+                    const int  thrVal
 )
 {
   m_bEnc = bEnc;
@@ -248,12 +310,12 @@ void TrQuant::init( const Quant* otherQuant,
   m_quant = nullptr;
 
   {
-    m_quant = new DepQuant( otherQuant, bEnc );
+    m_quant = new DepQuant( otherQuant, bEnc, scalingListsEnabled );
   }
 
   if( m_quant )
   {
-    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, dqThrVal );
+    m_quant->init( rdoq, bUseRDOQTS, thrVal );
   }
 }
 
@@ -311,8 +373,6 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
   if( !CU::isIntra( *tu.cu ) )
   {
     int cbfMask = 3;
-    resCb[cbfMask].create( tu.blocks[COMP_Cb] );
-    resCr[cbfMask].create( tu.blocks[COMP_Cr] );
     fwdTransformICT( tu, resCb[0], resCr[0], resCb[cbfMask], resCr[cbfMask], cbfMask );
     std::vector<int> cbfMasksToTest;
     cbfMasksToTest.push_back( cbfMask );
@@ -322,23 +382,6 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
   std::pair<int64_t,int64_t> pairDist[4];
   for( int cbfMask = 0; cbfMask < 4; cbfMask++ )
   {
-    if( cbfMask )
-    {
-      if (tu.cu->lfnstIdx)
-      {
-        if (resCb[cbfMask].valid())
-        {
-          resCb[cbfMask].destroy();
-        }
-        if (resCr[cbfMask].valid())
-        {
-          resCr[cbfMask].destroy();
-        }
-      }
-      CHECK( resCb[cbfMask].valid() || resCr[cbfMask].valid(), "target components for cbfMask=" << cbfMask << " are already present" );
-      resCb[cbfMask].create( tu.blocks[COMP_Cb] );
-      resCr[cbfMask].create( tu.blocks[COMP_Cr] );
-    }
     pairDist[cbfMask] = fwdTransformICT( tu, resCb[0], resCr[0], resCb[cbfMask], resCr[cbfMask], cbfMask );
   }
 
@@ -442,7 +485,7 @@ void TrQuant::xSetTrTypes( const TransformUnit& tu, const ComponentID compID, co
 
 void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelBuf& resi, CoeffBuf& dstCoeff, const int width, const int height )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_TRAFO );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_TRAFO );
 
   const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange( toChannelType( compID ) );
   const unsigned bitDepth               = tu.cs->sps->bitDepths[               toChannelType( compID ) ];
@@ -503,8 +546,8 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
 
   if (width > 1 && height > 1)
   {
-    const int shift_1st = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
-    const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT                          + COM16_C806_TRANS_PREC;
+    const int shift_1st = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
+    const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
@@ -512,13 +555,13 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   }
   else if (height == 1)   // 1-D horizontal transform
   {
-    const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
     CHECK( shift < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift, 1, 0, skipWidth);
   }
   else   // if (iWidth == 1) //1-D vertical transform
   {
-    int shift = ((floorLog2(height)) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    int shift = ((floorLog2(height)) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
     CHECK(shift < 0, "Negative shift");
     CHECKD((transformHeightIndex < 0), "There is a problem with the height.");
     fastFwdTrans[trTypeVer][transformHeightIndex](block, dstCoeff.buf, shift, 1, 0, skipHeight);
@@ -528,7 +571,7 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
 
 void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_TRAFO );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_TRAFO );
 
   const int      width                  = pCoeff.width;
   const int      height                 = pCoeff.height;
@@ -567,8 +610,8 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   TCoeff *tmp   = m_tmp;
   if (width > 1 && height > 1)   // 2-D transform
   {
-    const int shift_1st =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
-    const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
+    const int shift_1st =   TRANSFORM_MATRIX_SHIFT + 1; // 1 has been added to shift_1st at the expense of shift_2nd
+    const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
@@ -576,14 +619,14 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   }
   else if (width == 1)   // 1-D vertical transform
   {
-    int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
     CHECK(shift < 0, "Negative shift");
     CHECK((transformHeightIndex < 0), "There is a problem with the height.");
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, block, shift + 1, 1, 0, skipHeight, clipMinimum, clipMaximum);
   }
   else   // if(iHeight == 1) //1-D horizontal transform
   {
-    const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
     CHECK(shift < 0, "Negative shift");
     CHECK((transformWidthIndex < 0), "There is a problem with the width.");
     fastInvTrans[trTypeHor][transformWidthIndex](pCoeff.buf, block, shift + 1, 1, 0, skipWidth, clipMinimum, clipMaximum);
@@ -640,8 +683,12 @@ void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
 
 void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_QUANT, tu.cs, toChannelType(compID) );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
   m_quant->quant( tu, compID, pSrc, uiAbsSum, cQP, ctx );
+#if ENABLE_MEASURE_SEARCH_SPACE
+
+  g_searchSpaceAcc.addQuant( tu, toChannelType( compID ) );
+#endif
 }
 
 
@@ -756,64 +803,10 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  thrTS    = trCosts.begin()->first;
   while (itC != trCosts.end())
   {
-    const bool testTr               = itC->first <= (itC->second == 1 ? thrTS : thr) && numTests <= maxCand;
+    const bool testTr               = itC->first <= (trModes->at(itC->second).first == 1 ? thrTS : thr) && numTests <= maxCand;
     trModes->at(itC->second).second = testTr;
     numTests += testTr;
     itC++;
-  }
-}
-
-
-void TrQuant::xFwdLfnstNxN(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
-{
-  const int8_t *trMat  = (size > 4) ? g_lfnst8x8[mode][index][0] : g_lfnst4x4[mode][index][0];
-  const int     trSize = (size > 4) ? 48 : 16;
-  int           coef;
-  int *         out = dst;
-
-  assert(index < 3);
-
-  for (int j = 0; j < zeroOutSize; j++)
-  {
-    int *         srcPtr   = src;
-    const int8_t *trMatTmp = trMat;
-    coef                   = 0;
-    for (int i = 0; i < trSize; i++)
-    {
-      coef += *srcPtr++ * *trMatTmp++;
-    }
-    *out++ = (coef + 64) >> 7;
-    trMat += trSize;
-  }
-
-  ::memset(out, 0, (trSize - zeroOutSize) * sizeof(int));
-}
-
-
-void TrQuant::xInvLfnstNxN(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
-{
-  int           maxLog2TrDynamicRange = 15;
-  const TCoeff  outputMinimum         = -(1 << maxLog2TrDynamicRange);
-  const TCoeff  outputMaximum         = (1 << maxLog2TrDynamicRange) - 1;
-  const int8_t *trMat                 = (size > 4) ? g_lfnst8x8[mode][index][0] : g_lfnst4x4[mode][index][0];
-  const int     trSize                = (size > 4) ? 48 : 16;
-  int           resi;
-  int *         out = dst;
-
-  assert(index < 3);
-
-  for (int j = 0; j < trSize; j++)
-  {
-    resi                   = 0;
-    const int8_t *trMatTmp = trMat;
-    int *         srcPtr   = src;
-    for (int i = 0; i < zeroOutSize; i++)
-    {
-      resi += *srcPtr++ * *trMatTmp;
-      trMatTmp += trSize;
-    }
-    *out++ = Clip3(outputMinimum, outputMaximum, (int) (resi + 64) >> 7);
-    trMat++;
   }
 }
 
@@ -862,7 +855,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
@@ -900,8 +893,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
         scanPtr++;
       }
 
-      xInvLfnstNxN(m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize,
-                  (tu4x4Flag || tu8x8Flag) ? 8 : 16);
+      m_invLfnstNxN( m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
 
       lfnstTemp = m_tempOutMatrix;   // inverse spectral rearrangement
 
@@ -967,9 +959,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(
-          SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
-          Log2(area.height));   
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));   
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))
@@ -1049,8 +1039,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         }
       }
 
-      xFwdLfnstNxN(m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize,
-                  (tu4x4Flag || tu8x8Flag) ? 8 : 16);
+      m_fwdLfnstNxN( m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
 
       lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
       coeffTemp                        = tempCoeff;

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -48,7 +44,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
-#include "CommonDefX86.h"
+#ifdef TARGET_SIMD_X86
+#  include "x86/CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
+#endif
 
 #include <bitset>
 
@@ -68,8 +67,10 @@ namespace DQIntern
 
   struct NbInfoSbb
   {
-    uint8_t   num;
-    uint8_t   inPos[5];
+    //uint8_t   num;
+    uint8_t   numInv;
+    //uint8_t   inPos[5];
+    uint8_t   invInPos[5];
   };
   struct NbInfoOut
   {
@@ -98,7 +99,7 @@ namespace DQIntern
     unsigned      sigCtxOffsetNext;
     unsigned      gtxCtxOffsetNext;
     int           nextInsidePos;
-    NbInfoSbb     nextNbInfoSbb;
+    NbInfoSbb     currNbInfoSbb;
     int           nextSbbRight;
     int           nextSbbBelow;
     int           posX;
@@ -126,7 +127,6 @@ namespace DQIntern
     unsigned          m_sbbMask;
     unsigned          m_widthInSbb;
     unsigned          m_heightInSbb;
-    CoeffScanType     m_scanType;
     const ScanElement *m_scanSbbId2SbbPos;
     const ScanElement *m_scanId2BlkPos;
     const NbInfoSbb*  m_scanId2NbInfoSbb;
@@ -186,10 +186,9 @@ namespace DQIntern
         const uint32_t      groupWidth    = 1 << log2CGWidth;
         const uint32_t      groupHeight   = 1 << log2CGHeight;
         const uint32_t      groupSize     = groupWidth * groupHeight;
-        const CoeffScanType scanType      = SCAN_DIAG;
         const SizeType      blkWidthIdx   = Log2( blockWidth );
         const SizeType      blkHeightIdx  = Log2( blockHeight );
-        const ScanElement * scanId2RP     = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, scanType, blkWidthIdx, blkHeightIdx );
+        const ScanElement * scanId2RP     = getScanOrder( SCAN_GROUPED_4x4, blkWidthIdx, blkHeightIdx );
         NbInfoSbb*&         sId2NbSbb     = m_scanId2NbInfoSbbArray[hd][vd];
         NbInfoOut*&         sId2NbOut     = m_scanId2NbInfoOutArray[hd][vd];
         // consider only non-zero-out region
@@ -203,6 +202,7 @@ namespace DQIntern
         for( uint32_t scanId = 0; scanId < totalValues; scanId++ )
         {
           raster2id[scanId2RP[scanId].idx] = scanId;
+          sId2NbSbb[scanId].numInv = 0;
         }
 
         for( unsigned scanId = 0; scanId < totalValues; scanId++ )
@@ -212,7 +212,6 @@ namespace DQIntern
           const int rpos = scanId2RP[scanId].idx;
           {
             //===== inside subband neighbours =====
-            NbInfoSbb&     nbSbb  = sId2NbSbb[ scanId ];
             const int      begSbb = scanId - ( scanId & (groupSize-1) ); // first pos in current subblock
             int            cpos[5];
 
@@ -222,7 +221,10 @@ namespace DQIntern
             cpos[3] = ( posY + 1 < blkHeightNZOut                             ? ( raster2id[rpos+  blockWidth] < groupSize + begSbb ? raster2id[rpos+  blockWidth] - begSbb : 0 ) : 0 );
             cpos[4] = ( posY + 2 < blkHeightNZOut                             ? ( raster2id[rpos+2*blockWidth] < groupSize + begSbb ? raster2id[rpos+2*blockWidth] - begSbb : 0 ) : 0 );
 
-            for( nbSbb.num = 0; true; )
+            int num = 0;
+            int inPos[5] = { 0, };
+
+            while( true )
             {
               int nk = -1;
               for( int k = 0; k < 5; k++ )
@@ -236,12 +238,17 @@ namespace DQIntern
               {
                 break;
               }
-              nbSbb.inPos[ nbSbb.num++ ] = uint8_t( cpos[nk] );
+              inPos[ num++ ] = uint8_t( cpos[nk] );
               cpos[nk] = 0;
             }
-            for( int k = nbSbb.num; k < 5; k++ )
+            for( int k = num; k < 5; k++ )
             {
-              nbSbb.inPos[k] = 0;
+              inPos[k] = 0;
+            }
+            for( int k = 0; k < num; k++ )
+            {
+              CHECK( sId2NbSbb[begSbb + inPos[k]].numInv >= 5, "" );
+              sId2NbSbb[begSbb + inPos[k]].invInPos[sId2NbSbb[begSbb + inPos[k]].numInv++] = scanId & ( groupSize - 1 );
             }
           }
           {
@@ -360,13 +367,12 @@ namespace DQIntern
     m_widthInSbb  = nonzeroWidth >> m_log2SbbWidth;
     m_heightInSbb = nonzeroHeight >> m_log2SbbHeight;
     m_numSbb              = m_widthInSbb * m_heightInSbb;
-    m_scanType            = SCAN_DIAG;
     SizeType        hsbb  = Log2( m_widthInSbb  );
     SizeType        vsbb  = Log2( m_heightInSbb );
     SizeType        hsId  = Log2( m_width  );
     SizeType        vsId  = Log2( m_height );
-    m_scanSbbId2SbbPos    = g_scanOrderRom.getScanOrder( SCAN_UNGROUPED   , m_scanType , hsbb , vsbb );
-    m_scanId2BlkPos       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4 , m_scanType , hsId , vsId );
+    m_scanSbbId2SbbPos    = getScanOrder( SCAN_UNGROUPED   , hsbb , vsbb );
+    m_scanId2BlkPos       = getScanOrder( SCAN_GROUPED_4x4 , hsId , vsId );
     int log2W             = Log2( m_width  );
     int log2H             = Log2( m_height );
     m_scanId2NbInfoSbb    = rom.getNbInfoSbb( log2W, log2H );
@@ -409,7 +415,7 @@ namespace DQIntern
         scanInfo.gtxCtxOffsetNext = ( diag < 1 ? 6 : 1 );
       }
       scanInfo.nextInsidePos      = nextScanIdx & m_sbbMask;
-      scanInfo.nextNbInfoSbb      = m_scanId2NbInfoSbb[ nextScanIdx ];
+      scanInfo.currNbInfoSbb      = m_scanId2NbInfoSbb[ scanIdx ];
       if( scanInfo.insidePos == 0 )
       {
         const int nextSbbPos  = m_scanSbbId2SbbPos[nextScanIdx >> m_log2SbbSize].idx;
@@ -654,25 +660,6 @@ namespace DQIntern
     int64_t           m_DistOrgFact;
   };
 
-  inline int ceil_log2(uint64_t x)
-  {
-#ifdef TARGET_SIMD_X86
-    uint64_t y = _bit_scan_reverse( x ) + ( ( ( x & ( x - 1 ) ) == 0 ) ? 0 : 1 );
-#else
-    static const uint64_t t[6] = { 0xFFFFFFFF00000000ull, 0x00000000FFFF0000ull, 0x000000000000FF00ull, 0x00000000000000F0ull, 0x000000000000000Cull, 0x0000000000000002ull };
-    int y = (((x & (x - 1)) == 0) ? 0 : 1);
-    int j = 32;
-    for( int i = 0; i < 6; i++)
-    {
-      int k = (((x & t[i]) == 0) ? 0 : j);
-      y += k;
-      x >>= k;
-      j >>= 1;
-    }
-#endif
-
-    return y;
-  }
   void Quantizer::initQuantBlock(const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue = -1)
   {
     CHECKD( lambda <= 0.0, "Lambda must be greater than 0" );
@@ -686,9 +673,8 @@ namespace DQIntern
     const int         channelBitDepth       = sps.bitDepths[ chType ];
     const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange( chType );
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     // quant parameters
     m_QShift                    = QUANT_SHIFT  - 1 + qpPer + transformShift;
     m_QAdd                      = -( ( 3 << m_QShift ) >> 1 );
@@ -707,11 +693,11 @@ namespace DQIntern
       SCALE_BITS - 2 * (nomTransformShift + DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth)) + m_QShift + (needsSqrt2ScaleAdjustment ? 1 : 0);
     const double  qScale2       = double( qScale * qScale );
     const double  nomDistFactor = ( nomDShift < 0 ? 1.0/(double(int64_t(1)<<(-nomDShift))*qScale2*lambda) : double(int64_t(1)<<nomDShift)/(qScale2*lambda) );
-    const int64_t pow2dfShift   = (int64_t)( nomDistFactor * qScale2 ) + 1;
-    const int     dfShift       = ceil_log2( pow2dfShift );
+    const uint32_t pow2dfShift   = (uint32_t)( nomDistFactor * qScale2 ) + 1;
+    const int     dfShift       = ceilLog2( pow2dfShift );
     m_DistShift                 = 62 + m_QShift - 2*maxLog2TrDynamicRange - dfShift;
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
-    m_DistStepAdd               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 );
+    m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
   }
 
@@ -723,13 +709,12 @@ namespace DQIntern
     const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
-    const CoeffScanType scanType  = SCAN_DIAG;
-    const ScanElement *scan       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, scanType, hsId, vsId );
-    const TCoeff*       qCoeff    = tu.getCoeffs( compID ).buf;
+    const ScanElement  *scan      = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
+    const TCoeffSig*    qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 
     //----- reset coefficients and get last scan index -----
-    ::memset( tCoeff, 0, numCoeff * sizeof(TCoeff) );
+    ::memset( tCoeff, 0, numCoeff * sizeof( TCoeff ) );
     int lastScanIdx = tu.lastPos[compID];
     if( lastScanIdx < 0 )
     {
@@ -747,17 +732,16 @@ namespace DQIntern
     const TCoeff      minTCoeff             = -( 1 << maxLog2TrDynamicRange );
     const TCoeff      maxTCoeff             =  ( 1 << maxLog2TrDynamicRange ) - 1;
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
-    const bool        clipTransformShift    = ( tu.mtsIdx[compID]==MTS_SKIP && sps.spsRExt.extendedPrecisionProcessing );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
-    const int         transformShift        = ( clipTransformShift ? std::max<int>( 0, nomTransformShift ) : nomTransformShift ) + (needsSqrt2ScaleAdjustment?-1:0);
+    const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
     Intermediate_Int  shift                 = IQUANT_SHIFT + 1 - qpPer - transformShift + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
     Intermediate_Int  invQScale             = g_invQuantScales[needsSqrt2ScaleAdjustment?1:0][ qpRem ];
     Intermediate_Int  add                   = (shift < 0) ? 0 : ((1 << shift) >> 1);
     //----- dequant coefficients -----
     for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
     {
-      const unsigned  rasterPos = scan[scanIdx].idx;
-      const TCoeff&   level     = qCoeff[ rasterPos ];
+      const unsigned   rasterPos = scan[scanIdx].idx;
+      const TCoeffSig& level     = qCoeff[ rasterPos ];
       if( level )
       {
         if (enableScalingLists)
@@ -766,7 +750,7 @@ namespace DQIntern
         {
           invQScale <<= -shift;
         }
-        Intermediate_Int  qIdx      = ( level << 1 ) + ( level > 0 ? -(state>>1) : (state>>1) );
+        Intermediate_Int qIdx = 2 * level + (level > 0 ? -(state>>1) : (state>>1));
         int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
         tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
       }
@@ -774,9 +758,8 @@ namespace DQIntern
     }
   }
 
-  inline void Quantizer::preQuantCoeff(const TCoeff absCoeff, PQData *pqData, int quanCoeff) const
+  inline void Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
   {
-    // TODO: vectorize
     int64_t scaledOrg = int64_t( absCoeff ) * quanCoeff;
     TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, TCoeff( ( scaledOrg + m_QAdd ) >> m_QShift ) ) );
     int64_t scaledAdd = qIdx * m_DistStepAdd - scaledOrg * m_DistOrgFact;
@@ -866,14 +849,13 @@ namespace DQIntern
   public:
     State( const RateEstimator& rateEst, CommonCtx& commonCtx, const int stateId );
 
-    template<uint8_t numIPos>
     inline void updateState(const ScanInfo &scanInfo, const State *prevStates, const Decision &decision);
     inline void updateStateEOS(const ScanInfo &scanInfo, const State *prevStates, const State *skipStates,
                                const Decision &decision);
 
     inline void init()
     {
-      m_rdCost        = std::numeric_limits<int64_t>::max()>>1;
+      m_rdCost        = rdCostInit;
       m_numSigSbb     = 0;
       m_remRegBins    = 4;  // just large enough for last scan pos
       m_refSbbCtxId   = -1;
@@ -885,9 +867,6 @@ namespace DQIntern
 
     void checkRdCosts( const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decision& decisionA, Decision& decisionB ) const
     {
-      // TODO: avx2 reg: rdCostA | rdCostB | rdCostZ | ...
-      // vectorize...
-
       const int32_t*  goRiceTab = g_goRiceBits[m_goRicePar];
       int64_t         rdCostA   = m_rdCost + pqDataA.deltaDist;
       int64_t         rdCostB   = m_rdCost + pqDataB.deltaDist;
@@ -941,14 +920,13 @@ namespace DQIntern
         rdCostZ += goRiceTab[ m_goRiceZero ];
       }
 
-      if( rdCostA < decisionA.rdCost )
+      if( rdCostA < rdCostZ && rdCostA < decisionA.rdCost )
       {
         decisionA.rdCost    = rdCostA;
         decisionA.absLevel  = pqDataA.absLevel;
         decisionA.prevId    = m_stateId;
       }
-
-      if( rdCostZ < decisionA.rdCost )
+      else if( rdCostZ < decisionA.rdCost )
       {
         decisionA.rdCost    = rdCostZ;
         decisionA.absLevel  = 0;
@@ -963,6 +941,45 @@ namespace DQIntern
       }
     }
 
+#if 0
+    void checkRdCostsZero( const ScanPosType spt, Decision& decisionA ) const
+    {
+      const int32_t* goRiceTab = g_goRiceBits[m_goRicePar];
+      int64_t         rdCostZ  = m_rdCost;
+
+      if( m_remRegBins >= 4 )
+      {
+        if( spt == SCAN_ISCSBB )
+        {
+          rdCostZ += m_sigFracBits.intBits[0];
+        }
+        else if( spt == SCAN_SOCSBB )
+        {
+          rdCostZ += m_sbbFracBits.intBits[1] + m_sigFracBits.intBits[0];
+        }
+        else if( m_numSigSbb )
+        {
+          rdCostZ += m_sigFracBits.intBits[0];
+        }
+        else
+        {
+          rdCostZ = decisionA.rdCost;
+        }
+      }
+      else
+      {
+        rdCostZ += goRiceTab[m_goRiceZero];
+      }
+
+      if( rdCostZ < decisionA.rdCost )
+      {
+        decisionA.rdCost   = rdCostZ;
+        decisionA.absLevel = 0;
+        decisionA.prevId   = m_stateId;
+      }
+    }
+
+#endif
     inline void checkRdCostStart(int32_t lastOffset, const PQData &pqData, Decision &decision) const
     {
       int64_t rdCost = pqData.deltaDist + lastOffset;
@@ -1002,9 +1019,34 @@ namespace DQIntern
       decision.prevId   = 4 | m_stateId;
     }
 
+    inline void setRiceParam( const ScanInfo& scanInfo)
+    {
+      if( m_remRegBins >= 4 )
+      {
+        TCoeff  sumAbs  = m_sbb.ctx[scanInfo.insidePos].sumAbs;
+        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
+        m_goRicePar = g_auiGoRiceParsCoeff[sumAll];
+      }
+    }
+
+    struct CtxAcc
+    {
+      // tplAcc: lower 5 bits are absSum1, upper 3 bits are numPos
+      uint8_t tplAcc, sumAbs;
+    };
+
   private:
+
     int64_t                   m_rdCost;
-    uint16_t                  m_absLevelsAndCtxInit[24];  // 16x8bit for abs levels + 16x16bit for ctx init id
+    union
+    {
+      uint8_t                 m_state[48];
+      struct
+      {
+        uint8_t               absLevels[16];
+        CtxAcc                ctx[16];
+      } m_sbb;
+    };
     int8_t                    m_numSigSbb;
     int                       m_remRegBins;
     int8_t                    m_refSbbCtxId;
@@ -1018,6 +1060,7 @@ namespace DQIntern
     const CoeffFracBits*const m_gtxFracBitsArray;
     CommonCtx&                m_commonCtx;
   public:
+    static const int64_t      rdCostInit = std::numeric_limits<int64_t>::max() >> 1;
     unsigned                  effWidth;
     unsigned                  effHeight;
   };
@@ -1032,7 +1075,6 @@ namespace DQIntern
   {
   }
 
-  template<uint8_t numIPos>
   inline void State::updateState(const ScanInfo &scanInfo, const State *prevStates, const Decision &decision)
   {
     m_rdCost = decision.rdCost;
@@ -1045,12 +1087,11 @@ namespace DQIntern
         m_refSbbCtxId           = prvState->m_refSbbCtxId;
         m_sbbFracBits           = prvState->m_sbbFracBits;
         m_remRegBins            = prvState->m_remRegBins - 1;
-        m_goRicePar             = prvState->m_goRicePar;
         if( m_remRegBins >= 4 )
         {
           m_remRegBins -= (decision.absLevel < 2 ? decision.absLevel : 3);
         }
-        ::memcpy( m_absLevelsAndCtxInit, prvState->m_absLevelsAndCtxInit, 48*sizeof(uint8_t) );
+        ::memcpy( m_state, prvState->m_state, sizeof( m_state ) );
       }
       else
       {
@@ -1058,130 +1099,62 @@ namespace DQIntern
         m_refSbbCtxId   = -1;
         int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
         m_remRegBins = (effWidth * effHeight *ctxBinSampleRatio) / 16 - (decision.absLevel < 2 ? decision.absLevel : 3);
-        ::memset( m_absLevelsAndCtxInit, 0, 48*sizeof(uint8_t) );
+        ::memset( m_state, 0, sizeof( m_state ) );
       }
 
-      uint8_t* levels               = reinterpret_cast<uint8_t*>(m_absLevelsAndCtxInit);
-      levels[ scanInfo.insidePos ]  = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
+      if( decision.absLevel )
+      {
+        m_sbb.absLevels[scanInfo.insidePos] = ( uint8_t ) std::min<TCoeff>( 255, decision.absLevel );
+        
+        if( scanInfo.currNbInfoSbb.numInv )
+        {
+          int min4_or_5 = std::min<TCoeff>( 4 + ( decision.absLevel & 1 ), decision.absLevel );
 
-      // TODO: AVX2 vec: levels[scanInfo.nextNbInfoSbb.inPos[0]] | levels[scanInfo.nextNbInfoSbb.inPos[1]] | levels[scanInfo.nextNbInfoSbb.inPos[2]] | levels[scanInfo.nextNbInfoSbb.inPos[3]] | levels[scanInfo.nextNbInfoSbb.inPos[4]] | 0 | 0 | 0
-      // ...
-      // or SSE42 vec: 0 .. 3, and use UPDATE(4) for last element
+          auto adds8 = []( uint8_t a, uint8_t b )
+          {
+            uint8_t c = a + b;
+            if( c < a ) c = -1;
+            return c;
+          };
+
+          auto update_deps = [&]( int k )
+          {
+            auto& ctx = m_sbb.ctx[scanInfo.currNbInfoSbb.invInPos[k]];
+            ctx.tplAcc += 32 + min4_or_5;
+            ctx.sumAbs  = adds8( ctx.sumAbs, decision.absLevel );
+          };
+
+          switch( scanInfo.currNbInfoSbb.numInv )
+          {
+          default:
+          case 5:
+            update_deps( 4 );
+          case 4:
+            update_deps( 3 );
+          case 3:
+            update_deps( 2 );
+          case 2:
+            update_deps( 1 );
+          case 1:
+            update_deps( 0 );
+          }
+        }
+      }
 
       if (m_remRegBins >= 4)
       {
-        TCoeff  tinit = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos];
-        TCoeff  sumAbs1 = (tinit >> 3) & 31;
-        TCoeff  sumNum = tinit & 7;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        if (numIPos == 1)
-        {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-          UPDATE(4);
-        }
-#undef UPDATE
-        TCoeff sumGt1 = sumAbs1 - sumNum;
-        m_sigFracBits = m_sigFracBitsArray[scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
-        m_coeffFracBits = m_gtxFracBitsArray[scanInfo.gtxCtxOffsetNext + (sumGt1 < 4 ? sumGt1 : 4)];
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
+        int sumGt1      = sumAbs1 - sumNum;
 
-        TCoeff  sumAbs = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos] >> 8;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; }
-        if (numIPos == 1)
-        {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-          UPDATE(4);
-        }
-#undef UPDATE
-        int sumAll = std::max(std::min(31, (int)sumAbs - 4 * 5), 0);
-        m_goRicePar = g_auiGoRiceParsCoeff[sumAll];
+        m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
+        m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
       }
       else
       {
-        TCoeff  sumAbs = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos] >> 8;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; }
-        if (numIPos == 1)
-        {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-          UPDATE(4);
-        }
-#undef UPDATE
-        sumAbs = std::min<TCoeff>(31, sumAbs);
-        m_goRicePar = g_auiGoRiceParsCoeff[sumAbs];
+        TCoeff  sumAbs = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
+        sumAbs       = std::min<TCoeff>(31, sumAbs);
+        m_goRicePar  = g_auiGoRiceParsCoeff[sumAbs];
         m_goRiceZero = g_auiGoRicePosCoeff0(m_stateId, m_goRicePar);
       }
     }
@@ -1197,31 +1170,53 @@ namespace DQIntern
       if( decision.prevId  >= 4 )
       {
         CHECK( decision.absLevel != 0, "cannot happen" );
-        prvState    = skipStates + ( decision.prevId - 4 );
-        m_numSigSbb = 0;
-        ::memset( m_absLevelsAndCtxInit, 0, 16*sizeof(uint8_t) );
+        prvState     = skipStates + ( decision.prevId - 4 );
+        m_numSigSbb  = 0;
+        m_remRegBins = prvState->m_remRegBins;
+        ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
       else if( decision.prevId  >= 0 )
       {
-        prvState    = prevStates            +   decision.prevId;
-        m_numSigSbb = prvState->m_numSigSbb + !!decision.absLevel;
-        ::memcpy( m_absLevelsAndCtxInit, prvState->m_absLevelsAndCtxInit, 16*sizeof(uint8_t) );
+        prvState     = prevStates            +   decision.prevId;
+        m_numSigSbb  = prvState->m_numSigSbb + !!decision.absLevel;
+        m_remRegBins = prvState->m_remRegBins - 1;
+        if( m_remRegBins >= 4 )
+        {
+          m_remRegBins -= ( decision.absLevel < 2 ? decision.absLevel : 3 );
+        }
+        ::memcpy( m_sbb.absLevels, prvState->m_sbb.absLevels, sizeof( m_sbb.absLevels ) );
       }
       else
       {
-        m_numSigSbb = 1;
-        ::memset( m_absLevelsAndCtxInit, 0, 16*sizeof(uint8_t) );
+        m_numSigSbb  = 1;
+        m_remRegBins = ( effWidth * effHeight * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
+        if( m_remRegBins >= 4 )
+        {
+          m_remRegBins -= ( decision.absLevel < 2 ? decision.absLevel : 3 );
+        }
+        ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
-      reinterpret_cast<uint8_t*>(m_absLevelsAndCtxInit)[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
+
+      m_sbb.absLevels[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
 
       m_commonCtx.update( scanInfo, prvState, *this );
 
-      TCoeff  tinit   = m_absLevelsAndCtxInit[ 8 + scanInfo.nextInsidePos ];
-      TCoeff  sumNum  =   tinit        & 7;
-      TCoeff  sumAbs1 = ( tinit >> 3 ) & 31;
-      TCoeff  sumGt1  = sumAbs1        - sumNum;
-      m_sigFracBits   = m_sigFracBitsArray[ scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 ) ];
-      m_coeffFracBits = m_gtxFracBitsArray[ scanInfo.gtxCtxOffsetNext + ( sumGt1  < 4 ? sumGt1  : 4 ) ];
+      if (m_remRegBins >= 4)
+      {
+        TCoeff  sumAbs1 = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc & 31;
+        TCoeff  sumNum  = m_sbb.ctx[scanInfo.nextInsidePos].tplAcc >> 5u;
+        int sumGt1 = sumAbs1 - sumNum;
+
+        m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
+        m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
+      }
+      else
+      {
+        TCoeff  sumAbs = m_sbb.ctx[scanInfo.nextInsidePos].sumAbs;
+        sumAbs       = std::min<TCoeff>(31, sumAbs);
+        m_goRicePar  = g_auiGoRiceParsCoeff[sumAbs];
+        m_goRiceZero = g_auiGoRicePosCoeff0(m_stateId, m_goRicePar);
+      }
     }
   }
 
@@ -1241,60 +1236,48 @@ namespace DQIntern
       ::memset( levels + scanInfo.scanIdx, 0, setCpSize );
     }
     sbbFlags[ scanInfo.sbbPos ] = !!currState.m_numSigSbb;
-    ::memcpy( levels + scanInfo.scanIdx, currState.m_absLevelsAndCtxInit, scanInfo.sbbSize*sizeof(uint8_t) );
+    ::memcpy( levels + scanInfo.scanIdx, currState.m_sbb.absLevels, scanInfo.sbbSize*sizeof(uint8_t) );
 
     const int       sigNSbb   = ( ( scanInfo.nextSbbRight ? sbbFlags[ scanInfo.nextSbbRight ] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[ scanInfo.nextSbbBelow ] : false ) ? 1 : 0 );
     currState.m_numSigSbb     = 0;
-    if (prevState)
-    {
-      currState.m_remRegBins = prevState->m_remRegBins;
-    }
-    else
-    {
-      int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
-      currState.m_remRegBins = (currState.effWidth * currState.effHeight *ctxBinSampleRatio) / 16;
-    }
     currState.m_goRicePar     = 0;
     currState.m_refSbbCtxId   = currState.m_stateId;
     currState.m_sbbFracBits   = m_sbbFlagBits[ sigNSbb ];
 
-    uint16_t          templateCtxInit[16];
-    const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
-    const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
-    const uint8_t*    absLevels = levels   + scanBeg;
-    for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+    ::memset( currState.m_state, 0, sizeof( currState.m_state ) );
+
+    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[ scanInfo.nextSbbBelow  + 1 ] : false ) )
     {
-      if( nbOut->num )
+      const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
+      const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
+      const uint8_t*    absLevels = levels   + scanBeg;
+
+      for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
       {
-        TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
-#define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        UPDATE(0);
-        if( nbOut->num > 1 )
+        if( nbOut->num )
         {
-          UPDATE(1);
-          if( nbOut->num > 2 )
+          TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
+  #define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
+          switch( nbOut->num )
           {
+          default:
+          case 5:
+            UPDATE(4);
+          case 4:
+            UPDATE(3);
+          case 3:
             UPDATE(2);
-            if( nbOut->num > 3 )
-            {
-              UPDATE(3);
-              if( nbOut->num > 4 )
-              {
-                UPDATE(4);
-              }
-            }
+          case 2:
+            UPDATE(1);
+          case 1:
+            UPDATE(0);
           }
+  #undef UPDATE
+          currState.m_sbb.ctx[id].tplAcc = ( sumNum << 5 ) | sumAbs1;
+          currState.m_sbb.ctx[id].sumAbs = ( uint8_t ) std::min( 127, sumAbs );
         }
-#undef UPDATE
-        templateCtxInit[id] = uint16_t(sumNum) + ( uint16_t(sumAbs1) << 3 ) + ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
-      }
-      else
-      {
-        templateCtxInit[id] = 0;
       }
     }
-    ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
-    ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
   }
 
 
@@ -1315,7 +1298,7 @@ namespace DQIntern
 
   private:
     void    xDecideAndUpdate  ( const TCoeff absCoeff, const ScanInfo& scanInfo, bool zeroOut, int quantCoeff);
-    void    xDecide           ( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quantCoeff );
+    void    xDecide           ( const ScanInfo& scanInfo, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quantCoeff );
 
   private:
     CommonCtx   m_commonCtx;
@@ -1367,13 +1350,13 @@ namespace DQIntern
     m_quant.init( dqTrVal );
   }
 
-  void DepQuant::xDecide( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff)
+  void DepQuant::xDecide( const ScanInfo &scanInfo, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff )
   {
     ::memcpy( decisions, startDec, 4*sizeof(Decision) );
 
     if( zeroOut )
     {
-      if( spt==SCAN_EOCSBB )
+      if( scanInfo.spt==SCAN_EOCSBB )
       {
         m_skipStates[0].checkRdCostSkipSbbZeroOut( decisions[0] );
         m_skipStates[1].checkRdCostSkipSbbZeroOut( decisions[1] );
@@ -1385,11 +1368,24 @@ namespace DQIntern
 
     PQData  pqData[4];
     m_quant.preQuantCoeff( absCoeff, pqData, quanCoeff );
-    m_prevStates[0].checkRdCosts( spt, pqData[0], pqData[2], decisions[0], decisions[2]);
-    m_prevStates[1].checkRdCosts( spt, pqData[0], pqData[2], decisions[2], decisions[0]);
-    m_prevStates[2].checkRdCosts( spt, pqData[3], pqData[1], decisions[1], decisions[3]);
-    m_prevStates[3].checkRdCosts( spt, pqData[3], pqData[1], decisions[3], decisions[1]);
-    if( spt==SCAN_EOCSBB )
+
+    if( pqData[0].absLevel >= 4 || pqData[2].absLevel >= 4 )
+    {
+      m_prevStates[0].setRiceParam( scanInfo );
+      m_prevStates[1].setRiceParam( scanInfo );
+    }
+    if( pqData[1].absLevel >= 4 || pqData[3].absLevel >= 4 )
+    {
+      m_prevStates[2].setRiceParam( scanInfo );
+      m_prevStates[3].setRiceParam( scanInfo );
+    }
+
+    m_prevStates[0].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[0], decisions[2] );
+    m_prevStates[1].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[2], decisions[0] );
+    m_prevStates[2].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[1], decisions[3] );
+    m_prevStates[3].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+
+    if( scanInfo.spt==SCAN_EOCSBB )
     {
         m_skipStates[0].checkRdCostSkipSbb( decisions[0] );
         m_skipStates[1].checkRdCostSkipSbb( decisions[1] );
@@ -1407,7 +1403,7 @@ namespace DQIntern
 
     std::swap( m_prevStates, m_currStates );
 
-    xDecide( scanInfo.spt, absCoeff, lastOffset(scanInfo.scanIdx), decisions, zeroOut, quantCoeff );
+    xDecide( scanInfo, absCoeff, lastOffset(scanInfo.scanIdx), decisions, zeroOut, quantCoeff );
 
     if( scanInfo.scanIdx )
     {
@@ -1422,44 +1418,10 @@ namespace DQIntern
       }
       else if( !zeroOut )
       {
-        switch( scanInfo.nextNbInfoSbb.num )
-        {
-        case 0:
-          m_currStates[0].updateState<0>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<0>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<0>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<0>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 1:
-          m_currStates[0].updateState<1>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<1>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<1>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<1>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 2:
-          m_currStates[0].updateState<2>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<2>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<2>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<2>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 3:
-          m_currStates[0].updateState<3>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<3>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<3>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<3>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 4:
-          m_currStates[0].updateState<4>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<4>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<4>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<4>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        default:
-          m_currStates[0].updateState<5>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<5>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<5>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<5>( scanInfo, m_prevStates, decisions[3] );
-        }
+        m_currStates[0].updateState( scanInfo, m_prevStates, decisions[0] );
+        m_currStates[1].updateState( scanInfo, m_prevStates, decisions[1] );
+        m_currStates[2].updateState( scanInfo, m_prevStates, decisions[2] );
+        m_currStates[3].updateState( scanInfo, m_prevStates, decisions[3] );
       }
 
       if( scanInfo.spt == SCAN_SOCSBB )
@@ -1471,15 +1433,13 @@ namespace DQIntern
 
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
-    CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
-
     //===== reset / pre-init =====
     const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
     m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
-    TCoeff*       qCoeff      = tu.getCoeffs( compID ).buf;
+    TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
     const TCoeff* tCoeff      = srcCoeff.buf;
     const int     numCoeff    = tu.blocks[compID].area();
-    ::memset( qCoeff, 0x00, numCoeff * sizeof( TCoeff ) );
+    ::memset( qCoeff, 0x00, numCoeff * sizeof( TCoeffSig ) );
     absSum                    = 0;
 
     const CompArea& area      = tu.blocks[ compID ];
@@ -1647,7 +1607,7 @@ namespace DQIntern
     {
       decision          = m_trellis[ scanIdx ][ decision.prevId ];
       int32_t blkpos    = tuPars.m_scanId2BlkPos[scanIdx].idx;
-      qCoeff[ blkpos ]  = ( tCoeff[ blkpos ] < 0 ? -decision.absLevel : decision.absLevel );
+      qCoeff[ blkpos ]  = TCoeffSig( tCoeff[ blkpos ] < 0 ? -decision.absLevel : decision.absLevel );
       absSum           += decision.absLevel;
     }
 
@@ -1660,7 +1620,7 @@ namespace DQIntern
 
 
 //===== interface class =====
-DepQuant::DepQuant( const Quant* other, bool enc ) : QuantRDOQ2( other )
+DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists )
 {
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
@@ -1672,9 +1632,14 @@ DepQuant::~DepQuant()
   delete static_cast<DQIntern::DepQuant*>(p);
 }
 
-void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx )
+void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff& uiAbsSum, const QpParam& cQP, const Ctx& ctx )
 {
-  if( tu.cs->slice->depQuantEnabled && (tu.mtsIdx[compID] != MTS_SKIP) )
+  if( tu.cs->picture->useScSelectiveRdoq && !xNeedRDOQ( tu, compID, pSrc, cQP ) )
+  {
+    tu.lastPos[compID] = -1;
+    uiAbsSum           =  0;
+  }
+  else if( tu.cs->slice->depQuantEnabled && tu.mtsIdx[compID] != MTS_SKIP )
   {
     //===== scaling matrix ====
     const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
@@ -1721,11 +1686,11 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int dqThrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
 {
-  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, dqThrVal );
+  QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
 
-  static_cast<DQIntern::DepQuant*>(p)->init( dqThrVal );
+  static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
 }
 
 } // namespace vvenc

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -80,7 +76,6 @@ namespace CU
   inline bool isInter                   (const CodingUnit &cu)                          { return cu.predMode == MODE_INTER; }
   inline bool isIBC                     (const CodingUnit &cu)                          { return cu.predMode == MODE_IBC; }
   inline bool isPLT                     (const CodingUnit &cu)                          { return cu.predMode == MODE_PLT; }
-  inline bool isRDPCMEnabled            (const CodingUnit& cu)                          { return cu.predMode == MODE_INTRA ? cu.cs->sps->spsRExt.implicitRdpcmEnabled : cu.cs->sps->spsRExt.explicitRdpcmEnabled;}
   inline bool isSameSlice               (const CodingUnit& cu, const CodingUnit& cu2)   { return cu.slice->independentSliceIdx == cu2.slice->independentSliceIdx; }
   inline bool isSameTile                (const CodingUnit& cu, const CodingUnit& cu2)   { return cu.tileIdx == cu2.tileIdx; }
   inline bool isSameSliceAndTile        (const CodingUnit& cu, const CodingUnit& cu2)   { return ( cu.slice->independentSliceIdx == cu2.slice->independentSliceIdx ) && ( cu.tileIdx == cu2.tileIdx ); }
@@ -174,18 +169,21 @@ namespace CU
   bool     checkDMVRCondition           (const CodingUnit& cu);
   void     getAffineControlPointCand    (const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx);
   void     getAffineMergeCand           (      CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx = -1);
-  void     setAllAffineMvField          (      CodingUnit& cu, MvField *mvField, RefPicList eRefList);
+  void     setAllAffineMvField          (      CodingUnit& cu, const MvField *mvField, RefPicList eRefList);
   void     setAllAffineMv               (      CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs = false);
   void     xInheritedAffineMv           (const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3]);
   void     fillAffineMvpCand            (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
   bool     addAffineMVPCandUnscaled     (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
   bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
+
+  void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
+  void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);
+  void     getIbcMVPsEncOnly            (CodingUnit& cu, Mv* mvPred, int& nbPred);
 }
 
 // TU tools
 namespace TU
 {
-  bool isNonTransformedResidualRotated  (const TransformUnit& tu, const ComponentID compID);
   bool getCbf                           (const TransformUnit& tu, const ComponentID compID);
   bool getCbfAtDepth                    (const TransformUnit& tu, const ComponentID compID, const unsigned depth);
   void setCbfAtDepth                    (      TransformUnit& tu, const ComponentID compID, const unsigned depth, const bool cbf);
@@ -198,13 +196,14 @@ namespace TU
 }
 
 uint32_t  getCtuAddr                    (const Position& pos, const PreCalcValues &pcv);
+uint32_t  getCtuAddrFromCtuSize         (const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus);
+
 int       getNumModesMip                (const Size& block);
 int       getMipSizeId                  (const Size& block);
 bool      allowLfnstWithMip             (const Size& block);
 
 template<typename T, size_t N>
-uint32_t updateCandList(T uiMode, double uiCost, static_vector<T, N>& candModeList, static_vector<double, N>& candCostList
-  , size_t uiFastCandNum = N, int* iserttPos = nullptr)
+uint32_t updateCandList( T uiMode, double uiCost, static_vector<T, N> &candModeList, static_vector<double, N> &candCostList, size_t uiFastCandNum = N, int *iserttPos = nullptr )
 {
   CHECK( std::min( uiFastCandNum, candModeList.size() ) != std::min( uiFastCandNum, candCostList.size() ), "Sizes do not match!" );
   CHECK( uiFastCandNum > candModeList.capacity(), "The vector is to small to hold all the candidates!" );

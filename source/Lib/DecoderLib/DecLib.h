@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -73,7 +69,7 @@ namespace vvenc {
 class InputNALUnit;
 struct FFwdDecoder;
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true  );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 // Class definition
 // ====================================================================================================================
@@ -82,9 +78,10 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 class DecLib
 {
 private:
+  MsgLog&                 msg;
   int                     m_iMaxRefPicNum;
 
-  NalUnitType             m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
+  vvencNalUnitType        m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
   int                     m_pocCRA;            ///< POC number of the latest CRA picture
   int                     m_pocRandomAccess;   ///< POC number of the random access point (the first IDR or CRA picture)
   int                     m_lastRasPoc;
@@ -135,13 +132,14 @@ private:
 
   std::list<InputNALUnit*> m_prefixSEINALUs; /// Buffered up prefix SEI NAL Units.
   int                     m_debugPOC;
-  std::vector<std::pair<NalUnitType, int>> m_accessUnitNals;
+  bool                    m_isDecoderInEncoder;
+  std::vector<std::pair<vvencNalUnitType, int>> m_accessUnitNals;
   struct AccessUnitPicInfo
   {
-    NalUnitType     m_nalUnitType; ///< nal_unit_type
-    uint32_t        m_temporalId;  ///< temporal_id
-    uint32_t        m_nuhLayerId;  ///< nuh_layer_id
-    int             m_POC;
+    vvencNalUnitType m_nalUnitType; ///< nal_unit_type
+    uint32_t         m_temporalId;  ///< temporal_id
+    uint32_t         m_nuhLayerId;  ///< nuh_layer_id
+    int              m_POC;
   };
   std::vector<AccessUnitPicInfo> m_accessUnitPicInfo;
   std::vector<int> m_accessUnitApsNals;
@@ -156,7 +154,7 @@ private:
 public:
   int                     m_targetSubPicIdx;
 public:
-  DecLib();
+  DecLib( MsgLog& logger);
   virtual ~DecLib();
 
   void  create  ();
@@ -169,7 +167,7 @@ public:
   void  deletePicBuffer();
 
   void  executeLoopFilters();
-  void  finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl = INFO);
+  void  finishPicture(int& poc, PicList*& rpcListPic, vvencMsgLevel msgl = VVENC_INFO);
   void  finishPictureLight(int& poc, PicList*& rpcListPic );
   void  checkNoOutputPriorPics (PicList* rpcListPic);
   void  checkNalUnitConstraints( uint32_t naluType );
@@ -188,6 +186,7 @@ public:
   void resetAccessUnitNals()              { m_accessUnitNals.clear();    }
   void resetAccessUnitPicInfo()           { m_accessUnitPicInfo.clear();    }
   void resetAccessUnitApsNals()           { m_accessUnitApsNals.clear(); }
+  void setDecoderInEncoderMode( bool m )  { m_isDecoderInEncoder = m; }
   bool isSliceNaluFirstInAU( bool newPicture, InputNALUnit &nalu );
 
   const VPS* getVPS()                     { return m_vps; }
@@ -203,8 +202,8 @@ public:
 protected:
   void      xUpdateRasInit(Slice* slice);
 
-  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer, const int layerId);
-  void      xCreateLostPicture (int iLostPOC, const int layerId);
+  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer);
+  void      xCreateLostPicture (int iLostPOC);
   void      xActivateParameterSets( const int layerId );
   void      xCheckParameterSetConstraints( const int layerId );
   void      xDecodePicHeader( InputNALUnit& nalu );
@@ -214,7 +213,7 @@ protected:
   void      xDecodeSPS( InputNALUnit& nalu );
   void      xDecodePPS( InputNALUnit& nalu );
   void      xDecodeAPS(InputNALUnit& nalu);
-  void      xUpdatePreviousTid0POC(Slice* pSlice) { if ((pSlice->TLayer == 0) && (pSlice->nalUnitType!=NAL_UNIT_CODED_SLICE_RASL) && (pSlice->nalUnitType!=NAL_UNIT_CODED_SLICE_RADL))  { m_prevTid0POC = pSlice->poc; }  }
+  void      xUpdatePreviousTid0POC(Slice* pSlice) { if ((pSlice->TLayer == 0) && (pSlice->nalUnitType!=VVENC_NAL_UNIT_CODED_SLICE_RASL) && (pSlice->nalUnitType!=VVENC_NAL_UNIT_CODED_SLICE_RADL))  { m_prevTid0POC = pSlice->poc; }  }
   void      xParsePrefixSEImessages();
   void      xParsePrefixSEIsForUnknownVCLNal();
 

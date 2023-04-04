@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -78,7 +74,7 @@ UnitArea CS::getArea( const CodingStructure &cs, const UnitArea& area, const Cha
   return isDualITree( cs ) || treeType != TREE_D ? area.singleChan( chType ) : area;
 }
 
-void CS::setRefinedMotionField(CodingStructure &cs)
+void CS::setRefinedMotionField( CodingStructure& cs )
 {
   MotionBuf   mb     = cs.getMotionBuf();
   MotionInfo* orgPtr = mb.buf;
@@ -96,8 +92,8 @@ void CS::setRefinedMotionField(CodingStructure &cs)
       static const unsigned mask  = scale - 1;
 
       const Position puPos = cu.lumaPos();
-      const Mv mv0 = cu.mv[0];
-      const Mv mv1 = cu.mv[1];
+      const Mv mv0 = cu.mv[0][0];
+      const Mv mv1 = cu.mv[1][0];
 
       for( int y = puPos.y, num = 0; y < ( puPos.y + cu.lumaSize().height ); y = y + dy )
       {
@@ -181,7 +177,7 @@ bool CU::checkCCLMAllowed(const CodingUnit& cu)
     {
       //disallow CCLM if luma 64x64 block uses BT or TT or NS with ISP
       const Position lumaRefPos( cu.chromaPos().x << getComponentScaleX( COMP_Cb, cu.chromaFormat ), cu.chromaPos().y << getComponentScaleY( COMP_Cb, cu.chromaFormat ) );
-      const CodingUnit* colLumaCu = cu.cs->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+      const CodingUnit* colLumaCu = cu.cs->lumaCS->getCU( lumaRefPos, CH_L, TREE_D );
 
       if( colLumaCu->lwidth() < 64 || colLumaCu->lheight() < 64 ) //further split at 64x64 luma node
       {
@@ -204,7 +200,7 @@ bool CU::checkCCLMAllowed(const CodingUnit& cu)
 
 uint8_t CU::checkAllowedSbt(const CodingUnit& cu) 
 {
-  if( !cu.slice->sps->SBT || cu.predMode != MODE_INTER || cu.ciip)
+  if (!cu.slice->sps->SBT || cu.predMode != MODE_INTER || cu.ciip || cu.predMode == MODE_IBC)
   {
     return 0;
   }
@@ -289,23 +285,27 @@ uint32_t CU::getCtuAddr( const CodingUnit &cu )
 
 int CU::predictQP( const CodingUnit& cu, const int prevQP )
 {
-  const CodingStructure &cs = *cu.cs;
-
-  uint32_t  ctuRsAddr = getCtuAddr( cu );
-  uint32_t  ctuXPosInCtus = ctuRsAddr % cs.pcv->widthInCtus;
-  if ( ctuXPosInCtus == 0 &&
-      !( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) &&
-      !( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) && 
-      ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType) != NULL ) && 
-      CU::isSameSliceAndTile( *cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType), cu ) )
+  const ChannelType      chType   = cu.chType;
+  const CodingStructure& cs       = *cu.cs;
+  const Slice&           slice    = *cs.slice;
+  const bool             inCtuA   = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) );
+  const bool             inCtuL   = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) );
+  const CodingUnit*      cuAbove  =          cs.getCURestricted( cu.blocks[chType].pos().offset( 0, -1 ), cu, chType );
+  const CodingUnit*      cuLeft   = inCtuL ? cs.getCURestricted( cu.blocks[chType].pos().offset( -1, 0 ), cu, chType ) : nullptr;
+  
+  const uint32_t ctuRsAddr       = getCtuAddr( cu );
+  const uint32_t ctuXPosInCtus   = ctuRsAddr % cs.pcv->widthInCtus;
+  const uint32_t tileXPosInCtus  = slice.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]];
+  
+  if( ctuXPosInCtus == tileXPosInCtus && !inCtuL && !inCtuA && cuAbove )
   {
-    return ( ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType ) )->qp );
+    return cuAbove->qp;
   }
   else
   {
-    const int a = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType))->qp : prevQP;
-    const int b = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( -1, 0 ), cu.chType, cu.treeType))->qp : prevQP;
-
+    const int a = inCtuA ? cuAbove->qp : prevQP;
+    const int b = inCtuL ? cuLeft->qp  : prevQP;
+  
     return ( a + b + 1 ) >> 1;
   }
 }
@@ -316,7 +316,7 @@ void CU::saveMotionInHMVP( const CodingUnit& cu, const bool isToBeDone )
   if (!cu.geo && !cu.affine && !isToBeDone)
   {
     MotionInfo puMi = cu.getMotionInfo();
-    HPMVInfo     mi ( puMi, ( puMi.interDir == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL );
+    HPMVInfo     mi ( puMi, ( puMi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
 
     const unsigned log2ParallelMergeLevel = (cu.cs->sps->log2ParallelMergeLevelMinus2 + 2);
     const unsigned xBr = cu.Y().width + cu.Y().x;
@@ -324,7 +324,7 @@ void CU::saveMotionInHMVP( const CodingUnit& cu, const bool isToBeDone )
     bool enableHmvp = ((xBr >> log2ParallelMergeLevel) > (cu.Y().x >> log2ParallelMergeLevel)) && ((yBr >> log2ParallelMergeLevel) > (cu.Y().y >> log2ParallelMergeLevel));
     bool enableInsertion = CU::isIBC(cu) || enableHmvp;
     if (enableInsertion)
-      cu.cs->addMiToLut( /*CU::isIBC(cu) ? cu.cs->motionLut.lutIbc :*/ cu.cs->motionLut.lut, mi);
+      cu.cs->addMiToLut( CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, mi);
   }
 }
 
@@ -706,7 +706,7 @@ const CodingUnit& CU::getCoLocatedLumaPU(const CodingUnit& cu)
   Position              topLeftPos = cu.blocks[cu.chType].lumaPos();
   Position              refPos     = topLeftPos.offset(cu.blocks[cu.chType].lumaSize().width  >> 1,
                                                        cu.blocks[cu.chType].lumaSize().height >> 1);
-  const CodingUnit& lumaCU     = CU::isSepTree(cu) ? *cu.cs->refCS->getCU(refPos, CH_L, TREE_D)
+  const CodingUnit& lumaCU     = CU::isSepTree(cu) ? *cu.cs->lumaCS->getCU(refPos, CH_L, TREE_D)
                                                 : *cu.cs->getCU(topLeftPos, CH_L, TREE_D);
 
   return lumaCU;
@@ -721,8 +721,7 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
 {
   const Slice& slice = *cs.slice;
   HPMVInfo miNeighbor;
-
-  auto &lut = /*ibcFlag ? cs.motionLut.lutIbc :*/ cs.motionLut.lut;
+  auto& lut = ibcFlag ? cs.motionLut.lutIbc : cs.motionLut.lut;
   int num_avai_candInLUT = (int) lut.size();
 
   for (int mrgIdx = 1; mrgIdx <= num_avai_candInLUT; mrgIdx++)
@@ -732,14 +731,14 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
     if ( mrgIdx > 2 || ((mrgIdx > 1 || !isGt4x4) && ibcFlag)
       || ((!isAvailableA1 || (miNeighbor != miLeft)) && (!isAvailableB1 || (miNeighbor != miAbove))) )
     {
-      mrgCtx.interDirNeighbours[cnt] = miNeighbor.interDir;
+      mrgCtx.interDirNeighbours[cnt] = miNeighbor.interDir();
       mrgCtx.useAltHpelIf      [cnt] = !ibcFlag && miNeighbor.useAltHpelIf;
-      mrgCtx.BcwIdx            [cnt] = (miNeighbor.interDir == 3) ? miNeighbor.BcwIdx : BCW_DEFAULT;
-      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miNeighbor.mv[0], miNeighbor.refIdx[0]);
+      mrgCtx.BcwIdx            [cnt] = (miNeighbor.interDir() == 3) ? miNeighbor.BcwIdx : BCW_DEFAULT;
+      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miNeighbor.mv[0], miNeighbor.mhRefIdx[0]);
 
       if (slice.isInterB())
       {
-        mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miNeighbor.mv[1], miNeighbor.refIdx[1]);
+        mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miNeighbor.mv[1], miNeighbor.mhRefIdx[1]);
       }
 
       if (mrgCandIdx == cnt)
@@ -763,6 +762,107 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
   return false;
 }
 
+void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx)
+{
+  const CodingStructure& cs = *cu.cs;
+  const uint32_t maxNumMergeCand = cu.cs->sps->maxNumIBCMergeCand;
+  for (uint32_t ui = 0; ui < maxNumMergeCand; ++ui)
+  {
+    mrgCtx.BcwIdx[ui] = BCW_DEFAULT;
+    mrgCtx.interDirNeighbours[ui] = 0;
+    mrgCtx.mrgTypeNeighbours[ui] = MRG_TYPE_IBC;
+    mrgCtx.mvFieldNeighbours[ui * 2].refIdx = NOT_VALID;
+    mrgCtx.mvFieldNeighbours[ui * 2 + 1].refIdx = NOT_VALID;
+    mrgCtx.useAltHpelIf[ui] = false;
+  }
+
+  mrgCtx.numValidMergeCand = maxNumMergeCand;
+  // compute the location of the current PU
+
+  int cnt = 0;
+
+  const Position posRT = cu.Y().topRight();
+  const Position posLB = cu.Y().bottomLeft();
+
+  MotionInfo miAbove, miLeft, miAboveLeft, miAboveRight, miBelowLeft;
+
+  //left
+  const CodingUnit* cuLeft = cs.getCURestricted(posLB.offset(-1, 0), cu, cu.chType);
+  bool isGt4x4 = cu.lwidth() * cu.lheight() > 16;
+  const bool isAvailableA1 = cuLeft && cu != *cuLeft && CU::isIBC(*cuLeft);
+  if( isGt4x4 && isAvailableA1 )
+  {
+    miLeft             = cuLeft->getMotionInfo( posLB.offset( -1, 0 ) );
+    miLeft.miRefIdx[0] = MI_NOT_VALID + 1;
+
+    // get Inter Dir
+    mrgCtx.interDirNeighbours[cnt] = miLeft.interDir();
+    // get Mv from Left
+    mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miLeft.mv[0], miLeft.miRefIdx[0]);
+    if (mrgCandIdx == cnt)
+    {
+      return;
+    }
+    cnt++;
+  }
+
+  // early termination
+  if (cnt == maxNumMergeCand)
+  {
+    return;
+  }
+
+  // above
+  const CodingUnit* cuAbove = cs.getCURestricted(posRT.offset(0, -1), cu, cu.chType);
+  bool isAvailableB1 = cuAbove && cu != *cuAbove && CU::isIBC(*cuAbove);
+  if (isGt4x4 && isAvailableB1)
+  {
+    miAbove             = cuAbove->getMotionInfo( posRT.offset( 0, -1 ) );
+    miAbove.miRefIdx[0] = MI_NOT_VALID + 1;
+
+    if( !isAvailableA1 || ( miAbove != miLeft ) )
+    {
+      // get Inter Dir
+      mrgCtx.interDirNeighbours[cnt] = miAbove.interDir();
+      // get Mv from Above
+      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miAbove.mv[0], miAbove.miRefIdx[0]);
+      if (mrgCandIdx == cnt)
+      {
+        return;
+      }
+
+      cnt++;
+    }
+  }
+
+  // early termination
+  if (cnt == maxNumMergeCand)
+  {
+    return;
+  }
+  else
+  {
+    bool bFound = addMergeHMVPCand( cs, mrgCtx, mrgCandIdx, maxNumMergeCand, cnt, isAvailableA1, miLeft, isAvailableB1, miAbove, true, isGt4x4 );
+
+    if (bFound)
+    {
+      return;
+    }
+  }
+
+  while (cnt < maxNumMergeCand)
+  {
+    mrgCtx.mvFieldNeighbours[cnt * 2].setMvField(Mv(0, 0), MAX_NUM_REF);
+    mrgCtx.interDirNeighbours[cnt] = 1;
+    if (mrgCandIdx == cnt)
+    {
+      return;
+    }
+    cnt++;
+  }
+
+  mrgCtx.numValidMergeCand = cnt;
+}
 
 void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx )
 {
@@ -801,15 +901,15 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     miAbove = puAbove->getMotionInfo(posRT.offset(0, -1));
 
     // get Inter Dir
-    mrgCtx.interDirNeighbours[cnt] = miAbove.interDir;
+    mrgCtx.interDirNeighbours[cnt] = miAbove.interDir();
     mrgCtx.useAltHpelIf[cnt] = puAbove->imv == IMV_HPEL;
     // get Mv from Above
     mrgCtx.BcwIdx[cnt] = (mrgCtx.interDirNeighbours[cnt] == 3) ? puAbove->BcwIdx : BCW_DEFAULT;
-    mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miAbove.mv[0], miAbove.refIdx[0]);
+    mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miAbove.mv[0], miAbove.miRefIdx[0]);
 
     if (slice.isInterB())
     {
-      mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miAbove.mv[1], miAbove.refIdx[1]);
+      mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miAbove.mv[1], miAbove.miRefIdx[1]);
     }
     if (mrgCandIdx == cnt)
     {
@@ -837,15 +937,15 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     if (!isAvailableB1 || (miAbove != miLeft))
     {
       // get Inter Dir
-      mrgCtx.interDirNeighbours[cnt] = miLeft.interDir;
+      mrgCtx.interDirNeighbours[cnt] = miLeft.interDir();
       mrgCtx.useAltHpelIf[cnt] = puLeft->imv == IMV_HPEL;
       mrgCtx.BcwIdx[cnt] = (mrgCtx.interDirNeighbours[cnt] == 3) ? puLeft->BcwIdx : BCW_DEFAULT;
       // get Mv from Left
-      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miLeft.mv[0], miLeft.refIdx[0]);
+      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField(miLeft.mv[0], miLeft.miRefIdx[0]);
 
       if (slice.isInterB())
       {
-        mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miLeft.mv[1], miLeft.refIdx[1]);
+        mrgCtx.mvFieldNeighbours[(cnt << 1) + 1].setMvField(miLeft.mv[1], miLeft.miRefIdx[1]);
       }
       if (mrgCandIdx == cnt)
       {
@@ -874,15 +974,15 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     if( !isAvailableB1 || ( miAbove != miAboveRight ) )
     {
       // get Inter Dir
-      mrgCtx.interDirNeighbours[cnt] = miAboveRight.interDir;
+      mrgCtx.interDirNeighbours[cnt] = miAboveRight.interDir();
       mrgCtx.useAltHpelIf[cnt] = puAboveRight->imv == IMV_HPEL;
       // get Mv from Above-right
       mrgCtx.BcwIdx[cnt] = (mrgCtx.interDirNeighbours[cnt] == 3) ? puAboveRight->BcwIdx : BCW_DEFAULT;
-      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miAboveRight.mv[0], miAboveRight.refIdx[0] );
+      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miAboveRight.mv[0], miAboveRight.miRefIdx[0] );
 
       if( slice.isInterB() )
       {
-        mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miAboveRight.mv[1], miAboveRight.refIdx[1] );
+        mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miAboveRight.mv[1], miAboveRight.miRefIdx[1] );
       }
 
       if (mrgCandIdx == cnt)
@@ -911,15 +1011,15 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     if( !isAvailableA1 || ( miBelowLeft != miLeft ) )
     {
       // get Inter Dir
-      mrgCtx.interDirNeighbours[cnt] = miBelowLeft.interDir;
+      mrgCtx.interDirNeighbours[cnt] = miBelowLeft.interDir();
       mrgCtx.useAltHpelIf[cnt] = puLeftBottom->imv == IMV_HPEL;
       mrgCtx.BcwIdx[cnt] = (mrgCtx.interDirNeighbours[cnt] == 3) ? puLeftBottom->BcwIdx : BCW_DEFAULT;
       // get Mv from Bottom-Left
-      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miBelowLeft.mv[0], miBelowLeft.refIdx[0] );
+      mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miBelowLeft.mv[0], miBelowLeft.miRefIdx[0] );
 
       if( slice.isInterB() )
       {
-        mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miBelowLeft.mv[1], miBelowLeft.refIdx[1] );
+        mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miBelowLeft.mv[1], miBelowLeft.miRefIdx[1] );
       }
 
       if (mrgCandIdx == cnt)
@@ -951,15 +1051,15 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       if( ( !isAvailableA1 || ( miLeft != miAboveLeft ) ) && ( !isAvailableB1 || ( miAbove != miAboveLeft ) ) )
       {
         // get Inter Dir
-        mrgCtx.interDirNeighbours[cnt] = miAboveLeft.interDir;
+        mrgCtx.interDirNeighbours[cnt] = miAboveLeft.interDir();
         mrgCtx.useAltHpelIf[cnt] = puAboveLeft->imv == IMV_HPEL;
         mrgCtx.BcwIdx[cnt] = (mrgCtx.interDirNeighbours[cnt] == 3) ? puAboveLeft->BcwIdx : BCW_DEFAULT;
         // get Mv from Above-Left
-        mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miAboveLeft.mv[0], miAboveLeft.refIdx[0] );
+        mrgCtx.mvFieldNeighbours[cnt << 1].setMvField( miAboveLeft.mv[0], miAboveLeft.miRefIdx[0] );
 
         if( slice.isInterB() )
         {
-          mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miAboveLeft.mv[1], miAboveLeft.refIdx[1] );
+          mrgCtx.mvFieldNeighbours[( cnt << 1 ) + 1].setMvField( miAboveLeft.mv[1], miAboveLeft.miRefIdx[1] );
         }
 
         if (mrgCandIdx == cnt)
@@ -1131,7 +1231,7 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 
   int r = 0;
   int refcnt = 0;
-  while (uiArrayAddr < maxNumMergeCand)
+  while (uiArrayAddr < maxNumMergeCand && uiArrayAddr < MRG_MAX_NUM_CANDS)
   {
     mrgCtx.interDirNeighbours [uiArrayAddr     ] = 1;
     mrgCtx.BcwIdx             [uiArrayAddr     ] = BCW_DEFAULT;
@@ -1146,7 +1246,7 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 
     if ( mrgCtx.interDirNeighbours[uiArrayAddr] == 1 && cu.cs->slice->getRefPic(REF_PIC_LIST_0, mrgCtx.mvFieldNeighbours[uiArrayAddr << 1].refIdx)->getPOC() == cu.cs->slice->poc)
     {
-      THROW("no IBC support");
+      mrgCtx.mrgTypeNeighbours[uiArrayAddr] = MRG_TYPE_IBC;
     }
 
     uiArrayAddr++;
@@ -1196,7 +1296,7 @@ int convertMvFixedToFloat(int32_t val)
     int round = (1 << scale) >> 1;
     int n     = (val + round) >> scale;
     exponent  = scale + ((n ^ sign) >> (MV_MANTISSA_BITCOUNT - 1));
-    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign << (MV_MANTISSA_BITCOUNT - 1));
+    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign * (1 << (MV_MANTISSA_BITCOUNT - 1)));
   }
   else
   {
@@ -1204,14 +1304,14 @@ int convertMvFixedToFloat(int32_t val)
     mantissa = val;
   }
 
-  return exponent | (mantissa << MV_EXPONENT_BITCOUNT);
+  return exponent | (mantissa * (1 << MV_EXPONENT_BITCOUNT));
 }
 
 int convertMvFloatToFixed(int val)
 {
   int exponent = val & MV_EXPONENT_MASK;
   int mantissa = val >> MV_EXPONENT_BITCOUNT;
-  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) << (exponent - 1);
+  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) * (1 << (exponent - 1));
 }
 
 int roundMvComp(int x)
@@ -1279,6 +1379,11 @@ void CU::getInterMMVDMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, con
 
 bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, const Position& _pos, Mv& rcMv, const int refIdx, bool sbFlag )
 {
+  if( CU::isIBC( cu ) )
+  {
+    return false;
+  }
+
   // don't perform MV compression when generally disabled or SbTMVP is used
   const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
   const unsigned mask  = ~( scale - 1 );
@@ -1307,20 +1412,17 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
 
   const MotionInfo& mi = pColPic->cs->getMotionInfo( pos );
 
-  if( !mi.isInter )
+  if( !mi.isInter() )
   {
     return false;
   }
-  if (CU::isIBC(cu))
-  {
-    return false;
-  }
-  int iColRefIdx = mi.refIdx[eColRefPicList];
+
+  int iColRefIdx = mi.miRefIdx[eColRefPicList];
 
   if (sbFlag && !slice.checkLDC)
   {
     eColRefPicList = refPicList;
-    iColRefIdx = mi.refIdx[eColRefPicList];
+    iColRefIdx = mi.miRefIdx[eColRefPicList];
     if (iColRefIdx < 0)
     {
       return false;
@@ -1331,7 +1433,7 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
     if (iColRefIdx < 0)
     {
       eColRefPicList = RefPicList(1 - eColRefPicList);
-      iColRefIdx = mi.refIdx[eColRefPicList];
+      iColRefIdx = mi.miRefIdx[eColRefPicList];
 
       if (iColRefIdx < 0)
       {
@@ -1340,16 +1442,8 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
     }
   }
 
-  const Slice* sliceCol = nullptr;
-
-  for( const auto s : pColPic->slices )
-  {
-    if( s->independentSliceIdx == mi.sliceIdx )
-    {
-      sliceCol = s;
-      break;
-    }
-  }
+  int ctuRsAddr = getCtuAddr( pos, *pColPic->cs->pcv );
+  const Slice* sliceCol = pColPic->ctuSlice[ ctuRsAddr ];
 
   CHECK( sliceCol == nullptr, "Slice segment not found" );
 
@@ -1392,6 +1486,147 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   }
 
   return true;
+}
+
+static void isAddNeighborMvIBC( const Mv& currMv, Mv* neighborMvs, int& numNeighborMv )
+{
+  Mv bv = currMv;
+  bv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
+
+  bool existed = false;
+  for( uint32_t cand = 0; cand < numNeighborMv && !existed; cand++ )
+  {
+    if( bv == neighborMvs[cand] )
+    {
+      existed = true;
+    }
+  }
+
+  if( !existed )
+  {
+    neighborMvs[numNeighborMv++] = bv;
+  }
+}
+
+static bool getDerivedMvIbc( CodingUnit& cu, const Mv& currentBv, Mv& derivedMv )
+{
+  int cuPelX  = cu.lumaPos().x;
+  int cuPelY  = cu.lumaPos().y;
+  int rX      = cuPelX + currentBv.hor;
+  int rY      = cuPelY + currentBv.ver;
+  int offsetX = currentBv.hor;
+  int offsetY = currentBv.ver;
+
+  if( rX < 0 || rY < 0 || rX >= cu.cs->slice->pps->picWidthInLumaSamples || rY >= cu.cs->slice->pps->picHeightInLumaSamples )
+  {
+    return false;
+  }
+
+  const CodingUnit* neibRefCU = cu.cs->getCURestricted( cu.lumaPos().offset( offsetX, offsetY ), cu, CH_L );
+
+  if( neibRefCU && CU::isIBC( *neibRefCU ) )
+  {
+    Mv currMv  = currentBv; currMv.changePrecision( MV_PRECISION_INT, MV_PRECISION_INTERNAL );
+    derivedMv  = neibRefCU->mv[0][0];
+    derivedMv += currMv;
+    return true;
+  }
+
+  return false;
+}
+
+void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
+{
+  const PreCalcValues& pcv = *cu.cs->pcv;
+  const int  cuWidth = cu.blocks[COMP_Y].width;
+  const int  cuHeight = cu.blocks[COMP_Y].height;
+  const int  log2UnitWidth = floorLog2(pcv.minCUSize); //(pcv.minCUWidth);
+  const int  log2UnitHeight = floorLog2(pcv.minCUSize); //(pcv.minCUHeight);
+  const int  totalAboveUnits = (cuWidth >> log2UnitHeight) + 1; // log2UnitWidth) + 1;
+  const int  totalLeftUnits = (cuHeight >> log2UnitHeight) + 1;
+
+  nbPred = 0;
+  Position posLT = cu.Y().topLeft();
+
+  // above-left
+  const CodingUnit* aboveLeftCU = cu.cs->getCURestricted(posLT.offset(-1, -1), cu, CH_L);
+  if( aboveLeftCU && CU::isIBC( *aboveLeftCU ) )
+  {
+    isAddNeighborMvIBC(aboveLeftCU->mv[0][0], mvPred, nbPred);
+  }
+
+  // above neighbors
+  for( uint32_t dx = 0; dx < totalAboveUnits && nbPred < IBC_NUM_CANDIDATES; dx++ )
+  {
+    const CodingUnit* tmpCU = cu.cs->getCURestricted( posLT.offset( ( dx << log2UnitWidth ), -1 ), cu, CH_L );
+    if( tmpCU && CU::isIBC( *tmpCU ) )
+    {
+      isAddNeighborMvIBC( tmpCU->mv[0][0], mvPred, nbPred );
+    }
+  }
+
+  // left neighbors
+  for( uint32_t dy = 0; dy < totalLeftUnits && nbPred < IBC_NUM_CANDIDATES; dy++ )
+  {
+    const CodingUnit* tmpCU = cu.cs->getCURestricted( posLT.offset( -1, ( dy << log2UnitHeight ) ), cu, CH_L );
+    if( tmpCU && CU::isIBC( *tmpCU ) )
+    {
+      isAddNeighborMvIBC( tmpCU->mv[0][0], mvPred, nbPred );
+    }
+  }
+
+  size_t numAvaiCandInLUT = cu.cs->motionLut.lutIbc.size();
+  for( uint32_t cand = 0; cand < numAvaiCandInLUT && nbPred < IBC_NUM_CANDIDATES; cand++ )
+  {
+    auto& neibMi = cu.cs->motionLut.lutIbc;
+    isAddNeighborMvIBC( neibMi[cand].mv[0], mvPred, nbPred );
+  }
+
+  bool isBvCandDerived[IBC_NUM_CANDIDATES];
+  ::memset(isBvCandDerived, false, IBC_NUM_CANDIDATES);
+
+  int curNbPred = nbPred;
+  if( curNbPred < IBC_NUM_CANDIDATES )
+  {
+    do
+    {
+      curNbPred = nbPred;
+      for( uint32_t idx = 0; idx < curNbPred && nbPred < IBC_NUM_CANDIDATES; idx++ )
+      {
+        if( !isBvCandDerived[idx] )
+        {
+          Mv derivedMv;
+          if( getDerivedMvIbc( cu, mvPred[idx], derivedMv ) )
+          {
+            isAddNeighborMvIBC( derivedMv, mvPred, nbPred );
+          }
+          isBvCandDerived[idx] = true;
+        }
+      }
+    } while( nbPred > curNbPred && nbPred < IBC_NUM_CANDIDATES );
+  }
+}
+
+void CU::fillIBCMvpCand(CodingUnit& cu, AMVPInfo& amvpInfo)
+{
+  AMVPInfo* pInfo = &amvpInfo;
+
+  pInfo->numCand = 0;
+
+  MergeCtx mergeCtx;
+  CU::getIBCMergeCandidates(cu, mergeCtx, AMVP_MAX_NUM_CANDS - 1);
+  int candIdx = 0;
+  while (pInfo->numCand < AMVP_MAX_NUM_CANDS)
+  {
+    pInfo->mvCand[pInfo->numCand] = mergeCtx.mvFieldNeighbours[(candIdx << 1) + 0].mv;;
+    pInfo->numCand++;
+    candIdx++;
+  }
+
+  for (Mv& mv : pInfo->mvCand)
+  {
+    mv.roundIbcPrecInternal2Amvr(cu.imv);
+  }
 }
 
 bool CU::isDiffMER(const Position &pos1, const Position &pos2, const unsigned plevel)
@@ -1584,7 +1819,7 @@ bool CU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicL
   for (int predictorSource = 0; predictorSource < 2; predictorSource++) // examine the indicated reference picture list, then if not available, examine the other list.
   {
     const RefPicList refPicListIndex = (predictorSource == 0) ? refPicList : refPicList2nd;
-    const int        neibRefIdx = neibMi.refIdx[refPicListIndex];
+    const int        neibRefIdx = neibMi.miRefIdx[refPicListIndex];
 
     if (((neibPU->interDir & (refPicListIndex + 1)) == 0) || cu.slice->getRefPOC(refPicListIndex, neibRefIdx) != currRefPOC)
     {
@@ -1621,9 +1856,9 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
   int curH = cu.Y().height;
 
   Mv mvLT, mvRT, mvLB;
-  mvLT = cuNeighbour->mvAffi[refPicList][0];
-  mvRT = cuNeighbour->mvAffi[refPicList][1];
-  mvLB = cuNeighbour->mvAffi[refPicList][2];
+  mvLT = cuNeighbour->mv[refPicList][0];
+  mvRT = cuNeighbour->mv[refPicList][1];
+  mvLB = cuNeighbour->mv[refPicList][2];
 
   bool isTopCtuBoundary = false;
   if ((posNeiY + neiH) % cu.cs->sps->CTUSize == 0 && (posNeiY + neiH) == posCurY)
@@ -1640,12 +1875,12 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
   int shift = MAX_CU_DEPTH;
   int iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY;
 
-  iDMvHorX = (mvRT - mvLT).hor << (shift - Log2(neiW));
-  iDMvHorY = (mvRT - mvLT).ver << (shift - Log2(neiW));
+  iDMvHorX = (mvRT - mvLT).hor * (1<< (shift - Log2(neiW)));
+  iDMvHorY = (mvRT - mvLT).ver * (1<< (shift - Log2(neiW)));
   if (cuNeighbour->affineType == AFFINEMODEL_6PARAM && !isTopCtuBoundary)
   {
-    iDMvVerX = (mvLB - mvLT).hor << (shift - Log2(neiH));
-    iDMvVerY = (mvLB - mvLT).ver << (shift - Log2(neiH));
+    iDMvVerX = (mvLB - mvLT).hor * (1<< (shift - Log2(neiH)));
+    iDMvVerY = (mvLB - mvLT).ver * (1<< (shift - Log2(neiH)));
   }
   else
   {
@@ -1653,8 +1888,8 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
     iDMvVerY = iDMvHorX;
   }
 
-  int iMvScaleHor = mvLT.hor << shift;
-  int iMvScaleVer = mvLT.ver << shift;
+  int iMvScaleHor = mvLT.hor * (1<< shift);
+  int iMvScaleVer = mvLT.ver * (1<< shift);
   int horTmp, verTmp;
 
   // v0
@@ -1901,7 +2136,7 @@ bool CU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, 
   for( int predictorSource = 0; predictorSource < 2; predictorSource++ ) // examine the indicated reference picture list, then if not available, examine the other list.
   {
     const RefPicList refPicListIndex = ( predictorSource == 0 ) ? refPicList : refPicList2nd;
-    const int        neibRefIdx       = neibMi.refIdx[refPicListIndex];
+    const int        neibRefIdx       = neibMi.miRefIdx[refPicListIndex];
 
     if( neibRefIdx >= 0 && currRefPOC == cs.slice->getRefPOC( refPicListIndex, neibRefIdx ) )
     {
@@ -1917,8 +2152,7 @@ bool CU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, 
 void CU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info)
 {
   const Slice &slice = *(*cu.cs).slice;
-
-  auto &lut = /*CU::isIBC(cu) ? cu.cs->motionLut.lutIbc :*/ cu.cs->motionLut.lut;
+  auto& lut = CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut;
   int num_avai_candInLUT = (int) lut.size();
   int num_allowedCand = std::min(MAX_NUM_HMVP_AVMPCANDS, num_avai_candInLUT);
   const RefPicList refPicList2nd = (refPicList == REF_PIC_LIST_0) ? REF_PIC_LIST_1 : REF_PIC_LIST_0;
@@ -1934,9 +2168,9 @@ void CU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, cons
     for (int predictorSource = 0; predictorSource < 2; predictorSource++)
     {
       const RefPicList refPicListIndex = (predictorSource == 0) ? refPicList : refPicList2nd;
-      const int        neibRefIdx = neibMi.refIdx[refPicListIndex];
+      const int        neibRefIdx = neibMi.mhRefIdx[refPicListIndex];
 
-      if (neibRefIdx >= 0 && (CU::isIBC(cu) || (currRefPOC == slice.getRefPOC(refPicListIndex, neibRefIdx))))
+      if (neibRefIdx != MH_NOT_VALID && (CU::isIBC(cu) || (currRefPOC == slice.getRefPOC(refPicListIndex, neibRefIdx))))
       {
         Mv pmv = neibMi.mv[refPicListIndex];
         pmv.roundTransPrecInternal2Amvr(cu.imv);
@@ -1989,13 +2223,13 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
 
     for (int l = 0; l < 2; l++)
     {
-      if (mi[idx0].refIdx[l] >= 0 && mi[idx1].refIdx[l] >= 0)
+      if (mi[idx0].miRefIdx[l] != MI_NOT_VALID && mi[idx1].miRefIdx[l] != MI_NOT_VALID)
       {
         // check same refidx and different mv
-        if (mi[idx0].refIdx[l] == mi[idx1].refIdx[l])
+        if (mi[idx0].miRefIdx[l] == mi[idx1].miRefIdx[l])
         {
           dir |= (l + 1);
-          refIdx[l] = mi[idx0].refIdx[l];
+          refIdx[l] = mi[idx0].miRefIdx[l];
         }
       }
     }
@@ -2010,13 +2244,13 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
 
     for (int l = 0; l < 2; l++)
     {
-      if (mi[idx0].refIdx[l] >= 0 && mi[idx1].refIdx[l] >= 0 && mi[idx2].refIdx[l] >= 0)
+      if (mi[idx0].miRefIdx[l] != MI_NOT_VALID && mi[idx1].miRefIdx[l] != MI_NOT_VALID && mi[idx2].miRefIdx[l] != MI_NOT_VALID)
       {
         // check same refidx and different mv
-        if (mi[idx0].refIdx[l] == mi[idx1].refIdx[l] && mi[idx0].refIdx[l] == mi[idx2].refIdx[l])
+        if (mi[idx0].miRefIdx[l] == mi[idx1].miRefIdx[l] && mi[idx0].miRefIdx[l] == mi[idx2].miRefIdx[l])
         {
           dir |= (l + 1);
-          refIdx[l] = mi[idx0].refIdx[l];
+          refIdx[l] = mi[idx0].miRefIdx[l];
         }
       }
       }
@@ -2065,8 +2299,8 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
         break;
 
       case 5: // 5 : LT, LB
-        vx = (cMv[l][0].hor << shift) + ((cMv[l][2].ver - cMv[l][0].ver) << shiftHtoW);
-        vy = (cMv[l][0].ver << shift) - ((cMv[l][2].hor - cMv[l][0].hor) << shiftHtoW);
+        vx = (cMv[l][0].hor *(1<< shift)) + ((cMv[l][2].ver - cMv[l][0].ver) * (1<< shiftHtoW));
+        vy = (cMv[l][0].ver *(1<< shift)) - ((cMv[l][2].hor - cMv[l][0].hor) * (1<< shiftHtoW));
         roundAffineMv(vx, vy, shift);
         cMv[l][1].set(vx, vy);
         cMv[l][1].clipToStorageBitDepth();
@@ -2164,7 +2398,7 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& L
   // derivation of center motion parameters from the collocated CU
   const MotionInfo &mi = pColPic->cs->getMotionInfo(centerPos);
 
-  if (mi.isInter)
+  if (mi.isInter())
   {
     mrgCtx.interDirNeighbours[count] = 0;
 
@@ -2217,16 +2451,14 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& L
         MotionInfo mi;
 
         found = false;
-        mi.isInter = true;
-        mi.sliceIdx = slice.independentSliceIdx;
-        if (colMi.isInter)
+        if (colMi.isInter())
         {
           for (unsigned currRefListId = 0; currRefListId < (bBSlice ? 2 : 1); currRefListId++)
           {
             RefPicList currRefPicList = RefPicList(currRefListId);
             if (getColocatedMVP(cu, currRefPicList, colPos, cColMv, refIdx, true))
             {
-              mi.refIdx[currRefListId] = 0;
+              mi.miRefIdx[currRefListId] = 0;
               mi.mv[currRefListId] = cColMv;
               found = true;
             }
@@ -2236,17 +2468,14 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& L
         {
           mi.mv[0] = mrgCtx.mvFieldNeighbours[(count << 1) + 0].mv;
           mi.mv[1] = mrgCtx.mvFieldNeighbours[(count << 1) + 1].mv;
-          mi.refIdx[0] = mrgCtx.mvFieldNeighbours[(count << 1) + 0].refIdx;
-          mi.refIdx[1] = mrgCtx.mvFieldNeighbours[(count << 1) + 1].refIdx;
+          mi.miRefIdx[0] = mrgCtx.mvFieldNeighbours[(count << 1) + 0].refIdx;
+          mi.miRefIdx[1] = mrgCtx.mvFieldNeighbours[(count << 1) + 1].refIdx;
         }
 
-        mi.interDir = (mi.refIdx[0] != -1 ? 1 : 0) + (mi.refIdx[1] != -1 ? 2 : 0);
-
-        if (isBiPred && mi.interDir == 3)
+        if (isBiPred && mi.interDir() == 3)
         {
-          mi.interDir = 1;
-          mi.mv[1] = Mv();
-          mi.refIdx[1] = NOT_VALID;
+          mi.mv[1]       = Mv();
+          mi.miRefIdx[1] = MI_NOT_VALID;
         }
 
         mb.subBuf(g_miScaling.scale(Position{ x, y } -cu.lumaPos()), g_miScaling.scale(Size(puWidth, puHeight))).fill(mi);
@@ -2370,14 +2599,14 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
     {
       miLeft = puLeft->getMotionInfo(posCurLB.offset(-1, 0));
       // get Inter Dir
-      mrgCtx.interDirNeighbours[pos] = miLeft.interDir;
+      mrgCtx.interDirNeighbours[pos] = miLeft.interDir();
 
       // get Mv from Left
-      mrgCtx.mvFieldNeighbours[pos << 1].setMvField(miLeft.mv[0], miLeft.refIdx[0]);
+      mrgCtx.mvFieldNeighbours[pos << 1].setMvField(miLeft.mv[0], miLeft.miRefIdx[0]);
 
       if (slice.isInterB())
       {
-        mrgCtx.mvFieldNeighbours[(pos << 1) + 1].setMvField(miLeft.mv[1], miLeft.refIdx[1]);
+        mrgCtx.mvFieldNeighbours[(pos << 1) + 1].setMvField(miLeft.mv[1], miLeft.miRefIdx[1]);
       }
       pos++;
     }
@@ -2543,9 +2772,8 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
         bool      bExistMV = C0Avail && getColocatedMVP(cu, REF_PIC_LIST_0, posC0, cColMv, refIdx);
         if (bExistMV)
         {
-          mi[3].mv[0] = cColMv;
-          mi[3].refIdx[0] = refIdx;
-          mi[3].interDir = 1;
+          mi[3].mv[0]       = cColMv;
+          mi[3].miRefIdx[0] = refIdx;
           isAvailable[3] = true;
         }
 
@@ -2554,9 +2782,8 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
           bExistMV = C0Avail && getColocatedMVP(cu, REF_PIC_LIST_1, posC0, cColMv, refIdx);
           if (bExistMV)
           {
-            mi[3].mv[1] = cColMv;
-            mi[3].refIdx[1] = refIdx;
-            mi[3].interDir |= 2;
+            mi[3].mv[1]       = cColMv;
+            mi[3].miRefIdx[1] = refIdx;
             isAvailable[3] = true;
           }
         }
@@ -2624,7 +2851,7 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
   }
 }
 
-void CU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefList)
+void CU::setAllAffineMvField(CodingUnit& cu, const MvField *mvField, RefPicList eRefList)
 {
   // Set Mv
   Mv mv[3];
@@ -2667,13 +2894,13 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
   int deltaMvVerY = 0;
   if (!SameMV)
   {
-    deltaMvHorX = (affRT - affLT).hor << (shift - Log2(width));
-    deltaMvHorY = (affRT - affLT).ver << (shift - Log2(width));
+    deltaMvHorX = (affRT - affLT).hor * (1<< (shift - Log2(width)));
+    deltaMvHorY = (affRT - affLT).ver * (1<< (shift - Log2(width)));
     int height = cu.Y().height;
     if (cu.affineType == AFFINEMODEL_6PARAM)
     {
-      deltaMvVerX = (affLB - affLT).hor << (shift - Log2(height));
-      deltaMvVerY = (affLB - affLT).ver << (shift - Log2(height));
+      deltaMvVerX = (affLB - affLT).hor * (1<< (shift - Log2(height)));
+      deltaMvVerY = (affLB - affLT).ver * (1<< (shift - Log2(height)));
     }
     else
     {
@@ -2682,8 +2909,8 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
     }
   }
 
-  int mvScaleHor = affLT.hor << shift;
-  int mvScaleVer = affLT.ver << shift;
+  int mvScaleHor = affLT.hor * (1<< shift);
+  int mvScaleVer = affLT.ver * (1<< shift);
   int blockWidth = AFFINE_MIN_BLOCK_SIZE;
   int blockHeight = AFFINE_MIN_BLOCK_SIZE;
   const int halfBW = blockWidth >> 1;
@@ -2725,9 +2952,9 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
     }
   }
 
-  cu.mvAffi[eRefList][0] = affLT;
-  cu.mvAffi[eRefList][1] = affRT;
-  cu.mvAffi[eRefList][2] = affLB;
+  cu.mv[eRefList][0] = affLT;
+  cu.mv[eRefList][1] = affRT;
+  cu.mv[eRefList][2] = affLB;
 }
 
 void clipColPos(int& posX, int& posY, const CodingUnit& cu)
@@ -2758,52 +2985,53 @@ void clipColPos(int& posX, int& posY, const CodingUnit& cu)
 void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
 {
   MotionBuf mb = cu.getMotionBuf();
-  if (!cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N)
+
+  if( !cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N || cu.mergeType == MRG_TYPE_IBC )
   {
-    MotionInfo mi;
+    bool isIBC   = CU::isIBC( cu );
+    bool isInter = !CU::isIntra( cu ) && !isIBC;
 
-    mi.isInter  = CU::isInter(cu);
-    mi.sliceIdx = cu.slice->independentSliceIdx;
-
-    if( mi.isInter )
+    if( isInter || isIBC )
     {
-      mi.interDir = cu.interDir;
+      MotionInfo mi;
 
       for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
       {
-        mi.mv[i]     = cu.mv[i];
-        mi.refIdx[i] = cu.refIdx[i];
+        mi.mv[i]       = cu.mv[i][0];
+        mi.miRefIdx[i] = isIBC ? MI_NOT_VALID : cu.refIdx[i];
       }
-      if (cu.affine)
+
+      if( cu.affine )
       {
-        for (int y = 0; y < mb.height; y++)
+        for( int y = 0; y < mb.height; y++ )
         {
-          for (int x = 0; x < mb.width; x++)
+          for( int x = 0; x < mb.width; x++ )
           {
-            MotionInfo &dest = mb.at(x, y);
-            dest.isInter = mi.isInter;
-            dest.interDir = mi.interDir;
-            dest.sliceIdx = mi.sliceIdx;
-            for (int i = 0; i < NUM_REF_PIC_LIST_01; i++)
+            MotionInfo& dest = mb.at( x, y );
+
+            for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
             {
-              if (mi.refIdx[i] == -1)
+              if( mi.miRefIdx[i] == MI_NOT_VALID )
               {
                 dest.mv[i] = Mv();
               }
-              dest.refIdx[i] = mi.refIdx[i];
+              dest.miRefIdx[i] = mi.miRefIdx[i];
             }
           }
         }
         return;
       }
-    }
+      else
+      {
+      }
 
-    mb.fill( mi );
+      mb.fill( mi );
+    }
   }
-  else if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
+  else if( cu.mergeType == MRG_TYPE_SUBPU_ATMVP )
   {
-    CHECK(mrgCtx.subPuMvpMiBuf.area() == 0 || !mrgCtx.subPuMvpMiBuf.buf, "Buffer not initialized");
-    mb.copyFrom(mrgCtx.subPuMvpMiBuf);
+    CHECK( mrgCtx.subPuMvpMiBuf.area() == 0 || !mrgCtx.subPuMvpMiBuf.buf, "Buffer not initialized" );
+    mb.copyFrom( mrgCtx.subPuMvpMiBuf );
   }
 }
 
@@ -2836,10 +3064,10 @@ void CU::restrictBiPredMergeCandsOne(CodingUnit& cu)
   {
     if (cu.interDir == 3)
     {
-      cu.interDir = 1;
+      cu.interDir  = 1;
       cu.refIdx[1] = -1;
-      cu.mv[1] = Mv(0, 0);
-      cu.BcwIdx = BCW_DEFAULT;
+      cu.mv[1][0]  = Mv(0, 0);
+      cu.BcwIdx    = BCW_DEFAULT;
     }
   }
 }
@@ -2916,40 +3144,34 @@ void CU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t sp
   MotionBuf mb    = cu.getMotionBuf();
 
   MotionInfo biMv;
-  biMv.isInter  = true;
-  biMv.sliceIdx = cu.cs->slice->independentSliceIdx;
 
   if (geoMrgCtx.interDirNeighbours[candIdx0] == 1 && geoMrgCtx.interDirNeighbours[candIdx1] == 2)
   {
-    biMv.interDir  = 3;
-    biMv.mv[0]     = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].mv;
-    biMv.mv[1]     = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
-    biMv.refIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].refIdx;
-    biMv.refIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
+    biMv.mv[0]       = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].mv;
+    biMv.mv[1]       = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
+    biMv.miRefIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].refIdx;
+    biMv.miRefIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
   }
   else if (geoMrgCtx.interDirNeighbours[candIdx0] == 2 && geoMrgCtx.interDirNeighbours[candIdx1] == 1)
   {
-    biMv.interDir  = 3;
-    biMv.mv[0]     = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
-    biMv.mv[1]     = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].mv;
-    biMv.refIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
-    biMv.refIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].refIdx;
+    biMv.mv[0]       = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
+    biMv.mv[1]       = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].mv;
+    biMv.miRefIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
+    biMv.miRefIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].refIdx;
   }
   else if (geoMrgCtx.interDirNeighbours[candIdx0] == 1 && geoMrgCtx.interDirNeighbours[candIdx1] == 1)
   {
-    biMv.interDir  = 1;
-    biMv.mv[0]     = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
-    biMv.mv[1]     = Mv(0, 0);
-    biMv.refIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
-    biMv.refIdx[1] = -1;
+    biMv.mv[0]       = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
+    biMv.mv[1]       = Mv(0, 0);
+    biMv.miRefIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
+    biMv.miRefIdx[1] = MI_NOT_VALID;
   }
   else if (geoMrgCtx.interDirNeighbours[candIdx0] == 2 && geoMrgCtx.interDirNeighbours[candIdx1] == 2)
   {
-    biMv.interDir  = 2;
-    biMv.mv[0]     = Mv(0, 0);
-    biMv.mv[1]     = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
-    biMv.refIdx[0] = -1;
-    biMv.refIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
+    biMv.mv[0]       = Mv(0, 0);
+    biMv.mv[1]       = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
+    biMv.miRefIdx[0] = MI_NOT_VALID;
+    biMv.miRefIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
   }
 
   int16_t angle   = g_GeoParams[splitDir][0];
@@ -2970,40 +3192,28 @@ void CU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t sp
   }
   for (int y = 0; y < mb.height; y++)
   {
-    lookUpY = (((4 * y + offsetY) << 1) + 5) * g_Dis[distanceY];
+    lookUpY = (2 * (4 * y + offsetY) + 5) * g_Dis[distanceY];
     for (int x = 0; x < mb.width; x++)
     {
-      motionIdx = (((4 * x + offsetX) << 1) + 5) * g_Dis[distanceX] + lookUpY;
+      motionIdx = (2 * (4 * x + offsetX) + 5) * g_Dis[distanceX] + lookUpY;
       tpmMask   = abs(motionIdx) < 32 ? 2 : (motionIdx <= 0 ? (1 - isFlip) : isFlip);
       if (tpmMask == 2)
       {
-        mb.at(x, y).isInter   = true;
-        mb.at(x, y).interDir  = biMv.interDir;
-        mb.at(x, y).refIdx[0] = biMv.refIdx[0];
-        mb.at(x, y).refIdx[1] = biMv.refIdx[1];
-        mb.at(x, y).mv[0]     = biMv.mv[0];
-        mb.at(x, y).mv[1]     = biMv.mv[1];
-        mb.at(x, y).sliceIdx  = biMv.sliceIdx;
+        mb.at( x, y ) = biMv;
       }
       else if (tpmMask == 0)
       {
-        mb.at(x, y).isInter   = true;
-        mb.at(x, y).interDir  = geoMrgCtx.interDirNeighbours[candIdx0];
-        mb.at(x, y).refIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].refIdx;
-        mb.at(x, y).refIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].refIdx;
-        mb.at(x, y).mv[0]     = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].mv;
-        mb.at(x, y).mv[1]     = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].mv;
-        mb.at(x, y).sliceIdx  = biMv.sliceIdx;
+        mb.at(x, y).miRefIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].refIdx;
+        mb.at(x, y).miRefIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].refIdx;
+        mb.at(x, y).mv[0]       = geoMrgCtx.mvFieldNeighbours[candIdx0 << 1].mv;
+        mb.at(x, y).mv[1]       = geoMrgCtx.mvFieldNeighbours[(candIdx0 << 1) + 1].mv;
       }
       else
       {
-        mb.at(x, y).isInter   = true;
-        mb.at(x, y).interDir  = geoMrgCtx.interDirNeighbours[candIdx1];
-        mb.at(x, y).refIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
-        mb.at(x, y).refIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
-        mb.at(x, y).mv[0]     = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
-        mb.at(x, y).mv[1]     = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
-        mb.at(x, y).sliceIdx  = biMv.sliceIdx;
+        mb.at(x, y).miRefIdx[0] = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].refIdx;
+        mb.at(x, y).miRefIdx[1] = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].refIdx;
+        mb.at(x, y).mv[0]       = geoMrgCtx.mvFieldNeighbours[candIdx1 << 1].mv;
+        mb.at(x, y).mv[1]       = geoMrgCtx.mvFieldNeighbours[(candIdx1 << 1) + 1].mv;
       }
     }
   }
@@ -3017,7 +3227,7 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
   {
     if( cu.interDir != 2 /* PRED_L1 */ )
     {
-      Mv mv        = cu.mv[0];
+      Mv mv        = cu.mv[0][0];
       Mv mvPred;
       AMVPInfo amvpInfo;
       CU::fillMvpCand(cu, REF_PIC_LIST_0, cu.refIdx[0], amvpInfo);
@@ -3025,13 +3235,13 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
 
       mvPred       = amvpInfo.mvCand[cu.mvpIdx[0]];
       mv.roundTransPrecInternal2Amvr(cu.imv);
-      cu.mv[0]     = mv;
+      cu.mv[0][0]  = mv;
       Mv mvDiff    = mv - mvPred;
-      cu.mvd[0]    = mvDiff;
+      cu.mvd[0][0] = mvDiff;
     }
     if( cu.interDir != 1 /* PRED_L0 */ )
     {
-      Mv mv        = cu.mv[1];
+      Mv mv        = cu.mv[1][0];
       Mv mvPred;
       AMVPInfo amvpInfo;
       CU::fillMvpCand(cu, REF_PIC_LIST_1, cu.refIdx[1], amvpInfo);
@@ -3043,14 +3253,14 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
 
       if( cu.cs->slice->picHeader->mvdL1Zero && cu.interDir == 3 /* PRED_BI */ )
       {
-        cu.mvd[1] = Mv();
+        cu.mvd[1][0] = Mv();
         mv = mvPred;
       }
       else
       {
-        cu.mvd[1] = mvDiff;
+        cu.mvd[1][0] = mvDiff;
       }
-      cu.mv[1] = mv;
+      cu.mv[1][0] = mv;
     }
 
   }
@@ -3071,15 +3281,15 @@ bool CU::hasSubCUNonZeroMVd( const CodingUnit& cu )
   {
     if( cu.interDir != 2 /* PRED_L1 */ )
     {
-      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0].hor != 0;
-      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0].ver != 0;
+      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0][0].hor != 0;
+      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0][0].ver != 0;
     }
     if( cu.interDir != 1 /* PRED_L0 */ )
     {
       if( !cu.cs->slice->picHeader->mvdL1Zero || cu.interDir != 3 /* PRED_BI */ )
       {
-        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1].hor != 0;
-        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1].ver != 0;
+        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1][0].hor != 0;
+        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1][0].ver != 0;
       }
     }
   }
@@ -3102,8 +3312,8 @@ bool CU::hasSubCUNonZeroAffineMVd( const CodingUnit& cu )
     {
       for ( int i = 0; i < ( cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2 ); i++ )
       {
-        nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_0][i].hor != 0;
-        nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_0][i].ver != 0;
+        nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_0][i].hor != 0;
+        nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_0][i].ver != 0;
       }
     }
 
@@ -3113,8 +3323,8 @@ bool CU::hasSubCUNonZeroAffineMVd( const CodingUnit& cu )
       {
         for ( int i = 0; i < ( cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2 ); i++ )
         {
-          nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_1][i].hor != 0;
-          nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_1][i].ver != 0;
+          nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_1][i].hor != 0;
+          nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_1][i].ver != 0;
         }
       }
     }
@@ -3191,12 +3401,7 @@ bool CU::isBcwIdxCoded( const CodingUnit &cu )
     return false;
   }
 
-  if (cu.predMode == MODE_IBC)
-  {
-    return false;
-  }
-
-  if( cu.predMode == MODE_INTRA || cu.cs->slice->isInterP() )
+  if( cu.predMode == MODE_IBC || cu.predMode == MODE_INTRA || cu.slice->isInterP() || cu.interDir != 3 )
   {
     return false;
   }
@@ -3298,11 +3503,6 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
 
 // TU tools
 
-bool TU::isNonTransformedResidualRotated(const TransformUnit& tu, const ComponentID compID)
-{
-  return tu.cs->sps->spsRExt.transformSkipRotationEnabled && tu.blocks[compID].width == 4 && tu.cu->predMode == MODE_INTRA;
-}
-
 bool TU::getCbf( const TransformUnit& tu, const ComponentID compID )
 {
   return getCbfAtDepth( tu, compID, tu.depth );
@@ -3377,6 +3577,11 @@ bool TU::getPrevTuCbfAtDepth( const TransformUnit& currentTu, const ComponentID 
 uint32_t getCtuAddr( const Position& pos, const PreCalcValues& pcv )
 {
   return ( pos.x >> pcv.maxCUSizeLog2 ) + ( pos.y >> pcv.maxCUSizeLog2 ) * pcv.widthInCtus;
+}
+
+uint32_t getCtuAddrFromCtuSize( const Position& pos, const unsigned maxCUSizeLog2, const unsigned widthInCtus )
+{
+  return ( pos.x >> maxCUSizeLog2 ) + ( pos.y >> maxCUSizeLog2 ) * widthInCtus;
 }
 
 int getNumModesMip(const Size& block)

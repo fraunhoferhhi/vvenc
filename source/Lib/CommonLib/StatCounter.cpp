@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -59,11 +55,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#define OUTPUT(...) { sprintf( cStr, __VA_ARGS__ ); m_str << cStr; }
-#define OUTSTR( _w, ... ) { m_str << std::setw( _w ) << __VA_ARGS__; }
-#define OUTSTRC( _w, _c ) { m_str << std::setfill( _c ) << std::setw( _w  ) << _c << std::setfill( ' ' ); }
-#define OUTSTRF( _w, _p, ... ) { m_str << std::fixed << std::setw( _w ) << std::setprecision(_p) << __VA_ARGS__; }
-#define OUTPUT_COND_SIZE_IDX(_stype,_idx,...) { sprintf( cStr, __VA_ARGS__ ); m_str << cStr; }
+#define SC_CSTR_SIZE     512
+
+#define OUTPUT(...) { snprintf( cStr, SC_CSTR_SIZE - 1, __VA_ARGS__ ); m_str << cStr; }
+#define OUTSTR( _w, ... ) { m_str << std::setw( (int)(_w) ) << __VA_ARGS__; }
+#define OUTSTRC( _w, _c ) { m_str << std::setfill( _c ) << std::setw( (int)(_w)  ) << _c << std::setfill( ' ' ); }
+#define OUTSTRF( _w, _p, ... ) { m_str << std::fixed << std::setw( (int)(_w) ) << std::setprecision(_p) << __VA_ARGS__; }
+#define OUTPUT_COND_SIZE_IDX(_stype,_idx,...) { snprintf( cStr, SC_CSTR_SIZE - 1, __VA_ARGS__ ); m_str << cStr; }
 #define MIN_SIZE_IDX 2
 #define IDX_TO_SIZE(_i) (1<<_i)
 
@@ -73,7 +71,8 @@ namespace vvenc {
 template<typename T>
 std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T>& cntSet, bool axisInBlockSizes, bool absoluteNumbers, bool weightedByArea, bool secondColumnInPercentage, bool ratiosWithinSingleElement, int refCntId )
 {
-  char cStr[512];
+  char cStr[SC_CSTR_SIZE];
+  std::memset( cStr, 0, sizeof( cStr ) );
   std::stringstream m_str;
 
   CHECK( !axisInBlockSizes && weightedByArea, "Mode is not supported" );
@@ -159,6 +158,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
 
   // Derive counters that contains the data
   std::vector<T> cntAccum;
+  std::vector<T> cntAccumDimVer( xDim );
   for( int cntIdx = 0; cntIdx < totalNumCnt; cntIdx++ )
   {
     cntAccum.push_back( cntSet[cntIdx].total() );
@@ -217,6 +217,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
               OUTSTRF( numSymbolsInMantissa, 1, val );
             }
           }
+          cntAccumDimVer[i] += cntSet[cntIdx][j][i];
         }
         else
         {
@@ -228,6 +229,20 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
     // Empty line to separate heights
     OUTSTR( 0, "\r\n" );
   }
+
+  // Total over y-axis
+  OUTSTR( 12, "   " );
+  OUTSTR( maxCntNameLen, std::left << "Total" << std::internal );
+  OUTSTR( 2, " " );
+  for( int i = firstSizeIdx; i < xDim; i++ )
+  {
+    OUTSTR( 0, " " );
+    OUTSTR( numSymbolsInMantissa, (int)(cntAccumDimVer[i] / (double)scalingFactor) );
+    OUTSTR( numSymbolsInExp, "." );
+  }
+
+  OUTSTR( 0, "\r\n" );
+
 
   os << m_str.str();
   return os;

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+The copyright in this software is being made available under the Clear BSD
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -53,56 +49,49 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/CommonDef.h"
+#include "Utilities/MsgLog.h"
 
 #include "vvenc/vvencCfg.h"
 
 #include <vector>
 #include <algorithm>
 #include <list>
+#include <fstream>
 
 namespace vvenc {
   struct Picture;
 
-  struct TRCLCU
-  {
-    double  lambda;
-    double  bitWeight;
-    double  costIntra;
-    double  actualSSE;
-    double  actualMSE;
-    int     QP;     // QP of skip mode is set to RC_INVALID_QP_VALUE
-    int     actualBits;
-    int     targetBits;
-    int     numberOfPixel;
-    int     targetBitsLeft;
-  };
-
-  struct TRCParameter
-  {
-    double  alpha;
-    double  beta;
-    double  skipRatio;
-    int     validPix;
-  };
-
   struct TRCPassStats
   {
-    TRCPassStats( int _poc, int _qp, uint32_t _numBits, double _yPsnr, double _uPsnr, double _vPsnr, bool _isIntra, int _tempLayer ) : poc( _poc ), qp( _qp ), numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer ), isNewScene( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), scaledBits( double( numBits ) ), targetBits( 0 ), estAlpha() {}
+    TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
+                  const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
+                  const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const SceneType _scType,
+                  const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
+                  poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
+                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
+                  {
+                    std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
+                  }
     int       poc;
     int       qp;
+    double    lambda;
+    uint16_t  visActY;
     uint32_t  numBits;
-    double    yPsnr;
-    double    uPsnr;
-    double    vPsnr;
+    double    psnrY;
     bool      isIntra;
     int       tempLayer;
-
+    bool      isStartOfIntra;
+    bool      isStartOfGop;
+    int       gopNum;
+    SceneType scType;
+    uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
     bool      isNewScene;
+    bool      refreshParameters;
     double    frameInGopRatio;
-    double    gopBitsVsBitrate;
-    double    scaledBits;
     int       targetBits;
-    double    estAlpha[ 7 ];
+    bool      addedToList;
   };
 
   class EncRCSeq
@@ -111,83 +100,31 @@ namespace vvenc {
     EncRCSeq();
     ~EncRCSeq();
 
-    void create( int RCMode, bool twoPass, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int numberOfLevel, bool useLCUSeparateModel, int adaptiveBit, std::list<TRCPassStats> &firstPassData );
+    void create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
-    void initBitsRatio( int bitsRatio[] );
-    void initGOPID2Level( int GOPID2Level[] );
-    void initPicPara( TRCParameter* picPara = NULL );    // NULL to initial with default value
-    void initLCUPara( TRCParameter** LCUPara = NULL );    // NULL to initial with default value
-    void updateAfterPic( int bits );
-    void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
-    void setQpInGOP( int gopId, int gopQp, int &qp );
-    bool isQpResetRequired( int gopId );
-    int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
-    void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, double alpha[] );
+    void updateAfterPic (const int actBits, const int tgtBits);
+    void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
-  public:
-    int             rcMode;
     bool            twoPass;
-    int             totalFrames;
+    bool            isLookAhead;
+    unsigned        framesCoded;
     int             targetRate;
-    int             frameRate;
+    double          frameRate;
     int             gopSize;
-    int             picWidth;
-    int             picHeight;
-    int             lcuWidth;
-    int             lcuHeight;
-    int             averageBits;
-    int             intraPeriod;
-    int             numberOfPixel;
-    int             numberOfLCU;
-    int             framesCoded;
-    int             framesLeft;
-    int             adaptiveBits;
+    unsigned        intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
+    int64_t         bitsUsedIn1stPass;
+    int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
-    double          bitUsageRatio;
-    double          lastLambda;
-    bool            useLCUSeparateModel;
-    TRCParameter*   picParam;
-    TRCParameter**  lcuParam;
-    int*            bitsRatio;
-    int*            gopID2Level;
+    double          qpCorrection[8];
+    uint64_t        actualBitCnt[8];
+    unsigned        currFrameCnt[8];
+    uint64_t        targetBitCnt[8];
+    int             lastIntraQP;
     std::list<TRCPassStats> firstPassData;
-
-  private:
-    int             numberOfLevel;
-    int64_t         targetBits;
-    int64_t         bitsLeft;
-  };
-
-  class EncRCGOP
-  {
-  public:
-    EncRCGOP();
-    ~EncRCGOP();
-
-    void create( EncRCSeq* encRCSeq, int numPic );
-    void destroy();
-    void updateAfterPicture( int bitsCost );
-
-  private:
-    int    xEstGOPTargetBits( EncRCSeq* encRCSeq, int GOPSize );
-    void   xCalEquaCoeff( EncRCSeq* encRCSeq, double* lambdaRatio, double* equaCoeffA, double* equaCoeffB, int GOPSize );
-    double xSolveEqua( EncRCSeq* encRCSeq, double targetBpp, double* equaCoeffA, double* equaCoeffB, int GOPSize );
-
-  public:
-    int     numPics;
-    int     targetBits;
-    int     picsLeft;
-    int     bitsLeft;
-    int     gopQP;
-    int     idealTargetGOPBits;
-    int*    picTargetBitInGOP;
-    double  minEstLambda;
-    double  maxEstLambda;
-
-  private:
-    EncRCSeq* encRcSeq;
+    double          minEstLambda;
+    double          maxEstLambda;
   };
 
   class EncRCPic
@@ -196,108 +133,90 @@ namespace vvenc {
     EncRCPic();
     ~EncRCPic();
 
-    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, std::list<EncRCPic*>& listPreviousPictures );
-    void destroy();
-
-    void   calCostSliceI( Picture* pic );
-    int    estimatePicQP( double lambda, std::list<EncRCPic*>& listPreviousPictures );
-    void   clipQpConventional( std::list<EncRCPic*>& listPreviousPictures, int &QP );
-    void   clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &QP );
-    void   clipQpGopRc( std::list<EncRCPic*>& listPreviousPictures, int &QP );
-    void   clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &QP );
-    int    getRefineBitsForIntra( int orgBits );
-    double calculateLambdaIntra( double alpha, double beta, double MADPerPixel, double bitsPerPixel );
-    double estimatePicLambda( std::list<EncRCPic*>& listPreviousPictures, bool isIRAP );
-    void   clipLambdaConventional( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
-    void   clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
-    void   clipLambdaGopRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
-    void   clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
-    void   updateAlphaBetaIntra( double *alpha, double *beta );
-    double getLCUTargetBpp( bool isIRAP, const int ctuRsAddr );
-    double getLCUEstLambdaAndQP( double bpp, int clipPicQP, int *estQP, const int ctuRsAddr );
-    double getLCUEstLambda( double bpp, const int ctuRsAddr );
-    int    getLCUEstQP( double lambda, int clipPicQP, const int ctuRsAddr );
-    void   updateAfterCTU( int LCUIdx, int bits, int QP, double lambda, double skipRatio, bool updateLCUParameter = true );
-    void   updateAfterPicture( int actualHeaderBits, int actualTotalBits, double averageQP, double averageLambda, bool isIRAP );
-    void   getLCUInitTargetBits();
-    double clipRcAlpha( const int bitdepth, const double alpha );
-    double clipRcBeta( const double beta );
+    void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
+    void   destroy();
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
+    void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
-    double calAverageQP();
-    double calAverageLambda();
 
-  private:
-    int xEstPicTargetBits( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP );
-    int xEstPicHeaderBits( std::list<EncRCPic*>& listPreviousPictures, int frameLevel );
-
-  public:
-    TRCLCU* lcu;
     int     targetBits;
-    int     bitsLeft;
-    int     numberOfLCU;
-    int     lcuLeft;
-    int     picQPOffsetQPA;
-    double  picLambdaOffsetQPA;
-    double  picEstLambda;
-  
-  private:
-    EncRCSeq* encRCSeq;
-    EncRCGOP* encRCGOP;
+    int     tmpTargetBits;
+    int     poc;
+    uint16_t visActSteady;
 
+  protected:
+    int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
+
+    EncRCSeq* encRCSeq;
     int     frameLevel;
-    int     numberOfPixel;
-    int     estHeaderBits;
-    int     picActualHeaderBits;
-    int     picActualBits;          // the whole picture, including header
-    int     picQP;                  // in integer form
-    int     validPixelsInPic;
-    double  totalCostIntra;
-    double  remainingCostIntra;
-    double  picLambda;
-    double  picMSE;
+    int     picQP;           // in integer form
     bool    isNewScene;
+    bool    refreshParams;
   };
 
   class RateCtrl
   {
   public:
-    RateCtrl();
+    RateCtrl(MsgLog& logger);
     ~RateCtrl();
 
-    void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ] );
+    void init( const VVEncCfg& encCfg );
     void destroy();
-    void initRCPic( int frameLevel );
-    void initRCGOP( int numberOfPictures );
-    void destroyRCGOP();
-
-    void setRCPass( int pass, int maxPass );
-    void addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
-    void processFirstPassData( const unsigned sizeInCtus );
-    void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
+    int  getBaseQP();
+    void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
+    void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
+                         const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
+                         const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
+                         const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+    void processFirstPassData( const bool flush, const int poc = -1 );
     void processGops();
-    void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
-    int64_t getTotalBitsInFirstPass();
-    void detectNewScene();
+    void updateMinNoiseLevelsGop( const bool flush, const int poc );
+    double updateQPstartModelVal();
+    double getAverageBitsFromFirstPass();
+    void detectSceneCuts();
+    void xUpdateAfterPicRC( const Picture* pic );
+    void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
-    std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
+    std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
-    std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    std::vector<uint8_t>*    getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    const uint8_t*           getMinNoiseLevels() { return m_minNoiseLevels; }
+    int                      lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
-  public:
-    EncRCSeq*   encRCSeq;
-    EncRCGOP*   encRCGOP;
-    EncRCPic*   encRCPic;
-    std::mutex  rcMutex;
-    int         rcQP;
-    int         rcPQPAOffset;
-    int         rcPass;
-    int         rcMaxPass;
-    bool        rcIsFinalPass;
+    std::list<EncRCPic*>    m_listRCPictures;
+    EncRCSeq*               encRCSeq;
+    EncRCPic*               encRCPic;
+    int                     flushPOC;
+    int                     rcPass;
+    bool                    rcIsFinalPass;
+    const VVEncCfg*         m_pcEncCfg;
+
+  protected:
+    MsgLog&                 msg;
+
+    void xProcessFirstPassData( const bool flush, const int poc );
+    void storeStatsData( const TRCPassStats& statsData );
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+    void openStatsFile( const std::string& name );
+    void writeStatsHeader();
+    void readStatsHeader();
+    void readStatsFile();
+#endif
 
   private:
-    std::list<EncRCPic*>    m_listRCPictures;
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+    std::fstream            m_rcStatsFHandle;
+    int                     m_pqpaStatsWritten;
+#endif
+    int                     m_numPicStatsTotal;
+    int                     m_numPicAddedToList;
+    int                     m_updateNoisePoc;
+    bool                    m_resetNoise;
+    uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
   };
+
 }
 #endif

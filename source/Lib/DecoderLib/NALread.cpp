@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -56,6 +52,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
+#include "Utilities/MsgLog.h"
 #include <vector>
 #include <algorithm>
 #include <ostream>
@@ -66,8 +63,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-static void convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstream *bitstream, bool isVclNalUnit)
+static int convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstream *bitstream, bool isVclNalUnit)
 {
+  int cabac_zero_word = 0;
   uint32_t zeroCount = 0;
   std::vector<uint8_t>::iterator it_read, it_write;
 
@@ -96,21 +94,16 @@ static void convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstrea
   if (isVclNalUnit)
   {
     // Remove cabac_zero_word from payload if present
-    int n = 0;
-
     while (it_write[-1] == 0x00)
     {
       it_write--;
-      n++;
-    }
-
-    if (n > 0)
-    {
-      msg( NOTICE, "\nDetected %d instances of cabac_zero_word\n", n/2);
+      cabac_zero_word++;
     }
   }
 
   nalUnitBuf.resize(it_write - nalUnitBuf.begin());
+
+  return cabac_zero_word;
 }
 
 #if ENABLE_TRACING
@@ -137,7 +130,7 @@ void readNalUnitHeader(InputNALUnit& nalu)
   nalu.m_nuhReservedZeroBit = bs.read(1);                 // nuh_reserved_zero_bit
   nalu.m_nuhLayerId         = bs.read(6);                 // nuh_layer_id
   CHECK(nalu.m_nuhLayerId > 55, "The value of nuh_layer_id shall be in the range of 0 to 55, inclusive");
-  nalu.m_nalUnitType        = (NalUnitType) bs.read(5);   // nal_unit_type
+  nalu.m_nalUnitType        = (vvencNalUnitType) bs.read(5);   // nal_unit_type
   nalu.m_temporalId = bs.read(3) - 1;                 // nuh_temporal_id_plus1
 
 #if ENABLE_TRACING
@@ -147,7 +140,7 @@ void readNalUnitHeader(InputNALUnit& nalu)
   // only check these rules for base layer
   if (nalu.m_nuhLayerId == 0 && nalu.m_temporalId == 0)
   {
-    CHECK(nalu.m_nalUnitType == NAL_UNIT_CODED_SLICE_STSA
+    CHECK(nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_STSA
         , "When NAL unit type is equal to STSA_NUT, TemporalId shall not be equal to 0"); 
   }
 }
@@ -155,12 +148,16 @@ void readNalUnitHeader(InputNALUnit& nalu)
  * create a NALunit structure with given header values and storage for
  * a bitstream
  */
-void read(InputNALUnit& nalu)
+void read(InputNALUnit& nalu, MsgLog& msg )
 {
   InputBitstream &bitstream = nalu.getBitstream();
   std::vector<uint8_t>& nalUnitBuf=bitstream.getFifo();
   // perform anti-emulation prevention
-  convertPayloadToRBSP(nalUnitBuf, &bitstream, (nalUnitBuf[0] & 64) == 0);
+  int cabac_zero_word = convertPayloadToRBSP(nalUnitBuf, &bitstream, (nalUnitBuf[0] & 64) == 0);
+  if( cabac_zero_word > 0 )
+  {
+    msg.log( VVENC_NOTICE, "\nDetected %d instances of cabac_zero_word\n", cabac_zero_word/2);
+  }
   bitstream.resetToStart();
   readNalUnitHeader(nalu);
 }

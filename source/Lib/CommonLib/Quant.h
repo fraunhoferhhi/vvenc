@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -105,11 +101,11 @@ public:
 class Quant
 {
 public:
-  Quant( const Quant* other );
+  Quant( const Quant* other, bool useScalingLists );
   virtual ~Quant();
 
   // initialize class
-  virtual void init( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int dqThrVal = 8 );
+  virtual void init( int rdoq = 0, bool useRDOQTS = false, int thrVal = 8 );
 
 public:
 
@@ -126,7 +122,7 @@ public:
     return (m_scalingListEnabled && !isTransformSkip && (!lfnstApplied));
   };
   bool getScalingListEnabled      ()   { return m_scalingListEnabled; }
-  virtual void setFlatScalingList ( const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths);
+  virtual void setFlatScalingList ( const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths );
 
   // quantization
   virtual void quant              ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );
@@ -136,11 +132,19 @@ public:
 protected:
   bool    xNeedRDOQ               ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, const QpParam& cQP );
 private:
-  void    xInitScalingList        ( const Quant* other );
+  void    xInitScalingList        ( const Quant* other, bool useScalingLists );
   void    xDestroyScalingList     ();
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
-  void    xSignBitHidingHDQ       ( TCoeff* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange);
-  void    ( *DeQuant)             (const int maxX,const int maxY,const int scale,const TCoeff*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum);
+  void    xSignBitHidingHDQ       ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int &lastPos, const int maxLog2TrDynamicRange);
+  void    ( *xDeQuant)            (const int maxX,const int maxY,const int scale,const TCoeffSig*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum);
+  void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
+                                    const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
+                                    TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
+                                    const int defaultQuantisationCoefficient, const int iQBits, const int64_t iAdd,
+                                    const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
+                                    const bool signHiding,
+                                    const TCoeff m_thrVal );
+  bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift );
 
 #ifdef TARGET_SIMD_X86
   void initQuantX86();
@@ -151,8 +155,9 @@ private:
 protected:
   int      m_RDOQ;
   bool     m_useRDOQTS;
-  bool     m_useSelectiveRDOQ;
   double   m_dLambda;
+  TCoeffSig m_tmpBdpcm[1 << ( MAX_TB_LOG2_SIZEY << 1 )];
+  int      m_thrVal;
 
 private:
   double   m_lambdas[MAX_NUM_COMP];

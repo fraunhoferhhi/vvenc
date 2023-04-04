@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -52,6 +48,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "dtrace.h"
 #include "CommonDef.h"
 #include "Rom.h"
+
+#include "Utilities/MsgLog.h"
 
 #include <cmath>
 
@@ -123,6 +121,7 @@ namespace vvenc {
 enum DTRACE_CHANNEL
 {
   D_COMMON,
+  D_BITSTREAM,
   D_HEADER,               // header file infos
   D_NALUNITHEADER,        // NAL unit header infos
   D_RPSINFO,              // bits used to send the RPS
@@ -158,6 +157,7 @@ enum DTRACE_CHANNEL
   D_MOT_FIELD,
   D_MOT_COMP,             // Motion compensation
   D_ALF,
+  D_ALF_EST,
   D_CRC
 };
 #define _CNL_DEF(_s) {_s,(std::string(#_s))}
@@ -177,8 +177,8 @@ void dtrace_block( CDTrace *trace_ctx, DTRACE_CHANNEL channel, Tsrc *buf, unsign
   {
     for( i = 0; i < block_w; i++ )
     {
-      trace_ctx->dtrace<false>( channel, "%04x ", buf[j*stride + i] );
-      //trace_ctx->dtrace<false>( channel, "%4d ", buf[j*stride + i] );
+//      trace_ctx->dtrace<false>( channel, "%04x ", buf[j*stride + i] );
+      trace_ctx->dtrace<false>( channel, "%4d ", buf[j*stride + i] );
     }
     trace_ctx->dtrace<false>( channel, "\n" );
   }
@@ -214,11 +214,12 @@ void dtrace_frame_blockwise( CDTrace *trace_ctx, DTRACE_CHANNEL channel, Tsrc *b
 #define DTRACE_FRAME_BLOCKWISE(...)          dtrace_frame_blockwise(__VA_ARGS__)
 #define DTRACE_GET_COUNTER(ctx,channel)      ctx->getChannelCounter(channel)
 
-inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string& sTracingRule )
+inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string& sTracingRule, MsgLog& msg )
 {
   dtrace_channel next_channels[] =
   {
     _CNL_DEF( D_COMMON ),
+    _CNL_DEF( D_BITSTREAM ),
     _CNL_DEF( D_HEADER ),
     _CNL_DEF( D_NALUNITHEADER ),
     _CNL_DEF( D_RPSINFO ),
@@ -254,20 +255,20 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
     _CNL_DEF( D_MOT_FIELD ),
     _CNL_DEF( D_MOT_COMP ),
     _CNL_DEF( D_ALF ),
+    _CNL_DEF( D_ALF_EST ),
     _CNL_DEF( D_CRC )
   };
   dtrace_channels_t channels( next_channels, &next_channels[sizeof( next_channels ) / sizeof( next_channels[0] )] );
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    msg( VERBOSE, "\n" );
-    msg( VERBOSE, "Tracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    msg.log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
   if( pDtrace->getLastError() )
   {
-    msg( WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
+   msg.log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
     //return NULL;
   }
 

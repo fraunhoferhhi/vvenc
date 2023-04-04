@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -69,9 +65,10 @@ extern CDTrace* g_trace_ctx;
 #endif
 
 #if ENABLE_TIME_PROFILING
-extern TimeProfiler *g_timeProfiler;
-#elif ENABLE_TIME_PROFILING_EXTENDED
-extern TimeProfiler2D *g_timeProfiler;
+extern TProfiler *g_timeProfiler;
+#if ENABLE_TIME_PROFILING_MT_MODE
+extern thread_local std::unique_ptr<TProfiler> ptls;
+#endif
 #endif
 
 // ====================================================================================================================
@@ -82,40 +79,52 @@ extern TimeProfiler2D *g_timeProfiler;
 // flexible conversion from relative to absolute index
 struct ScanElement
 {
-  uint32_t idx;
-  uint16_t x;
-  uint16_t y;
+  uint16_t idx;
+  uint8_t  x;
+  uint8_t  y;
 };
 
 
-class ScanOrderRom
+class InitGeoRom
 {
   public:
-    ScanOrderRom() { initScanOrderRom(); }
+    InitGeoRom() { initGeoTemplate(); }
 
-    ~ScanOrderRom() { destroyScanOrderRom(); }
-
-    const ScanElement* getScanOrder( int g, int t, int w2, int h2 ) const { return m_scanOrder[ g ][ t ][ w2 ][ h2 ]; }
+    ~InitGeoRom() { }
 
   private:
-    void initScanOrderRom();
-    void destroyScanOrderRom();
-    void initGeoTemplate();
+    void initGeoTemplate() const;
 
   private:
-    ScanElement *m_scanOrder[ SCAN_NUMBER_OF_GROUP_TYPES ][ SCAN_NUMBER_OF_TYPES ][ MAX_CU_SIZE / 2 + 1 ][ MAX_CU_SIZE / 2 + 1 ];
 };
 
-extern ScanOrderRom g_scanOrderRom;
+extern const ScanElement  m_scanOrderBuf[32258];
+extern const ScanElement* m_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX];
+
+const ScanElement* const getScanOrder( int g, int w2, int h2 );
+
+extern const int8_t g_BcwLog2WeightBase;
+extern const int8_t g_BcwWeightBase;
+extern const int8_t g_BcwWeights[BCW_NUM];
+extern const int8_t g_BcwSearchOrder[BCW_NUM];
+extern const int8_t g_BcwCodingOrder[BCW_NUM];
+extern const int8_t g_BcwParsingOrder[BCW_NUM];
+
+class CodingStructure;
+int8_t getBcwWeight(uint8_t bcwIdx, uint8_t uhRefFrmList);
+void resetBcwCodingOrder(bool bRunDecoding, const CodingStructure &cs);
+uint32_t deriveWeightIdxBits(uint8_t bcwIdx);
+
+extern const InitGeoRom g_scanOrderRom;
 
 extern const uint32_t g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2];
-extern ScanElement g_coefTopLeftDiagScan8x8[MAX_CU_SIZE / 2 + 1][64];
+extern const ScanElement g_coefTopLeftDiagScan8x8[MAX_TU_SIZE_IDX][64];
 
 extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // Q(QP%6)
 extern const int g_invQuantScales[2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // IQ(QP%6)
 
 static const int g_numTransformMatrixSizes = 6;
-static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6, 6 };
+static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6/*, 6 */ };
 
 
 // ====================================================================================================================
@@ -169,8 +178,10 @@ extern const TMatrixCoeff g_trCoreDST7P8  [TRANSFORM_NUMBER_OF_DIRECTIONS][  8][
 extern const TMatrixCoeff g_trCoreDST7P16 [TRANSFORM_NUMBER_OF_DIRECTIONS][ 16][ 16];
 extern const TMatrixCoeff g_trCoreDST7P32 [TRANSFORM_NUMBER_OF_DIRECTIONS][ 32][ 32];
 
-extern const     int8_t   g_lfnst8x8[ 4 ][ 2 ][ 16 ][ 48 ];
-extern const     int8_t   g_lfnst4x4[ 4 ][ 2 ][ 16 ][ 16 ];
+extern const     int8_t   g_lfnstFwd8x8[ 4 ][ 2 ][ 16 ][ 48 ];
+extern const     int8_t   g_lfnstFwd4x4[ 4 ][ 2 ][ 16 ][ 16 ];
+extern const     int8_t   g_lfnstInv8x8[ 4 ][ 2 ][ 48 ][ 16 ];
+extern const     int8_t   g_lfnstInv4x4[ 4 ][ 2 ][ 16 ][ 16 ];
 
 extern const     uint8_t  g_lfnstLut[ NUM_INTRA_MODE + NUM_EXT_LUMA_MODE - 1 ];
 
@@ -198,6 +209,8 @@ extern const uint32_t g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
 
 class CodingStructure;
 
+const int g_IBCBufferSize = 256 * 128;
+
 constexpr uint8_t g_tbMax[257] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
@@ -211,12 +224,12 @@ constexpr uint8_t g_tbMax[257] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 
 
 //! \}
 
-extern int16_t **g_GeoParams;
-extern int16_t * g_globalGeoWeights[GEO_NUM_PRESTORED_MASK];
-extern int16_t * g_globalGeoEncSADmask[GEO_NUM_PRESTORED_MASK];
-extern int8_t    g_angle2mask[GEO_NUM_ANGLES];
-extern int8_t    g_Dis[GEO_NUM_ANGLES];
-extern int8_t    g_angle2mirror[GEO_NUM_ANGLES];
+extern int16_t   g_GeoParams[GEO_NUM_PARTITION_MODE][2];
+extern int16_t   g_globalGeoWeights[GEO_NUM_PRESTORED_MASK]   [GEO_WEIGHT_MASK_SIZE * GEO_WEIGHT_MASK_SIZE];
+extern int16_t   g_globalGeoEncSADmask[GEO_NUM_PRESTORED_MASK][GEO_WEIGHT_MASK_SIZE * GEO_WEIGHT_MASK_SIZE];
+extern const int8_t    g_angle2mask[GEO_NUM_ANGLES];
+extern const int8_t    g_Dis[GEO_NUM_ANGLES];
+extern const int8_t    g_angle2mirror[GEO_NUM_ANGLES];
 extern int16_t   g_weightOffset[GEO_NUM_CU_SIZE][GEO_NUM_CU_SIZE][GEO_NUM_PARTITION_MODE][2];
 
 #if ENABLE_CU_MODE_COUNTERS

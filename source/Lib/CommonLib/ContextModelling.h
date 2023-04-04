@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -60,12 +56,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-namespace vvenc {
+namespace vvenc
+{
+
+struct CtxTpl
+{
+  // lower 5 bits are absSum1, upper 3 bits are numPos
+  uint8_t ctxTpl;
+};
 
 struct CoeffCodingContext
 {
 public:
-  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false );
+  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false, CtxTpl* tplBuf = nullptr );
 public:
   void  initSubblock    ( int SubsetId, bool sigGroupFlag = false );
 public:
@@ -87,7 +90,6 @@ public:
   unsigned        log2CGWidth     ()                        const { return m_log2CGWidth; }
   unsigned        log2CGHeight    ()                        const { return m_log2CGHeight; }
   unsigned        log2CGSize      ()                        const { return m_log2CGSize; }
-  bool            extPrec         ()                        const { return m_extendedPrecision; }
   int             maxLog2TrDRange ()                        const { return m_maxLog2TrDynamicRange; }
   unsigned        maxNumCoeff     ()                        const { return m_maxNumCoeff; }
   int             scanPosLast     ()                        const { return m_scanPosLast; }
@@ -100,7 +102,6 @@ public:
   bool            signHiding      ()                        const { return m_signHiding; }
   bool            hideSign        ( int       posFirst,
                                     int       posLast   )   const { return ( m_signHiding && ( posLast - posFirst >= SBH_THRESHOLD ) ); }
-  CoeffScanType   scanType        ()                        const { return m_scanType; }
   unsigned        blockPos        ( int scanPos )           const { return m_scan[scanPos].idx; }
   unsigned        posX            ( int scanPos )           const { return m_scan[scanPos].x; }
   unsigned        posY            ( int scanPos )           const { return m_scan[scanPos].y; }
@@ -116,14 +117,14 @@ public:
   void            decimateNumCtxBins(int n) { m_remainingContextBins -= n; }
   void            increaseNumCtxBins(int n) { m_remainingContextBins += n; }
 
-  unsigned sigCtxIdAbs( int scanPos, const TCoeff* coeff, const int state )
+  unsigned sigCtxIdAbs( int scanPos, const TCoeffSig* coeff, const int state )
   {
-    const uint32_t posY      = m_scan[scanPos].y;
-    const uint32_t posX      = m_scan[scanPos].x;
-    const TCoeff* pData     = coeff + posX + posY * m_width;
-    const int     diag      = posX + posY;
-    int           numPos    = 0;
-    int           sumAbs    = 0;
+    const uint32_t   posY      = m_scan[scanPos].y;
+    const uint32_t   posX      = m_scan[scanPos].x;
+    const TCoeffSig* pData     = coeff + posX + posY * m_width;
+    const int        diag      = posX + posY;
+    int              numPos    = 0;
+    int              sumAbs    = 0;
 #define UPDATE(x) {int a=abs(x);sumAbs+=std::min(4+(a&1),a);numPos+=!!a;}
     if( posX < m_width-1 )
     {
@@ -147,7 +148,6 @@ public:
     }
 #undef UPDATE
 
-
     int ctxOfs = std::min((sumAbs+1)>>1, 3) + ( diag < 2 ? 4 : 0 );
 
     if( m_chType == CH_L )
@@ -158,6 +158,75 @@ public:
     m_tmplCpDiag = diag;
     m_tmplCpSum1 = sumAbs - numPos;
     return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+  }
+
+  unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
+  {
+    const auto scanEl       = m_scan[scanPos];
+    const uint32_t posY     = scanEl.y;
+    const uint32_t posX     = scanEl.x;
+    const int32_t blkPos    = scanEl.idx;
+    const int      diag     = posX + posY;
+    const int      tplVal   = m_tplBuf[-blkPos].ctxTpl;
+    const int      numPos   = tplVal >> 5u;
+    const int      sumAbs   = tplVal & 31;
+
+    int ctxOfs = std::min( ( sumAbs + 1 ) >> 1, 3 ) + ( diag < 2 ? 4 : 0 );
+
+    if( isLuma( m_chType ) )
+    {
+      ctxOfs += diag < 5 ? 4 : 0;
+    }
+    m_tmplCpDiag = diag;
+    m_tmplCpSum1 = sumAbs - numPos;
+    return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+  }
+
+  void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  {
+    CHECKD( !absLevel1, "Shound not be called if '0'!" );
+
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const int32_t  blkPos = scanEl.idx;
+
+    auto update_deps = [&]( int offset )
+    {
+      auto& ctx   = m_tplBuf[-blkPos + offset];
+      ctx.ctxTpl += uint8_t( 32 + absLevel1 );
+    };
+
+    if( posY > 1 ) update_deps( 2 * m_width );
+    if( posY > 0
+     && posX > 0 ) update_deps( m_width + 1 );
+    if( posY > 0 ) update_deps( m_width );
+    if( posX > 1 ) update_deps( 2 );
+    if( posX > 0 ) update_deps( 1 );
+  }
+  
+
+  void remAbsVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  {
+    CHECKD( !absLevel1, "Shound not be called if '0'!" );
+
+    const auto scanEl     = m_scan[scanPos];
+    const uint32_t posY   = scanEl.y;
+    const uint32_t posX   = scanEl.x;
+    const int32_t  blkPos = scanEl.idx;
+
+    auto update_deps = [&]( int offset )
+    {
+      auto& ctx   = m_tplBuf[-blkPos + offset];
+      ctx.ctxTpl -= uint8_t( 32 + absLevel1 );
+    };
+
+    if( posY > 1 ) update_deps( 2 * m_width );
+    if( posY > 0
+     && posX > 0 ) update_deps( m_width + 1 );
+    if( posY > 0 ) update_deps( m_width );
+    if( posX > 1 ) update_deps( 2 );
+    if( posX > 0 ) update_deps( 1 );
   }
 
   uint8_t ctxOffsetAbs()
@@ -174,12 +243,13 @@ public:
   unsigned parityCtxIdAbs   ( uint8_t offset )  const { return m_parFlagCtxSet   ( offset ); }
   unsigned greater1CtxIdAbs ( uint8_t offset )  const { return m_gtxFlagCtxSet[1]( offset ); }
   unsigned greater2CtxIdAbs ( uint8_t offset )  const { return m_gtxFlagCtxSet[0]( offset ); }
-  unsigned templateAbsSum( int scanPos, const TCoeff* coeff, int baseLevel )
+
+  unsigned templateAbsSum( int scanPos, const TCoeffSig* coeff, int baseLevel )
   {
-    const uint32_t  posY  = m_scan[scanPos].y;
-    const uint32_t  posX  = m_scan[scanPos].x;
-    const TCoeff*   pData = coeff + posX + posY * m_width;
-    int             sum   = 0;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* pData = coeff + posX + posY * m_width;
+    int              sum   = 0;
     if (posX < m_width - 1)
     {
       sum += abs(pData[1]);
@@ -203,12 +273,12 @@ public:
     return std::max(std::min(sum - 5 * baseLevel, 31), 0);
   }
 
-  unsigned sigCtxIdAbsTS( int scanPos, const TCoeff* coeff )
+  unsigned sigCtxIdAbsTS( int scanPos, const TCoeffSig* coeff )
   {
-    const uint32_t  posY   = m_scan[scanPos].y;
-    const uint32_t  posX   = m_scan[scanPos].x;
-    const TCoeff*   posC   = coeff + posX + posY * m_width;
-    int             numPos = 0;
+    const uint32_t   posY   = m_scan[scanPos].y;
+    const uint32_t   posX   = m_scan[scanPos].x;
+    const TCoeffSig* posC   = coeff + posX + posY * m_width;
+    int              numPos = 0;
 #define UPDATE(x) {int a=abs(x);numPos+=!!a;}
     if( posX > 0 )
     {
@@ -226,11 +296,11 @@ public:
   unsigned parityCtxIdAbsTS   ()                  const { return m_tsParFlagCtxSet(      0 ); }
   unsigned greaterXCtxIdAbsTS ( uint8_t offset )  const { return m_tsGtxFlagCtxSet( offset ); }
 
-  unsigned lrg1CtxIdAbsTS(int scanPos, const TCoeff* coeff, int bdpcm)
+  unsigned lrg1CtxIdAbsTS(int scanPos, const TCoeffSig* coeff, int bdpcm)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   posC = coeff + posX + posY * m_width;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* posC = coeff + posX + posY * m_width;
 
     int             numPos = 0;
 #define UPDATE(x) {int a=abs(x);numPos+=!!a;}
@@ -255,11 +325,11 @@ public:
     return m_tsLrg1FlagCtxSet(numPos);
   }
 
-  unsigned signCtxIdAbsTS(int scanPos, const TCoeff* coeff, int bdpcm)
+  unsigned signCtxIdAbsTS(int scanPos, const TCoeffSig* coeff, int bdpcm)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   pData = coeff + posX + posY * m_width;
+    const uint32_t   posY  = m_scan[scanPos].y;
+    const uint32_t   posX  = m_scan[scanPos].x;
+    const TCoeffSig* pData = coeff + posX + posY * m_width;
 
     int rightSign = 0, belowSign = 0;
     unsigned signCtx = 0;
@@ -292,11 +362,11 @@ public:
     return m_tsSignFlagCtxSet(signCtx);
   }
 
-  void neighTS(int& rightPixel, int& belowPixel, int scanPos, const TCoeff* coeff)
+  void neighTS(int& rightPixel, int& belowPixel, int scanPos, const TCoeffSig* coeff)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   data = coeff + posX + posY * m_width;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* data = coeff + posX + posY * m_width;
 
     rightPixel = belowPixel = 0;
 
@@ -357,7 +427,7 @@ public:
     return(absCoeffMod);
   }
 
-  unsigned templateAbsSumTS( int scanPos, const TCoeff* coeff )
+  unsigned templateAbsSumTS( int scanPos, const TCoeffSig* coeff )
   {
     return 1;
   }
@@ -380,9 +450,7 @@ private:
   const unsigned            m_log2BlockHeight;
   const unsigned            m_maxNumCoeff;
   const bool                m_signHiding;
-  const bool                m_extendedPrecision;
   const int                 m_maxLog2TrDynamicRange;
-  CoeffScanType             m_scanType;
   const ScanElement *       m_scan;
   const ScanElement *       m_scanCG;
   const CtxSet              m_CtxSetLastX;
@@ -416,6 +484,7 @@ private:
   int                       m_remainingContextBins;
   std::bitset<MLS_GRP_NUM>  m_sigCoeffGroupFlag;
   const bool                m_bdpcm;
+  CtxTpl*                   m_tplBuf;
 };
 
 

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -54,11 +50,16 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CodingStructure.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
+
 #include <algorithm>
 
 #include "vvenc/vvencCfg.h"
 #include "Utilities/NoMallocThreadPool.h"
 
+#if defined( TARGET_SIMD_X86 )
+#  include "CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
+#endif
 
 //! \ingroup EncoderLib
 //! \{
@@ -79,7 +80,6 @@ struct FilterIdxCount
 bool compareCounts(FilterIdxCount a, FilterIdxCount b) { return a.count > b.count; }
 
 #define AlfCtx(c) SubCtx( Ctx::Alf, c)
-std::vector<double> EncAdaptiveLoopFilter::m_lumaLevelToWeightPLUT;
 
 void AlfCovariance::getClipMax(const AlfFilterShape& alfShape, int *clip_max) const
 {
@@ -124,12 +124,12 @@ void AlfCovariance::reduceClipCost(const AlfFilterShape& alfShape, int *clip) co
   }
 }
 
-double AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, double *f, bool optimize_clip) const
+alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, alf_float_t *f, bool optimize_clip) const
 {
   const int size = alfShape.numCoeff;
   int clip_max[MAX_NUM_ALF_LUMA_COEFF];
 
-  double err_best, err_last;
+  alf_float_t err_best, err_last;
 
   TE kE;
   Ty ky;
@@ -154,7 +154,7 @@ double AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, 
 
   while( step > 0 )
   {
-    double err_min = err_best;
+    alf_float_t err_min = err_best;
     int idx_min = -1;
     int inc_min = 0;
 
@@ -262,15 +262,15 @@ double AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, 
 }
 
 template<>
-double AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const double invFactor ) const
+alf_float_t AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const alf_float_t invFactor ) const
 {
-  double error = 0;
+  alf_float_t error = 0;
   const int coeffDiff = (coeffAfter-coeffBefore);
   for( int i = 0; i < numCoeff; i++ )
   {
     if( i == coeffPos )
     {
-      double sum = 0;
+      alf_float_t sum = 0;
       for( int j = i + 1; j < numCoeff; j++ )
       {
         sum += E[0][0][i][j] * coeff[j];
@@ -295,15 +295,15 @@ double AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const int 
 }
 
 template<>
-double AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const double invFactor ) const
+alf_float_t AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const alf_float_t invFactor ) const
 {
-  double error = 0;
+  alf_float_t error = 0;
   const int coeffDiff = (coeffAfter-coeffBefore);
   for( int i = 0; i < numCoeff; i++ )
   {
     if( i == coeffPos )
     {
-      double sum = 0;
+      alf_float_t sum = 0;
       for( int j = i + 1; j < numCoeff; j++ )
       {
         sum += E[clip[i]][clip[j]][i][j] * coeff[j];
@@ -327,14 +327,755 @@ double AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *
   return error * invFactor;
 }
 
-template<>
-double AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const double invFactor ) const
+
+
+template<int numCoeff>
+static alf_float_t calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
 {
-  double error = 0;
+  alf_float_t error = 0;
 
   for( int i = 0; i < numCoeff; i++ )   //diagonal
   {
-    double sum = 0;
+    alf_float_t sum = 0;
+    for( int j = i + 1; j < numCoeff; j++ )
+    {
+      // E[j][i] = E[i][j], sum will be multiplied by 2 later
+      sum += E[0][0][i][j] * coeff[j];
+    }
+    error += ( ( E[0][0][i][i] * coeff[i] + sum * 2 ) * invFactor - 2 * y[0][i] ) * coeff[i];
+  }
+
+  return error * invFactor;
+}
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+static alf_float_t calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
+{
+#if ALF_SINGLE_PREC_FLOAT
+  //alf_float_t orgerror = 0;
+  //
+  //for( int i = 0; i < 13; i++ )   //diagonal
+  //{
+  //  alf_float_t sum = 0;
+  //  for( int j = i + 1; j < 13; j++ )
+  //  {
+  //    // E[j][i] = E[i][j], sum will be multiplied by 2 later
+  //    sum += E[0][0][i][j] * coeff[j];
+  //  }
+  //  orgerror += ( ( E[0][0][i][i] * coeff[i] + sum * 2 ) * invFactor - 2 * y[0][i] ) * coeff[i];
+  //}
+  //
+  //orgerror *= invFactor;
+
+  alf_float_t error = 0;
+
+  const __m128 mzero = _mm_setzero_ps();
+  const __m128 minvf = _mm_set1_ps( invFactor );
+  const __m128 mtwo  = _mm_set1_ps( 2.0 );
+
+  __m128 merror  = _mm_setzero_ps(), msum0, msum1, msum2, msum3;
+  __m128 mcoef1  = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) &coeff[1] ) );
+  __m128 mcoef5  = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) &coeff[5] ) );
+  __m128 mcoef9  = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) &coeff[9] ) );
+
+  // i = 0
+
+  __m128 mE1  = _mm_loadu_ps( &E[0][0][0][ 1] );
+  __m128 mE5  = _mm_loadu_ps( &E[0][0][0][ 5] );
+  __m128 mE9  = _mm_loadu_ps( &E[0][0][0][ 9] );
+  
+  mE1  = _mm_mul_ps( mcoef1, mE1 );
+  mE5  = _mm_mul_ps( mcoef5, mE5 );
+  mE9  = _mm_mul_ps( mcoef9, mE9 );
+
+  msum0 = _mm_add_ps( _mm_add_ps( mE1, mE5 ), mE9 );
+
+  // i = 1
+
+  mcoef1 = _mm_blend_ps( mcoef1, mzero, 1 );
+
+  mE1  = _mm_loadu_ps( &E[0][0][1][ 1] );
+  mE5  = _mm_loadu_ps( &E[0][0][1][ 5] );
+  mE9  = _mm_loadu_ps( &E[0][0][1][ 9] );
+  
+  mE1  = _mm_mul_ps( mcoef1,  mE1 );
+  mE5  = _mm_mul_ps( mcoef5,  mE5 );
+  mE9  = _mm_mul_ps( mcoef9,  mE9 );
+
+  msum1 = _mm_add_ps( _mm_add_ps( mE1, mE5 ), mE9 );
+
+  // i = 2
+
+  mcoef1 = _mm_blend_ps( mcoef1, mzero, 2 );
+
+  mE1 = _mm_loadu_ps( &E[0][0][2][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][2][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][2][9] );
+
+  mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum2 = _mm_add_ps( _mm_add_ps( mE1, mE5 ), mE9 );
+
+  // i = 3
+
+  mcoef1 = _mm_blend_ps( mcoef1, mzero, 4 );
+
+  mE1 = _mm_loadu_ps( &E[0][0][3][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][3][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][3][9] );
+
+  mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum3 = _mm_add_ps( _mm_add_ps( mE1, mE5 ), mE9 );
+
+  msum0 = _mm_hadd_ps( msum0, msum1 );
+  msum2 = _mm_hadd_ps( msum2, msum3 );
+  msum0 = _mm_hadd_ps( msum0, msum2 );
+
+  // combine i = 0...3
+
+  __m128 mcoef   = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) &coeff[0] ) );
+  __m128 my      =                  _mm_loadu_ps(                       &y[0][0] );
+  __m128 mE      =                  _mm_setr_ps ( E[0][0][0][0], E[0][0][1][1], E[0][0][2][2], E[0][0][3][3] );
+  
+  mE1 = _mm_mul_ps( mE, mcoef );
+  mE5 = _mm_mul_ps( msum0, mtwo );
+  mE1 = _mm_add_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, minvf );
+  mE5 = _mm_mul_ps( mtwo, my );
+  mE1 = _mm_sub_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, mcoef );
+  merror = _mm_add_ps( merror, mE1 );
+
+  //error += ( ( E[0][0][0][0] * coeff[0] + sum0 * 2 ) * invFactor - 2 * y[0][0] ) * coeff[0];
+  //error += ( ( E[0][0][1][1] * coeff[1] + sum1 * 2 ) * invFactor - 2 * y[0][1] ) * coeff[1];
+  //error += ( ( E[0][0][2][2] * coeff[2] + sum2 * 2 ) * invFactor - 2 * y[0][2] ) * coeff[2];
+  //error += ( ( E[0][0][3][3] * coeff[3] + sum3 * 2 ) * invFactor - 2 * y[0][3] ) * coeff[3];
+
+  // i = 4
+  
+  //__m128 mE1 = _mm_loadu_ps( &E[0][0][4][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][4][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][4][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum0 = _mm_add_ps( mE5, mE9 );
+
+  // i = 5
+
+  mcoef5 = _mm_blend_ps( mcoef5, mzero, 1 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][5][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][5][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][5][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum1 = _mm_add_ps( mE5, mE9 );
+
+  // i = 6
+
+  mcoef5 = _mm_blend_ps( mcoef5, mzero, 2 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][6][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][6][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][6][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum2 = _mm_add_ps( mE5, mE9 );
+
+  // i = 7
+
+  mcoef5 = _mm_blend_ps( mcoef5, mzero, 4 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][7][1] );
+  mE5 = _mm_loadu_ps( &E[0][0][7][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][7][9] );
+
+//  mE1 = _mm_mul_ps( mcoef1, mE1 );
+  mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum3 = _mm_add_ps( mE5, mE9 );
+
+  msum0 = _mm_hadd_ps( msum0, msum1 );
+  msum2 = _mm_hadd_ps( msum2, msum3 );
+  msum0 = _mm_hadd_ps( msum0, msum2 );
+
+  // combine i = 4...7
+
+  mcoef = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) &coeff[4] ) );
+  my = _mm_loadu_ps( &y[0][4] );
+  mE = _mm_setr_ps( E[0][0][4][4], E[0][0][5][5], E[0][0][6][6], E[0][0][7][7] );
+
+  mE1 = _mm_mul_ps( mE, mcoef );
+  mE5 = _mm_mul_ps( msum0, mtwo );
+  mE1 = _mm_add_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, minvf );
+  mE5 = _mm_mul_ps( mtwo, my );
+  mE1 = _mm_sub_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, mcoef );
+  merror = _mm_add_ps( merror, mE1 );
+
+  //error += ( ( E[0][0][4][4] * coeff[4] + sum0 * 2 ) * invFactor - 2 * y[0][4] ) * coeff[4];
+  //error += ( ( E[0][0][5][5] * coeff[5] + sum1 * 2 ) * invFactor - 2 * y[0][5] ) * coeff[5];
+  //error += ( ( E[0][0][6][6] * coeff[6] + sum2 * 2 ) * invFactor - 2 * y[0][6] ) * coeff[6];
+  //error += ( ( E[0][0][7][7] * coeff[7] + sum3 * 2 ) * invFactor - 2 * y[0][7] ) * coeff[7];
+
+  // i = 8
+  
+  //__m128 mE1 = _mm_loadu_ps( &E[0][0][8][1] );
+  //__m128 mE5 = _mm_loadu_ps( &E[0][0][8][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][8][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  //mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum0 = mE9;
+
+  // i = 9
+
+  mcoef9 = _mm_blend_ps( mcoef9, mzero, 1 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][9][1] );
+  //mE5 = _mm_loadu_ps( &E[0][0][9][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][9][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  //mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum1 = mE9;
+
+  // i = 10
+
+  mcoef9 = _mm_blend_ps( mcoef9, mzero, 2 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][10][1] );
+  //mE5 = _mm_loadu_ps( &E[0][0][10][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][10][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  //mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum2 = mE9;
+
+  // i = 11
+
+  mcoef9 = _mm_blend_ps( mcoef9, mzero, 4 );
+
+  //mE1 = _mm_loadu_ps( &E[0][0][11][1] );
+  //mE5 = _mm_loadu_ps( &E[0][0][11][5] );
+  mE9 = _mm_loadu_ps( &E[0][0][11][9] );
+
+  //mE1 = _mm_mul_ps( mcoef1, mE1 );
+  //mE5 = _mm_mul_ps( mcoef5, mE5 );
+  mE9 = _mm_mul_ps( mcoef9, mE9 );
+
+  msum3 = mE9;
+
+  msum0 = _mm_hadd_ps( msum0, msum1 );
+  msum2 = _mm_hadd_ps( msum2, msum3 );
+  msum0 = _mm_hadd_ps( msum0, msum2 );
+
+  // combine i = 8...11
+
+  mcoef = _mm_cvtepi32_ps( _mm_loadu_si128( ( const __m128i* ) & coeff[8] ) );
+  my = _mm_loadu_ps( &y[0][8] );
+  mE = _mm_setr_ps( E[0][0][8][8], E[0][0][9][9], E[0][0][10][10], E[0][0][11][11] );
+
+  mE1 = _mm_mul_ps( mE, mcoef );
+  mE5 = _mm_mul_ps( msum0, mtwo );
+  mE1 = _mm_add_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, minvf );
+  mE5 = _mm_mul_ps( mtwo, my );
+  mE1 = _mm_sub_ps( mE1, mE5 );
+  mE1 = _mm_mul_ps( mE1, mcoef );
+  merror = _mm_add_ps( merror, mE1 );
+
+  //error += ( ( E[0][0][ 8][ 8] * coeff[ 8] + sum0 * 2 ) * invFactor - 2 * y[0][ 8] ) * coeff[ 8];
+  //error += ( ( E[0][0][ 9][ 9] * coeff[ 9] + sum1 * 2 ) * invFactor - 2 * y[0][ 9] ) * coeff[ 9];
+  //error += ( ( E[0][0][10][10] * coeff[10] + sum2 * 2 ) * invFactor - 2 * y[0][10] ) * coeff[10];
+  //error += ( ( E[0][0][11][11] * coeff[11] + sum3 * 2 ) * invFactor - 2 * y[0][11] ) * coeff[11];
+
+  merror = _mm_hadd_ps( merror, mzero );
+  merror = _mm_hadd_ps( merror, mzero );
+  error  = _mm_cvtss_f32( merror );
+  error += ( ( E[0][0][12][12] * coeff[12] ) * invFactor - 2 * y[0][12] ) * coeff[12];
+
+  return error * invFactor;
+#else
+  alf_float_t error = 0;
+
+  const __m128d mzero = _mm_setzero_pd();
+  const __m128d minvf = _mm_set1_pd( invFactor );
+  const __m128d mtwo  = _mm_set1_pd( 2.0 );
+
+  __m128d merror  = _mm_setzero_pd(), msum0, msum1;
+  __m128d mcoef1  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [1] ) );
+  __m128d mcoef3  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [3] ) );
+  __m128d mcoef5  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [5] ) );
+  __m128d mcoef7  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [7] ) );
+  __m128d mcoef9  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [9] ) );
+  __m128d mcoef11 = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[11] ) );
+
+
+  __m128d mE1  = _mm_loadu_pd( &E[0][0][0][ 1] );
+  __m128d mE3  = _mm_loadu_pd( &E[0][0][0][ 3] );
+  __m128d mE5  = _mm_loadu_pd( &E[0][0][0][ 5] );
+  __m128d mE7  = _mm_loadu_pd( &E[0][0][0][ 7] );
+  __m128d mE9  = _mm_loadu_pd( &E[0][0][0][ 9] );
+  __m128d mE11 = _mm_loadu_pd( &E[0][0][0][11] );
+  
+  mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+
+
+  mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
+
+  mE1  = _mm_loadu_pd( &E[0][0][1][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][1][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][1][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][1][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][1][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][1][11] );
+  
+  mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+  
+
+  
+  __m128d mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[0] ) );
+  __m128d my      =                  _mm_loadu_pd(                       &y[0][0] );
+  __m128d mE      =                  _mm_setr_pd( E[0][0][0][0], E[0][0][1][1] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+
+  //error += ( ( E[0][0][0][0] * coeff[0] + sum0 * 2 ) * invFactor - 2 * y[0][0] ) * coeff[0];
+  //error += ( ( E[0][0][1][1] * coeff[1] + sum1 * 2 ) * invFactor - 2 * y[0][1] ) * coeff[1];
+  
+  
+  
+  //mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][2][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][2][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][2][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][2][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][2][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][2][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+
+
+  mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][3][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][3][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][3][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][3][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][3][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][3][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+
+  
+  
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[2] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][2] );
+  mE      =                  _mm_setr_pd( E[0][0][2][2], E[0][0][3][3] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][2][2] * coeff[2] + sum0 * 2 ) * invFactor - 2 * y[0][2] ) * coeff[2];
+  //error += ( ( E[0][0][3][3] * coeff[3] + sum1 * 2 ) * invFactor - 2 * y[0][3] ) * coeff[3];
+
+
+  
+  //mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][4][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][4][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][4][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][4][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][4][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][4][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
+
+
+  mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][5][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][5][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][5][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][5][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][5][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][5][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[4] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][4] );
+  mE      =                  _mm_setr_pd( E[0][0][4][4], E[0][0][5][5] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][4][4] * coeff[4] + sum0 * 2 ) * invFactor - 2 * y[0][4] ) * coeff[4];
+  //error += ( ( E[0][0][5][5] * coeff[5] + sum1 * 2 ) * invFactor - 2 * y[0][5] ) * coeff[5];
+  
+
+  
+  //mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][6][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][6][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][6][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][6][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][6][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][6][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
+
+
+  mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][7][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][7][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][7][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][7][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][7][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][7][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[6] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][6] );
+  mE      =                  _mm_setr_pd( E[0][0][6][6], E[0][0][7][7] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][6][6] * coeff[6] + sum0 * 2 ) * invFactor - 2 * y[0][6] ) * coeff[6];
+  //error += ( ( E[0][0][7][7] * coeff[7] + sum1 * 2 ) * invFactor - 2 * y[0][7] ) * coeff[7];
+  
+
+  
+  //mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][8][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][8][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][8][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][8][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][8][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][8][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = _mm_add_pd( mE9, mE11 );
+
+  
+  mcoef9 = _mm_blend_pd( mcoef9, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][9][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][9][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][9][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][9][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][9][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][9][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = _mm_add_pd( mE9, mE11 );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[8] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][8] );
+  mE      =                  _mm_setr_pd( E[0][0][8][8], E[0][0][9][9] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][8][8] * coeff[8] + sum0 * 2 ) * invFactor - 2 * y[0][8] ) * coeff[8];
+  //error += ( ( E[0][0][9][9] * coeff[9] + sum1 * 2 ) * invFactor - 2 * y[0][9] ) * coeff[9];
+  
+
+  
+  //mcoef9 = _mm_blend_pd( mcoef9, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][10][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][10][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][10][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][10][ 7] );
+  //mE9  = _mm_loadu_pd( &E[0][0][10][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][10][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  //mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum0 = mE11;
+
+
+  mcoef11 = _mm_blend_pd( mcoef11, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][1][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][1][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][1][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][1][ 7] );
+  //mE9  = _mm_loadu_pd( &E[0][0][1][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][11][11] );
+
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  //mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum1 = mE11;
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[10] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][10] );
+  mE      =                  _mm_setr_pd( E[0][0][10][10], E[0][0][11][11] );
+  
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum0, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][10][10] * coeff[10] + sum0 * 2 ) * invFactor - 2 * y[0][10] ) * coeff[10];
+  //error += ( ( E[0][0][11][11] * coeff[11] + sum1 * 2 ) * invFactor - 2 * y[0][11] ) * coeff[11];
+
+  error  = _mm_cvtsd_f64( _mm_hadd_pd( merror, mzero ) );
+  error += ( ( E[0][0][12][12] * coeff[12] ) * invFactor - 2 * y[0][12] ) * coeff[12];
+
+  return error * invFactor;
+#endif
+}
+#endif
+
+const AlfCovariance& AlfCovariance::operator+= ( const AlfCovariance& src )
+{
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF && ALF_SINGLE_PREC_FLOAT
+  if( numCoeff == 13 && read_x86_extension_flags() > SCALAR )
+  {
+    for( int b0 = 0; b0 < numBins; b0++ )
+    {
+      for( int b1 = 0; b1 < numBins; b1++ )
+      {
+        //for( int j = 0; j < numCoeff; j++ )
+        //{
+        //  for( int i = 0; i < numCoeff; i++ )
+        //  {
+        //    E[b0][b1][j][i] += src.E[b0][b1][j][i];
+        //  }
+        //}
+        const int sumLen = numCoeff * numCoeff;
+
+        CHECKD( ( sumLen & 3 ) != 1, "sumLen has to have 1 extra element over multiples of 4" );
+        
+              alf_float_t* d = &    E[b0][b1][0][0];
+        const alf_float_t* s = &src.E[b0][b1][0][0];
+        
+        int i = 0;
+        for( ; i < ( sumLen - 1 ); i += 4 )
+        {
+          __m128 m1 = _mm_loadu_ps( &d[i] );
+          __m128 m2 = _mm_loadu_ps( &s[i] );
+          _mm_storeu_ps( &d[i], _mm_add_ps( m1, m2 ) );
+        }
+
+        d[sumLen - 1] += s[sumLen - 1];
+      }
+    }
+
+    for( int b = 0; b < numBins; b++ )
+    {
+            alf_float_t* d = &    y[b][0];
+      const alf_float_t* s = &src.y[b][0];
+      int i = 0;
+      for( ; i < ( numCoeff - 1 ); i += 4 )
+      {
+        __m128 m1 = _mm_loadu_ps( &d[i] );
+        __m128 m2 = _mm_loadu_ps( &s[i] );
+        _mm_storeu_ps( &d[i], _mm_add_ps( m1, m2 ) );
+      }
+
+      d[numCoeff - 1] += s[numCoeff - 1];
+    }
+  }
+  else
+#endif
+  {
+    for( int b0 = 0; b0 < numBins; b0++ )
+    {
+      for( int b1 = 0; b1 < numBins; b1++ )
+      {
+        for( int j = 0; j < numCoeff; j++ )
+        {
+          for( int i = 0; i < numCoeff; i++ )
+          {
+            E[b0][b1][j][i] += src.E[b0][b1][j][i];
+          }
+        }
+      }
+    }
+
+    for( int b = 0; b < numBins; b++ )
+    {
+      for( int j = 0; j < numCoeff; j++ )
+      {
+        y[b][j] += src.y[b][j];
+      }
+    }
+  }
+
+  pixAcc += src.pixAcc;
+  all0 &= src.all0;
+  return *this;
+}
+
+template<int numCoeff>
+static alf_float_t calcErrorForCoeffsNonLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* clip, const int* coeff, const alf_float_t invFactor )
+{
+  alf_float_t error = 0;
+
+  for( int i = 0; i < numCoeff; i++ )   //diagonal
+  {
+    alf_float_t sum = 0;
     for( int j = i + 1; j < numCoeff; j++ )
     {
       // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -347,31 +1088,40 @@ double AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coef
 }
 
 template<>
-double AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const double invFactor ) const
+alf_float_t AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const
 {
-  double error = 0;
+  if( numCoeff ==  7 ) return calcErrorForCoeffsNonLin< 7>( E, y, clip, coeff, invFactor );
+  if( numCoeff == 13 ) return calcErrorForCoeffsNonLin<13>( E, y, clip, coeff, invFactor );
 
-  for( int i = 0; i < numCoeff; i++ )   //diagonal
-  {
-    double sum = 0;
-    for( int j = i + 1; j < numCoeff; j++ )
-    {
-      // E[j][i] = E[i][j], sum will be multiplied by 2 later
-      sum += E[0][0][i][j] * coeff[j];
-    }
-    error += ( ( E[0][0][i][i] * coeff[i] + sum * 2 ) * invFactor - 2 * y[0][i] ) * coeff[i];
-  }
-
-  return error * invFactor;
+  THROW( "Unexpected number of coefficients: " << numCoeff );
+  return 0.0;
 }
 
-double AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const double invFactor) const
+template<>
+alf_float_t AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const
 {
-  double error = 0;
+  if( numCoeff ==  7 ) return calcErrorForCoeffsLin< 7>( E, y, coeff, invFactor );
+  if( numCoeff == 13 )
+  {
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    if( read_x86_extension_flags() > SCALAR )
+      return calcErrorForCoeffsLin_13_SSE( E, y, coeff, invFactor );
+    else
+#endif
+      return calcErrorForCoeffsLin<13>( E, y, coeff, invFactor );
+  }
+
+  THROW( "Unexpected number of coefficients: " << numCoeff );
+  return 0.0;
+}
+
+alf_float_t AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const alf_float_t invFactor) const
+{
+  alf_float_t error = 0;
 
   for (int i = 0; i < numCoeff; i++)   // diagonal
   {
-    double sum = 0;
+    alf_float_t sum = 0;
     for (int j = i + 1; j < numCoeff; j++)
     {
       // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -383,9 +1133,9 @@ double AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int nu
   return error * invFactor;
 }
 
-double AlfCovariance::calculateError( const int *clip, const double *coeff, const int numCoeff ) const
+alf_float_t AlfCovariance::calculateError( const int *clip, const alf_float_t*coeff, const int numCoeff ) const
 {
-  double sum = 0;
+  alf_float_t sum = 0;
   for( int i = 0; i < numCoeff; i++ )
   {
     sum += coeff[i] * y[clip[i]][i];
@@ -394,7 +1144,7 @@ double AlfCovariance::calculateError( const int *clip, const double *coeff, cons
   return pixAcc - sum;
 }
 
-double AlfCovariance::calculateError( const int *clip ) const
+alf_float_t AlfCovariance::calculateError( const int *clip ) const
 {
   Ty c;
   return optimizeFilter( clip, c, numCoeff );
@@ -405,20 +1155,20 @@ double AlfCovariance::calculateError( const int *clip ) const
 //********************************
 
 #define ROUND(a)  (((a) < 0)? (int)((a) - 0.5) : (int)((a) + 0.5))
-#define REG              0.0001
-#define REG_SQR          0.0000001
+#define REG              alf_float_t( 0.0001    )
+#define REG_SQR          alf_float_t( 0.0000001 )
 
 //Find filter coeff related
 int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
 {
-  Ty invDiag;  /* Vector of the inverse of diagonal entries of outMatr */
-
   for( int i = 0; i < numEq; i++ )
   {
+    alf_float_t invDiag = 0.0f;
+
     for( int j = i; j < numEq; j++ )
     {
       /* Compute the scaling factor */
-      double scale = inpMatr[i][j];
+      alf_float_t scale = inpMatr[i][j];
       if( i > 0 )
       {
         for( int k = i - 1; k >= 0; k-- )
@@ -434,27 +1184,35 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
         {
           return 0;
         }
-        else              /* Normal operation */
-          invDiag[i] = 1.0 / ( outMatr[i][i] = sqrt( scale ) );
+        else
+        {
+          /* Normal operation */
+          invDiag = alf_float_t( 1.0 ) / ( outMatr[i][i] = sqrt( scale ) );
+        }
       }
       else
       {
-        outMatr[i][j] = scale * invDiag[i]; /* Upper triangular part          */
-        outMatr[j][i] = 0.0;              /* Lower triangular part set to 0 */
+        outMatr[i][j] = scale * invDiag; /* Upper triangular part          */
+        outMatr[j][i] = alf_float_t( 0.0 );             /* Lower triangular part set to 0 */
       }
     }
   }
   return 1; /* Signal that Cholesky factorization is successfully performed */
 }
 
-void AlfCovariance::gnsTransposeBacksubstitution( TE U, double* rhs, double* x, int order ) const
+void AlfCovariance::gnsTransposeBacksubstitution( TE U, alf_float_t* rhs, alf_float_t* x, int order ) const
 {
+
+#if __GNUC__ == 7
+  _Pragma( "GCC diagnostic push" );
+  _Pragma( "GCC diagnostic ignored \"-Wmaybe-uninitialized\"" );
+#endif
   /* Backsubstitution starts */
   x[0] = rhs[0] / U[0][0];               /* First row of U'                   */
   for( int i = 1; i < order; i++ )
   {         /* For the rows 1..order-1           */
 
-    double sum = 0; //Holds backsubstitution from already handled rows
+    alf_float_t sum = 0; //Holds backsubstitution from already handled rows
 
     for( int j = 0; j < i; j++ ) /* Backsubst already solved unknowns */
     {
@@ -463,16 +1221,19 @@ void AlfCovariance::gnsTransposeBacksubstitution( TE U, double* rhs, double* x, 
 
     x[i] = ( rhs[i] - sum ) / U[i][i];       /* i'th component of solution vect.  */
   }
+#if __GNUC__ == 7
+  _Pragma( "GCC diagnostic pop" );
+#endif
 }
 
-void AlfCovariance::gnsBacksubstitution( TE R, double* z, int size, double* A ) const
+void AlfCovariance::gnsBacksubstitution( TE R, alf_float_t* z, int size, alf_float_t* A ) const
 {
   size--;
   A[size] = z[size] / R[size][size];
 
   for( int i = size - 1; i >= 0; i-- )
   {
-    double sum = 0;
+    alf_float_t sum = 0;
 
     for( int j = i + 1; j <= size; j++ )
     {
@@ -483,7 +1244,7 @@ void AlfCovariance::gnsBacksubstitution( TE R, double* z, int size, double* A ) 
   }
 }
 
-int AlfCovariance::gnsSolveByChol( const int *clip, double *x, int numEq ) const
+int AlfCovariance::gnsSolveByChol( const int *clip, alf_float_t*x, int numEq ) const
 {
   TE LHS;
   Ty rhs;
@@ -492,7 +1253,7 @@ int AlfCovariance::gnsSolveByChol( const int *clip, double *x, int numEq ) const
   return gnsSolveByChol( LHS, rhs, x, numEq );
 }
 
-int AlfCovariance::gnsSolveByChol( TE LHS, double* rhs, double *x, int numEq ) const
+int AlfCovariance::gnsSolveByChol( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq ) const
 {
   Ty aux;     /* Auxiliary vector */
   TE U;    /* Upper triangular Cholesky factor of LHS */
@@ -528,7 +1289,7 @@ int AlfCovariance::gnsSolveByChol( TE LHS, double* rhs, double *x, int numEq ) c
 
     if( !res )
     {
-      std::memset( x, 0, sizeof( double )*numEq );
+      std::memset( x, 0, sizeof( alf_float_t )*numEq );
       return 0;
     }
 
@@ -569,31 +1330,46 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
   m_alfCovarianceCcAlf[1] = nullptr;
   m_alfCovarianceFrameCcAlf[0] = nullptr;
   m_alfCovarianceFrameCcAlf[1] = nullptr;
+  m_accumStatCTUWise = false;
 }
 
-void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
+void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
 {
 
-  AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );
+  AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_internalBitDepth );
 
   m_encCfg = &encCfg;
   m_CABACEstimator = &cabacEstimator;
   m_CtxCache = &ctxCache;
+
+  m_maxAsuWidth   = encCfg.m_alfUnitSize;
+  m_maxAsuHeight  = encCfg.m_alfUnitSize;
+
+  m_numAsusInWidth  = ( m_picWidth / m_maxAsuWidth ) + ( ( m_picWidth % m_maxAsuWidth ) ? 1 : 0 );
+  m_numAsusInHeight = ( m_picHeight / m_maxAsuHeight ) + ( ( m_picHeight % m_maxAsuHeight ) ? 1 : 0 );
+  m_numAsusInPic    = m_numAsusInHeight * m_numAsusInWidth;
+  m_numCtusInAsuWidth  = m_maxAsuWidth  / m_maxCUWidth;
+  m_numCtusInAsuHeight = m_maxAsuHeight / m_maxCUHeight;
+  m_numCtusInAsu.resize( m_numAsusInPic );
+  for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
+  {
+    int ctuX, ctuY;
+    getAsuCtuXY( asuIdx, ctuX, ctuY );
+    int ctuMaxX = getAsuMaxCtuX( ctuX );
+    int ctuMaxY = getAsuMaxCtuY( ctuY );
+    m_numCtusInAsu[asuIdx] = ( ctuMaxX - ctuX ) * ( ctuMaxY - ctuY );
+  }
 
   const int numBins = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma ? MaxAlfNumClippingValues : 1;
 
   for( int channelIdx = 0; channelIdx < MAX_NUM_CH; channelIdx++ )
   {
     ChannelType chType = (ChannelType)channelIdx;
-    int numClasses = channelIdx ? MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
-    m_alfCovarianceFrame[chType] = new AlfCovariance*[m_filterShapes[chType].size()];
-    for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+    int numClasses = channelIdx ? VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
+    m_alfCovarianceFrame[chType] = new AlfCovariance[numClasses];
+    for( int k = 0; k < numClasses; k++ )
     {
-      m_alfCovarianceFrame[chType][i] = new AlfCovariance[numClasses];
-      for( int k = 0; k < numClasses; k++ )
-      {
-        m_alfCovarianceFrame[chType][i][k].create( m_filterShapes[chType][i].numCoeff, numBins );
-      }
+      m_alfCovarianceFrame[chType][k].create( m_filterShapes[chType].numCoeff, numBins );
     }
   }
 
@@ -613,32 +1389,43 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     ChannelType chType = toChannelType( ComponentID( compIdx ) );
     int numClasses = compIdx ? 1 : MAX_NUM_ALF_CLASSES;
 
-    m_alfCovariance[compIdx] = new AlfCovariance**[m_filterShapes[chType].size()];
-
-    for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+    // statistics buffer
+    // if ASUs are used, the preferred way to gather statistics is across ASUs
+    // CTU-wise gathering is the fall-back mode for the cases when tiles are used and at least one tile boundary splits ASUs
+    m_accumStatCTUWise = false;
+    if( m_numAsusInPic != m_numCTUsInPic && pps.getNumTiles() > 1 && !pps.loopFilterAcrossTilesEnabled )
     {
-      m_alfCovariance[compIdx][i] = new AlfCovariance*[m_numCTUsInPic];
-      for( int j = 0; j < m_numCTUsInPic; j++ )
+      // check whether any tile boundary splits ASUs. Only in that case we need extra CTU-buffers.
+      for( int tileIdx = 0; tileIdx < pps.numTileRows * pps.numTileCols; tileIdx++ )
       {
-        m_alfCovariance[compIdx][i][j] = new AlfCovariance[numClasses];
-        for( int k = 0; k < numClasses; k++ )
+        int tileCtuX = pps.tileColBd[tileIdx % pps.numTileCols] << pps.pcv->maxCUSizeLog2;
+        int tileCtuY = pps.tileRowBd[tileIdx / pps.numTileCols] << pps.pcv->maxCUSizeLog2;
+        if( tileCtuX % m_maxAsuWidth != 0 || tileCtuY % m_maxAsuHeight != 0 )
         {
-          m_alfCovariance[compIdx][i][j][k].create( m_filterShapes[chType][i].numCoeff, numBins );
+          m_accumStatCTUWise = true;
+          break;
         }
+      }
+    }
+    const int numUnitsInPic = m_accumStatCTUWise ? m_numCTUsInPic: m_numAsusInPic;
+    m_alfCovariance[compIdx] = new AlfCovariance*[numUnitsInPic];
+    for( int j = 0; j < numUnitsInPic; j++ )
+    {
+      m_alfCovariance[compIdx][j] = new AlfCovariance[numClasses];
+      for( int k = 0; k < numClasses; k++ )
+      {
+        m_alfCovariance[compIdx][j][k].create( m_filterShapes[chType].numCoeff, numBins );
       }
     }
   }
 
-  for( int i = 0; i != m_filterShapes[COMP_Y].size(); i++ )
+  for (int j = 0; j <= MAX_NUM_ALF_CLASSES + 1; j++)
   {
-    for (int j = 0; j <= MAX_NUM_ALF_CLASSES + 1; j++)
-    {
-      m_alfCovarianceMerged[i][j].create( m_filterShapes[COMP_Y][i].numCoeff, numBins );
-    }
+    m_alfCovarianceMerged[j].create( m_filterShapes[COMP_Y].numCoeff, numBins );
   }
 
-  m_filterCoeffSet = new int*[std::max(MAX_NUM_ALF_CLASSES, MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
-  m_filterClippSet = new int*[std::max(MAX_NUM_ALF_CLASSES, MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
+  m_filterCoeffSet = new int*[std::max(MAX_NUM_ALF_CLASSES, VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
+  m_filterClippSet = new int*[std::max(MAX_NUM_ALF_CLASSES, VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
   m_diffFilterCoeff = new int*[MAX_NUM_ALF_CLASSES];
 
   for( int i = 0; i < MAX_NUM_ALF_CLASSES; i++ )
@@ -661,24 +1448,20 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
   for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
   {
     int numFilters = MAX_NUM_CC_ALF_FILTERS;
-    m_alfCovarianceCcAlf[compIdx-1] = new AlfCovariance**[m_filterShapesCcAlf[compIdx-1].size()];
-    m_alfCovarianceFrameCcAlf[compIdx-1] = new AlfCovariance*[m_filterShapesCcAlf[compIdx-1].size()];
-    for( int i = 0; i != m_filterShapesCcAlf[compIdx-1].size(); i++ )
-    {
-      m_alfCovarianceFrameCcAlf[compIdx - 1][i] = new AlfCovariance[numFilters];
-      for (int k = 0; k < numFilters; k++)
-      {
-        m_alfCovarianceFrameCcAlf[compIdx - 1][i][k].create(m_filterShapesCcAlf[compIdx - 1][i].numCoeff, numBins);
-      }
 
-      m_alfCovarianceCcAlf[compIdx - 1][i] = new AlfCovariance *[numFilters];
-      for (int j = 0; j < numFilters; j++)
+    m_alfCovarianceFrameCcAlf[compIdx - 1] = new AlfCovariance[numFilters];
+    for (int k = 0; k < numFilters; k++)
+    {
+      m_alfCovarianceFrameCcAlf[compIdx - 1][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
+    }
+
+    m_alfCovarianceCcAlf[compIdx - 1] = new AlfCovariance *[numFilters];
+    for (int j = 0; j < numFilters; j++)
+    {
+      m_alfCovarianceCcAlf[compIdx - 1][j] = new AlfCovariance[m_numCTUsInPic];
+      for (int k = 0; k < m_numCTUsInPic; k++)
       {
-        m_alfCovarianceCcAlf[compIdx - 1][i][j] = new AlfCovariance[m_numCTUsInPic];
-        for (int k = 0; k < m_numCTUsInPic; k++)
-        {
-          m_alfCovarianceCcAlf[compIdx - 1][i][j][k].create(m_filterShapesCcAlf[compIdx - 1][i].numCoeff, numBins);
-        }
+        m_alfCovarianceCcAlf[compIdx - 1][j][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
       }
     }
   }
@@ -710,16 +1493,10 @@ void EncAdaptiveLoopFilter::destroy()
   {
     if( m_alfCovarianceFrame[channelIdx] )
     {
-      ChannelType chType = (ChannelType)channelIdx;
-      int numClasses = channelIdx ? 1 : MAX_NUM_ALF_CLASSES;
-      for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+      int numClasses = channelIdx ? VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
+      for( int k = 0; k < numClasses; k++ )
       {
-        for( int k = 0; k < numClasses; k++ )
-        {
-          m_alfCovarianceFrame[channelIdx][i][k].destroy();
-        }
-        delete[] m_alfCovarianceFrame[channelIdx][i];
-        m_alfCovarianceFrame[channelIdx][i] = nullptr;
+        m_alfCovarianceFrame[channelIdx][k].destroy();
       }
       delete[] m_alfCovarianceFrame[channelIdx];
       m_alfCovarianceFrame[channelIdx] = nullptr;
@@ -748,36 +1525,27 @@ void EncAdaptiveLoopFilter::destroy()
 
     if( m_alfCovariance[compIdx] )
     {
-      ChannelType chType = toChannelType( ComponentID( compIdx ) );
       int numClasses = compIdx ? 1 : MAX_NUM_ALF_CLASSES;
 
-      for( int i = 0; i != m_filterShapes[chType].size(); i++ )
+      const int numUnitsInPic = m_accumStatCTUWise ? m_numCTUsInPic: m_numAsusInPic;
+      for( int j = 0; j < numUnitsInPic; j++ )
       {
-        for( int j = 0; j < m_numCTUsInPic; j++ )
+        for( int k = 0; k < numClasses; k++ )
         {
-          for( int k = 0; k < numClasses; k++ )
-          {
-            m_alfCovariance[compIdx][i][j][k].destroy();
-          }
-          delete[] m_alfCovariance[compIdx][i][j];
-          m_alfCovariance[compIdx][i][j] = nullptr;
-
+          m_alfCovariance[compIdx][j][k].destroy();
         }
-        delete[] m_alfCovariance[compIdx][i];
-        m_alfCovariance[compIdx][i] = nullptr;
-
+        delete[] m_alfCovariance[compIdx][j];
+        m_alfCovariance[compIdx][j] = nullptr;
       }
+
       delete[] m_alfCovariance[compIdx];
       m_alfCovariance[compIdx] = nullptr;
     }
   }
 
-  for( int i = 0; i != m_filterShapes[COMP_Y].size(); i++ )
+  for (int j = 0; j <= MAX_NUM_ALF_CLASSES + 1; j++)
   {
-    for (int j = 0; j <= MAX_NUM_ALF_CLASSES + 1; j++)
-    {
-      m_alfCovarianceMerged[i][j].destroy();
-    }
+    m_alfCovarianceMerged[j].destroy();
   }
 
   if( m_filterCoeffSet )
@@ -826,13 +1594,9 @@ void EncAdaptiveLoopFilter::destroy()
     int numFilters = MAX_NUM_CC_ALF_FILTERS;
     if (m_alfCovarianceFrameCcAlf[compIdx - 1])
     {
-      for (int i = 0; i != m_filterShapesCcAlf[compIdx - 1].size(); i++)
+      for (int k = 0; k < numFilters; k++)
       {
-        for (int k = 0; k < numFilters; k++)
-        {
-          m_alfCovarianceFrameCcAlf[compIdx - 1][i][k].destroy();
-        }
-        delete[] m_alfCovarianceFrameCcAlf[compIdx - 1][i];
+        m_alfCovarianceFrameCcAlf[compIdx - 1][k].destroy();
       }
       delete[] m_alfCovarianceFrameCcAlf[compIdx - 1];
       m_alfCovarianceFrameCcAlf[compIdx - 1] = nullptr;
@@ -840,17 +1604,13 @@ void EncAdaptiveLoopFilter::destroy()
 
     if (m_alfCovarianceCcAlf[compIdx - 1])
     {
-      for (int i = 0; i != m_filterShapesCcAlf[compIdx - 1].size(); i++)
+      for (int j = 0; j < numFilters; j++)
       {
-        for (int j = 0; j < numFilters; j++)
+        for (int k = 0; k < m_numCTUsInPic; k++)
         {
-          for (int k = 0; k < m_numCTUsInPic; k++)
-          {
-            m_alfCovarianceCcAlf[compIdx - 1][i][j][k].destroy();
-          }
-          delete[] m_alfCovarianceCcAlf[compIdx - 1][i][j];
+          m_alfCovarianceCcAlf[compIdx - 1][j][k].destroy();
         }
-        delete[] m_alfCovarianceCcAlf[compIdx - 1][i];
+        delete[] m_alfCovarianceCcAlf[compIdx - 1][j];
       }
       delete[] m_alfCovarianceCcAlf[compIdx - 1];
       m_alfCovarianceCcAlf[compIdx - 1] = nullptr;
@@ -913,9 +1673,8 @@ void EncAdaptiveLoopFilter::destroy()
 }
 
 
-void EncAdaptiveLoopFilter::initCABACEstimator( Slice* pcSlice, ParameterSetMap<APS>* apsMap )
+void EncAdaptiveLoopFilter::initCABACEstimator( Slice* pcSlice )
 {
-  m_apsMap         = apsMap;
   m_CABACEstimator->initCtxModels( *pcSlice );
   m_CABACEstimator->resetBits();
 }
@@ -924,8 +1683,8 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
 {
   if (m_ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cb - 1])
   {
-    int  ccAlfCbApsId = cs.slice->tileGroupCcAlfCbApsId;
-    APS* aps = m_apsMap->getPS((cs.slice->tileGroupCcAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
+    int  ccAlfCbApsId = cs.slice->ccAlfCbApsId;
+    APS* aps = m_apsMap->getPS((cs.slice->ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
     if (aps == NULL)
     {
       aps = m_apsMap->allocatePS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
@@ -940,25 +1699,28 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       memcpy(aps->ccAlfParam.ccAlfCoeff[COMP_Cb - 1][filterIdx],
              m_ccAlfFilterParam.ccAlfCoeff[COMP_Cb - 1][filterIdx], sizeof(short) * MAX_NUM_CC_ALF_CHROMA_COEFF);
     }
-    aps->apsId   = ccAlfCbApsId;
-    aps->apsType = ALF_APS;
-    aps->poc     = cs.slice->poc;
+    CHECK( m_reuseApsId[COMP_Cb - 1] > 0 && aps->apsId != ccAlfCbApsId, "CCALF: ID missmatch while reusing APS-ID" );
     if (m_reuseApsId[COMP_Cb - 1] < 0)
     {
       aps->ccAlfParam.newCcAlfFilter[COMP_Cb - 1] = 1;
       m_apsMap->setChangedFlag((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS, true);
       aps->temporalId = cs.slice->TLayer;
+      aps->apsId   = ccAlfCbApsId;
+      aps->apsType = ALF_APS;
+      aps->poc     = cs.slice->poc;
+      m_apsIdStart = ccAlfCbApsId;
     }
-    cs.slice->tileGroupCcAlfCbEnabled = true;
+    cs.slice->ccAlfCbEnabled = true;
+    cs.slice->alfAps[ccAlfCbApsId] = m_apsMap->getPS((ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
   else
   {
-    cs.slice->tileGroupCcAlfCbEnabled = false;
+    cs.slice->ccAlfCbEnabled = false;
   }
   if (m_ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cr - 1])
   {
-    int  ccAlfCrApsId = cs.slice->tileGroupCcAlfCrApsId;
-    APS* aps = m_apsMap->getPS((cs.slice->tileGroupCcAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
+    int  ccAlfCrApsId = cs.slice->ccAlfCrApsId;
+    APS* aps = m_apsMap->getPS((cs.slice->ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
     if (aps == NULL)
     {
       aps = m_apsMap->allocatePS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
@@ -973,63 +1735,111 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
       memcpy(aps->ccAlfParam.ccAlfCoeff[COMP_Cr - 1][filterIdx],
              m_ccAlfFilterParam.ccAlfCoeff[COMP_Cr - 1][filterIdx], sizeof(short) * MAX_NUM_CC_ALF_CHROMA_COEFF);
     }
-    aps->apsId =  ccAlfCrApsId;
-    aps->poc   = cs.slice->poc;
+    CHECK( m_reuseApsId[COMP_Cr - 1] > 0 && aps->apsId != ccAlfCrApsId, "CCALF: ID missmatch while reusing APS-ID!" );
     if (m_reuseApsId[COMP_Cr - 1] < 0)
     {
       aps->ccAlfParam.newCcAlfFilter[COMP_Cr - 1] = 1;
       m_apsMap->setChangedFlag((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS, true);
       aps->temporalId = cs.slice->TLayer;
+      aps->apsId      = ccAlfCrApsId;
+      aps->apsType    = ALF_APS;
+      aps->poc        = cs.slice->poc;
+      m_apsIdStart    = ccAlfCrApsId;
     }
-    aps->apsType = ALF_APS;
-    cs.slice->tileGroupCcAlfCrEnabled = true;
+    cs.slice->ccAlfCrEnabled = true;
+    cs.slice->alfAps[ccAlfCrApsId] = m_apsMap->getPS((ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
   else
   {
-    cs.slice->tileGroupCcAlfCrEnabled = false;
+    cs.slice->ccAlfCrEnabled = false;
   }
 }
 
-void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr )
+void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  if( isSkipAlfForFrame( pic ) )
+  {
+    return;
+  }
 
+  const PreCalcValues& pcv = *cs.pcv;
+  const int xC = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int yC = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  if( m_accumStatCTUWise )
+  {
+    // CTU-wise statistics gathering mode
+    // later in the derivation step statistics will be accumulated into ASUs
+    for( int compIdx = 0; compIdx < getNumberValidComponents( m_chromaFormat ); compIdx++ )
+    {
+      const int numClasses = isLuma( ComponentID( compIdx ) ) ? MAX_NUM_ALF_CLASSES : 1;
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+      {
+        m_alfCovariance[compIdx][ctuRsAddr][classIdx].reset();
+      }
+    }
+    xGetStatisticsCTU( pic, cs, recYuv, xC, yC, ctuRsAddr, alfTempCtuBuf );
+  }
+  else
+  {
+    // regular mode: gather statistics ASU-wise
+    const int wC = std::min( m_maxCUWidth,  m_picWidth  - xC );
+    const int hC = std::min( m_maxCUHeight, m_picHeight - yC );
+
+    const int xA = xC & ~(m_maxAsuWidth - 1);
+    const int yA = yC & ~(m_maxAsuHeight - 1);
+    const int wA = std::min( m_maxAsuWidth,  m_picWidth  - xA );
+    const int hA = std::min( m_maxAsuHeight, m_picHeight - yA );
+
+    // bottom-right CTU in ASU?
+    if( xA + wA == xC + wC && yA + hA == yC + hC )
+    {
+      getStatisticsASU( pic, cs, recYuv, xA, yA, xC, yC, alfTempCtuBuf );
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::getStatisticsASU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, int xA, int yA, int xC, int yC, PelStorage& alfTempCtuBuf )
+{
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
+  // init ASU stats buffer
+  const int asuRsAddr = ( yA / m_maxAsuHeight ) * m_numAsusInWidth + xA / m_maxAsuWidth;
+  for( int compIdx = 0; compIdx < getNumberValidComponents( m_chromaFormat ); compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    const int numClasses = isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1;
+
+    for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+    {
+      m_alfCovariance[compIdx][asuRsAddr][classIdx].reset();
+    }
+  }
+  
+  for( int y = yA; y <= yC; y += m_maxCUHeight )
+  {
+    for( int x = xA; x <= xC; x += m_maxCUWidth )
+    {
+      xGetStatisticsCTU( pic, cs, recYuv, x, y, asuRsAddr, alfTempCtuBuf );
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& alfTempCtuBuf )
+{
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
 
-  const CPelBuf& recLuma = recYuv.get( COMP_Y );
   const PreCalcValues& pcv = *cs.pcv;
   bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
   int numHorVirBndry = 0, numVerVirBndry = 0;
   int horVirBndryPos[] = { 0, 0, 0 };
   int verVirBndryPos[] = { 0, 0, 0 };
 
-//  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-
-  // init CTU stats buffers
   const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-  for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
-  {
-    const ComponentID compID = ComponentID( compIdx );
-    const int numClasses = isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1;
 
-    for( int shape = 0; shape != m_filterShapes[toChannelType( compID )].size(); shape++ )
-    {
-//      for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
-      {
-        for( int classIdx = 0; classIdx < numClasses; classIdx++ )
-        {
-          m_alfCovariance[compIdx][shape][ctuRsAddr][classIdx].reset();
-        }
-      }
-    }
-  }
-
-  const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
-  const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
-
+  int ctuRsAddr = getCtuAddr( Position( xPos, yPos ), pcv );
   const int width = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
   const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
+  const CPelBuf& recLuma = recYuv.get( COMP_Y );
 
   int rasterSliceAlfPad = 0;
   if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight, numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos, rasterSliceAlfPad ) )
@@ -1053,7 +1863,7 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 
         const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
         const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-        PelUnitBuf  dstBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
         CPelUnitBuf srcBuf = recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) );
         dstBuf.copyFrom( srcBuf );
         // pad top-left unavailable samples for raster slice
@@ -1089,15 +1899,11 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
           int  orgStride = orgYuv.get( compID ).stride;
           Pel* org = orgYuv.get( compID ).bufAt( xStart >> getComponentScaleX( compID, m_chromaFormat ), yStart >> getComponentScaleY( compID, m_chromaFormat ) );
 
-
-          for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
-          {
-            const CompArea& compAreaDst = areaDst.block( compID );
-            getPreBlkStats( m_alfCovariance[compIdx][shape][ctuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, compArea, chType
-              , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
-              , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
-            );
-          }
+          const CompArea& compAreaDst = areaDst.block( compID );
+          getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compAreaDst, chType
+            , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
+            , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
+          );
         }
 
         xStart = xEnd;
@@ -1120,112 +1926,73 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 
       int  recStride = recYuv.get( compID ).stride;
       Pel* rec = recYuv.get( compID ).bufAt( compArea );
-
       int  orgStride = orgYuv.get( compID ).stride;
       Pel* org = orgYuv.get( compID ).bufAt( compArea );
 
       ChannelType chType = toChannelType( compID );
 
-      for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
-      {
-        getPreBlkStats( m_alfCovariance[compIdx][shape][ctuRsAddr], m_filterShapes[chType][shape], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, compArea, chType
-          , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
-          , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
-        );
-      }
+      getPreBlkStats( m_alfCovariance[compIdx][asuRsAddr], m_filterShapes[chType], compIdx ? nullptr : &m_classifier[numClassBlocksInCTU * ctuRsAddr], org, orgStride, rec, recStride, compArea, chType
+        , ( ( compIdx == 0 ) ? m_alfVBLumaCTUHeight : m_alfVBChmaCTUHeight )
+        , ( compIdx == 0 ) ? m_alfVBLumaPos : m_alfVBChmaPos
+      );
     }
-  }
+  }  
 }
 
-void EncAdaptiveLoopFilter::performCCALF( Picture& pic, CodingStructure& cs )
+void EncAdaptiveLoopFilter::copyCTUforALF( const CodingStructure& cs, int ctuPosX, int ctuPosY )
 {
-  CHECK( m_alfWSSD, "TODO: check weighted ALF implementation, not implemented in some cases!" );
-
-  initCABACEstimator( cs.slice, &pic.picApsMap );
-  const TempCtx ctxStartCcAlf(m_CtxCache, SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx()));
-
-  // Do not transmit CC ALF if it is unchanged
-  if (cs.slice->tileGroupAlfEnabled[COMP_Y])
+  // copy unfiltered reco (including padded / extended area)
+  const ChromaFormat chromaFormat = cs.area.chromaFormat;
+  UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
+  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
   {
-    for (int32_t lumaAlfApsId : cs.slice->tileGroupLumaApsId)
+    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
+    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
+    CompArea cpyArea = ctuArea.blocks[ i ];
+    if( ctuPosX == 0 )
     {
-      APS* aps = (lumaAlfApsId >= 0) ? m_apsMap->getPS((lumaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS) : nullptr;
-      if (aps && m_apsMap->getChangedFlag((lumaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS))
-      {
-        aps->ccAlfParam.newCcAlfFilter[0] = false;
-        aps->ccAlfParam.newCcAlfFilter[1] = false;
-      }
+      cpyArea.x     -= extX;
+      cpyArea.width += extX;
     }
-  }
-  int chromaAlfApsId = ( cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr]) ? cs.slice->tileGroupChromaApsId : -1;
-  APS* aps = (chromaAlfApsId >= 0) ? m_apsMap->getPS((chromaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS) : nullptr;
-  if (aps && m_apsMap->getChangedFlag((chromaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS))
-  {
-    aps->ccAlfParam.newCcAlfFilter[0] = false;
-    aps->ccAlfParam.newCcAlfFilter[1] = false;
-  }
-
-  if (!cs.slice->sps->ccalfEnabled )
-  {
-    return;
-  }
-
-  m_tempBuf.get(COMP_Cb).copyFrom(cs.getRecoBuf().get(COMP_Cb));
-  m_tempBuf.get(COMP_Cr).copyFrom(cs.getRecoBuf().get(COMP_Cr));
-
-  PelUnitBuf orgYuv = cs.picture->getOrigBuf();
-  PelUnitBuf recYuv = m_tempBuf.getBuf(cs.area);
-  recYuv.extendBorderPel(MAX_ALF_FILTER_LENGTH >> 1);
-  
-  deriveStatsForCcAlfFiltering(orgYuv, recYuv, COMP_Cb, m_numCTUsInWidth, (0 + 1), cs);
-  deriveStatsForCcAlfFiltering(orgYuv, recYuv, COMP_Cr, m_numCTUsInWidth, (0 + 1), cs);
-  initDistortionCcalf();
-
-  m_CABACEstimator->getCtx() = SubCtx(Ctx::CcAlfFilterControlFlag, ctxStartCcAlf);
-  deriveCcAlfFilter(cs, COMP_Cb, orgYuv, recYuv, cs.getRecoBuf());
-  m_CABACEstimator->getCtx() = SubCtx(Ctx::CcAlfFilterControlFlag, ctxStartCcAlf);
-  deriveCcAlfFilter(cs, COMP_Cr, orgYuv, recYuv, cs.getRecoBuf());
-
-  xSetupCcAlfAPS(cs);
-
-  for (int compIdx = 1; compIdx < getNumberValidComponents(cs.pcv->chrFormat); compIdx++)
-  {
-    ComponentID compID     = ComponentID(compIdx);
-    if (m_ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
+    if( ctuPosX + 1 >= cs.pcv->widthInCtus )
     {
-      applyCcAlfFilter(cs, compID, cs.getRecoBuf().get(compID), recYuv, m_ccAlfFilterControl[compIdx - 1],
-                       m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1], -1);
+      cpyArea.width += extX;
     }
-  }
-}
 
-void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& cs )
-{
-  PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-  resetFrameStats();
-  for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
-  {
-    getStatisticsCTU( pic, cs, recoBuf, ctuRsAddr );
+    if( ctuPosY == 0 )
+    {
+      cpyArea.y      -= extY;
+      cpyArea.height += extY;
+    }
+    if( ctuPosY + 1 >= cs.pcv->heightInCtus )
+    {
+      cpyArea.height += extY;
+    }
+
+           PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
+    const CPelBuf srcBuf = cs.getRecoBuf( cpyArea.compID ).subBuf( cpyArea.pos(), cpyArea.size() );
+    dstBuf.copyFrom( srcBuf );
   }
 }
 
 void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, const double* lambdas )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
-  initCABACEstimator( cs.slice, &pic.picApsMap );
-  if( m_encCfg->m_maxParallelFrames )
+  if( isSkipAlfForFrame( pic ) )
   {
-    setApsIdStart( pic.picApsMap.getApsIdStart() );
+    return;
   }
+
+  m_apsMap = &pic.picApsMap;
+  m_apsIdStart = pic.picApsMap.getApsIdStart();
+
+  initCABACEstimator( cs.slice );
 
   // On TL0 and pending RAS: reset APS
   int layerIdx = cs.vps == nullptr ? 0 : cs.vps->generalLayerIdx[ cs.slice->pic->layerId ];
-#if RPR_READY
-  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA() || ( cs.slice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA && m_encCfg->m_craAPSreset ) ) )
-#else
-  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA()))
-#endif
+  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA() || ( cs.slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA && m_encCfg->m_craAPSreset ) ) )
   {
     memset(cs.slice->alfAps, 0, sizeof(*cs.slice->alfAps)*ALF_CTB_MAX_NUM_APS);
     m_apsIdStart = ALF_CTB_MAX_NUM_APS;
@@ -1249,17 +2016,44 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   {
     const ComponentID compID = ComponentID( compIdx );
     const ChannelType chType = toChannelType( compID );
-    for( int shape = 0; shape != m_filterShapes[chType].size(); shape++ )
+    const int numClasses = ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 );
+    for( int asuRsAddr = 0; asuRsAddr < m_numAsusInPic; asuRsAddr++ )
     {
-      for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
+      DTRACE( g_trace_ctx, D_ALF, "ASU=%d\n", asuRsAddr );
+      if( m_accumStatCTUWise )
       {
-        for( int classIdx = 0; classIdx < ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 ); classIdx++ )
+        // accumulate CTUs to ASU
+        int ctuX, ctuY;
+        getAsuCtuXY( asuRsAddr, ctuX, ctuY );
+        int ctuMaxX = getAsuMaxCtuX( ctuX );
+        int ctuMaxY = getAsuMaxCtuY( ctuY );
+        if( asuRsAddr > 0 )
         {
-          m_alfCovarianceFrame[chType][shape][isLuma( compID ) ? classIdx : 0] += m_alfCovariance[compIdx][shape][ctuRsAddr][classIdx];
-#if ENABLE_TRACING
-          m_alfCovarianceFrame[chType][shape][isLuma( compID ) ? classIdx : 0].trace();
-#endif
+          for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+            m_alfCovariance[compIdx][asuRsAddr][classIdx].reset();
         }
+        for( int cY = ctuY; cY < ctuMaxY; cY++ )
+        {
+          for( int cX = ctuX; cX < ctuMaxX; cX++ )
+          {
+            const int ctuRsAddr = cY * m_numCTUsInWidth + cX;
+            if( ctuRsAddr > 0 )
+            {
+              for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+              {
+                m_alfCovariance[compIdx][asuRsAddr][classIdx] += m_alfCovariance[compIdx][ctuRsAddr][classIdx];
+              }
+            }
+          }
+        }
+      }
+
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+      {
+        m_alfCovarianceFrame[chType][isLuma( compID ) ? classIdx : 0] += m_alfCovariance[compIdx][asuRsAddr][classIdx];
+#if ENABLE_TRACING
+        m_alfCovarianceFrame[chType][isLuma( compID ) ? classIdx : 0].trace();
+#endif
       }
     }
   }
@@ -1270,18 +2064,18 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   const TempCtx ctxStart( m_CtxCache, AlfCtx( m_CABACEstimator->getCtx() ) );
 
   // set available filter shapes
-  alfParam.filterShapes = m_filterShapes;
+  //alfParam.filterShapes = m_filterShapes;
 
   for( int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++ )
   {
-    pic.getAlfCtbFilterIndex()[ctbIdx] = NUM_FIXED_FILTER_SETS;
+    pic.m_alfCtbFilterIndex[ctbIdx] = NUM_FIXED_FILTER_SETS;
   }
 
   // set CTU ALF enable flags, it was already reset before ALF process
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    m_ctuEnableFlag[compIdx] = cs.picture->getAlfCtuEnabled( compIdx );
-    m_ctuAlternative[compIdx] = cs.picture->getAlfCtuAlternativeData( compIdx );
+    m_ctuEnableFlag[compIdx] = cs.picture->m_alfCtuEnabled[ compIdx ].data();
+    m_ctuAlternative[compIdx] = cs.picture->m_alfCtuAlternative[ compIdx ].data();
   }
 
   // reset ALF parameters
@@ -1295,9 +2089,9 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   // consider using new filter (only)
   alfParam.newFilterFlag[CH_L] = true;
   alfParam.newFilterFlag[CH_C] = true;
-  cs.slice->tileGroupNumAps = ( 1 ); // Only new filter for RD cost optimization
+  cs.slice->numAps = ( 1 ); // Only new filter for RD cost optimization
 
-  const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP && m_encCfg->m_RCRateControlMode != 1;
+  const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP;
   const double lambdaChromaWeight = useCtuWiseLambda && ( m_lambda[COMP_Y] > 0.0 ) ? ( m_lambda[COMP_Cb] + m_lambda[COMP_Cr] ) / ( 2.0 * m_lambda[COMP_Y] ) : 0.0;
 
   // derive filter (luma)
@@ -1308,14 +2102,19 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   // let alfEncoderCtb decide now
   alfParam.newFilterFlag[CH_L] = false;
   alfParam.newFilterFlag[CH_C] = false;
-  cs.slice->tileGroupNumAps = ( 0 );
+  cs.slice->numAps = ( 0 );
   m_CABACEstimator->getCtx() = AlfCtx( ctxStart );
   alfEncoderCtb( cs, alfParam, lambdaChromaWeight );
 }
 
-void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
+void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
+
+  if( isSkipAlfForFrame( pic ) )
+  {
+    return;
+  }
 
   const int nCtuX = ctuRsAddr % cs.pcv->widthInCtus;
   const int nCtuY = ctuRsAddr / cs.pcv->widthInCtus;
@@ -1323,32 +2122,10 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
   // copy unfiltered reco (including padded / extented area)
   const ChromaFormat chromaFormat = cs.area.chromaFormat;
   UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( nCtuX, nCtuY ) );
-  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
-  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
-  {
-    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
-    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
-    CompArea cpyArea = ctuArea.blocks[ i ];
-    cpyArea.x += extX;
-    cpyArea.y += extY;
-    if ( nCtuX == 0 )
-    {
-      cpyArea.x     -= 2 * extX;
-      cpyArea.width += 2 * extX;
-    }
-    if ( nCtuY == 0 )
-    {
-      cpyArea.y      -= 2 * extY;
-      cpyArea.height += 2 * extY;
-    }
-    PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
-    PelBuf srcBuf = pic.getRecoBuf( cpyArea );
-    dstBuf.copyFrom( srcBuf );
-  }
 
   // Perform filtering
   PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
-  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr );
+  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr, alfTempCtuBuf );
 }
 
 #if ENABLE_TRACING
@@ -1369,10 +2146,11 @@ void traceStreamBlock( std::stringstream& str, Tsrc *buf, unsigned stride, unsig
 }
 #endif
 
-void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, int ctuRsAddr )
+void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   bool ctuEnableFlag = m_ctuEnableFlag[COMP_Y][ctuRsAddr];
-  for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+  for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
     ctuEnableFlag |= m_ctuEnableFlag[compIdx][ctuRsAddr] > 0;
 
 #if ALF_CTU_PAR_TRACING
@@ -1403,7 +2181,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
     PelUnitBuf& recBuf = cs.getRecoBufRef();
     const ClpRngs& clpRngs = cs.slice->clpRngs;
 
-    const short* alfCtuFilterIndex = cs.picture->getAlfCtbFilterIndex();
+    const short* alfCtuFilterIndex = cs.picture->m_alfCtbFilterIndex.data();
 
     const PreCalcValues& pcv = *cs.pcv;
     const int xPos            = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
@@ -1440,8 +2218,8 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
           const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
           const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
-          PelUnitBuf  dstBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-          dstBuf.copyFrom( recExtBufCTU );
+          PelUnitBuf  dstBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+          dstBuf.copyFrom( m_tempBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE), yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf ) ) ) );
           // pad top-left unavailable samples for raster slice
           if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
           {
@@ -1473,13 +2251,10 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
               clip = m_clipDefault;
             }
-            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-              , m_alfVBLumaCTUHeight
-              , m_alfVBLumaPos
-              );
+            m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, buf, blkDst, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
           }
 
-          for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+          for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
           {
             ComponentID compID = ComponentID( compIdx );
             const int chromaScaleX = getComponentScaleX( compID, recBuf.chromaFormat );
@@ -1489,10 +2264,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               const Area blkSrc( 0, 0, w >> chromaScaleX, h >> chromaScaleY );
               const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
               const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-                , m_alfVBChmaCTUHeight
-                , m_alfVBChmaPos
-                );
+              m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, buf, blkDst, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
             }
           }
 
@@ -1522,13 +2294,10 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           coeff = m_fixedFilterSetCoeffDec[filterSetIndex];
           clip = m_clipDefault;
         }
-        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs.comp[COMP_Y], cs
-          , m_alfVBLumaCTUHeight
-          , m_alfVBLumaPos
-          );
+        m_filter7x7Blk[nonLinAlfLuma]( &m_classifier[numClassBlocksInCTU * ctuRsAddr], recBuf, recExtBufCTU, blk, blkSrc, COMP_Y, coeff, clip, clpRngs[COMP_Y], cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
       }
 
-      for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+      for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
       {
         ComponentID compID = ComponentID( compIdx );
         const int chromaScaleX = getComponentScaleX( compID, recBuf.chromaFormat );
@@ -1538,10 +2307,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           Area blk( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
           const Area blkSrc( 0, 0, width >> chromaScaleX, height >> chromaScaleY );
           const int alt_num = m_ctuAlternative[compID][ctuRsAddr];
-          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs.comp[compIdx], cs
-            , m_alfVBChmaCTUHeight
-            , m_alfVBChmaPos
-            );
+          m_filter5x5Blk[nonLinAlfChroma]( m_classifier, recBuf, recExtBufCTU, blk, blkSrc, compID, m_chromaCoeffFinal[alt_num], m_chromaClippFinal[alt_num], clpRngs[compIdx], cs, m_alfVBChmaCTUHeight, m_alfVBChmaPos );
         }
       }
     }
@@ -1549,54 +2315,135 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 }
 
-void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
-{
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_REC );
-  if( !cs.slice->tileGroupAlfEnabled[COMP_Y] )
-  {
-    return;
-  }
+// void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
+// {
+//   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
+//   if( !cs.slice->alfEnabled[COMP_Y] )
+//   {
+//     return;
+//   }
+// 
+// 
+//   reconstructCoeffAPSs( cs, true, cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
+//   const PreCalcValues& pcv = *cs.pcv;
+// 
+//   int ctuIdx = 0;
+//   for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
+//   {
+//     for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
+//     {
+//       reconstructCTU_MT( *cs.picture, cs, ctuIdx );
+//       ctuIdx++;
+//     }
+//   }
+// }
 
-
-  reconstructCoeffAPSs( cs, true, cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
-  const PreCalcValues& pcv = *cs.pcv;
-
-  int ctuIdx = 0;
-  for( int yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
-  {
-    for( int xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
-    {
-      reconstructCTU_MT( *cs.picture, cs, ctuIdx );
-      ctuIdx++;
-    }
-  }
-}
-
-void EncAdaptiveLoopFilter::resetFrameStats()
+void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
 {
   // init Frame stats buffers
   const int numberOfChannels = getNumberValidChannels( m_chromaFormat );
   for( int channelIdx = 0; channelIdx < numberOfChannels; channelIdx++ )
   {
     const ChannelType channelID = ChannelType( channelIdx );
-    const int numAlts = channelID == CH_L ? 1 : MAX_NUM_ALF_ALTERNATIVES_CHROMA;
+    const int numAlts = channelID == CH_L ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
     const int numClasses = isLuma( channelID ) ? MAX_NUM_ALF_CLASSES : 1;
 
     for( int altIdx = 0; altIdx < numAlts; ++altIdx )
     {
-      for( int shape = 0; shape != m_filterShapes[channelIdx].size(); shape++ )
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
       {
-        for( int classIdx = 0; classIdx < numClasses; classIdx++ )
-        {
-          m_alfCovarianceFrame[channelIdx][shape][isLuma( channelID ) ? classIdx : altIdx].reset();
-        }
+        m_alfCovarianceFrame[channelIdx][isLuma( channelID ) ? classIdx : altIdx].reset();
       }
+    }
+  }
+
+  if( ccAlfEnabled )
+  {
+    const int filterIdx = 0;
+    const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+    for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
+    {
+      m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx].reset();
     }
   }
 }
 
-double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, const int iShapeIdx, ChannelType channel, const double chromaWeight,
-                                                       const int numClasses, const int numCoeff, double& distUnfilter )
+void EncAdaptiveLoopFilter::xStoreAlfAsuEnabledFlag( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuEnableFlag[compIdx][curCtuIdx] = flag;
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xStoreAlfAsuAlternative( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      m_ctuAlternative[compIdx][curCtuIdx] = alt;
+    }
+  }
+}
+
+void EncAdaptiveLoopFilter::xStoreAlfAsuFilterIdx( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex )
+{
+  int ctuMaxX = getAsuMaxCtuX( ctuX );
+  int ctuMaxY = getAsuMaxCtuY( ctuY );
+
+  for( int cY = ctuY; cY < ctuMaxY; cY++ )
+  {
+    for( int cX = ctuX; cX < ctuMaxX; cX++ )
+    {
+      int curCtuIdx = cY * cs.pcv->widthInCtus + cX;
+      alfCtbFilterSetIndex[curCtuIdx] = fltIdx;
+    }
+  }
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuEnabledFlag( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compIdx, alfParam );
+  return ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuLumaFilterIdx( CodingStructure& cs, int asuIdx, int ctuIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->resetBits();
+  m_CABACEstimator->codeAlfCtuFilterIndex( cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y] );
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+double EncAdaptiveLoopFilter::xCodeAlfAsuAlternative( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
+{
+  m_CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compIdx, alfParam );
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+}
+
+bool EncAdaptiveLoopFilter::isSkipAlfForFrame( const Picture& pic ) const
+{
+  if( !pic.cs->sps->alfEnabled || ( pic.cs->sps->maxTLayers > 1 && pic.cs->sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer ) )
+  {
+    return true;
+  }
+
+  return false;
+}
+
+double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, ChannelType channel, const double chromaWeight,
+                                                           const int numClasses, const int numCoeff, double& distUnfilter )
 {
   TempCtx        ctxTempStart( m_CtxCache );
   TempCtx        ctxTempBest( m_CtxCache );
@@ -1613,7 +2460,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
   setEnableFlag(m_alfParamTemp, channel, true);
 
   reconstructCoeff(m_alfParamTemp, channel, true, isLuma(channel));
-  for( int altIdx = 0; altIdx < (isLuma(channel) ? 1 : MAX_NUM_ALF_ALTERNATIVES_CHROMA); altIdx++)
+  for( int altIdx = 0; altIdx < (isLuma(channel) ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA); altIdx++)
   {
     for (int classIdx = 0; classIdx < (isLuma(channel) ? MAX_NUM_ALF_CLASSES : 1); classIdx++)
     {
@@ -1625,31 +2472,32 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
     }
   }
 
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+  for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
   {
+    int ctuX, ctuY;
+    getAsuCtuXY( asuIdx, ctuX, ctuY );
+    int ctuIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
     for( int compID = compIDFirst; compID <= compIDLast; compID++ )
     {
       const double ctuLambda = chromaWeight > 0.0 ? (isLuma (channel) ? cs.picture->ctuQpaLambda[ctuIdx] : cs.picture->ctuQpaLambda[ctuIdx] * chromaWeight) : m_lambda[compID];
-      double distUnfilterCtu = getUnfilteredDistortion( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses );
+      double distUnfilterCtu = getUnfilteredDistortion( m_alfCovariance[compID][asuIdx], numClasses );
 
       ctxTempStart = AlfCtx( m_CABACEstimator->getCtx() );
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 1;
-      m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp );
+      double costOn = distUnfilterCtu;
+      costOn += xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
       if( isLuma( channel ) )
       {
-        // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
-        assert( cs.picture->getAlfCtbFilterIndex()[ctuIdx] == NUM_FIXED_FILTER_SETS );
-        assert( cs.slice->tileGroupNumAps == 1 );
-        m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
+        costOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctuIdx, &m_alfParamTemp, ctuLambda );
       }
-      double costOn = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
 
       ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
       if( isLuma( channel ) )
       {
-        costOn += doClip ? getFilteredDistortion<true >( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff )
-                         : getFilteredDistortion<false>( m_alfCovariance[compID][iShapeIdx][ctuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff );;
+        costOn += doClip ? getFilteredDistortion<true >( m_alfCovariance[compID][asuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff )
+                         : getFilteredDistortion<false>( m_alfCovariance[compID][asuIdx], numClasses, m_alfParamTemp.numLumaFilters - 1, numCoeff );;
       }
       else
       {
@@ -1662,12 +2510,10 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compID][ctuIdx] = altIdx;
-          m_CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compID, &m_alfParamTemp );
-          double r_altCost = ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
           double altDist = 0.;
-          altDist += doClip ? m_alfCovariance[compID][iShapeIdx][ctuIdx][0].calcErrorForCoeffs<true >( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor )
-                            : m_alfCovariance[compID][iShapeIdx][ctuIdx][0].calcErrorForCoeffs<false>( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor );
+          altDist += doClip ? m_alfCovariance[compID][asuIdx][0].calcErrorForCoeffs<true >( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor )
+                            : m_alfCovariance[compID][asuIdx][0].calcErrorForCoeffs<false>( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor );
 
           double altCost = altDist + r_altCost;
           if( altCost < bestAltCost )
@@ -1677,28 +2523,28 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
             ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
           }
         }
-        m_ctuAlternative[compID][ctuIdx] = bestAltIdx;
+        xStoreAlfAsuAlternative( cs, ctuX, ctuY, ctuIdx, compID, bestAltIdx );
         costOn += bestAltCost;
       }
 
       m_CABACEstimator->getCtx() = AlfCtx( ctxTempStart );
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 0;
-      m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp);
-      double costOff = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+      double costOff = distUnfilterCtu + xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
 
+      uint8_t enable = 0;
       if( costOn < costOff )
       {
         cost += costOn;
         m_CABACEstimator->getCtx() = AlfCtx( ctxTempBest );
-        m_ctuEnableFlag[compID][ctuIdx] = 1;
+        enable = 1;
       }
       else
       {
         cost += costOff;
-        m_ctuEnableFlag[compID][ctuIdx] = 0;
         distUnfilter += distUnfilterCtu;
       }
+      xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctuIdx, compID, enable );
     }
   }
 
@@ -1712,109 +2558,107 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
 
 void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_ENC );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC );
   const TempCtx  ctxStart( m_CtxCache, AlfCtx( m_CABACEstimator->getCtx() ) );
   TempCtx        ctxBest( m_CtxCache );
 
   double costMin = MAX_DOUBLE;
 
-  std::vector<AlfFilterShape>& alfFilterShape = alfParam.filterShapes[channel];
   m_bitsNewFilter[channel] = 0;
   const int numClasses = isLuma( channel ) ? MAX_NUM_ALF_CLASSES : 1;
   int uiCoeffBits = 0;
 
-  for( int iShapeIdx = 0; iShapeIdx < alfFilterShape.size(); iShapeIdx++ )
+  m_alfParamTemp = alfParam;
+  //1. get unfiltered distortion
+  if( isChroma(channel) )
+    m_alfParamTemp.numAlternativesChroma = 1;
+  double cost = getUnfilteredDistortion( m_alfCovarianceFrame[channel], channel );
+  cost /= 1.001; // slight preference for unfiltered choice
+
+  if( cost < costMin )
   {
-    m_alfParamTemp = alfParam;
-    //1. get unfiltered distortion
+    costMin = cost;
+    setEnableFlag( alfParam, channel, false );
+    // no CABAC signalling
+    ctxBest = AlfCtx( ctxStart );
+    setCtuEnableFlag( m_ctuEnableFlagTmp, channel, 0 );
     if( isChroma(channel) )
-      m_alfParamTemp.numAlternativesChroma = 1;
-    double cost = getUnfilteredDistortion( m_alfCovarianceFrame[channel][iShapeIdx], channel );
-    cost /= 1.001; // slight preference for unfiltered choice
+      setCtuAlternativeChroma( m_ctuAlternativeTmp, 0 );
+  }
 
-    if( cost < costMin )
+  const int nonLinearFlagMax =
+    ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) // For Chroma non linear flag is check for each alternative filter
+    ? 2 : 1;
+
+  for( int nonLinearFlag = 0; nonLinearFlag < nonLinearFlagMax; nonLinearFlag++ )
+  {
+    for( int numAlternatives = isLuma( channel ) ? 1 : getMaxNumAlternativesChroma(); numAlternatives > 0; numAlternatives-- )
     {
-      costMin = cost;
-      setEnableFlag( alfParam, channel, false );
-      // no CABAC signalling
-      ctxBest = AlfCtx( ctxStart );
-      setCtuEnableFlag( m_ctuEnableFlagTmp, channel, 0 );
-      if( isChroma(channel) )
-        setCtuAlternativeChroma( m_ctuAlternativeTmp, 0 );
-    }
+      if( isChroma( channel ) )
+        m_alfParamTemp.numAlternativesChroma = numAlternatives;
+      //2. all CTUs are on
+      setEnableFlag( m_alfParamTemp, channel, true );
+      m_alfParamTemp.nonLinearFlag[channel] = nonLinearFlag;
+      m_CABACEstimator->getCtx() = AlfCtx( ctxStart );
+      setCtuEnableFlag( m_ctuEnableFlag, channel, 1 );
+      // all alternatives are on
+      if( isChroma( channel ) )
+        initCtuAlternativeChroma( m_ctuAlternative );
+      cost = getFilterCoeffAndCost( cs, 0, channel, true, uiCoeffBits );
 
-    const int nonLinearFlagMax =
-      ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) // For Chroma non linear flag is check for each alternative filter
-      ? 2 : 1;
-
-    for( int nonLinearFlag = 0; nonLinearFlag < nonLinearFlagMax; nonLinearFlag++ )
-    {
-      for( int numAlternatives = isLuma( channel ) ? 1 : getMaxNumAlternativesChroma(); numAlternatives > 0; numAlternatives-- )
+      if( cost < costMin )
       {
-        if( isChroma( channel ) )
-          m_alfParamTemp.numAlternativesChroma = numAlternatives;
-        //2. all CTUs are on
-        setEnableFlag( m_alfParamTemp, channel, true );
-        m_alfParamTemp.nonLinearFlag[channel] = nonLinearFlag;
-        m_CABACEstimator->getCtx() = AlfCtx( ctxStart );
-        setCtuEnableFlag( m_ctuEnableFlag, channel, 1 );
-        // all alternatives are on
-        if( isChroma( channel ) )
-          initCtuAlternativeChroma( m_ctuAlternative );
-        cost = getFilterCoeffAndCost( cs, 0, channel, true, iShapeIdx, uiCoeffBits );
-
-        if( cost < costMin )
-        {
-          m_bitsNewFilter[channel] = uiCoeffBits;
-          costMin = cost;
-          copyAlfParam( alfParam, m_alfParamTemp, channel );
-          ctxBest = AlfCtx( m_CABACEstimator->getCtx() );
-          setCtuEnableFlag( m_ctuEnableFlagTmp, channel, 1 );
-          if( isChroma(channel) )
-            copyCtuAlternativeChroma( m_ctuAlternativeTmp, m_ctuAlternative );
-        }
-
-        //3. CTU decision
-        double distUnfilter = 0;
-        double prevItCost = MAX_DOUBLE;
-        const int iterNum = isLuma(channel) ? (2 * 4 + 1) : (2 * (2 + m_alfParamTemp.numAlternativesChroma - 1) + 1);
-
-        for( int iter = 0; iter < iterNum; iter++ )
-        {
-          if ((iter & 0x01) == 0)
-          {
-            m_CABACEstimator->getCtx() = AlfCtx(ctxStart);
-            cost = m_lambda[channel] * uiCoeffBits;
-            cost += deriveCtbAlfEnableFlags(cs, iShapeIdx, channel, lambdaChromaWeight,
-                                            numClasses, alfFilterShape[iShapeIdx].numCoeff, distUnfilter);
-            if (cost < costMin)
-            {
-              m_bitsNewFilter[channel] = uiCoeffBits;
-              costMin = cost;
-              ctxBest = AlfCtx(m_CABACEstimator->getCtx());
-              copyCtuEnableFlag(m_ctuEnableFlagTmp, m_ctuEnableFlag, channel);
-              if( isChroma(channel) )
-                copyCtuAlternativeChroma( m_ctuAlternativeTmp, m_ctuAlternative );
-              copyAlfParam(alfParam, m_alfParamTemp, channel);
-            }
-            else if ( cost >= prevItCost  )
-            {
-              // High probability that we have converged or we are diverging
-              break;
-            }
-            prevItCost = cost;
-          }
-          else
-          {
-            // unfiltered distortion is added due to some CTBs may not use filter
-            // no need to reset CABAC here, since uiCoeffBits is not affected
-            /*cost = */getFilterCoeffAndCost( cs, distUnfilter, channel, true, iShapeIdx, uiCoeffBits );
-          }
-        }//for iter
-        // Decrease number of alternatives and reset ctu params and filters
+        m_bitsNewFilter[channel] = uiCoeffBits;
+        costMin = cost;
+        copyAlfParam( alfParam, m_alfParamTemp, channel );
+        ctxBest = AlfCtx( m_CABACEstimator->getCtx() );
+        setCtuEnableFlag( m_ctuEnableFlagTmp, channel, 1 );
+        if( isChroma(channel) )
+          copyCtuAlternativeChroma( m_ctuAlternativeTmp, m_ctuAlternative );
       }
-    }// for nonLineaFlag
-  }//for shapeIdx
+
+      //3. CTU decision
+      double distUnfilter = 0;
+      double prevItCost = MAX_DOUBLE;
+      const int iterNum = isLuma(channel) ? (2 * 4 + 1) : (2 * (2 + m_alfParamTemp.numAlternativesChroma - 1) + 1);
+
+      for( int iter = 0; iter < iterNum; iter++ )
+      {
+        if ((iter & 0x01) == 0)
+        {
+          m_CABACEstimator->getCtx() = AlfCtx(ctxStart);
+          cost = m_lambda[channel] * uiCoeffBits;
+          cost += deriveCtbAlfEnableFlags(cs, channel, lambdaChromaWeight, numClasses, m_filterShapes[channel].numCoeff, distUnfilter);
+
+          DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f, cost = %.2f\n", cs.slice->poc, channel, nonLinearFlag, numAlternatives, iter, costMin, cost );
+          if (cost < costMin)
+          {
+            m_bitsNewFilter[channel] = uiCoeffBits;
+            costMin = cost;
+            ctxBest = AlfCtx(m_CABACEstimator->getCtx());
+            copyCtuEnableFlag(m_ctuEnableFlagTmp, m_ctuEnableFlag, channel);
+            if( isChroma(channel) )
+              copyCtuAlternativeChroma( m_ctuAlternativeTmp, m_ctuAlternative );
+            copyAlfParam(alfParam, m_alfParamTemp, channel);
+          }
+          else if ( cost >= prevItCost  )
+          {
+            // High probability that we have converged or we are diverging
+            break;
+          }
+          prevItCost = cost;
+        }
+        else
+        {
+          // unfiltered distortion is added due to some CTBs may not use filter
+          // no need to reset CABAC here, since uiCoeffBits is not affected
+          /*cost = */getFilterCoeffAndCost( cs, distUnfilter, channel, true, uiCoeffBits );
+          DTRACE( g_trace_ctx, D_ALF_EST, "AlfEnc: POC%d, cnl_%d, NL=%d, numalt=%d, iter=%d, costMin=%.2f\n", cs.slice->poc, channel, nonLinearFlag, numAlternatives, iter, costMin );
+        }
+      }//for iter
+      // Decrease number of alternatives and reset ctu params and filters
+    }
+  }// for nonLineaFlag
   m_CABACEstimator->getCtx() = AlfCtx( ctxBest );
   if( isChroma(channel) )
     copyCtuAlternativeChroma( m_ctuAlternative, m_ctuAlternativeTmp );
@@ -1838,33 +2682,33 @@ void EncAdaptiveLoopFilter::copyAlfParam( AlfParam& alfParamDst, AlfParam& alfPa
   }
 }
 
-double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double distUnfilter, ChannelType channel, bool bReCollectStat, int iShapeIdx, int& uiCoeffBits, bool onlyFilterCost )
+double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double distUnfilter, ChannelType channel, bool bReCollectStat, int& uiCoeffBits, bool onlyFilterCost )
 {
   //collect stat based on CTU decision
   if( bReCollectStat )
   {
-    getFrameStats( channel, iShapeIdx );
+    getFrameStats( channel );
   }
 
   double dist = distUnfilter;
   uiCoeffBits = 0;
-  AlfFilterShape& alfFilterShape = m_alfParamTemp.filterShapes[channel][iShapeIdx];
+  AlfFilterShape& alfFilterShape = m_filterShapes[channel];
   //get filter coeff
   if( isLuma( channel ) )
   {
-    std::fill_n(m_alfClipMerged[iShapeIdx][0][0], MAX_NUM_ALF_LUMA_COEFF*MAX_NUM_ALF_CLASSES*MAX_NUM_ALF_CLASSES, m_alfParamTemp.nonLinearFlag[channel] ? AlfNumClippingValues / 2 : 0);
+    std::fill_n(m_alfClipMerged[0][0], MAX_NUM_ALF_LUMA_COEFF*MAX_NUM_ALF_CLASSES*MAX_NUM_ALF_CLASSES, m_alfParamTemp.nonLinearFlag[channel] ? AlfNumClippingValues / 2 : 0);
     // Reset Merge Tmp Cov
-    m_alfCovarianceMerged[iShapeIdx][MAX_NUM_ALF_CLASSES].reset();
-    m_alfCovarianceMerged[iShapeIdx][MAX_NUM_ALF_CLASSES + 1].reset();
+    m_alfCovarianceMerged[MAX_NUM_ALF_CLASSES].reset();
+    m_alfCovarianceMerged[MAX_NUM_ALF_CLASSES + 1].reset();
     //distortion
-    dist += mergeFiltersAndCost( m_alfParamTemp, alfFilterShape, m_alfCovarianceFrame[channel][iShapeIdx], m_alfCovarianceMerged[iShapeIdx], m_alfClipMerged[iShapeIdx], uiCoeffBits );
+    dist += mergeFiltersAndCost( m_alfParamTemp, alfFilterShape, m_alfCovarianceFrame[channel], m_alfCovarianceMerged, m_alfClipMerged, uiCoeffBits );
   }
   else
   {
     //distortion
     for( int altIdx = 0; altIdx < m_alfParamTemp.numAlternativesChroma; ++altIdx )
     {
-      assert(alfFilterShape.numCoeff == m_alfCovarianceFrame[channel][iShapeIdx][altIdx].numCoeff);
+      assert(alfFilterShape.numCoeff == m_alfCovarianceFrame[channel][altIdx].numCoeff);
       AlfParam bestSliceParam;
       double bestCost = MAX_DOUBLE;
       double bestDist = MAX_DOUBLE;
@@ -1880,7 +2724,7 @@ double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double
         }
 
         std::fill_n(m_filterClippSet[altIdx], MAX_NUM_ALF_CHROMA_COEFF, nonLinearFlag ? AlfNumClippingValues / 2 : 0 );
-        double dist = m_alfCovarianceFrame[channel][iShapeIdx][altIdx].pixAcc + deriveCoeffQuant( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], m_alfCovarianceFrame[channel][iShapeIdx][altIdx], alfFilterShape, m_NUM_BITS, nonLinearFlag );
+        double dist = m_alfCovarianceFrame[channel][altIdx].pixAcc + deriveCoeffQuant( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], m_alfCovarianceFrame[channel][altIdx], alfFilterShape, m_NUM_BITS, nonLinearFlag );
         for( int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++ )
         {
           m_alfParamTemp.chromaCoeff[altIdx][i] = m_filterCoeffSet[altIdx][i];
@@ -1915,9 +2759,9 @@ double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double
     if( isLuma( channel ) )
     {
       // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
-      assert( cs.picture->getAlfCtbFilterIndex()[ctuIdx] == NUM_FIXED_FILTER_SETS );
-      assert( cs.slice->tileGroupNumAps == 1 );
-      m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
+      assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
+      assert( cs.slice->numAps == 1 );
+      m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
     }
   }
   m_CABACEstimator->codeAlfCtuAlternatives( cs, channel, &m_alfParamTemp );
@@ -1995,7 +2839,7 @@ double EncAdaptiveLoopFilter::mergeFiltersAndCost( AlfParam& alfParam, AlfFilter
   int numFiltersBest = 0;
   int numFilters = MAX_NUM_ALF_CLASSES;
   bool codedVarBins[MAX_NUM_ALF_CLASSES];
-  double errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2];
+  alf_float_t errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2];
 
   double cost, cost0, dist, distForce0, costMin = MAX_DOUBLE;
   int coeffBits, coeffBitsForce0;
@@ -2172,7 +3016,7 @@ int EncAdaptiveLoopFilter::lengthFilterCoeffs( AlfFilterShape& alfShape, const i
 }
 
 
-double EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const int numFilters, double errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins )
+alf_float_t EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins )
 {
   int bitsVarBin[MAX_NUM_ALF_CLASSES];
 
@@ -2210,7 +3054,7 @@ double EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const int
 
   return distForce0;
 }
-double EncAdaptiveLoopFilter::getDistCoeffForce0( bool* codedVarBins, double errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters)
+alf_float_t EncAdaptiveLoopFilter::getDistCoeffForce0( bool* codedVarBins, alf_float_t errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters)
 {
   double distForce0 = 0;
   std::memset( codedVarBins, 0, sizeof( *codedVarBins ) * MAX_NUM_ALF_CLASSES );
@@ -2242,9 +3086,9 @@ int EncAdaptiveLoopFilter::lengthUvlc( int uiCode )
 }
 
 
-double EncAdaptiveLoopFilter::deriveFilterCoeffs( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, double errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam )
+double EncAdaptiveLoopFilter::deriveFilterCoeffs( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_DERIVE_COEF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_DERIVE_COEF );
   double error = 0.0;
   AlfCovariance& tmpCov = covMerged[MAX_NUM_ALF_CLASSES];
 
@@ -2279,11 +3123,11 @@ double EncAdaptiveLoopFilter::deriveCoeffQuant( int *filterClipp, int *filterCoe
   const int factor = 1 << ( bitDepth - 1 );
   const int max_value = factor - 1;
   const int min_value = -factor + 1;
-  const double invFactor = 1.0 /((double)factor);
+  const alf_float_t invFactor = 1.0 /((double)factor);
   const bool doClip = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma;
 
   const int numCoeff = shape.numCoeff;
-  double filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
+  alf_float_t filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
 
   cov.optimizeFilter( shape, filterClipp, filterCoeff, optimizeClip );
   roundFiltCoeff( filterCoeffQuant, filterCoeff, numCoeff, factor );
@@ -2332,7 +3176,7 @@ double EncAdaptiveLoopFilter::deriveCoeffQuant( int *filterClipp, int *filterCoe
   return errRef;
 }
 
-void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, double *filterCoeff, const int numCoeff, const int factor )
+void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor )
 {
   for( int i = 0; i < numCoeff; i++ )
   {
@@ -2341,7 +3185,7 @@ void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, double *filte
   }
 }
 
-void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, double *filterCoeff, const int numCoeff, const int factor )
+void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor )
 {
   for( int i = 0; i < numCoeff; i++ )
   {
@@ -2364,7 +3208,7 @@ void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, doub
 
 void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES] )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_MERGE );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_MERGE );
   int       tmpClip          [MAX_NUM_ALF_LUMA_COEFF];
   int       bestMergeClip    [MAX_NUM_ALF_LUMA_COEFF];
   double    err              [MAX_NUM_ALF_CLASSES];
@@ -2493,7 +3337,7 @@ void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCov
   }
 }
 
-void EncAdaptiveLoopFilter::getFrameStats( ChannelType channel, int iShapeIdx )
+void EncAdaptiveLoopFilter::getFrameStats( ChannelType channel )
 {
   int numClasses = isLuma( channel ) ? MAX_NUM_ALF_CLASSES : 1;
   int numAlternatives = isLuma( channel ) ? 1 : m_alfParamTemp.numAlternativesChroma;
@@ -2503,16 +3347,16 @@ void EncAdaptiveLoopFilter::getFrameStats( ChannelType channel, int iShapeIdx )
   {
     for( int i = 0; i < numClasses; i++ )
     {
-      m_alfCovarianceFrame[channel][iShapeIdx][isLuma( channel ) ? i : altIdx].reset();
+      m_alfCovarianceFrame[channel][isLuma( channel ) ? i : altIdx].reset();
     }
     if( isLuma( channel ) )
     {
-      getFrameStat( m_alfCovarianceFrame[CH_L][iShapeIdx], m_alfCovariance[COMP_Y][iShapeIdx], m_ctuEnableFlag[COMP_Y], nullptr, numClasses, altIdx );
+      getFrameStat( m_alfCovarianceFrame[CH_L], m_alfCovariance[COMP_Y], m_ctuEnableFlag[COMP_Y], nullptr, numClasses, altIdx );
     }
     else
     {
-      getFrameStat( m_alfCovarianceFrame[CH_C][iShapeIdx], m_alfCovariance[COMP_Cb][iShapeIdx], m_ctuEnableFlag[COMP_Cb], m_ctuAlternative[COMP_Cb], numClasses, altIdx );
-      getFrameStat( m_alfCovarianceFrame[CH_C][iShapeIdx], m_alfCovariance[COMP_Cr][iShapeIdx], m_ctuEnableFlag[COMP_Cr], m_ctuAlternative[COMP_Cr], numClasses, altIdx );
+      getFrameStat( m_alfCovarianceFrame[CH_C], m_alfCovariance[COMP_Cb], m_ctuEnableFlag[COMP_Cb], m_ctuAlternative[COMP_Cb], numClasses, altIdx );
+      getFrameStat( m_alfCovarianceFrame[CH_C], m_alfCovariance[COMP_Cr], m_ctuEnableFlag[COMP_Cr], m_ctuAlternative[COMP_Cr], numClasses, altIdx );
     }
   }
 }
@@ -2521,7 +3365,7 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
 {
   if( !ctbAltIdx )
   {
-    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+    for( int ctuIdx = 0; ctuIdx < m_numAsusInPic; ctuIdx++ )
     {
       if( ctbEnableFlags[ctuIdx] )
       {
@@ -2534,264 +3378,628 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
   }
   else
   {
-    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++ )
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
     {
+      int ctuX, ctuY;
+      getAsuCtuXY( asuIdx, ctuX, ctuY );
+      int ctuIdx = ctuY * m_numCTUsInWidth/*cs.pcv->widthInCtus*/ + ctuX;
       if( ctbEnableFlags[ctuIdx]  && ( altIdx == ctbAltIdx[ctuIdx] ))
       {
         for( int classIdx = 0; classIdx < numClasses; classIdx++ )
         {
-          frameCov[altIdx] += ctbCov[ctuIdx][classIdx];
+          frameCov[altIdx] += ctbCov[asuIdx][classIdx];
         }
       }
     }
   }
 }
 
+#define NL_COVAR_bstride ( MAX_NUM_ALF_LUMA_COEFF << 4 )
+#define NL_COVAR_kstride ( 1 << 4 )
+#define NL_COVAR_xstride ( 1 )
+#define GET_ALF_COVAR( elocal, b, k, x ) elocal[( b ) * NL_COVAR_bstride + ( k ) * NL_COVAR_kstride + ( x ) * NL_COVAR_xstride]
+#define SET_ALF_COVAR( elocal, b, k, x, v ) GET_ALF_COVAR( elocal, b, k, x ) = ( v )
 
-void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos)
+void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const ChannelType channel, int vbCTUHeight, int vbPos)
 {
-  constexpr int numBins = AlfNumClippingValues;
+  const int numBins = ( isLuma( channel ) ? m_encCfg->m_useNonLinearAlfLuma : m_encCfg->m_useNonLinearAlfChroma ) ? AlfNumClippingValues : 1;
+
   int transposeIdx = 0;
   int classIdx = 0;
 
-  for( int i = 0; i < area.height; i++ )
+  const int halfFilterLength = shape.filterLength >> 1;
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+  const bool useSimd = read_x86_extension_flags() > SCALAR;
+#else
+  const bool useSimd = false;
+#endif
+
+  for( int i = 0; i < areaDst.height; i += 4 )
   {
-    int vbDistance = ((areaDst.y + i) % vbCTUHeight) - vbPos;
     const int maxFilterSamples = 4;
-    int clipTopRow = -maxFilterSamples;
-    int clipBotRow = maxFilterSamples;
-    if( vbDistance >= -3 && vbDistance < 0 )
-    {
-      clipBotRow = -vbDistance - 1;
-      clipTopRow = -clipBotRow; // symmetric
-    }
-    else if( vbDistance >= 0 && vbDistance < 3 )
-    {
-      clipTopRow = -vbDistance;
-      clipBotRow = -clipTopRow; // symmetric
-    }
 
-    if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma && ( area.width & 3 ) == 0 )
+    int clipTopRow[4] = { -maxFilterSamples, -maxFilterSamples, -maxFilterSamples, -maxFilterSamples };
+    int clipBotRow[4] = {  maxFilterSamples,  maxFilterSamples,  maxFilterSamples,  maxFilterSamples };
+
+    for( int ii = 0; ii < 4; ii++ )
     {
-      for( int j = 0; j < area.width; j += 4 )
+      int vbDistance = ((areaDst.y + i + ii) % vbCTUHeight) - vbPos;
+      if( vbDistance >= -3 && vbDistance < 0 )
       {
-        const int idx = ( i / 4 ) * ( MAX_CU_SIZE / 4 ) + j / 4;
-        if( classifier && classifier[idx].classIdx == m_ALF_UNUSED_CLASSIDX && classifier[idx].transposeIdx == m_ALF_UNUSED_TRANSPOSIDX )
-        {
-          continue;
-        }
-        if( classifier )
-        {
-          AlfClassifier& cl = classifier[idx];
-          transposeIdx = cl.transposeIdx;
-          classIdx = cl.classIdx;
-        }
-
-        int yLocal0 = org[j+0] - rec[j+0];
-        int yLocal1 = org[j+1] - rec[j+1];
-        int yLocal2 = org[j+2] - rec[j+2];
-        int yLocal3 = org[j+3] - rec[j+3];
-
-        //      std::memset( ELocal, 0, sizeof( ELocal ) );
-        int ELocal0[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal1[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal2[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal3[MAX_NUM_ALF_LUMA_COEFF];
-
-        if( clipBotRow == 4 )
-        {
-          calcLinCovariance<false>( ELocal0, rec + j + 0, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal1, rec + j + 1, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal2, rec + j + 2, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal3, rec + j + 3, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-        }
-        else
-        {
-          calcLinCovariance<true>( ELocal0, rec + j + 0, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal1, rec + j + 1, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal2, rec + j + 2, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal3, rec + j + 3, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-        }
-
-        for( int k = 0; k < shape.numCoeff; k++ )
-        {
-          int Elocalk0  = ELocal0[k];
-          int* Elocall0 = &ELocal0[k];
-          int Elocalk1  = ELocal1[k];
-          int* Elocall1 = &ELocal1[k];
-          int Elocalk2  = ELocal2[k];
-          int* Elocall2 = &ELocal2[k];
-          int Elocalk3  = ELocal3[k];
-          int* Elocall3 = &ELocal3[k];
-          double* cov   = &alfCovariance[classIdx].E[0][0][k][k];
-
-          for( int l = k; l < shape.numCoeff; l++ )
-          {
-            int
-            sum   = Elocalk0 * *Elocall0++;
-            sum  += Elocalk1 * *Elocall1++;
-            sum  += Elocalk2 * *Elocall2++;
-            sum  += Elocalk3 * *Elocall3++;
-
-            *cov++ += sum;
-          }
-
-          alfCovariance[classIdx].y[0][k] += Elocalk0 * yLocal0;
-          alfCovariance[classIdx].y[0][k] += Elocalk1 * yLocal1;
-          alfCovariance[classIdx].y[0][k] += Elocalk2 * yLocal2;
-          alfCovariance[classIdx].y[0][k] += Elocalk3 * yLocal3;
-        }
-
-        if( m_alfWSSD )
-        {
-          double weight0 = m_lumaLevelToWeightPLUT[org[j+0]];
-          double weight1 = m_lumaLevelToWeightPLUT[org[j+1]];
-          double weight2 = m_lumaLevelToWeightPLUT[org[j+2]];
-          double weight3 = m_lumaLevelToWeightPLUT[org[j+3]];
-
-          alfCovariance[classIdx].pixAcc += weight0 * ( double ) ( yLocal0 * yLocal0 );
-          alfCovariance[classIdx].pixAcc += weight1 * ( double ) ( yLocal1 * yLocal1 );
-          alfCovariance[classIdx].pixAcc += weight2 * ( double ) ( yLocal2 * yLocal2 );
-          alfCovariance[classIdx].pixAcc += weight3 * ( double ) ( yLocal3 * yLocal3 );
-        }
-        else
-        {
-          alfCovariance[classIdx].pixAcc += yLocal0 * yLocal0;
-          alfCovariance[classIdx].pixAcc += yLocal1 * yLocal1;
-          alfCovariance[classIdx].pixAcc += yLocal2 * yLocal2;
-          alfCovariance[classIdx].pixAcc += yLocal3 * yLocal3;
-        }
+        clipBotRow[ii] = -vbDistance - 1;
+        clipTopRow[ii] = -clipBotRow[ii]; // symmetric
+      }
+      else if( vbDistance >= 0 && vbDistance < 3 )
+      {
+        clipTopRow[ii] = -vbDistance;
+        clipBotRow[ii] = -clipTopRow[ii]; // symmetric
       }
     }
-    else
+
+    for( int j = 0; j < areaDst.width; j += 4 )
     {
-      for( int j = 0; j < area.width; j++ )
+      const int idx = ( i / 4 ) * ( MAX_CU_SIZE / 4 ) + j / 4;
+      if( classifier && classifier[idx].classIdx == m_ALF_UNUSED_CLASSIDX && classifier[idx].transposeIdx == m_ALF_UNUSED_TRANSPOSIDX )
       {
-        const int idx = ( i / 4 ) * ( MAX_CU_SIZE / 4 ) + j / 4;
-        if( classifier && classifier[idx].classIdx == m_ALF_UNUSED_CLASSIDX && classifier[idx].transposeIdx == m_ALF_UNUSED_TRANSPOSIDX )
-        {
-          continue;
-        }
-        if( classifier )
-        {
-          AlfClassifier& cl = classifier[idx];
-          transposeIdx = cl.transposeIdx;
-          classIdx = cl.classIdx;
-        }
+        continue;
+      }
+      if( classifier )
+      {
+        AlfClassifier& cl = classifier[idx];
+        transposeIdx = cl.transposeIdx;
+        classIdx = cl.classIdx;
+      }
 
-        double weight = 1.0;
-        if (m_alfWSSD)
+      Pel yLocal[4][4];
+      for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+      {
+        yLocal[ii][jj] = org[j + jj + ii * orgStride] - rec[j + jj + ii * recStride];
+      }
+
+
+      Pel ELocal[MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 )];
+
+      if( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma )
+      {
+        if( useSimd )
         {
-          weight = m_lumaLevelToWeightPLUT[org[j]];
-        }
-
-        int yLocal = org[j] - rec[j];
-
-        int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues];
-        //      std::memset( ELocal, 0, sizeof( ELocal ) );
-        calcCovariance( ELocal, rec + j, recStride, shape, transposeIdx, channel, vbDistance );
-
-        if( m_alfWSSD )
-        {
-          for( int k = 0; k < shape.numCoeff; k++ )
+          for( int ii = 0; ii < 4; ii++ )
           {
-            for( int l = k; l < shape.numCoeff; l++ )
-            {
-              int Elocalkb0 = ELocal[k][0];
-              int Elocalkb1 = ELocal[k][1];
-              int Elocalkb2 = ELocal[k][2];
-              int Elocalkb3 = ELocal[k][3];
-
-              int Elocallb0 = ELocal[l][0];
-              int Elocallb1 = ELocal[l][1];
-              int Elocallb2 = ELocal[l][2];
-              int Elocallb3 = ELocal[l][3];
-
-              alfCovariance[classIdx].E[0][0][k][l] += weight * (Elocalkb0 * Elocallb0);
-              alfCovariance[classIdx].E[0][1][k][l] += weight * (Elocalkb0 * Elocallb1);
-              alfCovariance[classIdx].E[0][2][k][l] += weight * (Elocalkb0 * Elocallb2);
-              alfCovariance[classIdx].E[0][3][k][l] += weight * (Elocalkb0 * Elocallb3);
-
-              alfCovariance[classIdx].E[1][0][k][l] += weight * (Elocalkb1 * Elocallb0);
-              alfCovariance[classIdx].E[1][1][k][l] += weight * (Elocalkb1 * Elocallb1);
-              alfCovariance[classIdx].E[1][2][k][l] += weight * (Elocalkb1 * Elocallb2);
-              alfCovariance[classIdx].E[1][3][k][l] += weight * (Elocalkb1 * Elocallb3);
-
-              alfCovariance[classIdx].E[2][0][k][l] += weight * (Elocalkb2 * Elocallb0);
-              alfCovariance[classIdx].E[2][1][k][l] += weight * (Elocalkb2 * Elocallb1);
-              alfCovariance[classIdx].E[2][2][k][l] += weight * (Elocalkb2 * Elocallb2);
-              alfCovariance[classIdx].E[2][3][k][l] += weight * (Elocalkb2 * Elocallb3);
-
-              alfCovariance[classIdx].E[3][0][k][l] += weight * (Elocalkb3 * Elocallb0);
-              alfCovariance[classIdx].E[3][1][k][l] += weight * (Elocalkb3 * Elocallb1);
-              alfCovariance[classIdx].E[3][2][k][l] += weight * (Elocalkb3 * Elocallb2);
-              alfCovariance[classIdx].E[3][3][k][l] += weight * (Elocalkb3 * Elocallb3);
-            }
-            for( int b = 0; b < numBins; b++ )
-            {
-              alfCovariance[classIdx].y[b][k] += weight * (double)(ELocal[k][b] * yLocal);
-            }
+            if( clipBotRow[ii] == 4 )
+              calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcLinCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
           }
         }
         else
         {
-          for( int k = 0; k < shape.numCoeff; k++ )
+          for( int ii = 0; ii < 4; ii++ )
           {
-            for( int l = k; l < shape.numCoeff; l++ )
-            {
-              int Elocalkb0 = ELocal[k][0];
-              int Elocalkb1 = ELocal[k][1];
-              int Elocalkb2 = ELocal[k][2];
-              int Elocalkb3 = ELocal[k][3];
-
-              int Elocallb0 = ELocal[l][0];
-              int Elocallb1 = ELocal[l][1];
-              int Elocallb2 = ELocal[l][2];
-              int Elocallb3 = ELocal[l][3];
-
-              alfCovariance[classIdx].E[0][0][k][l] += Elocalkb0 * Elocallb0;
-              alfCovariance[classIdx].E[0][1][k][l] += Elocalkb0 * Elocallb1;
-              alfCovariance[classIdx].E[0][2][k][l] += Elocalkb0 * Elocallb2;
-              alfCovariance[classIdx].E[0][3][k][l] += Elocalkb0 * Elocallb3;
-
-              alfCovariance[classIdx].E[1][0][k][l] += Elocalkb1 * Elocallb0;
-              alfCovariance[classIdx].E[1][1][k][l] += Elocalkb1 * Elocallb1;
-              alfCovariance[classIdx].E[1][2][k][l] += Elocalkb1 * Elocallb2;
-              alfCovariance[classIdx].E[1][3][k][l] += Elocalkb1 * Elocallb3;
-
-              alfCovariance[classIdx].E[2][0][k][l] += Elocalkb2 * Elocallb0;
-              alfCovariance[classIdx].E[2][1][k][l] += Elocalkb2 * Elocallb1;
-              alfCovariance[classIdx].E[2][2][k][l] += Elocalkb2 * Elocallb2;
-              alfCovariance[classIdx].E[2][3][k][l] += Elocalkb2 * Elocallb3;
-
-              alfCovariance[classIdx].E[3][0][k][l] += Elocalkb3 * Elocallb0;
-              alfCovariance[classIdx].E[3][1][k][l] += Elocalkb3 * Elocallb1;
-              alfCovariance[classIdx].E[3][2][k][l] += Elocalkb3 * Elocallb2;
-              alfCovariance[classIdx].E[3][3][k][l] += Elocalkb3 * Elocallb3;
-            }
-            for( int b = 0; b < numBins; b++ )
-            {
-              alfCovariance[classIdx].y[b][k] += ELocal[k][b] * yLocal;
-            }
+            if( clipBotRow[ii] == 4 )
+              calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcLinCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
           }
-        }
-        if( m_alfWSSD )
-        {
-          alfCovariance[classIdx].pixAcc += weight * ( double ) ( yLocal * yLocal );
-        }
-        else
-        {
-          alfCovariance[classIdx].pixAcc += yLocal * yLocal;
         }
       }
+      else
+      {
+        if( useSimd )
+        {
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            if( clipBotRow[ii] == 4 )
+              calcCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcCovariance4<true, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+          }
+        }
+        else
+        {
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            if( clipBotRow[ii] == 4 )
+              calcCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+            else
+              calcCovariance4<true, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, halfFilterLength, transposeIdx, channel, clipTopRow[ii], clipBotRow[ii] );
+          }
+        }
+      }
+
+      if( m_alfWSSD )
+      {
+        alf_float_t weight[4][4];
+        for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+        {
+          weight[ii][jj] = m_lumaLevelToWeightPLUT[org[j + jj + ii * orgStride]];
+        }
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+        if( useSimd )
+        {
+#if ALF_SINGLE_PREC_FLOAT
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel* Elocalk  = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t* cov    = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                for( int l = k; l < shape.numCoeff; l++ )
+                {
+                  const Pel* Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+
+                  //double sum = 0.0;
+                  __m128 xacc = _mm_setzero_ps();
+
+                  for( int ii = 0; ii < 4; ii++ )
+                  {
+                    const __m128i xloclx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
+                    const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                  
+                    __m128 xlocld = _mm_cvtepi32_ps( xloclx32 );
+                    __m128 xlockd = _mm_cvtepi32_ps( xlockx32 );
+                    __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
+                    __m128 xprdct = _mm_mul_ps     ( xwght, _mm_mul_ps     ( xlocld, xlockd ) );
+                  
+                    xacc = _mm_add_ps( xacc, xprdct );
+
+                    //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
+                  }
+
+                  xacc = _mm_hadd_ps( xacc, xacc );
+                  xacc = _mm_hadd_ps( xacc, xacc );
+
+                  *cov++ += _mm_cvtss_f32( xacc );
+                  //*cov++ += sum;
+                }
+              }
+
+              //double sum = 0.0;
+              __m128 xacc = _mm_setzero_ps();
+
+              for( int ii = 0; ii < 4; ii++ )
+              {
+                const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal [ii][0] ) );
+                
+                __m128 ylocd  = _mm_cvtepi32_ps( yloc32 );
+                __m128 xlockd = _mm_cvtepi32_ps( xlockx32 );
+                __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
+                __m128 xprdct = _mm_mul_ps     ( xwght, _mm_mul_ps( ylocd, xlockd ) );
+                
+                xacc    = _mm_add_ps      ( xacc, xprdct );
+                //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
+              }
+
+              xacc = _mm_hadd_ps( xacc, xacc );
+              xacc = _mm_hadd_ps( xacc, xacc );
+
+              alfCovariance[classIdx].y[b0][k] += _mm_cvtss_f32( xacc );
+              //alfCovariance[classIdx].y[b0][k] += sum;
+            }
+          }
+
+          //double sum = 0.0;
+          __m128 xacc = _mm_setzero_ps();
+
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) );
+              
+            __m128 ylocd  = _mm_cvtepi32_ps( yloc32 );
+            __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
+            __m128 xprdct = _mm_mul_ps     ( xwght, _mm_mul_ps( ylocd, ylocd ) );
+              
+            xacc    = _mm_add_ps      ( xacc, xprdct );
+            //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
+          }
+
+          xacc = _mm_hadd_ps( xacc, xacc );
+          xacc = _mm_hadd_ps( xacc, xacc );
+
+          alfCovariance[classIdx].pixAcc += _mm_cvtss_f32( xacc );
+          //alfCovariance[classIdx].pixAcc += sum;
+#else
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel *Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t* cov     = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                for( int l = k; l < shape.numCoeff; l++ )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+
+                  //double sum = 0.0;
+                  __m128d xacc = _mm_setzero_pd();
+
+                  for( int ii = 0; ii < 4; ii++ )
+                  {
+                    const __m128i xloclx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
+                    const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                  
+                    __m128d xlocld = _mm_cvtepi32_pd( xloclx32 );
+                    __m128d xlockd = _mm_cvtepi32_pd( xlockx32 );
+                    __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+                    __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd     ( xlocld, xlockd ) );
+                  
+                    xacc = _mm_add_pd( xacc, xprdct );
+                  
+                    xlocld = _mm_cvtepi32_pd( _mm_unpackhi_epi64( xloclx32, xloclx32 ) );
+                    xlockd = _mm_cvtepi32_pd( _mm_unpackhi_epi64( xlockx32, xlockx32 ) );
+                    xwght  = _mm_loadu_pd   ( &weight[ii][2] );
+                    xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd     ( xlocld, xlockd ) );
+                  
+                    xacc = _mm_add_pd( xacc, xprdct );
+
+                    //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
+                  }
+
+                  xacc = _mm_hadd_pd( xacc, xacc );
+
+                  *cov++ += _mm_cvtsd_f64( xacc );
+                  //*cov++ += sum;
+                }
+              }
+
+              //double sum = 0.0;
+              __m128d xacc = _mm_setzero_pd();
+
+              for( int ii = 0; ii < 4; ii++ )
+              {
+                const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal [ii][0] ) );
+                
+                __m128d ylocd  = _mm_cvtepi32_pd( yloc32 );
+                __m128d xlockd = _mm_cvtepi32_pd( xlockx32 );
+                __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+                __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd( ylocd, xlockd ) );
+                
+                xacc    = _mm_add_pd      ( xacc, xprdct );
+                
+                ylocd   = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( yloc32, yloc32 ) );
+                xlockd  = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( xlockx32, xlockx32 ) );
+                xwght   = _mm_loadu_pd    ( &weight[ii][2] );
+                xprdct  = _mm_mul_pd      ( xwght, _mm_mul_pd( ylocd, xlockd ) );
+                
+                xacc    = _mm_add_pd      ( xacc, xprdct );
+
+                //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
+              }
+
+              xacc = _mm_hadd_pd( xacc, xacc );
+
+              alfCovariance[classIdx].y[b0][k] += _mm_cvtsd_f64( xacc );
+              //alfCovariance[classIdx].y[b0][k] += sum;
+            }
+          }
+
+          //double sum = 0.0;
+          __m128d xacc = _mm_setzero_pd();
+
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) );
+              
+            __m128d ylocd  = _mm_cvtepi32_pd( yloc32 );
+            __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+            __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd( ylocd, ylocd ) );
+              
+            xacc    = _mm_add_pd      ( xacc, xprdct );
+              
+            ylocd   = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( yloc32, yloc32 ) );
+            xwght   = _mm_loadu_pd    ( &weight[ii][2] );
+            xprdct  = _mm_mul_pd      ( xwght, _mm_mul_pd( ylocd, ylocd ) );
+              
+            xacc    = _mm_add_pd      ( xacc, xprdct );
+
+            //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
+          }
+
+          xacc = _mm_hadd_pd( xacc, xacc );
+
+          alfCovariance[classIdx].pixAcc += _mm_cvtsd_f64( xacc );
+          //alfCovariance[classIdx].pixAcc += sum;
+#endif
+        }
+        else
+#endif
+        {
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel *Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t *cov = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                for( int l = k; l < shape.numCoeff; l++ )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+
+                  alf_float_t sum = 0.0;
+                  for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+                  {
+                    sum += weight[ii][jj] * Elocall[( ii << 2 ) + jj] * Elocalk[( ii << 2 ) + jj];
+                  }
+
+                  *cov++ += sum;
+                }
+              }
+
+              alf_float_t sum = 0.0;
+              for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+              {
+                sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
+              }
+
+              alfCovariance[classIdx].y[b0][k] += sum;
+            }
+          }
+
+          alf_float_t sum = 0.0;
+          for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+          {
+            sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
+          }
+
+          alfCovariance[classIdx].pixAcc += sum;
+        }
+      }
+      else
+      {
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+        if( useSimd )
+        {
+#if ALF_SINGLE_PREC_FLOAT
+          const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i* ) &yLocal[0][0] );
+          const __m128i mylocal8 = _mm_loadu_si128( ( const __m128i* ) &yLocal[2][0] );
+
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel *Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[0] );
+              const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[8] );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t* cov = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                int l = k;
+              
+                for( ; l < ( shape.numCoeff - 3 ); l += 4 )
+                {
+                  __m128i vmacc[4];
+
+                  for( int ll = 0; ll < 4; ll++ )
+                  {
+                    const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l + ll, 0 );
+
+                    __m128i melocall0 = _mm_loadu_si128( ( const __m128i * ) &Elocall[0] );
+                    __m128i melocall8 = _mm_loadu_si128( ( const __m128i * ) &Elocall[8] );
+
+                    __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                    __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+
+                    __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+
+                    vmacc[ll] = mmacc;
+                  }
+
+                  __m128i
+                  mmacc = _mm_hadd_epi32( _mm_hadd_epi32( vmacc[0], vmacc[1] ),
+                                          _mm_hadd_epi32( vmacc[2], vmacc[3] ) );
+                
+                  __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
+
+                  __m128 mcov = _mm_loadu_ps( cov );
+                  mcov = _mm_add_ps( mcov, mmaccf );
+                  _mm_storeu_ps( cov, mcov );
+
+                  cov += 4;
+                }
+              
+                for( ; l < shape.numCoeff; l++ )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+                
+                  __m128i melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                  __m128i melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                  __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+                
+                  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+                  mmacc = _mm_hadd_epi32( mmacc, mmacc );
+                  mmacc = _mm_hadd_epi32( mmacc, mmacc );
+                
+                  __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
+
+                  *cov++ += _mm_cvtss_f32( mmaccf );
+                }
+              }
+
+              const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
+              const __m128i mmacc8 = _mm_madd_epi16( melocalk8, mylocal8 );
+
+              __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+              mmacc = _mm_hadd_epi32( mmacc, mmacc );
+              mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+              alfCovariance[classIdx].y[b0][k] += _mm_cvtsi128_si32( mmacc );
+            }
+          }
+
+          const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
+          const __m128i mmacc8 = _mm_madd_epi16( mylocal8, mylocal8 );
+
+          __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+          mmacc = _mm_hadd_epi32( mmacc, mmacc );
+          mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+          alfCovariance[classIdx].pixAcc += _mm_cvtsi128_si32( mmacc );
+#else
+          const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i * ) &yLocal[0][0] );
+          const __m128i mylocal8 = _mm_loadu_si128( ( const __m128i * ) &yLocal[2][0] );
+
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel *Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t* cov = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[0] );
+                const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[8] );
+
+                int l = k;
+              
+                for( ; l < ( shape.numCoeff - 1 ); l += 2 )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+                
+                  __m128i melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                  __m128i melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                  __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+                
+                  __m128i mmacca = _mm_add_epi32( mmacc0, mmacc8 );
+
+                  Elocall = &GET_ALF_COVAR( ELocal, b1, l + 1, 0 );
+
+                  melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                  melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                  mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+
+                  __m128i mmaccb = _mm_add_epi32( mmacc0, mmacc8 );
+
+                  __m128i mmacc = _mm_hadd_epi32( mmacca, mmaccb );
+                  mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+                  __m128d madd = _mm_cvtepi32_pd( mmacc );
+                  __m128d mcov = _mm_loadu_pd( cov );
+                  mcov = _mm_add_pd( mcov, madd );
+                  _mm_storeu_pd( cov, mcov );
+
+                  cov += 2;
+                }
+
+                if( l != shape.numCoeff )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+                
+                  const __m128i melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                  const __m128i melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                  const __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  const __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+                
+                  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+                  mmacc = _mm_hadd_epi32( mmacc, mmacc );
+                  mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+                  *cov += _mm_cvtsi128_si32( mmacc );
+                }
+              }
+
+              const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
+              const __m128i mmacc8 = _mm_madd_epi16( melocalk8, mylocal8 );
+
+              __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+              mmacc = _mm_hadd_epi32( mmacc, mmacc );
+              mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+              alfCovariance[classIdx].y[b0][k] += _mm_cvtsi128_si32( mmacc );
+            }
+          }
+
+          const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
+          const __m128i mmacc8 = _mm_madd_epi16( mylocal8, mylocal8 );
+
+          __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+          mmacc = _mm_hadd_epi32( mmacc, mmacc );
+          mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+          alfCovariance[classIdx].pixAcc += _mm_cvtsi128_si32( mmacc );
+#endif
+        }
+        else
+#endif
+        {
+          for( int b0 = 0; b0 < numBins; b0++ )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel *Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
+
+              for( int b1 = 0; b1 < numBins; b1++ )
+              {
+                alf_float_t* cov    = &alfCovariance[classIdx].E[b0][b1][k][k];
+
+                for( int l = k; l < shape.numCoeff; l++ )
+                {
+                  const Pel *Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
+
+                  int64_t sum = 0;
+                  for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+                  {
+                    sum += int( Elocall[(ii << 2) + jj] ) * Elocalk[(ii << 2) + jj];
+                  }
+
+                  *cov++ += sum;
+                }
+              }
+
+              int64_t sum = 0;
+              for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+              {
+                sum += int( Elocalk[(ii << 2) + jj] ) * yLocal[ii][jj];
+              }
+
+              alfCovariance[classIdx].y[b0][k] += sum;
+            }
+          }
+
+          int64_t sum = 0;
+          for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+          {
+            sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
+          }
+
+          alfCovariance[classIdx].pixAcc += sum;
+        }
+      }
+
+      alfCovariance[classIdx].all0 = false;
     }
-    org += orgStride;
-    rec += recStride;
+
+    org += ( orgStride << 2 );
+    rec += ( recStride << 2 );
   }
 
   int numClasses = classifier ? MAX_NUM_ALF_CLASSES : 1;
 
-  if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma )
+  if( ( isLuma( channel ) ? !m_encCfg->m_useNonLinearAlfLuma : !m_encCfg->m_useNonLinearAlfChroma ) )
   {
     for( classIdx = 0; classIdx < numClasses; classIdx++ )
     {
@@ -2799,14 +4007,12 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
       {
         for( int l = 0; l < k; l++ )
         {
-          // NOTE: Diagnostic is disabled due to a GCC bug (7.4.0).
-          //       GCC is trying to optimize the loop and complains about the possible exceeding of array bounds
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && GCC_VERSION_AT_LEAST(7,3)
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
           alfCovariance[classIdx].E[0][0][k][l] = alfCovariance[classIdx].E[0][0][l][k];
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && GCC_VERSION_AT_LEAST(7,3)
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
 #pragma GCC diagnostic pop
 #endif
         }
@@ -2843,245 +4049,697 @@ inline int clipIdx( int i, int clip )
     return i;
 }
 
-template < bool clipToBdry >
-void EncAdaptiveLoopFilter::calcLinCovariance( int* ELocal, const Pel *rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow )
+template<bool clipToBdry, bool simd>
+void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow )
 {
-  const int *filterPattern = shape.pattern.data();
-  const int halfFilterLength = shape.filterLength >> 1;
-
-  int k = 0;
-
-  const short curr = rec[0];
-
-  if( transposeIdx == 0 )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+  if( simd )
   {
-    for( int i = -halfFilterLength; i < 0; i++ )
-    {
-      const Pel* rec0 = rec + clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const Pel* rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
-      for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
-      {
-        const int val0 = rec0[j] - curr;
-        const int val1 = rec1[-j] - curr;
+    int k = 0;
+  
+    const Pel* rec0 = &rec[0];
 
-        ELocal[filterPattern[k]] = val0 + val1;
+    __m128i xrec = _mm_loadl_epi64( ( const __m128i* ) rec );
+    __m128i xcur = _mm_slli_epi16( xrec, 1 );
+
+    if( transposeIdx == 0 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+        {
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        }
+      }
+
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec[ j] );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec[-j] );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
       }
     }
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
+    else if( transposeIdx == 1 )
     {
-      const int val0 = rec[j] - curr;
-      const int val1 = rec[-j] - curr;
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
 
-      ELocal[filterPattern[k]] = val0 + val1;
+        for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+      }
     }
+    else if( transposeIdx == 2 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+        {
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec0[ j] );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec0[-j] );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+      }
+    }
+    else
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
+
+        for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+        
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+      }
+    }
+
+    _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xrec );
   }
-  else if( transposeIdx == 1 )
+  else
+#endif
   {
-    for( int j = -halfFilterLength; j < 0; j++ )
-    {
-      const Pel* rec0 = rec + j;
-      const Pel* rec1 = rec - j;
-      for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
-      {
-        const int val0 = rec0[ clipIdx<clipToBdry>( i,  clipTopRow ) * stride] - curr;
-        const int val1 = rec1[-clipIdx<clipToBdry>( i, -clipBotRow ) * stride] - curr;
+    int k = 0;
+  
+    const Pel* rec0 = &rec[0];
+    const Pel* rec1 = &rec[1];
+    const Pel* rec2 = &rec[2];
+    const Pel* rec3 = &rec[3];
+  
+    const Pel curr0 = *rec0 << 1;
+    const Pel curr1 = *rec1 << 1;
+    const Pel curr2 = *rec2 << 1;
+    const Pel curr3 = *rec3 << 1;
 
-        ELocal[filterPattern[k]] = val0 + val1;
+    if( transposeIdx == 0 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        const Pel* rec10 = rec1 + off0;
+        const Pel* rec11 = rec1 + off1;
+
+        const Pel* rec20 = rec2 + off0;
+        const Pel* rec21 = rec2 + off1;
+
+        const Pel* rec30 = rec3 + off0;
+        const Pel* rec31 = rec3 + off1;
+
+        for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+        {
+          const Pel val00 = rec00[ j];
+          const Pel val01 = rec01[-j];
+        
+          const Pel val10 = rec10[ j];
+          const Pel val11 = rec11[-j];
+        
+          const Pel val20 = rec20[ j];
+          const Pel val21 = rec21[-j];
+
+          const Pel val30 = rec30[ j];
+          const Pel val31 = rec31[-j];
+
+          GET_ALF_COVAR( ELocal, 0, k, 0 ) = val00 + val01 - curr0;
+          GET_ALF_COVAR( ELocal, 0, k, 1 ) = val10 + val11 - curr1;
+          GET_ALF_COVAR( ELocal, 0, k, 2 ) = val20 + val21 - curr2;
+          GET_ALF_COVAR( ELocal, 0, k, 3 ) = val30 + val31 - curr3;
+        }
+      }
+
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        const Pel val00 = rec0[ j];
+        const Pel val01 = rec0[-j];
+      
+        const Pel val10 = rec1[ j];
+        const Pel val11 = rec1[-j];
+      
+        const Pel val20 = rec2[ j];
+        const Pel val21 = rec2[-j];
+      
+        const Pel val30 = rec3[ j];
+        const Pel val31 = rec3[-j];
+
+        GET_ALF_COVAR( ELocal, 0, k, 0 ) = val00 + val01 - curr0;
+        GET_ALF_COVAR( ELocal, 0, k, 1 ) = val10 + val11 - curr1;
+        GET_ALF_COVAR( ELocal, 0, k, 2 ) = val20 + val21 - curr2;
+        GET_ALF_COVAR( ELocal, 0, k, 3 ) = val30 + val31 - curr3;
       }
     }
-    for( int i = -halfFilterLength; i < 0; i++, k++ )
+    else if( transposeIdx == 1 )
     {
-      const int val0 = rec[ clipIdx<clipToBdry>( i,  clipTopRow ) * stride] - curr;
-      const int val1 = rec[-clipIdx<clipToBdry>( i, -clipBotRow ) * stride] - curr;
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
 
-      ELocal[filterPattern[k]] = val0 + val1;
+        for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          const Pel* vptr2 =  rec0;
+
+          GET_ALF_COVAR( ELocal, 0, k, 0 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 1 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 2 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 3 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+        const Pel* vptr2 =  rec0;
+
+        GET_ALF_COVAR( ELocal, 0, k, 0 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 1 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 2 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 3 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+      }
     }
+    else if( transposeIdx == 2 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        const Pel* rec10 = rec1 + off0;
+        const Pel* rec11 = rec1 + off1;
+
+        const Pel* rec20 = rec2 + off0;
+        const Pel* rec21 = rec2 + off1;
+
+        const Pel* rec30 = rec3 + off0;
+        const Pel* rec31 = rec3 + off1;
+
+        for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+        {
+          const Pel val00 = rec00[ j];
+          const Pel val01 = rec01[-j];
+        
+          const Pel val10 = rec10[ j];
+          const Pel val11 = rec11[-j];
+        
+          const Pel val20 = rec20[ j];
+          const Pel val21 = rec21[-j];
+        
+          const Pel val30 = rec30[ j];
+          const Pel val31 = rec31[-j];
+
+          GET_ALF_COVAR( ELocal, 0, k, 0 ) = val00 + val01 - curr0;
+          GET_ALF_COVAR( ELocal, 0, k, 1 ) = val10 + val11 - curr1;
+          GET_ALF_COVAR( ELocal, 0, k, 2 ) = val20 + val21 - curr2;
+          GET_ALF_COVAR( ELocal, 0, k, 3 ) = val30 + val31 - curr3;
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        const Pel val00 = rec0[ j];
+        const Pel val01 = rec0[-j];
+
+        const Pel val10 = rec1[ j];
+        const Pel val11 = rec1[-j];
+
+        const Pel val20 = rec2[ j];
+        const Pel val21 = rec2[-j];
+
+        const Pel val30 = rec3[ j];
+        const Pel val31 = rec3[-j];
+
+        GET_ALF_COVAR( ELocal, 0, k, 0 ) = val00 + val01 - curr0;
+        GET_ALF_COVAR( ELocal, 0, k, 1 ) = val10 + val11 - curr1;
+        GET_ALF_COVAR( ELocal, 0, k, 2 ) = val20 + val21 - curr2;
+        GET_ALF_COVAR( ELocal, 0, k, 3 ) = val30 + val31 - curr3;
+      }
+    }
+    else
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
+
+        for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          const Pel* vptr2 =  rec0;
+
+          GET_ALF_COVAR( ELocal, 0, k, 0 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 1 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 2 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          GET_ALF_COVAR( ELocal, 0, k, 3 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+        const Pel* vptr2 =  rec0;
+
+        GET_ALF_COVAR( ELocal, 0, k, 0 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 1 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 2 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        GET_ALF_COVAR( ELocal, 0, k, 3 ) = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+      }
+    }
+
+    GET_ALF_COVAR( ELocal, 0, k, 0 ) = *rec0;
+    GET_ALF_COVAR( ELocal, 0, k, 1 ) = *rec1;
+    GET_ALF_COVAR( ELocal, 0, k, 2 ) = *rec2;
+    GET_ALF_COVAR( ELocal, 0, k, 3 ) = *rec3;
   }
-  else if( transposeIdx == 2 )
+}
+
+template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  false>( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<false, false>( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<false, true> ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+
+template<bool clipToBdry, bool simd>
+void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow )
+{
+  const Pel *clip = m_alfClippingValues[channel];
+  constexpr int numBins = AlfNumClippingValues;
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+  if( simd )
   {
-    for( int i = -halfFilterLength; i < 0; i++ )
+    int k = 0;
+
+    const Pel *rec = rec_;
+    const __m128i vcurr = _mm_loadl_epi64( ( const __m128i * ) rec );
+
+    auto vClipAlf = []( int clip, __m128i v0, __m128i v1 )
     {
-      const Pel* rec0 = rec + clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const Pel* rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+      //return Clip3<int>( -clip, +clip, val0 ) + Clip3<int>( -clip, +clip, val1 );
+      const __m128i vmax = _mm_set1_epi16(  clip );
+      const __m128i vmin = _mm_set1_epi16( -clip );
 
-      for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+      v0 = _mm_min_epi16( v0, vmax );
+      v0 = _mm_max_epi16( v0, vmin );
+      v1 = _mm_min_epi16( v1, vmax );
+      v1 = _mm_max_epi16( v1, vmin );
+
+      return _mm_add_epi16( v0, v1 );
+    };
+
+    if( transposeIdx == 0 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
       {
-        const int val0 = rec0[j] - curr;
-        const int val1 = rec1[-j] - curr;
+        const Pel *rec0 = rec + clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-        ELocal[filterPattern[k]] = val0 + val1;
+        for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+        {
+          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[ j] );
+          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[-j] );
+          vval0 = _mm_sub_epi16( vval0, vcurr );
+          vval1 = _mm_sub_epi16( vval1, vcurr );
+          for( int b = 0; b < numBins; b++ )
+          {
+            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          }
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[ j] );
+        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[-j] );
+        vval0 = _mm_sub_epi16( vval0, vcurr );
+        vval1 = _mm_sub_epi16( vval1, vcurr );
+        for( int b = 0; b < numBins; b++ )
+        {
+          _mm_storel_epi64( ( __m128i * ) & GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+        }
       }
     }
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
+    else if( transposeIdx == 1 )
     {
-      const int val0 = rec[j] - curr;
-      const int val1 = rec[-j] - curr;
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel *rec0 = rec + j;
+        const Pel *rec1 = rec - j;
+        for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+          
+          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[off0] );
+          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[off1] );
+          vval0 = _mm_sub_epi16( vval0, vcurr );
+          vval1 = _mm_sub_epi16( vval1, vcurr );
+          for( int b = 0; b < numBins; b++ )
+          {
+            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          }
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+        
+        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[off0] );
+        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[off1] );
+        vval0 = _mm_sub_epi16( vval0, vcurr );
+        vval1 = _mm_sub_epi16( vval1, vcurr );
+        for( int b = 0; b < numBins; b++ )
+        {
+          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+        }
+      }
+    }
+    else if( transposeIdx == 2 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const Pel *rec0 = rec + clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-      ELocal[filterPattern[k]] = val0 + val1;
+        for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+        {
+          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[ j] );
+          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[-j] );
+          vval0 = _mm_sub_epi16( vval0, vcurr );
+          vval1 = _mm_sub_epi16( vval1, vcurr );
+          for( int b = 0; b < numBins; b++ )
+          {
+            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          }
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) & rec[j] );
+        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) & rec[-j] );
+        vval0 = _mm_sub_epi16( vval0, vcurr );
+        vval1 = _mm_sub_epi16( vval1, vcurr );
+        for( int b = 0; b < numBins; b++ )
+        {
+          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+        }
+      }
+    }
+    else
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel *rec0 = rec + j;
+        const Pel *rec1 = rec - j;
+        for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+          
+          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[off0] );
+          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[off1] );
+          vval0 = _mm_sub_epi16( vval0, vcurr );
+          vval1 = _mm_sub_epi16( vval1, vcurr );
+          for( int b = 0; b < numBins; b++ )
+          {
+            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          }
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+        
+        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[off0] );
+        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[off1] );
+        vval0 = _mm_sub_epi16( vval0, vcurr );
+        vval1 = _mm_sub_epi16( vval1, vcurr );
+        for( int b = 0; b < numBins; b++ )
+        {
+          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+        }
+      }
+    }
+    for( int b = 0; b < numBins; b++ )
+    {
+      _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vcurr );
     }
   }
   else
+#endif
   {
-    for( int j = -halfFilterLength; j < 0; j++ )
+    for( int x = 0; x < 4; x++ )
     {
-      const Pel* rec0 = rec + j;
-      const Pel* rec1 = rec - j;
-      for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+      int k = 0;
+
+      const short *rec = &rec_[x];
+      const short curr = rec[0];
+
+      if( transposeIdx == 0 )
       {
-        const int val0 = rec0[ clipIdx<clipToBdry>( i,  clipTopRow ) * stride] - curr;
-        const int val1 = rec1[-clipIdx<clipToBdry>( i, -clipBotRow ) * stride] - curr;
-
-        ELocal[filterPattern[k]] = val0 + val1;
-      }
-    }
-    for( int i = -halfFilterLength; i < 0; i++, k++ )
-    {
-      const int val0 = rec[ clipIdx<clipToBdry>( i,  clipTopRow ) * stride] - curr;
-      const int val1 = rec[-clipIdx<clipToBdry>( i, -clipBotRow ) * stride] - curr;
-
-      ELocal[filterPattern[k]] = val0 + val1;
-    }
-  }
-
-  ELocal[filterPattern[k]] = curr;
-}
-template void EncAdaptiveLoopFilter::calcLinCovariance<true> ( int* ELocal, const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow );
-template void EncAdaptiveLoopFilter::calcLinCovariance<false>( int* ELocal, const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow );
-
-void EncAdaptiveLoopFilter::calcCovariance( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel *rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance )
-{
-  int clipTopRow = -4;
-  int clipBotRow = 4;
-  if (vbDistance >= -3 && vbDistance < 0)
-  {
-    clipBotRow = -vbDistance - 1;
-    clipTopRow = -clipBotRow; // symmetric
-  }
-  else if (vbDistance >= 0 && vbDistance < 3)
-  {
-    clipTopRow = -vbDistance;
-    clipBotRow = -clipTopRow; // symmetric
-  }
-
-  const int *filterPattern   = shape.pattern.data();
-  const int halfFilterLength = shape.filterLength >> 1;
-  const Pel* clip            = m_alfClippingValues[channel];
-  constexpr int numBins      = AlfNumClippingValues;
-
-  int k = 0;
-
-  const short curr = rec[0];
-
-  if( transposeIdx == 0 )
-  {
-    for( int i = -halfFilterLength; i < 0; i++ )
-    {
-      const Pel* rec0 = rec + std::max(i, clipTopRow) * stride;
-      const Pel* rec1 = rec - std::max(i, -clipBotRow) * stride;
-      for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
-      {
-        const int val0 = rec0[ j] - curr;
-        const int val1 = rec1[-j] - curr;
-        for( int b = 0; b < numBins; b++ )
+        for( int i = -halfFilterLength; i < 0; i++ )
         {
-          ELocal[filterPattern[k]][b] = clipALF( clip[b], val0, val1 );
+          const Pel *rec0 = rec + clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+          const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+          for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+          {
+            const int val0 = rec0[j] - curr;
+            const int val1 = rec1[-j] - curr;
+            for( int b = 0; b < numBins; b++ )
+            {
+              GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+            }
+          }
+        }
+        for( int j = -halfFilterLength; j < 0; j++, k++ )
+        {
+          const int val0 = rec[j] - curr;
+          const int val1 = rec[-j] - curr;
+          for( int b = 0; b < numBins; b++ )
+          {
+            GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+          }
         }
       }
-    }
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
-    {
-      const int val0 = rec[ j] - curr;
-      const int val1 = rec[-j] - curr;
+      else if( transposeIdx == 1 )
+      {
+        for( int j = -halfFilterLength; j < 0; j++ )
+        {
+          const Pel *rec0 = rec + j;
+          const Pel *rec1 = rec - j;
+          for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+          {
+            const int off0 = clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+            const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+            const int val0 = rec0[off0] - curr;
+            const int val1 = rec1[off1] - curr;
+            for( int b = 0; b < numBins; b++ )
+            {
+              GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+            }
+          }
+        }
+        for( int i = -halfFilterLength; i < 0; i++, k++ )
+        {
+          const int off0 = clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const int val0 = rec[off0] - curr;
+          const int val1 = rec[off1] - curr;
+          for( int b = 0; b < numBins; b++ )
+          {
+            GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+          }
+        }
+      }
+      else if( transposeIdx == 2 )
+      {
+        for( int i = -halfFilterLength; i < 0; i++ )
+        {
+          const Pel *rec0 = rec + clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+          const Pel *rec1 = rec - clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+          {
+            const int val0 = rec0[j] - curr;
+            const int val1 = rec1[-j] - curr;
+            for( int b = 0; b < numBins; b++ )
+            {
+              GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+            }
+          }
+        }
+        for( int j = -halfFilterLength; j < 0; j++, k++ )
+        {
+          const int val0 = rec[j] - curr;
+          const int val1 = rec[-j] - curr;
+          for( int b = 0; b < numBins; b++ )
+          {
+            GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+          }
+        }
+      }
+      else
+      {
+        for( int j = -halfFilterLength; j < 0; j++ )
+        {
+          const Pel *rec0 = rec + j;
+          const Pel *rec1 = rec - j;
+          for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+          {
+            const int off0 = clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+            const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+            const int val0 = rec0[off0] - curr;
+            const int val1 = rec1[off1] - curr;
+            for( int b = 0; b < numBins; b++ )
+            {
+              GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+            }
+          }
+        }
+        for( int i = -halfFilterLength; i < 0; i++, k++ )
+        {
+          const int off0 = clipIdx<clipToBdry>( i, clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const int val0 = rec[off0] - curr;
+          const int val1 = rec[off1] - curr;
+          for( int b = 0; b < numBins; b++ )
+          {
+            GET_ALF_COVAR( ELocal, b, k, x ) = clipALF( clip[b], val0, val1 );
+          }
+        }
+      }
       for( int b = 0; b < numBins; b++ )
       {
-        ELocal[filterPattern[k]][b] = clipALF( clip[b], val0, val1 );
+        GET_ALF_COVAR( ELocal, b, k, x ) = curr;
       }
     }
-  }
-  else if( transposeIdx == 1 )
-  {
-    for( int j = -halfFilterLength; j < 0; j++ )
-    {
-      const Pel* rec0 = rec + j;
-      const Pel* rec1 = rec - j;
-      for (int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++)
-      {
-        const int val0 = rec0[std::max(i, clipTopRow) * stride] - curr;
-        const int val1 = rec1[-std::max(i, -clipBotRow) * stride] - curr;
-        for (int b = 0; b < numBins; b++)
-        {
-          ELocal[filterPattern[k]][b] = clipALF(clip[b], val0, val1);
-        }
-      }
-    }
-    for (int i = -halfFilterLength; i < 0; i++, k++)
-    {
-      const int val0 = rec[std::max(i, clipTopRow) * stride] - curr;
-      const int val1 = rec[-std::max(i, -clipBotRow) * stride] - curr;
-      for (int b = 0; b < numBins; b++)
-      {
-        ELocal[filterPattern[k]][b] = clipALF(clip[b], val0 , val1);
-      }
-    }
-  }
-  else if( transposeIdx == 2 )
-  {
-    for( int i = -halfFilterLength; i < 0; i++ )
-    {
-      const Pel* rec0 = rec + std::max(i, clipTopRow) * stride;
-      const Pel* rec1 = rec - std::max(i, -clipBotRow) * stride;
-
-      for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
-      {
-        const int val0 = rec0[j] - curr;
-        const int val1 = rec1[-j] - curr;
-        for( int b = 0; b < numBins; b++ )
-        {
-          ELocal[filterPattern[k]][b] = clipALF( clip[b], val0, val1 );
-        }
-      }
-    }
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
-    {
-      const int val0 = rec[j] - curr;
-      const int val1 = rec[-j] - curr;
-      for( int b = 0; b < numBins; b++ )
-      {
-        ELocal[filterPattern[k]][b] = clipALF( clip[b], val0, val1 );
-      }
-    }
-  }
-  else
-  {
-    for( int j = -halfFilterLength; j < 0; j++ )
-    {
-      const Pel* rec0 = rec + j;
-      const Pel* rec1 = rec - j;
-      for (int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++)
-      {
-        const int val0 = rec0[std::max(i, clipTopRow) * stride] - curr;
-        const int val1 = rec1[-std::max(i, -clipBotRow) * stride] - curr;
-        for (int b = 0; b < numBins; b++)
-        {
-          ELocal[filterPattern[k]][b] = clipALF(clip[b], val0 ,val1 );
-        }
-      }
-    }
-    for (int i = -halfFilterLength; i < 0; i++, k++)
-    {
-      const int val0 = rec[std::max(i, clipTopRow) * stride] - curr;
-      const int val1 = rec[-std::max(i, -clipBotRow) * stride] - curr;
-      for (int b = 0; b < numBins; b++)
-      {
-        ELocal[filterPattern[k]][b] = clipALF(clip[b], val0 ,val1 );
-      }
-    }
-  }
-  for( int b = 0; b < numBins; b++ )
-  {
-    ELocal[filterPattern[k]][b] = curr;
   }
 }
+
+
+template void EncAdaptiveLoopFilter::calcCovariance4<false, false>( Pel *ELocal, const Pel *rec0, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<false, true >( Pel *ELocal, const Pel *rec0, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<true , false>( Pel *ELocal, const Pel *rec0, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcCovariance4<true , true >( Pel *ELocal, const Pel *rec0, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
 
 void EncAdaptiveLoopFilter::setEnableFlag( AlfParam& alfSlicePara, ChannelType channel, bool val )
 {
@@ -3145,7 +4803,8 @@ std::vector<int> EncAdaptiveLoopFilter::getAvaiApsIdsLuma(CodingStructure& cs, i
   APS** apss = cs.slice->alfAps;
   for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
   {
-    apss[i] = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
+    APS* aps = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
+    apss[i] = ( aps && aps->apsId != MAX_UINT ) ? aps: nullptr;
   }
 
   std::vector<int> result;
@@ -3166,12 +4825,12 @@ std::vector<int> EncAdaptiveLoopFilter::getAvaiApsIdsLuma(CodingStructure& cs, i
       }
     }
   }
-  cs.slice->tileGroupNumAps = ((int)result.size());
+  cs.slice->numAps = ((int)result.size());
   cs.slice->setAlfApsIds(result);
   newApsId = m_apsIdStart - 1;
   if( !m_encCfg->m_alfTempPred )
   {
-    newApsId = m_apsIdStart = 0;
+    newApsId = m_apsIdStart = m_encCfg->m_explicitAPSid;
   }
 
   if( newApsId < 0 )
@@ -3185,9 +4844,9 @@ void  EncAdaptiveLoopFilter::initDistortion()
 {
   for (int comp = 0; comp < MAX_NUM_COMP; comp++)
   {
-    for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
     {
-      m_ctbDistortionUnfilter[comp][ctbIdx] = getUnfilteredDistortion(m_alfCovariance[comp][0][ctbIdx], comp == 0 ? MAX_NUM_ALF_CLASSES : 1);
+      m_ctbDistortionUnfilter[comp][asuIdx] = getUnfilteredDistortion(m_alfCovariance[comp][asuIdx], comp == 0 ? MAX_NUM_ALF_CLASSES : 1);
     }
   }
 }
@@ -3198,14 +4857,14 @@ void  EncAdaptiveLoopFilter::initDistortionCcalf()
   {
     for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
     {
-      m_ctbDistortionUnfilter[comp][ctbIdx] = m_alfCovarianceCcAlf[comp - 1][0][0][ctbIdx].pixAcc;
+      m_ctbDistortionUnfilter[comp][ctbIdx] = m_alfCovarianceCcAlf[comp - 1][0][ctbIdx].pixAcc;
     }
   }
 }
 
 void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_ENC_CTB );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC_CTB );
   TempCtx   ctxStart       ( m_CtxCache, AlfCtx(m_CABACEstimator->getCtx()));
   TempCtx   ctxBest        ( m_CtxCache );
   TempCtx   ctxTempStart   ( m_CtxCache );
@@ -3214,7 +4873,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   TempCtx   ctxTempAltBest ( m_CtxCache );
   AlfParam  alfParamNewFiltersBest = alfParamNewFilters;
   APS**     apss = cs.slice->alfAps;
-  short*    alfCtbFilterSetIndex = cs.picture->getAlfCtbFilterIndex();
+  short*    alfCtbFilterSetIndex = cs.picture->m_alfCtbFilterIndex.data();
   bool      hasNewFilters[2] = { alfParamNewFilters.alfEnabled[COMP_Y] , alfParamNewFilters.alfEnabled[COMP_Cb] || alfParamNewFilters.alfEnabled[COMP_Cr] };
   const double invFactor = 1.0/((double)(1<<(m_NUM_BITS-1)));
   const bool doClip      = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma;
@@ -3223,9 +4882,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   //luma
   m_alfParamTemp = alfParamNewFilters;
   setCtuEnableFlag(m_ctuEnableFlag, CH_L, 1);
-  getFrameStats(CH_L, 0);
+  getFrameStats(CH_L);
   setCtuEnableFlag(m_ctuEnableFlag, CH_L, 0);
-  double costOff = getUnfilteredDistortion(m_alfCovarianceFrame[CH_L][0], CH_L);
+  double costOff = getUnfilteredDistortion(m_alfCovarianceFrame[CH_L], CH_L);
 
   int newApsId;
   std::vector<int> apsIds = getAvaiApsIdsLuma(cs, newApsId);
@@ -3260,7 +4919,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       {
         continue;
       }
-      cs.slice->tileGroupNumAps = (numTemporalAps + useNewFilter);
+      cs.slice->numAps = (numTemporalAps + useNewFilter);
       int numFilterSet = NUM_FIXED_FILTER_SETS + numTemporalAps + useNewFilter;
       if (numTemporalAps == apsIds.size() && numTemporalAps > 0 && useNewFilter && newApsId == apsIds.back()) //last temporalAPS is occupied by new filter set and this temporal APS becomes unavailable
       {
@@ -3276,17 +4935,26 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         {
           double dDistOrgNewFilter = 0;
           int blocksUsingNewFilter = 0;
-          for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+          for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
           {
+            int ctuX, ctuY;
+            getAsuCtuXY( asuIdx, ctuX, ctuY );
+            int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
             if (m_ctuEnableFlag[COMP_Y][ctbIdx] && alfCtbFilterSetIndex[ctbIdx] != NUM_FIXED_FILTER_SETS)
             {
-              m_ctuEnableFlag[COMP_Y][ctbIdx] = 0;
+              xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, COMP_Y, 0 );
             }
             else if (m_ctuEnableFlag[COMP_Y][ctbIdx] && alfCtbFilterSetIndex[ctbIdx] == NUM_FIXED_FILTER_SETS)
             {
-              DTRACE( g_trace_ctx, D_MISC, "\t\t\t\t re-derive ctbIdx=%d\n", ctbIdx );
-              blocksUsingNewFilter++;
-              dDistOrgNewFilter += m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
+              DTRACE( g_trace_ctx, D_MISC, "\t\t\t\t re-derive ctbIdx=%d\n", asuIdx );
+              int ctuMaxX = getAsuMaxCtuX( ctuX );
+              int ctuMaxY = getAsuMaxCtuY( ctuY );
+              for( int cY = ctuY; cY < ctuMaxY; cY++ )
+              for( int cX = ctuX; cX < ctuMaxX; cX++ )
+                blocksUsingNewFilter++;
+
+              dDistOrgNewFilter += m_ctbDistortionUnfilter[COMP_Y][asuIdx];
               for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
               {
                 short* pCoeff = m_coeffFinal;
@@ -3296,8 +4964,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
-                dDistOrgNewFilter += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                                            : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
+                dDistOrgNewFilter += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                            : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
             }
           } //for(ctbIdx)
@@ -3308,7 +4976,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_alfParamTemp.nonLinearFlag[CH_L] = 1;
             if (m_encCfg->m_useNonLinearAlfLuma)
             {
-              errNL[1] = getFilterCoeffAndCost(cs, 0, CH_L, true, 0, bitNL[1], true);
+              errNL[1] = getFilterCoeffAndCost(cs, 0, CH_L, true, bitNL[1], true);
               m_alfParamTempNL = m_alfParamTemp;
             }
             else
@@ -3316,7 +4984,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
               errNL[1] = MAX_DOUBLE;
             }
             m_alfParamTemp.nonLinearFlag[CH_L] = 0;
-            errNL[0] = getFilterCoeffAndCost(cs, 0, CH_L, true, 0, bitNL[0], true);
+            errNL[0] = getFilterCoeffAndCost(cs, 0, CH_L, true, bitNL[0], true);
 
             int bitsNewFilterTempLuma = bitNL[0];
             double err = errNL[0];
@@ -3345,14 +5013,18 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           {
             continue;
           }
-        }
+        }// if iter > 0
 
         m_CABACEstimator->getCtx() = ctxStart;
-        for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+        for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
         {
-          DTRACE( g_trace_ctx, D_MISC, "\t\t\t ctbIdx=%d\n", ctbIdx );
+          int ctuX, ctuY;
+          getAsuCtuXY( asuIdx, ctuX, ctuY );
+          int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
+          DTRACE( g_trace_ctx, D_MISC, "\t\t\t ctbIdx=%d\n", asuIdx );
           const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] : m_lambda[COMP_Y];
-          double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
+          const double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][asuIdx];
           //ctb on
           m_ctuEnableFlag[COMP_Y][ctbIdx] = 1;
           double         costOn = MAX_DOUBLE;
@@ -3364,20 +5036,22 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             //rate
             m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
             m_CABACEstimator->resetBits();
-            m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, &m_alfParamTemp);
+            double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
-            m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctbIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
-            double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+            rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, &m_alfParamTemp, ctuLambda );
             //distortion
             double dist = distUnfilterCtb;
+
             for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
             {
               if (filterSetIdx < NUM_FIXED_FILTER_SETS)
               {
                 // fixed filter set
                 int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
-                dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                               : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
+
+                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
               else
               {
@@ -3406,13 +5080,19 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
-                dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                               : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
+
+                if( !m_alfCovariance[COMP_Y][asuIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][asuIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
             } //for(classIdx)
             //cost
-            const double costOnTmp = dist + ctuLambda * rateOn;
-            DTRACE( g_trace_ctx, D_MISC, "\t cost = %.2f, rate = %.2f, dist = %.2f", costOnTmp, rateOn, dist );
+            const double costOnTmp = dist + rateOn;
+#if ENABLE_TRACING
+            const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] : m_lambda[COMP_Y];
+            DTRACE( g_trace_ctx, D_MISC, "\t cost = %.2f, rate = %.2f, dist = %.2f", costOnTmp, rateOn/ctuLambda, dist );
+#endif
+            DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_LumaFlt: POC%d, asu_%d, flt_%d, cost=%.2f, rate=%.2f, dist=%.2f\n", cs.slice->poc, asuIdx, filterSetIdx, costOnTmp, rateOn/ctuLambda, dist );
 
             if (costOnTmp < costOn)
             {
@@ -3429,26 +5109,29 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           //rate
           m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
           m_CABACEstimator->resetBits();
-          m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, &m_alfParamTemp);
+          double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
           //cost
-          const double costOff = distUnfilterCtb + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+          const double costOff = distUnfilterCtb + rateCost;
           DTRACE( g_trace_ctx, D_MISC, "\t\t\t costOff=%.2f\n", costOff );
 
+          uint8_t enable = 0;
           if (costOn < costOff)
           {
             m_CABACEstimator->getCtx() = AlfCtx(ctxTempBest);
-            m_ctuEnableFlag[COMP_Y][ctbIdx] = 1;
-            alfCtbFilterSetIndex[ctbIdx] = iBestFilterSetIdx;
+            xStoreAlfAsuFilterIdx( cs, ctuX, ctuY, ctbIdx, iBestFilterSetIdx, alfCtbFilterSetIndex );
+            enable = 1;
             curCost += costOn;
           }
           else
           {
-            m_ctuEnableFlag[COMP_Y][ctbIdx] = 0;
             curCost += costOff;
           }
+          xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, COMP_Y, enable );
+          DTRACE( g_trace_ctx, D_ALF_EST, "\n" );
         } //for(ctbIdx)
         int tmpBits = bitsNewFilter + 3 * (numFilterSet - NUM_FIXED_FILTER_SETS);
         curCost += tmpBits * m_lambda[COMP_Y];
+        DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Luma: POC%d, numFilt_%d, newFilt_%d, TempAps_%d, iter_%d, costMin=%.2f, Cost=%.2f\n", cs.slice->poc, numFilterSet, useNewFilter, numTemporalAps, iter, (costMin != MAX_DOUBLE ? costMin: 0.0), curCost );
         if (curCost < costMin)
         {
           costMin = curCost;
@@ -3479,21 +5162,21 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
     }// for (int numTemporalAps = 0; numTemporalAps < apsIds.size(); numTemporalAps++)
   }//for (int useNewFilter = 0; useNewFilter <= 1; useNewFilter++)
 
-  cs.slice->tileGroupCcAlfCbApsId = newApsId;
-  cs.slice->tileGroupCcAlfCrApsId = newApsId;
+  cs.slice->ccAlfCbApsId = newApsId;
+  cs.slice->ccAlfCrApsId = newApsId;
 
   if (costOff <= costMin)
   {
-    memset( cs.slice->tileGroupAlfEnabled, 0, sizeof( cs.slice->tileGroupAlfEnabled ) );
-    cs.slice->tileGroupNumAps = (0);
+    memset( cs.slice->alfEnabled, 0, sizeof( cs.slice->alfEnabled ) );
+    cs.slice->numAps = (0);
     setCtuEnableFlag(m_ctuEnableFlag, CH_L, 0);
     setCtuEnableFlag(m_ctuEnableFlag, CH_C, 0);
     return;
   }
   else
   {
-    cs.slice->tileGroupAlfEnabled[COMP_Y] = true;
-    cs.slice->tileGroupNumAps = ((int)bestApsIds.size());
+    cs.slice->alfEnabled[COMP_Y] = true;
+    cs.slice->numAps = ((int)bestApsIds.size());
     cs.slice->setAlfApsIds(bestApsIds);
     copyCtuEnableFlag(m_ctuEnableFlag, m_ctuEnableFlagTmp, CH_L);
     for (int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++)
@@ -3506,9 +5189,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       if (newAPS == NULL)
       {
         newAPS = m_apsMap->allocatePS((newApsId << NUM_APS_TYPE_LEN) + ALF_APS);
-        newAPS->apsId = newApsId;
         newAPS->apsType = ALF_APS;
       }
+      newAPS->apsId = newApsId;
       newAPS->alfParam = alfParamNewFiltersBest;
       newAPS->temporalId = cs.slice->TLayer;
       newAPS->alfParam.newFilterFlag[CH_C] = false;
@@ -3517,8 +5200,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       m_apsIdStart = newApsId;
     }
 
-    const std::vector<int>& apsIds = cs.slice->tileGroupLumaApsId;
-    for (int i = 0; i < (int)cs.slice->tileGroupNumAps; i++)
+    const std::vector<int>& apsIds = cs.slice->lumaApsId;
+    for (int i = 0; i < (int)cs.slice->numAps; i++)
     {
       apss[apsIds[i]] = m_apsMap->getPS((apsIds[i] << NUM_APS_TYPE_LEN) + ALF_APS);
     }
@@ -3534,8 +5217,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   }
   setCtuAlternativeChroma( m_ctuAlternative, 0 );
   setCtuEnableFlag(m_ctuEnableFlag, CH_C, 1);
-  getFrameStats(CH_C, 0);
-  costOff = getUnfilteredDistortion(m_alfCovarianceFrame[CH_C][0], CH_C)/* + m_lambda[CH_C] * 1.0*/;
+  getFrameStats(CH_C);
+  costOff = getUnfilteredDistortion(m_alfCovarianceFrame[CH_C], CH_C)/* + m_lambda[CH_C] * 1.0*/;
   costMin = MAX_DOUBLE;
   m_CABACEstimator->getCtx() = AlfCtx(ctxBest);
   ctxStart = AlfCtx(m_CABACEstimator->getCtx());
@@ -3593,10 +5276,14 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
     for (int compId = 1; compId < MAX_NUM_COMP; compId++)
     {
       m_alfParamTemp.alfEnabled[compId] = true;
-      for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
+      for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
       {
+        int ctuX, ctuY;
+        getAsuCtuXY( asuIdx, ctuX, ctuY );
+        int ctbIdx = ctuY * cs.pcv->widthInCtus + ctuX;
+
         const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] * lambdaChromaWeight : m_lambda[compId];
-        double distUnfilterCtu = m_ctbDistortionUnfilter[compId][ctbIdx];
+        double distUnfilterCtu = m_ctbDistortionUnfilter[compId][asuIdx];
         //cost on
         m_ctuEnableFlag[compId][ctbIdx] = 1;
         ctxTempStart = AlfCtx(m_CABACEstimator->getCtx());
@@ -3604,12 +5291,11 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
         //ctb flag
-        m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, compId, &m_alfParamTemp);
-        double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+        double rateCostOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
         double dist = MAX_DOUBLE;
         int numAlts = m_alfParamTemp.numAlternativesChroma;
         ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
-        double bestAltRate = 0;
+        double bestRateAltCost = 0;
         double bestAltCost = MAX_DOUBLE;
         int bestAltIdx = -1;
         ctxTempAltStart = AlfCtx( ctxTempBest );
@@ -3619,9 +5305,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compId][ctbIdx] = altIdx;
-          m_CABACEstimator->codeAlfCtuAlternative( cs, ctbIdx, compId, &m_alfParamTemp );
-          double altRate   = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-          double r_altCost = ctuLambda * altRate;
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
 
           //distortion
           for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
@@ -3629,83 +5313,90 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_filterTmp[i] = m_chromaCoeffFinal[altIdx][i];
             m_clipTmp[i]   = m_chromaClippFinal[altIdx][i];
           }
-          double altDist = doClip ? m_alfCovariance[compId][0][ctbIdx][0].calcErrorForCoeffs<true >( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor )
-                                  : m_alfCovariance[compId][0][ctbIdx][0].calcErrorForCoeffs<false>( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor );
+          double altDist = doClip ? m_alfCovariance[compId][asuIdx][0].calcErrorForCoeffs<true >( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor )
+                                  : m_alfCovariance[compId][asuIdx][0].calcErrorForCoeffs<false>( m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor );
           double altCost = altDist + r_altCost;
+          //DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, numalt=%d, bestAltCost=%.2f, altCost=%.2f\n", cs.slice->poc, compId, asuIdx, altIdx, bestAltCost, altCost );
           if( altCost < bestAltCost )
           {
             bestAltCost = altCost;
             bestAltIdx = altIdx;
-            bestAltRate = altRate;
+            bestRateAltCost = r_altCost;
             ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
             dist = altDist;
           }
         }
-        m_ctuAlternative[compId][ctbIdx] = bestAltIdx;
-        rateOn += bestAltRate;
+        xStoreAlfAsuAlternative( cs, ctuX, ctuY, ctbIdx, compId, bestAltIdx );
+        rateCostOn += bestRateAltCost;
         dist += distUnfilterCtu;
         //cost
-        const double costOn = dist + ctuLambda * rateOn;
+        const double costOn = dist + rateCostOn;
         //cost off
         m_ctuEnableFlag[compId][ctbIdx] = 0;
         //rate
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
-        m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, compId, &m_alfParamTemp);
+        double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
         //cost
-        const double costOff = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-
+        const double costOff = distUnfilterCtu + rateCost;
+        DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, costOff=%.2f[distUnf=%2.f,rateCost=%2.f], CostOn=%.2f\n", cs.slice->poc, compId, asuIdx, costOff, distUnfilterCtu, rateCost, costOn );
+        
+        uint8_t enable = 0;
         if (costOn < costOff)
         {
           m_CABACEstimator->getCtx() = AlfCtx(ctxTempBest);
-          m_ctuEnableFlag[compId][ctbIdx] = 1;
+          enable = 1;
           curCost += costOn;
         }
         else
         {
-          m_ctuEnableFlag[compId][ctbIdx] = 0;
           curCost += costOff;
         }
+        xStoreAlfAsuEnabledFlag( cs, ctuX, ctuY, ctbIdx, compId, enable );
+
       } //for(ctbIdx)
     }
     //chroma idc
     setEnableFlag(m_alfParamTemp, CH_C, m_ctuEnableFlag);
 
+    DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, APSId_%d, costMin=%.2f, Cost=%.2f\n", cs.slice->poc, curApsId, curApsId, (costMin != MAX_DOUBLE ? costMin: 0.0), curCost );
+    DTRACE( g_trace_ctx, D_ALF_EST, "\n" );
+
     if (curCost < costMin)
     {
       costMin = curCost;
-      cs.slice->tileGroupChromaApsId = curApsId;
-      cs.slice->tileGroupAlfEnabled[COMP_Cb] = m_alfParamTemp.alfEnabled[COMP_Cb];
-      cs.slice->tileGroupAlfEnabled[COMP_Cr] = m_alfParamTemp.alfEnabled[COMP_Cr];
+      cs.slice->chromaApsId = curApsId;
+      cs.slice->alfEnabled[COMP_Cb] = m_alfParamTemp.alfEnabled[COMP_Cb];
+      cs.slice->alfEnabled[COMP_Cr] = m_alfParamTemp.alfEnabled[COMP_Cr];
       copyCtuEnableFlag(m_ctuEnableFlagTmp, m_ctuEnableFlag, CH_C);
       copyCtuAlternativeChroma(m_ctuAlternativeTmp, m_ctuAlternative);
     }
   }
   if (newApsIdChroma >= 0)
   {
-    cs.slice->tileGroupCcAlfCbApsId = newApsIdChroma;
-    cs.slice->tileGroupCcAlfCrApsId = newApsIdChroma;
+    cs.slice->ccAlfCbApsId = newApsIdChroma;
+    cs.slice->ccAlfCrApsId = newApsIdChroma;
   }
   if (costOff < costMin)
   {
-    cs.slice->tileGroupAlfEnabled[COMP_Cb] = false;
-    cs.slice->tileGroupAlfEnabled[COMP_Cr] = false;
+    cs.slice->alfEnabled[COMP_Cb] = false;
+    cs.slice->alfEnabled[COMP_Cr] = false;
     setCtuEnableFlag(m_ctuEnableFlag, CH_C, 0);
   }
   else
   {
     copyCtuEnableFlag(m_ctuEnableFlag, m_ctuEnableFlagTmp, CH_C);
     copyCtuAlternativeChroma(m_ctuAlternative, m_ctuAlternativeTmp);
-    if (cs.slice->tileGroupChromaApsId == newApsIdChroma)  //new filter
+    if (cs.slice->chromaApsId == newApsIdChroma)  //new filter
     {
       APS* newAPS = m_apsMap->getPS((newApsIdChroma << NUM_APS_TYPE_LEN) + ALF_APS);
       if (newAPS == NULL)
       {
         newAPS = m_apsMap->allocatePS((newApsIdChroma << NUM_APS_TYPE_LEN) + ALF_APS);
         newAPS->apsType = ALF_APS;
-        newAPS->apsId   = newApsIdChroma;
         newAPS->alfParam.reset();
       }
+      newAPS->apsId = newApsIdChroma;
       newAPS->alfParam.newFilterFlag[CH_C] = true;
       if (!alfParamNewFiltersBest.newFilterFlag[CH_L])
       {
@@ -3715,7 +5406,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       newAPS->alfParam.nonLinearFlag[CH_C] = alfParamNewFilters.nonLinearFlag[CH_C];
       newAPS->temporalId = cs.slice->TLayer;
       newAPS->poc = cs.slice->poc;
-      for (int altIdx = 0; altIdx  < MAX_NUM_ALF_ALTERNATIVES_CHROMA; ++altIdx )
+      for (int altIdx = 0; altIdx  < VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA; ++altIdx )
       for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
       {
         newAPS->alfParam.chromaCoeff[altIdx][i] = alfParamNewFilters.chromaCoeff[altIdx][i];
@@ -3724,7 +5415,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       m_apsMap->setChangedFlag((newApsIdChroma << NUM_APS_TYPE_LEN) + ALF_APS);
       m_apsIdStart = newApsIdChroma;
     }
-    apss[cs.slice->tileGroupChromaApsId] = m_apsMap->getPS((cs.slice->tileGroupChromaApsId << NUM_APS_TYPE_LEN) + ALF_APS);
+    apss[cs.slice->chromaApsId] = m_apsMap->getPS((cs.slice->chromaApsId << NUM_APS_TYPE_LEN) + ALF_APS);
   }
   }
 }
@@ -3744,18 +5435,36 @@ void EncAdaptiveLoopFilter::setCtuAlternativeChroma( uint8_t* ctuAlts[MAX_NUM_CO
 void EncAdaptiveLoopFilter::initCtuAlternativeChroma( uint8_t* ctuAlts[MAX_NUM_COMP] )
 {
   uint8_t altIdx = 0;
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+  if( m_numAsusInPic == m_numCTUsInPic )
   {
-    ctuAlts[COMP_Cb][ctuIdx] = altIdx;
-    if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
-      ++altIdx;
+    for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+    {
+      ctuAlts[COMP_Cb][ctuIdx] = altIdx;
+      ctuAlts[COMP_Cr][ctuIdx] = altIdx;
+      if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
+        ++altIdx;
+    }
   }
-  altIdx = 0;
-  for( int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ++ctuIdx )
+  else
   {
-    ctuAlts[COMP_Cr][ctuIdx] = altIdx;
-    if( (ctuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numCTUsInPic )
-      ++altIdx;
+    for( int asuIdx = 0; asuIdx < m_numAsusInPic; asuIdx++ )
+    {
+      int ctuX, ctuY;
+      getAsuCtuXY( asuIdx, ctuX, ctuY );
+      int ctuMaxX = getAsuMaxCtuX( ctuX );
+      int ctuMaxY = getAsuMaxCtuY( ctuY );
+      for( int cY = ctuY; cY < ctuMaxY; cY++ )
+      {
+        for( int cX = ctuX; cX < ctuMaxX; cX++ )
+        {
+          int ctuIdx = cY * m_numCTUsInWidth + cX;
+          ctuAlts[COMP_Cb][ctuIdx] = altIdx;
+          ctuAlts[COMP_Cr][ctuIdx] = altIdx;
+        }
+      }
+      if( (asuIdx+1) * m_alfParamTemp.numAlternativesChroma >= (altIdx+1)*m_numAsusInPic )
+        ++altIdx;
+    }
   }
 }
 
@@ -3792,7 +5501,7 @@ int EncAdaptiveLoopFilter::getCoeffRateCcAlf(short chromaCoeff[MAX_NUM_CC_ALF_FI
   return bits;
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const PelUnitBuf& recYuv, const PelUnitBuf& recYuvExt, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
+void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx )
 {
   int forward_tab[CCALF_CANDS_COEFF_NR * 2 - 1] = {0};
   for (int i = 0; i < CCALF_CANDS_COEFF_NR; i++)
@@ -3800,28 +5509,28 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const Pe
     forward_tab[CCALF_CANDS_COEFF_NR - 1 + i] = CCALF_SMALL_TAB[i];
     forward_tab[CCALF_CANDS_COEFF_NR - 1 - i] = (-1) * CCALF_SMALL_TAB[i];
   }
-  using TE = double[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
-  using Ty = double[MAX_NUM_ALF_LUMA_COEFF];
+  using TE = alf_float_t[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
+  using Ty = alf_float_t[MAX_NUM_ALF_LUMA_COEFF];
 
-  double filterCoeffDbl[MAX_NUM_CC_ALF_CHROMA_COEFF];
+  alf_float_t filterCoeffDbl[MAX_NUM_CC_ALF_CHROMA_COEFF];
   int16_t filterCoeffInt[MAX_NUM_CC_ALF_CHROMA_COEFF];
 
   std::fill_n(filterCoeffInt, MAX_NUM_CC_ALF_CHROMA_COEFF, 0);
 
   TE        kE;
   Ty        ky;
-  const int size = m_filterShapesCcAlf[compID - 1][0].numCoeff - 1;
+  const int size = m_filterShapesCcAlf[compID - 1].numCoeff - 1;
 
   for (int k = 0; k < size; k++)
   {
-    ky[k] = m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].y[0][k];
+    ky[k] = m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].y[0][k];
     for (int l = 0; l < size; l++)
     {
-      kE[k][l] = m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].E[0][0][k][l];
+      kE[k][l] = m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].E[0][0][k][l];
     }
   }
 
-  m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].gnsSolveByChol(kE, ky, filterCoeffDbl, size);
+  m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].gnsSolveByChol(kE, ky, filterCoeffDbl, size);
   roundFiltCoeffCCALF(filterCoeffInt, filterCoeffDbl, size, (1 << m_scaleBits));
 
   for (int k = 0; k < size; k++)
@@ -3830,10 +5539,10 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const Pe
     CHECK( filterCoeffInt[k] > (1 << CCALF_DYNAMIC_RANGE), "this is not possible: filterCoeffInt[k] >  (1 << CCALF_DYNAMIC_RANGE)");
   }
 
-  const double invFactor = 1.0 / (double)(1 << m_scaleBits );
+  const alf_float_t invFactor = 1.0 / ( alf_float_t )( 1 << m_scaleBits );
   // Refine quanitzation
   int modified       = 1;
-  double errRef      = m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].calcErrorForCcAlfCoeffs(filterCoeffInt, size, invFactor);
+  double errRef      = m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].calcErrorForCcAlfCoeffs(filterCoeffInt, size, invFactor);
   while (modified)
   {
     modified = 0;
@@ -3859,7 +5568,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const Pe
           continue;
 
         filterCoeffInt[k] = forward_tab[org_idx - delta];
-        double error = m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].calcErrorForCcAlfCoeffs(filterCoeffInt, size, invFactor);
+        double error = m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].calcErrorForCcAlfCoeffs(filterCoeffInt, size, invFactor);
         if( error < errMin )
         {
           errMin = error;
@@ -4000,7 +5709,7 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
   {
     std::copy_n(curFilterEnabled, MAX_NUM_CC_ALF_FILTERS, filterEnabled);
 
-    std::sort(filterIdxCount, filterIdxCount + MAX_NUM_CC_ALF_FILTERS, compareCounts);
+    std::stable_sort(filterIdxCount, filterIdxCount + MAX_NUM_CC_ALF_FILTERS, compareCounts);
 
     int filterIdc = 1;
     ccAlfFilterCount = 0;
@@ -4047,7 +5756,8 @@ std::vector<int> EncAdaptiveLoopFilter::getAvailableCcAlfApsIds(CodingStructure&
   APS** apss = cs.slice->alfAps;
   for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
   {
-    apss[i] = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
+    APS* aps = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
+    apss[i] = ( aps && aps->apsId != MAX_UINT ) ? aps: nullptr;
   }
 
   std::vector<int> result;
@@ -4077,10 +5787,7 @@ void EncAdaptiveLoopFilter::getFrameStatsCcalf(ComponentID compIdx, int filterId
   const int filterIdx = filterIdc - 1;
 
   // init Frame stats buffers
-  for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-  {
-    m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx].reset();
-  }
+  m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx].reset();
 
   for (int yPos = 0; yPos < m_picHeight; yPos += m_maxCUHeight)
   {
@@ -4088,20 +5795,70 @@ void EncAdaptiveLoopFilter::getFrameStatsCcalf(ComponentID compIdx, int filterId
     {
       if (m_trainingCovControl[ctuRsAddr] == filterIdc)
       {
-        for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-        {
-          m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] +=
-            m_alfCovarianceCcAlf[compIdx - 1][shape][0][ctuRsAddr];
-        }
+        m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx] += m_alfCovarianceCcAlf[compIdx - 1][0][ctuRsAddr];
       }
       ctuRsAddr++;
     }
   }
 }
 
-void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& tempDecYuvBuf, const PelUnitBuf& dstYuv )
+void EncAdaptiveLoopFilter::deriveCcAlfFilter( Picture& pic, CodingStructure& cs )
 {
-  if (!cs.slice->tileGroupAlfEnabled[COMP_Y])
+  initCABACEstimator( cs.slice );
+  initDistortionCcalf();
+
+  // Do not transmit CC ALF if it is unchanged
+  if( cs.slice->alfEnabled[COMP_Y] )
+  {
+    for( int32_t lumaAlfApsId : cs.slice->lumaApsId )
+    {
+      APS* aps = ( lumaAlfApsId >= 0 ) ? m_apsMap->getPS( ( lumaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) : nullptr;
+      if( aps && m_apsMap->getChangedFlag( ( lumaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) )
+      {
+        aps->ccAlfParam.newCcAlfFilter[0] = false;
+        aps->ccAlfParam.newCcAlfFilter[1] = false;
+      }
+    }
+  }
+  int chromaAlfApsId = ( cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr] ) ? cs.slice->chromaApsId : -1;
+  APS* aps = ( chromaAlfApsId >= 0 ) ? m_apsMap->getPS( ( chromaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) : nullptr;
+  if( aps && m_apsMap->getChangedFlag( ( chromaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) )
+  {
+    aps->ccAlfParam.newCcAlfFilter[0] = false;
+    aps->ccAlfParam.newCcAlfFilter[1] = false;
+  }
+
+  // Accumulate ALF statistic
+  const int filterIdx = 0;
+  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+  for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
+    {
+      for( int classIdx = 0; classIdx < ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 ); classIdx++ )
+      {
+        m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx] += m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr];
+      }
+    }
+  }
+
+  const TempCtx ctxStartCcAlf( m_CtxCache, SubCtx( Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx() ) );
+  const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
+  const PelUnitBuf recYuv = cs.getRecoBuf();
+
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
+  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, recYuv );
+
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
+  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, recYuv );
+
+  xSetupCcAlfAPS( cs );
+}
+
+void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& dstYuv )
+{
+  if (!cs.slice->alfEnabled[COMP_Y])
   {
     m_ccAlfFilterParam.ccAlfFilterEnabled[compID - 1] = false;
     return;
@@ -4154,7 +5911,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   uint64_t unfilteredDistortion = 0;
   for (int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++)
   {
-    unfilteredDistortion += (uint64_t)m_alfCovarianceCcAlf[compID - 1][0][0][ctbIdx].pixAcc;
+    unfilteredDistortion += (uint64_t)m_alfCovarianceCcAlf[compID - 1][0][ctbIdx].pixAcc;
   }
   double bestUnfilteredTotalCost = 1 * m_lambda[compID] + unfilteredDistortion;   // 1 bit is for gating flag
 
@@ -4245,9 +6002,9 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
             if (!referencingExistingAps)
             {
               getFrameStatsCcalf(compID, (filterIdx + 1));
-              deriveCcAlfFilterCoeff(compID, dstYuv, tempDecYuvBuf, ccAlfFilterCoeff, filterIdx);
+              deriveCcAlfFilterCoeff(compID, ccAlfFilterCoeff, filterIdx);
             }
-            const int numCoeff  = m_filterShapesCcAlf[compID - 1][0].numCoeff - 1;
+            const int numCoeff  = m_filterShapesCcAlf[compID - 1].numCoeff - 1;
             int log2BlockWidth  = cs.pcv->maxCUSizeLog2 - scaleX;
             int log2BlockHeight = cs.pcv->maxCUSizeLog2 - scaleY;
             for (int y = 0; y < m_buf->height; y += (1 << log2BlockHeight))
@@ -4257,7 +6014,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
                 int ctuIdx = (y >> log2BlockHeight) * m_numCTUsInWidth + (x >> log2BlockWidth);
                 m_trainingDistortion[filterIdx][ctuIdx] =
                   int(m_ctbDistortionUnfilter[compID][ctuIdx]
-                      + m_alfCovarianceCcAlf[compID - 1][0][0][ctuIdx].calcErrorForCcAlfCoeffs(
+                      + m_alfCovarianceCcAlf[compID - 1][0][ctuIdx].calcErrorForCcAlfCoeffs(
                         ccAlfFilterCoeff[filterIdx], numCoeff, invFactor));
               }
             }
@@ -4392,128 +6149,95 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
       m_reuseApsId[compID - 1] = ccalfReuseApsId;
       if (compID == COMP_Cb)
       {
-        cs.slice->tileGroupCcAlfCbApsId = ccalfReuseApsId;
+        cs.slice->ccAlfCbApsId = ccalfReuseApsId;
       }
       else
       {
-        cs.slice->tileGroupCcAlfCrApsId = ccalfReuseApsId;
+        cs.slice->ccAlfCrApsId = ccalfReuseApsId;
       }
     }
   }
 }
 
-void EncAdaptiveLoopFilter::deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv,
-                                                         const int compIdx, const int maskStride,
-                                                         const uint8_t filterIdc, CodingStructure &cs)
+void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
-  const int filterIdx = filterIdc - 1;
+  const int filterIdx = 0;
 
   // init CTU stats buffers
-  for( int shape = 0; shape != m_filterShapesCcAlf[compIdx-1].size(); shape++ )
-  {
-    for (int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++)
-    {
-      m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuIdx].reset();
-    }
-  }
+  m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr].reset();
 
-  // init Frame stats buffers
-  for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-  {
-    m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx].reset();
-  }
-
-  int                  ctuRsAddr = 0;
-  const PreCalcValues &pcv       = *cs.pcv;
+  const PreCalcValues& pcv = *cs.pcv;
   bool                 clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
   int                  numHorVirBndry = 0, numVerVirBndry = 0;
   int                  horVirBndryPos[] = { 0, 0, 0 };
   int                  verVirBndryPos[] = { 0, 0, 0 };
 
-  for (int yPos = 0; yPos < m_picHeight; yPos += m_maxCUHeight)
+  const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int width = ( xPos + m_maxCUWidth > m_picWidth ) ? ( m_picWidth - xPos ) : m_maxCUWidth;
+  const int height = ( yPos + m_maxCUHeight > m_picHeight ) ? ( m_picHeight - yPos ) : m_maxCUHeight;
+  int       rasterSliceAlfPad = 0;
+
+  const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
+  const PelUnitBuf recYuv = PelUnitBuf( m_chromaFormat, m_tempBuf.getBuf( COMP_Y ), cs.getRecoBuf( COMP_Cb ), cs.getRecoBuf( COMP_Cr ) );
+
+  if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
+    numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
+    rasterSliceAlfPad ) )
   {
-    for (int xPos = 0; xPos < m_picWidth; xPos += m_maxCUWidth)
+    int yStart = yPos;
+    for( int i = 0; i <= numHorVirBndry; i++ )
     {
-//      if (m_trainingCovControl[ctuRsAddr] == filterIdc)
+      const int  yEnd = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
+      const int  h = yEnd - yStart;
+      const bool clipT = ( i == 0 && clipTop ) || ( i > 0 ) || ( yStart == 0 );
+      const bool clipB = ( i == numHorVirBndry && clipBottom ) || ( i < numHorVirBndry ) || ( yEnd == pcv.lumaHeight );
+      int        xStart = xPos;
+      for( int j = 0; j <= numVerVirBndry; j++ )
       {
-        const int width             = (xPos + m_maxCUWidth > m_picWidth) ? (m_picWidth - xPos) : m_maxCUWidth;
-        const int height            = (yPos + m_maxCUHeight > m_picHeight) ? (m_picHeight - yPos) : m_maxCUHeight;
-        int       rasterSliceAlfPad = 0;
-        if (isCrossedByVirtualBoundaries(cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
-                                         numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
-                                         rasterSliceAlfPad))
+        const int  xEnd = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
+        const int  w = xEnd - xStart;
+        const bool clipL = ( j == 0 && clipLeft ) || ( j > 0 ) || ( xStart == 0 );
+        const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
+        const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
+        const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
+        PelUnitBuf recBuf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        recBuf.copyFrom( recYuv.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ), 
+                                                                              yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+        // pad top-left unavailable samples for raster slice
+        if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
         {
-          int yStart = yPos;
-          for (int i = 0; i <= numHorVirBndry; i++)
-          {
-            const int  yEnd   = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
-            const int  h      = yEnd - yStart;
-            const bool clipT  = (i == 0 && clipTop) || (i > 0) || (yStart == 0);
-            const bool clipB  = (i == numHorVirBndry && clipBottom) || (i < numHorVirBndry) || (yEnd == pcv.lumaHeight);
-            int        xStart = xPos;
-            for (int j = 0; j <= numVerVirBndry; j++)
-            {
-              const int  xEnd   = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
-              const int  w      = xEnd - xStart;
-              const bool clipL  = (j == 0 && clipLeft) || (j > 0) || (xStart == 0);
-              const bool clipR  = (j == numVerVirBndry && clipRight) || (j < numVerVirBndry) || (xEnd == pcv.lumaWidth);
-              const int  wBuf   = w + (clipL ? 0 : MAX_ALF_PADDING_SIZE) + (clipR ? 0 : MAX_ALF_PADDING_SIZE);
-              const int  hBuf   = h + (clipT ? 0 : MAX_ALF_PADDING_SIZE) + (clipB ? 0 : MAX_ALF_PADDING_SIZE);
-              PelUnitBuf recBuf = m_tempBuf2.subBuf(UnitArea(cs.area.chromaFormat, Area(0, 0, wBuf, hBuf)));
-              recBuf.copyFrom(recYuv.subBuf(
-                UnitArea(cs.area.chromaFormat, Area(xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE),
-                                                    yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf))));
-              // pad top-left unavailable samples for raster slice
-              if (xStart == xPos && yStart == yPos && (rasterSliceAlfPad & 1))
-              {
-                recBuf.padBorderPel(MAX_ALF_PADDING_SIZE, 1);
-              }
-
-              // pad bottom-right unavailable samples for raster slice
-              if (xEnd == xPos + width && yEnd == yPos + height && (rasterSliceAlfPad & 2))
-              {
-                recBuf.padBorderPel(MAX_ALF_PADDING_SIZE, 2);
-              }
-              recBuf.extendBorderPel(MAX_ALF_PADDING_SIZE);
-              recBuf = recBuf.subBuf(UnitArea(
-                cs.area.chromaFormat, Area(clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h)));
-
-              const UnitArea area(m_chromaFormat, Area(0, 0, w, h));
-              const UnitArea areaDst(m_chromaFormat, Area(xStart, yStart, w, h));
-
-              const ComponentID compID = ComponentID(compIdx);
-
-              for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-              {
-                getBlkStatsCcAlf(m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
-                                 m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recBuf, areaDst, area, compID, yPos);
-                m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] +=
-                  m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr];
-              }
-
-              xStart = xEnd;
-            }
-
-            yStart = yEnd;
-          }
+          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
         }
-        else
+
+        // pad bottom-right unavailable samples for raster slice
+        if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
         {
-          const UnitArea area(m_chromaFormat, Area(xPos, yPos, width, height));
-
-          const ComponentID compID = ComponentID(compIdx);
-
-          for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-          {
-            getBlkStatsCcAlf(m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
-                             m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recYuv, area, area, compID, yPos);
-            m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] +=
-              m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr];
-          }
+          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
         }
+        recBuf.extendBorderPel( MAX_ALF_PADDING_SIZE );
+        recBuf = recBuf.subBuf( UnitArea(
+          cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+
+        const UnitArea area( m_chromaFormat, Area( 0, 0, w, h ) );
+        const UnitArea areaDst( m_chromaFormat, Area( xStart, yStart, w, h ) );
+
+        const ComponentID compID = ComponentID( compIdx );
+
+        getBlkStatsCcAlf( m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr], m_filterShapesCcAlf[compIdx - 1], orgYuv, recBuf, areaDst, area, compID, yPos );
+
+        xStart = xEnd;
       }
-      ctuRsAddr++;
+
+      yStart = yEnd;
     }
+  }
+  else
+  {
+    const UnitArea area( m_chromaFormat, Area( xPos, yPos, width, height ) );
+
+    const ComponentID compID = ComponentID( compIdx );
+    getBlkStatsCcAlf( m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr], m_filterShapesCcAlf[compIdx - 1], orgYuv, recYuv, area, area, compID, yPos );
   }
 }
 
@@ -4522,207 +6246,400 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
                                              const UnitArea &areaDst, const UnitArea &area, const ComponentID compID,
                                              const int yPos)
 {
-  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-  const CompArea &compArea           = areaDst.block(compID);
-  int  recStride[MAX_NUM_COMP];
-  const Pel* rec[MAX_NUM_COMP];
-  for ( int cIdx = 0; cIdx < numberOfComponents; cIdx++ )
-  {
-    recStride[cIdx] = recYuv.get(ComponentID(cIdx)).stride;
-    rec[cIdx] = recYuv.get(ComponentID(cIdx)).bufAt(isLuma(ComponentID(cIdx)) ? area.lumaPos() : area.chromaPos());
-  }
+  const CompArea &compArea = areaDst.block(compID);
+
+  int        recStride = recYuv.get(COMP_Y).stride;
+  const Pel* rec       = recYuv.get(COMP_Y).bufAt(area.lumaPos());
+  
+  int        slfStride = recYuv.get(compID).stride;
+  const Pel* slf       = recYuv.get(compID).bufAt(area.chromaPos());
 
   int        orgStride = orgYuv.get(compID).stride;
   const Pel *org       = orgYuv.get(compID).bufAt(compArea);
-  const int  numBins   = 1;
 
   int vbCTUHeight = m_alfVBLumaCTUHeight;
   int vbPos       = m_alfVBLumaPos;
+
   if ((yPos + m_maxCUHeight) >= m_picHeight)
   {
     vbPos = m_picHeight;
   }
 
-  for (int i = 0; i < compArea.height; i++)
+  CHECK( ( compArea.width  & 3 ) != 0, "Area width has to be a multiple of 4!" );
+  CHECK( ( compArea.height & 3 ) != 0, "Area width has to be a multiple of 4!" );
+  CHECK( isLuma( compID ), "Only chroma can be analysed in CCALF!" );
+
+  int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
+
+  const bool useSimd = read_x86_extension_flags() > SCALAR;
+
+  Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
+  Pel yLocal[4][4];
+  double weight[4][4];
+
+  for (int i = 0; i < compArea.height; i += 4)
   {
-    int vbDistance = ((i << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance0 = (((i+0) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance1 = (((i+1) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance2 = (((i+2) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance3 = (((i+3) << getComponentScaleY(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
 
-    if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma && ( compArea.width & 3 ) == 0 )
+    const Pel* recLine[4] = { &rec[0], &rec[effStride], &rec[2 * effStride], &rec[3 * effStride] };
+    const Pel* orgLine[4] = { &org[0], &org[orgStride], &org[2 * orgStride], &org[3 * orgStride] };
+    const Pel* slfLine[4] = { &slf[0], &slf[slfStride], &slf[2 * slfStride], &slf[3 * slfStride] };
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    const bool hasVb = vbDistance1 == -2 || vbDistance3 == -2 || vbDistance0 == 0 || vbDistance2 == 0;
+
+#endif
+    for (int j = 0; j < compArea.width; j += 4)
     {
-      int ELocal0[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal1[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal2[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal3[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-
-      for( int j = 0; j < compArea.width; j += 4 )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+      if( useSimd && getChannelTypeScaleX( CH_C, m_chromaFormat ) && getChannelTypeScaleY( CH_C, m_chromaFormat ) && !hasVb )
       {
-        std::memset( ELocal0, 0, sizeof( ELocal0 ) );
-        std::memset( ELocal1, 0, sizeof( ELocal1 ) );
-        std::memset( ELocal2, 0, sizeof( ELocal2 ) );
-        std::memset( ELocal3, 0, sizeof( ELocal3 ) );
-
-        double weight0 = 1.0, weight1 = 1.0, weight2 = 1.0, weight3 = 1.0;
-        if( m_alfWSSD )
+        for( int ii = 0; ii < 4; ii++ )
         {
-          weight0 = m_lumaLevelToWeightPLUT[org[j+0]];
-          weight1 = m_lumaLevelToWeightPLUT[org[j+1]];
-          weight2 = m_lumaLevelToWeightPLUT[org[j+2]];
-          weight3 = m_lumaLevelToWeightPLUT[org[j+3]];
+          __m128i vorg = _mm_loadl_epi64( ( const __m128i* ) &orgLine[ii][j] );
+          __m128i vslf = _mm_loadl_epi64( ( const __m128i* ) &slfLine[ii][j] );
+          __m128i vylc = _mm_sub_epi16( vorg, vslf );
+          _mm_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
         }
+        
+        const Pel* rec = recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) );
 
-        int yLocal0 = org[j+0] - rec[compID][j+0];
-        int yLocal1 = org[j+1] - rec[compID][j+1];
-        int yLocal2 = org[j+2] - rec[compID][j+2];
-        int yLocal3 = org[j+3] - rec[compID][j+3];
+        const Pel* recYM1 = rec - 1 * recStride;
+        const Pel* recY0  = rec;
+        const Pel* recYP1 = rec + 1 * recStride;
+        const Pel* recYP2 = rec + 2 * recStride;
 
-        calcCovarianceCcAlf( ELocal0, rec[COMP_Y] + ( (j+0) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal1, rec[COMP_Y] + ( (j+1) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal2, rec[COMP_Y] + ( (j+2) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal3, rec[COMP_Y] + ( (j+3) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+        const __m128i vshuf0 = _mm_setr_epi8( 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1 );
+        const __m128i vshuf1 = _mm_setr_epi8( 2, 3, 6, 7, 10, 11, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1 );
 
-        for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
-        {
-          int  Elocalk0  =  ELocal0[k][0];
-          int* Elocall0  = &ELocal0[k][0];
-          int  Elocalk1  =  ELocal1[k][0];
-          int* Elocall1  = &ELocal1[k][0];
-          int  Elocalk2  =  ELocal2[k][0];
-          int* Elocall2  = &ELocal2[k][0];
-          int  Elocalk3  =  ELocal3[k][0];
-          int* Elocall3  = &ELocal3[k][0];
-          double* cov    = &alfCovariance.E[0][0][k][k];
+        __m128i v01, v10, v11, v12, v20, v21, v22, v31, v3x;
+        v01 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYM1[+0] ), vshuf0 );
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v11 = _mm_loadu_si128 ( ( const __m128i* ) &recY0 [+0] );
+        v12 = _mm_shuffle_epi8( v11, vshuf1 );
+        v11 = _mm_shuffle_epi8( v11, vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
 
-          for( int l = k; l < ( shape.numCoeff - 1); l++ )
-          {
-            int
-            sum   = Elocalk0 * *Elocall0++;
-            sum  += Elocalk1 * *Elocall1++;
-            sum  += Elocalk2 * *Elocall2++;
-            sum  += Elocalk3 * *Elocall3++;
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
 
-            *cov++ += sum;
-          }
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
 
-          alfCovariance.y[0][k] += Elocalk0 * yLocal0;
-          alfCovariance.y[0][k] += Elocalk1 * yLocal1;
-          alfCovariance.y[0][k] += Elocalk2 * yLocal2;
-          alfCovariance.y[0][k] += Elocalk3 * yLocal3;
-        }
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
 
-        if (m_alfWSSD)
-        {
-          alfCovariance.pixAcc += weight0 * (double) (yLocal0 * yLocal0);
-          alfCovariance.pixAcc += weight1 * (double) (yLocal1 * yLocal1);
-          alfCovariance.pixAcc += weight2 * (double) (yLocal2 * yLocal2);
-          alfCovariance.pixAcc += weight3 * (double) (yLocal3 * yLocal3);
-        }
-        else
-        {
-          alfCovariance.pixAcc += yLocal0 * yLocal0;
-          alfCovariance.pixAcc += yLocal1 * yLocal1;
-          alfCovariance.pixAcc += yLocal2 * yLocal2;
-          alfCovariance.pixAcc += yLocal3 * yLocal3;
-        }
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
+
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
+
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
+
+        recYM1 += effStride;
+        recY0  += effStride;
+        recYP1 += effStride;
+        recYP2 += effStride;
+
+        v01 = v21;
+        v11 = v31;
+        v12 = _mm_shuffle_epi8( v3x, vshuf1 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_loadu_si128 ( ( const __m128i* ) &recYP1[+0] );
+        v22 = _mm_shuffle_epi8( v21, vshuf1 );
+        v21 = _mm_shuffle_epi8( v21, vshuf0 );
+        v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
+        v31 = _mm_shuffle_epi8( v3x, vshuf0 );
+
+        v10 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [-1] ), vshuf0 );
+        v12 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recY0 [+1] ), vshuf0 );
+        v20 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[-1] ), vshuf0 );
+        v21 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+0] ), vshuf0 );
+        v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
+        v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
+                                                                                        
+        _mm_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v11 ) );
+        _mm_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v11 ) );
       }
-    }
-    else
-    {
-      int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-
-      for( int j = 0; j < compArea.width; j++ )
+      else
+#endif
       {
-        std::memset( ELocal, 0, sizeof( ELocal ) );
-
-        double weight = 1.0;
-        if( m_alfWSSD )
+        for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
         {
-          weight = m_lumaLevelToWeightPLUT[org[j]];
+          yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
         }
 
-        int yLocal = org[j] - rec[compID][j];
+        calcCovariance4CcAlf( ELocal,  0, recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance0 );
+        calcCovariance4CcAlf( ELocal,  4, recLine[1] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance1 );
+        calcCovariance4CcAlf( ELocal,  8, recLine[2] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance2 );
+        calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
+      }
 
-        calcCovarianceCcAlf( ELocal, rec[COMP_Y] + ( j << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      if( m_alfWSSD )
+      {
+        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+        {
+          weight[ii][jj] = m_lumaLevelToWeightPLUT[orgLine[ii][j + jj]];
+        }
 
         for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
           for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
           {
-            for( int b0 = 0; b0 < numBins; b0++ )
+            double sum = 0;
+            for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
             {
-              for( int b1 = 0; b1 < numBins; b1++ )
-              {
-                if( m_alfWSSD )
-                {
-                  alfCovariance.E[b0][b1][k][l] += weight * ( double ) ( ELocal[k][b0] * ELocal[l][b1] );
-                }
-                else
-                {
-                  alfCovariance.E[b0][b1][k][l] += ELocal[k][b0] * ELocal[l][b1];
-                }
-              }
+              sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
             }
+            alfCovariance.E[0][0][k][l] += sum;
           }
-          for( int b = 0; b < numBins; b++ )
-          {
-            if( m_alfWSSD )
-            {
-              alfCovariance.y[b][k] += weight * ( double ) ( ELocal[k][b] * yLocal );
-            }
-            else
-            {
-              alfCovariance.y[b][k] += ELocal[k][b] * yLocal;
-            }
-          }
-        }
 
-        if (m_alfWSSD)
+          double sum = 0;
+          for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+          {
+            sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+          }
+          alfCovariance.y[0][k] += sum;
+        } 
+
+
+        double sum = 0;
+        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
         {
-          alfCovariance.pixAcc += weight * (double) (yLocal * yLocal);
+          sum += weight[ii][jj] * int( yLocal[ii][jj] ) * yLocal[ii][jj];
         }
-        else
-        {
-          alfCovariance.pixAcc += yLocal * yLocal;
-        }
-      }
-    }
-    org += orgStride;
-    for (int srcCIdx = 0; srcCIdx < numberOfComponents; srcCIdx++)
-    {
-      ComponentID srcCompID = ComponentID(srcCIdx);
-      if (toChannelType(srcCompID) == toChannelType(compID))
-      {
-        rec[srcCIdx] += recStride[srcCIdx];
+        alfCovariance.pixAcc += sum;
       }
       else
       {
-        if (isLuma(compID))
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+        if( useSimd )
         {
-          rec[srcCIdx] += (recStride[srcCIdx] >> getComponentScaleY(srcCompID, m_chromaFormat));
+          const __m128i mylocal0 = _mm_loadu_si128((const __m128i*) & yLocal[0][0]);
+          const __m128i mylocal8 = _mm_loadu_si128((const __m128i*) & yLocal[2][0]);
+
+          for (int k = 0; k < shape.numCoeff; k++)
+          {
+            const Pel* Elocalk = &ELocal[k][0];
+            alf_float_t* cov = &alfCovariance.E[0][0][k][k];
+
+            const __m128i melocalk0 = _mm_loadu_si128((const __m128i*) & Elocalk[0]);
+            const __m128i melocalk8 = _mm_loadu_si128((const __m128i*) & Elocalk[8]);
+
+            for (int l = k; l < shape.numCoeff; l++)
+            {
+              const Pel* Elocall = &ELocal[l][0];
+
+              const __m128i melocall0 = _mm_loadu_si128((const __m128i*) & Elocall[0]);
+              const __m128i melocall8 = _mm_loadu_si128((const __m128i*) & Elocall[8]);
+
+              const __m128i mmacc0 = _mm_madd_epi16(melocalk0, melocall0);
+              const __m128i mmacc8 = _mm_madd_epi16(melocalk8, melocall8);
+
+              __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+              mmacc = _mm_hadd_epi32(mmacc, mmacc);
+              mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+              *cov++ += _mm_cvtsi128_si32(mmacc);
+            }
+
+            const __m128i mmacc0 = _mm_madd_epi16(melocalk0, mylocal0);
+            const __m128i mmacc8 = _mm_madd_epi16(melocalk8, mylocal8);
+
+            __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+            mmacc = _mm_hadd_epi32(mmacc, mmacc);
+            mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+            alfCovariance.y[0][k] += _mm_cvtsi128_si32(mmacc);
+          }
+
+          const __m128i mmacc0 = _mm_madd_epi16(mylocal0, mylocal0);
+          const __m128i mmacc8 = _mm_madd_epi16(mylocal8, mylocal8);
+
+          __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+          mmacc = _mm_hadd_epi32(mmacc, mmacc);
+          mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+          alfCovariance.pixAcc += _mm_cvtsi128_si32(mmacc);
         }
         else
+#endif
         {
-          rec[srcCIdx] += (recStride[srcCIdx] << getComponentScaleY(compID, m_chromaFormat));
+          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
+          {
+            for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+            {
+              int sum = 0;
+              for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+              {
+                sum += int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+              }
+              alfCovariance.E[0][0][k][l] += sum;
+            }
+
+            int sum = 0;
+            for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+            {
+              sum += int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+            }
+            alfCovariance.y[0][k] += sum;
+          } 
+
+
+          int sum = 0;
+          for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+          {
+            sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
+          }
+          alfCovariance.pixAcc += sum;
         }
       }
     }
+    
+    slf += (slfStride << 2);
+    org += (orgStride << 2);
+    rec += (effStride << 2);
   }
 
   for (int k = 1; k < (MAX_NUM_CC_ALF_CHROMA_COEFF - 1); k++)
   {
     for (int l = 0; l < k; l++)
     {
-      for (int b0 = 0; b0 < numBins; b0++)
-      {
-        for (int b1 = 0; b1 < numBins; b1++)
-        {
-          alfCovariance.E[b0][b1][k][l] = alfCovariance.E[b1][b0][l][k];
-        }
-      }
+      alfCovariance.E[0][0][k][l] = alfCovariance.E[0][0][l][k];
     }
   }
 }
 
-void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
+void EncAdaptiveLoopFilter::calcCovariance4CcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const int N, const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance)
+{
+  CHECK(shape.filterType != CC_ALF, "Bad CC ALF shape");
+
+  const Pel* recYM1 = rec - 1 * stride;
+  const Pel* recY0  = rec;
+  const Pel* recYP1 = rec + 1 * stride;
+  const Pel* recYP2 = rec + 2 * stride;
+
+  if (vbDistance == -2 || vbDistance == +1)
+  {
+    recYP2 = recYP1;
+  }
+  else if (vbDistance == -1 || vbDistance == 0)
+  {
+    recYM1 = recY0;
+    recYP2 = recYP1 = recY0;
+}
+
+  const int dx0 = 0;
+  const int dx1 = 1 << getChannelTypeScaleX( CH_C, m_chromaFormat );
+  const int dx2 = dx1 << 1;
+  const int dx3 = dx1 + dx2;
+
+  const Pel centerValue0 = recY0[+dx0];
+  const Pel centerValue1 = recY0[+dx1];
+  const Pel centerValue2 = recY0[+dx2];
+  const Pel centerValue3 = recY0[+dx3];
+
+  ELocal[0][N+0] = recYM1[+0+dx0] - centerValue0;
+  ELocal[0][N+1] = recYM1[+0+dx1] - centerValue1;
+  ELocal[0][N+2] = recYM1[+0+dx2] - centerValue2;
+  ELocal[0][N+3] = recYM1[+0+dx3] - centerValue3;
+                 
+  ELocal[1][N+0] = recY0[ -1+dx0] - centerValue0;
+  ELocal[1][N+1] = recY0[ -1+dx1] - centerValue1;
+  ELocal[1][N+2] = recY0[ -1+dx2] - centerValue2;
+  ELocal[1][N+3] = recY0[ -1+dx3] - centerValue3;
+                 
+  ELocal[2][N+0] = recY0[ +1+dx0] - centerValue0;
+  ELocal[2][N+1] = recY0[ +1+dx1] - centerValue1;
+  ELocal[2][N+2] = recY0[ +1+dx2] - centerValue2;
+  ELocal[2][N+3] = recY0[ +1+dx3] - centerValue3;
+                 
+  ELocal[3][N+0] = recYP1[-1+dx0] - centerValue0;
+  ELocal[3][N+1] = recYP1[-1+dx1] - centerValue1;
+  ELocal[3][N+2] = recYP1[-1+dx2] - centerValue2;
+  ELocal[3][N+3] = recYP1[-1+dx3] - centerValue3;
+                 
+  ELocal[4][N+0] = recYP1[+0+dx0] - centerValue0;
+  ELocal[4][N+1] = recYP1[+0+dx1] - centerValue1;
+  ELocal[4][N+2] = recYP1[+0+dx2] - centerValue2;
+  ELocal[4][N+3] = recYP1[+0+dx3] - centerValue3;
+                 
+  ELocal[5][N+0] = recYP1[+1+dx0] - centerValue0;
+  ELocal[5][N+1] = recYP1[+1+dx1] - centerValue1;
+  ELocal[5][N+2] = recYP1[+1+dx2] - centerValue2;
+  ELocal[5][N+3] = recYP1[+1+dx3] - centerValue3;
+                 
+  ELocal[6][N+0] = recYP2[+0+dx0] - centerValue0;
+  ELocal[6][N+1] = recYP2[+0+dx1] - centerValue1;
+  ELocal[6][N+2] = recYP2[+0+dx2] - centerValue2;
+  ELocal[6][N+3] = recYP2[+0+dx3] - centerValue3;
+}
+
+void EncAdaptiveLoopFilter::calcCovarianceCcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
 {
   CHECK(shape.filterType != CC_ALF, "Bad CC ALF shape");
 
@@ -4741,18 +6658,16 @@ void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA
     recYP2 = recYP1 = recY0;
   }
 
-  for (int b = 0; b < 1; b++)
-  {
     const Pel centerValue = recY0[+0];
-    ELocal[0][b] += recYM1[+0] - centerValue;
-    ELocal[1][b] += recY0[-1] - centerValue;
-    ELocal[2][b] += recY0[+1] - centerValue;
-    ELocal[3][b] += recYP1[-1] - centerValue;
-    ELocal[4][b] += recYP1[+0] - centerValue;
-    ELocal[5][b] += recYP1[+1] - centerValue;
-    ELocal[6][b] += recYP2[+0] - centerValue;
+
+  ELocal[0] += recYM1[+0] - centerValue;
+  ELocal[1] += recY0 [-1] - centerValue;
+  ELocal[2] += recY0 [+1] - centerValue;
+  ELocal[3] += recYP1[-1] - centerValue;
+  ELocal[4] += recYP1[+0] - centerValue;
+  ELocal[5] += recYP1[+1] - centerValue;
+  ELocal[6] += recYP2[+0] - centerValue;
   }
-}
 
 void EncAdaptiveLoopFilter::countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride)
 {
@@ -4834,6 +6749,101 @@ void EncAdaptiveLoopFilter::countChromaSampleValueNearMidPoint(const Pel* chroma
       }
     }
     chroma += (chromaStride << log2BlockHeight);
+  }
+}
+
+void EncAdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
+{
+  if( m_ccAlfFilterParam.ccAlfFilterEnabled[(int)compID - 1] )
+  {
+    const PreCalcValues& pcv = *cs.pcv;
+    const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+    const uint8_t *filterControl = m_ccAlfFilterControl[(int)compID - 1];
+
+    int filterIdx = ( filterControl == nullptr ) ? -1 : filterControl[( yPos >> cs.pcv->maxCUSizeLog2 ) * cs.pcv->widthInCtus + ( xPos >> cs.pcv->maxCUSizeLog2 )];
+    bool skipFiltering = ( filterControl != nullptr && filterIdx == 0 ) ? true : false;
+
+    if( !skipFiltering )
+    {
+      const ClpRngs& clpRngs      = cs.slice->clpRngs;
+
+      bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
+      int  numHorVirBndry = 0, numVerVirBndry = 0;
+      int  horVirBndryPos[] = { 0, 0, 0 };
+      int  verVirBndryPos[] = { 0, 0, 0 };
+      if( filterControl != nullptr )
+        filterIdx--;
+
+      const int16_t* filterCoeff = m_ccAlfFilterParam.ccAlfCoeff[(int)compID - 1][filterIdx]; //filterSet[filterIdx];
+
+      const int width  = ( xPos + pcv.maxCUSize > pcv.lumaWidth ) ? ( pcv.lumaWidth - xPos ) : pcv.maxCUSize;
+      const int height = ( yPos + pcv.maxCUSize > pcv.lumaHeight ) ? ( pcv.lumaHeight - yPos ) : pcv.maxCUSize;
+      const int chromaScaleX = getComponentScaleX( compID, m_chromaFormat );
+      const int chromaScaleY = getComponentScaleY( compID, m_chromaFormat );
+
+      const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
+      const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
+
+      int rasterSliceAlfPad = 0;
+      if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
+        numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
+        rasterSliceAlfPad ) )
+      {
+        int yStart = yPos;
+        for( int i = 0; i <= numHorVirBndry; i++ )
+        {
+          const int  yEnd = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
+          const int  h = yEnd - yStart;
+          const bool clipT = ( i == 0 && clipTop ) || ( i > 0 ) || ( yStart == 0 );
+          const bool clipB = ( i == numHorVirBndry && clipBottom ) || ( i < numHorVirBndry ) || ( yEnd == m_picHeight );
+          int        xStart = xPos;
+          for( int j = 0; j <= numVerVirBndry; j++ )
+          {
+            const int  xEnd = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
+            const int  w = xEnd - xStart;
+            const bool clipL = ( j == 0 && clipLeft ) || ( j > 0 ) || ( xStart == 0 );
+            const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == m_picWidth );
+            const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
+            const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
+            PelUnitBuf buf = alfTempCtuBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+            buf.copyFrom( recYuvExt.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
+                                                                                  yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+
+            // pad top-left unavailable samples for raster slice
+            if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
+            }
+
+            // pad bottom-right unavailable samples for raster slice
+            if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
+            {
+              buf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
+            }
+            buf.extendBorderPel( MAX_ALF_PADDING_SIZE );
+            buf = buf.subBuf( UnitArea(
+              cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+
+            const Area blkSrc( 0, 0, w, h );
+
+            const Area blkDst( xStart >> chromaScaleX, yStart >> chromaScaleY, w >> chromaScaleX, h >> chromaScaleY );
+            m_filterCcAlf( dstBuf, buf, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+
+            xStart = xEnd;
+          }
+
+          yStart = yEnd;
+        }
+      }
+      else
+      {
+        Area blkDst( xPos >> chromaScaleX, yPos >> chromaScaleY, width >> chromaScaleX, height >> chromaScaleY );
+        Area blkSrc( xPos, yPos, width, height );
+
+        m_filterCcAlf( dstBuf, recYuvExt, blkDst, blkSrc, compID, filterCoeff, clpRngs, cs, m_alfVBLumaCTUHeight, m_alfVBLumaPos );
+      }
+    }
   }
 }
 

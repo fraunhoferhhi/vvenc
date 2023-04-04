@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -61,7 +57,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Quant.h"
 
 #ifdef TARGET_SIMD_X86
-#include "CommonDefX86.h"
+#  include "x86/CommonDefX86.h"
+#  include <simde/x86/sse4.1.h>
 #endif
 
 namespace vvenc {
@@ -101,11 +98,6 @@ const uint8_t LoopFilter::sm_betaTable[MAX_QP + 1] =
 #define GET_OFFSETX( ptr, stride, x ) ( ( ptr ) + ( x ) )
 #define GET_OFFSETY( ptr, stride, y ) ( ( ptr ) + ( y ) * ( stride ) )
 #define GET_OFFSET( ptr, stride, x, y ) ( ( ptr ) + ( x ) + ( y ) * ( stride ) )
-
-static bool isAvailable( const CodingUnit& cu, const CodingUnit& cu2, const bool bEnforceSliceRestriction )
-{
-  return ( !bEnforceSliceRestriction || CU::isSameSlice( cu, cu2 ) );
-}
 
 #define BsSet( val, compIdx ) (   ( val ) << ( ( compIdx ) << 1 ) )     
 #define BsGet( val, compIdx ) ( ( ( val ) >> ( ( compIdx ) << 1 ) ) & 3 )
@@ -332,7 +324,7 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
   }
   else
   {
-    delta = Clip3(-tc, tc, ((((m4 - m3) << 2) + m2 - m5 + 4) >> 3));
+    delta           = Clip3(-tc, tc, ((4 * (m4 - m3) + m2 - m5 + 4) >> 3));
     piSrc[-iOffset] = ClipPel(m3 + delta, clpRng);
     piSrc[0] = ClipPel(m4 - delta, clpRng);
   }
@@ -363,6 +355,9 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
 
 LoopFilter::LoopFilter()
 {
+  m_origin[0] = Position{ 0, 0 };
+  m_origin[1] = Position{ 0, 0 };
+
   xPelFilterLuma  = xPelFilterLumaCore;
   xFilteringPandQ = xFilteringPandQCore;
 
@@ -385,47 +380,18 @@ LoopFilter::~LoopFilter()
  */
 void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) const
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_DEBLOCK_FILTER );
+  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_DEBLOCK_FILTER );
   const PreCalcValues& pcv = *cs.pcv;
 
-
 #if ENABLE_TRACING
-
   for (int y = 0; y < pcv.heightInCtus; y++)
   {
     for (int x = 0; x < pcv.widthInCtus; x++)
     {
       const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
-        if( currCU.Y().valid() )
-        {
-          DTRACE(g_trace_ctx, D_CRC, "CU LumaPos %d %d", currCU.Y().x, currCU.Y().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
-        }
-     }
+      DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
+    }
   }
-
-  for (int y = 0; y < pcv.heightInCtus; y++)
-  {
-    for (int x = 0; x < pcv.widthInCtus; x++)
-    {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
-  }
-
 #endif
 
   if( cs.pps->deblockingFilterControlPresent && cs.pps->deblockingFilterDisabled && !cs.pps->deblockingFilterOverrideEnabled )
@@ -454,46 +420,23 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
     loopFilterPicLine( cs, MAX_NUM_CH, y, 0, NUM_EDGE_DIR );
   }
 
-#if ENABLE_TRACING 
+#if ENABLE_TRACING && false
   for (int y = 0; y < pcv.heightInCtus; y++)
   {
     for (int x = 0; x < pcv.widthInCtus; x++)
     {
       const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
-        if( currCU.Y().valid() )
-        {
-          DTRACE(g_trace_ctx, D_CRC, "CU LumaPos %d %d", currCU.Y().x, currCU.Y().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
-        }
-     }
-  }
-
-  for (int y = 0; y < pcv.heightInCtus; y++)
-  {
-    for (int x = 0; x < pcv.widthInCtus; x++)
-    {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
-
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
+      DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
+    }
   }
 #endif
 
   DTRACE_PIC_COMP(D_REC_CB_LUMA_LF,   cs, cs.getRecoBuf(), COMP_Y);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
+  {
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  }
 }
 
 void LoopFilter::loopFilterPicLine( CodingStructure &cs, const ChannelType chType, const int ctuLine, const int offset, const DeblockEdgeDir edgeDir ) const
@@ -568,33 +511,6 @@ void LoopFilter::calcFilterStrengthsCTU( CodingStructure& cs, const UnitArea& ct
   }
 }
 
-void LoopFilter::loopFilterCTU( CodingStructure &cs, const ChannelType chType, const int ctuCol, const int ctuLine, const int offset, const DeblockEdgeDir edgeDir ) const
-{
-  const PreCalcValues &pcv = *cs.pcv;
-
-  const bool frstLine = ctuLine == 0;
-
-  const int ly = frstLine ? 0 : ( ctuLine * pcv.maxCUSize + ( offset ) );
-  const int lh = frstLine ? pcv.maxCUSize + ( offset ) : pcv.maxCUSize;
-
-  if( ly >= pcv.lumaHeight )
-  {
-    return;
-  }
-  
-  PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-
-  const UnitArea ctuArea = clipArea( UnitArea( pcv.chrFormat, Area( ctuCol << pcv.maxCUSizeLog2, ly, pcv.maxCUSize, lh ) ), *cs.picture );
-
-  if( edgeDir == NUM_EDGE_DIR || edgeDir == EDGE_VER )
-  {
-    xDeblockArea<EDGE_VER>( cs, ctuArea, chType, recoBuf );
-  }
-  if( edgeDir == NUM_EDGE_DIR || edgeDir == EDGE_HOR )
-  {
-    xDeblockArea<EDGE_HOR>( cs, ctuArea, chType, recoBuf );
-  }
-}
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
@@ -734,9 +650,6 @@ template<> inline SizeType parlSize<EDGE_HOR>( const Size& size ) { return size.
 template<> inline SizeType perpSize<EDGE_HOR>( const Size& size ) { return size.height; }
 template<> inline SizeType parlSize<EDGE_VER>( const Size& size ) { return size.height; }
 template<> inline SizeType perpSize<EDGE_VER>( const Size& size ) { return size.width; }
-
-// set / get functions
-LFCUParam xGetLoopfilterParam( const CodingUnit& cu );
 
 // filtering functions
 template<DeblockEdgeDir edgeDir>
@@ -901,7 +814,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrV->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_VER>( *lineLfpPtrV, cu, Position{ area.x + x, area.y + y }, x ? cu : *cuP );
 
         lineLfpPtrV->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrV, lfpStride );
       }
 
@@ -927,7 +839,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrH->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_HOR>( *lineLfpPtrH, cu, Position{ area.x + x, area.y + y }, y ? cu : *cuP );
 
         lineLfpPtrH->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrH, lfpStride );
       }
 
@@ -996,6 +907,18 @@ inline void xDeriveEdgefilterParam( const Position pos, const int numVerVirBndry
   }
 }
 
+template<DeblockEdgeDir edgeDir>
+bool canFilterCUBdry( const Slice& slice, const Position& pos, const ChannelType& chType, const PreCalcValues &pcv )
+{
+  const int scaleX = getChannelTypeScaleX( chType, pcv.chrFormat );
+  const int scaleY = getChannelTypeScaleY( chType, pcv.chrFormat );
+  const int ctuX   = ( pos.x << scaleX ) >> pcv.maxCUSizeLog2;
+  const int ctuY   = ( pos.y << scaleY ) >> pcv.maxCUSizeLog2;
+  if( edgeDir )
+    return ( 0 < pos.y ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, ( ( ( pos.y << scaleY ) - 1 ) >> pcv.maxCUSizeLog2 ) - ctuY );
+  else
+    return ( 0 < pos.x ) && slice.pps->canFilterCtuBdry( ctuX, ctuY, ( ( ( pos.x << scaleX ) - 1 ) >> pcv.maxCUSizeLog2 ) - ctuX, 0 );
+}
 
 template<DeblockEdgeDir edgeDir>
 void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const TransformUnit& currTU, const bool bValue, bool deriveBdStrngt )
@@ -1019,7 +942,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
     }
   }
 
-  if( start != end && !currTU.Cb().valid() )
+  if( start != end && (cu.chromaFormat == VVENC_CHROMA_400 || !currTU.Cb().valid() ))
   {
     end = CH_L;
   }
@@ -1031,6 +954,9 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
   for( int ct = start; ct <= end; ct++ )
   {
     const ChannelType ch  = ( ChannelType ) ct;
+    if( !canFilterCUBdry<edgeDir>( *cu.slice, currTU.blocks[ch].pos(), ch, pcv ) )
+      continue;
+
     const TreeType    tt  = isLuma( ch ) ? TREE_L : TREE_C;
     const TreeType    ttfst = isLuma( start ) ? TREE_L : TREE_C;
     const bool        vld = isLuma( ch ) ? currTU.Y().valid() : currTU.Cb().valid();
@@ -1050,7 +976,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
       const int         incFst   = edgeDir ? pcv.minCUSize >> getChannelTypeScaleX( ChannelType( start ), cu.chromaFormat )
                                            : pcv.minCUSize >> getChannelTypeScaleY( ChannelType( start ), cu.chromaFormat );
 
-      if( cuP == &cu && cuNeigh == nullptr && ( edgeDir ? cu.blocks[ch].pos().y : cu.blocks[ch].pos().x ) > 0 ) //TODO: check for !pps.getLoopFilterAcrossSlicesEnabledFlag() || !pps.getLoopFilterAcrossTilesEnabledFlag()
+      if( cuP == &cu && cuNeigh == nullptr && ( edgeDir ? cu.blocks[ch].pos().y : cu.blocks[ch].pos().x ) > 0 )
       {
         const Position posP   { currTU.blocks[   ch].x - ( 1 - edgeDir ), currTU.blocks[   ch].y - edgeDir };
         const Position posPfst{ currTU.blocks[start].x - ( 1 - edgeDir ), currTU.blocks[start].y - edgeDir };
@@ -1224,7 +1150,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   const TransformUnit &tuP = cuP.firstTU->next == nullptr ? *cuP.firstTU : *CU::getTU( cuP, posP, chType ); //TODO: check this: based on chType of the current cu, because cuQ.chType and cuP.chType are not the same when local dual-tree is applied
   
   const bool hasLuma   = cuQ.Y(). valid();
-  const bool hasChroma = cuQ.Cb().valid();
+  const bool hasChroma = cuQ.blocks.size()>1 && cuQ.Cb().valid();
 
   bool cuPcIsIntra = false;
   int  chrmBS      = 2;
@@ -1271,9 +1197,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( MODE_INTRA == cuP.predMode || MODE_INTRA == cuQ.predMode )
   {
     const int edgeIdx = ( perpPos<edgeDir>( localPos ) - perpPos<edgeDir>( cuPos ) ) / 4;
-
     int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmM[CH_L] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_L] ) ? 0 : 2;
-
     if( cuQ.ispMode && edgeIdx )
     {
       lfp.bs |= BsSet( bsY, COMP_Y ) & bsMask;
@@ -1282,7 +1206,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     {
       lfp.bs |= ( BsSet( bsY, COMP_Y ) + BsSet( chrmBS, COMP_Cb ) + BsSet( chrmBS, COMP_Cr ) ) & bsMask;
     }
-
     return;
   }
   else if( cuPcIsIntra )
@@ -1293,7 +1216,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( ( lfp.bs & bsMask ) && ( cuP.ciip || cuQ.ciip ) )
   {
     lfp.bs |= ( BsSet( 2, COMP_Y ) + BsSet( 2, COMP_Cb ) + BsSet( 2, COMP_Cr ) ) & bsMask;
-
     return;
   }
 
@@ -1303,21 +1225,22 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( lfp.bs & bsMask )
   {
     tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Y  ) || TU::getCbf( tuP, COMP_Y  )                                   ) ? 1 : 0, COMP_Y  );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cb ) || TU::getCbf( tuP, COMP_Cb ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cb );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cr ) || TU::getCbf( tuP, COMP_Cr ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cr );
+    if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra) && cuQ.chromaFormat != VVENC_CHROMA_400)
+    {
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cb) || TU::getCbf(tuP, COMP_Cb) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cb);
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cr) || TU::getCbf(tuP, COMP_Cr) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cr);
+    }
   }
 
   if( BsGet( tmpBs, COMP_Y ) == 1 )
   {
     lfp.bs |= tmpBs & bsMask;
-
     return;
   }
 
   if( cuP.ciip || cuQ.ciip )
   {
     lfp.bs |= 1 & bsMask;
-
     return;
   }
 
@@ -1352,10 +1275,15 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
 
   if( sliceQ.isInterB() || sliceP.isInterB() )
   {
-    const Picture *piRefP0 = CU::isIBC( cuP ) ? sliceP.pic : 0 <= miP.refIdx[0] ? sliceP.getRefPic( REF_PIC_LIST_0, miP.refIdx[0] ) : nullptr;
-    const Picture *piRefP1 = CU::isIBC( cuP ) ? nullptr    : 0 <= miP.refIdx[1] ? sliceP.getRefPic( REF_PIC_LIST_1, miP.refIdx[1] ) : nullptr;
-    const Picture *piRefQ0 = CU::isIBC( cuQ ) ? sliceQ.pic : 0 <= miQ.refIdx[0] ? sliceQ.getRefPic( REF_PIC_LIST_0, miQ.refIdx[0] ) : nullptr;
-    const Picture *piRefQ1 = CU::isIBC( cuQ ) ? nullptr    : 0 <= miQ.refIdx[1] ? sliceQ.getRefPic( REF_PIC_LIST_1, miQ.refIdx[1] ) : nullptr;
+    const Picture *piRefP0 = CU::isIBC( cuP ) ? sliceP.pic : MI_NOT_VALID != miP.miRefIdx[0] ? sliceP.getRefPic( REF_PIC_LIST_0, miP.miRefIdx[0] ) : nullptr;
+    const Picture *piRefP1 = CU::isIBC( cuP ) ? nullptr    : MI_NOT_VALID != miP.miRefIdx[1] ? sliceP.getRefPic( REF_PIC_LIST_1, miP.miRefIdx[1] ) : nullptr;
+    const Picture *piRefQ0 = CU::isIBC( cuQ ) ? sliceQ.pic : MI_NOT_VALID != miQ.miRefIdx[0] ? sliceQ.getRefPic( REF_PIC_LIST_0, miQ.miRefIdx[0] ) : nullptr;
+    const Picture *piRefQ1 = CU::isIBC( cuQ ) ? nullptr    : MI_NOT_VALID != miQ.miRefIdx[1] ? sliceQ.getRefPic( REF_PIC_LIST_1, miQ.miRefIdx[1] ) : nullptr;
+
+    const bool hasValidMvP0 = CU::isIBC( cuP ) || MI_NOT_VALID != miP.miRefIdx[0];
+    const bool hasValidMvP1 = CU::isIBC( cuP ) || MI_NOT_VALID != miP.miRefIdx[1];
+    const bool hasValidMvQ0 = CU::isIBC( cuQ ) || MI_NOT_VALID != miQ.miRefIdx[0];
+    const bool hasValidMvQ1 = CU::isIBC( cuQ ) || MI_NOT_VALID != miQ.miRefIdx[1];
 
     unsigned uiBs = 0;
 
@@ -1363,16 +1291,16 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     if( ( piRefP0 == piRefQ0 && piRefP1 == piRefQ1 ) || ( piRefP0 == piRefQ1 && piRefP1 == piRefQ0 ) )
     {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_DBLF
-      const __m128i xmvP = _mm_unpacklo_epi64( 0 <= miP.refIdx[0] ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[0] ) : _mm_setzero_si128(), 0 <= miP.refIdx[1] ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[1] ) : _mm_setzero_si128() );
-      const __m128i xmvQ = _mm_unpacklo_epi64( 0 <= miQ.refIdx[0] ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[0] ) : _mm_setzero_si128(), 0 <= miQ.refIdx[1] ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[1] ) : _mm_setzero_si128() );
+      const __m128i xmvP = _mm_unpacklo_epi64( hasValidMvP0 ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[0] ) : _mm_setzero_si128(), hasValidMvP1 ? _mm_loadl_epi64( ( const __m128i* ) &miP.mv[1] ) : _mm_setzero_si128() );
+      const __m128i xmvQ = _mm_unpacklo_epi64( hasValidMvQ0 ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[0] ) : _mm_setzero_si128(), hasValidMvQ1 ? _mm_loadl_epi64( ( const __m128i* ) &miQ.mv[1] ) : _mm_setzero_si128() );
       const __m128i xth  = _mm_set1_epi32( nThreshold - 1 );
 #else
       Mv mvP[2] = { { 0, 0 }, { 0, 0 } }, mvQ[2] = { { 0, 0 }, { 0, 0 } };
 
-      if( 0 <= miP.refIdx[0] ) { mvP[0] = miP.mv[0]; }
-      if( 0 <= miP.refIdx[1] ) { mvP[1] = miP.mv[1]; }
-      if( 0 <= miQ.refIdx[0] ) { mvQ[0] = miQ.mv[0]; }
-      if( 0 <= miQ.refIdx[1] ) { mvQ[1] = miQ.mv[1]; }
+      if( hasValidMvP0 ) { mvP[0] = miP.mv[0]; }
+      if( hasValidMvP1 ) { mvP[1] = miP.mv[1]; }
+      if( hasValidMvQ0 ) { mvQ[0] = miQ.mv[0]; }
+      if( hasValidMvQ1 ) { mvQ[1] = miQ.mv[1]; }
 #endif
       if( piRefP0 != piRefP1 )   // Different L0 & L1
       {
@@ -1439,21 +1367,19 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     }
 
     lfp.bs |= ( uiBs + tmpBs ) & bsMask;
-
     return;
   }
 
   // pcSlice->isInterP()
-  CHECK( CU::isInter( cuP ) && 0 > miP.refIdx[0], "Invalid reference picture list index" );
-  CHECK( CU::isInter( cuP ) && 0 > miQ.refIdx[0], "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miP.miRefIdx[0], "Invalid reference picture list index" );
+  CHECK( CU::isInter( cuP ) && MI_NOT_VALID == miQ.miRefIdx[0], "Invalid reference picture list index" );
 
-  const Picture *piRefP0 = ( CU::isIBC( cuP ) ? sliceP.pic : sliceP.getRefPic( REF_PIC_LIST_0, miP.refIdx[0] ) );
-  const Picture *piRefQ0 = ( CU::isIBC( cuQ ) ? sliceQ.pic : sliceQ.getRefPic( REF_PIC_LIST_0, miQ.refIdx[0] ) );
+  const Picture *piRefP0 = ( CU::isIBC( cuP ) ? sliceP.pic : sliceP.getRefPic( REF_PIC_LIST_0, miP.miRefIdx[0] ) );
+  const Picture *piRefQ0 = ( CU::isIBC( cuQ ) ? sliceQ.pic : sliceQ.getRefPic( REF_PIC_LIST_0, miQ.miRefIdx[0] ) );
 
   if( piRefP0 != piRefQ0 )
   {
     lfp.bs |= ( tmpBs + 1 ) & bsMask;
-
     return;
   }
 
@@ -1474,8 +1400,19 @@ LFCUParam xGetLoopfilterParam( const CodingUnit& cu )
   const Position pos = cu.blocks[cu.chType].pos();
 
   LFCUParam stLFCUParam;                   ///< status structure
-  stLFCUParam.leftEdge     = ( 0 < pos.x ) && isAvailable ( cu, *CU::getLeft ( cu ), !slice.pps->loopFilterAcrossSlicesEnabled );
-  stLFCUParam.topEdge      = ( 0 < pos.y ) && isAvailable ( cu, *CU::getAbove( cu ), !slice.pps->loopFilterAcrossSlicesEnabled );
+  stLFCUParam.leftEdge     = ( 0 < pos.x );
+  stLFCUParam.topEdge      = ( 0 < pos.y );
+
+  // TODO: subpics?
+  if( !slice.pps->loopFilterAcrossSlicesEnabled || !slice.pps->loopFilterAcrossTilesEnabled )
+  {
+    const int scaleX = getChannelTypeScaleX( cu.chType, slice.pps->pcv->chrFormat );
+    const int scaleY = getChannelTypeScaleY( cu.chType, slice.pps->pcv->chrFormat );
+    const int ctuX   = ( pos.x << scaleX ) >> slice.pps->pcv->maxCUSizeLog2;
+    const int ctuY   = ( pos.y << scaleY ) >> slice.pps->pcv->maxCUSizeLog2;
+    stLFCUParam.leftEdge = stLFCUParam.leftEdge && slice.pps->canFilterCtuBdry( ctuX, ctuY,    ( ( ( pos.x - 1 ) << scaleX ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuX, 0 );
+    stLFCUParam.topEdge  = stLFCUParam.topEdge  && slice.pps->canFilterCtuBdry( ctuX, ctuY, 0, ( ( ( pos.y - 1 ) << scaleY ) >> slice.pps->pcv->maxCUSizeLog2 ) - ctuY );
+  }
   return stLFCUParam;
 }
 
@@ -1555,7 +1492,7 @@ template<DeblockEdgeDir edgeDir>
 void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
         PelBuf&    picYuvRec   = picReco.bufs[ COMP_Y ];
-        Pel*      piSrc        = picYuvRec.bufAt( pos );
+        Pel*      piSrc        = picYuvRec.bufAt( pos.offset( -m_origin[0].x, -m_origin[0].y ) );
   const ptrdiff_t iStride      = picYuvRec.stride;
   const SPS &     sps          = *cs.sps;
   const Slice &   slice        = *cs.slice;
@@ -1578,7 +1515,7 @@ void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos
     srcStep  = 1;
   }
 
-#if ENABLE_SIMD_OPT 
+#if ENABLE_SIMD_DBLF && defined( TARGET_SIMD_X86 )
   if( offset == 1 )
   {
     _mm_prefetch( (char *) &piSrc[0 * srcStep - 4], _MM_HINT_T0 );
@@ -1621,8 +1558,8 @@ void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos
     sidePisLarge = false;
   }
  
-  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + ( tcOffsetDiv2 << 1 ) ) );
-  const int iIndexB   = Clip3( 0, MAX_QP, iQP + ( betaOffsetDiv2 << 1 ) );
+  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + 2 * tcOffsetDiv2  ) );
+  const int iIndexB   = Clip3( 0, MAX_QP, iQP + 2 * betaOffsetDiv2 );
 
       const int iTc = bitDepthLuma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthLuma))) >> (10 - bitDepthLuma)) : ((sm_tcTable[iIndexTC]) << (bitDepthLuma - 10));
   const int iBeta     = sm_betaTable[iIndexB ] << ( bitDepthLuma - 8 );
@@ -1713,8 +1650,8 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
 
   PelBuf             picYuvRecCb         = picReco.bufs[ COMP_Cb ];
   PelBuf             picYuvRecCr         = picReco.bufs[ COMP_Cr ];
-  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos );
-  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos );
+  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
+  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
   const ptrdiff_t    iStride             = picYuvRecCb.stride;
   const SPS &        sps                 = *cs.sps;
   const Slice &      slice               = *cs.slice;
@@ -1772,7 +1709,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       const ClpRng& clpRng( cs.slice->clpRngs[ComponentID( chromaIdx + 1 )] );
 
       int iQP = lfp.qp[chromaIdx + 1];
-      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + (tcOffsetDiv2[chromaIdx] << 1));
+      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + 2 * tcOffsetDiv2[chromaIdx] );
         const int iTc = bitDepthChroma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthChroma))) >> (10 - bitDepthChroma)) : ((sm_tcTable[iIndexTC]) << (bitDepthChroma - 10));
       Pel* piSrcChroma   = chromaIdx == 0 ? piSrcCb : piSrcCr;
 
@@ -1781,7 +1718,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       if( largeBoundary )
       {
         const int iBitdepthScale = 1 << ( sps.bitDepths[CH_C] - 8 );
-        const int indexB = Clip3<int>(0, MAX_QP, iQP + (betaOffsetDiv2[chromaIdx] << 1));
+        const int indexB = Clip3<int>(0, MAX_QP, iQP + 2 * betaOffsetDiv2[chromaIdx]);
         const int beta   = sm_betaTable[indexB] * iBitdepthScale;
 
         const int dp0 = xCalcDP( piSrcChroma, offset, isChromaHorCTBBoundary );

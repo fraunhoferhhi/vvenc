@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -72,11 +68,11 @@ void CABACReader::initCtxModels( Slice& slice )
   {
     switch( sliceType )
     {
-    case P_SLICE:           // change initialization table to B_SLICE initialization
-      sliceType = B_SLICE;
+    case VVENC_P_SLICE:           // change initialization table to B_SLICE initialization
+      sliceType = VVENC_B_SLICE;
       break;
-    case B_SLICE:           // change initialization table to P_SLICE initialization
-      sliceType = P_SLICE;
+    case VVENC_B_SLICE:           // change initialization table to P_SLICE initialization
+      sliceType = VVENC_P_SLICE;
       break;
     default     :           // should not occur
       THROW( "Invalid slice type" );
@@ -141,7 +137,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
 
   sao( cs, ctuRsAddr );
-  if (cs.sps->alfEnabled && (cs.slice->tileGroupAlfEnabled[COMP_Y]))
+  if (cs.sps->alfEnabled && (cs.slice->alfEnabled[COMP_Y]))
   {
     const PreCalcValues& pcv = *cs.pcv;
     int                 frame_width_in_ctus = pcv.widthInCtus;
@@ -158,9 +154,9 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
     for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
     {
-      if (cs.slice->tileGroupAlfEnabled[compIdx])
+      if (cs.slice->alfEnabled[compIdx])
       {
-        uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+        uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
         int ctx = 0;
         ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
         ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
@@ -173,11 +169,11 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
         }
         if( isChroma( (ComponentID)compIdx ) )
         {
-          int apsIdx = cs.slice->tileGroupChromaApsId;
+          int apsIdx = cs.slice->chromaApsId;
           CHECK(cs.slice->alfAps[apsIdx] == nullptr, "APS not initialized");
           const AlfParam& alfParam = cs.slice->alfAps[apsIdx]->alfParam;
           const int numAlts = alfParam.numAlternativesChroma;
-          uint8_t* ctbAlfAlternative = cs.slice->pic->getAlfCtuAlternativeData( compIdx );
+          uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
           ctbAlfAlternative[ctuRsAddr] = 0;
           if( ctbAlfFlag[ctuRsAddr] )
           {
@@ -237,8 +233,8 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
 void CABACReader::readAlfCtuFilterIndex(CodingStructure& cs, unsigned ctuRsAddr)
 {
-  short* alfCtbFilterSetIndex = cs.slice->pic->getAlfCtbFilterIndex();
-  unsigned numAps = cs.slice->tileGroupNumAps;
+  short* alfCtbFilterSetIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
+  unsigned numAps = cs.slice->numAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
   uint32_t filtIndex = 0;
   if (numAvailableFiltSets > NUM_FIXED_FILTER_SETS)
@@ -1160,9 +1156,8 @@ void CABACReader::cu_bcw_flag(CodingUnit& cu)
     }
   }
 
-  THROW("no support");
-//   uint8_t BcwIdx = (uint8_t)g_BCWParsingOrder[idx];
-//   CU::setBcwIdx(cu, BcwIdx);
+  uint8_t BcwIdx = (uint8_t)g_BcwParsingOrder[idx];
+  CU::setBcwIdx( cu, BcwIdx );
 
   DTRACE(g_trace_ctx, D_SYNTAX, "cu_BCW_flag() BCW_idx=%d\n", cu.BcwIdx ? 1 : 0);
 }
@@ -1574,7 +1569,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
     cu.interDir = 1;
     cu.affine = false;
     cu.refIdx[REF_PIC_LIST_0] = MAX_NUM_REF;
-    mvd_coding(cu.mvd[REF_PIC_LIST_0]);
+    mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
     if ( cu.cs->sps->maxNumIBCMergeCand == 1 )
     {
       cu.mvpIdx[REF_PIC_LIST_0] = 0;
@@ -1595,16 +1590,16 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
       ref_idx     ( cu, REF_PIC_LIST_0 );
       if( cu.affine )
       {
-        mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][0] );
-        mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][1] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][1] );
         if ( cu.affineType == AFFINEMODEL_6PARAM )
         {
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][2] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_0][2] );
         }
       }
       else
       {
-        mvd_coding( cu.mvd[REF_PIC_LIST_0] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
       }
       mvp_flag    ( cu, REF_PIC_LIST_0 );
     }
@@ -1616,23 +1611,22 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
         ref_idx     ( cu, REF_PIC_LIST_1 );
         if( cu.cs->slice->picHeader->mvdL1Zero && cu.interDir == 3 /* PRED_BI */ )
         {
-          cu.mvd[ REF_PIC_LIST_1 ] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][0] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][1] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][2] = Mv();
+          cu.mvd[REF_PIC_LIST_1][0] = Mv();
+          cu.mvd[REF_PIC_LIST_1][1] = Mv();
+          cu.mvd[REF_PIC_LIST_1][2] = Mv();
         }
         else if( cu.affine )
         {
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][0] );
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][1] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][0] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][1] );
           if ( cu.affineType == AFFINEMODEL_6PARAM )
           {
-            mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][2] );
+            mvd_coding( cu.mvd[REF_PIC_LIST_1][2] );
           }
         }
         else
         {
-          mvd_coding( cu.mvd[REF_PIC_LIST_1] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][0] );
         }
       }
       mvp_flag    ( cu, REF_PIC_LIST_1 );
@@ -1640,7 +1634,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
   }
   if( cu.interDir == 3 /* PRED_BI */ && CU::isBipredRestriction(cu) )
   {
-    cu.mv    [REF_PIC_LIST_1] = Mv(0, 0);
+    cu.mv [REF_PIC_LIST_1][0] = Mv(0, 0);
     cu.refIdx[REF_PIC_LIST_1] = -1;
     cu.interDir               =  1;
     cu.BcwIdx = BCW_DEFAULT;
@@ -1649,8 +1643,8 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
   if ( cu.smvdMode )
   {
     RefPicList eCurRefList = (RefPicList)(cu.smvdMode - 1);
-    cu.mvd[1 - eCurRefList].set( -cu.mvd[eCurRefList].hor, -cu.mvd[eCurRefList].ver );
-    CHECK(!((cu.mvd[1 - eCurRefList].hor >= MVD_MIN) && (cu.mvd[1 - eCurRefList].hor <= MVD_MAX)) || !((cu.mvd[1 - eCurRefList].ver >= MVD_MIN) && (cu.mvd[1 - eCurRefList].ver <= MVD_MAX)), "Illegal MVD value");
+    cu.mvd[1 - eCurRefList][0].set( -cu.mvd[eCurRefList][0].hor, -cu.mvd[eCurRefList][0].ver );
+    CHECK(!((cu.mvd[1 - eCurRefList][0].hor >= MVD_MIN) && (cu.mvd[1 - eCurRefList][0].hor <= MVD_MAX)) || !((cu.mvd[1 - eCurRefList][0].ver >= MVD_MIN) && (cu.mvd[1 - eCurRefList][0].ver <= MVD_MAX)), "Illegal MVD value");
     cu.refIdx[1 - eCurRefList] = cu.cs->slice->symRefIdx[ 1 - eCurRefList ];
   }
 
@@ -2189,7 +2183,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
   ChromaCbfs        chromaCbfs;
   chromaCbfs.Cb = chromaCbfs.Cr = false;
 
-  const bool chromaCbfISP = area.blocks[COMP_Cb].valid() && cu.ispMode;
+  const bool chromaCbfISP = area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && cu.ispMode;
 
   // cbf_cb & cbf_cr
   if (area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && (!CU::isSepTree(cu) || partitioner.chType == CH_C) && (!cu.ispMode || chromaCbfISP))
@@ -2394,7 +2388,7 @@ void CABACReader::residual_coding( TransformUnit& tu, ComponentID compID, CUCtx&
 
   // init coeff coding context
   CoeffCodingContext  cctx    ( tu, compID, signHiding );
-  TCoeff*             coeff   = tu.getCoeffs( compID ).buf;
+  TCoeffSig*          coeff   = tu.getCoeffs( compID ).buf;
 
   // parse last coeff position
   cctx.setScanPosLast( last_sig_coeff( cctx, tu, compID ) );
@@ -2621,7 +2615,7 @@ int CABACReader::last_sig_coeff( CoeffCodingContext& cctx, TransformUnit& tu, Co
 
 
 
-void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeff* coeff, const int stateTransTable, int& state )
+void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeffSig* coeff, const int stateTransTable, int& state )
 {
   // NOTE: All coefficients of the subblock must be set to zero before calling this function
 
@@ -2712,7 +2706,7 @@ void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeff* co
   {
     int       sumAll = cctx.templateAbsSum(scanPos, coeff, 4);
     ricePar = g_auiGoRiceParsCoeff[sumAll];
-    TCoeff& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
+    TCoeffSig& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
     if( tcoeff >= 4 )
     {
       int       rem     = m_BinDecoder.decodeRemAbsEP( ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
@@ -2768,8 +2762,8 @@ void CABACReader::residual_codingTS( TransformUnit& tu, ComponentID compID )
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_codingTS() etype=%d pos=(%d,%d) size=%dx%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height );
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)]);
-  TCoeff*             coeff   = tu.getCoeffs( compID ).buf;
+  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)] );
+  TCoeffSig*          coeff   = tu.getCoeffs( compID ).buf;
 
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);
@@ -2781,7 +2775,7 @@ void CABACReader::residual_codingTS( TransformUnit& tu, ComponentID compID )
   }
 }
 
-void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* coeff )
+void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeffSig* coeff )
 {
   // NOTE: All coefficients of the subblock must be set to zero before calling this function
 
@@ -2862,7 +2856,7 @@ void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* 
   //===== 2nd PASS: gt2 =====
   for (int scanPos = firstSigPos; scanPos <= minSubPos && cctx.numCtxBins() >= 4; scanPos++)
   {
-    TCoeff& tcoeff = coeff[cctx.blockPos(scanPos)];
+    TCoeffSig& tcoeff = coeff[cctx.blockPos(scanPos)];
     cutoffVal = 2;
     for (int i = 0; i < numGtBins; i++)
     {
@@ -2885,7 +2879,7 @@ void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* 
   //===== 3rd PASS: Go-rice codes =====
   for( int scanPos = firstSigPos; scanPos <= minSubPos; scanPos++ )
   {
-    TCoeff& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
+    TCoeffSig& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
     cutoffVal = (scanPos <= lastScanPosPass2 ? 10 : (scanPos <= lastScanPosPass1 ? 2 : 0));
     if (tcoeff < 0)
     {

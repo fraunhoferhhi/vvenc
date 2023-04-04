@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -54,15 +50,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/HRD.h"
 #include "CommonLib/Slice.h"
 #include "EncHRD.h"
+#include "GOPCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
 
 namespace vvenc {
 
-void SEIEncoder::init( const VVEncCfg& encCfg, EncHRD& encHRD)
+void SEIEncoder::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, EncHRD& encHRD)
 {
   m_pcEncCfg      = &encCfg;
+  m_gopCfg        = gopCfg;
   m_pcEncHRD      = &encHRD;
   m_isInitialized = true;
   ::memset(m_lastBPSEI,  0, sizeof(m_lastBPSEI));
@@ -76,8 +74,8 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   uint32_t uiInitialCpbRemovalDelay = (90000/2);                      // 0.5 sec
   bpSei.bpNalCpbParamsPresent = true;
   bpSei.bpVclCpbParamsPresent = true;
-  bpSei.bpMaxSubLayers = m_pcEncCfg->m_maxTempLayer;
-  bpSei.bpCpbCnt = 1;
+  bpSei.bpMaxSubLayers        = m_pcEncCfg->m_maxTLayer + 1;
+  bpSei.bpCpbCnt              = 1;
   for(int i=0; i < bpSei.bpMaxSubLayers; i++)
   {
     for(int j=0; j < bpSei.bpCpbCnt; j++)
@@ -100,7 +98,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   //       Using getIntraPeriod() should be avoided though, because it assumes certain GOP
   //       properties, which are only valid in CTC.
   //       Still copying this setting from HM for consistency, improvements welcome
-  bool isRandomAccess  = m_pcEncCfg->m_IntraPeriod > 0;
+  bool isRandomAccess  = m_pcEncCfg->m_picReordering;
   if( isRandomAccess && m_pcEncCfg->m_IntraPeriod < 256)
   {
     bpSei.cpbRemovalDelayLength =                                                           // 6  // 32 = 2^5 (plus 1)
@@ -117,6 +115,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   bpSei.concatenationFlag = 0;
   //since the temporal layer HRDParameters is not ready, we assumed it is fixed
   bpSei.auCpbRemovalDelayDelta = 1;
+  CHECK( m_pcEncCfg->m_IntraPeriod % m_pcEncCfg->m_GOPSize != 0, "broken for aip" );
   bool bpDeltasGOPStructure = m_pcEncCfg->m_GOPSize == 8 || m_pcEncCfg->m_GOPSize == 16; //assume GOPs specified as in CTC
   bpSei.cpbRemovalDelayDeltasPresent = bpDeltasGOPStructure;
   if (bpSei.cpbRemovalDelayDeltasPresent)
@@ -177,12 +176,13 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
     }
   }
   bpSei.sublayerDpbOutputOffsetsPresent = true;
+  const std::vector<int>& numReorderPics = m_gopCfg->getNumReorderPics();
   for(int i = 0; i < bpSei.bpMaxSubLayers; i++)
   {
-    bpSei.dpbOutputTidOffset[i] = m_pcEncCfg->m_maxNumReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
-    if(bpSei.dpbOutputTidOffset[i] >= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1])
+    bpSei.dpbOutputTidOffset[i] = numReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
+    if(bpSei.dpbOutputTidOffset[i] >= numReorderPics[bpSei.bpMaxSubLayers-1])
     {
-      bpSei.dpbOutputTidOffset[i] -= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1];
+      bpSei.dpbOutputTidOffset[i] -= numReorderPics[bpSei.bpMaxSubLayers-1];
     }
     else
     {
@@ -208,19 +208,19 @@ void SEIEncoder::initDecodedPictureHashSEI( SEIDecodedPictureHash& dphSei, const
 
   switch (m_pcEncCfg->m_decodedPictureHashSEIType)
   {
-    case HASHTYPE_MD5:
+    case VVENC_HASHTYPE_MD5:
       {
         uint32_t numChar=calcMD5(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
-    case HASHTYPE_CRC:
+    case VVENC_HASHTYPE_CRC:
       {
         uint32_t numChar=calcCRC(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
-    case HASHTYPE_CHECKSUM:
+    case VVENC_HASHTYPE_CHECKSUM:
     default:
       {
         uint32_t numChar=calcChecksum(pic, dphSei.pictureHash, bitDepths);
@@ -262,6 +262,7 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
     const uint32_t temporalId = slice->TLayer;
     for( int i = temporalId ; i < maxNumSubLayers - 1 ; i ++ )
     {
+      CHECK( m_pcEncCfg->m_IntraPeriod % m_pcEncCfg->m_GOPSize != 0, "broken for aip" );
       int indexWithinGOP = (m_totalCoded[maxNumSubLayers - 1] - m_lastBPSEI[maxNumSubLayers - 1]) % m_pcEncCfg->m_GOPSize;
       ptSei->ptSubLayerDelaysPresent[i] = true;
       if( ((m_rapWithLeading == true) && (indexWithinGOP == 0)) || (m_totalCoded[maxNumSubLayers - 1] == 0) || bpPresentInAU || (slice->poc + m_pcEncCfg->m_GOPSize) > m_pcEncCfg->m_framesToBeEncoded )
@@ -442,7 +443,7 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
       {
         m_lastBPSEI[i] = m_totalCoded[i];
       }
-      if( (slice->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL)||(slice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA) )
+      if( (slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL)||(slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA) )
       {
         m_rapWithLeading = true;
       }
@@ -485,10 +486,50 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
   }
 
   // not sure if this is the final place
-  for( int i = slice->TLayer; i < slice->sps->maxTLayers; i ++ )
+  for( uint32_t i = slice->TLayer; i < slice->sps->maxTLayers; i ++ )
   {
     m_totalCoded[i]++;
   }
+}
+
+void SEIEncoder::initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiAltTransCharacteristics!=NULL), "Unspecified error");
+  //  Set SEI message parameters read from command line options
+  seiAltTransCharacteristics->preferredTransferCharacteristics = m_pcEncCfg->m_preferredTransferCharacteristics;
+}
+
+void SEIEncoder::initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVolume *seiMDCV)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiMDCV != NULL), "Unspecified error");
+
+  //  Set SEI message parameters read from command line options
+  seiMDCV->values.primaries[0][0] = m_pcEncCfg->m_masteringDisplay[0];
+  seiMDCV->values.primaries[0][1] = m_pcEncCfg->m_masteringDisplay[1];
+
+  seiMDCV->values.primaries[1][0] = m_pcEncCfg->m_masteringDisplay[2];
+  seiMDCV->values.primaries[1][1] = m_pcEncCfg->m_masteringDisplay[3];
+
+  seiMDCV->values.primaries[2][0] = m_pcEncCfg->m_masteringDisplay[4];
+  seiMDCV->values.primaries[2][1] = m_pcEncCfg->m_masteringDisplay[5];
+
+  seiMDCV->values.whitePoint[0]   = m_pcEncCfg->m_masteringDisplay[6];
+  seiMDCV->values.whitePoint[1]   = m_pcEncCfg->m_masteringDisplay[7];
+
+  seiMDCV->values.maxLuminance    = m_pcEncCfg->m_masteringDisplay[8];
+  seiMDCV->values.minLuminance    = m_pcEncCfg->m_masteringDisplay[9];
+}
+
+void SEIEncoder::initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiCLL != NULL), "Unspecified error");
+
+  //  Set SEI message parameters read from command line options
+  seiCLL->maxContentLightLevel    = m_pcEncCfg->m_contentLightLevel[0];
+  seiCLL->maxPicAverageLightLevel = m_pcEncCfg->m_contentLightLevel[1];
 }
 
 

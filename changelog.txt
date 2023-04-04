@@ -1,4 +1,484 @@
 /////////////////////////////////////////
+tag 1.8.0-rc1
+
+* libvvenc:
+  - removed library parameters:
+    - vvenc_config::m_temporalSubsampleRatio, vvenc_config::m_MaxCodingDepth, vvenc_config::m_RCForceIntraQP,
+      vvenc_config::m_log2DiffMaxMinCodingBlockSize, 
+  - added library parameters:
+    - vvenc_config::m_FirstPassMode
+  - changed library parameters:
+    - vvenc_config::m_useSelectiveRDOQ is now an int_8, with 2 enabling selective RDOQ only for SCC
+  - QPA: added saliency detection
+  - BIM: propagation of the parameters to higher temporal layers
+  - retuned the presets:
+    - 15% speedup for faster, 10% speedup for fast, medium and slow, 5% for slower
+  - speedup of the first pass for faster preset
+  - various speedups and bugfixes
+
+* vvencapp:
+  
+* vvencFFapp:
+  - removed from default installation! Use VVENC_INSTALL_FULLFEATURE_APP CMake variable to override.
+  - removed parameters: TemporalSubsampleRatio, RCForceIntraQP
+  - added parameters: FirstPassMode
+
+/////////////////////////////////////////
+tag 1.7.0
+
+* libvvenc:
+  - removed (unused) library parameters:
+    - vvencGOPEntry: m_CbTcOffsetDiv2, m_CbBetaOffsetDiv2, m_CrTcOffsetDiv2, m_CrBetaOffsetDiv2
+                     m_refPic, m_isEncoded, m_ltrp_in_slice_header_flag
+    - vvencReshapeCW: rspBaseQP
+  - added library parameters:
+    - extended vvencHDRMode to also include SDR color spaces
+    - vvenc_config: m_numRefPics, m_numRefPicsSCC, m_blockImportanceMapping, m_saoScc
+    - vvenc_config: changed m_sliceTypeAdapt from bool to char
+  - changed library parameters:
+    - m_TicksPerSecond new default 27000000 (old: 90000) to support all NTSC frame rates
+  - added support for ARM through SIMDe
+  - allowing adaptive intra period (content adaptive placement of random access points)
+  - ported block importance mapping from VTM
+    - around 1% gain for faster
+    - around 2% BD-rate gain for other presets
+  - added noise based QP clipping to RC
+  - improved SCC detector to ignore black borders
+  - added possibility of logo overlay
+  - major refactoring to separate a pre-processing step
+  - many bugfixes
+  - speedups: 20% for faster, 5% for other presets
+
+* vvencapp:
+  - added parameter "sdr" to set the SDR color space (mutually exclusive with "hdr" parameter)
+  - added parameter "logofile" specifying a JSON logo descriptor (use without value for help)
+  
+* vvencFFapp:
+  - added parameters "Sdr" and "logofile" analogue to simple app
+  - added parameters "NumRefPics" and "NumRefPicsSCC" allowing per-TL setting of number of reference pictures
+  - added parameter "BIM"
+  - changed parameters "SAO" and "STA" from flag to integer
+    - SAO=2 will only apply SAO to screen content
+    - STA=2 will start a new intra period when a content-dependent intra frame is inserted
+
+/////////////////////////////////////////
+tag 1.6.1
+
+* libvvenc:
+  - bugfix for rate control at low rates
+  - bugfix to multi-threaded encoding with tiles
+  - made apputils an internal header only lib, fixing linking problems
+  - speedup non-linear ALF (-4% runtime for slower)
+  - added auto-logic for correct tickspersec setting
+  - optimized non-RD-optimized quantization
+
+/////////////////////////////////////////
+tag 1.6.0
+
+* libvvenc:
+  - removed library parameters:
+    - vvenc_config::m_bRestrictMESampling
+  - added library parameters:
+    - vvencMCTF::MCTFUnitSize, vvenc_config::m_alfUnitSize, vvenc_config::m_meReduceTap
+  - changed semantics of the parameters:
+    - vvenc_config::m_maxMTTDepth: if >=10, each decimal digit corresponds to the value set for frames in a specific temporal layer
+    - vvenc_config::m_maxMTTDepthIChroma: if negative, set equal to vvenc_config::m_maxMTTDepthI
+    - vvenc_config::m_motionEstimationSearchMethod: deprecated value 2
+    - vvenc_config::m_motionEstimationSearchMethodSCC: deprecated value 1
+  - speedups
+    - 15%+ for faster, fast, medium and slower
+    -  6%  for slow
+  - improvements to rate control stability, especially for single pass and high rates
+  - various improvements, cleanups and fixes
+
+* vvencapp:
+  - remove deprecated gopsize parameter
+
+* vvencFFapp:
+  - removed command line parameters:
+    - RestrictMESampling
+  - added command line parameters:
+    - ReduceFilterME, ALFUnitSize, MCTFUnitSize
+
+/////////////////////////////////////////
+tag 1.5.0
+
+* libvvenc:
+  - removed library paramters:
+    - vvenc_config::m_RPLList0, vvenc_config::m_RPLList1, vvenc_config::m_maxDecPicBuffering, vvenc_config::m_maxNumReorderPics,
+      vvenc_config::m_maxNumReorderPics, vvenc_config::m_numRPLList0, vvenc_config::m_numRPLList1, vvenc_config::m_bUseConstrainedIntraPred,
+      vvenc_config::m_deblockingFilterMetric, vvenc_config::m_videoSignalTypePresent
+  - added library parameters:
+    - vvenc_config::m_deblockLastTLayers, vvenc_config::m_picReordering, vvenc_config::m_fastHad
+  - allowing arbitrary intra periods (not required to be multiples of the GOP size)
+  - improvements to rate control stability, mostly regarding to noisy input and scene changes
+  - many speedups and improvements
+    - 10% speedup, 1.3% BD-rate gain for faster
+    - 12% speedup, 1.3% BD-rate gain for fast
+    - 11% speedup for medium
+    - 8% speedup for slow
+    - 6% speedup for slower
+  - added a low-decoding-energy configuration roughly matching the medium preset
+  - fixed portability
+  - multi-threading improvements
+  - memory reduction
+  
+* vvencapp:
+  
+* vvencFFapp:
+  - removed command line parameters:
+    - DeblockingFilterMetric, ConstrainedIntraPred
+  - added command line parameters
+    - PicReordering: enable/disable picture reordering during encoding (default 1, picture reordering enabled)
+    - FastHAD: enable/disable the usage of a fast subsampled HAD calculation for large blocks
+    - DeblockLastLayers: indicates to only use deblocking filter for the N highest temporal layers (default 0, deblock all temporal layers)
+
+/////////////////////////////////////////
+tag 1.4.0
+
+* all:
+  - changed license to the standard Clear BSD license (without adaptations)
+  - explicitly stating the authors (AUTHORS.md) as copyright holders
+
+* libvvenc:
+  - removed library parameters:
+    - vvencMCTF::MCTFNumLeadFrames, vvencMCTF::MCTFNumTrailFrames
+    - vvenc_config::m_RCLookAhead (now always behaving as if equal to 1)
+  - added library parameters:
+    - vvenc_config::m_leadFrames, vvenc_config::m_trailFrames, vvenc_config::m_LookAhead, vvenc_config::m_sliceTypeAdapt
+  - add function to extract SPS, PPS and other headers during encoding
+    int vvenc_get_headers(vvencEncoder *, vvencAccessUnit *);
+  - removed legacy 1-pass rate control (now always using the look-ahead based 1pRC)
+  - added a slice adaptation mode inserting intra-frames instead of TL-0 B-frames when scene-cut is detected within the preceding GOP
+  - fix encoder initialization with other bitstream when using rate control
+  - fixed CU tracing
+  - ported improvements to motion compensated filtering from JVET
+  - fixed LMCS processing for 8-bit internal bitdepth coding
+  - various fixes and improvements
+  
+* vvencapp:
+  - changed semantics of the bitrate parameters to understand suffixes (Mbps, M, kbps, k, bps),
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1), respectively
+  - added y4m parameter to force input interpretation as Y4M (also inferred when file file extension is .y4m)
+
+* vvencFFapp:
+  - added command line parameters:
+    - STA: enable/disable TL-0 B-to-I slice type adaptation after scene cuts (default: on)
+  - renamed parameters:
+    - MCTFNumLeadFrames -> LeadFrames (now also relevant in chunk based encoding for STA)
+    - MCTFNumTrailFrames -> TrailFrames
+  - changed semantics of the TargetBitrate parameter to understand suffixes (Mbps, M, kbps, k, bps),
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1), respectively
+  - added y4m parameter to force input interpretation as Y4M (also inferred when file file extension is .y4m)
+
+/////////////////////////////////////////
+tag 1.3.1
+
+* libvvenc:
+  - fixed QPA encoding with tiles
+  - allowing encoding of videos compatible with subpic-merging functionality of VVC
+  - API extended, but ABI compatible
+    - added paramter: m_treatAsSubPic, m_explicitAPSid
+  - temporarily forbidding rate control combined with DebugBitstream
+  
+* vvencapp:
+  - fixed output of `vvencapp --version`
+  - aligned output with full-featured app
+  
+* vvencFFapp:
+  - aligned output with vvencapp
+  - added command line parameters
+    - TreatAsSubPic
+    - ExplicitAPSid
+  
+  
+/////////////////////////////////////////
+tag 1.3.0
+
+* libvvenc:
+  - introducing params setting using a string api (vvencCfg.h): 
+    int vvenc_set_param     (vvenc_config *cfg, const char *name, const char *value);
+    int vvenc_set_param_list(vvenc_config *c, int argc, char* argv[]);
+  - logger interface changed to support multiple encoder instances. use: vvenc_set_msg_callback(vvenc_config *, void* , vvencLoggingCallback)
+  - deprecated: vvenc_set_logging_callback(void * ctx, vvencLoggingCallback)  (please use: vvenc_set_msg_callback)
+  - added CRA with constrained RASL encoding refresh type (cra_cre)
+  - presets redefined for codec improvements
+  - add look ahead analysis for single pass rate control
+  - HRD timing information are always written into bitstream per default (signal fps)
+  - perceptual QPA improvements for lower bitrates
+  - added tile support including tile parallelism
+  - mingw support added
+  - various cleanups, bugfixes and reducing memory usage
+
+* vvencapp:
+  - added command line parameters:
+    - tiles: set number of tile columns and tile rows
+    - framescale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1 or 60000/1001)
+    - additional: set parameters using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
+    - rt/refreshtype now supports cra_cre (previously set using --RPR=2 in full-featured app)
+
+* vvencFFapp:
+  - added command line parameters:
+    - Tiles: set number of tile columns and tile rows
+    - FrameScale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1, 60000/1001)
+    - additional: set parameter using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
+    - LookAhead: enable pre-analysis in single pass rate control
+    - DecodingRefreshType/dr now supports value '5' (cra_cre), previously set using --RPR=2)
+  - removed command line parameters:
+    - InputQueueSize
+  - removed unused/legacy command line parameters (legacy VTM parameter):
+    - EnablePictureHeaderInSliceHeader
+    - CropOffsetLeft, CropOffsetTop, CropOffsetRight, CropOffsetBottom
+    - CalculateHdrMetrics
+    - SignalledIdFlag
+    - SignalledSliceIdLengthMinus1
+    - RectSlicesBoundaryArray
+    - SignalledSliceId
+    - isSDR
+
+/////////////////////////////////////////
+tag 1.2.0
+
+* libvvenc:
+  - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD, m_RCPass
+  - renamed parameters: m_bUseEarlyCU to m_useEarlyCU, m_dqThresholdVal to m_quantThresholdVal
+  - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RADL rather than IDR_N_LP picture)
+  - added nlohmann_json as a third party lib (can be disabled with CMake variable VVENC_ENABLE_THIRDPARTY_JSON)
+  - redefined the presets
+  - improvements to single picture rate control
+  - added additional partitioning speedups
+  - improved linear ALF implementation (memory access patterns and SIMD)
+  - improved DMVR implementation
+  - improved error handling
+  - various cleanups and bugfixes
+
+* vvencapp:
+  - added command line parameters:
+    - rcstatsfile: defines the location of the to-be-written/to-be-read rate control statistics file
+    - pass: if != -1, defines which encoding pass is to be performed in case of 2-pass RC (requires rcstatsfile)
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout
+
+
+* vvencFFapp:
+  - added command line parameters:
+    - RCStatsFile, Pass (analogue to vvencapp)
+    - NumIntraModesFullRD, ReduceIntraChromaModesFullRD
+  - renamed command line parameters: DQThrVal to QuantThrVal
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout (PYUV=1)
+
+/////////////////////////////////////////
+tag 1.1.0
+
+* libvvenc:
+  - mostly about faster/fast speedups, minor improvements to other presets
+  - redefined the presets
+  - improved RC rate accuracy
+  - added tool: BCW
+  - added parameters: m_FIMMode, m_bIntegerET, (m_vvencMCTF.)MCTFSpeed, m_alfSpeed, m_IntraEstDecBit, m_BCW, m_motionEstimationSearchMethodSCC
+  - removed parameters: m_useEarlySkipDetection
+  - SCC coding: using alternative ME strategy, disabling LMCS
+  - memory reduction (storing coeffs as 16bit, single storage for displacement/affine motion models, move objects rather than copy during search, garbage collection)
+  - removed dynamic memory from partitioner
+  - SIMD search for last coeff in DQ=0 RDOQ=2
+  - combined regular and affine merge search into a single function
+  - optimized motion search
+  - RC cleanup
+  - various cleanups
+  
+* vvencapp:
+
+* vvencFFapp:
+  - added options: IntegerET, FastInferMerge, MCTFSpeed, ALFSpeed, IntraEstDecBit, BCW, FastSearchSCC
+  - removed options: ESD
+
+* bugfixes:
+  - fixed the TU-split z-partitioning
+  - fixed the ECU option
+  - fixed picture/sequence-level deblocking parameter management
+  - fixed SwitchDQP option when used with multi-threading
+  - fixed TemporalSubsampling (used in JVET AI test conditions)
+  - fixed ALF covariance accumulation domain to double when required (LMCS+ALF+Hdr=pq)
+  - fixed IDR coding with GOPSize==IntraPeriod
+  - fixed short sequence coding (<3 frames) with MCTF
+
+/////////////////////////////////////////
+tag 1.0.0
+
+* libvvenc:
+  - add pkgconfig
+  - rewriting the vvenc interface in c
+    - restructuring vvenc.h and vvencCfg.h to pure C syntax
+    - removing namespace vvenc and replacing all struct and enumx to typedefs with prefix 'vvenc'
+    - removing file vvencCfgExpert.h and integrating all expert options into single struct vvenc_config
+    - vvencCfg replacing existing lists/vector by fixed size arrays, std::strings are fixed size char arrays now
+  - added IBC
+    - added parameters m_IBCMode (0 - off, 1 - always on, 2 - on with SCC auto detection) and m_IBCFastMethod (1 - slowest with biggest gain to 6 - fastest with lowest gain)
+  - improvements to rate control based on the XPSNR model
+  - supports for generation of main10stillpicture profile bitstreams
+    
+* vvencapp:
+  - adding parameter --version to show current version
+  - changed parameter: -i/--input accepts "-" to indicate reading input from stdin
+   
+* vvencFFapp:
+  - adding parameter --version/-v to show current version
+  - vvenc::YUVWriterIf is replaced by callback function vvencRecYUVBufferCallback
+  - changed parameter: -i/--InputFile accepts "-" to indicate reading input from stdin
+  - added parameters IBC and IBCFastMethod as described in the libvvenc
+
+* bugfixes
+  - fixes #51, #47, #46, #37, #33 and many more
+  - fixed AVX2 CCALF for non-multiple of 8 picture width
+  - fixed PQ content encoding with LMCS
+  - fixed C++17 compatibility
+  - fixed level/tier auto-settings
+  - fixed FastForwardToPOC and DebugBitstram options
+
+/////////////////////////////////////////
+tag 0.3.1.0
+
+* libvvenc:
+ - only supporting picture-level rate control, removed vvencCfgExpert::m_RCRateControlMode,
+   vvencCfgExpert::m_RCKeepHierarchicalBit and vvencCfgExpert::m_RCUseLCUSeparateModel parameters.
+ - added vvencCfgExpert::m_log2MinCodingBlockSize parameter to limit minimal coding block size (default: 2)
+ - reduced and defragmented the used memory.
+ - added new speed-ups and adapted fast and faster presets.
+   
+* vvencFFapp:
+ - removed parameters --KeepHierarchicalBit, --RCLCUSeparateModel
+   and --RateControl (defaults to 2 if target rate is set, 0 otherwise).
+ - renamed parameter --InitialQP to --RCInitialQP.
+ - added parameter --Log2MinCodingBlockSize (default: 2) to limit the minimal coding block size
+
+* bugfixes
+ - fixes #29
+ - corrected motion vector clipping during DMVR process (might produce enc/dec mismatches).
+ - fixed LMCS/ISP interaction (weighted SAD for blocks of width '1').
+
+/////////////////////////////////////////
+tag 0.3.0.0
+
+* new:
+ - support for HDR metadata (--hdr off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020)
+   - if using HDR, encoder decisions depend on the used mode and the enabled metadata. by default VUI and SEI metadata are enabled 
+   - PQ: set vui parameter (transfer characteristics 16(smpte2084))
+   - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
+ - support for MasteringDisplayColourVolume and MaxContentLightLevel (SMPTE ST 2086 - HDR10/PQ)
+   - MasteringDisplayColourVolume can be set by vector of 10 values:
+     x,y,x,y,x,y,x,y,max,min  where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)
+     x,y coordinates for GBR and WP in increment of 1/50000
+     max,min luminance in units of 1/10000 cd/m2 
+     0 <= x,y <= 50000, 0 <= max,min <= 10000, 
+     
+     Example for a P3D65 1000-nits monitor, where 
+     G(x=0.265, y=0.690), B(x=0.150, y=0.060), R(x=0.680, y=0.320), 
+     WP(x=0.3127, y=0.3290), L(max=1000, min=0.0001):
+     13250,34500,7500,3000,34000,16000,15635,16450,10000000,1
+   - MaxContentLightLevel can be set by vector of 2 values:
+     cll,fall  where cll=max. content light level,fall=max. frame average light level,
+     range: 1 <= cll,fall <= 65535
+    
+* changes:
+ - align usage of vvenc interface for vvencapp and vvencFFapp (both apps are now using the lib in the same manner)
+ - vvencapp is now using the command line parser of vvencFFapp, 
+   but the command line params haven´t changed to prev. version for legacy support
+ - help dialog re-designed, params are now sorted into categories
+ 
+ - perceptually motivated QP adaptation (qpa) changed to on/off (mode 0-5 before) and uses XPSNR depending on HDR mode
+   vvencapp: use --qpa  or --qpa 0|1 to enable/disable (enabled by default
+   vvencFFapp:  use -qpa|--PerceptQPA   or -qpa|--PerceptQPA 0|1 to enable/disable (enabled by default
+ - Level is set to auto per default. In this mode it will be automatically detected by given resolution
+
+
+* bugfixes:
+ - #18: setting of max number CABAC-coded coefficients for the floating point scalar RDOQ
+ 
+
+* libvvenc:
+ - changed preset configuration to reflect current Pareto-Optimal trade-offs. The new presets are much better harmonized between different
+   resolutions and content types.
+ - auto config initialization. The configuration to init the vvenc library now only needs required 
+   parameter (width, height, framerate), everything else is set to default config
+   some parameter are set to -1 per default. Params set to -1 will be set to default, auto config params:
+   profile, level, threads, aud, vui, hrd, PerceptQPATempFiltIPic, RateControl, KeepHierarchicalBit, WppBitEqual, FEN
+ - medium preset is now used as default (this has quite a big impact on default params in the vvencFFapp)
+ - decreased memory usage
+ - improved multi-threading (now can utilize up to 10 threads for HD and up to 24 for UHD, efficiency depends on preset and other parameters)
+ - added the possibility to generate bitstreams for minimal drift in open-GOP adaptive switching.
+ - various optimizations and speed-ups.
+
+* vvencapp:
+ - new parameter     -aud, --accessunitdelimiter [auto] Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     -vui, --vuiparameterspresent [auto] Emit VUI information (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     -hrd, --hrdParameterspresent [auto] Emit VUI HRD information (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
+                             use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
+
+ - changed parameter --qpa [on] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
+                             as legacy support the previous modes 1-5 are now mapped to on/1
+
+* vvencFFapp:
+ - new parameter     --MaxParallelFrames [-1] Maximum number of frames to be processed in parallel
+                                     (-1: auto depends on number of threads, 0:off, >=2: enable parallel frames)
+                     --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
+                             use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
+                     --MasteringDisplayColourVolume [[]] 
+                                     SMPTE ST 2086 mastering display colour volume info SEI (HDR), vec(uint) size 10,
+                                     x,y,x,y,x,y,x,y,max,min where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)"range: 0 <=
+                                     GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000,
+                                     min/max luminance in units of 1/10000 cd/m2
+                     --MaxContentLightLevel [[]]  Specify content light level info SEI as "cll,fall" (HDR) max. content light level,
+                                     max. frame average light level, range: 1 <= cll,fall <= 65535'
+                     --PreferredTransferCharacteristics [auto] 
+                                     Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI
+                                     (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, smpte240m,
+                                     linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, bt2020-10, bt2020-12,
+                                     smpte2084, smpte428, arib-std-b67
+                     --segment [off] when encoding multiple separate segments, specify segment position to enable segment concatenation 
+                                     (first, mid, last) [off]
+                                     first: first segment           
+                                     mid  : all segments between first and last segment
+                                     last : last segment
+                     --FastIntraTools [0]         SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)
+
+ - changed parameter --qpa [off] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
+                     -aud, --AccessUnitDelimiter [auto] Enable Access Unit Delimiter NALUs, 
+                                     (default: auto - enable only if needed by dependent options)
+                     -vui, --VuiParametersPresent [auto] Enable generation of vui_parameters(),
+                                     (default: auto - enable only if needed by dependent options)
+                     -hrd, --HrdParametersPresent [auto] Enable generation of hrd_parameters(), 
+                                     (default: auto - enable only if needed by dependent options)
+                     --Profile [auto] name to use for encoding. Use [multilayer_]main_10[_444][_still_picture],
+                                     auto, or none
+                     --Level [auto] limit to be used, eg 5.1, or none
+                     --WppBitEqual [-1] Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line
+                                     above, 2:line wise reset)
+                     --RateControl [-1]  enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)
+                     --KeepHierarchicalBit [-1]   Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 
+                                     2:adaptive ratio bit allocation
+                     --PerceptQPATempFiltIPic [-1] Temporal high-pass filter in QPA activity calculation for key pictures 
+                                     (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)
+                     --SliceChromaQPOffsetPeriodicity [-1] Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. 
+                                     Use 0 (default) to disable periodic nature.
+                     --ColourPrimaries [unknown]  Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg,
+                                     smpte170m, smpte240m, film, bt2020, smpte428, smpte431, smpte432
+                     --TransferCharacteristics [unknown] 
+                                     Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown,
+                                     empty, bt470m, bt470bg, smpte170m, smpte240m, linear, log100, log316, iec61966-2-4,
+                                     bt1361e, iec61966-2-1, bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67
+                     --MatrixCoefficients [unknown] 
+                                     Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr,
+                                     bt709, unknown, empty, fcc, bt470bg, smpte170m, smpte240m, ycgco, bt2020nc,
+                                     bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp
+                     --RPR [1] can be now set to "2", in which case the encoder will impose constraints on the RASL frames
+                                     allowing for minimal drift open-GOP adaptive switching (with or withour resolution change).
+                     
+/////////////////////////////////////////
 tag 0.2.1.0
 
 * bugfixes:

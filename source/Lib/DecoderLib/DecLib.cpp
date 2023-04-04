@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -75,7 +71,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/, bool copyToEnc /* = true */ )
+bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& msg, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/, bool copyToEnc /* = true */ )
 {
   PicList* pcListPic = NULL;
   bool     bRet      = false;
@@ -89,18 +85,20 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
       CHECK( !*ffwdDecoder.bitstreamFile, "failed to open bitstream file " << bitstreamFileName.c_str() << " for reading" ) ;
       // create decoder class
-      ffwdDecoder.pcDecLib = new DecLib;
+      ffwdDecoder.pcDecLib = new DecLib(msg);
       ffwdDecoder.pcDecLib->create();
 
       // initialize decoder class
       ffwdDecoder.pcDecLib->init();
 
+      ffwdDecoder.pcDecLib->setDecoderInEncoderMode        ( true );
       ffwdDecoder.pcDecLib->setDebugPOC                    ( debugPOC );
       ffwdDecoder.pcDecLib->setDecodedPictureHashSEIEnabled( true );
-      if(apsMap) ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
-      msg( INFO, "start to decode %s \n", bitstreamFileName.c_str() );
+      msg.log( VVENC_INFO, "start to decode %s \n", bitstreamFileName.c_str() );
     }
+    if(apsMap) 
+      ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
     bool goOn = true;
     DecLib *pcDecLib = ffwdDecoder.pcDecLib;
@@ -110,7 +108,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
     while( !!*ffwdDecoder.bitstreamFile && goOn )
     {
       InputNALUnit nalu;
-      nalu.m_nalUnitType = NAL_UNIT_INVALID;
+      nalu.m_nalUnitType = VVENC_NAL_UNIT_INVALID;
 
       // determine if next NAL unit will be the first one from a new picture
       bool bNewPicture = pcDecLib->isNewPicture( ffwdDecoder.bitstreamFile,  ffwdDecoder.bytestream );
@@ -131,17 +129,17 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
            *  - two back-to-back start_code_prefixes
            *  - start_code_prefix immediately followed by EOF
            */
-          msg( ERROR, "Warning: Attempt to decode an empty NAL unit\n" );
+          msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n" );
         }
         else
         {
-          read( nalu );
+          read( nalu, msg );
           int iSkipFrame = 0;
           pcDecLib->decode( nalu, iSkipFrame, ffwdDecoder.iPOCLastDisplay, 0 );
         }
       }
 
-      if( ( bNewPicture || !*ffwdDecoder.bitstreamFile || nalu.m_nalUnitType == NAL_UNIT_EOS ) && !pcDecLib->getFirstSliceInSequence() )
+      if( ( bNewPicture || !*ffwdDecoder.bitstreamFile || nalu.m_nalUnitType == VVENC_NAL_UNIT_EOS ) && !pcDecLib->getFirstSliceInSequence() )
       {
         if( ! ffwdDecoder.loopFiltered || *ffwdDecoder.bitstreamFile )
         {
@@ -159,7 +157,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
                   pcEncPic->createTempBuffers( pic->cs->pcv->maxCUSize );
                   pcEncPic->cs->createCoeffs();
                   pcEncPic->cs->createTempBuffers( true );
-                  pcEncPic->cs->initStructData();
+                  pcEncPic->cs->initStructData( MAX_INT, false, nullptr );
 
                   CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
 
@@ -191,29 +189,28 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
                     if( pic->cs->sps->alfEnabled )
                     {
-                      std::copy(pic->getAlfCtbFilterIndexVec().begin(), pic->getAlfCtbFilterIndexVec().end(), pcEncPic->getAlfCtbFilterIndexVec().begin());
+                      pcEncPic->resizeAlfCtuBuffers( pic->cs->pcv->sizeInCtus );
                       for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
                       {
-                        std::copy( pic->getAlfCtuEnabled()[compIdx].begin(), pic->getAlfCtuEnabled()[compIdx].end(), pcEncPic->getAlfCtuEnabled()[compIdx].begin() );
+                        std::copy( pic->m_alfCtuEnabled[ compIdx ].begin(), pic->m_alfCtuEnabled[ compIdx ].end(), pcEncPic->m_alfCtuEnabled[ compIdx ].begin() );
                       }
-                      pcEncPic->resizeAlfCtbFilterIndex(pic->cs->pcv->sizeInCtus);
-                      memcpy( pcEncPic->getAlfCtbFilterIndex(), pic->getAlfCtbFilterIndex(), sizeof(short)*pic->cs->pcv->sizeInCtus );
+                      std::copy( pic->m_alfCtbFilterIndex.begin(), pic->m_alfCtbFilterIndex.end(), pcEncPic->m_alfCtbFilterIndex.begin() );
 
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cb).begin(), pic->getAlfCtuAlternative(COMP_Cb).end(), pcEncPic->getAlfCtuAlternative(COMP_Cb).begin() );
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cr).begin(), pic->getAlfCtuAlternative(COMP_Cr).end(), pcEncPic->getAlfCtuAlternative(COMP_Cr).begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cb].begin(), pic->m_alfCtuAlternative[COMP_Cb].end(), pcEncPic->m_alfCtuAlternative[COMP_Cb].begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cr].begin(), pic->m_alfCtuAlternative[COMP_Cr].end(), pcEncPic->m_alfCtuAlternative[COMP_Cr].begin() );
 
                       for( int i = 0; i < pic->slices.size(); i++ )
                       {
-                        pcEncPic->slices[i]->tileGroupNumAps = (pic->slices[i]->tileGroupNumAps);
+                        pcEncPic->slices[i]->numAps = (pic->slices[i]->numAps);
                         pcEncPic->slices[i]->setAlfAPSs(pic->slices[i]->alfAps);
-                        pcEncPic->slices[i]-> tileGroupChromaApsId        = pic->slices[i]->tileGroupChromaApsId;
-                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Y]  = pic->slices[i]->tileGroupAlfEnabled[COMP_Y];
-                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cb] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cb];
-                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cr] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cr];
-                        pcEncPic->slices[i]->tileGroupCcAlfCbApsId   = pic->slices[i]->tileGroupCcAlfCbApsId;
-                        pcEncPic->slices[i]->tileGroupCcAlfCbEnabled = pic->slices[i]->tileGroupCcAlfCbEnabled;
-                        pcEncPic->slices[i]->tileGroupCcAlfCrApsId   = pic->slices[i]->tileGroupCcAlfCrApsId;
-                        pcEncPic->slices[i]->tileGroupCcAlfCrEnabled = pic->slices[i]->tileGroupCcAlfCrEnabled;
+                        pcEncPic->slices[i]-> chromaApsId        = pic->slices[i]->chromaApsId;
+                        pcEncPic->slices[i]->alfEnabled[COMP_Y]  = pic->slices[i]->alfEnabled[COMP_Y];
+                        pcEncPic->slices[i]->alfEnabled[COMP_Cb] = pic->slices[i]->alfEnabled[COMP_Cb];
+                        pcEncPic->slices[i]->alfEnabled[COMP_Cr] = pic->slices[i]->alfEnabled[COMP_Cr];
+                        pcEncPic->slices[i]->ccAlfCbApsId   = pic->slices[i]->ccAlfCbApsId;
+                        pcEncPic->slices[i]->ccAlfCbEnabled = pic->slices[i]->ccAlfCbEnabled;
+                        pcEncPic->slices[i]->ccAlfCrApsId   = pic->slices[i]->ccAlfCrApsId;
+                        pcEncPic->slices[i]->ccAlfCrEnabled = pic->slices[i]->ccAlfCrEnabled;
                       }
                     }
 
@@ -228,6 +225,14 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
                     if( CS::isDualITree( *pcEncPic->cs ) )
                     {
                       pcEncPic->cs->copyStructure( *pic->cs, CH_C, TREE_D, true, true );
+                    }
+                  }
+
+                  for( const auto* slice : pcEncPic->slices )
+                  {
+                    for( int ctu : slice->sliceMap.ctuAddrInSlice )
+                    {
+                      pcEncPic->ctuSlice[ctu] = slice;
                     }
                   }
 
@@ -250,7 +255,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
             pcDecLib->executeLoopFilters();
           }
 
-          pcDecLib->finishPicture( poc, pcListPic, copyToEnc ? DETAILS : INFO );
+          pcDecLib->finishPicture( poc, pcListPic, copyToEnc ? VVENC_DETAILS : VVENC_INFO );
 
           // write output
           if( ! pcListPic->empty())
@@ -329,14 +334,14 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
             pcDecLib->resetAccessUnitApsNals();
           }
         }
-        ffwdDecoder.loopFiltered = ( nalu.m_nalUnitType == NAL_UNIT_EOS );
-        if( nalu.m_nalUnitType == NAL_UNIT_EOS )
+        ffwdDecoder.loopFiltered = ( nalu.m_nalUnitType == VVENC_NAL_UNIT_EOS );
+        if( nalu.m_nalUnitType == VVENC_NAL_UNIT_EOS )
         {
           pcDecLib->setFirstSliceInSequence( true );
         }
 
       }
-      else if( ( bNewPicture || !*ffwdDecoder.bitstreamFile || nalu.m_nalUnitType == NAL_UNIT_EOS ) && pcDecLib->getFirstSliceInSequence() )
+      else if( ( bNewPicture || !*ffwdDecoder.bitstreamFile || nalu.m_nalUnitType == VVENC_NAL_UNIT_EOS ) && pcDecLib->getFirstSliceInSequence() )
       {
         pcDecLib->setFirstSliceInPicture( true );
       }
@@ -375,9 +380,10 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 //! \ingroup DecoderLib
 //! \{
 
-DecLib::DecLib()
-  : m_iMaxRefPicNum(0)
-  , m_associatedIRAPType(NAL_UNIT_INVALID)
+DecLib::DecLib( MsgLog& logger )
+  : msg ( logger )
+  , m_iMaxRefPicNum(0)
+  , m_associatedIRAPType(VVENC_NAL_UNIT_INVALID)
   , m_pocCRA(0)
   , m_pocRandomAccess(MAX_INT)
   , m_lastRasPoc(MAX_INT)
@@ -390,8 +396,8 @@ DecLib::DecLib()
   , m_cTrQuant()
   , m_cSliceDecoder()
   , m_cCuDecoder()
-  , m_HLSReader()
-  , m_seiReader()
+  , m_HLSReader(logger)
+  , m_seiReader(logger)
   , m_cLoopFilter()
   , m_cSAO()
   , m_cReshaper()
@@ -413,6 +419,7 @@ DecLib::DecLib()
   , m_warningMessageSkipPicture(false)
   , m_prefixSEINALUs()
   , m_debugPOC( -1 )
+  , m_isDecoderInEncoder( false )
   , m_vps( nullptr )
   , m_scalingListUpdateFlag(true)
   , m_PreScalingListAPSId(-1)
@@ -420,10 +427,10 @@ DecLib::DecLib()
   , m_maxDecSliceAddrInSubPic(-1)
   , m_apsMapEnc( nullptr )
 {
-#if ENABLE_SIMD_OPT_BUFFER
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_X86 )
   g_pelBufOP.initPelBufOpsX86();
 #endif
-#if ENABLE_SIMD_TRAFO
+#if ENABLE_SIMD_TRAFO  && defined( TARGET_SIMD_X86 )
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 }
@@ -466,14 +473,14 @@ void DecLib::deletePicBuffer ( )
   for (int i = 0; i < iSize; i++ )
   {
     Picture* pic = *(iterPic++);
-    pic->destroy();
+    pic->destroy( false );
 
     delete pic;
     pic = NULL;
   }
 }
 
-Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32_t temporalLayer, const int layerId )
+Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32_t temporalLayer )
 {
   Picture * pic = nullptr;
   m_iMaxRefPicNum = ( m_vps == nullptr || m_vps->numLayersInOls[m_vps->targetOlsIdx] == 1 ) ? sps.maxDecPicBuffering[temporalLayer] : m_vps->getMaxDecPicBuffering( temporalLayer );     // m_uiMaxDecPicBuffering has the space for the picture currently being decoded uiMaxDecPicBuffering has the space for the picture currently being decoded
@@ -481,7 +488,7 @@ Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32
   {
     pic = new Picture();
 
-    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, layerId );
+    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
 
     m_cListPic.push_back( pic );
 
@@ -517,14 +524,14 @@ Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32
 
     m_cListPic.push_back( pic );
 
-    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, layerId );
+    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
   }
   else
   {
     if( !pic->Y().Size::operator==( Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ) ) || pic->cs->pcv->maxCUSize != sps.CTUSize || pic->cs->pcv->maxCUSize != sps.CTUSize )
     {
-      pic->destroy();
-      pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, 0 );
+      pic->destroy( false );
+      pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
     }
   }
 
@@ -624,7 +631,7 @@ void DecLib::finishPictureLight(int& poc, PicList*& rpcListPic )
   rpcListPic          = &m_cListPic;
 }
 
-void DecLib::finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl )
+void DecLib::finishPicture(int& poc, PicList*& rpcListPic, vvencMsgLevel msgl )
 {
   Slice*  slice = m_pic->cs->slice;
 
@@ -637,32 +644,33 @@ void DecLib::finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl )
   if (slice->isDRAP) c = 'D';
 
   //-- For time output for each slice
-  msg( msgl, "POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", slice->poc,
+  msg.log( msgl, "POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", slice->poc,
          slice->TLayer,
          c,
          slice->sliceQp );
 
   for (int iRefList = 0; iRefList < 2; iRefList++)
   {
-    msg( msgl, "[L%d ", iRefList);
+    msg.log( msgl, "[L%d ", iRefList);
     for (int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++)
     {
-      msg( msgl, "%d ", slice->getRefPOC(RefPicList(iRefList), iRefIndex));
+      msg.log( msgl, "%d ", slice->getRefPOC(RefPicList(iRefList), iRefIndex));
     }
-    msg( msgl, "] ");
+    msg.log( msgl, "] ");
   }
+
   if (m_decodedPictureHashSEIEnabled)
   {
     SEIMessages pictureHashes = getSeisByType(m_pic->SEIs, SEI::DECODED_PICTURE_HASH );
     const SEIDecodedPictureHash *hash = ( pictureHashes.size() > 0 ) ? (SEIDecodedPictureHash*) *(pictureHashes.begin()) : NULL;
     if (pictureHashes.size() > 1)
     {
-      msg( WARNING, "Warning: Got multiple decoded picture hash SEI messages. Using first.");
+      msg.log( VVENC_WARNING, "Warning: Got multiple decoded picture hash SEI messages. Using first.");
     }
-    m_numberOfChecksumErrorsDetected += calcAndPrintHashStatus(((const Picture*) m_pic)->getRecoBuf(), hash, slice->sps->bitDepths, msgl);
+    m_numberOfChecksumErrorsDetected += calcAndPrintHashStatus(((const Picture*) m_pic)->getRecoBuf(), hash, slice->sps->bitDepths, msgl, msg);
   }
 
-  msg( msgl, "\n");
+  msg.log( msgl, "\n");
 
   m_pic->isNeededForOutput = slice->picHeader->picOutputFlag;
   m_pic->isReconstructed   = true;
@@ -714,10 +722,10 @@ void DecLib::xUpdateRasInit(Slice* slice)
   }
 }
 
-void DecLib::xCreateLostPicture( int iLostPoc, const int layerId )
+void DecLib::xCreateLostPicture( int iLostPoc )
 {
-  msg( INFO, "\ninserting lost poc : %d\n",iLostPoc);
-  Picture *cFillPic = xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), 0, layerId);
+  msg.log( VVENC_INFO, "\ninserting lost poc : %d\n",iLostPoc);
+  Picture *cFillPic = xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), 0);
 
   CHECK( !cFillPic->slices.size(), "No slices in picture" );
 
@@ -739,7 +747,7 @@ void DecLib::xCreateLostPicture( int iLostPoc, const int layerId )
     Picture *pic = *(iterPic++);
     if(abs(pic->getPOC() -iLostPoc)==closestPoc&&pic->getPOC()!=m_apcSlicePilot->poc)
     {
-      msg( INFO, "copying picture %d to %d (%d)\n",pic->getPOC() ,iLostPoc,m_apcSlicePilot->poc);
+      msg.log( VVENC_INFO, "copying picture %d to %d (%d)\n",pic->getPOC() ,iLostPoc,m_apcSlicePilot->poc);
       cFillPic->getRecoBuf().copyFrom( pic->getRecoBuf() );
       break;
     }
@@ -769,14 +777,14 @@ bool DecLib::isSliceNaluFirstInAU( bool newPicture, InputNALUnit &nalu )
   }
 
   // should only be called for slice NALU types
-  if( nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_TRAIL &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_STSA &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_RADL &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_IDR_W_RADL &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_IDR_N_LP &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_CRA &&
-      nalu.m_nalUnitType != NAL_UNIT_CODED_SLICE_GDR )
+  if( nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_TRAIL &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_STSA &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RASL &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RADL &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_CRA &&
+      nalu.m_nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_GDR )
   {
     return false;
   }
@@ -801,11 +809,11 @@ bool DecLib::isSliceNaluFirstInAU( bool newPicture, InputNALUnit &nalu )
 void activateAPS(PicHeader* picHeader, Slice* pSlice, ParameterSetManager& parameterSetManager, APS** apss, APS* lmcsAPS, APS* scalingListAPS)
 {
   //luma APSs
-  if (pSlice->tileGroupAlfEnabled[COMP_Y])
+  if (pSlice->alfEnabled[COMP_Y])
   {
-    for (int i = 0; i < pSlice->tileGroupLumaApsId.size(); i++)
+    for (int i = 0; i < pSlice->lumaApsId.size(); i++)
     {
-      int apsId = pSlice->tileGroupLumaApsId[i];
+      int apsId = pSlice->lumaApsId[i];
       APS* aps = parameterSetManager.getAPS(apsId, ALF_APS);
 
       if (aps)
@@ -821,10 +829,10 @@ void activateAPS(PicHeader* picHeader, Slice* pSlice, ParameterSetManager& param
       }
     }
   }
-  if (pSlice->tileGroupAlfEnabled[COMP_Cb]||pSlice->tileGroupAlfEnabled[COMP_Cr])
+  if (pSlice->alfEnabled[COMP_Cb]||pSlice->alfEnabled[COMP_Cr])
   {
     //chroma APS
-    int apsId = pSlice->tileGroupChromaApsId;
+    int apsId = pSlice->chromaApsId;
     APS* aps = parameterSetManager.getAPS(apsId, ALF_APS);
     if (aps)
     {
@@ -849,9 +857,9 @@ void activateAPS(PicHeader* picHeader, Slice* pSlice, ParameterSetManager& param
   memset( filterParam.ccAlfFilterIdxEnabled[COMP_Cb - 1], false, sizeof(filterParam.ccAlfFilterIdxEnabled[COMP_Cb - 1]) );
   memset( filterParam.ccAlfFilterIdxEnabled[COMP_Cr - 1], false, sizeof(filterParam.ccAlfFilterIdxEnabled[COMP_Cr - 1]) );
 
-  if(pSlice->tileGroupCcAlfCbEnabled)
+  if(pSlice->ccAlfCbEnabled)
   {
-    int apsId = pSlice->tileGroupCcAlfCbApsId;
+    int apsId = pSlice->ccAlfCbApsId;
     APS *aps = parameterSetManager.getAPS(apsId, ALF_APS);
     if(aps)
     {
@@ -874,9 +882,9 @@ void activateAPS(PicHeader* picHeader, Slice* pSlice, ParameterSetManager& param
     }
   }
 
-  if(pSlice->tileGroupCcAlfCrEnabled)
+  if(pSlice->ccAlfCrEnabled)
   {
-    int apsId = pSlice->tileGroupCcAlfCrApsId;
+    int apsId = pSlice->ccAlfCrApsId;
     APS *aps = parameterSetManager.getAPS(apsId, ALF_APS);
     if(aps)
     {
@@ -953,14 +961,29 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     if (NULL == pps->pcv)
     {
-      m_parameterSetManager.getPPS( m_picHeader.ppsId )->pcv = new PreCalcValues( *sps, *pps, false );
+      const unsigned _maxQtSize[3] = { sps->CTUSize, sps->CTUSize, sps->CTUSize };
+      m_parameterSetManager.getPPS( m_picHeader.ppsId )->pcv = new PreCalcValues( *sps, *pps, _maxQtSize, false );
     }
     m_parameterSetManager.clearSPSChangedFlag(sps->spsId);
     m_parameterSetManager.clearPPSChangedFlag(pps->ppsId);
 
-    if (false == m_parameterSetManager.activatePPS(m_picHeader.ppsId,m_apcSlicePilot->isIRAP()))
+    ParameterSetManager::PPSErrCodes retPPS = m_parameterSetManager.activatePPS(m_picHeader.ppsId,m_apcSlicePilot->isIRAP() );
+    if( (int)retPPS != ParameterSetManager::PPS_OK )
     {
-      THROW("Parameter set activation failed!");
+      switch(retPPS)
+      {
+        case ParameterSetManager::PPS_ERR_INACTIVE_SPS: msg.log( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR."); break;
+        case ParameterSetManager::PPS_ERR_NO_SPS:       msg.log( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS."); break;
+        case ParameterSetManager::PPS_ERR_NO_PPS:       msg.log( VVENC_WARNING, "Warning: tried to activate non-existing PPS."); break;
+        case ParameterSetManager::PPS_WARN_DCI_ID:      msg.log( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!"); break;
+        case ParameterSetManager::PPS_WARN_NO_DCI:      msg.log( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI."); break;
+        default: break;
+      }
+
+      if( (int)retPPS < 0 )
+      {
+        THROW("Parameter set activation failed!");
+      }
     }
 
     m_parameterSetManager.getApsMap()->clearActive();
@@ -998,13 +1021,13 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     xParsePrefixSEImessages();
 
-    if (sps->spsRExt.extendedPrecisionProcessing || sps->bitDepths[ CH_L ]>12 || sps->bitDepths[ CH_C ]>12 )
+    if( sps->bitDepths[CH_L] > 10 || sps->bitDepths[CH_C] > 10 )
     {
-      THROW("High bit depth support must be enabled at compile-time in order to decode this bitstream\n");
+      THROW( "VVenC does not support high bitdepth stream\n" );
     }
 
     //  Get a new picture buffer. This will also set up m_pic, and therefore give us a SPS and PPS pointer that we can use.
-    m_pic = xGetNewPicBuffer (*sps, *pps, m_apcSlicePilot->TLayer, layerId);
+    m_pic = xGetNewPicBuffer (*sps, *pps, m_apcSlicePilot->TLayer);
 
     m_apcSlicePilot->pps = pps;
     m_apcSlicePilot->picHeader = &m_picHeader;
@@ -1014,7 +1037,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     m_pic->createTempBuffers( m_pic->cs->pps->pcv->maxCUSize );
     m_pic->cs->createCoeffs();
     m_pic->cs->createTempBuffers( true );
-    m_pic->cs->initStructData();
+    m_pic->cs->initStructData( MAX_INT, false, nullptr );
 
     m_pic->allocateNewSlice();
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice
@@ -1057,18 +1080,16 @@ void DecLib::xActivateParameterSets( const int layerId)
     // Recursive structure
     m_cCuDecoder.init( &m_cTrQuant, &m_cIntraPred, &m_cInterPred, sps->chromaFormatIdc );
 
-    m_cTrQuant.init( nullptr, sps->getMaxTbSize(), false, false, false, false, false );
+    m_cTrQuant.init( nullptr, 0, false, false, false, false );
     // RdCost
-    m_cRdCost.setCostMode ( COST_STANDARD_LOSSY ); // not used in decoder side RdCost stuff -> set to default
+    m_cRdCost.setCostMode ( VVENC_COST_STANDARD_LOSSY ); // not used in decoder side RdCost stuff -> set to default
     // RdCost
-    m_cRdCost.setCostMode ( COST_STANDARD_LOSSY ); // not used in decoder side RdCost stuff -> set to default
+    m_cRdCost.setCostMode ( VVENC_COST_STANDARD_LOSSY ); // not used in decoder side RdCost stuff -> set to default
 
     m_cSliceDecoder.create();
     if( sps->alfEnabled )
     {
-      const int maxDepth = floorLog2(sps->CTUSize) - sps->log2MinCodingBlockSize;
-
-      m_cALF.create( sps->maxPicWidthInLumaSamples, sps->maxPicHeightInLumaSamples, sps->chromaFormatIdc, sps->CTUSize, sps->CTUSize, maxDepth, sps->bitDepths.recon );
+      m_cALF.create( sps->maxPicWidthInLumaSamples, sps->maxPicHeightInLumaSamples, sps->chromaFormatIdc, sps->CTUSize, sps->CTUSize, sps->bitDepths.recon );
     }
     pSlice->ccAlfFilterControl[0] = m_cALF.m_ccAlfFilterControl[COMP_Cb-1];
     pSlice->ccAlfFilterControl[1] = m_cALF.m_ccAlfFilterControl[COMP_Cr-1];
@@ -1101,28 +1122,28 @@ void DecLib::xActivateParameterSets( const int layerId)
     // check that the current active PPS has not changed...
     if (m_parameterSetManager.getSPSChangedFlag(sps->spsId) )
     {
-      EXIT("Error - a new SPS has been decoded while processing a picture");
+      THROW("a new SPS has been decoded while processing a picture");
     }
     if (m_parameterSetManager.getPPSChangedFlag(pps->ppsId) )
     {
-      EXIT("Error - a new PPS has been decoded while processing a picture");
+      THROW("a new PPS has been decoded while processing a picture");
     }
     for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
     {
       APS* aps = m_parameterSetManager.getAPS(i, ALF_APS);
       if (aps && m_parameterSetManager.getAPSChangedFlag(i, ALF_APS))
       {
-        EXIT("Error - a new APS has been decoded while processing a picture");
+        THROW("a new APS has been decoded while processing a picture");
       }
     }
 
     if (lmcsAPS && m_parameterSetManager.getAPSChangedFlag(lmcsAPS->apsId, LMCS_APS) )
     {
-      EXIT("Error - a new LMCS APS has been decoded while processing a picture");
+      THROW("a new LMCS APS has been decoded while processing a picture");
     }
     if( scalinglistAPS && m_parameterSetManager.getAPSChangedFlag( scalinglistAPS->apsId, SCALING_LIST_APS ) )
     {
-      EXIT( "Error - a new SCALING LIST APS has been decoded while processing a picture" );
+      THROW( "a new SCALING LIST APS has been decoded while processing a picture" );
     }
 
     activateAPS(&m_picHeader, pSlice, m_parameterSetManager, apss, lmcsAPS, scalinglistAPS);
@@ -1154,7 +1175,7 @@ void DecLib::xCheckParameterSetConstraints(const int layerId)
   const VPS *vps = slice->vps;
 
   static std::unordered_map<int, int> m_clvssSPSid;
-  bool isClvssPu =  slice->nalUnitType >= NAL_UNIT_CODED_SLICE_IDR_W_RADL && slice->nalUnitType <= NAL_UNIT_CODED_SLICE_GDR && !pps->mixedNaluTypesInPic;
+  bool isClvssPu =  slice->nalUnitType >= VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL && slice->nalUnitType <= VVENC_NAL_UNIT_CODED_SLICE_GDR && !pps->mixedNaluTypesInPic;
 
   if( isClvssPu && m_bFirstSliceInPicture )
   {
@@ -1177,18 +1198,17 @@ void DecLib::xCheckParameterSetConstraints(const int layerId)
   const int minCuSize = 1 << sps->log2MinCodingBlockSize;
   CHECK( ( pps->picWidthInLumaSamples % ( std::max( 8, minCuSize) ) ) != 0, "Coded frame width must be a multiple of Max(8, the minimum unit size)" );
   CHECK( ( pps->picHeightInLumaSamples % ( std::max( 8, minCuSize) ) ) != 0, "Coded frame height must be a multiple of Max(8, the minimum unit size)" );
-  if( !sps->rprEnabled )
+  if( !sps->resChangeInClvsEnabled )
   {
     CHECK( pps->picWidthInLumaSamples != sps->maxPicWidthInLumaSamples, "When res_change_in_clvs_allowed_flag equal to 0, the value of pic_width_in_luma_samples shall be equal to pic_width_max_in_luma_samples." );
     CHECK( pps->picHeightInLumaSamples != sps->maxPicHeightInLumaSamples, "When res_change_in_clvs_allowed_flag equal to 0, the value of pic_height_in_luma_samples shall be equal to pic_height_max_in_luma_samples." );
   }
-  if( sps->rprEnabled )
+  if( sps->resChangeInClvsEnabled )
   {
     CHECK( sps->subPicInfoPresent != 0, "When res_change_in_clvs_allowed_flag is equal to 1, the value of subpic_info_present_flag shall be equal to 0." );
   }
-  CHECK( !sps->rprEnabled && pps->scalingWindow.enabledFlag, "When res_change_in_clvs_allowed_flag is equal to 0, the value of scaling_window_flag shall be equal to 0." );
 
-  CHECK(sps->rprEnabled && sps->virtualBoundariesEnabled, "when the value of res_change_in_clvs_allowed_flag is equal to 1, the value of sps_virtual_boundaries_present_flag shall be equal to 0");
+  CHECK(sps->resChangeInClvsEnabled && sps->virtualBoundariesEnabled, "when the value of res_change_in_clvs_allowed_flag is equal to 1, the value of sps_virtual_boundaries_present_flag shall be equal to 0");
 
   if( sps->CTUSize + 2 * ( 1 << sps->log2MinCodingBlockSize ) > pps->picWidthInLumaSamples )
   {
@@ -1246,7 +1266,7 @@ void DecLib::xParsePrefixSEIsForUnknownVCLNal()
   while (!m_prefixSEINALUs.empty())
   {
     // do nothing?
-    msg( NOTICE, "Discarding Prefix SEI associated with unknown VCL NAL unit.\n");
+    msg.log( VVENC_NOTICE, "Discarding Prefix SEI associated with unknown VCL NAL unit.\n");
     delete m_prefixSEINALUs.front();
   }
   // TODO: discard following suffix SEIs as well?
@@ -1359,21 +1379,22 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   m_apcSlicePilot->associatedIRAP = (m_pocCRA);
   m_apcSlicePilot->associatedIRAPType = (m_associatedIRAPType);
 
-  if (m_apcSlicePilot->isIRAP())
+  // Notice, we can also run into these part from encoder due to DebugBitstream mode, then the changes of pic.header should be avoided.
+  if (m_apcSlicePilot->isIRAP() && !m_isDecoderInEncoder )
   {
     //the inference for NoOutputPriorPicsFlag
     // KJS: This cannot happen at the encoder
-    if (!m_bFirstSliceInBitstream && (m_apcSlicePilot->isIRAP() || m_apcSlicePilot->nalUnitType >= NAL_UNIT_CODED_SLICE_GDR)
+    if (!m_bFirstSliceInBitstream && (m_apcSlicePilot->isIRAP() || m_apcSlicePilot->nalUnitType >= VVENC_NAL_UNIT_CODED_SLICE_GDR)
       )
     {
-      if (m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_CRA || m_apcSlicePilot->nalUnitType >= NAL_UNIT_CODED_SLICE_GDR)
+      if (m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA || m_apcSlicePilot->nalUnitType >= VVENC_NAL_UNIT_CODED_SLICE_GDR)
       {
         m_picHeader.noOutputOfPriorPics = (true);
       }
     }
   }
 
-  if ((m_apcSlicePilot->getRapPicFlag()  || m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_GDR) && m_picHeader.noOutputOfPriorPics)
+  if ((m_apcSlicePilot->getRapPicFlag()  || m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_GDR) && m_picHeader.noOutputOfPriorPics)
   {
     m_lastPOCNoOutputPriorPics = m_apcSlicePilot->poc;
     m_isNoOutputPriorPics = true;
@@ -1384,7 +1405,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   }
 
   //For inference of PicOutputFlag
-  if (m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_RASL)
+  if (m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL)
   {
     if ( m_lastNoIncorrectPicOutputFlag )
     {
@@ -1402,7 +1423,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
     }
   }
 
-  if ((m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_CRA || m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_GDR) &&
+  if ((m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA || m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_GDR) &&
       m_lastNoIncorrectPicOutputFlag)                     //Reset POC MSB when CRA or GDR has NoIncorrectPicOutputFlag equal to 1
   {
     int iMaxPOClsb = 1 << sps->bitsForPOC;
@@ -1433,7 +1454,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   //we should only get a different poc for a new picture (with CTU address==0)
   if(m_apcSlicePilot->poc != m_prevPOC && !m_bFirstSliceInSequence && (m_apcSlicePilot->sliceMap.ctuAddrInSlice[0] != 0))
   {
-    msg( WARNING, "Warning, the first slice of a picture might have been lost!\n");
+    msg.log( VVENC_WARNING, "Warning, the first slice of a picture might have been lost!\n");
   }
   m_prevLayerID = nalu.m_nuhLayerId;
 
@@ -1454,7 +1475,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   }
 
 
-  if (sps->ccalfEnabled && m_apcSlicePilot->tileGroupAlfEnabled[COMP_Y])
+  if (sps->ccalfEnabled && m_apcSlicePilot->alfEnabled[COMP_Y])
   {
   }
 
@@ -1462,14 +1483,19 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   //detect lost reference picture and insert copy of earlier frame.
   {
     int lostPoc;
-    int layerId = 0;
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, true)) > 0)
-      xCreateLostPicture(lostPoc - 1, layerId);
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, true)) > 0)
-      xCreateLostPicture(lostPoc - 1, layerId);
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_0, lostPoc ) )
+    {
+      msg.log( VVENC_WARNING, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc );
+      xCreateLostPicture( lostPoc - 1 );
+    }
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_1, lostPoc ) )
+    {
+      msg.log( VVENC_WARNING, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc );
+      xCreateLostPicture( lostPoc - 1 );
+    }
   }
 
-    m_prevPOC = m_apcSlicePilot->poc;
+  m_prevPOC = m_apcSlicePilot->poc;
 
   if (m_bFirstSliceInPicture)
   {
@@ -1566,7 +1592,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
     {
       m_cReshaper.setReshapeFlag(false);
     }
-    if( slice->sliceType == I_SLICE )
+    if( slice->sliceType == VVENC_I_SLICE )
     {
       m_cReshaper.setCTUFlag(false);
     }
@@ -1653,64 +1679,64 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
   bool ret;
   // ignore all NAL units of layers > 0
 
-  m_accessUnitNals.push_back( std::pair<NalUnitType, int>( nalu.m_nalUnitType, nalu.m_temporalId ) );
+  m_accessUnitNals.push_back( std::pair<vvencNalUnitType, int>( nalu.m_nalUnitType, nalu.m_temporalId ) );
 
   switch (nalu.m_nalUnitType)
   {
-    case NAL_UNIT_VPS:
+    case VVENC_NAL_UNIT_VPS:
       xDecodeVPS( nalu );
       m_vps->targetOlsIdx = iTargetOlsIdx;
       return false;
 
-    case NAL_UNIT_DCI:
+    case VVENC_NAL_UNIT_DCI:
       xDecodeDCI( nalu );
       return false;
 
-    case NAL_UNIT_SPS:
+    case VVENC_NAL_UNIT_SPS:
       xDecodeSPS( nalu );
       return false;
 
-    case NAL_UNIT_PPS:
+    case VVENC_NAL_UNIT_PPS:
       xDecodePPS( nalu );
       return false;
-    case NAL_UNIT_PH:
+    case VVENC_NAL_UNIT_PH:
       xDecodePicHeader(nalu);
       return !m_bFirstSliceInPicture;
 
-    case NAL_UNIT_PREFIX_APS:
-    case NAL_UNIT_SUFFIX_APS:
+    case VVENC_NAL_UNIT_PREFIX_APS:
+    case VVENC_NAL_UNIT_SUFFIX_APS:
       xDecodeAPS(nalu);
       return false;
 
-    case NAL_UNIT_PREFIX_SEI:
+    case VVENC_NAL_UNIT_PREFIX_SEI:
       // Buffer up prefix SEI messages until SPS of associated VCL is known.
       m_prefixSEINALUs.push_back(new InputNALUnit(nalu));
       return false;
 
-    case NAL_UNIT_SUFFIX_SEI:
+    case VVENC_NAL_UNIT_SUFFIX_SEI:
       if (m_pic)
       {
         m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pic->SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream );
       }
       else
       {
-        msg( NOTICE, "Note: received suffix SEI but no picture currently active.\n");
+        msg.log( VVENC_NOTICE, "Note: received suffix SEI but no picture currently active.\n");
       }
       return false;
 
-    case NAL_UNIT_CODED_SLICE_TRAIL:
-    case NAL_UNIT_CODED_SLICE_STSA:
-    case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
-    case NAL_UNIT_CODED_SLICE_IDR_N_LP:
-    case NAL_UNIT_CODED_SLICE_CRA:
-    case NAL_UNIT_CODED_SLICE_GDR:
-    case NAL_UNIT_CODED_SLICE_RADL:
-    case NAL_UNIT_CODED_SLICE_RASL:
+    case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+    case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+    case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+    case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+    case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+    case VVENC_NAL_UNIT_CODED_SLICE_GDR:
+    case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+    case VVENC_NAL_UNIT_CODED_SLICE_RASL:
       ret = xDecodeSlice(nalu, iSkipFrame, iPOCLastDisplay);
       return ret;
 
-    case NAL_UNIT_EOS:
-      m_associatedIRAPType = NAL_UNIT_INVALID;
+    case VVENC_NAL_UNIT_EOS:
+      m_associatedIRAPType = VVENC_NAL_UNIT_INVALID;
       m_pocCRA = 0;
       m_pocRandomAccess = MAX_INT;
       m_prevLayerID = MAX_INT;
@@ -1719,35 +1745,35 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
       m_skippedPOC = 0;
       return false;
 
-    case NAL_UNIT_ACCESS_UNIT_DELIMITER:
+    case VVENC_NAL_UNIT_ACCESS_UNIT_DELIMITER:
       {
-        AUDReader audReader;
+        AUDReader audReader(msg);
         uint32_t picType;
         uint32_t audIrapOrGdrAuFlag;
         audReader.parseAccessUnitDelimiter(&(nalu.getBitstream()),audIrapOrGdrAuFlag,picType);
         return !m_bFirstSliceInPicture;
       }
 
-    case NAL_UNIT_EOB:
+    case VVENC_NAL_UNIT_EOB:
       return false;
 
-    case NAL_UNIT_RESERVED_IRAP_VCL_11:
-    case NAL_UNIT_RESERVED_IRAP_VCL_12:
-      msg( NOTICE, "Note: found reserved VCL NAL unit.\n");
+    case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_11:
+    case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_12:
+      msg.log( VVENC_NOTICE, "Note: found reserved VCL NAL unit.\n");
       xParsePrefixSEIsForUnknownVCLNal();
       return false;
-    case NAL_UNIT_RESERVED_VCL_4:
-    case NAL_UNIT_RESERVED_VCL_5:
-    case NAL_UNIT_RESERVED_VCL_6:
-    case NAL_UNIT_RESERVED_NVCL_26:
-    case NAL_UNIT_RESERVED_NVCL_27:
-      msg( NOTICE, "Note: found reserved NAL unit.\n");
+    case VVENC_NAL_UNIT_RESERVED_VCL_4:
+    case VVENC_NAL_UNIT_RESERVED_VCL_5:
+    case VVENC_NAL_UNIT_RESERVED_VCL_6:
+    case VVENC_NAL_UNIT_RESERVED_NVCL_26:
+    case VVENC_NAL_UNIT_RESERVED_NVCL_27:
+      msg.log( VVENC_NOTICE, "Note: found reserved NAL unit.\n");
       return false;
-    case NAL_UNIT_UNSPECIFIED_28:
-    case NAL_UNIT_UNSPECIFIED_29:
-    case NAL_UNIT_UNSPECIFIED_30:
-    case NAL_UNIT_UNSPECIFIED_31:
-      msg( NOTICE, "Note: found unspecified NAL unit.\n");
+    case VVENC_NAL_UNIT_UNSPECIFIED_28:
+    case VVENC_NAL_UNIT_UNSPECIFIED_29:
+    case VVENC_NAL_UNIT_UNSPECIFIED_30:
+    case VVENC_NAL_UNIT_UNSPECIFIED_31:
+      msg.log( VVENC_NOTICE, "Note: found unspecified NAL unit.\n");
       return false;
     default:
       THROW( "Invalid NAL unit type" );
@@ -1774,13 +1800,13 @@ bool DecLib::isRandomAccessSkipPicture( int& iSkipFrame, int& iPOCLastDisplay )
     iSkipFrame--;   // decrement the counter
     return true;
   }
-  else if ( m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL || m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP )
+  else if ( m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL || m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
   {
     m_pocRandomAccess = -MAX_INT; // no need to skip the reordered pictures in IDR, they are decodable.
   }
   else if (m_pocRandomAccess == MAX_INT) // start of random access point, m_pocRandomAccess has not been set yet.
   {
-    if (m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_CRA )
+    if (m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA )
     {
       // set the POC random access since we need to skip the reordered pictures in the case of CRA/CRANT/BLA/BLANT.
       m_pocRandomAccess = m_apcSlicePilot->poc;
@@ -1789,14 +1815,14 @@ bool DecLib::isRandomAccessSkipPicture( int& iSkipFrame, int& iPOCLastDisplay )
     {
       if(!m_warningMessageSkipPicture)
       {
-        msg( WARNING, "\nWarning: this is not a valid random access point and the data is discarded until the first CRA picture");
+        msg.log( VVENC_WARNING, "\nWarning: this is not a valid random access point and the data is discarded until the first CRA picture");
         m_warningMessageSkipPicture = true;
       }
       return true;
     }
   }
   // skip the reordered pictures, if necessary
-  else if (m_apcSlicePilot->poc < m_pocRandomAccess && (m_apcSlicePilot->nalUnitType == NAL_UNIT_CODED_SLICE_RASL))
+  else if (m_apcSlicePilot->poc < m_pocRandomAccess && (m_apcSlicePilot->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL))
   {
     iPOCLastDisplay++;
     return true;
@@ -1827,25 +1853,25 @@ void DecLib::xCheckNalUnitConstraintFlags( const ConstraintInfo *cInfo, uint32_t
 {
   if (cInfo != NULL)
   {
-    CHECK(cInfo->noTrailConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_TRAIL,
+    CHECK(cInfo->noTrailConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_TRAIL,
       "Non-conforming bitstream. no_trail_constraint_flag is equal to 1 but bitstream contains NAL unit of type TRAIL_NUT.");
-    CHECK(cInfo->noStsaConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_STSA,
+    CHECK(cInfo->noStsaConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_STSA,
       "Non-conforming bitstream. no_stsa_constraint_flag is equal to 1 but bitstream contains NAL unit of type STSA_NUT.");
-    CHECK(cInfo->noRaslConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_RASL,
+    CHECK(cInfo->noRaslConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_RASL,
       "Non-conforming bitstream. no_rasl_constraint_flag is equal to 1 but bitstream contains NAL unit of type RASL_NUT.");
-    CHECK(cInfo->noRadlConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_RADL,
+    CHECK(cInfo->noRadlConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_RADL,
       "Non-conforming bitstream. no_radl_constraint_flag is equal to 1 but bitstream contains NAL unit of type RADL_NUT.");
-    CHECK(cInfo->noIdrConstraintFlag && (naluType == NAL_UNIT_CODED_SLICE_IDR_W_RADL),
+    CHECK(cInfo->noIdrConstraintFlag && (naluType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL),
       "Non-conforming bitstream. no_idr_constraint_flag is equal to 1 but bitstream contains NAL unit of type IDR_W_RADL.");
-    CHECK(cInfo->noIdrConstraintFlag && (naluType == NAL_UNIT_CODED_SLICE_IDR_N_LP),
+    CHECK(cInfo->noIdrConstraintFlag && (naluType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP),
       "Non-conforming bitstream. no_idr_constraint_flag is equal to 1 but bitstream contains NAL unit of type IDR_N_LP.");
-    CHECK(cInfo->noCraConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_CRA,
+    CHECK(cInfo->noCraConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_CRA,
       "Non-conforming bitstream. no_cra_constraint_flag is equal to 1 but bitstream contains NAL unit of type CRA_NUT.");
-    CHECK(cInfo->noGdrConstraintFlag && naluType == NAL_UNIT_CODED_SLICE_GDR,
+    CHECK(cInfo->noGdrConstraintFlag && naluType == VVENC_NAL_UNIT_CODED_SLICE_GDR,
       "Non-conforming bitstream. no_gdr_constraint_flag is equal to 1 but bitstream contains NAL unit of type GDR_NUT.");
-    CHECK(cInfo->noApsConstraintFlag && naluType == NAL_UNIT_PREFIX_APS,
+    CHECK(cInfo->noApsConstraintFlag && naluType == VVENC_NAL_UNIT_PREFIX_APS,
       "Non-conforming bitstream. no_aps_constraint_flag is equal to 1 but bitstream contains NAL unit of type APS_PREFIX_NUT.");
-    CHECK(cInfo->noApsConstraintFlag && naluType == NAL_UNIT_SUFFIX_APS,
+    CHECK(cInfo->noApsConstraintFlag && naluType == VVENC_NAL_UNIT_SUFFIX_APS,
       "Non-conforming bitstream. no_aps_constraint_flag is equal to 1 but bitstream contains NAL unit of type APS_SUFFIX_NUT.");
   }
 }
@@ -1875,62 +1901,62 @@ bool DecLib::isNewPicture(std::ifstream *bitstreamFile, class InputByteStream *b
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      msg( ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
       // get next NAL unit type
-      read(nalu);
+      read(nalu, msg);
       switch( nalu.m_nalUnitType ) {
 
         // NUT that indicate the start of a new picture
-      case NAL_UNIT_ACCESS_UNIT_DELIMITER:
-      case NAL_UNIT_DCI:
-      case NAL_UNIT_VPS:
-      case NAL_UNIT_SPS:
-      case NAL_UNIT_PPS:
-      case NAL_UNIT_PH:
+      case VVENC_NAL_UNIT_ACCESS_UNIT_DELIMITER:
+      case VVENC_NAL_UNIT_DCI:
+      case VVENC_NAL_UNIT_VPS:
+      case VVENC_NAL_UNIT_SPS:
+      case VVENC_NAL_UNIT_PPS:
+      case VVENC_NAL_UNIT_PH:
         ret = true;
         finished = true;
         break;
 
       // NUT that may be the start of a new picture - check first bit in slice header
-      case NAL_UNIT_CODED_SLICE_TRAIL:
-      case NAL_UNIT_CODED_SLICE_STSA:
-      case NAL_UNIT_CODED_SLICE_RASL:
-      case NAL_UNIT_CODED_SLICE_RADL:
-      case NAL_UNIT_RESERVED_VCL_4:
-      case NAL_UNIT_RESERVED_VCL_5:
-      case NAL_UNIT_RESERVED_VCL_6:
-      case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
-      case NAL_UNIT_CODED_SLICE_IDR_N_LP:
-      case NAL_UNIT_CODED_SLICE_CRA:
-      case NAL_UNIT_CODED_SLICE_GDR:
-      case NAL_UNIT_RESERVED_IRAP_VCL_11:
-      case NAL_UNIT_RESERVED_IRAP_VCL_12:
+      case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+      case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+      case VVENC_NAL_UNIT_CODED_SLICE_RASL:
+      case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+      case VVENC_NAL_UNIT_RESERVED_VCL_4:
+      case VVENC_NAL_UNIT_RESERVED_VCL_5:
+      case VVENC_NAL_UNIT_RESERVED_VCL_6:
+      case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+      case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+      case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+      case VVENC_NAL_UNIT_CODED_SLICE_GDR:
+      case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_11:
+      case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_12:
         ret = checkPictureHeaderInSliceHeaderFlag(nalu);
         finished = true;
         break;
 
       // NUT that are not the start of a new picture
-      case NAL_UNIT_EOS:
-      case NAL_UNIT_EOB:
-      case NAL_UNIT_SUFFIX_APS:
-      case NAL_UNIT_SUFFIX_SEI:
-      case NAL_UNIT_FD:
+      case VVENC_NAL_UNIT_EOS:
+      case VVENC_NAL_UNIT_EOB:
+      case VVENC_NAL_UNIT_SUFFIX_APS:
+      case VVENC_NAL_UNIT_SUFFIX_SEI:
+      case VVENC_NAL_UNIT_FD:
         ret = false;
         finished = true;
         break;
 
         // NUT that might indicate the start of a new picture - keep looking
-      case NAL_UNIT_PREFIX_APS:
-      case NAL_UNIT_PREFIX_SEI:
-      case NAL_UNIT_RESERVED_NVCL_26:
-      case NAL_UNIT_RESERVED_NVCL_27:
-      case NAL_UNIT_UNSPECIFIED_28:
-      case NAL_UNIT_UNSPECIFIED_29:
-      case NAL_UNIT_UNSPECIFIED_30:
-      case NAL_UNIT_UNSPECIFIED_31:
+      case VVENC_NAL_UNIT_PREFIX_APS:
+      case VVENC_NAL_UNIT_PREFIX_SEI:
+      case VVENC_NAL_UNIT_RESERVED_NVCL_26:
+      case VVENC_NAL_UNIT_RESERVED_NVCL_27:
+      case VVENC_NAL_UNIT_UNSPECIFIED_28:
+      case VVENC_NAL_UNIT_UNSPECIFIED_29:
+      case VVENC_NAL_UNIT_UNSPECIFIED_30:
+      case VVENC_NAL_UNIT_UNSPECIFIED_31:
       default:
         break;
       }
@@ -1971,39 +1997,39 @@ bool DecLib::isNewAccessUnit( bool newPicture, std::ifstream *bitstreamFile, cla
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      msg( ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_WARNING, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
       // get next NAL unit type
-      read(nalu);
+      read(nalu,msg);
       switch( nalu.m_nalUnitType ) {
 
         // AUD always indicates the start of a new access unit
-      case NAL_UNIT_ACCESS_UNIT_DELIMITER:
+      case VVENC_NAL_UNIT_ACCESS_UNIT_DELIMITER:
         ret = true;
         finished = true;
         break;
 
         // slice types - check layer ID and POC
-      case NAL_UNIT_CODED_SLICE_TRAIL:
-      case NAL_UNIT_CODED_SLICE_STSA:
-      case NAL_UNIT_CODED_SLICE_RASL:
-      case NAL_UNIT_CODED_SLICE_RADL:
-      case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
-      case NAL_UNIT_CODED_SLICE_IDR_N_LP:
-      case NAL_UNIT_CODED_SLICE_CRA:
-      case NAL_UNIT_CODED_SLICE_GDR:
+      case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+      case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+      case VVENC_NAL_UNIT_CODED_SLICE_RASL:
+      case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+      case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+      case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+      case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+      case VVENC_NAL_UNIT_CODED_SLICE_GDR:
         ret = isSliceNaluFirstInAU( newPicture, nalu );
         finished = true;
         break;
 
         // NUT that are not the start of a new access unit
-      case NAL_UNIT_EOS:
-      case NAL_UNIT_EOB:
-      case NAL_UNIT_SUFFIX_APS:
-      case NAL_UNIT_SUFFIX_SEI:
-      case NAL_UNIT_FD:
+      case VVENC_NAL_UNIT_EOS:
+      case VVENC_NAL_UNIT_EOB:
+      case VVENC_NAL_UNIT_SUFFIX_APS:
+      case VVENC_NAL_UNIT_SUFFIX_SEI:
+      case VVENC_NAL_UNIT_FD:
         ret = false;
         finished = true;
         break;

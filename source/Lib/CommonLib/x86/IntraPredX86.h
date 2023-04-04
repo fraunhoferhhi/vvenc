@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -222,8 +218,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
         if (useCubicFilter)
         {
-          vbdmin = _mm256_set1_epi16( clpRng.min );
-          vbdmax = _mm256_set1_epi16( clpRng.max );
+          vbdmin = _mm256_set1_epi16( clpRng.min() );
+          vbdmax = _mm256_set1_epi16( clpRng.max() );
         }
 
         for (int y = 0; y<height; y++ )
@@ -242,10 +238,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
           __m256i coeff = _mm256_broadcastsi128_si256(tmp);
           for( int x = 0; x < width; x+=16)
           {
-            __m256i src0 = _mm256_lddqu_si256( ( const __m256i * )&refMain[refMainIndex - 1]  );//load 16 16 bit reference Pels   -1 0 1 2  3 4 5 6  7 8 9 10  11 12 13 14
-            __m256i src2 = _mm256_castsi128_si256 (_mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex +4 - 1] ));
-            __m256i src1 = _mm256_permute2f128_si256  (src0,src0,0x00);
-            src2 = _mm256_permute2f128_si256  (src2,src2,0x00);
+            __m256i src1 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &refMain[refMainIndex     - 1] ) );
+            __m256i src2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &refMain[refMainIndex + 4 - 1] ) );
             src1 = _mm256_shuffle_epi8(src1,shflmask1);									// -1 0 1 2  0 1 2 3 1 2 3 4  2 3 4 5
             src2 = _mm256_shuffle_epi8(src2,shflmask1);									// 3 4 5 6  4 5 6 7  5 6 7 8 6 7 8 9
 
@@ -260,10 +254,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
             refMainIndex+=8;
 
-            src1 = _mm256_permute2f128_si256  (src0,src0,0x1);
-            src2 =  _mm256_inserti128_si256(src2, _mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex +4 - 1] ), 0x0);
-            src1 = _mm256_permute2f128_si256  (src1,src1,0x00);
-            src2 = _mm256_permute2f128_si256  (src2,src2,0x00);
+            src1 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex     - 1] ) );
+            src2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex + 4 - 1] ) );
 
             src1 = _mm256_shuffle_epi8(src1,shflmask1);									// -1 0 1 2  0 1 2 3 1 2 3 4  2 3 4 5
             src2 = _mm256_shuffle_epi8(src2,shflmask1);									// 3 4 5 6  4 5 6 7  5 6 7 8 6 7 8 9
@@ -275,6 +267,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
             sum1 = _mm256_add_epi32( sum1, offset );
             sum1 = _mm256_srai_epi32( sum1, 6 );
+            __m256i
             src0 = _mm256_packs_epi32( sum, sum1 );
 
             src0 = _mm256_permute4x64_epi64(src0,0xD8);
@@ -296,8 +289,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
         if (useCubicFilter)
         {
-          vbdmin = _mm_set1_epi16( clpRng.min );
-          vbdmax = _mm_set1_epi16( clpRng.max );
+          vbdmin = _mm_set1_epi16( clpRng.min() );
+          vbdmax = _mm_set1_epi16( clpRng.max() );
         }
 
         for (int y = 0; y<height; y++ )
@@ -314,11 +307,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
           __m128i tmp = _mm_loadl_epi64( ( __m128i const * )f );   //load 4 16 bit filter coeffs
           tmp = _mm_shuffle_epi32(tmp,0x44);
           __m256i coeff = _mm256_broadcastsi128_si256(tmp);
-          __m256i src0 = _mm256_lddqu_si256( ( const __m256i * )&refMain[refMainIndex - 1]  );//load 16 16 bit reference Pels   -1 0 1 2  3 4 5 6  7 8 9 10  11 12 13 14
-          //					__m256i src2 =  _mm256_inserti128_si256(src2, _mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex +4 - 1] ), 0x0);
-          __m256i src2 = _mm256_castsi128_si256 (_mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex +4 - 1] ));
-          __m256i src1 = _mm256_permute2f128_si256  (src0,src0,0x00);
-          src2 = _mm256_permute2f128_si256  (src2,src2,0x00);
+          __m256i src1 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex     - 1] ) );
+          __m256i src2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( __m128i const* ) &refMain[refMainIndex + 4 - 1] ) );
           src1 = _mm256_shuffle_epi8(src1,shflmask1);									// -1 0 1 2  0 1 2 3 1 2 3 4  2 3 4 5
           src2 = _mm256_shuffle_epi8(src2,shflmask1);									// 3 4 5 6  4 5 6 7  5 6 7 8 6 7 8 9
 
@@ -330,6 +320,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
           sum = _mm256_add_epi32( sum, offset );
           sum = _mm256_srai_epi32( sum, 6 );
+          __m256i
           src0 = _mm256_permute4x64_epi64( _mm256_packs_epi32( sum, sum ), 0x88  );
           __m128i dest128 = _mm256_castsi256_si128( src0);
 
@@ -351,8 +342,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
       __m128i offset = _mm_set1_epi32( 32 );
       if (useCubicFilter)
       {
-        vbdmin = _mm_set1_epi16( clpRng.min );
-        vbdmax = _mm_set1_epi16( clpRng.max );
+        vbdmin = _mm_set1_epi16( clpRng.min() );
+        vbdmax = _mm_set1_epi16( clpRng.max() );
       }
       for (int y = 0; y<height; y++ )
       {
@@ -369,7 +360,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
         coeff = _mm_shuffle_epi32(coeff,0x44);
         for( int x = 0; x < width; x+=8)
         {
-          __m128i src0 = _mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
+          __m128i src0 = _mm_loadu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
           __m128i src1 = _mm_shuffle_epi8(src0,shflmask1);									// -1 0 1 2  0 1 2 3
           __m128i src2 = _mm_shuffle_epi8(src0,shflmask2);									// 1 2 3 4  2 3 4 5
           src0 = _mm_madd_epi16( coeff,src1 );
@@ -379,7 +370,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
           sum = _mm_srai_epi32( sum, 6 );
 
           refMainIndex+=4;
-          src0 = _mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
+          src0 = _mm_loadu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
           src1 = _mm_shuffle_epi8(src0,shflmask1);						                    // -1 0 1 2  0 1 2 3
           src2 = _mm_shuffle_epi8(src0,shflmask2);
 
@@ -413,8 +404,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
     if (useCubicFilter)
     {
-      vbdmin = _mm_set1_epi16( clpRng.min );
-      vbdmax = _mm_set1_epi16( clpRng.max );
+      vbdmin = _mm_set1_epi16( clpRng.min() );
+      vbdmax = _mm_set1_epi16( clpRng.max() );
     }
 
     for (int y = 0; y<height; y++ )
@@ -431,7 +422,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 //      __m128i coeff = _mm_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
       coeff = _mm_shuffle_epi32(coeff,0x44);
       {
-        __m128i src0 = _mm_lddqu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
+        __m128i src0 = _mm_loadu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
         __m128i src1 = _mm_shuffle_epi8(src0,shflmask1);									// -1 0 1 2  0 1 2 3
         __m128i src2 = _mm_shuffle_epi8(src0,shflmask2);									// 1 2 3 4  2 3 4 5
         src0 = _mm_madd_epi16( coeff,src1 );
@@ -461,10 +452,6 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
   _mm256_zeroupper();
 #endif
 }
-#define _mm_storeu_si32(p, a) (void)(*(int*)(p) = _mm_cvtsi128_si32((a)))
-#define _mm_loadu_si64(p) _mm_loadl_epi64((__m128i const*)(p))
-#define _mm_loadu_si32(p) _mm_cvtsi32_si128(*(unsigned int const*)(p))
-
 
 template< X86_VEXT vext, int W >
 void  IntraPredSampleFilter_SIMD(PelBuf& dstBuf, const CPelBuf& Src)
@@ -1258,7 +1245,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
         _mm_storel_epi64( ( __m128i * )(pDsty), xdst );
       else
       {
-        EXIT("wrong blocksize");
+        THROW("wrong blocksize");
       }
     }
   }
@@ -1299,8 +1286,8 @@ void IntraHorVerPDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int 
    {
 #ifdef USE_AVX2
      __m256i v32 = _mm256_set1_epi32(32);
-     __m256i vbdmin   = _mm256_set1_epi16( clpRng.min );
-     __m256i vbdmax   = _mm256_set1_epi16( clpRng.max );
+     __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
+     __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
 
      __m256i wl16;
      if (scale==0)
@@ -1367,8 +1354,8 @@ void IntraHorVerPDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int 
    }
    else      //width <= 8
    {
-     __m128i vbdmin   = _mm_set1_epi16( clpRng.min );
-     __m128i vbdmax   = _mm_set1_epi16( clpRng.max );
+     __m128i vbdmin   = _mm_set1_epi16( clpRng.min() );
+     __m128i vbdmax   = _mm_set1_epi16( clpRng.max() );
      __m128i wl16;
 
      if (scale==0)

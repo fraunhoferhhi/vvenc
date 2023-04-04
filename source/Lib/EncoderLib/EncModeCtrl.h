@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -80,6 +76,8 @@ enum EncTestModeType
   ETM_SPLIT_TT_H,
   ETM_SPLIT_TT_V,
   ETM_RECO_CACHED,
+  ETM_IBC,
+  ETM_IBC_MERGE,
   ETM_INVALID
 };
 
@@ -163,15 +161,6 @@ inline PartSplit getPartSplit( const EncTestMode& encTestmode )
   }
 }
 
-inline EncTestMode getCSEncMode( const CodingStructure& cs )
-{
-  return EncTestMode( EncTestModeType( (unsigned)cs.features[ENC_FT_ENC_MODE_TYPE] ),
-                      EncTestModeOpts( (unsigned)cs.features[ENC_FT_ENC_MODE_OPTS] ),
-                      false);
-}
-
-
-
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl controls if specific modes should be tested
 //////////////////////////////////////////////////////////////////////////
@@ -188,7 +177,9 @@ struct ComprCUCtx
     , bestCS        ( nullptr    )
     , bestCU        ( nullptr    )
     , bestTU        ( nullptr    )
+    , bestMode      ()
     , bestInterCost             ( MAX_DOUBLE )
+    , bestCostBeforeSplit       ( MAX_DOUBLE )
     , bestCostVertSplit     (MAX_DOUBLE)
     , bestCostHorzSplit     (MAX_DOUBLE)
     , bestCostTriVertSplit  (MAX_DOUBLE)
@@ -201,7 +192,6 @@ struct ComprCUCtx
     , grad_dowVal           (0)
     , interHad              (MAX_DISTORTION)
     , maxQtSubDepth         (0)
-    , earlySkip             (false)
     , isReusingCu           (false)
     , qtBeforeBt            (false)
     , doTriHorzSplit        (false)
@@ -209,8 +199,16 @@ struct ComprCUCtx
     , didQuadSplit          (false)
     , didHorzSplit          (false)
     , didVertSplit          (false)
+    , doHorChromaSplit      (false)
+    , doVerChromaSplit      (false)
+    , doQtChromaSplit       (false)
     , isBestNoSplitSkip     (false)
     , skipSecondMTSPass     (false)
+    , intraWasTested        (false)
+    , relatedCuIsValid      (false)
+    , bestIntraMode         (0)
+    , isIntra               (false)
+    , nonSkipWasTested      (false)
   {
   }
 
@@ -219,7 +217,9 @@ struct ComprCUCtx
   CodingStructure*  bestCS;
   CodingUnit*       bestCU;
   TransformUnit*    bestTU;
+  EncTestMode       bestMode;
   double            bestInterCost;
+  double            bestCostBeforeSplit;
   double            bestCostVertSplit;
   double            bestCostHorzSplit;
   double            bestCostTriVertSplit;
@@ -232,7 +232,6 @@ struct ComprCUCtx
   double            grad_dowVal;
   Distortion        interHad;
   int               maxQtSubDepth;
-  bool              earlySkip;
   bool              isReusingCu;
   bool              qtBeforeBt;
   bool              doTriHorzSplit;
@@ -241,37 +240,21 @@ struct ComprCUCtx
   bool              didQuadSplit;
   bool              didHorzSplit;
   bool              didVertSplit;
+  bool              doHorChromaSplit;
+  bool              doVerChromaSplit;
+  bool              doQtChromaSplit;
   bool              isBestNoSplitSkip;
   bool              skipSecondMTSPass;
+  bool              intraWasTested;
+  bool              relatedCuIsValid;
+  int               bestIntraMode;
+  bool              isIntra;
+  bool              nonSkipWasTested;
 };
 
 //////////////////////////////////////////////////////////////////////////
 // some utility interfaces that expose some functionality that can be used without concerning about which particular controller is used
 //////////////////////////////////////////////////////////////////////////
-struct SaveLoadStructSbt
-{
-  uint8_t  numPuInfoStored;
-  uint32_t puSse[SBT_NUM_SL];
-  uint8_t  puSbt[SBT_NUM_SL];
-};
-
-class SaveLoadEncInfoSbt
-{
-protected:
-  void init( const Slice &slice );
-  void create();
-  void destroy();
-
-private:
-  SaveLoadStructSbt m_saveLoadSbt[6][6][32][32];
-  const PreCalcValues* m_pcv;
-
-public:
-  virtual  ~SaveLoadEncInfoSbt() { }
-  void     resetSaveloadSbt   ( int maxSbtSize );
-  uint8_t  findBestSbt        ( const UnitArea& area, const uint32_t curPuSse );
-  bool     saveBestSbt        ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
-};
 
 static const int MAX_STORED_CU_INFO_REFS = 4;
 
@@ -281,11 +264,18 @@ struct CodedCUInfo
   bool isIntra;
   bool isSkip;
   bool isMMVDSkip;
+  int  isMergeSimple;
   bool isIBC;
   uint8_t BcwIdx;
-  bool validMv[NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
-  Mv   saveMv [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
   int  ctuRsAddr, poc;
+  uint8_t  numPuInfoStored;
+  bool validMv  [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  Mv   saveMv   [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  uint32_t puSse[SBT_NUM_SL];
+  uint8_t  puSbt[SBT_NUM_SL];
+  double bestCost;
+  bool   relatedCuIsValid;
+  int    bestIntraMode;
 
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
@@ -296,6 +286,7 @@ class CacheBlkInfoCtrl
 protected:
   // x in CTU, y in CTU, width, height
   CodedCUInfo*         m_codedCUInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
+  CodedCUInfo*         m_codedCUInfoBuf;
   const PreCalcValues* m_pcv;
 
 protected:
@@ -305,22 +296,24 @@ protected:
   void init     ( const Slice &slice );
 
 public:
-  virtual ~CacheBlkInfoCtrl() {}
+  CacheBlkInfoCtrl() : m_codedCUInfoBuf( nullptr ) {}
+  ~CacheBlkInfoCtrl () {}
 
-  CodedCUInfo& getBlkInfo( const UnitArea& area );
-  void         initBlk( const UnitArea& area, int poc );
+  CodedCUInfo& getBlkInfo   ( const UnitArea& area );
+  void         initBlk      ( const UnitArea& area, int poc );
+
+  uint8_t      findBestSbt  ( const UnitArea& area, const uint32_t curPuSse );
+  bool         saveBestSbt  ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
 };
 
 struct BestEncodingInfo
 { 
-  BestEncodingInfo( int dmvrSize ) { dmvrMvdBuffer.resize(dmvrSize); }
   CodingUnit      cu;
   TransformUnit   tu;
   EncTestMode     testMode;
   int             poc;
   Distortion      dist;
   double          costEDO;
-  std::vector<Mv> dmvrMvdBuffer;
 };
 
 class BestEncInfoCache
@@ -328,7 +321,9 @@ class BestEncInfoCache
 private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
-  TCoeff*              m_pCoeff;
+  TCoeffSig*           m_pCoeff;
+  BestEncodingInfo*    m_encInfoBuf;
+  Mv*                  m_dmvrMvBuf;
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
 
@@ -337,12 +332,12 @@ protected:
   void create   ( const ChromaFormat chFmt );
   void destroy  ();
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
-  virtual ~BestEncInfoCache() {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_encInfoBuf( nullptr ), m_dmvrMvBuf( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
+  ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
-  bool setCsFrom        ( CodingStructure& cs, EncTestMode& testMode, const Partitioner& partitioner ) const;
-  bool setFromCs        ( const CodingStructure& cs, const Partitioner& partitioner );
+  bool setCsFrom        (       CodingStructure& cs,       EncTestMode& testMode, const Partitioner& partitioner ) const;
+  bool setFromCs        ( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner );
   bool isReusingCuValid ( const CodingStructure &cs, const Partitioner &partitioner, int qp );
 };
 
@@ -351,7 +346,7 @@ public:
 //                    - only 2Nx2N, no RQT, additional binary/triary CU splits
 //////////////////////////////////////////////////////////////////////////
 
-class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache, public SaveLoadEncInfoSbt
+class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache
 {
 protected:
 
@@ -359,16 +354,17 @@ protected:
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
+  unsigned              m_tileIdx;
 
 public:
   ComprCUCtx*           comprCUCtx;
 
-  virtual ~EncModeCtrl    () { destroy(); }
+  ~EncModeCtrl    () { destroy(); }
 
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
-  void initCTUEncoding    ( const Slice &slice );
-  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );
+  void initCTUEncoding    ( const Slice &slice, int tileIdx );
+  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
   void finishCULevel      ( Partitioner &partitioner );
 
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );
@@ -376,10 +372,6 @@ public:
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 
   void beforeSplit        ( Partitioner& partitioner );
-
-private:
-  void xExtractFeatures   ( const EncTestMode& encTestmode, CodingStructure& cs );
-
 };
 
 } // namespace vvenc

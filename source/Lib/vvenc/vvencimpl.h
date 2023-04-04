@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -50,13 +46,28 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <string>
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
+#include "EncoderLib/EncLib.h"
+#include "Utilities/MsgLog.h"
 
 namespace vvenc {
 
+static const char * const vvencErrorMsg[] = { "expected behavior",
+                                              "unspecified malfunction",
+                                              "encoder not initialized or tried to initialize multiple times",
+                                              "internal allocation error",
+                                              "allocated memory to small to receive encoded data",
+                                              "inconsistent or invalid parameters",
+                                              "unsupported request",
+                                              "encoder requires restart",
+                                              "unsupported CPU - SSE 4.1 needed",
+                                              "unknown error code", 0 };
+
 class EncLib;
 class AccessUnitList;
+
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
@@ -80,18 +91,22 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf );
+  int init( vvenc_config* config );
 
-  int initPass( int pass );
+  int initPass( int pass, const char* statsFName );
   int uninit();
 
   bool isInitialized() const;
 
-  int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
+  int setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
 
-  int getConfig( VVEncCfg& rcVVEncCfg ) const;
-  int checkConfig( const VVEncCfg& rcVVEncCfg );
-  int reconfig( const VVEncCfg& rcVVEncCfg );
+  int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUnit, bool* pbEncodeDone );
+
+  int getParameterSets( vvencAccessUnit *pcAccessUnit );
+
+  int getConfig( vvenc_config& rcVVEncCfg ) const;
+  int checkConfig( const vvenc_config& rcVVEncCfg );
+  int reconfig( const vvenc_config& rcVVEncCfg );
 
   int setAndRetErrorMsg( int Ret );
 
@@ -100,32 +115,36 @@ public:
 
   int printSummary() const;
 
-  std::string getEncoderInfo() const;
+  const char* getEncoderInfo() const;
 
-  std::string getLastError() const;
+  const char* getLastError() const;
 
-  static std::string getErrorMsg( int nRet );
-  static std::string getVersionNumber();
-  
-  static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
-  static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static const char* getErrorMsg( int nRet );
+  static const char* getVersionNumber();
+  static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );  ///< deprecated, this method uses the deprecated global logger and will be removed
+  static const char* setSIMDExtension( const char* simdId );                     ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static std::string getCompileInfoString();
+  static std::string createEncoderInfoStr();
+  static int         decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 private:
-
-  int xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const;
-
-  int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
+  int xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList );
+  int xCopyAu( vvencAccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
+  bool xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer );
 
 private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
   bool                   m_bInitialized         = false;
 
-  VVEncCfg               m_cVVEncCfg;
+  vvenc_config           m_cVVEncCfgExt;      // external (user) config ( not usd currently)
+  vvenc_config           m_cVVEncCfg;         // internal (adapted) config
 
   std::string            m_cErrorString;
-  std::string            m_sEncoderCapabilities;
+  std::string            m_cEncoderInfo;
 
   EncLib*                m_pEncLib = nullptr;
+
+  MsgLog                 msg;
 };
 
 

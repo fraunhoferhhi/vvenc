@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -66,19 +62,11 @@ namespace vvenc {
 // ====================================================================================================================
 class EncPicture;
 class EncCu;
-class VVEncCfg;
 
 /// encoder search class
 class IntraSearch : public IntraPrediction
 {
 private:
-  CodingStructure***  m_pTempCS;
-  CodingStructure***  m_pBestCS;
-  CodingStructure**   m_pSaveCS;
-  bool                m_saveCuCostInSCIPU;
-  uint8_t             m_numCuInSCIPU;
-  Area                m_cuAreaInSCIPU[NUM_INTER_CU_INFO_SAVE];
-  double              m_cuCostInSCIPU[NUM_INTER_CU_INFO_SAVE];
 
   struct ModeInfo
   {
@@ -88,49 +76,21 @@ private:
     uint8_t  ispMod;    // CU::ispMode
     uint8_t  modeId;    // CU::intraDir[CH_L]
 
-    ModeInfo() : mipFlg(false), mipTrFlg(false), mRefId(0), ispMod(NOT_INTRA_SUBPARTITIONS), modeId(0) {}
-    ModeInfo(const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode) : mipFlg(mipf), mipTrFlg(miptf), mRefId(mrid), ispMod(ispm), modeId(mode) {}
-    bool operator==(const ModeInfo cmp) const { return (0 == ::memcmp(this,&cmp,sizeof(ModeInfo))); }
+    ModeInfo() : mipFlg( false ), mipTrFlg( false ), mRefId( 0 ), ispMod( NOT_INTRA_SUBPARTITIONS ), modeId( 0 ) {}
+    ModeInfo( const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode ) : mipFlg( mipf ), mipTrFlg( miptf ), mRefId( mrid ), ispMod( ispm ), modeId( mode ) {}
+    bool operator==( const ModeInfo cmp ) const { return ( 0 == ::memcmp( this, &cmp, sizeof( ModeInfo ) ) ); }
   };
 
-  struct ISPTestedModesInfo
-  {
-    int                                         numTotalParts[2];
-    int                                         bestModeSoFar;
-    ISPType                                     bestSplitSoFar;
-    double                                      bestCost[2];
-    bool                                        splitIsFinished[2];
-    int                                         subTuCounter;
-    PartSplit                                   IspType;
-
-    // set everything to default values
-    void clear()
-    {
-      for (int splitIdx = 0; splitIdx < NUM_INTRA_SUBPARTITIONS_MODES - 1; splitIdx++)
-      {
-        numTotalParts[splitIdx]   = 0;
-        splitIsFinished[splitIdx] = false;
-        bestCost[splitIdx] = MAX_DOUBLE;
-      }
-      bestModeSoFar      = -1;
-      bestSplitSoFar     = NOT_INTRA_SUBPARTITIONS;
-      subTuCounter = -1;
-      IspType      = TU_NO_ISP;
-    }
-    void init(const int numTotalPartsHor, const int numTotalPartsVer)
-    {
-      clear();
-      const int horSplit = HOR_INTRA_SUBPARTITIONS - 1, verSplit = VER_INTRA_SUBPARTITIONS - 1;
-      numTotalParts[horSplit]   = numTotalPartsHor;
-      numTotalParts[verSplit]   = numTotalPartsVer;
-      splitIsFinished[horSplit] = (numTotalParts[horSplit] == 0);
-      splitIsFinished[verSplit] = (numTotalParts[verSplit] == 0);
-      subTuCounter = -1;
-      IspType      = TU_NO_ISP;
-    }
-  };
-
-  ISPTestedModesInfo                                       m_ispTestedModes[NUM_LFNST_NUM_PER_SET];
+  CodingStructure*    m_pTempCS;
+  CodingStructure*    m_pBestCS;
+  CodingStructure**   m_pSaveCS;
+  bool                m_saveCuCostInSCIPU;
+  uint8_t             m_numCuInSCIPU;
+  Area                m_cuAreaInSCIPU[NUM_INTER_CU_INFO_SAVE];
+  double              m_cuCostInSCIPU[NUM_INTER_CU_INFO_SAVE];
+  CompStorage         m_orgResiCb[5], m_orgResiCr[5]; // 0:std, 1-3:jointCbCr, 4:crossComp
+  std::vector<ModeInfo>
+                      m_parentCandList;
 
 protected:
   // interface to option
@@ -147,6 +107,61 @@ protected:
 public:
   IntraSearch();
   ~IntraSearch();
+
+  struct ISPTestedModesInfo
+  {
+    int                                         numTotalParts[2];
+    int                                         bestModeSoFar;
+    ISPType                                     bestSplitSoFar;
+    double                                      bestCost[2];
+    bool                                        splitIsFinished[2];
+    int                                         subTuCounter;
+    PartSplit                                   IspType;
+    bool                                        relatedCuIsValid;
+    bool                                        intraWasTested;
+    int                                         bestIntraMode;
+    bool                                        isIntra;
+    int                                         bestBefore[3];
+    // set everything to default values
+    void clear()
+    {
+      for (int splitIdx = 0; splitIdx < NUM_INTRA_SUBPARTITIONS_MODES - 1; splitIdx++)
+      {
+        numTotalParts[splitIdx] = 0;
+        splitIsFinished[splitIdx] = false;
+        bestCost[splitIdx] = MAX_DOUBLE;
+      }
+      bestModeSoFar = -1;
+      bestSplitSoFar = NOT_INTRA_SUBPARTITIONS;
+      subTuCounter = -1;
+      IspType = TU_NO_ISP;
+    }
+    void init(const int numTotalPartsHor, const int numTotalPartsVer, bool n)
+    {
+      if (n)
+      {
+        intraWasTested = false;
+        relatedCuIsValid = false;
+        bestIntraMode = 0;
+        isIntra   = false;
+        std::memset(bestBefore,0, sizeof(bestBefore));
+        clear();
+      }
+      else
+      {
+        const int horSplit = HOR_INTRA_SUBPARTITIONS - 1, verSplit = VER_INTRA_SUBPARTITIONS - 1;
+        numTotalParts[horSplit] = numTotalPartsHor;
+        numTotalParts[verSplit] = numTotalPartsVer;
+        splitIsFinished[horSplit] = (numTotalParts[horSplit] == 0);
+        splitIsFinished[verSplit] = (numTotalParts[verSplit] == 0);
+        subTuCounter = -1;
+        IspType = TU_NO_ISP;
+      }
+    }
+  };
+
+  ISPTestedModesInfo m_ispTestedModes[ NUM_LFNST_NUM_PER_SET ];
+
   void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
   void setCtuEncRsrc              ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
   void destroy                    ();
@@ -186,9 +201,10 @@ private:
 
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false);
   ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm );
-  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode );
+  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode, bool disableMTS);
   double   xTestISP                   ( CodingStructure& cs, Partitioner& pm, double bestCostSoFar, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx);
   int      xSpeedUpISP                ( int speed, bool& testISP, int mode, int& noISP, int& endISP, CodingUnit& cu, static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,const ModeInfo& bestPUMode, int bestISP, int bestLfnstIdx);
+  void     xSpeedUpIntra              ( double bestcost, int& EndMode, int& speedIntra, CodingUnit& cu);
 
   template<typename T, size_t N, int M>
   void      xReduceHadCandList        ( static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const CodingUnit& cu, const bool fastMip);

@@ -1,0 +1,59 @@
+name: CI build
+
+on:
+  push:
+  pull_request:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      matrix:
+        config:
+          - {
+              name: "Windows MSVC",
+              os: windows-2019,
+              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+              generators: "Visual Studio 16 2019"
+            }
+          - {
+              name: "Windows MinGW",
+              os: windows-2019,
+              cc: "gcc",
+              cxx: "g++",
+              generators: "MinGW Makefiles"
+            }
+          - {
+              name: "Ubuntu 18.04",
+              os: ubuntu-18.04
+            }
+          - {
+              name: "Ubuntu 20.04",
+              os: ubuntu-20.04
+            }
+          - {
+              name: "Mac OS 10.15",
+              os: macos-10.15
+            }
+    steps:
+    - uses: actions/checkout@v2
+    - run: git fetch --prune --unshallow
+    - run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build .
+      if: matrix.config.os != 'windows-2019'
+    - run: |
+        mkdir build
+        cd build
+        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release"
+        cmake --build . --config Release
+      shell: cmd
+      if: matrix.config.os == 'windows-2019'
+
+      

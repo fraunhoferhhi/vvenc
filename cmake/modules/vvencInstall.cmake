@@ -5,31 +5,42 @@ set( RUNTIME_DEST ${CMAKE_INSTALL_BINDIR} )
 set( LIBRARY_DEST ${CMAKE_INSTALL_LIBDIR} )
 set( ARCHIVE_DEST ${CMAKE_INSTALL_LIBDIR} )
 
+set( VVENC_INST_TARGETS vvenc )
+
 # install targets
 macro( install_targets config_ )
   string( TOLOWER ${config_} config_lc_ )
-  install( TARGETS             vvenc vvencapp vvencFFapp
-           EXPORT              vvencTargets-${config_lc_} 
+  install( TARGETS             ${VVENC_INST_TARGETS}
+           EXPORT              vvencTargets-${config_lc_}
            CONFIGURATIONS      ${config_}
            RUNTIME DESTINATION ${RUNTIME_DEST}
            LIBRARY DESTINATION ${LIBRARY_DEST}
            ARCHIVE DESTINATION ${ARCHIVE_DEST} )
+  if( VVENC_INSTALL_FULLFEATURE_APP )
+	install( TARGETS             vvencapp vvencFFapp
+	         CONFIGURATIONS      ${config_}
+             RUNTIME DESTINATION ${RUNTIME_DEST} )
+  else()
+	install( TARGETS             vvencapp
+             CONFIGURATIONS      ${config_}
+             RUNTIME DESTINATION ${RUNTIME_DEST} )
+  endif()
 endmacro( install_targets )
 
 # install pdb file for static and shared libraries
 macro( install_lib_pdb lib_ )
   if( MSVC )
-    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,SHARED_LIBRARY>>:$<TARGET_PDB_FILE:${lib_}>>                                         
+    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,SHARED_LIBRARY>>:$<TARGET_PDB_FILE:${lib_}>>
              CONFIGURATIONS Debug DESTINATION ${RUNTIME_DEST} OPTIONAL )
-    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,SHARED_LIBRARY>>:$<TARGET_PDB_FILE:${lib_}>>                                         
+    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,SHARED_LIBRARY>>:$<TARGET_PDB_FILE:${lib_}>>
              CONFIGURATIONS RelWithDebInfo DESTINATION ${RUNTIME_DEST} OPTIONAL )
-    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/$<TARGET_PROPERTY:${lib_},NAME>.pdb> 
+    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/$<TARGET_PROPERTY:${lib_},NAME>.pdb>
              CONFIGURATIONS Debug DESTINATION ${ARCHIVE_DEST} OPTIONAL )
-    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/$<TARGET_PROPERTY:${lib_},NAME>.pdb> 
+    install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/$<TARGET_PROPERTY:${lib_},NAME>.pdb>
              CONFIGURATIONS RelWithDebInfo DESTINATION ${ARCHIVE_DEST} OPTIONAL )
-    #install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/${lib_}.pdb> 
+    #install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/${lib_}.pdb>
     #         CONFIGURATIONS Debug DESTINATION ${ARCHIVE_DEST} OPTIONAL )
-    #install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/${lib_}.pdb> 
+    #install( FILES $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${lib_},TYPE>,STATIC_LIBRARY>>:$<TARGET_FILE_DIR:${lib_}>/${lib_}.pdb>
     #         CONFIGURATIONS RelWithDebInfo DESTINATION ${ARCHIVE_DEST} OPTIONAL )
   endif()
 endmacro( install_lib_pdb )
@@ -76,3 +87,7 @@ endif()
 install( EXPORT vvencTargets-release        NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Release        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 install( EXPORT vvencTargets-debug          NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Debug          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 install( EXPORT vvencTargets-relwithdebinfo NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS RelWithDebInfo DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+
+configure_file( pkgconfig/libvvenc.pc.in ${CMAKE_CURRENT_BINARY_DIR}/pkgconfig/libvvenc.pc @ONLY )
+install( FILES ${CMAKE_CURRENT_BINARY_DIR}/pkgconfig/libvvenc.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig )
+

@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -75,7 +71,6 @@ enum PictureType
   PIC_RECON_WRAP,
   PIC_SAO_TEMP,
   NUM_PIC_TYPES,
-  PIC_ORIGINAL_LOCAL,
   PIC_ORIGINAL_RSP_REC,
 };
 
@@ -88,11 +83,11 @@ class CodingStructure
 public:
 
   UnitArea         area;
+  UnitArea         _maxArea;
 
   Picture*         picture;
   CodingStructure* parent;
-  CodingStructure* refCS;
-  CodingStructure* bestCS;
+  CodingStructure* lumaCS;
   Slice*           slice;
 
   UnitScale        unitScale[MAX_NUM_COMP];
@@ -111,8 +106,8 @@ public:
   const PreCalcValues* pcv;
 
   CodingStructure( XUCache& unitCache, std::mutex* mutex );
-  void create( const UnitArea& _unit, const bool isTopLayer, const PreCalcValues* _pcv );
-  void create( const ChromaFormat _chromaFormat, const Area& _area, const bool isTopLayer );
+  void createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv );
+  void createForSearch( const ChromaFormat _chromaFormat, const Area& _area );
   void destroy();
   void releaseIntermediateData();
 
@@ -143,8 +138,8 @@ public:
   const CodingUnit*    getCURestricted(const Position& pos, const CodingUnit& curCu,    const ChannelType _chType) const;
   const TransformUnit* getTURestricted(const Position& pos, const TransformUnit& curTu, const ChannelType _chType) const;
 
-  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType);
-  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu);
+  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cuInit = nullptr);
+  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu, TransformUnit* tuInit = nullptr);
   void addEmptyTUs( Partitioner &partitioner, CodingUnit* cu );
 
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
@@ -156,8 +151,6 @@ public:
   // encoding search utilities
   // ---------------------------------------------------------------------------
 
-  static_vector<double, NUM_ENC_FEATURES> features;
-
   double      cost;
   double      costDbOffset;
   double      lumaCost;
@@ -165,14 +158,15 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false);
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = true, const UnitArea* area = nullptr );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
+  void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
-  void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
+  void useSubStructure (      CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyRecoToPic = true);
 
-  void clearTUs();
-  void clearCUs();
+  void clearTUs( bool force = false );
+  void clearCUs( bool force = false );
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
   void createTempBuffers( const bool isTopLayer );
@@ -196,7 +190,6 @@ private:
   bool m_isTuEnc;
 
   CodingUnit**      m_cuPtr   [MAX_NUM_CH];
-  TransformUnit**   m_tuPtr   [MAX_NUM_CH];
 
   unsigned m_numCUs;
   unsigned m_numTUs;
@@ -214,8 +207,8 @@ private:
   PelStorage* m_org;
   PelStorage* m_rsporg;
 
-  TCoeff* m_coeffs [MAX_NUM_COMP];
-  int     m_offsets[MAX_NUM_COMP];
+  TCoeffSig*  m_coeffs [MAX_NUM_COMP];
+  int         m_offsets[MAX_NUM_COMP];
 
   std::vector<Mv>   m_dmvrMvCache;
   int               m_dmvrMvCacheOffset;
@@ -229,6 +222,7 @@ private:
 
 public:
   CodingStructure*  bestParent;
+  bool              resetIBCBuffer;
 
   MotionBuf getMotionBuf( const     Area& _area );
   MotionBuf getMotionBuf( const UnitArea& _area ) { return getMotionBuf( _area.Y() ); }
@@ -326,7 +320,7 @@ private:
 };
 
 
-static inline uint32_t getNumberValidTBlocks(const PreCalcValues& pcv) { return (pcv.chrFormat==CHROMA_400) ? 1 : ( pcv.multiBlock422 ? MAX_NUM_TBLOCKS : MAX_NUM_COMP ); }
+static inline uint32_t getNumberValidTBlocks(const PreCalcValues& pcv) { return (pcv.chrFormat==CHROMA_400) ? 1 : MAX_NUM_COMP; }
 
 } // namespace vvenc
 
