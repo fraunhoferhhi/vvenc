@@ -354,7 +354,9 @@ typedef struct vvencRPLEntry
 
 VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry );
 
-
+/// <summary>
+/// Deprecated, dont use!
+/// </summary>
 typedef struct vvencWCGChromaQPControl
 {
   bool   enabled        ;    // Enabled flag (0:default)
