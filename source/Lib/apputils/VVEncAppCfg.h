@@ -809,10 +809,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
     ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "(deprecated) 1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
-    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "(deprecated)WCG PPS Chroma Cb QP Scale")
-    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "(deprecated)WCG PPS Chroma Cr QP Scale")
-    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "(deprecated)WCG PPS Chroma QP Scale")
-    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "(deprecated)WCG PPS Chroma QP Offset")
+    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "(deprecated) WCG PPS Chroma Cb QP Scale")
+    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "(deprecated) WCG PPS Chroma Cr QP Scale")
+    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "(deprecated) WCG PPS Chroma QP Scale")
+    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "(deprecated) WCG PPS Chroma QP Offset")
     ;
 
     opts.setSubSection("Misc. options");
