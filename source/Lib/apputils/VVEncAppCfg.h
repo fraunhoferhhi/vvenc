@@ -808,11 +808,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
     ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-    ("WCGPPSEnable (deprecated)",                       c->m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
-    ("WCGPPSCbQpScale (deprecated)",                    c->m_wcgChromaQpControl.chromaCbQpScale,             "WCG PPS Chroma Cb QP Scale")
-    ("WCGPPSCrQpScale (deprecated)",                    c->m_wcgChromaQpControl.chromaCrQpScale,             "WCG PPS Chroma Cr QP Scale")
-    ("WCGPPSChromaQpScale (deprecated)",                c->m_wcgChromaQpControl.chromaQpScale,               "WCG PPS Chroma QP Scale")
-    ("WCGPPSChromaQpOffset (deprecated)",               c->m_wcgChromaQpControl.chromaQpOffset,              "WCG PPS Chroma QP Offset")
+    ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "(deprecated) 1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
+    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "(deprecated)WCG PPS Chroma Cb QP Scale")
+    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "(deprecated)WCG PPS Chroma Cr QP Scale")
+    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "(deprecated)WCG PPS Chroma QP Scale")
+    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "(deprecated)WCG PPS Chroma QP Offset")
     ;
 
     opts.setSubSection("Misc. options");
