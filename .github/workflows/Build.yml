@@ -15,10 +15,16 @@ jobs:
       matrix:
         config:
           - {
-              name: "Windows MSVC",
+              name: "Windows MSVC 16",
               os: windows-2019,
               environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
               generators: "Visual Studio 16 2019"
+            }
+          - {
+              name: "Windows MSVC 17",
+              os: windows-2019,
+              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+              generators: "Visual Studio 17 2022"
             }
           - {
               name: "Windows MinGW",
@@ -36,8 +42,14 @@ jobs:
               os: ubuntu-22.04
             }
           - {
-              name: "Mac OS 12",
-              os: macos-12
+              name: "Mac OS Latest x86_64",
+              os: macos-latest,
+              osx_arch: x86_64
+            }
+          - {
+              name: "Mac OS Latest arm64",
+              os: macos-latest,
+              osx_arch: arm64
             }
     steps:
     - uses: actions/checkout@v3
@@ -45,7 +57,7 @@ jobs:
     - run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake .. -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.config.osx_arch }}"
         cmake --build .
       if: matrix.config.os != 'windows-2019'
     - run: |
