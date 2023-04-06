@@ -808,11 +808,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
     ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-    ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
-    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "WCG PPS Chroma Cb QP Scale")
-    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "WCG PPS Chroma Cr QP Scale")
-    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "WCG PPS Chroma QP Scale")
-    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "WCG PPS Chroma QP Offset")
+    ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "(deprecated) 1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
+    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "(deprecated) WCG PPS Chroma Cb QP Scale")
+    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "(deprecated) WCG PPS Chroma Cr QP Scale")
+    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "(deprecated) WCG PPS Chroma QP Scale")
+    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "(deprecated) WCG PPS Chroma QP Offset")
     ;
 
     opts.setSubSection("Misc. options");
@@ -847,12 +847,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MaxMTTDepthI",                                    c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
     ("MaxMTTDepthISliceL",                              c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
     ("MaxMTTDepthISliceC",                              c->m_maxMTTDepthIChroma,                             "Max MTT depth for chroma in I slices")
-    // --> deprecated
-    ("MaxMTTHierarchyDepth",                            c->m_maxMTTDepth,                                    "(deprecated) Same as MaxMTTDepth")
-    ("MaxMTTHierarchyDepthI",                           c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthI")
-    ("MaxMTTHierarchyDepthISliceL",                     c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthISliceL")
-    ("MaxMTTHierarchyDepthISliceC",                     c->m_maxMTTDepthIChroma,                             "(deprecated) Same as MaxMTTDepthISliceC")
-    // <-- deprecated
     ("MaxBTLumaISlice",                                 c->m_maxBT[0],                                       "Max BT size for (luma in) I slices")
     ("MaxBTChromaISlice",                               c->m_maxBT[2],                                       "Max BT size for chroma in I slices")
     ("MaxBTNonISlice",                                  c->m_maxBT[1],                                       "Max BT size for P/B slices")
