@@ -1523,7 +1523,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
       CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
       pic->picApsGlobal = m_globalApsList.back();
       // the max size of global APS list is more than enough to support parallelization 
-      if( m_globalApsList.size() > m_pcEncCfg->m_GOPSize * ( m_pcEncCfg->m_maxParallelFrames + 1 ) )
+      if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
       {
         delete m_globalApsList.front();
         m_globalApsList.pop_front();

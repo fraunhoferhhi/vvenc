@@ -732,11 +732,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         goRiceParam      = g_auiGoRiceParsCoeff   [ sumAbs ];
         goRiceZero       = g_auiGoRicePosCoeff0(0, goRiceParam);
       }
-      else if( iScanPos != iLastScanPos && iAbsLevel )
-      {
-        int  sumAll = cctx.templateAbsSum( iScanPos, piDstCoeff, 4 );
-        goRiceParam = g_auiGoRiceParsCoeff[ sumAll ];
-      }
 
 #if ENABLE_TRACING
       DTRACE( g_trace_ctx, D_RDOQ, "%d [%d][%d][%2d:%2d][%2d:%2d]", DTRACE_GET_COUNTER( g_trace_ctx, D_RDOQ ), iScanPos, cctx.blockPos( iScanPos ), cctx.cgPosX(), cctx.cgPosY(), cctx.posX( iScanPos ), cctx.posY( iScanPos ) );
@@ -776,6 +771,13 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         //===== coefficient level estimation =====
         const int iFloor = (int)( iScaledLevel >> iQBits );
         const int iCeil  = iFloor + 1;
+
+        if( remRegBins >= 4 && iScanPos != iLastScanPos && iCeil >= 4 )
+        {
+          int  sumAll = cctx.templateAbsSum( iScanPos, piDstCoeff, 4 );
+          goRiceParam = g_auiGoRiceParsCoeff[ sumAll ];
+        }
+
         if( iScanPos == iLastScanPos )
         {
           // =======================             =======================

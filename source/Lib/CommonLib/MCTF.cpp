@@ -633,14 +633,14 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( !pic->useScMCTF )
+  if( !pic->useScMCTF && !pic->gopEntry->m_isStartOfGop )
   {
     isFilterThisFrame = false;
   }
 
   pic->m_picShared->m_picAuxQpOffset = 0;
 
-  if ( isFilterThisFrame || pic->gopEntry->m_isStartOfGop )
+  if ( isFilterThisFrame )
   {
     const PelStorage& origBuf = pic->getOrigBuffer();
           PelStorage& fltrBuf = pic->getFilteredOrigBuffer();
@@ -768,7 +768,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           }
         }
 
-        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0)
+        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
           // force filter
           fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
