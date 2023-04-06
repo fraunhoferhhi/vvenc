@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.8.0-rc1
+tag 1.8.0
 
 * libvvenc:
   - removed library parameters:
@@ -9,6 +9,7 @@ tag 1.8.0-rc1
     - vvenc_config::m_FirstPassMode
   - changed library parameters:
     - vvenc_config::m_useSelectiveRDOQ is now an int_8, with 2 enabling selective RDOQ only for SCC
+  - deprecated config: vvencWCGChromaQPControl
   - QPA: added saliency detection
   - BIM: propagation of the parameters to higher temporal layers
   - retuned the presets:
@@ -20,7 +21,10 @@ tag 1.8.0-rc1
   
 * vvencFFapp:
   - removed from default installation! Use VVENC_INSTALL_FULLFEATURE_APP CMake variable to override.
-  - removed parameters: TemporalSubsampleRatio, RCForceIntraQP
+  - removed parameters: TemporalSubsampleRatio, RCForceIntraQP, MaxMTTHierarchyDepth, MaxMTTHierarchyDepthI,
+                        MaxMTTHierarchyDepthISliceL, MaxMTTHierarchyDepthISliceC
+  - deprecated parameters: WCGPPSEnable, WCGPPSCbQpScale, WCGPPSCrQpScale,
+                           WCGPPSChromaQpScale, WCGPPSChromaQpOffset
   - added parameters: FirstPassMode
 
 /////////////////////////////////////////
