@@ -28,19 +28,19 @@ jobs:
               generators: "MinGW Makefiles"
             }
           - {
-              name: "Ubuntu 18.04",
-              os: ubuntu-18.04
-            }
-          - {
               name: "Ubuntu 20.04",
               os: ubuntu-20.04
+            }
+          - {
+              name: "Ubuntu 22.04",
+              os: ubuntu-22.04
             }
           - {
               name: "Mac OS 10.15",
               os: macos-10.15
             }
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
     - run: |
         mkdir build
