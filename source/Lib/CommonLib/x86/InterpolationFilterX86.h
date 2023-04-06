@@ -1288,6 +1288,166 @@ static void simdInterpolateN2_M4( const int16_t* src, int srcStride, int16_t *ds
     dst += dstStride;
   }
 }
+
+template<X86_VEXT vext>
+static void simdInterpolateN2_2D( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *ch, TFilterCoeff const *cv )
+{
+  const int shift1st  = IF_FILTER_PREC_BILINEAR - ( IF_INTERNAL_PREC_BILINEAR - clpRng.bd );
+  const int offset1st = 1 << ( shift1st - 1 );
+
+  const int shift2nd  = 4;
+  const int offset2nd = 1 << ( shift2nd - 1 );
+  
+  _mm_prefetch( ( const char * ) src, _MM_HINT_T0 );
+
+#if USE_AVX2
+  if( ( ( width - 4 ) & 15 ) == 0 )  {
+    __m256i mm256Offset1   = _mm256_set1_epi16( offset1st );
+    __m256i mm256Offset2   = _mm256_set1_epi16( offset2nd );
+    __m256i mm256CoeffH    = _mm256_set1_epi16( ch[1] );
+    __m256i mm256CoeffV    = _mm256_set1_epi16( cv[1] );
+    __m256i mm256LastH [8];
+    __m128i mmLast4H;
+
+    for( int row = -1; row < height; row++ )
+    {
+      _mm_prefetch( ( const char * ) &src[srcStride], _MM_HINT_T0 );
+      _mm_prefetch( ( const char * ) &src[4],         _MM_HINT_T0 );
+
+      {
+        __m128i mmPix  = _mm_loadl_epi64( ( const __m128i* )( src ) );
+        __m128i mmPix1 = _mm_loadl_epi64( ( const __m128i* )( src + 1 ) );
+        __m128i mmFiltered = _mm256_castsi256_si128( mm256Offset1 );
+        mmFiltered = _mm_add_epi16 ( mmFiltered, _mm_slli_epi16( mmPix, 4 ) );
+        mmFiltered = _mm_add_epi16 ( mmFiltered, _mm_mullo_epi16( _mm_sub_epi16( mmPix1, mmPix ),  _mm256_castsi256_si128( mm256CoeffH ) ) );
+        mmFiltered = _mm_srai_epi16( mmFiltered, shift1st );
+
+        if( row >= 0 )
+        {
+          __m128i
+          mmFiltered2 = _mm256_castsi256_si128( mm256Offset2 );
+          mmFiltered2 = _mm_add_epi16 ( mmFiltered2, _mm_slli_epi16 ( mmLast4H, 4 ) );
+          mmFiltered2 = _mm_add_epi16 ( mmFiltered2, _mm_mullo_epi16( _mm_sub_epi16( mmFiltered, mmLast4H ), _mm256_castsi256_si128( mm256CoeffV ) ) );
+          mmFiltered2 = _mm_srai_epi16( mmFiltered2, shift2nd );
+
+          _mm_storel_epi64( ( __m128i* ) dst, mmFiltered2 );
+        }
+
+        mmLast4H = mmFiltered;
+      }
+
+      for( int x = 4; x < width; x += 16 )
+      {
+        _mm_prefetch( ( const char * ) &src[x + 16], _MM_HINT_T0 );
+        _mm_prefetch( ( const char * ) &src[x + 32], _MM_HINT_T0 );
+
+        __m256i mmPix   = _mm256_loadu_si256( ( const __m256i* )( src + x ) );
+        __m256i mmPix1  = _mm256_loadu_si256( ( const __m256i* )( src + x + 1 ) );
+        __m256i mmFiltered
+                        = _mm256_add_epi16  ( mm256Offset1, _mm256_slli_epi16( mmPix, 4 ) );
+        mmFiltered      = _mm256_add_epi16  ( mmFiltered, _mm256_mullo_epi16( _mm256_sub_epi16( mmPix1, mmPix ),  mm256CoeffH ) );
+        mmFiltered      = _mm256_srai_epi16 ( mmFiltered, shift1st );
+
+        int idx = x >> 4;
+
+        __m256i m256Last = mm256LastH[idx];
+        mm256LastH[idx] = mmFiltered;
+
+        if( row >= 0 )
+        {
+          __m256i
+          mmFiltered2 = _mm256_add_epi16  ( mm256Offset2, _mm256_slli_epi16( m256Last, 4 ) );
+          mmFiltered2 = _mm256_add_epi16  ( mmFiltered2,  _mm256_mullo_epi16( _mm256_sub_epi16( mmFiltered, m256Last ), mm256CoeffV ) );
+          mmFiltered2 = _mm256_srai_epi16 ( mmFiltered2,  shift2nd );
+
+          _mm256_storeu_si256( ( __m256i* ) ( dst + x ), mmFiltered2 );
+        }
+      }
+
+      if( row >= 0 ) dst += dstStride;
+
+      src += srcStride;
+    }
+  }
+  else
+#endif
+  {
+    __m128i mmOffset1 = _mm_set1_epi16( offset1st );
+    __m128i mmOffset2 = _mm_set1_epi16( offset2nd );
+    __m128i mmCoeffH  = _mm_set1_epi16( ch[1] );
+    __m128i mmCoeffV  = _mm_set1_epi16( cv[1] );
+#if USE_AVX2
+    __m128i mmLastH [1];
+#else
+    __m128i mmLastH[16];
+#endif
+    __m128i mmLast4H;
+
+    // workaround for over-sensitive compilers
+    mmLastH[0] = _mm_setzero_si128();
+
+    for( int row = -1; row < height; row++ )
+    {
+      _mm_prefetch( ( const char * ) &src[srcStride], _MM_HINT_T0 );
+      _mm_prefetch( ( const char * ) &src[4],         _MM_HINT_T0 );
+
+      {
+        __m128i mmPix  = _mm_loadl_epi64( ( const __m128i* )( src ) );
+        __m128i mmPix1 = _mm_loadl_epi64( ( const __m128i* )( src + 1 ) );
+        __m128i mmFiltered
+                   = _mm_add_epi16 ( mmOffset1,  _mm_slli_epi16( mmPix, 4 ) );
+        mmFiltered = _mm_add_epi16 ( mmFiltered, _mm_mullo_epi16( _mm_sub_epi16( mmPix1, mmPix ), mmCoeffH ) );
+        mmFiltered = _mm_srai_epi16( mmFiltered, shift1st );
+
+        if( row >= 0 )
+        {
+          __m128i
+          mmFiltered2 = _mm_add_epi16 ( mmOffset2,   _mm_slli_epi16( mmLast4H, 4 ) );
+          mmFiltered2 = _mm_add_epi16 ( mmFiltered2, _mm_mullo_epi16( _mm_sub_epi16( mmFiltered, mmLast4H ), mmCoeffV ) );
+          mmFiltered2 = _mm_srai_epi16( mmFiltered2, shift2nd );
+
+          _mm_storel_epi64( ( __m128i* ) dst, mmFiltered2 );
+        }
+
+        mmLast4H = mmFiltered;
+      }
+
+      for( int x = 4; x < width; x += 8 )
+      {
+#if !USE_AVX2
+        _mm_prefetch( ( const char * ) &src[x +  8], _MM_HINT_T0 );
+        _mm_prefetch( ( const char * ) &src[x + 16], _MM_HINT_T0 );
+
+#endif
+        __m128i mmPix   = _mm_loadu_si128( ( const __m128i* )( src + x ) );
+        __m128i mmPix1  = _mm_loadu_si128( ( const __m128i* )( src + x + 1 ) );
+        __m128i mmFiltered 
+                        = _mm_add_epi16  ( mmOffset1,  _mm_slli_epi16( mmPix, 4 ) );
+        mmFiltered      = _mm_add_epi16  ( mmFiltered, _mm_mullo_epi16( _mm_sub_epi16( mmPix1, mmPix ), mmCoeffH ) );
+        mmFiltered      = _mm_srai_epi16 ( mmFiltered, shift1st );
+
+        int idx = x >> 3; 
+        __m128i mLast = mmLastH[idx];
+        mmLastH[idx] = mmFiltered;
+
+        if( row >= 0 )
+        {
+          __m128i
+          mmFiltered2 = _mm_add_epi16  ( mmOffset2,   _mm_slli_epi16( mLast, 4 ) );
+          mmFiltered2 = _mm_add_epi16  ( mmFiltered2, _mm_mullo_epi16( _mm_sub_epi16( mmFiltered, mLast ),  mmCoeffV ) );
+          mmFiltered2 = _mm_srai_epi16 ( mmFiltered2, shift2nd );
+
+          _mm_storeu_si128( ( __m128i* ) ( dst + x ), mmFiltered2 );
+        }
+      }
+
+      if( row >= 0 ) dst += dstStride;
+
+      src += srcStride;
+    }
+  }
+}
+
 #ifdef USE_AVX2
 static inline __m256i simdInterpolateLuma10Bit2P16(int16_t const *src1, int srcStride, __m256i *mmCoeff, const __m256i & mmOffset, __m128i &mmShift)
 {
@@ -3284,14 +3444,15 @@ void InterpolationFilter::_initInterpolationFilterX86()
   m_filter8x8[1][0]    = simdFilter8xX_N4<vext, false>;
   m_filter8x8[1][1]    = simdFilter8xX_N4<vext, true>;
 
+  m_filter16x16[0][0]  = simdFilter16xX_N8<vext, false>;
+  m_filter16x16[0][1]  = simdFilter16xX_N8<vext, true>;
 
-  m_filter16x16[0][0]    = simdFilter16xX_N8<vext, false>;
-  m_filter16x16[0][1]    = simdFilter16xX_N8<vext, true>;
+  m_filter16x16[1][0]  = simdFilter16xX_N4<vext, false>;
+  m_filter16x16[1][1]  = simdFilter16xX_N4<vext, true>;
 
-  m_filter16x16[1][0]    = simdFilter16xX_N4<vext, false>;
-  m_filter16x16[1][1]    = simdFilter16xX_N4<vext, true>;
+  m_filterN2_2D        = simdInterpolateN2_2D<vext>;
 
-  m_weightedGeoBlk       = xWeightedGeoBlk_SSE<vext>;
+  m_weightedGeoBlk     = xWeightedGeoBlk_SSE<vext>;
 }
 
 template void InterpolationFilter::_initInterpolationFilterX86<SIMDX86>();
