@@ -15,11 +15,19 @@ jobs:
       matrix:
         config:
           - {
-              name: "Windows MSVC",
+              name: "Windows MSVC 64 Bit",
               os: windows-2019,
               environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-              generators: "Visual Studio 16 2019"
+              generators: "Visual Studio 16 2019",
+              msvc_arch: x64
             }
+#          - {
+#              name: "Windows MSVC 32 Bit",
+#              os: windows-2019,
+#              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat",
+#              generators: "Visual Studio 16 2019",
+#              msvc_arch: Win32
+#            }
           - {
               name: "Windows MinGW",
               os: windows-2019,
@@ -28,32 +36,42 @@ jobs:
               generators: "MinGW Makefiles"
             }
           - {
-              name: "Ubuntu 18.04",
-              os: ubuntu-18.04
-            }
-          - {
               name: "Ubuntu 20.04",
               os: ubuntu-20.04
             }
           - {
-              name: "Mac OS 10.15",
-              os: macos-10.15
+              name: "Ubuntu 22.04",
+              os: ubuntu-22.04
             }
+          - {
+              name: "Mac OS Latest x86_64",
+              os: macos-latest,
+              osx_arch: x86_64
+            }
+          - {
+              name: "Mac OS Latest arm64",
+              os: macos-latest,
+              osx_arch: arm64
+            }
+    env:
+      CMAKE_GENERATOR: "${{ matrix.config.generators }}"
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
-    - run: |
+
+    - name: Ubuntu/Mac OS X/MinGW build
+      if: ${{ !contains( matrix.config.generators, 'Visual Studio' ) }}
+      run: |
         mkdir build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake .. -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.config.osx_arch }}"
         cmake --build .
-      if: matrix.config.os != 'windows-2019'
-    - run: |
+
+    - name: MSVC build
+      if: contains( matrix.config.generators, 'Visual Studio' )
+      run: |
         mkdir build
         cd build
-        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release"
+        cmake ..  -DCMAKE_BUILD_TYPE=Release -A "${{ matrix.config.msvc_arch }}"
         cmake --build . --config Release
       shell: cmd
-      if: matrix.config.os == 'windows-2019'
-
-      
