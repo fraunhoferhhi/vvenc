@@ -94,8 +94,10 @@ void InterpolationFilter::initInterpolationFilterX86( /*int iBitDepthY, int iBit
 #if ENABLE_SIMD_OPT_BUFFER
 void PelBufferOps::initPelBufOpsX86()
 {
-  if ( isInitX86Done )
+  if( isInitX86Done )
     return;
+
+  isInitX86Done = true;
 
   auto vext = read_x86_extension_flags();
   switch (vext){
@@ -113,8 +115,6 @@ void PelBufferOps::initPelBufOpsX86()
     default:
       break;
   }
-
-  isInitX86Done = true;
 }
 #endif
 
@@ -207,7 +207,6 @@ void SampleAdaptiveOffset::initSampleAdaptiveOffsetX86()
     default:
       break;
   }
-
 }
 
 #endif
