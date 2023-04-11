@@ -35,7 +35,7 @@ if( VVENC_ENABLE_X86_SIMD )
     add_compile_options( ${FLAG_msse41} )
   endif()
 
-  if( NOT MSVC AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten" )
+  if( NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten" )
     check_missing_intrinsics()
   endif()
 

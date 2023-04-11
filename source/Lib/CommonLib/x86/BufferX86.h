@@ -1652,10 +1652,11 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
   }
 }
 
+#if INTPTR_MAX == INT64_MAX
 template<X86_VEXT vext>
 void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, void* val )
 {
-  static_assert( sizeof( val ) == 8, "Only supported for 64bit systems!" );
+  static_assert( sizeof( ptr ) == 8, "Only supported for 64bit systems!" );
   if( ( width & 3 ) == 0 )
   {
 #if USE_AVX2
@@ -1701,6 +1702,77 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
     }
   }
 }
+#elif INTPTR_MAX == INT32_MAX
+template<X86_VEXT vext>
+void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, void* val )
+{
+  static_assert( sizeof( ptr ) == 4, "Only supported for 32bit systems!" );
+  if( ( width & 7 ) == 0 )
+  {
+#if USE_AVX2
+    __m256i vval = _mm256_set1_epi32( ( int32_t ) val );
+
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        _mm256_storeu_si256( ( __m256i* ) &ptr[x], vval );
+      }
+
+      ptr += ptrStride;
+    }
+#else
+    __m128i vval = _mm_set1_epi32( ( int32_t ) val );
+
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &ptr[x + 0], vval );
+        _mm_storeu_si128( ( __m128i* ) &ptr[x + 4], vval );
+      }
+
+      ptr += ptrStride;
+    }
+#endif
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    __m128i vval = _mm_set1_epi32( ( int32_t ) val );
+
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 4 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &ptr[x], vval );
+      }
+
+      ptr += ptrStride;
+    }
+  }
+  else if( ( width & 1 ) == 0 )
+  {
+    while( height-- )
+    {
+      ptr[0] = val;
+      ptr[1] = val;
+
+      ptr += ptrStride;
+    }
+  }
+  else
+  {
+    while( height-- )
+    {
+      for( int x = 0; x < width; ++x )
+      {
+        ptr[x] = val;
+      }
+      ptr += ptrStride;
+    }
+  }
+}
+#endif  // INTPTR_MAX == INT32_MAX
 
 template<X86_VEXT vext>
 uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, const int iSrcStride)

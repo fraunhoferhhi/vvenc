@@ -1048,6 +1048,7 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Posi
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if( cuN ) checkPosX = chType == CH_C ? (cuN->Cb().x + cuN->Cb().width - posLT.x) : (cuN->Y().x + cuN->Y().width - posLT.x);
+      else break;
     }
 
     numIntra += valid ? 1 : 0;
@@ -1078,7 +1079,9 @@ int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Posit
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if( cuN ) checkPosY = chType == CH_C ? (cuN->Cb().y + cuN->Cb().height - posLT.y) : (cuN->Y().y + cuN->Y().height - posLT.y);
+      else break;
     }
+
     numIntra += valid ? 1 : 0;
     *validFlags = valid;
 
@@ -1107,7 +1110,9 @@ int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if(cuN) checkPosX = chType == CH_C ? (cuN->Cb().x + cuN->Cb().width - (posRT.x + unitWidth)) : (cuN->Y().x + cuN->Y().width - (posRT.x + unitWidth));
+      else break;
     }
+
     numIntra += valid ? 1 : 0;
     *validFlags = valid;
 
@@ -1136,7 +1141,9 @@ int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const 
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if( cuN ) checkPosY = chType == CH_C ? (cuN->Cb().y + cuN->Cb().height - (posLB.y + unitHeight)) : (cuN->Y().y + cuN->Y().height - (posLB.y + unitHeight));
+      else break;
     }
+
     numIntra += valid ? 1 : 0;
     *validFlags = valid;
 

@@ -21,13 +21,13 @@ jobs:
               generators: "Visual Studio 16 2019",
               msvc_arch: x64
             }
-#          - {
-#              name: "Windows MSVC 32 Bit",
-#              os: windows-2019,
-#              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat",
-#              generators: "Visual Studio 16 2019",
-#              msvc_arch: Win32
-#            }
+          - {
+              name: "Windows MSVC 32 Bit",
+              os: windows-2019,
+              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars32.bat",
+              generators: "Visual Studio 16 2019",
+              msvc_arch: Win32
+            }
           - {
               name: "Windows MinGW",
               os: windows-2019,
