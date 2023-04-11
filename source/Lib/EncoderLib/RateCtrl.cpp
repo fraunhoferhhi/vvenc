@@ -1044,19 +1044,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
           sliceQP = int( 0.5 + d + 0.5 * std::max( 0.0, baseQP - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
-#if 0 // TODO hlm: check if this is still needed
-          if ( it->refreshParameters ) // avoid overcoding after some scene cuts (stabilization)
-          {
-            const int offset = ( it->poc > 0 && ( m_pcEncCfg->m_PadSourceWidth > 2048 || m_pcEncCfg->m_PadSourceHeight > 1280 ) ? 5 : 4 ) << ( encRCSeq->bitDepth - 2 ); // to compensate for downsampling with UHD
-            const int clipQP = ( ( ( offset + ( it->poc > 0 ? visAct : 1 << ( encRCSeq->bitDepth - 1 ) ) ) * secondPassBaseQP ) >> ( encRCSeq->bitDepth + 1 ) ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 );
-
-            if ( sliceQP < clipQP )
-            {
-              encRcPic->targetBits = int( 0.5 + encRcPic->targetBits * pow( 2.0, (sliceQP - clipQP) / 5.0 ) ); // VCIP paper, Tab. 1
-              sliceQP = clipQP;
-            }
-          }
-#endif
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
