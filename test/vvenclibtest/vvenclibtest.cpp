@@ -1004,7 +1004,6 @@ int checkTimestampsDefault()
 
       if( 0 != runEncoder(c,frames) )
       {
-        std::cout << "Wrong a" << std::endl;
         return -1;
       }
     }
