@@ -32,7 +32,8 @@ if( VVENC_ENABLE_X86_SIMD )
     # when building for non-x86, but emulating simd using simd-everywhere (e.g. on ARM),
     # the x86-compiler flags are not understood by the compiler
     set_if_compiler_supports_flag( FLAG_msse41 -msse4.1 )
-    add_compile_options( ${FLAG_msse41} )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FLAG_msse41}" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAG_msse41}" )
   endif()
 
   if( NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten" )
