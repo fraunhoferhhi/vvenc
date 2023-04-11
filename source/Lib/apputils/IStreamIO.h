@@ -48,6 +48,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <vector>
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 
 #include "VVEncAppCfg.h"
 #include <vvenc/vvencCfg.h>
