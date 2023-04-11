@@ -173,6 +173,13 @@ build_clang14_ubuntu2204:
      CC: clang-14
      CXX: clang++-14
 
+build_clang15_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: clang-15
+     CXX: clang++-15
+
 build_mingw_ubuntu2004:
    extends: .build_only_ubuntu2004_mingw_template
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2004_full:latest
