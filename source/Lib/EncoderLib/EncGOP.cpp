@@ -2335,6 +2335,10 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
     {
       trailingSeiMessages.push_back( decodedPictureHashSei );
     }
+    else
+    {
+      delete decodedPictureHashSei;
+    }
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
