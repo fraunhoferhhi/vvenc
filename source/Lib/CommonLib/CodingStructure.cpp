@@ -1187,7 +1187,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
 
   if( pos.x < 0 || pos.y < 0 || ( pos.x * ( 1 << csx ) ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
 
-  const CodingUnit* cu = picture->cs->getCU( pos, _chType, curCu.treeType );
+  const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
 
   return ( cu && CU::isSameSlice( *cu, curCu ) ) ? cu : nullptr;
 }
@@ -1211,7 +1211,7 @@ const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const P
 
   if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curTileIdx ) return nullptr;
 
-  const CodingUnit* cu = picture->cs->getCU( pos, _chType, _treeType );
+  const CodingUnit* cu = getCU( pos, _chType, _treeType );
 
   return ( cu && cu->slice->independentSliceIdx == curSliceIdx && cu->tileIdx == curTileIdx ) ? cu : nullptr;
 }
