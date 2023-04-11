@@ -83,7 +83,11 @@ NUM_JOBS := $(j)
 endif
 
 ifeq ($(OS),Windows_NT)
-  CONFIG_OPTIONS += -A x64
+  ifneq ($(msvc-arch),)
+    CONFIG_OPTIONS += -A $(msvc-arch)
+  else
+    CONFIG_OPTIONS += -A x64
+  endif
   CMAKE_MCONFIG := 1
   ifneq ($(NUM_JOBS),1)
     BUILD_TOOL_OPTIONS := -- /maxcpucount:$(NUM_JOBS) /verbosity:minimal /nr:false

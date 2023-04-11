@@ -669,7 +669,9 @@ template <X86_VEXT vext>
 void LoopFilter::_initLoopFilterX86()
 {
   xPelFilterLuma  = xPelFilterLumaX86<vext>;
+#if INTPTR_MAX == INT64_MAX || !defined( _WIN32 )
   xFilteringPandQ = xFilteringPandQX86<vext>;
+#endif
 }
 
 template void LoopFilter::_initLoopFilterX86<SIMDX86>();
