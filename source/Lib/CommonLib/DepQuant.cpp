@@ -951,7 +951,7 @@ namespace DQIntern
 
       if( m_remRegBins >= 4 )
       {
-        rdCostA += m_coeffFracBits.bits[ pqDataA.absLevel ];
+        rdCostA += m_coeffFracBits.bits[ 1 ];
 
         if( spt == SCAN_ISCSBB )
         {
