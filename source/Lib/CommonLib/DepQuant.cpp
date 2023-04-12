@@ -761,7 +761,7 @@ namespace DQIntern
   inline void Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
   {
     int64_t scaledOrg = int64_t( absCoeff ) * quanCoeff;
-    TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, ( scaledOrg + m_QAdd ) >> m_QShift ) );
+    TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, TCoeff( ( scaledOrg + m_QAdd ) >> m_QShift ) ) );
     int64_t scaledAdd = qIdx * m_DistStepAdd - scaledOrg * m_DistOrgFact;
 
     PQData& pq_a      = pqData[ ( qIdx + 0 ) & 3 ];
