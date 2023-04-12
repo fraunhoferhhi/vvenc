@@ -761,7 +761,7 @@ namespace DQIntern
   inline void Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
   {
     int64_t scaledOrg = int64_t( absCoeff ) * quanCoeff;
-    TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, TCoeff( ( scaledOrg + m_QAdd ) >> m_QShift ) ) );
+    TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, ( scaledOrg + m_QAdd ) >> m_QShift ) );
     int64_t scaledAdd = qIdx * m_DistStepAdd - scaledOrg * m_DistOrgFact;
 
     PQData& pq_a      = pqData[ ( qIdx + 0 ) & 3 ];
@@ -941,45 +941,59 @@ namespace DQIntern
       }
     }
 
-#if 0
-    void checkRdCostsZero( const ScanPosType spt, Decision& decisionA ) const
+    void checkRdCostsOdd1( const ScanPosType spt, const PQData& pqDataA, Decision& decisionA, Decision& decisionZ ) const
     {
-      const int32_t* goRiceTab = g_goRiceBits[m_goRicePar];
-      int64_t         rdCostZ  = m_rdCost;
+      CHECKD( pqDataA.absLevel != 1, "" );
+
+      const int32_t*  goRiceTab = g_goRiceBits[m_goRicePar];
+      int64_t         rdCostA   = m_rdCost + pqDataA.deltaDist;
+      int64_t         rdCostZ   = m_rdCost;
 
       if( m_remRegBins >= 4 )
       {
+        rdCostA += m_coeffFracBits.bits[ pqDataA.absLevel ];
+
         if( spt == SCAN_ISCSBB )
         {
-          rdCostZ += m_sigFracBits.intBits[0];
+          rdCostA += m_sigFracBits.intBits[ 1 ];
+          rdCostZ += m_sigFracBits.intBits[ 0 ];
         }
         else if( spt == SCAN_SOCSBB )
         {
-          rdCostZ += m_sbbFracBits.intBits[1] + m_sigFracBits.intBits[0];
+          rdCostA += m_sbbFracBits.intBits[ 1 ] + m_sigFracBits.intBits[ 1 ];
+          rdCostZ += m_sbbFracBits.intBits[ 1 ] + m_sigFracBits.intBits[ 0 ];
         }
         else if( m_numSigSbb )
         {
-          rdCostZ += m_sigFracBits.intBits[0];
+          rdCostA += m_sigFracBits.intBits[ 1 ];
+          rdCostZ += m_sigFracBits.intBits[ 0 ];
         }
         else
         {
-          rdCostZ = decisionA.rdCost;
+          rdCostZ = decisionZ.rdCost;
         }
       }
       else
       {
+        rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[0];
         rdCostZ += goRiceTab[m_goRiceZero];
       }
 
-      if( rdCostZ < decisionA.rdCost )
+      if( rdCostA < decisionA.rdCost )
       {
-        decisionA.rdCost   = rdCostZ;
-        decisionA.absLevel = 0;
-        decisionA.prevId   = m_stateId;
+        decisionA.rdCost    = rdCostA;
+        decisionA.absLevel  = pqDataA.absLevel;
+        decisionA.prevId    = m_stateId;
+      }
+
+      if( rdCostZ < decisionZ.rdCost )
+      {
+        decisionZ.rdCost    = rdCostZ;
+        decisionZ.absLevel  = 0;
+        decisionZ.prevId    = m_stateId;
       }
     }
 
-#endif
     inline void checkRdCostStart(int32_t lastOffset, const PQData &pqData, Decision &decision) const
     {
       int64_t rdCost = pqData.deltaDist + lastOffset;
@@ -1369,21 +1383,33 @@ namespace DQIntern
     PQData  pqData[4];
     m_quant.preQuantCoeff( absCoeff, pqData, quanCoeff );
 
-    if( pqData[0].absLevel >= 4 || pqData[2].absLevel >= 4 )
-    {
-      m_prevStates[0].setRiceParam( scanInfo );
-      m_prevStates[1].setRiceParam( scanInfo );
-    }
-    if( pqData[1].absLevel >= 4 || pqData[3].absLevel >= 4 )
-    {
-      m_prevStates[2].setRiceParam( scanInfo );
-      m_prevStates[3].setRiceParam( scanInfo );
-    }
+    bool near0 = pqData[1].deltaDist < pqData[2].deltaDist && pqData[1].absLevel == 1 && pqData[2].absLevel == 1;
 
-    m_prevStates[0].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[0], decisions[2] );
-    m_prevStates[1].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[2], decisions[0] );
-    m_prevStates[2].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[1], decisions[3] );
-    m_prevStates[3].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+    if( near0 )
+    {
+      m_prevStates[0].checkRdCostsOdd1( scanInfo.spt, pqData[2], decisions[2], decisions[0] );
+      m_prevStates[1].checkRdCostsOdd1( scanInfo.spt, pqData[2], decisions[0], decisions[2] );
+      m_prevStates[2].checkRdCostsOdd1( scanInfo.spt, pqData[1], decisions[3], decisions[1] );
+      m_prevStates[3].checkRdCostsOdd1( scanInfo.spt, pqData[1], decisions[1], decisions[3] );
+    }
+    else
+    {
+      if( pqData[0].absLevel >= 4 || pqData[2].absLevel >= 4 )
+      {
+        m_prevStates[0].setRiceParam( scanInfo );
+        m_prevStates[1].setRiceParam( scanInfo );
+      }
+      if( pqData[1].absLevel >= 4 || pqData[3].absLevel >= 4 )
+      {
+        m_prevStates[2].setRiceParam( scanInfo );
+        m_prevStates[3].setRiceParam( scanInfo );
+      }
+
+      m_prevStates[0].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[0], decisions[2] );
+      m_prevStates[1].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions[2], decisions[0] );
+      m_prevStates[2].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[1], decisions[3] );
+      m_prevStates[3].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+    }
 
     if( scanInfo.spt==SCAN_EOCSBB )
     {
