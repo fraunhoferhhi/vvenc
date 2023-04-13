@@ -301,11 +301,13 @@ typedef enum
 
 typedef enum
 {
-  VVENC_HASHTYPE_MD5        = 0,
-  VVENC_HASHTYPE_CRC        = 1,
-  VVENC_HASHTYPE_CHECKSUM   = 2,
-  VVENC_HASHTYPE_NONE       = 3,
-  VVENC_NUMBER_OF_HASHTYPES = 4
+  VVENC_HASHTYPE_MD5          = 0,
+  VVENC_HASHTYPE_CRC          = 1,
+  VVENC_HASHTYPE_CHECKSUM     = 2,
+  VVENC_HASHTYPE_MD5_LOG      = 10, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CRC_LOG      = 11, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CHECKSUM_LOG = 12, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_NONE
 }vvencHashType;
 
 // ====================================================================================================================

@@ -209,18 +209,21 @@ void SEIEncoder::initDecodedPictureHashSEI( SEIDecodedPictureHash& dphSei, const
   switch (m_pcEncCfg->m_decodedPictureHashSEIType)
   {
     case VVENC_HASHTYPE_MD5:
+    case VVENC_HASHTYPE_MD5_LOG:
       {
         uint32_t numChar=calcMD5(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
     case VVENC_HASHTYPE_CRC:
+    case VVENC_HASHTYPE_CRC_LOG:
       {
         uint32_t numChar=calcCRC(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
     case VVENC_HASHTYPE_CHECKSUM:
+    case VVENC_HASHTYPE_CHECKSUM_LOG:
     default:
       {
         uint32_t numChar=calcChecksum(pic, dphSei.pictureHash, bitDepths);

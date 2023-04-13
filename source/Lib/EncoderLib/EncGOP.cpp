@@ -2331,7 +2331,14 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
     m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
-    trailingSeiMessages.push_back( decodedPictureHashSei );
+    if ( m_pcEncCfg->m_decodedPictureHashSEIType < VVENC_HASHTYPE_MD5_LOG )
+    {
+      trailingSeiMessages.push_back( decodedPictureHashSei );
+    }
+    else
+    {
+      delete decodedPictureHashSei;
+    }
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
@@ -2714,12 +2721,15 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
     {
       case VVENC_HASHTYPE_MD5:
+      case VVENC_HASHTYPE_MD5_LOG:
         modeName = "MD5";
         break;
       case VVENC_HASHTYPE_CRC:
+      case VVENC_HASHTYPE_CRC_LOG:
         modeName = "CRC";
         break;
       case VVENC_HASHTYPE_CHECKSUM:
+      case VVENC_HASHTYPE_CHECKSUM_LOG:
         modeName = "Checksum";
         break;
       default:

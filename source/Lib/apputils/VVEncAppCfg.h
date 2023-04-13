@@ -198,15 +198,21 @@ const std::vector<SVPair<vvencChromaFormat>> ChromaFormatToEnumMap =
 
 const std::vector<SVPair<vvencHashType>> HashTypeToEnumMap =
 {
-  { "md5",                     VVENC_HASHTYPE_MD5      },
-  { "crc",                     VVENC_HASHTYPE_CRC      },
-  { "checksum",                VVENC_HASHTYPE_CHECKSUM },
-  { "off",                     VVENC_HASHTYPE_NONE     },
+  { "md5",                     VVENC_HASHTYPE_MD5          },
+  { "crc",                     VVENC_HASHTYPE_CRC          },
+  { "checksum",                VVENC_HASHTYPE_CHECKSUM     },
+  { "log_md5",                 VVENC_HASHTYPE_MD5_LOG      },
+  { "log_crc",                 VVENC_HASHTYPE_CRC_LOG      },
+  { "log_checksum",            VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "off",                     VVENC_HASHTYPE_NONE         },
   // for backward compatibility support values as well
-  { "1",                       VVENC_HASHTYPE_MD5      },
-  { "2",                       VVENC_HASHTYPE_CRC      },
-  { "3",                       VVENC_HASHTYPE_CHECKSUM },
-  { "0",                       VVENC_HASHTYPE_NONE     }
+  { "1",                       VVENC_HASHTYPE_MD5          },
+  { "2",                       VVENC_HASHTYPE_CRC          },
+  { "3",                       VVENC_HASHTYPE_CHECKSUM     },
+  { "11",                      VVENC_HASHTYPE_MD5_LOG      },
+  { "12",                      VVENC_HASHTYPE_CRC_LOG      },
+  { "13",                      VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "0",                       VVENC_HASHTYPE_NONE         }
 };
 
 const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap =
