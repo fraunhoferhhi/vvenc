@@ -103,7 +103,6 @@ namespace vvenc {
     void create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
     void updateAfterPic (const int actBits, const int tgtBits);
-    void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
     bool            isLookAhead;
@@ -142,16 +141,13 @@ namespace vvenc {
     int     targetBits;
     int     tmpTargetBits;
     int     poc;
+    bool    refreshParams;
     uint16_t visActSteady;
 
   protected:
-    int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
-
     EncRCSeq* encRCSeq;
     int     frameLevel;
     int     picQP;           // in integer form
-    bool    isNewScene;
-    bool    refreshParams;
   };
 
   class RateCtrl
