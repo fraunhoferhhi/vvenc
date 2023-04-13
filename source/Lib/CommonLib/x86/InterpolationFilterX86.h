@@ -3142,15 +3142,15 @@ void InterpolationFilter::_initInterpolationFilterX86()
   m_filter8x8[0][1]    = simdFilter8xX_N8<vext, true>;
   m_filter8x8[1][0]    = simdFilter8xX_N4<vext, false>;
   m_filter8x8[1][1]    = simdFilter8xX_N4<vext, true>;
-  
-  
+
+
   m_filter16x16[0][0]    = simdFilter16xX_N8<vext, false>;
   m_filter16x16[0][1]    = simdFilter16xX_N8<vext, true>;
-  
+
   m_filter16x16[1][0]    = simdFilter16xX_N4<vext, false>;
   m_filter16x16[1][1]    = simdFilter16xX_N4<vext, true>;
 
-  m_weightedGeoBlk       = xWeightedGeoBlk_SSE<vext>;
+  m_weightedGeoBlk     = xWeightedGeoBlk_SSE<vext>;
 }
 
 template void InterpolationFilter::_initInterpolationFilterX86<SIMDX86>();
