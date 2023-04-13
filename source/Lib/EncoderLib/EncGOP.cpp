@@ -2331,7 +2331,7 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
     m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
-    if ( m_pcEncCfg->m_decodedPictureHashSEIType < VVENC_HASHTYPE_NONE )
+    if ( m_pcEncCfg->m_decodedPictureHashSEIType < VVENC_HASHTYPE_MD5_LOG )
     {
       trailingSeiMessages.push_back( decodedPictureHashSei );
     }
