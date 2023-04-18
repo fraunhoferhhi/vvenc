@@ -75,6 +75,7 @@ EncRCSeq::EncRCSeq()
   std::memset (currFrameCnt, 0, sizeof (currFrameCnt));
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
   lastIntraQP         = 0;
+  lastIntraBitsSaved  = false;
   bitDepth            = 0;
 }
 
@@ -743,7 +744,7 @@ void RateCtrl::detectSceneCuts()
     }
     if (it->scType == SCT_TL0_SCENE_CUT && !needRefresh[0]) // assume scene cuts at all adapted I-frames
     {
-      it->isNewScene = needRefresh[0] = true;
+      it->isNewScene = needRefresh[0] = needRefresh[1] = true;
     }
 
     it->refreshParameters = needRefresh[tmpLevel];
@@ -958,6 +959,14 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
             }
+            else if ( encRCSeq->framesCoded >= encRCSeq->intraPeriod )
+            {
+              if ( frameLevel == 0 ) encRCSeq->lastIntraBitsSaved = ( encRcSeq->estimatedBitUsage > encRcSeq->bitsUsed ); // cut GOP
+              if ( frameLevel == 1 && encRCSeq->lastIntraBitsSaved && encRcSeq->estimatedBitUsage < encRcSeq->bitsUsed ) // next GOP
+              {
+                encRCSeq->bitsUsedQPLimDiff += encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed; // relax higher-TL rate constraints
+              }
+            }
             encRcPic->refreshParams = true;
           }
           CHECK( slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7" );
@@ -1009,6 +1018,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           if ( m_pcEncCfg->m_LookAhead )
           {
             encRCSeq->bitsUsedIn1stPass += it->numBits;
+            if ( frameLevel == 1 ) encRCSeq->lastIntraBitsSaved = false;
 
             if ( (sliceQP > 0) && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0) )
             {
