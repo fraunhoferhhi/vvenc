@@ -121,6 +121,7 @@ namespace vvenc {
     unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastIntraQP;
+    bool            lastIntraBitsSaved;
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
     double          maxEstLambda;
