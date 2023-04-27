@@ -964,7 +964,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               if ( frameLevel == 0 ) encRCSeq->lastIntraBitsSaved = ( encRcSeq->estimatedBitUsage > encRcSeq->bitsUsed ); // cut GOP
               if ( frameLevel == 1 && encRCSeq->lastIntraBitsSaved && encRcSeq->estimatedBitUsage < encRcSeq->bitsUsed ) // next GOP
               {
-                encRCSeq->bitsUsedQPLimDiff += encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed; // relax higher-TL rate constraints
+                encRCSeq->bitsUsedQPLimDiff += ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) >> 1;  // relax rate constraints
               }
             }
             encRcPic->refreshParams = true;
