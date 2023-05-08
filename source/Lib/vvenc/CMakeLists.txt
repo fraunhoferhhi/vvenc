@@ -151,6 +151,6 @@ endif()
 
 # set the folder where to place the projects
 set_target_properties( ${LIB_NAME} PROPERTIES
-VERSION ${CMAKE_PROJECT_VERSION}
+VERSION ${PROJECT_VERSION}
 SOVERSION ${PROJECT_VERSION_MAJOR}
 FOLDER lib )
