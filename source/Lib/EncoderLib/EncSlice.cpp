@@ -1100,8 +1100,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           // on finishing of CTU-line of a tile (picture)
           // copy rec. samples for ALF
-          const int firstCtuInRow     = ctuPosX   + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
-          const int firstCtuAddrInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+          const int firstCtuInRow = ctuPosX + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           if( slice.sps->alfEnabled )
           {
             for (int curCtuPosX = firstCtuInRow; curCtuPosX <= ctuPosX; curCtuPosX++)
