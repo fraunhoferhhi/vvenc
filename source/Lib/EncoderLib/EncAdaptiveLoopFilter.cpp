@@ -6275,7 +6275,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
   Pel yLocal[4][4];
-  double weight[4][4];
+  alf_float_t weight[4][4];
 
   for (int i = 0; i < compArea.height; i += 4)
   {
@@ -6446,33 +6446,94 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           weight[ii][jj] = m_lumaLevelToWeightPLUT[orgLine[ii][j + jj]];
         }
 
-        for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF && ALF_SINGLE_PREC_FLOAT
+        if( useSimd )
         {
-          for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
           {
-            double sum = 0;
+            for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+            {
+              __m128 xsum = _mm_setzero_ps();
+
+              for (int ii = 0; ii < 4; ii++)
+              {
+                __m128 xw = _mm_loadu_ps( &weight[ii][0] );
+                __m128 xk = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
+                __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[l][ii << 2] ) ) );
+
+                //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+
+                xk = _mm_mul_ps( xk, xl );
+                __m128 xs = _mm_mul_ps( xw, xk );
+                xsum = _mm_add_ps( xsum, xs );
+              }
+
+              xsum = _mm_hadd_ps( xsum, xsum );
+              xsum = _mm_hadd_ps( xsum, xsum );
+
+              alfCovariance.E[0][0][k][l] += _mm_cvtss_f32( xsum );
+            }
+
+            __m128 xsum = _mm_setzero_ps();
+
             for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
             {
-              sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+              __m128 xw = _mm_loadu_ps( &weight[ii][0] );
+              __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
+              __m128 xy = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) ) );
+
+              //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+
+              xy = _mm_mul_ps( xy, xl );
+              __m128 xs = _mm_mul_ps( xw, xy );
+              xsum = _mm_add_ps( xsum, xs );
             }
-            alfCovariance.E[0][0][k][l] += sum;
-          }
+
+            xsum = _mm_hadd_ps( xsum, xsum );
+            xsum = _mm_hadd_ps( xsum, xsum );
+
+            alfCovariance.y[0][k] += _mm_cvtss_f32( xsum );
+          } 
+
 
           double sum = 0;
           for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
           {
-            sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+            sum += weight[ii][jj] * int( yLocal[ii][jj] ) * yLocal[ii][jj];
           }
-          alfCovariance.y[0][k] += sum;
-        } 
-
-
-        double sum = 0;
-        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
-        {
-          sum += weight[ii][jj] * int( yLocal[ii][jj] ) * yLocal[ii][jj];
+          alfCovariance.pixAcc += sum;
         }
-        alfCovariance.pixAcc += sum;
+        else
+#endif
+        {
+          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
+          {
+            for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+            {
+              double sum = 0;
+              for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+              {
+                sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+              }
+              alfCovariance.E[0][0][k][l] += sum;
+            }
+
+            double sum = 0;
+            for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+            {
+              sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+            }
+            alfCovariance.y[0][k] += sum;
+          } 
+
+
+          double sum = 0;
+          for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+          {
+            sum += weight[ii][jj] * int( yLocal[ii][jj] ) * yLocal[ii][jj];
+          }
+          alfCovariance.pixAcc += sum;
+        }
       }
       else
       {
