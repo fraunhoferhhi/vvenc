@@ -301,11 +301,13 @@ typedef enum
 
 typedef enum
 {
-  VVENC_HASHTYPE_MD5        = 0,
-  VVENC_HASHTYPE_CRC        = 1,
-  VVENC_HASHTYPE_CHECKSUM   = 2,
-  VVENC_HASHTYPE_NONE       = 3,
-  VVENC_NUMBER_OF_HASHTYPES = 4
+  VVENC_HASHTYPE_MD5          = 0,
+  VVENC_HASHTYPE_CRC          = 1,
+  VVENC_HASHTYPE_CHECKSUM     = 2,
+  VVENC_HASHTYPE_MD5_LOG      = 10, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CRC_LOG      = 11, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CHECKSUM_LOG = 12, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_NONE
 }vvencHashType;
 
 // ====================================================================================================================
@@ -354,7 +356,9 @@ typedef struct vvencRPLEntry
 
 VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry );
 
-
+/// <summary>
+/// Deprecated, dont use!
+/// </summary>
 typedef struct vvencWCGChromaQPControl
 {
   bool   enabled        ;    // Enabled flag (0:default)
@@ -744,8 +748,7 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
-  // reserved parameters for internal use
-  int                 m_reservedInt[1];
+  int                 m_FirstPassMode;
   int                 m_numRefPics;                                                      // Number of reference pictures
   int                 m_numRefPicsSCC;                                                   // Number of reference pictures
   int                 m_alfUnitSize;                                                     // Size of the Alf Search Unit

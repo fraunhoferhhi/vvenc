@@ -370,7 +370,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
 
   if (encCfg.m_usePerceptQPA)
   {
-    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
+    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) && encCfg.m_salienceBasedOpt ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
 
   if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
@@ -1306,7 +1306,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
 
   xInitPPSforTiles( pps, sps );
 
-  pps.pcv            = new PreCalcValues( sps, pps, true );
+  pps.pcv            = new PreCalcValues( sps, pps, m_pcEncCfg->m_MaxQT, true );
 }
 
 void EncGOP::xInitPPSforTiles(PPS &pps,const SPS &sps) const
@@ -1554,7 +1554,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 
     if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
     {
-      xSetupPicAps( pic );
+        xSetupPicAps( pic );
     }
 
     // continue with next picture
@@ -2359,7 +2359,14 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
     m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
+    if ( m_pcEncCfg->m_decodedPictureHashSEIType < VVENC_HASHTYPE_MD5_LOG )
+    {
     trailingSeiMessages.push_back( decodedPictureHashSei );
+  }
+    else
+    {
+      delete decodedPictureHashSei;
+    }
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
@@ -2636,10 +2643,14 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
           sMctf.str().c_str(),
           uibits );
 
-      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+      std::string yPSNR = dPSNR[COMP_Y]  == MAX_DOUBLE ? prnt(" [Y %7s dB    ", "inf" ) : prnt(" [Y %6.4lf dB    ", dPSNR[COMP_Y] );
+      std::string uPSNR = dPSNR[COMP_Cb] == MAX_DOUBLE ? prnt("U %7s dB    ", "inf" ) : prnt("U %6.4lf dB    ", dPSNR[COMP_Cb] );
+      std::string vPSNR = dPSNR[COMP_Cr] == MAX_DOUBLE ? prnt("V %7s dB]", "inf" ) : prnt("V %6.4lf dB]", dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
-      accessUnit.InfoString.append( cPSNR );
+      accessUnit.InfoString.append( yPSNR );
+      accessUnit.InfoString.append( uPSNR );
+      accessUnit.InfoString.append( vPSNR );
 
       if ( m_pcEncCfg->m_printHexPsnr )
       {
@@ -2651,9 +2662,13 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
               reinterpret_cast<uint8_t *>(&xPsnr[i]));
         }
 
-        std::string cPSNRHex = prnt(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+        std::string yPSNRHex = dPSNR[COMP_Y]  == MAX_DOUBLE ? prnt(" [xY %16s", "inf") : prnt(" [xY %16" PRIx64,  xPsnr[COMP_Y] );
+        std::string uPSNRHex = dPSNR[COMP_Cb] == MAX_DOUBLE ? prnt(" xU %16s", "inf") : prnt(" xU %16" PRIx64, xPsnr[COMP_Cb] ) ;
+        std::string vPSNRHex = dPSNR[COMP_Cr] == MAX_DOUBLE ? prnt(" xV %16s]", "inf") : prnt(" xV %16" PRIx64 "]", xPsnr[COMP_Cr]);
 
-        accessUnit.InfoString.append( cPSNRHex );
+        accessUnit.InfoString.append( yPSNRHex );
+        accessUnit.InfoString.append( uPSNRHex );
+        accessUnit.InfoString.append( vPSNRHex );
       }
 
       if( printFrameMSE )
@@ -2734,12 +2749,15 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
     {
       case VVENC_HASHTYPE_MD5:
+      case VVENC_HASHTYPE_MD5_LOG:
         modeName = "MD5";
         break;
       case VVENC_HASHTYPE_CRC:
+      case VVENC_HASHTYPE_CRC_LOG:
         modeName = "CRC";
         break;
       case VVENC_HASHTYPE_CHECKSUM:
+      case VVENC_HASHTYPE_CHECKSUM_LOG:
         modeName = "Checksum";
         break;
       default:

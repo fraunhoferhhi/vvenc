@@ -672,8 +672,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_addGOP32refPics                         = false;
   c->m_numRefPics                              = 0;
   c->m_numRefPicsSCC                           = -1;
+  
+  c->m_FirstPassMode                           = 0;
 
-  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
@@ -784,6 +785,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ), "TargetBitrate must be between 0 - 800000000" );
+
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 1 ), "FirstPassMode must be 0 or 1" );
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -2300,7 +2303,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
-
+  
   iRet = vvenc_init_preset( c, preset );
   return iRet;
 }
@@ -2440,6 +2443,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
     case vvencPresetMode::VVENC_FASTER:
 
+      c->m_FirstPassMode                   = 1;
+      
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
@@ -2451,8 +2456,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_CTUSize                         = 64;
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 4;
-      c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 4;
+      c->m_MinQT[ 1 ]                      = 4;
+      c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 0;
 
@@ -2510,8 +2515,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_CTUSize                         = 64;
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 4;
-      c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 4;
+      c->m_MinQT[ 1 ]                      = 4;
+      c->m_MinQT[ 2 ]                      = 2;
       c->m_maxMTTDepth                     = 0;
       c->m_maxMTTDepthI                    = 1;
 
@@ -2578,7 +2583,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 8;
+      c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 221111;
       c->m_maxMTTDepthI                    = 2;
 
@@ -2651,7 +2656,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 8;
+      c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 2;
       c->m_maxMTTDepthI                    = 3;
 
@@ -2726,7 +2731,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_dualITree                       = 1;
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
-      c->m_MinQT[ 2 ]                      = 8;
+      c->m_MinQT[ 2 ]                      = 4;
       c->m_maxMTTDepth                     = 333332;
       c->m_maxMTTDepthI                    = 3;
 
@@ -2967,7 +2972,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     // verbose output
     css << "CODING TOOL CFG: ";
-    css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+    css << "CTU" << c->m_CTUSize << " QTMin" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
     css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
     css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
     css << "ALF:" << (c->m_alf ? 1 : 0) << " ";

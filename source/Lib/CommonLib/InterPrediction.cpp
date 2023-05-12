@@ -787,36 +787,32 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
   {
     m_if.filterVer(compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, true, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
   }
+  else if( bilinearMC )
+  {
+    m_if.filterN2_2D( compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, width, height, xFrac, yFrac, clpRng );
+  }
+  else if( backupWidth == 4 && backupHeight == 4 )
+  {
+    m_if.filter4x4( compID, (Pel*)refBuf.buf, refBuf.stride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
+  else if( backupWidth == 16 )
+  {
+    m_if.filter16x16( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
+  else if( backupWidth == 8 )
+  {
+    m_if.filter8x8( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
   else
   {
-    int vFilterSize = bilinearMC ? NTAPS_BILINEAR : isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA;
+    const int vFilterSize = isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA;
 
-    if( backupWidth == 4 && backupHeight == 4 && !bilinearMC )
-    {
-      m_if.filter4x4( compID, (Pel*)refBuf.buf, refBuf.stride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-    }
-    else if( !bilinearMC && ( backupWidth & 15 ) == 0 )
-    {
-      for( int dx = 0; dx < backupWidth; dx += 16 )
-      {
-        m_if.filter16x16( compID, refBuf.buf + dx, refBuf.stride, dstBuf.buf + dx, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-      }
-    }
-    else if( !bilinearMC && ( backupWidth & 7 ) == 0 )
-    {
-      for( int dx = 0; dx < backupWidth; dx += 8 )
-      {
-        m_if.filter8x8( compID, refBuf.buf + dx, refBuf.stride, dstBuf.buf + dx, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-      }
-    }
-    else
-    {
-      PelBuf tmpBuf( m_filteredBlockTmp[0][compID], dmvrWidth ? dmvrWidth : dstBuf.stride, dmvrWidth ? Size( dmvrWidth, dmvrHeight ) : cu.blocks[compID].size() );
+    PelBuf tmpBuf( m_filteredBlockTmp[0][compID], dmvrWidth ? dmvrWidth : dstBuf.stride, dmvrWidth ? Size( dmvrWidth, dmvrHeight ) : cu.blocks[compID].size() );
 
-      m_if.filterHor(compID, (Pel*)refBuf.buf - ((vFilterSize >> 1) - 1) * refBuf.stride, refBuf.stride, tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-      m_if.filterVer(compID, (Pel*)tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-    }
+    m_if.filterHor(compID, (Pel*)refBuf.buf - ((vFilterSize >> 1) - 1) * refBuf.stride, refBuf.stride, tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
+    m_if.filterVer(compID, (Pel*)tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
   }
+
   if (bdofApplied && compID == COMP_Y)
   {
     const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));

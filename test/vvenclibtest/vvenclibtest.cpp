@@ -966,11 +966,13 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
 
   vvenc_YUVBuffer_free( yuvPicture, true );
   vvenc_accessUnit_free( AU, true );
+  vvenc_encoder_close( enc );
   return 0;
 
 fail:
   vvenc_YUVBuffer_free( yuvPicture, true );
   vvenc_accessUnit_free( AU, true );
+  vvenc_encoder_close( enc );
   return -1;
 }
 

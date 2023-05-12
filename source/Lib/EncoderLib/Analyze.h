@@ -71,6 +71,7 @@ private:
   uint32_t  m_uiNumPic;
   double    m_dFrmRate; //--CFG_KDY
   double    m_MSEyuvframe[MAX_NUM_COMP]; // sum of MSEs
+  uint32_t  m_uiLosslessFrames[MAX_NUM_COMP];
 
 public:
   virtual ~Analyze()  {}
@@ -85,7 +86,14 @@ public:
       return;
     for(uint32_t i=0; i<MAX_NUM_COMP; i++)
     {
-      m_dPSNRSum[i] += psnr[i];
+      if( psnr[i] == MAX_DOUBLE )
+      {
+        m_uiLosslessFrames[i] += 1;
+      }
+      else
+      {
+        m_dPSNRSum[i] += psnr[i];
+      }
       m_MSEyuvframe[i] += MSEyuvframe[i];
     }
 
@@ -95,6 +103,8 @@ public:
   double  getBits()                   const { return  m_dAddBits;   }
   void    setBits(double numBits)     { m_dAddBits = numBits; }
   uint32_t    getNumPic()                 const { return  m_uiNumPic;   }
+  uint32_t    getLosslessFrames(ComponentID compID) const { return m_uiLosslessFrames[compID]; }
+  double      getNumPicLossy(ComponentID compID) const { return double( m_uiNumPic - m_uiLosslessFrames[compID] ); }
 
   void    setFrmRate  (double dFrameRate) { m_dFrmRate = dFrameRate; } //--CFG_KDY
   void    clear()
@@ -104,6 +114,7 @@ public:
     {
       m_dPSNRSum[i] = 0;
       m_MSEyuvframe[i] = 0;
+      m_uiLosslessFrames[i] = 0;
     }
     m_uiNumPic = 0;
   }
@@ -141,7 +152,7 @@ public:
     }
 
     MSEyuv /= double(scale);  // i.e. divide by 6 for 4:2:0, 8 for 4:2:2 etc.
-    PSNRyuv = (MSEyuv == 0) ? 999.99 : 10.0 * log10((maxval * maxval) / MSEyuv);
+    PSNRyuv = (MSEyuv == 0) ? MAX_DOUBLE : 10.0 * log10((maxval * maxval) / MSEyuv);
   }
 
   std::string printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
@@ -166,11 +177,12 @@ public:
           const uint32_t maxval = 255 << (bitDepths[toChannelType(compID)] - 8); // fix with WPSNR: 1023 (4095) instead of 1020 (4080) for bit depth 10 (12)
           const double MSE  = m_MSEyuvframe[compID];
 
-          MSEBasedSNR[compID] = (MSE == 0) ? 999.99 : 10.0 * log10((maxval * maxval) / (MSE / (double)getNumPic()));
+          MSEBasedSNR[compID] = (MSE == 0) ? MAX_DOUBLE : 10.0 * log10((maxval * maxval) / (MSE / (double)getNumPic()));
         }
       }
     }
 
+    bool printLosslessPlanes = getLosslessFrames(COMP_Y) != 0 || getLosslessFrames(COMP_Cb) != 0 || getLosslessFrames(COMP_Cr) != 0;
     switch (chFmt)
     {
       case CHROMA_400:
@@ -196,13 +208,13 @@ public:
            info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() ));
+                 getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
 
           if (printHexPsnr)
           {
             double dPsnr;
             uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / (double)getNumPic();
+            dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
 
             std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
@@ -247,13 +259,13 @@ public:
           info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() ));
+                 getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
 
           if (printHexPsnr)
           {
             double dPsnr;
             uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / (double)getNumPic();
+            dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
 
             std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
@@ -283,7 +295,7 @@ public:
 
           if (printMSEBasedSNR)
           {
-            info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " ));
+            info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " ));
 
             if (printHexPsnr)
             {
@@ -292,7 +304,12 @@ public:
 
             if (printSequenceMSE)
             {
-              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE   " ));
+            }
+            
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("Y-Lossless  U-Lossless  V-Lossless\n"));
             }
             else
             {
@@ -303,9 +320,9 @@ public:
             info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
-                   getPsnr(COMP_Y ) / (double)getNumPic(),
-                   getPsnr(COMP_Cb) / (double)getNumPic(),
-                   getPsnr(COMP_Cr) / (double)getNumPic(),
+                   getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
+                   getPsnr(COMP_Cb) / getNumPicLossy(COMP_Cb),
+                   getPsnr(COMP_Cr) / getNumPicLossy(COMP_Cr),
                    PSNRyuv ));
 
             if (printHexPsnr)
@@ -314,7 +331,7 @@ public:
               uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / (double)getNumPic();
+                dPsnr[i] = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
 
                 std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
@@ -325,11 +342,15 @@ public:
 
             if (printSequenceMSE)
             {
-              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
                      MSEyuv ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("  %10d  "  "%10d  "  "%10d\n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
             }
             else
             {
@@ -354,7 +375,11 @@ public:
             }
             if (printSequenceMSE)
             {
-              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE   " ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("Y-Lossless  U-Lossless  V-Lossless\n"));
             }
             else
             {
@@ -365,9 +390,9 @@ public:
             info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
-                   getPsnr(COMP_Y ) / (double)getNumPic(),
-                   getPsnr(COMP_Cb) / (double)getNumPic(),
-                   getPsnr(COMP_Cr) / (double)getNumPic(),
+                   getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
+                   getPsnr(COMP_Cb) / getNumPicLossy(COMP_Cb),
+                   getPsnr(COMP_Cr) / getNumPicLossy(COMP_Cr),
                    PSNRyuv ));
 
 
@@ -377,7 +402,7 @@ public:
               uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / (double)getNumPic();
+                dPsnr[i] = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
 
                 std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
@@ -387,11 +412,15 @@ public:
             }
             if (printSequenceMSE)
             {
-              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
                      MSEyuv ));
+            }
+            if (printLosslessPlanes)
+            {
+              info.append(prnt("  %10d  "  "%10d  "  "%10d\n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
             }
             else
             {

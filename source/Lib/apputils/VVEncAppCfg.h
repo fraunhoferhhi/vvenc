@@ -198,15 +198,21 @@ const std::vector<SVPair<vvencChromaFormat>> ChromaFormatToEnumMap =
 
 const std::vector<SVPair<vvencHashType>> HashTypeToEnumMap =
 {
-  { "md5",                     VVENC_HASHTYPE_MD5      },
-  { "crc",                     VVENC_HASHTYPE_CRC      },
-  { "checksum",                VVENC_HASHTYPE_CHECKSUM },
-  { "off",                     VVENC_HASHTYPE_NONE     },
+  { "md5",                     VVENC_HASHTYPE_MD5          },
+  { "crc",                     VVENC_HASHTYPE_CRC          },
+  { "checksum",                VVENC_HASHTYPE_CHECKSUM     },
+  { "log_md5",                 VVENC_HASHTYPE_MD5_LOG      },
+  { "log_crc",                 VVENC_HASHTYPE_CRC_LOG      },
+  { "log_checksum",            VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "off",                     VVENC_HASHTYPE_NONE         },
   // for backward compatibility support values as well
-  { "1",                       VVENC_HASHTYPE_MD5      },
-  { "2",                       VVENC_HASHTYPE_CRC      },
-  { "3",                       VVENC_HASHTYPE_CHECKSUM },
-  { "0",                       VVENC_HASHTYPE_NONE     }
+  { "1",                       VVENC_HASHTYPE_MD5          },
+  { "2",                       VVENC_HASHTYPE_CRC          },
+  { "3",                       VVENC_HASHTYPE_CHECKSUM     },
+  { "11",                      VVENC_HASHTYPE_MD5_LOG      },
+  { "12",                      VVENC_HASHTYPE_CRC_LOG      },
+  { "13",                      VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "0",                       VVENC_HASHTYPE_NONE         }
 };
 
 const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap =
@@ -809,11 +815,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
     ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-    ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
-    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "WCG PPS Chroma Cb QP Scale")
-    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "WCG PPS Chroma Cr QP Scale")
-    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "WCG PPS Chroma QP Scale")
-    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "WCG PPS Chroma QP Offset")
+    ("WCGPPSEnable",                                    c->m_wcgChromaQpControl.enabled,                     "(deprecated) 1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
+    ("WCGPPSCbQpScale",                                 c->m_wcgChromaQpControl.chromaCbQpScale,             "(deprecated) WCG PPS Chroma Cb QP Scale")
+    ("WCGPPSCrQpScale",                                 c->m_wcgChromaQpControl.chromaCrQpScale,             "(deprecated) WCG PPS Chroma Cr QP Scale")
+    ("WCGPPSChromaQpScale",                             c->m_wcgChromaQpControl.chromaQpScale,               "(deprecated) WCG PPS Chroma QP Scale")
+    ("WCGPPSChromaQpOffset",                            c->m_wcgChromaQpControl.chromaQpOffset,              "(deprecated) WCG PPS Chroma QP Offset")
     ;
 
     opts.setSubSection("Misc. options");
@@ -848,12 +854,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MaxMTTDepthI",                                    c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
     ("MaxMTTDepthISliceL",                              c->m_maxMTTDepthI,                                   "Max MTT depth for (luma in) I slices")
     ("MaxMTTDepthISliceC",                              c->m_maxMTTDepthIChroma,                             "Max MTT depth for chroma in I slices")
-    // --> deprecated
-    ("MaxMTTHierarchyDepth",                            c->m_maxMTTDepth,                                    "(deprecated) Same as MaxMTTDepth")
-    ("MaxMTTHierarchyDepthI",                           c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthI")
-    ("MaxMTTHierarchyDepthISliceL",                     c->m_maxMTTDepthI,                                   "(deprecated) Same as MaxMTTDepthISliceL")
-    ("MaxMTTHierarchyDepthISliceC",                     c->m_maxMTTDepthIChroma,                             "(deprecated) Same as MaxMTTDepthISliceC")
-    // <-- deprecated
     ("MaxBTLumaISlice",                                 c->m_maxBT[0],                                       "Max BT size for (luma in) I slices")
     ("MaxBTChromaISlice",                               c->m_maxBT[2],                                       "Max BT size for chroma in I slices")
     ("MaxBTNonISlice",                                  c->m_maxBT[1],                                       "Max BT size for P/B slices")
@@ -1091,6 +1091,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastInferMerge",                                  c->m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
     ("NumIntraModesFullRD",                             c->m_numIntraModesFullRD,                            "Number modes for full RD intra search [-1, 1..3] (default: -1 auto)")
     ("ReduceIntraChromaModesFullRD",                    c->m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
+    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "FirstPassMode (0: default, 1: faster")
     ;
 
     opts.setSubSection("Input Options");
