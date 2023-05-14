@@ -6016,8 +6016,8 @@ void EncAdaptiveLoopFilter::determineControlIdcValuesCTU( CodingStructure &cs, c
   uint64_t lumaSwingCount = 0, chromaMidPointCount = 0;
   if (m_limitCcAlf)
   {
-    lumaSwingCount      = countLumaSwingGreaterThanThresholdCTU( dstYuv.get(COMP_Y).bufAt(0, 0), xCtu, yCtu, dstYuv.get(COMP_Y).stride, dstYuv.get(COMP_Y).height, dstYuv.get(COMP_Y).width, cs.pcv->maxCUSizeLog2, cs.pcv->maxCUSizeLog2 );
-    chromaMidPointCount = countChromaSampleValueNearMidPointCTU( dstYuv.get(compID).bufAt(0, 0), xCtu, yCtu, dstYuv.get(compID).stride, dstYuv.get(compID).height, dstYuv.get(compID).width, cs.pcv->maxCUSizeLog2- scaleX, cs.pcv->maxCUSizeLog2 - scaleY );
+    lumaSwingCount      = countLumaSwingGreaterThanThresholdCTU( dstYuv.get(COMP_Y).bufAt(0, lumaPos.y), lumaPos.x, lumaPos.y, dstYuv.get(COMP_Y).stride, dstYuv.get(COMP_Y).height, dstYuv.get(COMP_Y).width, cs.pcv->maxCUSizeLog2, cs.pcv->maxCUSizeLog2 );
+    chromaMidPointCount = countChromaSampleValueNearMidPointCTU( dstYuv.get(compID).bufAt(0,      yCtu), xCtu, yCtu,           dstYuv.get(compID).stride, dstYuv.get(compID).height, dstYuv.get(compID).width, cs.pcv->maxCUSizeLog2- scaleX, cs.pcv->maxCUSizeLog2 - scaleY );
   }
   DTRACE(g_trace_ctx, D_MISC, "CCALF_%d: ctuIdx=%d\n", (int)compID, ctuIdx );
 
