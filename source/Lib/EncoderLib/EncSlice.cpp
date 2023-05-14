@@ -1206,7 +1206,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
             for(int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++)
             {
-              encSlice->m_pALF->determineFilterForCTU( cs, &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+              encSlice->m_pALF->selectFilterForCTU( cs, &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
             }
           }
           else
@@ -1333,8 +1333,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
             for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
             {
-              encSlice->m_pALF->determineCcAlfFilterForCTU( cs, COMP_Cb, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
-              encSlice->m_pALF->determineCcAlfFilterForCTU( cs, COMP_Cr, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+              encSlice->m_pALF->selectCcAlfFilterForCTU( cs, COMP_Cb, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+              encSlice->m_pALF->selectCcAlfFilterForCTU( cs, COMP_Cr, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
             }
           }
           else
