@@ -3529,6 +3529,17 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               {
                 alf_float_t* cov    = &alfCovariance[classIdx].E[b0][b1][k][k];
 
+                __m128 xprodwk[4];
+                for( int ii = 0; ii < 4; ii++ )
+                {
+                  const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+
+                  __m128 xlocd  = _mm_cvtepi32_ps( xlockx32 );
+                  __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
+                  __m128 xprdct = _mm_mul_ps     ( xwght, xlocd );
+                  xprodwk[ii] = xprdct;
+                }
+
                 for( int l = k; l < shape.numCoeff; l++ )
                 {
                   const Pel* Elocall = &GET_ALF_COVAR( ELocal, b1, l, 0 );
@@ -3539,14 +3550,9 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                   for( int ii = 0; ii < 4; ii++ )
                   {
                     const __m128i xloclx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
-                    const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
                   
-                    __m128 xlocld = _mm_cvtepi32_ps( xloclx32 );
-                    __m128 xlockd = _mm_cvtepi32_ps( xlockx32 );
-                    __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
-                    __m128 xprdct = _mm_mul_ps     ( xwght, _mm_mul_ps     ( xlocld, xlockd ) );
-                  
-                    xacc = _mm_add_ps( xacc, xprdct );
+                    __m128 xlockd = _mm_cvtepi32_ps( xloclx32 );
+                    xacc = _mm_add_ps( xacc, _mm_mul_ps( xprodwk[ii], xlockd ) );
 
                     //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
                   }
@@ -6451,20 +6457,26 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         {
           for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
           {
+            __m128 xprodkw[4];
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              __m128 xw = _mm_loadu_ps( &weight[ii][0] );
+              __m128 xk = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
+              xk = _mm_mul_ps( xk, xw );
+              xprodkw[ii] = xk;
+            }
+
             for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
             {
               __m128 xsum = _mm_setzero_ps();
 
               for (int ii = 0; ii < 4; ii++)
               {
-                __m128 xw = _mm_loadu_ps( &weight[ii][0] );
-                __m128 xk = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
                 __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[l][ii << 2] ) ) );
 
                 //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
 
-                xk = _mm_mul_ps( xk, xl );
-                __m128 xs = _mm_mul_ps( xw, xk );
+                __m128 xs = _mm_mul_ps( xl, xprodkw[ii] );
                 xsum = _mm_add_ps( xsum, xs );
               }
 
