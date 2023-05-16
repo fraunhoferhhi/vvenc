@@ -3525,20 +3525,20 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             {
               const Pel* Elocalk  = &GET_ALF_COVAR( ELocal, b0, k, 0 );
 
+              __m128 xprodwk[4];
+              for( int ii = 0; ii < 4; ii++ )
+              {
+                const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+
+                __m128 xlocd  = _mm_cvtepi32_ps( xlockx32 );
+                __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
+                __m128 xprdct = _mm_mul_ps     ( xwght, xlocd );
+                xprodwk[ii] = xprdct;
+              }
+
               for( int b1 = 0; b1 < numBins; b1++ )
               {
                 alf_float_t* cov    = &alfCovariance[classIdx].E[b0][b1][k][k];
-
-                __m128 xprodwk[4];
-                for( int ii = 0; ii < 4; ii++ )
-                {
-                  const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
-
-                  __m128 xlocd  = _mm_cvtepi32_ps( xlockx32 );
-                  __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
-                  __m128 xprdct = _mm_mul_ps     ( xwght, xlocd );
-                  xprodwk[ii] = xprdct;
-                }
 
                 for( int l = k; l < shape.numCoeff; l++ )
                 {
