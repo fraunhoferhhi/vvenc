@@ -407,7 +407,7 @@ public:
   void destroy                      ();
   void initASU                      ( int m_alfUnitSize );
   void initDistortion               ();
-  void getAvaiApsIdsLuma            ( Slice& slice, int& newApsId );
+  void getAvaiApsIdsLuma            ( Slice& slice );
   void alfEncoderCtb(CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight);
   void initCABACEstimator           ( Slice* pcSlice );
   void setApsIdStart                ( int i ) { m_apsIdStart = i; }
@@ -425,7 +425,8 @@ public:
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
 //  void alfReconstructor             ( CodingStructure& cs );
   void initEncProcess               ( Slice& slice );
-  bool isSkipAlfForFrame            ( const Picture& pic ) const;
+  void initDerivation               ( Slice& slice );
+  bool isSkipAlfForFrame( const Picture& pic ) const;
 private:
   void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
   void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
@@ -508,7 +509,6 @@ private:
   uint64_t countChromaSampleValueNearMidPointCTU(const Pel* chroma, int x, int y, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight);
   void getFrameStatsCcalf        ( ComponentID compIdx, int filterIdc);
   void initDistortionCcalf       ();
-  std::vector<int> getAvaiApsIdsLumaNew(CodingStructure& cs, int& newApsId);
   inline int getAsuMaxCtuX( int ctuX )
   {
     return std::min( ctuX + m_numCtusInAsuWidth, (int)m_numCTUsInWidth );

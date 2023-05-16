@@ -157,7 +157,7 @@ void EncPicture::finalizePicture( Picture& pic )
   xCalcDistortion( pic, *slice->sps );
   
   // finalize
-  if( !pic.encPic )
+  if( !pic.encPic || ( slice->pps->getNumTiles() > 1 && !slice->pps->loopFilterAcrossTilesEnabled ) )
   {
     pic.extendPicBorder();
   }

@@ -758,6 +758,11 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     m_saoAllDisabled = true;
   }
 
+  if( slice.sps->alfEnabled )
+  {
+    m_pALF->initEncProcess( slice );
+  }
+
   std::fill( m_processStates.begin(), m_processStates.end(), CTU_ENCODE );
 
   // fill encoder parameter list
@@ -1076,9 +1081,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ALF border extension
         if( cs.sps->alfEnabled )
         {
-          if( ctuRsAddr == 0 )
-            encSlice->m_pALF->initEncProcess( slice );
-
           // we have to do some kind of position aware boundary padding
           // it's done here because the conditions are readable
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
@@ -1204,6 +1206,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[lineIdx];
             PerThreadRsrc* taskRsrc = encSlice->m_ThreadRsrc[threadIdx];
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+            if( ctuPosY == 0 ) encSlice->m_pALF->initDerivation( slice );
             for(int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++)
             {
               encSlice->m_pALF->selectFilterForCTU( cs, &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
@@ -1211,6 +1214,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           }
           else
           {
+            encSlice->m_pALF->initDerivation( slice );
             encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
             encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->alfEnabled[COMP_Y], cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
           }
@@ -1382,14 +1386,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
 
         // extend pic border
-        PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-        const int margin   = cs.picture->margin;
-        recoBuf.extendBorderPelLft( y, height, margin );
-        recoBuf.extendBorderPelRgt( y, height, margin );
-        if( ctuPosY == 0 )
-          recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2*margin, margin );
-        if( ctuPosY+1 == pcv.heightInCtus )
-          recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2*margin, margin );
+        if( !( slice.pps->getNumTiles() > 1 && !slice.pps->loopFilterAcrossTilesEnabled ) )
+        {
+          PelUnitBuf recoBuf = cs.picture->getRecoBuf();
+          const int margin = cs.picture->margin;
+          recoBuf.extendBorderPelLft( y, height, margin );
+          recoBuf.extendBorderPelRgt( y, height, margin );
+          if(ctuPosY == 0)
+            recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2 * margin, margin );
+          if(ctuPosY + 1 == pcv.heightInCtus)
+            recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2 * margin, margin );
+        }
 
         if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
         {

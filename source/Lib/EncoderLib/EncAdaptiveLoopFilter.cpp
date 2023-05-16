@@ -1910,6 +1910,10 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
         const UnitArea areaDst( m_chromaFormat, Area( xStart, yStart, w, h ) );
         for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
         {
+          if( !cs.slice->alfEnabled[compIdx] )
+          {
+            continue;
+          }
           const ComponentID compID = ComponentID( compIdx );
           const ChannelType chType = toChannelType( compID );
           const CompArea& compArea = area.block( compID );
@@ -1942,6 +1946,10 @@ void EncAdaptiveLoopFilter::xGetStatisticsCTU( Picture& pic, CodingStructure& cs
     const UnitArea area( m_chromaFormat, Area( xPos, yPos, width, height ) );
     for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
     {
+      if( !cs.slice->alfEnabled[compIdx] )
+      {
+        continue;
+      }
       const ComponentID compID = ComponentID( compIdx );
       const CompArea& compArea = area.block( compID );
 
@@ -2069,26 +2077,24 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
     pic.m_alfCtbFilterIndex[ctbIdx] = NUM_FIXED_FILTER_SETS;
   }
 
+
+  // consider using new filter (only)
+  alfParam.newFilterFlag[CH_L] = true;
+  alfParam.newFilterFlag[CH_C] = true;
+  cs.slice->numAps = ( 1 ); // Only new filter for RD cost optimization
+
   const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP;
   const double lambdaChromaWeight = useCtuWiseLambda && ( m_lambda[COMP_Y] > 0.0 ) ? ( m_lambda[COMP_Cb] + m_lambda[COMP_Cr] ) / ( 2.0 * m_lambda[COMP_Y] ) : 0.0;
 
-  if( !m_encCfg->m_fppLinesSynchro )
-  {
-    // consider using new filter (only)
-    alfParam.newFilterFlag[CH_L] = true;
-    alfParam.newFilterFlag[CH_C] = true;
-    cs.slice->numAps = 1; // Only new filter for RD cost optimization
-
-    // derive filter (luma)
-    alfEncoder(cs, alfParam, CH_L, lambdaChromaWeight);
-    // derive filter (chroma)
-    alfEncoder(cs, alfParam, CH_C, lambdaChromaWeight);
-  }
+  // derive filter (luma)
+  alfEncoder( cs, alfParam, CH_L, lambdaChromaWeight );
+  // derive filter (chroma)
+  alfEncoder( cs, alfParam, CH_C, lambdaChromaWeight );
 
   // let alfEncoderCtb decide now
   alfParam.newFilterFlag[CH_L] = false;
   alfParam.newFilterFlag[CH_C] = false;
-  cs.slice->numAps = 0;
+  cs.slice->numAps = ( 0 );
   m_CABACEstimator->getCtx() = AlfCtx( ctxStart );
   alfEncoderCtb( cs, alfParam, lambdaChromaWeight );
 }
@@ -2326,9 +2332,46 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
 {
+  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
+  if( isSkipAlfForFrame( *slice.pic ) )
+  {
+    return;
+  }
+
+  // NOTE: ALF is here enabled per default. However it can be disabled during filter derivation part.
+  //       In line synchronized FPP mode, it cannot be disabled.
+  slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = true;
+  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = slice.alfEnabled[COMP_Y] ? true : false;
+
+  if( m_encCfg->m_fppLinesSynchro )
+  {
+    slice.alfEnabled[COMP_Y] = true;
+    slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = false; // currently disabled
+
+    // CCALF
+    if( 1 )
+    {
+      // currently CCALF is off
+      m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
+    }
+    else
+    {
+      m_limitCcAlf = m_encCfg->m_QP >= m_encCfg->m_ccalfQpThreshold;
+      if(m_limitCcAlf && slice.sliceQp <= m_encCfg->m_QP + 1)
+      {
+        m_ccAlfFilterParam.ccAlfFilterEnabled[0] = false;
+        m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
+      }
+    }
+    slice.ccAlfCbEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[0];
+    slice.ccAlfCrEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[1];
+  }
+}
+
+void EncAdaptiveLoopFilter::initDerivation( Slice& slice )
+{
   m_apsIds.clear();
   m_apsIdsChroma.clear();
-  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
 
   if( isSkipAlfForFrame( *slice.pic ) )
   {
@@ -2367,38 +2410,10 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
         APS* aps = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
         apss[i] = (aps && aps->apsId != MAX_UINT) ? aps : nullptr;
       }
-      getAvaiApsIdsLuma(slice, m_newApsIdLuma);
+      getAvaiApsIdsLuma(slice);
     }
   }
 
-  slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = true;
-
-  if( m_encCfg->m_fppLinesSynchro )
-  {
-    slice.alfEnabled[COMP_Y] = true;
-    slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = false;
-
-    // CCALF
-    if( 1 )
-    {
-      // currently CCALF is off
-      m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
-    }
-    else
-    {
-      m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = slice.alfEnabled[COMP_Y] ? true : false;
-
-      m_limitCcAlf = m_encCfg->m_QP >= m_encCfg->m_ccalfQpThreshold;
-      if(m_limitCcAlf && slice.sliceQp <= m_encCfg->m_QP + 1)
-      {
-        m_ccAlfFilterParam.ccAlfFilterEnabled[0] = false;
-        m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
-      }
-    }
-    slice.ccAlfCbEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[0] ? true: false;
-    slice.ccAlfCrEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[1] ? true: false;
-  }
-  
   int newApsId = m_apsIdStart - 1;
   if( !m_encCfg->m_alfTempPred )
   {
@@ -4907,7 +4922,7 @@ void EncAdaptiveLoopFilter::setCtuEnableFlag( uint8_t** ctuFlags, ChannelType ch
   }
 }
 
-void EncAdaptiveLoopFilter::getAvaiApsIdsLuma(Slice& slice, int& newApsId)
+void EncAdaptiveLoopFilter::getAvaiApsIdsLuma( Slice& slice )
 {
   std::vector<int> result;
   if( m_encCfg->m_alfTempPred )
@@ -5152,7 +5167,6 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
             double altDist = doClip ? m_alfCovariance[compId][asuIdx][0].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor)
                                     : m_alfCovariance[compId][asuIdx][0].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_CHROMA_COEFF, invFactor);
             double altCost = altDist + r_altCost;
-            //DTRACE( g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, numalt=%d, bestAltCost=%.2f, altCost=%.2f\n", cs.slice->poc, compId, asuIdx, altIdx, bestAltCost, altCost );
             DTRACE(g_trace_ctx, D_MISC, "Chroma_%d: \t\t\t alt=%d, altDist =%.2f altCost =%.2f\n", compId, altIdx, altDist, altCost );
             if (altCost < bestAltCost)
             {
@@ -5177,7 +5191,6 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
           //cost
           const double costOff = distUnfilterCtu + rateCost;
           DTRACE(g_trace_ctx, D_MISC, "Chroma_%d: \t\t\t costOn =%.2f, costOff =%.2f\n", compId, costOn, costOff );
-          DTRACE(g_trace_ctx, D_ALF_EST, "AlfEncCtb_Chroma: POC%d, comp_%d, asu_%d, costOff=%.2f[distUnf=%2.f,rateCost=%2.f], CostOn=%.2f\n", cs.slice->poc, compId, asuIdx, costOff, distUnfilterCtu, rateCost, costOn);
 
           uint8_t enable = 0;
           if (costOn < costOff)
@@ -5191,50 +5204,6 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
     }
   }
 }
-
-std::vector<int> EncAdaptiveLoopFilter::getAvaiApsIdsLumaNew(CodingStructure& cs, int& newApsId)
-{
-  APS** apss = cs.slice->alfAps;
-  for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
-  {
-    APS* aps = m_apsMap->getPS((i << NUM_APS_TYPE_LEN) + ALF_APS);
-    apss[i] = ( aps && aps->apsId != MAX_UINT ) ? aps: nullptr;
-  }
-
-  std::vector<int> result;
-  if( m_encCfg->m_alfTempPred )
-  {
-    int apsIdChecked = 0, curApsId = m_apsIdStart;
-    if (curApsId < ALF_CTB_MAX_NUM_APS)
-    {
-      while (apsIdChecked < ALF_CTB_MAX_NUM_APS && !cs.slice->isIntra() && result.size() < ALF_CTB_MAX_NUM_APS && !cs.slice->pendingRasInit && !cs.slice->isIDRorBLA())
-      {
-        APS* curAPS = cs.slice->alfAps[curApsId];
-        if (curAPS && curAPS->layerId <= cs.slice->pic->layerId && curAPS->temporalId <= cs.slice->TLayer && curAPS->alfParam.newFilterFlag[CH_L])
-        {
-          result.push_back( curApsId );
-        }
-        apsIdChecked++;
-        curApsId = (curApsId + 1) % ALF_CTB_MAX_NUM_APS;
-      }
-    }
-  }
-  cs.slice->numAps = ((int)result.size());
-  cs.slice->setAlfApsIds(result);
-  newApsId = m_apsIdStart - 1;
-  if( !m_encCfg->m_alfTempPred )
-  {
-    newApsId = m_apsIdStart = m_encCfg->m_explicitAPSid;
-  }
-
-  if( newApsId < 0 )
-  {
-    newApsId = ALF_CTB_MAX_NUM_APS - 1;
-  }
-  CHECK(newApsId >= ALF_CTB_MAX_NUM_APS, "Wrong APS index assignment in getAvaiApsIdsLuma");
-  return result;
-}
-
 
 void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight )
 {
@@ -6410,7 +6379,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   std::vector<int> apsIds             = getAvailableCcAlfApsIds(cs, compID);
   const double invFactor = 1.0 / (double)(1 << m_scaleBits );
 
-  const bool deriveNewFilter = !( m_encCfg->m_fppLinesSynchro );
+  const bool deriveNewFilter = true;
   for (int testFilterIdx = 0; testFilterIdx < ( apsIds.size() + (int)deriveNewFilter ); testFilterIdx++ )
   {
     bool referencingExistingAps   = (testFilterIdx < apsIds.size()) ? true : false;
@@ -6648,6 +6617,11 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
 void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
   const int filterIdx = 0;
+
+  if( !m_ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1] )
+  {
+    return;
+  }
 
   // init CTU stats buffers
   m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr].reset();
