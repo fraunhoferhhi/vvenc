@@ -6120,7 +6120,8 @@ void EncAdaptiveLoopFilter::selectCcAlfFilterForCTU( CodingStructure& cs, Compon
   }
 }
 
-void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const ComponentID compID, const PelUnitBuf& dstYuv, const PelBuf *buf,
+/*
+void EncAdaptiveLoopFilter::determineControlIdcValuesNew(CodingStructure &cs, const ComponentID compID, const PelUnitBuf& dstYuv, const PelBuf *buf,
                                                       const int ctuWidthC, const int ctuHeightC, const int picWidthC,
                                                       const int picHeightC, double **unfilteredDistortion,
                                                       uint64_t *trainingDistortion[MAX_NUM_CC_ALF_FILTERS],
@@ -6168,6 +6169,160 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
         curFilterEnabled[bestFilterIdx] = true;
         filterIdxCount  [bestFilterIdx].count++;
       }
+      ctuIdx++;
+    }
+  }
+
+  if (!reuseTemporalFilterCoeff)
+  {
+    std::copy_n(curFilterEnabled, MAX_NUM_CC_ALF_FILTERS, filterEnabled);
+
+    std::stable_sort(filterIdxCount, filterIdxCount + MAX_NUM_CC_ALF_FILTERS, compareCounts);
+
+    int filterIdc = 1;
+    ccAlfFilterCount = 0;
+    for ( FilterIdxCount &s : filterIdxCount )
+    {
+      const int filterIdx = s.filterIdx;
+      if (filterEnabled[filterIdx])
+      {
+        mapFilterIdxToFilterIdc[filterIdx] = filterIdc;
+        filterIdc++;
+        ccAlfFilterCount++;
+      }
+    }
+
+    curTotalRate = prevRate;
+    m_CABACEstimator->getCtx() = ctxInitial;
+    m_CABACEstimator->resetBits();
+    int ctuIdx = 0;
+    for (int y = 0; y < buf->height; y += ctuHeightC)
+    {
+      for (int x = 0; x < buf->width; x += ctuWidthC)
+      {
+        const int filterIdxPlus1 = filterControl[ctuIdx];
+
+        const Position lumaPos = Position(
+                                          { x << getComponentScaleX(compID, cs.pcv->chrFormat), y << getComponentScaleY(compID, cs.pcv->chrFormat) });
+
+        m_CABACEstimator->codeCcAlfFilterControlIdc(filterIdxPlus1 == 0 ? 0
+                                                    : mapFilterIdxToFilterIdc[filterIdxPlus1 - 1],
+                                                    cs, compID, ctuIdx, filterControl, lumaPos, ccAlfFilterCount);
+
+        ctuIdx++;
+      }
+    }
+    curTotalRate += FRAC_BITS_SCALE*m_CABACEstimator->getEstFracBits();
+  }
+
+  // restore for next iteration
+  m_CABACEstimator->getCtx() = ctxInitial;
+}
+
+*/
+void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const ComponentID compID, const PelBuf *buf,
+                                                      const int ctuWidthC, const int ctuHeightC, const int picWidthC,
+                                                      const int picHeightC, double **unfilteredDistortion,
+                                                      uint64_t *trainingDistortion[MAX_NUM_CC_ALF_FILTERS],
+                                                      uint64_t *lumaSwingGreaterThanThresholdCount,
+                                                      uint64_t *chromaSampleCountNearMidPoint,
+                                                      bool reuseTemporalFilterCoeff, uint8_t *trainingCovControl,
+                                                      uint8_t *filterControl, uint64_t &curTotalDistortion,
+                                                      double &curTotalRate, bool filterEnabled[MAX_NUM_CC_ALF_FILTERS],
+                                                      uint8_t  mapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS + 1],
+                                                      uint8_t &ccAlfFilterCount)
+{
+  bool curFilterEnabled[MAX_NUM_CC_ALF_FILTERS];
+  std::fill_n(curFilterEnabled, MAX_NUM_CC_ALF_FILTERS, false);
+
+  FilterIdxCount filterIdxCount[MAX_NUM_CC_ALF_FILTERS];
+  for (int i = 0; i < MAX_NUM_CC_ALF_FILTERS; i++)
+  {
+    filterIdxCount[i].count     = 0;
+    filterIdxCount[i].filterIdx = i;
+  }
+
+  double prevRate = curTotalRate;
+
+  TempCtx ctxInitial(m_CtxCache);
+  TempCtx ctxBest(m_CtxCache);
+  TempCtx ctxStart(m_CtxCache);
+  ctxInitial = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
+  ctxBest    = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
+
+  int ctuIdx = 0;
+  for (int yCtu = 0; yCtu < buf->height; yCtu += ctuHeightC)
+  {
+    for (int xCtu = 0; xCtu < buf->width; xCtu += ctuWidthC)
+    {
+      uint64_t ssd;
+      double   rate;
+      double   cost;
+
+      uint64_t bestSSD       = MAX_UINT64;
+      double   bestRate      = MAX_DOUBLE;
+      double   bestCost      = MAX_DOUBLE;
+      uint8_t  bestFilterIdc = 0;
+      uint8_t  bestFilterIdx = 0;
+      const uint32_t thresholdS = std::min<int>(buf->height - yCtu, ctuHeightC) << getComponentScaleY(COMP_Cb, m_chromaFormat);
+      const uint32_t numberOfChromaSamples = std::min<int>(buf->height - yCtu, ctuHeightC) * std::min<int>(buf->width - xCtu, ctuWidthC);
+      const uint32_t thresholdC = (numberOfChromaSamples >> 2);
+
+      m_CABACEstimator->getCtx() = ctxBest;
+      ctxStart                   = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
+
+      for (int filterIdx = 0; filterIdx <= MAX_NUM_CC_ALF_FILTERS; filterIdx++)
+      {
+        uint8_t filterIdc = mapFilterIdxToFilterIdc[filterIdx];
+        if (filterIdx < MAX_NUM_CC_ALF_FILTERS && !filterEnabled[filterIdx])
+        {
+          continue;
+        }
+
+        if (filterIdx == MAX_NUM_CC_ALF_FILTERS)
+        {
+          ssd = unfilteredDistortion[compID][ctuIdx];   // restore saved distortion computation
+        }
+        else
+        {
+          ssd = trainingDistortion[filterIdx][ctuIdx];
+        }
+        m_CABACEstimator->getCtx() = ctxStart;
+        m_CABACEstimator->resetBits();
+        const Position lumaPos = Position({ xCtu << getComponentScaleX(compID, cs.pcv->chrFormat),
+          yCtu << getComponentScaleY(compID, cs.pcv->chrFormat) });
+        m_CABACEstimator->codeCcAlfFilterControlIdc(filterIdc, cs, compID, ctuIdx, filterControl, lumaPos,
+                                                    ccAlfFilterCount);
+        rate = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
+        cost = rate * m_lambda[compID] + ssd;
+
+        bool limitationExceeded = false;
+        if (m_limitCcAlf && filterIdx < MAX_NUM_CC_ALF_FILTERS)
+        {
+          limitationExceeded = limitationExceeded || (lumaSwingGreaterThanThresholdCount[ctuIdx] >= thresholdS);
+          limitationExceeded = limitationExceeded || (chromaSampleCountNearMidPoint[ctuIdx] >= thresholdC);
+        }
+        if (cost < bestCost && !limitationExceeded)
+        {
+          bestCost      = cost;
+          bestRate      = rate;
+          bestSSD       = ssd;
+          bestFilterIdc = filterIdc;
+          bestFilterIdx = filterIdx;
+
+          ctxBest = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
+
+          trainingCovControl[ctuIdx] = (filterIdx == MAX_NUM_CC_ALF_FILTERS) ? 0 : (filterIdx + 1);
+          filterControl[ctuIdx]      = (filterIdx == MAX_NUM_CC_ALF_FILTERS) ? 0 : (filterIdx + 1);
+        }
+      }
+      if (bestFilterIdc != 0)
+      {
+        curFilterEnabled[bestFilterIdx] = true;
+        filterIdxCount[bestFilterIdx].count++;
+      }
+      curTotalRate += bestRate;
+      curTotalDistortion += bestSSD;
       ctuIdx++;
     }
   }
@@ -6347,7 +6502,16 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   const int picHeightC           = cs.pcv->lumaHeight >> scaleY;
   const int maxTrainingIterCount = 15;
 
+
   //DTRACE_FRAME_BLOCKWISE( g_trace_ctx, D_TMP, dstYuv.bufs[COMP_Y].bufAt(0, 0), dstYuv.bufs[COMP_Y].stride, dstYuv.bufs[COMP_Y].width, dstYuv.bufs[COMP_Y].height, 64, 64 );
+  if (m_limitCcAlf)
+  {
+    countLumaSwingGreaterThanThreshold(dstYuv.get(COMP_Y).bufAt(0, 0), dstYuv.get(COMP_Y).stride, dstYuv.get(COMP_Y).height, dstYuv.get(COMP_Y).width, cs.pcv->maxCUSizeLog2, cs.pcv->maxCUSizeLog2, m_lumaSwingGreaterThanThresholdCount, m_numCTUsInWidth);
+  }
+  if (m_limitCcAlf)
+  {
+    countChromaSampleValueNearMidPoint(dstYuv.get(compID).bufAt(0, 0), dstYuv.get(compID).stride, dstYuv.get(compID).height, dstYuv.get(compID).width, cs.pcv->maxCUSizeLog2- scaleX, cs.pcv->maxCUSizeLog2 - scaleY, m_chromaSampleCountNearMidPoint, m_numCTUsInWidth);
+  }
 
   for ( int filterIdx = 0; filterIdx <= MAX_NUM_CC_ALF_FILTERS; filterIdx++ )
   {
@@ -6484,7 +6648,8 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
 
         uint64_t curTotalDistortion = 0;
         double curTotalRate = 0;
-        determineControlIdcValues(cs, compID, dstYuv, m_buf, ctuWidthC, ctuHeightC, picWidthC, picHeightC,
+        //determineControlIdcValuesNew(cs, compID, dstYuv, m_buf, ctuWidthC, ctuHeightC, picWidthC, picHeightC,
+        determineControlIdcValues(cs, compID, m_buf, ctuWidthC, ctuHeightC, picWidthC, picHeightC,
                                   m_ctbDistortionUnfilter, m_trainingDistortion,
                                   m_lumaSwingGreaterThanThresholdCount,
                                   m_chromaSampleCountNearMidPoint,
@@ -6620,12 +6785,11 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
 
 void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, const int ctuRsAddr, PelStorage& alfTempCtuBuf )
 {
-  const int filterIdx = 0;
-
   if( !m_ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1] )
   {
     return;
   }
+  const int filterIdx = 0;
 
   // init CTU stats buffers
   m_alfCovarianceCcAlf[compIdx - 1][filterIdx][ctuRsAddr].reset();
@@ -7200,6 +7364,89 @@ uint64_t EncAdaptiveLoopFilter::countChromaSampleValueNearMidPointCTU(const Pel*
     }
   }
   return count;
+}
+
+void EncAdaptiveLoopFilter::countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride)
+{
+  const int lumaBitDepth = m_inputBitDepth[CH_L];
+  const int threshold = (1 << ( m_inputBitDepth[CH_L] - 2 )) - 1;
+
+  // 3x4 Diamond
+  int xSupport[] = {  0, -1, 0, 1, -1, 0, 1, 0 };
+  int ySupport[] = { -1,  0, 0, 0,  1, 1, 1, 2 };
+
+  for (int y = 0; y < height; y += (1 << log2BlockHeight))
+  {
+    for (int x = 0; x < width; x += (1 << log2BlockWidth))
+    {
+      lumaSwingGreaterThanThresholdCount[(y >> log2BlockHeight) * lumaCountStride + (x >> log2BlockWidth)] = 0;
+
+      for (int yOff = 0; yOff < (1 << log2BlockHeight); yOff++)
+      {
+        for (int xOff = 0; xOff < (1 << log2BlockWidth); xOff++)
+        {
+          if ((y + yOff) >= (height - 2) || (x + xOff) >= (width - 1) || (y + yOff) < 1 || (x + xOff) < 1) // only consider samples that are fully supported by picture
+          {
+            continue;
+          }
+
+          int minVal = ((1 << lumaBitDepth) - 1);
+          int maxVal = 0;
+          for (int i = 0; i < 8; i++)
+          {
+            Pel p = luma[(yOff + ySupport[i]) * lumaStride + x + xOff + xSupport[i]];
+
+            if ( p < minVal )
+            {
+              minVal = p;
+            }
+            if ( p > maxVal )
+            {
+              maxVal = p;
+            }
+          }
+
+          if ((maxVal - minVal) > threshold)
+          {
+            lumaSwingGreaterThanThresholdCount[(y >> log2BlockHeight) * lumaCountStride + (x >> log2BlockWidth)]++;
+          }
+        }
+      }
+    }
+    luma += (lumaStride << log2BlockHeight);
+  }
+}
+
+void EncAdaptiveLoopFilter::countChromaSampleValueNearMidPoint(const Pel* chroma, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* chromaSampleCountNearMidPoint, int chromaSampleCountNearMidPointStride)
+{
+  const int midPoint  = (1 << m_inputBitDepth[CH_C]) >> 1;
+  const int threshold = 16;
+
+  for (int y = 0; y < height; y += (1 << log2BlockHeight))
+  {
+    for (int x = 0; x < width; x += (1 << log2BlockWidth))
+    {
+      chromaSampleCountNearMidPoint[(y >> log2BlockHeight)* chromaSampleCountNearMidPointStride + (x >> log2BlockWidth)] = 0;
+
+      for (int yOff = 0; yOff < (1 << log2BlockHeight); yOff++)
+      {
+        for (int xOff = 0; xOff < (1 << log2BlockWidth); xOff++)
+        {
+          if ((y + yOff) >= height || (x + xOff) >= width)
+          {
+            continue;
+          }
+
+          int distanceToMidPoint = abs(chroma[yOff * chromaStride + x + xOff] - midPoint);
+          if (distanceToMidPoint < threshold)
+          {
+            chromaSampleCountNearMidPoint[(y >> log2BlockHeight)* chromaSampleCountNearMidPointStride + (x >> log2BlockWidth)]++;
+          }
+        }
+      }
+    }
+    chroma += (chromaStride << log2BlockHeight);
+  }
 }
 
 void EncAdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf )

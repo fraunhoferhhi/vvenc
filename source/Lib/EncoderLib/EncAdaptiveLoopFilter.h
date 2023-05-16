@@ -493,7 +493,19 @@ private:
   int  getCoeffRateCcAlf         ( short chromaCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], bool filterEnabled[MAX_NUM_CC_ALF_FILTERS], uint8_t filterCount, ComponentID compID);
   void deriveCcAlfFilterCoeff    ( ComponentID compID, short filterCoeff[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF], const uint8_t filterIdx );
   void determineControlIdcValuesCTU(CodingStructure& cs, const ComponentID compID, const PelUnitBuf& dstYuv, int ctuIdx, int xCtu, int yCtu, int ctuWidthC, int ctuHeightC, int widthC, int heightC, double** unfilteredDistortion, uint64_t* trainingDistortion[MAX_NUM_CC_ALF_FILTERS], uint64_t* lumaSwingGreaterThanThresholdCount, uint64_t* chromaSampleCountNearMidPoint, uint8_t* trainingCovControl, uint8_t* filterControl, uint64_t& curTotalDistortion, double& curTotalRate, bool filterEnabled[MAX_NUM_CC_ALF_FILTERS], uint8_t mapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS + 1], uint8_t& ccAlfFilterCount, uint8_t& bestFilterIdx, CABACWriter* CABACEstimator, TempCtx& ctxBest, TempCtx& ctxStart);
-  void determineControlIdcValues ( CodingStructure &cs, const ComponentID compID, const PelUnitBuf& dstYuv, const PelBuf *buf, const int ctuWidthC,
+/*
+  void determineControlIdcValuesNew ( CodingStructure &cs, const ComponentID compID, const PelUnitBuf& dstYuv, const PelBuf *buf, const int ctuWidthC,
+                                   const int ctuHeightC, const int picWidthC, const int picHeightC,
+                                   double **unfilteredDistortion, uint64_t *trainingDistortion[MAX_NUM_CC_ALF_FILTERS],
+                                   uint64_t *lumaSwingGreaterThanThresholdCount,
+                                   uint64_t *chromaSampleCountNearMidPoint,
+                                   bool reuseFilterCoeff, uint8_t *trainingCovControl, uint8_t *filterControl,
+                                   uint64_t &curTotalDistortion, double &curTotalRate,
+                                   bool     filterEnabled[MAX_NUM_CC_ALF_FILTERS],
+                                   uint8_t  mapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS + 1],
+                                   uint8_t &ccAlfFilterCount);
+*/
+  void determineControlIdcValues ( CodingStructure &cs, const ComponentID compID, const PelBuf *buf, const int ctuWidthC,
                                    const int ctuHeightC, const int picWidthC, const int picHeightC,
                                    double **unfilteredDistortion, uint64_t *trainingDistortion[MAX_NUM_CC_ALF_FILTERS],
                                    uint64_t *lumaSwingGreaterThanThresholdCount,
@@ -508,6 +520,8 @@ private:
   std::vector<int> getAvailableCcAlfApsIds(CodingStructure& cs, ComponentID compID);
   uint64_t countLumaSwingGreaterThanThresholdCTU(const Pel* luma, int x, int y, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight);
   uint64_t countChromaSampleValueNearMidPointCTU(const Pel* chroma, int x, int y, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight);
+  void countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride);
+  void countChromaSampleValueNearMidPoint(const Pel* chroma, int chromaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* chromaSampleCountNearMidPoint, int chromaSampleCountNearMidPointStride);
   void getFrameStatsCcalf        ( ComponentID compIdx, int filterIdc);
   void initDistortionCcalf       ();
   inline int getAsuMaxCtuX( int ctuX )
