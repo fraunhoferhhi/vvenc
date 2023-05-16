@@ -6487,15 +6487,11 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
             for (int ii = 0; ii < 4; ii++)
             {
-              __m128 xw = _mm_loadu_ps( &weight[ii][0] );
-              __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
               __m128 xy = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) ) );
 
               //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
 
-              xy = _mm_mul_ps( xy, xl );
-              __m128 xs = _mm_mul_ps( xw, xy );
-              xsum = _mm_add_ps( xsum, xs );
+              xsum = _mm_add_ps( xsum, _mm_mul_ps( xy, xprodkw[ii] ) );
             }
 
             xsum = _mm_hadd_ps( xsum, xsum );
