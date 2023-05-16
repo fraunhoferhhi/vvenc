@@ -426,7 +426,8 @@ public:
 //  void alfReconstructor             ( CodingStructure& cs );
   void initEncProcess               ( Slice& slice );
   void initDerivation               ( Slice& slice );
-  bool isSkipAlfForFrame( const Picture& pic ) const;
+  void resetFrameStats              ( bool ccAlfEnabled );
+  bool isSkipAlfForFrame            ( const Picture& pic ) const;
 private:
   void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
   void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );

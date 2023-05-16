@@ -2368,15 +2368,47 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
   }
 }
 
+void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
+{
+  // init Frame stats buffers
+  const int numberOfChannels = getNumberValidChannels( m_chromaFormat );
+  for( int channelIdx = 0; channelIdx < numberOfChannels; channelIdx++ )
+  {
+    const ChannelType channelID = ChannelType( channelIdx );
+    const int numAlts = channelID == CH_L ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
+    const int numClasses = isLuma( channelID ) ? MAX_NUM_ALF_CLASSES : 1;
+
+    for( int altIdx = 0; altIdx < numAlts; ++altIdx )
+    {
+      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
+      {
+        m_alfCovarianceFrame[channelIdx][isLuma( channelID ) ? classIdx : altIdx].reset();
+      }
+    }
+  }
+
+  if( ccAlfEnabled )
+  {
+    const int filterIdx = 0;
+    const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+    for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
+    {
+      m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx].reset();
+    }
+  }
+}
+
 void EncAdaptiveLoopFilter::initDerivation( Slice& slice )
 {
-  m_apsIds.clear();
-  m_apsIdsChroma.clear();
-
   if( isSkipAlfForFrame( *slice.pic ) )
   {
     return;
   }
+
+  resetFrameStats( m_ccAlfFilterParam.ccAlfFilterEnabled[0] || m_ccAlfFilterParam.ccAlfFilterEnabled[1] );
+
+  m_apsIds.clear();
+  m_apsIdsChroma.clear();
 
   m_apsMap     = &slice.pic->picApsMap;
   m_apsIdStart = slice.pic->picApsMap.getApsIdStart();
@@ -2426,34 +2458,6 @@ void EncAdaptiveLoopFilter::initDerivation( Slice& slice )
   }
   CHECK(newApsId >= ALF_CTB_MAX_NUM_APS, "Wrong APS index assignment in getAvaiApsIdsLuma");
   m_newApsIdLuma = newApsId;
-
-
-  // init Frame stats buffers
-  const int numberOfChannels = getNumberValidChannels( m_chromaFormat );
-  for( int channelIdx = 0; channelIdx < numberOfChannels; channelIdx++ )
-  {
-    const ChannelType channelID = ChannelType( channelIdx );
-    const int numAlts = channelID == CH_L ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
-    const int numClasses = isLuma( channelID ) ? MAX_NUM_ALF_CLASSES : 1;
-
-    for( int altIdx = 0; altIdx < numAlts; ++altIdx )
-    {
-      for( int classIdx = 0; classIdx < numClasses; classIdx++ )
-      {
-        m_alfCovarianceFrame[channelIdx][isLuma( channelID ) ? classIdx : altIdx].reset();
-      }
-    }
-  }
-
-  if( slice.sps->ccalfEnabled )
-  {
-    const int filterIdx = 0;
-    const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-    for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
-    {
-      m_alfCovarianceFrameCcAlf[compIdx - 1][filterIdx].reset();
-    }
-  }
 
   // set CTU ALF enable flags, it was already reset before ALF process
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
