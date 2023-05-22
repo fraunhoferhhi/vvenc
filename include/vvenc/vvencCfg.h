@@ -719,7 +719,6 @@ typedef struct vvenc_config
   int                 m_maxParallelFrames;
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
   bool                m_tileParallelCtuEnc;
-  int8_t              m_fppLinesSynchro;
 
   bool                m_picPartitionFlag;
   unsigned int        m_tileColumnWidth[10];
@@ -761,6 +760,7 @@ typedef struct vvenc_config
 
   bool                m_picReordering;
   bool                m_reservedFlag[2];
+  int8_t              m_fppLinesSynchro;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;
   bool                m_addGOP32refPics;

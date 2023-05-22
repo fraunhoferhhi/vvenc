@@ -65,7 +65,7 @@ void roundAffineMv( int& mvx, int& mvy, int nShift )
   mvy = (mvy + nOffset - (mvy >= 0)) >> nShift;
 }
 
-void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int fppLinesSynchro )
+void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv )
 {
   if( pcv.wrapArround )
   {
@@ -76,13 +76,7 @@ void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCa
   int iHorMax = ( pcv.lumaWidth + iOffset - ( int ) pos.x - 1 ) << iMvShift;
   int iHorMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.x + 1 ) * (1 << iMvShift);
 
-  int maxLumaHeight = fppLinesSynchro && ((pos.y >> pcv.maxCUSizeLog2) + fppLinesSynchro + 1 < pcv.heightInCtus) ? 
-    
-    (((pos.y >> pcv.maxCUSizeLog2) + fppLinesSynchro + 1) << pcv.maxCUSizeLog2 ) - size.height - 4  // 4 samples from DCTIF vertical bottom part
-
-    : pcv.lumaHeight + iOffset;
-
-  int iVerMax = ( maxLumaHeight - ( int ) pos.y - 1 ) << iMvShift;
+  int iVerMax = ( pcv.lumaHeight + iOffset - ( int ) pos.y - 1 ) << iMvShift;
   int iVerMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.y + 1 ) * (1 << iMvShift);
 
   rcMv.hor = ( std::min( iHorMax, std::max( iHorMin, rcMv.hor ) ) );

@@ -1974,12 +1974,13 @@ static bool checkCfgParameter( vvenc_config *c )
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
 
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Affine,    "Affine cannot be used with full-FPP" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Geo,       "GPM (GEO) cannot be used with full-FPP" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_AMVRspeed, "AMVR (IMV) cannot be used with full-FPP" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "SMVD cannot be used with full-FPP" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "MMVD cannot be used with full-FPP" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Affine,    "FPP CTU-lines synchro: Affine cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Geo,       "FPP CTU-lines synchro: GPM (GEO) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_AMVRspeed, "FPP CTU-lines synchro: AMVR (IMV) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "FPP CTU-lines synchro: SMVD cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "FPP CTU-lines synchro: MMVD cannot be used" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileCols > 1, "FPP CTU-lines synchro: Only single tile column is supported" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0 || c->m_fppLinesSynchro > (c->m_SourceHeight/c->m_CTUSize - 1), "fppLinesSynchro must be greater than 0 and less than max number of CTU lines" );
   }
 

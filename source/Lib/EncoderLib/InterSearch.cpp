@@ -1778,7 +1778,7 @@ void InterSearch::xEstimateMvPredAMVP( CodingUnit& cu, CPelUnitBuf& origBuf, Ref
   {
     Mv mvCand = pcAMVPInfo->mvCand[i];
     if( m_pcEncCfg->m_fppLinesSynchro )
-      clipMv( mvCand, cu.lumaPos(), cu.lumaSize(),*cu.cs->pcv, true );
+      xClipMvSearch( mvCand, cu.lumaPos(), cu.lumaSize(),*cu.cs->pcv, true );
 
     Distortion uiTmpCost = xGetTemplateCost( cu, origBuf, predBuf, mvCand, i, AMVP_MAX_NUM_CANDS, refPicList, iRefIdx );
     if( uiBestCost > uiTmpCost )
@@ -2006,7 +2006,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
 
     Mv bestInitMv = (bBi ? rcMv : rcMvPred);
     Mv cTmpMv     = bestInitMv;
-    clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro );
+    xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro );
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
     m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
     Distortion uiBestSad = m_cDistParam.distFunc(m_cDistParam);
@@ -2031,7 +2031,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
       if( j < i )
         continue;
 
-      clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro);
+      xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro);
       cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
       m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
 
@@ -2087,6 +2087,29 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   DTRACE(g_trace_ctx, D_ME, "   MECost<L%d,%d>: %6d (%d)  MV:%d,%d\n", (int)refPicList, (int)bBi, ruiCost, ruiBits, rcMv.hor << 2, rcMv.ver << 2);
 }
 
+void InterSearch::xClipMvSearch( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int fppLinesSynchro )
+{
+  if( pcv.wrapArround )
+  {
+    return;
+  }
+  int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
+  int iOffset = 8;
+  int iHorMax = ( pcv.lumaWidth + iOffset - ( int ) pos.x - 1 ) << iMvShift;
+  int iHorMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.x + 1 ) * (1 << iMvShift);
+
+  int maxLumaHeight = fppLinesSynchro && ((pos.y >> pcv.maxCUSizeLog2) + fppLinesSynchro + 1 < pcv.heightInCtus) ? 
+    
+    (((pos.y >> pcv.maxCUSizeLog2) + fppLinesSynchro + 1) << pcv.maxCUSizeLog2 ) - size.height - 4  // 4 samples from DCTIF vertical bottom part
+
+    : pcv.lumaHeight + iOffset;
+
+  int iVerMax = ( maxLumaHeight - ( int ) pos.y - 1 ) << iMvShift;
+  int iVerMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.y + 1 ) * (1 << iMvShift);
+
+  rcMv.hor = ( std::min( iHorMax, std::max( iHorMin, rcMv.hor ) ) );
+  rcMv.ver = ( std::min( iVerMax, std::max( iVerMin, rcMv.ver ) ) );
+}
 
 void InterSearch::xSetSearchRange ( const CodingUnit& cu,
                                     const Mv& cMvPred,
@@ -2109,7 +2132,7 @@ void InterSearch::xSetSearchRange ( const CodingUnit& cu,
   else
   {
     clipMv( mvTL, cu.lumaPos(), cu.lumaSize(), pcv);
-    clipMv( mvBR, cu.lumaPos(), cu.lumaSize(), pcv, m_pcEncCfg->m_fppLinesSynchro );
+    xClipMvSearch( mvBR, cu.lumaPos(), cu.lumaSize(), pcv, m_pcEncCfg->m_fppLinesSynchro );
   }
 
   mvTL.divideByPowerOf2( iMvShift );
@@ -2242,7 +2265,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
   const bool bNewZeroNeighbourhoodTest               = bExtendedSettings;
 
   int iSearchRange = m_iSearchRange;
-  clipMv( rcMv, cu.lumaPos(), cu.lumaSize(),*cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro );
+  xClipMvSearch( rcMv, cu.lumaPos(), cu.lumaSize(),*cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro );
   rcMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_QUARTER);
   rcMv.divideByPowerOf2(2);
 
@@ -2270,7 +2293,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
     Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
 
-    clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro);
+    xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_fppLinesSynchro);
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
     m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
 
