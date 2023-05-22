@@ -145,8 +145,11 @@ void EncPicture::finalizePicture( Picture& pic )
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
   }
-
+#if TEMP_DOWNSAMPLER
+  if (pic.writePic && !pic.skipFrame)
+#else
   if( pic.writePic )
+#endif
   {
     // write picture
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );

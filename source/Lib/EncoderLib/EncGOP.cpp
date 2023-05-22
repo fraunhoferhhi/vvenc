@@ -559,7 +559,22 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
 
-      xEncodePicture( pic, picEncoder );
+#if TEMP_DOWNSAMPLER 
+      pic->skipFrame = false;
+      auList.skipAU = false;
+      if ((m_pcEncCfg->m_FirstPassMode == 2) && m_pcEncCfg->m_RCTargetBitrate == 0 && m_pcEncCfg->m_RCNumPasses == 2 && !flush)
+      {
+        if (pic->slices[0]->TLayer >= 2)
+        {
+          int FrameNumInGop = (pic->poc > m_pcEncCfg->m_GOPSize) ? (pic->poc % m_pcEncCfg->m_GOPSize) : pic->poc;
+          if(FrameNumInGop != (1<< (m_pcEncCfg->m_maxTLayer - pic->slices[0]->TLayer)))
+          {
+            pic->skipFrame = true;
+          }
+        }
+      }
+#endif
+      xEncodePicture(pic, picEncoder);
     }
   }
 
@@ -579,6 +594,14 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
   // AU output
   Picture* outPic = m_gopEncListOutput.front();
   m_gopEncListOutput.pop_front();
+
+#if TEMP_DOWNSAMPLER
+  if (outPic->skipFrame)
+  {
+    outPic->writePic = true;
+    auList.skipAU = true;
+  }
+#endif
 
   if( outPic->writePic )
   {
@@ -713,6 +736,9 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
   else
   {
+#if TEMP_DOWNSAMPLER
+    if (!pic->skipFrame)
+#endif
     encPic = true;
   }
 
@@ -2169,7 +2195,12 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
   xWriteLeadingSEIs( pic, au );
-  pic.actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
+#if TEMP_DOWNSAMPLER
+  if (!pic.skipFrame)
+#endif
+  {
+    pic.actualTotalBits += xWritePictureSlices(pic, au, m_HLSWriter);
+  }
 
   pic.encTime.stopTimer();
 

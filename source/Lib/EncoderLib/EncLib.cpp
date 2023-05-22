@@ -358,8 +358,12 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
-  
+ 
+#if TEMP_DOWNSAMPLER
+  if (m_firstPassCfg.m_FirstPassMode > 1)
+#else
   if( m_firstPassCfg.m_FirstPassMode == 1 )
+#endif
   {
     unsigned interBlockSize = m_firstPassCfg.m_SourceWidth >= 1280 && m_firstPassCfg.m_SourceHeight >= 720 ? 64 : 32;
     m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
@@ -421,9 +425,24 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       isQueueEmpty &= encStage->isStageDone() && m_AuList.empty();
     }
 
-    if( !au.empty() )
+#if TEMP_DOWNSAMPLER
+    bool wasDoneSkipedFrame = false;
+    if (au.empty() && au.skipAU)
     {
-      m_AuList.push_back( au );
+      wasDoneSkipedFrame = true;
+    }
+    if (!au.empty() || au.skipAU)
+#else
+    if( !au.empty() )
+#endif
+    {
+#if TEMP_DOWNSAMPLER
+      if (!au.skipAU)
+#endif
+      {
+        m_AuList.push_back(au);
+      }
+
       au.detachNalUnitList();
       au.clearAu();
       // NOTE: delay AU output in stage parallel mode only
@@ -432,7 +451,11 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
+#if TEMP_DOWNSAMPLER
+    bool waitAndStay = inputPending || ((m_AuList.empty() && !wasDoneSkipedFrame) && !isQueueEmpty && (m_accessUnitOutputStarted || flush));
+#else
     bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
+#endif
     if( ! waitAndStay )
     {
       break;

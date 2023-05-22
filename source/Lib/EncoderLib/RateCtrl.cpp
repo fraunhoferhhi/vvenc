@@ -388,6 +388,38 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
+#if TEMP_DOWNSAMPLER
+  if ((m_pcEncCfg->m_FirstPassMode == 2) && rcIsFinalPass && pass)
+  {
+    float lambda[4] = { 0.0,0.0,0.0,0.0 };
+    int numBits[4] = { 0,0,0,0 };
+    float psnr[4] = { 0.0,0.0,0.0,0.0 };
+    int qps[4] = { 0,0,0,0 };
+    auto itr = m_listRCFirstPassStats.begin();
+    for (; itr != m_listRCFirstPassStats.end(); itr++)
+    {
+      auto& stat = *itr;
+      if (stat.tempLayer >= 3)
+      {
+        int n = stat.tempLayer - 3;
+        if (stat.numBits == 0)
+        {
+          stat.numBits = numBits[n];
+          stat.lambda = lambda[n];
+          stat.psnrY = psnr[n];
+          stat.qp = qps[n];
+        }
+        else
+        {
+          numBits[n] = stat.numBits;
+          lambda[n] = stat.lambda;
+          psnr[n] = stat.psnrY;
+          qps[n] = stat.qp;
+        }
+      }
+    }
+  }
+#endif
 #else
   CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
 #endif

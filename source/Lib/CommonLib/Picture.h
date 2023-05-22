@@ -232,6 +232,9 @@ public:
   bool                          isPreAnalysis;
 
   PicShared*                    m_picShared;
+#if TEMP_DOWNSAMPLER
+  bool                          skipFrame;
+#endif
 
   PelStorage                    m_picBufs[ NUM_PIC_TYPES ];
   PelStorage*                   m_sharedBufs[ NUM_PIC_TYPES ];

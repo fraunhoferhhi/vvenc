@@ -178,6 +178,9 @@ public:
     rap           = false;
     refPic        = false;
     InfoString.clear();
+#if 1//TEMP_DOWNSAMPLER
+    skipAU        = false;
+#endif
 
     for( AccessUnitList::iterator it = this->begin(); it != this->end(); it++ )
     {
@@ -202,6 +205,9 @@ public:
   bool            rap;                                    ///< random access point flag
   bool            refPic;                                 ///< reference picture
   std::string     InfoString;
+#if 1//TEMP_DOWNSAMPLER
+  bool            skipAU;
+#endif
 };
 
 
