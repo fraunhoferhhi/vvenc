@@ -1276,7 +1276,6 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   pps.outputFlagPresent                 = false;
   pps.deblockingFilterOverrideEnabled   = !m_pcEncCfg->m_loopFilterOffsetInPPS;
   pps.deblockingFilterDisabled          = m_pcEncCfg->m_bLoopFilterDisable;
-  pps.dbfInfoInPh                       = m_pcEncCfg->m_picPartitionFlag && !m_pcEncCfg->m_loopFilterOffsetInPPS && !m_pcEncCfg->m_bLoopFilterDisable;
 
   if (! pps.deblockingFilterDisabled)
   {
