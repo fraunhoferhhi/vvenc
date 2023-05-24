@@ -394,8 +394,8 @@ void EncPicture::skipCompressPicture( Picture& pic )
 
   if( m_pcEncCfg->m_fppLinesSynchro )
   {
-    if( pic.m_ctuLineReadyA )
-      std::fill( pic.m_ctuLineReadyA->begin(), pic.m_ctuLineReadyA->end(), true );
+    if( pic.m_ctuLineReady )
+      std::fill( pic.m_ctuLineReady->begin(), pic.m_ctuLineReady->end(), true );
   }
 }
 

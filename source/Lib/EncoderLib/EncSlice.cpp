@@ -1400,7 +1400,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
         {
-          pic->m_ctuLineReadyA->at(ctuPosY) = true;
+          pic->m_ctuLineReady->at(ctuPosY) = true;
         }
 
         // perform finish only once for whole picture

@@ -3662,7 +3662,7 @@ bool refPicCtuLineReady( const Slice& slice, const int refCtuRow )
     int numOfActiveRef = slice.numRefIdx[ refList ];
     for( int i = 0; i < numOfActiveRef; i++ )
     {
-      if( ! slice.refPicList[ refList ][ i ]->m_ctuLineReadyA->at(refCtuRow) )
+      if( ! slice.refPicList[ refList ][ i ]->m_ctuLineReady->at(refCtuRow) )
       {
         return false;
       }
