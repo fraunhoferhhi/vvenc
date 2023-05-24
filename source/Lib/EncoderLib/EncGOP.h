@@ -212,6 +212,7 @@ private:
   vvencNalUnitType xGetNalUnitType    ( const Slice* slice ) const;
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
+  void xSetupPicAps                   ( Picture* pic );
   void xInitPicsInCodingOrder         ( const PicList& picList, bool flush );
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
   void xInitFirstSlice                ( Picture& pic, const PicList& picList, bool isEncodeLtRef );

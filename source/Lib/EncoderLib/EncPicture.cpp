@@ -157,7 +157,10 @@ void EncPicture::finalizePicture( Picture& pic )
   xCalcDistortion( pic, *slice->sps );
   
   // finalize
-  pic.extendPicBorder();
+  if( !pic.encPic || ( slice->pps->getNumTiles() > 1 && !slice->pps->loopFilterAcrossTilesEnabled ) )
+  {
+    pic.extendPicBorder();
+  }
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );
@@ -181,7 +184,6 @@ void EncPicture::finalizePicture( Picture& pic )
       }
     }
     dst.setApsIdStart( src.getApsIdStart() );
-    pic.picApsGlobal->tid = pic.TLayer; // signal that APS is initialized
   }
 
   // cleanup
@@ -388,6 +390,12 @@ void EncPicture::skipCompressPicture( Picture& pic )
     const int lmcsApsId          = slice->picHeader->lmcsApsId;
     const int apsMapIdx          = ( lmcsApsId << NUM_APS_TYPE_LEN ) + LMCS_APS;
     slice->picHeader->lmcsAps    = pic.picApsMap.getPS( apsMapIdx ); // just to be sure
+  }
+
+  if( m_pcEncCfg->m_fppLinesSynchro )
+  {
+    if( pic.m_ctuLineReady )
+      std::fill( pic.m_ctuLineReady->begin(), pic.m_ctuLineReady->end(), true );
   }
 }
 

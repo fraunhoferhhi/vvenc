@@ -1035,7 +1035,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       {
         if (m_pcEncCfg->m_FastInferMerge)
         {
-          if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
+          if (bestCS && (bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;

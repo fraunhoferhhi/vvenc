@@ -128,13 +128,15 @@ struct TileLineEncRsrc
   CABACWriter             m_CABACEstimator;
   BitEstimator            m_SaoBitEstimator;
   CABACWriter             m_SaoCABACEstimator;
+  BitEstimator            m_AlfBitEstimator;
+  CABACWriter             m_AlfCABACEstimator;
   ReuseUniMv              m_ReuseUniMv;
   BlkUniMvInfoBuffer      m_BlkUniMvInfoBuffer;
   AffineProfList          m_AffineProfList;
   IbcBvCand               m_CachedBvs;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  TileLineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( ! encCfg.m_picReordering ); }
+  TileLineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ), m_AlfCABACEstimator( m_AlfBitEstimator ) { m_AffineProfList.init( ! encCfg.m_picReordering ); }
 };
 
 struct PerThreadRsrc
@@ -545,6 +547,7 @@ void EncSlice::compressSlice( Picture* pic )
   {
     lnRsrc->m_CABACEstimator    .initCtxModels( *slice );
     lnRsrc->m_SaoCABACEstimator .initCtxModels( *slice );
+    lnRsrc->m_AlfCABACEstimator .initCtxModels( *slice );
     lnRsrc->m_AffineProfList    .resetAffineMVList();
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
     lnRsrc->m_CachedBvs         .resetIbcBvCand();
@@ -711,7 +714,8 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   if( slice.sps->saoEnabled && pic->useScSAO )
   {
     // store disabled statistics
-    saoDisabledRate( cs, &m_saoReconParams[ 0 ] );
+    if( !m_pcEncCfg->m_numThreads )
+      saoDisabledRate( cs, &m_saoReconParams[ 0 ] );
 
     // set slice header flags
     CHECK( m_saoEnabled[ COMP_Cb ] != m_saoEnabled[ COMP_Cr ], "Unspecified error");
@@ -721,8 +725,6 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
       s->saoEnabled[ CH_C ] = m_saoEnabled[ COMP_Cb ];
     }
   }
-
-  CS::setRefinedMotionField( cs );
 }
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
@@ -758,7 +760,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
 
   if( slice.sps->alfEnabled )
   {
-    m_pALF->resetFrameStats( slice.sps->ccalfEnabled );
+    m_pALF->initEncProcess( slice );
   }
 
   std::fill( m_processStates.begin(), m_processStates.end(), CTU_ENCODE );
@@ -896,6 +898,13 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     // encode
     case CTU_ENCODE:
       {
+        // CTU line-wise frame parallel processing synchronization
+        const int syncLines = encSlice->m_pcEncCfg->m_fppLinesSynchro;
+        if( syncLines && ctuPosX == 0 && ctuPosY + syncLines < pcv.heightInCtus && !refPicCtuLineReady( slice, ctuPosY + syncLines ) )
+        {
+          return false;
+        }
+
         // general wpp conditions, top and top-right ctu have to be encoded
         if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && ctuPosY > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX, ctuPosY - 1 ) )
           ; // allow parallel processing of CTU-encoding on independent tiles
@@ -1091,6 +1100,24 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const int lastCtuColInTileRow = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
         if( ctuPosX == lastCtuColInTileRow )
         {
+          // on finishing of CTU-line of a tile (picture)
+          // copy rec. samples for ALF
+          const int firstCtuInRow = ctuPosX + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+          if( slice.sps->alfEnabled )
+          {
+            for (int curCtuPosX = firstCtuInRow; curCtuPosX <= ctuPosX; curCtuPosX++)
+            {
+              encSlice->m_pALF->copyCTUforALF(cs, curCtuPosX, ctuPosY);
+            }
+          }
+          // DMVR refinement can be stored now
+          if( slice.sps->DMVR && !slice.picHeader->disDmvrFlag )
+          {
+            for (int curCtuPosX = firstCtuInRow; curCtuPosX <= ctuPosX; curCtuPosX++)
+            {
+              CS::setRefinedMotionFieldCTU( cs, curCtuPosX, ctuPosY );
+            }
+          }
           processStates[ctuRsAddr] = ALF_GET_STATISTICS;
         }
         else
@@ -1122,7 +1149,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->copyCTUforALF   ( cs, ctu % pcv.widthInCtus, ctuPosY );
             encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
@@ -1131,55 +1157,84 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_stat );
 
         // derive alf filter only once for whole picture
-        const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
-        processStates[ ctuRsAddr ] = ( ctuRsAddr == deriveFilterCtu ) ? ALF_DERIVE_FILTER : ALF_RECONSTRUCT;
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+        {
+          processStates[ctuRsAddr] = ALF_DERIVE_FILTER;
+        }
+        else
+        {
+          const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
+          processStates[ctuRsAddr] = (ctuRsAddr == deriveFilterCtu) ? ALF_DERIVE_FILTER : ALF_RECONSTRUCT;
+        }
       }
       break;
 
     case ALF_DERIVE_FILTER:
       {
-        CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
-
-        // ensure statistics from all previous ctu's have been collected
-        if( processStates[ctuRsAddr] <= ALF_GET_STATISTICS )
-          return false;
-        for( int y = 0; y < pcv.heightInCtus; y++ )
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
         {
-          for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
+          // bitstream coding dependency: top ctu has to be filtered
+          if( checkCtuTaskNbTop   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, ALF_DERIVE_FILTER ) ) return false;
+        }
+        else
+        {
+          CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
+
+          // ensure statistics from all previous ctu's have been collected
+          if( processStates[ctuRsAddr] <= ALF_GET_STATISTICS )
+            return false;
+          for( int y = 0; y < pcv.heightInCtus; y++ )
           {
-            const int lastCtuInTileRow = y * pcv.widthInCtus + slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
-            if( processStates[lastCtuInTileRow] <= ALF_GET_STATISTICS )
-              return false;
+            for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
+            {
+              const int lastCtuInTileRow = y * pcv.widthInCtus + slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
+              if( processStates[lastCtuInTileRow] <= ALF_GET_STATISTICS )
+                return false;
+            }
           }
         }
-
         if( checkReadyState )
           return true;
 
         ITT_TASKSTART( itt_domain_encode, itt_handle_alf_derive );
-
         // ALF post-processing
         if( slice.sps->alfEnabled )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
-          encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
-          encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->alfEnabled[COMP_Y], cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
+          if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+          {
+            TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[lineIdx];
+            PerThreadRsrc* taskRsrc = encSlice->m_ThreadRsrc[threadIdx];
+            const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+            if( ctuPosY == 0 ) encSlice->m_pALF->initDerivation( slice );
+            for(int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++)
+            {
+              encSlice->m_pALF->selectFilterForCTU( cs, &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+            }
+          }
+          else
+          {
+            encSlice->m_pALF->initDerivation( slice );
+            encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
+            encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->alfEnabled[COMP_Y], cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
+          }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_derive );
-
         processStates[ ctuRsAddr ] = ALF_RECONSTRUCT;
       }
       break;
 
     case ALF_RECONSTRUCT:
       {
-        const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
-
-        // start alf reconstruct, when derive filter is done
-        if( processStates[deriveFilterCtu] < ALF_RECONSTRUCT )
-          return false;
+        if( !encSlice->m_pcEncCfg->m_fppLinesSynchro )
+        {
+          // start alf reconstruct, when derive filter is done
+          const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
+          if( processStates[deriveFilterCtu] < ALF_RECONSTRUCT )
+            return false;
+        }
 
         if( checkReadyState )
           return true;
@@ -1228,28 +1283,43 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_stat );
 
-        // derive alf filter only once for whole picture
-        const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
-        processStates[ctuRsAddr] = ( ctuRsAddr == deriveFilterCtu ) ? CCALF_DERIVE_FILTER : CCALF_RECONSTRUCT;
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+        {
+          processStates[ctuRsAddr] = CCALF_DERIVE_FILTER;
+        }
+        else
+        {
+          // derive alf filter only once for whole picture
+          const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
+          processStates[ctuRsAddr] = (ctuRsAddr == deriveFilterCtu) ? CCALF_DERIVE_FILTER : CCALF_RECONSTRUCT;
+        }
       }
       break;
 
     case CCALF_DERIVE_FILTER:
       {
-        CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu" );
-
-        if( processStates[ctuRsAddr] != CCALF_DERIVE_FILTER )
-          return false;
-
-        // ensure statistics from all previous ctu's have been collected
-        for( int y = 0; y < pcv.heightInCtus; y++ )
+        // synchronization dependencies
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
         {
-          for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
+          // bitstream coding dependency: top ctu has to be filtered
+          if( checkCtuTaskNbTop( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_DERIVE_FILTER ) ) return false;
+        }
+        else
+        {
+          CHECK(ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, derive alf filter only once for last ctu");
+          if (processStates[ctuRsAddr] != CCALF_DERIVE_FILTER)
+            return false;
+
+          // ensure statistics from all previous ctu's have been collected
+          for (int y = 0; y < pcv.heightInCtus; y++)
           {
-            const int lastCtuColInTileRow = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
-            const int lastCtuInTileRow = y * pcv.widthInCtus + lastCtuColInTileRow;
-            if( processStates[lastCtuInTileRow] <= CCALF_GET_STATISTICS )
-              return false;
+            for (int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++)
+            {
+              const int lastCtuColInTileRow = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
+              const int lastCtuInTileRow = y * pcv.widthInCtus + lastCtuColInTileRow;
+              if (processStates[lastCtuInTileRow] <= CCALF_GET_STATISTICS)
+                return false;
+            }
           }
         }
         if( checkReadyState )
@@ -1257,12 +1327,25 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKSTART( itt_domain_encode, itt_handle_ccalf_derive );
 
-        // ALF post-processing
+        // start task
         if( slice.sps->ccalfEnabled )
         {
-          encSlice->m_pALF->deriveCcAlfFilter( *cs.picture, cs );
+          if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+          {
+            TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[ lineIdx ];
+            PerThreadRsrc*   taskRsrc    = encSlice->m_ThreadRsrc[ threadIdx ];
+            const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+            for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
+            {
+              encSlice->m_pALF->selectCcAlfFilterForCTU( cs, COMP_Cb, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+              encSlice->m_pALF->selectCcAlfFilterForCTU( cs, COMP_Cr, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
+            }
+          }
+          else
+          {
+            encSlice->m_pALF->deriveCcAlfFilter(*cs.picture, cs);
+          }
         }
-
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_derive );
 
         processStates[ctuRsAddr] = CCALF_RECONSTRUCT;
@@ -1271,11 +1354,19 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     case CCALF_RECONSTRUCT:
       {
-        const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
-
-        // start alf reconstruct, when derive filter is done
-        if( processStates[deriveFilterCtu] < CCALF_RECONSTRUCT )
-          return false;
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+        {
+          if( checkCtuTaskNbTop( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_RECONSTRUCT ) ) return false;
+          // TODO: check if we really need the bottom sync due to same rec. buffer
+          if( checkCtuTaskNbBot( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, CCALF_GET_STATISTICS ) ) return false;
+        }
+        else
+        {
+          // start alf reconstruct, when derive filter is done
+          const unsigned deriveFilterCtu = pcv.sizeInCtus - 1;
+          if( processStates[deriveFilterCtu] < CCALF_RECONSTRUCT )
+            return false;
+        }
 
         if( checkReadyState )
           return true;
@@ -1293,6 +1384,24 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
+
+        // extend pic border
+        if( !( slice.pps->getNumTiles() > 1 && !slice.pps->loopFilterAcrossTilesEnabled ) )
+        {
+          PelUnitBuf recoBuf = cs.picture->getRecoBuf();
+          const int margin = cs.picture->margin;
+          recoBuf.extendBorderPelLft( y, height, margin );
+          recoBuf.extendBorderPelRgt( y, height, margin );
+          if(ctuPosY == 0)
+            recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2 * margin, margin );
+          if(ctuPosY + 1 == pcv.heightInCtus)
+            recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2 * margin, margin );
+        }
+
+        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+        {
+          pic->m_ctuLineReady->at(ctuPosY) = true;
+        }
 
         // perform finish only once for whole picture
         const unsigned finishCtu = pcv.sizeInCtus - 1;

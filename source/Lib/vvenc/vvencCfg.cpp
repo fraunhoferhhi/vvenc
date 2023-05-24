@@ -630,6 +630,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
   c->m_tileParallelCtuEnc                      = true;
+  c->m_fppLinesSynchro                         = 0;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -867,12 +868,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_numThreads = c->m_SourceWidth >= 1280 && c->m_SourceHeight >= 720 ? 8 : 4;
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
-  if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ? 1   : 0   ;
-  if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ? 0   : 1   ;
-  if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ? 0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = 1   ;
-  if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ? 0.0 : 0.75;
-  if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ? 0.0 : 0.5 ;
+  if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
+  if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
+  if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_fppLinesSynchro ? 0   : 1   ;
+  if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ?      0.0 : 0.75;
+  if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
@@ -1972,6 +1973,15 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
+
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Affine,    "FPP CTU-lines synchro: Affine cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Geo,       "FPP CTU-lines synchro: GPM (GEO) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_AMVRspeed, "FPP CTU-lines synchro: AMVR (IMV) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "FPP CTU-lines synchro: SMVD cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "FPP CTU-lines synchro: MMVD cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileCols > 1, "FPP CTU-lines synchro: Only single tile column is supported" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0 || c->m_fppLinesSynchro > (c->m_SourceHeight/c->m_CTUSize - 1), "fppLinesSynchro must be greater than 0 and less than max number of CTU lines" );
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
@@ -3117,6 +3127,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "\nPARALLEL PROCESSING CFG: ";
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+    css << "fppLinesSynchro:" << c->m_fppLinesSynchro << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

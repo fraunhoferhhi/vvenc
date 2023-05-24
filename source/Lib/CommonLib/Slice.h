@@ -1263,7 +1263,7 @@ public:
                               Slice();
   virtual                     ~Slice();
   void                        resetSlicePart();
-  void                        constructRefPicList(const PicList& rcListPic, bool extBorder);
+  void                        constructRefPicList(const PicList& rcListPic, bool extBorder, const bool usingLongTerm = true);
   void                        updateRefPicCounter( int step );
   bool                        checkRefPicsReconstructed() const;
   void                        setRefPOCList();
@@ -1295,7 +1295,7 @@ public:
   void                        copySliceInfo( const Slice* slice, bool cpyAlmostAll = true);
 
   void                        checkLeadingPictureRestrictions( const PicList& rcListPic ) const;
-  void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
+  void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps, const bool usingLongTerm = true )  const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
   bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
   void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );
