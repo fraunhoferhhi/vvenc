@@ -53,17 +53,12 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \{
 
 #define ALF_CTU_PAR_TRACING ( 0 && ENABLE_TRACING )
-#define ALF_SINGLE_PREC_FLOAT 1
 
 namespace vvenc {
 
 class NoMallocThreadPool;
 
-#if ALF_SINGLE_PREC_FLOAT
-typedef float alf_float_t; 
-#else
-typedef double alf_float_t;
-#endif
+typedef float alf_float_t;
 
 struct AlfCovariance
 {
