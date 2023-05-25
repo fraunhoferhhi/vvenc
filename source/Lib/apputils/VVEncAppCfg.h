@@ -1358,26 +1358,38 @@ static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned
 virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
-   bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+  std::string loglvl("vvenc ");
+  switch ( eMsgLevel )
+  {
+    case VVENC_SILENT : loglvl.append("[silent]: ");  break;
+    case VVENC_ERROR  : loglvl.append("[error]: ");   break;
+    case VVENC_WARNING: loglvl.append("[warning]: "); break;
+    case VVENC_INFO   : loglvl.append("[info]: ");    break;
+    case VVENC_NOTICE : loglvl.append("[notice]: ");  break;
+    case VVENC_VERBOSE: loglvl.append("[verbose]: "); break;
+    case VVENC_DETAILS: loglvl.append("[details]: "); break;
+    default: break;
+  }
 
+  bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+  std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
+  std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+  std::string format = isY4m ? "y4m" : "yuv";
+
+  if( eMsgLevel >= VVENC_INFO )
+  {
+    if( format != ext )
+      css << loglvl << "Input File                             : " << m_inputFileName << " (" << format << ")\n";
+    else
+      css << loglvl << "Input File                             : " << m_inputFileName << "\n";
+    css << loglvl << "Bitstream File                         : " << m_bitstreamFileName << "\n";
+  }
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    css << "Input          File                    : " << m_inputFileName << "\n";
-    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
-    css << "Reconstruction File                    : " << m_reconFileName << "\n";
-    css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
-  }
-  else if( eMsgLevel >= VVENC_INFO )
-  {
-    std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
-    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
-    std::string format = isY4m ? "y4m" : "yuv";
-    if( format != ext )
-      css << "Input     File : " << m_inputFileName << " (" << format << ")\n";
-    else
-      css << "Input     File : " << m_inputFileName << "\n";
-
-    css << "Bitstream File : " << m_bitstreamFileName << "\n";
+    if( !m_easyMode )
+      css << loglvl << "Reconstruction File                    : " << m_reconFileName << "\n";
+    if ( c->m_RCTargetBitrate > 0 )
+      css << loglvl << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
   }
 
   if ( c )
@@ -1407,20 +1419,12 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       }
 
       if ( m_FrameSkip )
-        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
-    
-      if( eMsgLevel >= VVENC_DETAILS )
-        css << "Real     Format                        : ";
-      else
-        css << "Real Format    : ";
-
+        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");         
+        
+      css << loglvl << "Real Format                            : ";      
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
           << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
-      
-      if( eMsgLevel >= VVENC_DETAILS )
-        css << "                                       : " << framesStr.str() << "\n";
-      else
-        css << "               : " << framesStr.str() << "\n";
+      css << loglvl << "Frames                                 : " << framesStr.str() << "\n";
     }
   }
 
