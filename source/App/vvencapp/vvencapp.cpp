@@ -61,6 +61,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvenc.h"
 
 #include "apputils/YuvFileIO.h"
+#include "apputils/BitstreamHelper.h"
 #include "apputils/VVEncAppCfg.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
@@ -351,6 +352,10 @@ int main( int argc, char* argv[] )
       iSeqNumber=iRemSkipFrames;
     }
 
+    apputils::BitstreamHelper cBitstreamHelper;
+    cBitstreamHelper.init( vvenccfg.m_FrameRate/vvenccfg.m_FrameScale);
+    bool printBitrate = false;
+
     while( !bEof || !bEncodeDone )
     {
       vvencYUVBuffer* ptrYUVInputBuffer = nullptr;
@@ -393,6 +398,14 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
+        cBitstreamHelper.addAU( &AU, &printBitrate );
+        if( printBitrate )
+        {
+
+          msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getCurBitrate().c_str() );
+          cBitstreamHelper.reset();
+        }
+
         if( cOutBitstream.is_open() )
         {
           // write output
