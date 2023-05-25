@@ -1374,24 +1374,20 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
   std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
   std::string format = isY4m ? "y4m" : "yuv";
 
-
+  if( eMsgLevel >= VVENC_INFO )
+  {
+    if( format != ext )
+      css << loglvl << "Input File                             : " << m_inputFileName << " (" << format << ")\n";
+    else
+      css << loglvl << "Input File                             : " << m_inputFileName << "\n";
+    css << loglvl << "Bitstream File                         : " << m_bitstreamFileName << "\n";
+  }
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    if( format != ext )
-      css << loglvl << "Input          File                    : " << m_inputFileName << " (" << format << ")\n";
-    else
-      css << loglvl << "Input          File                    : " << m_inputFileName << "\n";
-    css << loglvl << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
-    css << loglvl << "Reconstruction File                    : " << m_reconFileName << "\n";
-    css << loglvl << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
-  }
-  else if( eMsgLevel >= VVENC_INFO )
-  {
-    if( format != ext )
-      css << loglvl << "Input          File                    : " << m_inputFileName << " (" << format << ")\n";
-    else
-      css << loglvl << "Input          File                    : " << m_inputFileName << "\n";
-    css << loglvl << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
+    if( !m_easyMode )
+      css << loglvl << "Reconstruction File                    : " << m_reconFileName << "\n";
+    if ( c->m_RCTargetBitrate > 0 )
+      css << loglvl << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
   }
 
   if ( c )
@@ -1423,10 +1419,10 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       if ( m_FrameSkip )
         framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");         
         
-      css << loglvl << "Real     Format                        : ";      
+      css << loglvl << "Real Format                            : ";      
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
           << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
-      css << loglvl << "                                       : " << framesStr.str() << "\n";
+      css << loglvl << "Frames                                 : " << framesStr.str() << "\n";
     }
   }
 
