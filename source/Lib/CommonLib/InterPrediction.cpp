@@ -246,7 +246,7 @@ void InterPrediction::destroy()
   m_IBCBuffer.destroy();
 }
 
-void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize )
+void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize, const int fppLinesSynchro )
 {
   // if it has been initialised before, but the chroma format has changed, release the memory and start again.
   if( m_yuvPred[L0].getOrigin( COMP_Y ) != nullptr && m_currChromaFormat != chFormat )
@@ -279,6 +279,7 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     m_IBCBufferWidth = g_IBCBufferSize / ctuSize;
     m_IBCBuffer.create(UnitArea(chFormat, Area(0, 0, m_IBCBufferWidth, ctuSize)));
   }
+  InterPredInterpolation::m_fppLinesSynchro = fppLinesSynchro;
 }
 
 // ====================================================================================================================
@@ -614,6 +615,7 @@ InterPredInterpolation::InterPredInterpolation()
   , m_skipPROF(false)
   , m_encOnly(false)
   , m_isBi(false)
+  , m_fppLinesSynchro(0)
 {
 
 }
@@ -725,6 +727,7 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
 
   bool  wrapRef = false;
   Mv    mv(_mv);
+  CHECKD( m_fppLinesSynchro && !srcPadBuf && !CU::isMvInRangeFPP( cu, mv, m_fppLinesSynchro, compID, shiftVer ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
   if( !isIBC && cu.cs->pcv->wrapArround )
   {
     wrapRef = wrapClipMv( mv, cu.blocks[0].pos(), cu.blocks[0].size(), *cu.cs);
@@ -1581,6 +1584,8 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) * (1 << iMvShift);
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
   const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
+  
+  CHECKD( m_fppLinesSynchro, "Full FPP is not implemented for Affine" );
 
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;

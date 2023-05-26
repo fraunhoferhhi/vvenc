@@ -60,6 +60,54 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+bool evaluateRules( std::list<Rule>& rule_list, state_type& stateval )
+{
+    bool _active = false;
+    for( std::list<Rule>::iterator rules_iter = rule_list.begin();
+            rules_iter != rule_list.end();
+            ++rules_iter ) {
+        /* iterate over conditions, get the state of the condition type
+         * and check if condition is met:
+         *     if not -> go to next rule
+         *        yes -> go to next condition
+         * if all conditions are met: set channel active and return */
+        bool probe = true;
+
+        for( Rule::iterator cond_iter = rules_iter->begin();
+                cond_iter != rules_iter->end();
+                ++cond_iter ) 
+        {
+            if( cond_iter->type == stateval.first )
+            {
+              int sVal = stateval.second;
+              if(!cond_iter->eval( cond_iter->rval, sVal )) {
+                probe = false;
+                break;
+              }
+            }
+        }
+        if( probe ) {
+            _active = true;
+            break;
+        }
+    }
+    return _active;
+}
+
+bool Channel::evaluate( state_type stateval )
+{
+  return evaluateRules( rule_list, stateval );
+}
+
+void Channel::update( state_type& stateval, bool localState )
+{
+  bool val = evaluateRules( rule_list, stateval );
+  if( localState )
+    _activeLocal = val;
+  else
+    _active = val;
+}
+
 void Channel::update( std::map< CType, int > state )
 {
 
@@ -253,6 +301,12 @@ bool CDTrace::update( state_type stateval )
         citer->update( state );
     }
 
+    return true;
+}
+
+bool CDTrace::updateChannel( int channel, state_type stateval )
+{
+    chanRules[channel].update( stateval, true );
     return true;
 }
 

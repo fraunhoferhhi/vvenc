@@ -518,6 +518,40 @@ void AdaptiveLoopFilter::reconstructCoeffAPSs(CodingStructure& cs, bool luma, bo
   }
 }
 
+void AdaptiveLoopFilter::reconstructCoeffFixedAPSs(CodingStructure& cs, bool luma, bool chroma, bool isRdo)
+{
+  //luma
+  APS** aps = cs.slice->alfAps;
+  AlfParam alfParamTmp;
+  APS* curAPS;
+  if (luma)
+  {
+    for (int i = 0; i < cs.slice->numAps; i++)
+    {
+      int apsIdx = cs.slice->lumaApsId[i];
+      curAPS = aps[apsIdx];
+      CHECK(curAPS == NULL, "invalid APS");
+      alfParamTmp = curAPS->alfParam;
+      reconstructCoeff(alfParamTmp, CH_L, isRdo, true);
+      memcpy(m_coeffApsLumaFixed[i], m_coeffFinal, sizeof(m_coeffFinal));
+      memcpy(m_clippApsLumaFixed[i], m_clippFinal, sizeof(m_clippFinal));
+    }
+  }
+
+  //chroma
+  if (chroma)
+  {
+    int apsIdxChroma = cs.slice->chromaApsId;
+    curAPS = aps[apsIdxChroma];
+    m_alfParamChroma = &curAPS->alfParam;
+    alfParamTmp = *m_alfParamChroma;
+    reconstructCoeff(alfParamTmp, CH_C, isRdo, true);
+    memcpy(m_chromaCoeffFinalFixed, m_chromaCoeffFinal, sizeof(m_chromaCoeffFinal));
+    memcpy(m_chromaClippFinalFixed, m_chromaClippFinal, sizeof(m_chromaClippFinal));
+  }
+}
+
+
 void AdaptiveLoopFilter::reconstructCoeff( AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo )
 {
   const int factor               = isRdo ? 0 : (1 << (m_NUM_BITS - 1));

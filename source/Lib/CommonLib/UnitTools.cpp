@@ -74,53 +74,74 @@ UnitArea CS::getArea( const CodingStructure &cs, const UnitArea& area, const Cha
   return isDualITree( cs ) || treeType != TREE_D ? area.singleChan( chType ) : area;
 }
 
-void CS::setRefinedMotionField( CodingStructure& cs )
+void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
+{
+  const int dy = std::min<int>( cu.lumaSize().height, DMVR_SUBCU_SIZE );
+  const int dx = std::min<int>( cu.lumaSize().width,  DMVR_SUBCU_SIZE );
+      
+  static const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
+  static const unsigned mask  = scale - 1;
+
+  const Position puPos = cu.lumaPos();
+  const Mv mv0 = cu.mv[0][0];
+  const Mv mv1 = cu.mv[1][0];
+
+  for( int y = puPos.y, num = 0; y < ( puPos.y + cu.lumaSize().height ); y = y + dy )
+  {
+    for( int x = puPos.x; x < ( puPos.x + cu.lumaSize().width ); x = x + dx, num++ )
+    {
+      const Mv subPuMv0 = mv0 + cu.mvdL0SubPu[num];
+      const Mv subPuMv1 = mv1 - cu.mvdL0SubPu[num];
+
+      int y2 = ( ( y - 1 ) & ~mask ) + scale;
+
+      for( ; y2 < y + dy; y2 += scale )
+      {
+        int x2 = ( ( x - 1 ) & ~mask ) + scale;
+
+        for( ; x2 < x + dx; x2 += scale )
+        {
+          const Position mbPos = g_miScaling.scale( Position{ x2, y2 } );
+          mb.buf = orgPtr + rsAddr( mbPos, mb.stride );
+
+          MotionInfo& mi = *mb.buf;
+
+          mi.mv[0] = subPuMv0;
+          mi.mv[1] = subPuMv1;
+        }
+      }
+    }
+  }
+}
+
+void CS::setRefinedMotionFieldCTU( CodingStructure& cs, const int ctuX, const int ctuY )
 {
   MotionBuf   mb     = cs.getMotionBuf();
   MotionInfo* orgPtr = mb.buf;
+
+  const int xPos = ctuX << cs.pcv->maxCUSizeLog2;
+  const int yPos = ctuY << cs.pcv->maxCUSizeLog2;
   
-  for( CodingUnit *ptrCU : cs.cus )
+  // first CU in CTU
+  const CodingUnit *ptrCU = cs.getCU( Position( xPos, yPos ), CH_L, TREE_D );
+  while( ptrCU )
   {
-    CodingUnit& cu = *ptrCU;
+    const CodingUnit& cu = *ptrCU;
     
     if( isLuma( cu.chType ) && CU::checkDMVRCondition( cu ) )
     {
-      const int dy = std::min<int>( cu.lumaSize().height, DMVR_SUBCU_SIZE );
-      const int dx = std::min<int>( cu.lumaSize().width,  DMVR_SUBCU_SIZE );
-      
-      static const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
-      static const unsigned mask  = scale - 1;
-
-      const Position puPos = cu.lumaPos();
-      const Mv mv0 = cu.mv[0][0];
-      const Mv mv1 = cu.mv[1][0];
-
-      for( int y = puPos.y, num = 0; y < ( puPos.y + cu.lumaSize().height ); y = y + dy )
-      {
-        for( int x = puPos.x; x < ( puPos.x + cu.lumaSize().width ); x = x + dx, num++ )
-        {
-          const Mv subPuMv0 = mv0 + cu.mvdL0SubPu[num];
-          const Mv subPuMv1 = mv1 - cu.mvdL0SubPu[num];
-
-          int y2 = ( ( y - 1 ) & ~mask ) + scale;
-
-          for( ; y2 < y + dy; y2 += scale )
-          {
-            int x2 = ( ( x - 1 ) & ~mask ) + scale;
-
-            for( ; x2 < x + dx; x2 += scale )
-            {
-              const Position mbPos = g_miScaling.scale( Position{ x2, y2 } );
-              mb.buf = orgPtr + rsAddr( mbPos, mb.stride );
-
-              MotionInfo& mi = *mb.buf;
-
-              mi.mv[0] = subPuMv0;
-              mi.mv[1] = subPuMv1;
-            }
-          }
-        }
-      }
+      refineCU( cu, mb, orgPtr );
+    }
+    ptrCU = ptrCU->next;
+  }
+}
+void CS::setRefinedMotionField( CodingStructure& cs )
+{
+  for( int j = 0; j < cs.pcv->heightInCtus; j++ )
+  {
+    for( int i = 0; i < cs.pcv->widthInCtus; i++ )
+    {
+      CS::setRefinedMotionFieldCTU( cs, i, j );
     }
   }
 }
@@ -3500,6 +3521,20 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
   return mtsAllowed;
 }
 
+bool CU::isMvInRangeFPP( const CodingUnit &cu, const Mv& mv, const int fppLinesSynchro, const ComponentID compID, const int mvPrecShift )
+{
+  const int yCompScale        = getComponentScaleY(compID, cu.chromaFormat);
+  const int maxCUSizeShift    = cu.cs->pcv->maxCUSizeLog2 - yCompScale;
+  const int dctifMarginVerBot = 4 >> yCompScale;
+  const int refPosBot         = cu.block(compID).y + cu.block(compID).height - 1 + dctifMarginVerBot + (mv.ver >> mvPrecShift);
+  const int refCtuRow         = std::min( (int)((refPosBot > 0) ? refPosBot >> maxCUSizeShift: -1), (int)(cu.cs->pcv->heightInCtus - 1));
+  const int curCtuRow         = cu.block(compID).y >> maxCUSizeShift;
+  if( refCtuRow > ( curCtuRow + fppLinesSynchro ) )
+  {
+    return false;
+  }
+  return true;
+}
 
 // TU tools
 
@@ -3620,6 +3655,21 @@ bool allowLfnstWithMip(const Size& block)
   return false;
 }
 
+bool refPicCtuLineReady( const Slice& slice, const int refCtuRow )
+{
+  for( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
+  {
+    int numOfActiveRef = slice.numRefIdx[ refList ];
+    for( int i = 0; i < numOfActiveRef; i++ )
+    {
+      if( ! slice.refPicList[ refList ][ i ]->m_ctuLineReady->at(refCtuRow) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 
 } // namespace vvenc
 

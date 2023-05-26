@@ -213,6 +213,8 @@ void dtrace_frame_blockwise( CDTrace *trace_ctx, DTRACE_CHANNEL channel, Tsrc *b
 #define DTRACE_BLOCK(...)                    dtrace_block(__VA_ARGS__)
 #define DTRACE_FRAME_BLOCKWISE(...)          dtrace_frame_blockwise(__VA_ARGS__)
 #define DTRACE_GET_COUNTER(ctx,channel)      ctx->getChannelCounter(channel)
+#define DTRACE_ENABLE_CHANNEL(cond,ctx,channel) ctx->enableChannel( channel, (cond) )
+#define DTRACE_UPDATE_LOCAL(ctx,channel,s)      ctx->updateChannel( channel, s )
 
 inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string& sTracingRule, MsgLog& msg )
 {
@@ -287,6 +289,8 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 #define DTRACE_BLOCK(...)
 #define DTRACE_FRAME_BLOCKWISE(...)
 #define DTRACE_GET_COUNTER(ctx,channel)
+#define DTRACE_ENABLE_CHANNEL(cond,ctx,channel)
+#define DTRACE_UPDATE_LOCAL(ctx,channel,s)
 
 #endif
 

@@ -759,7 +759,8 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_reservedFlag[3];
+  bool                m_reservedFlag[2];
+  int8_t              m_fppLinesSynchro;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;
   bool                m_addGOP32refPics;

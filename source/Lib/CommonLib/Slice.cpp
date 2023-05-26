@@ -372,7 +372,7 @@ void Slice::setList1IdxToList0Idx()
   }
 }
 
-void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
+void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder, const bool usingLongTerm)
 {
   ::memset(isUsedAsLongTerm, 0, sizeof(isUsedAsLongTerm));
   if (sliceType == VVENC_I_SLICE)
@@ -408,10 +408,12 @@ void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
           pcRefPic = *(iterPic);
         }
 
-        pcRefPic->isLongTerm = false;
+        if(usingLongTerm)
+          pcRefPic->isLongTerm = false;
       }
       else
       {
+        CHECK(!usingLongTerm, "Wrong state: using long term when it's not supported by the encoder configuration");
         int pocBits = sps->bitsForPOC;
         int pocMask = (1 << pocBits) - 1;
         int ltrpPoc = rpl[eRefList]->refPicIdentifier[ii] & pocMask;
@@ -424,7 +426,7 @@ void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
         pcRefPic->extendPicBorder();
       }
       refPicList[eRefList][ii] = pcRefPic;
-      isUsedAsLongTerm[eRefList][ii] = pcRefPic->isLongTerm;
+      isUsedAsLongTerm[eRefList][ii] = usingLongTerm ? pcRefPic->isLongTerm: false;
     }
   }
 }
@@ -834,7 +836,7 @@ void Slice::checkLeadingPictureRestrictions(const PicList& rcListPic) const
 
 
 //Function for applying picture marking based on the Reference Picture List
-void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps ) const
+void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps, const bool usingLongTerm ) const
 {
   int i, isReference;
   checkLeadingPictureRestrictions(rcListPic);
@@ -863,7 +865,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
         if( pic->poc == poc )
         {
           isReference = 1;
-          if( !pic->isLongTerm ) pic->isLongTerm = true;
+          if( usingLongTerm && !pic->isLongTerm ) pic->isLongTerm = true;
         }
       }
       else if( pic->layerId == layerId )
@@ -873,14 +875,14 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
           if( pic->poc == poc + pRPL0->refPicIdentifier[i] )
           {
             isReference = 1;
-            if( pic->isLongTerm ) pic->isLongTerm = false;
+            if( usingLongTerm && pic->isLongTerm ) pic->isLongTerm = false;
           }
         }
         else
         {
           int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
           int curPoc = pic->poc & (pocCycle - 1);
-          if( pic->isLongTerm && curPoc == pRPL0->refPicIdentifier[i] )
+          if( usingLongTerm && pic->isLongTerm && curPoc == pRPL0->refPicIdentifier[i] )
           {
             isReference = 1;
           }
@@ -897,7 +899,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
         if( pic->poc == poc )
         {
           isReference = 1;
-          if( !pic->isLongTerm ) pic->isLongTerm = true;
+          if( usingLongTerm && !pic->isLongTerm ) pic->isLongTerm = true;
         }
       }
       else if( pic->layerId == layerId )
@@ -907,14 +909,14 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
           if( pic->poc == poc + pRPL1->refPicIdentifier[i] )
           {
             isReference = 1;
-            if( pic->isLongTerm ) pic->isLongTerm = false;
+            if( usingLongTerm && pic->isLongTerm ) pic->isLongTerm = false;
           }
         }
         else
         {
           int pocCycle = 1 << ( pic->cs->sps->bitsForPOC );
           int curPoc = pic->poc & ( pocCycle - 1 );
-          if( pic->isLongTerm && curPoc == pRPL1->refPicIdentifier[i] )
+          if( usingLongTerm && pic->isLongTerm && curPoc == pRPL1->refPicIdentifier[i] )
           {
             isReference = 1;
           }
@@ -926,7 +928,8 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
     if ( pic->layerId == layerId && pic->isInitDone && pic->poc != poc && isReference == 0 )
     {
       pic->isReferenced = false;
-      pic->isLongTerm   = false;
+      if( usingLongTerm )
+        pic->isLongTerm   = false;
     }
   }
 }

@@ -83,27 +83,31 @@ public:
     : type(t), eval(efunc), rval(refval)
     {}
 };
+typedef std::pair< CType, int > state_type;
 
+typedef std::vector<Condition> Rule;
 class Channel
 {
-    typedef std::vector<Condition> Rule;
 public:
-    Channel() : rule_list(), _active(false), _counter(0) {}
+    Channel() : rule_list(), _active(false), _activeLocal(false), _counter(0) {}
+    bool evaluate( state_type stateval );
+    void update( state_type& stateval, bool localState );
     void update( std::map< CType, int > state );
-    bool active() { return _active; }
+    bool active() { return _active || _activeLocal; }
     void add( Rule rule );
+    void enable( bool _enable ) { _activeLocal = _enable; }
     void incrementCounter() { _counter++; }
     void decrementCounter() { _counter--  ; }
     int64_t getCounter() { return _counter; }
 private:
     std::list< Rule > rule_list;
     bool _active;
+    bool _activeLocal;
     int64_t _counter;
 };
 
 class CDTrace
 {
-  typedef std::pair< CType, int > state_type;
   //friend class Rules;
 private:
     bool          copy;
@@ -130,15 +134,17 @@ public:
     int  addRule      ( std::string rulestring );
     template<bool bCount>
     void dtrace       ( int, const char *format, /*va_list args*/... );
-    void dtrace_repeat( int, int i_times, const char *format, /*va_list args*/... );
+    void dtrace_repeat( int, int i_times, const char* format, /*va_list args*/... );
     bool update       ( state_type stateval );
+    bool updateChannel( int channel, state_type stateval );
     int  init( vstring channel_names );
     int  getLastError() { return m_error_code;  }
     const char*  getChannelName( int channel_number );
     void getChannelsList( std::string& sChannels );
     std::string getErrMessage();
     int64_t getChannelCounter( int channel ) { return chanRules[channel].getCounter(); }
-    void    decrementChannelCounter( int channel ) { chanRules[channel].decrementCounter(); }
+    void decrementChannelCounter( int channel ) { chanRules[channel].decrementCounter(); }
+    void enableChannel( int channel, bool _enable ) { chanRules[channel].enable(_enable); }
 };
 
 } // namespace vvenc
