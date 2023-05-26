@@ -353,7 +353,11 @@ int main( int argc, char* argv[] )
     }
 
     apputils::BitstreamHelper cBitstreamHelper;
-    cBitstreamHelper.init( vvenccfg.m_FrameRate/vvenccfg.m_FrameScale);
+
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
+    int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
+
+    cBitstreamHelper.init( vvenccfg.m_FrameRate/vvenccfg.m_FrameScale, framesToEncode );
     bool printBitrate = false;
 
     while( !bEof || !bEncodeDone )
@@ -401,9 +405,7 @@ int main( int argc, char* argv[] )
         cBitstreamHelper.addAU( &AU, &printBitrate );
         if( printBitrate )
         {
-
-          msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getCurBitrate().c_str() );
-          cBitstreamHelper.reset();
+          msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getAndResetCurBitrate().c_str() );
         }
 
         if( cOutBitstream.is_open() )
@@ -421,6 +423,8 @@ int main( int argc, char* argv[] )
     }
 
     cYuvFileInput.close();
+    
+    msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getAndResetCurBitrate().c_str() );
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();

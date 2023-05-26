@@ -46,9 +46,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <iostream>
-#include <string.h>
+#include <string>
+#include <sstream>
+#include <chrono>
+#include <iomanip>
 
-//#include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
 
@@ -71,13 +73,19 @@ public:
   {
   }
 
-  int init( int framerate )
+  int init( int framerate, int maxFrames )
   {
     mFramerate = framerate;
+    mMaxFrames = maxFrames;
     mBytes = 0;
     mBytesCur = 0;
     mPeriods = 0;
     mFrames = 0;
+    mFramesCur = 0;
+    mRapCnt = 0;
+
+    mTStart = std::chrono::steady_clock::now();
+
     return 0;
   }
 
@@ -86,59 +94,73 @@ public:
     if( !au ){ return -1; } 
     
     *periodDone = false;
-    if( mBytes && au->rap )
+
+    mFrames++;
+    mFramesCur++;
+
+    if( mBytes && mFramesCur >= mFramerate )
     {
       mPeriods++;
       *periodDone = true;
     }
 
+    if( au->rap )
+      mRapCnt++;
+
     mBytes    += au->payloadUsedSize;
     mBytesCur += au->payloadUsedSize;
-    mFrames++;
 
     //std::cout << "au " << au->poc << " bytes " << au->payloadUsedSize << " bitrate " << mBytesCur*8 << std::endl;
  
     return 0;
   }
 
-  std::string getCurBitrate()
+  std::string getAndResetCurBitrate()
   {
     std::stringstream css;
     uint64_t bitrate = mBytesCur*8;
 
-    css << "BITRATE ";
-    if( bitrate < 1000000 )
-      css <<  (double)bitrate/1000.0 << " kbps ";
-    else
-      css << (double)bitrate/1000000.0 << " Mbps ";
+    mTEnd = std::chrono::steady_clock::now();
 
-    css << " periods " << mPeriods << " avg ";
-    bitrate = mBytes*8/mPeriods;
+    if( mPeriods && mBytesCur )
+    {
+      double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((mTEnd)-(mTStart)).count() / 1000;
+      double dFps = dTimeSec ? (double)mFramesCur / dTimeSec : 0;
 
-    if( bitrate < 1000000 )
-      css <<  (double)bitrate/1000.0 << " kbps ";
-    else
-      css << (double)bitrate/1000000.0 << " Mbps ";
+      css << "stats:";
+      css << std::fixed << std::setprecision(2) << " frame= " << mFrames << "/" << mMaxFrames << " fps= " << dFps;
+      css << std::fixed << std::setprecision(2) << " bitrate= " << (double)bitrate/1000000.0 << " Mbps";
 
-    css << " frames " << mFrames << std::endl;
+      bitrate = mPeriods ? mBytes*8/mPeriods : 0;
+      css << std::fixed << std::setprecision(2) << " avg_bitrate= " << (double)bitrate/1000000.0 << " Mbps ";
+
+
+      css << std::setprecision(-1) << std::endl;
+    }
 
     mBytesCur = 0;
+    mFramesCur = 0;
+    mRapCnt = 0;
+    mTStart = std::chrono::steady_clock::now();
+
     return css.str();
-  }
-
-  void reset()
-  {
-    mBytesCur = 0;
   }
 
 private:
    int mFramerate     = 1;
-   
+   int mMaxFrames     = 0;
+
    uint64_t mBytes    = 0;
    uint64_t mBytesCur = 0;
 
    int mPeriods       = 0;
    int mFrames        = 0;
+   int mFramesCur     = 0;
+
+   int mRapCnt = 0;
+
+   std::chrono::steady_clock::time_point mTStart;
+   std::chrono::steady_clock::time_point mTEnd; 
 };
 
 } // namespace apputils
