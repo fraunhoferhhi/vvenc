@@ -67,8 +67,6 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define TEMP_DOWNSAMPLER     1
-
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
@@ -889,6 +887,7 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_isStartOfGop;
   bool      m_isStartOfIntra;
   bool      m_isValid;
+  bool      m_skipFirstPass;
   SceneType m_scType;
 
   void setDefaultGOPEntry()
@@ -903,6 +902,7 @@ typedef struct GOPEntry : vvencGOPEntry
     m_isStartOfGop     = false;
     m_isStartOfIntra   = false;
     m_isValid          = false;
+    m_skipFirstPass    = false;
     m_scType           = SCT_NONE;
   }
 
