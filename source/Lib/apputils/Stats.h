@@ -75,6 +75,13 @@ public:
     {}
     ~AUStats()
     {
+      reset();
+    }
+
+    void reset()
+    {
+      m_count = 0;
+      m_bytes = 0;
       m_qpCur.clear();
       m_qps.clear();
     }
@@ -159,6 +166,10 @@ public:
     m_framesCur   = 0;
     m_tStart      = std::chrono::steady_clock::now();
     m_tGlobStart  = std::chrono::steady_clock::now();
+
+    m_AUStats[VVENC_I_SLICE].reset();
+    m_AUStats[VVENC_P_SLICE].reset();
+    m_AUStats[VVENC_B_SLICE].reset();
 
     return 0;
   }
@@ -246,16 +257,16 @@ public:
 
 private:
 
-  double m_framerate  = 1.0;
-  int m_maxFrames     = 0;
+  double   m_framerate  = 1.0;
+  int      m_maxFrames  = 0;
 
-  uint64_t m_bytes    = 0;
-  uint64_t m_bytesCur = 0;
+  uint64_t m_bytes      = 0;
+  uint64_t m_bytesCur   = 0;
 
-  int m_frames        = 0;
-  int m_framesCur     = 0;
+  int      m_frames     = 0;
+  int      m_framesCur  = 0;
 
-  AUStats m_AUStats[3];    // stats per slice type
+  AUStats m_AUStats[3]; // stats per slice type
 
   std::chrono::steady_clock::time_point m_tStart;
   std::chrono::steady_clock::time_point m_tEnd;
