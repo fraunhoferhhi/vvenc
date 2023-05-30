@@ -504,7 +504,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
         // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
-        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) ) 
+        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) )
         {
           break;
         }
@@ -559,21 +559,6 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
 
-#if TEMP_DOWNSAMPLER 
-      pic->skipFrame = false;
-      auList.skipAU = false;
-      if ((m_pcEncCfg->m_FirstPassMode == 2) && m_pcEncCfg->m_RCTargetBitrate == 0 && m_pcEncCfg->m_RCNumPasses == 2 && !flush)
-      {
-        if (pic->slices[0]->TLayer >= 2)
-        {
-          int FrameNumInGop = (pic->poc > m_pcEncCfg->m_GOPSize) ? (pic->poc % m_pcEncCfg->m_GOPSize) : pic->poc;
-          if(FrameNumInGop != (1<< (m_pcEncCfg->m_maxTLayer - pic->slices[0]->TLayer)))
-          {
-            pic->skipFrame = true;
-          }
-        }
-      }
-#endif
       xEncodePicture(pic, picEncoder);
     }
   }
@@ -595,14 +580,6 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
   Picture* outPic = m_gopEncListOutput.front();
   m_gopEncListOutput.pop_front();
 
-#if TEMP_DOWNSAMPLER
-  if (outPic->skipFrame)
-  {
-    outPic->writePic = true;
-    auList.skipAU = true;
-  }
-#endif
-
   if( outPic->writePic )
   {
     xWritePicture( *outPic, auList, false );
@@ -619,7 +596,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       {
         if( pic != outPic )
         {
-          pic->actualHeadBits = outPic->actualHeadBits;
+          pic->actualHeadBits  = outPic->actualHeadBits;
           pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         }
         m_pcRateCtrl->xUpdateAfterPicRC( pic );
@@ -632,7 +609,8 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       m_rcUpdateList.pop_front();
   }
 
-  if( m_pcEncCfg->m_useAMaxBT )
+  const bool skipFirstPass = ! m_pcRateCtrl->rcIsFinalPass && outPic->gopEntry->m_skipFirstPass;
+  if( m_pcEncCfg->m_useAMaxBT && ! skipFirstPass )
   {
     m_BlkStat.updateMaxBT( *outPic->slices[0], outPic->picBlkStat );
   }
@@ -718,6 +696,15 @@ void EncGOP::xSyncAlfAps( Picture& pic )
 
 void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 {
+  // first pass temporal down-sampling
+  if( ! m_pcRateCtrl->rcIsFinalPass && pic->gopEntry->m_skipFirstPass )
+  {
+    pic->isReconstructed = true;
+    pic->writePic        = true;
+    m_freePicEncoderList.push_back( picEncoder );
+    return;
+  }
+
   // decoder in encoder
   bool decPic = false;
   bool encPic = false;
@@ -736,9 +723,6 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
   else
   {
-#if TEMP_DOWNSAMPLER
-    if (!pic->skipFrame)
-#endif
     encPic = true;
   }
 
@@ -1651,7 +1635,7 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
     if( ! m_gopEncListOutput.empty() )
       rcUpdateList.push_back( m_gopEncListOutput.front() );
   }
-  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(),                                                         "first picture in RC update and in output list have to be the same" );
+  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(), "first picture in RC update and in output list have to be the same" );
 }
 
 void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncodeLtRef )
@@ -2170,6 +2154,25 @@ void EncGOP::xSelectReferencePictureList( Slice* slice ) const
 
 void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
+  // first pass temporal down-sampling
+  if( ! m_pcRateCtrl->rcIsFinalPass && pic.gopEntry->m_skipFirstPass )
+  {
+    m_pcRateCtrl->addRCPassStats( pic.cs->slice->poc,
+        0,
+        0,
+        pic.picVisActY,
+        0,
+        0,
+        pic.cs->slice->isIntra(),
+        pic.cs->slice->TLayer,
+        pic.gopEntry->m_isStartOfIntra,
+        pic.gopEntry->m_isStartOfGop,
+        pic.gopEntry->m_gopNum,
+        pic.gopEntry->m_scType,
+        pic.m_picShared->m_minNoiseLevels );
+    return;
+  }
+
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
   pic.encTime.startTimer();
 
@@ -2195,12 +2198,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
   xWriteLeadingSEIs( pic, au );
-#if TEMP_DOWNSAMPLER
-  if (!pic.skipFrame)
-#endif
-  {
-    pic.actualTotalBits += xWritePictureSlices(pic, au, m_HLSWriter);
-  }
+  pic.actualTotalBits += xWritePictureSlices(pic, au, m_HLSWriter);
 
   pic.encTime.stopTimer();
 

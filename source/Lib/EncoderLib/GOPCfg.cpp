@@ -55,7 +55,7 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
+void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
@@ -63,6 +63,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, int lea
   m_refreshType        = refreshType;
   m_picReordering      = bPicReordering;
   m_fixIntraPeriod     = intraPeriod;
+  m_firstPassMode      = firstPassMode;
   m_maxGopSize         = gopSize;
   m_defGopSize         = m_fixIntraPeriod > 0 ? std::min( m_maxGopSize, m_fixIntraPeriod ) : m_maxGopSize;
 
@@ -560,6 +561,10 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
+  if( m_firstPassMode == 2 )
+  {
+    xSetSkipFirstPass( gopList );
+  }
 
   // mark first gop entry
   gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
@@ -719,6 +724,23 @@ void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
         gopEntry.m_mctfIndex = i;
         break;
       }
+    }
+  }
+}
+
+void GOPCfg::xSetSkipFirstPass( GOPEntryList& gopList ) const
+{
+  // find max temporal id
+  const int maxTid = xGetMaxTid( gopList );
+
+  // skip first pass encoding after first frame at max temporal id has been encoded
+  if( maxTid > 1 )
+  {
+    bool bSkipRem = false;
+    for( auto& gopEntry : gopList )
+    {
+      gopEntry.m_skipFirstPass = bSkipRem;
+      bSkipRem |= gopEntry.m_temporalId == maxTid;
     }
   }
 }
