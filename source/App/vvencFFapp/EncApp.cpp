@@ -166,11 +166,6 @@ bool EncApp::parseCfg( int argc, char* argv[])
     m_vvenc_config.m_RCNumPasses = 2;
   }
 
-  if( m_cEncAppCfg.m_decode )
-  {
-    return ret;
-  }
-
   if( vvenc_init_config_parameter( &m_vvenc_config ) )
   {
     ret = false;
@@ -194,11 +189,6 @@ int EncApp::encode()
 {
   apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
   vvenc_config&          vvencCfg = m_vvenc_config;
-
-  if( appCfg.m_decode )
-  {
-    return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
-  }
 
   // initialize encoder lib
   m_encCtx = vvenc_encoder_create();

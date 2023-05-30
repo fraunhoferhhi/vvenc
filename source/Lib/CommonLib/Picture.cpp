@@ -160,8 +160,6 @@ Picture::Picture()
     , isNeededForOutput ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
-    , encPic            ( true )
-    , writePic          ( true )
     , precedingDRAP     ( false )
     , gopEntry          ( nullptr )
     , refCounter        ( 0 )
@@ -226,8 +224,6 @@ void Picture::reset()
   isFinished          = false;
   isLongTerm          = false;
   isMeanQPLimited     = false;
-  encPic              = false;
-  writePic            = false;
   precedingDRAP       = false;
 
   gopEntry            = nullptr;

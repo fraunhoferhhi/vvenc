@@ -81,27 +81,6 @@ class EncHRD;
 class MsgLog;
 class GOPCfg;
 
-struct FFwdDecoder
-{
-  bool bDecode1stPart;
-  bool bHitFastForwardPOC;
-  bool loopFiltered;
-  int  iPOCLastDisplay;
-  std::ifstream* bitstreamFile;
-  InputByteStream* bytestream;
-  DecLib *pcDecLib;
-
-  FFwdDecoder()
-    : bDecode1stPart      ( true )
-      , bHitFastForwardPOC( false )
-      , loopFiltered      ( false )
-      , iPOCLastDisplay   ( -MAX_INT )
-      , bitstreamFile     ( nullptr )
-      , bytestream        ( nullptr )
-      , pcDecLib          ( nullptr )
-  {}
-};
-
 // ====================================================================================================================
 
 class EncGOP;
@@ -142,7 +121,7 @@ private:
   SEIEncoder                m_seiEncoder;
   EncReshape                m_Reshaper;
   BlkStat                   m_BlkStat;
-  FFwdDecoder               m_ffwdDecoder;
+  bool                      m_hitFastForwardPOC;
 
   ParameterSetMap<SPS>      m_spsMap;
   ParameterSetMap<PPS>      m_ppsMap;
@@ -161,7 +140,6 @@ private:
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
-  int                       m_appliedSwitchDQP;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;
 
@@ -173,8 +151,6 @@ private:
   std::deque<PicApsGlobal*> m_globalApsList;
 
   std::vector<int>          m_globalCtuQpVector;
-
-  bool                      m_trySkipOrDecodePicture;
 
 public:
   EncGOP( MsgLog& msglog );

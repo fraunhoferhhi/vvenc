@@ -727,15 +727,6 @@ typedef struct vvenc_config
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
 
-  // decode bitstream options
-  int                 m_switchPOC;                                                       // dbg poc.
-  int                 m_switchDQP;                                                       // switch DQP.
-  int                 m_fastForwardToPOC;                                                // get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
-  bool                m_stopAfterFFtoPOC;
-  bool                m_bs2ModPOCAndType;
-  bool                m_forceDecodeBitstream1;
-  char                m_decodeBitstreams[2][VVENC_MAX_STRING_LEN];                       // filename for decode bitstreams.
-
   // trace rules
   bool                m_listTracingChannels;
   char                m_traceRule[VVENC_MAX_STRING_LEN];
