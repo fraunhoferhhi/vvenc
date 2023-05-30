@@ -61,8 +61,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvenc.h"
 
 #include "apputils/YuvFileIO.h"
-#include "apputils/BitstreamHelper.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/Stats.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -352,12 +352,12 @@ int main( int argc, char* argv[] )
       iSeqNumber=iRemSkipFrames;
     }
 
-    apputils::BitstreamHelper cBitstreamHelper;
+    apputils::Stats cStats;
 
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
     int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
 
-    cBitstreamHelper.init( vvenccfg.m_FrameRate/vvenccfg.m_FrameScale, framesToEncode );
+    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, framesToEncode );
     bool printBitrate = false;
 
     while( !bEof || !bEncodeDone )
@@ -402,10 +402,10 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
-        cBitstreamHelper.addAU( &AU, &printBitrate );
+        cStats.addAU( &AU, &printBitrate );
         if( printBitrate )
         {
-          msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getAndResetCurBitrate().c_str() );
+          msgApp( nullptr, VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
         }
 
         if( cOutBitstream.is_open() )
@@ -424,7 +424,8 @@ int main( int argc, char* argv[] )
 
     cYuvFileInput.close();
     
-    msgApp( nullptr, VVENC_INFO, cBitstreamHelper.getAndResetCurBitrate().c_str() );
+    msgApp( nullptr, VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
+    msgApp( nullptr, VVENC_INFO, cStats.getFinalStats().c_str() );
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
