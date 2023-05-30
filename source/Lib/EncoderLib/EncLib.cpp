@@ -423,9 +423,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     if( !au.empty() )
     {
-      {
-        m_AuList.push_back(au);
-      }
+      m_AuList.push_back(au);
 
       au.detachNalUnitList();
       au.clearAu();

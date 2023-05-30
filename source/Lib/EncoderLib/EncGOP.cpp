@@ -559,7 +559,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
 
-      xEncodePicture(pic, picEncoder);
+      xEncodePicture( pic, picEncoder );
     }
   }
 
@@ -2158,11 +2158,11 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
   if( ! m_pcRateCtrl->rcIsFinalPass && pic.gopEntry->m_skipFirstPass )
   {
     m_pcRateCtrl->addRCPassStats( pic.cs->slice->poc,
-        0,
-        0,
+        0,                /* qp */
+        0,                /* lambda */
         pic.picVisActY,
-        0,
-        0,
+        0,                /* numBits */
+        0,                /* psnrY */
         pic.cs->slice->isIntra(),
         pic.cs->slice->TLayer,
         pic.gopEntry->m_isStartOfIntra,
@@ -2198,7 +2198,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
   xWriteLeadingSEIs( pic, au );
-  pic.actualTotalBits += xWritePictureSlices(pic, au, m_HLSWriter);
+  pic.actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
 
   pic.encTime.stopTimer();
 
