@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <iomanip>
 #include <numeric>
+#include <cmath>
 
 #include "vvenc/vvenc.h"
 
@@ -147,8 +148,7 @@ public:
 
   int init( int framerate, int framescale, int maxFrames )
   {
-    m_framerate = framerate;
-    m_framescale= framescale;
+    m_framerate = std::ceil(framerate/(double)framescale);    
     m_maxFrames = maxFrames;
     m_bytes     = 0;
     m_bytesCur  = 0;
@@ -211,7 +211,6 @@ public:
 
     m_bytesCur = 0;
     m_framesCur = 0;
-    m_rapCnt = 0;
     m_tStart = std::chrono::steady_clock::now();
 
     return css.str();
@@ -220,26 +219,28 @@ public:
   std::string getFinalStats()
   {
     std::stringstream css;
-    css << std::fixed << std::setprecision(2);
+    if( m_periods && m_bytes ){    
+      css << std::fixed << std::setprecision(2);
 
-    double qpI = m_AUStats[VVENC_I_SLICE].getAvgQp();
-    double qpP = m_AUStats[VVENC_P_SLICE].getAvgQp();
-    double qpB = m_AUStats[VVENC_B_SLICE].getAvgQp();
+      double qpI = m_AUStats[VVENC_I_SLICE].getAvgQp();
+      double qpP = m_AUStats[VVENC_P_SLICE].getAvgQp();
+      double qpB = m_AUStats[VVENC_B_SLICE].getAvgQp();
+      //css << "stats general: rap count " << m_rapCnt << std::endl;
 
-    css << "stats frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getBps()/1000.0
-    << " AvgQP: " << ((qpI > 0.0) ? qpI : NAN) << std::endl;
-    css << "stats frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getBps()/1000.0
-    << " AvgQP: " << ((qpP > 0.0) ? qpP : NAN) << std::endl;
-    css << "stats frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getBps()/1000.0
-    << " AvgQP: " << ((qpB > 0.0) ? qpB : NAN) << std::endl;
-    
-    css << std::setprecision(-1) << std::endl;
+      css << "stats frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getBps()/1000.0
+      << " AvgQP: " << ((qpI > 0.0) ? qpI : NAN) << std::endl;
+      css << "stats frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getBps()/1000.0
+      << " AvgQP: " << ((qpP > 0.0) ? qpP : NAN) << std::endl;
+      css << "stats frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getBps()/1000.0
+      << " AvgQP: " << ((qpB > 0.0) ? qpB : NAN) << std::endl;
+      
+      css << std::setprecision(-1) << std::endl;
+    }
     return css.str();
   }
   
 private:
-   int m_framerate     = 1;
-   int m_framescale    = 1;
+   double m_framerate     = 1.0;
    int m_maxFrames     = 0;
 
    uint64_t m_bytes    = 0;
@@ -249,9 +250,9 @@ private:
    int m_frames        = 0;
    int m_framesCur     = 0;
 
-   int m_rapCnt = 0;
+   int m_rapCnt        = 0;
 
-   AUStats m_AUStats[3];
+   AUStats m_AUStats[3];    // stats per slice type
 
    std::chrono::steady_clock::time_point m_tStart;
    std::chrono::steady_clock::time_point m_tEnd; 
