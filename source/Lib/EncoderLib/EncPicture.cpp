@@ -145,6 +145,7 @@ void EncPicture::finalizePicture( Picture& pic )
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
   }
+
   if( pic.writePic )
   {
     // write picture

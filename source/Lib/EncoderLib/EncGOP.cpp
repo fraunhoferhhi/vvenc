@@ -609,7 +609,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       m_rcUpdateList.pop_front();
   }
 
-  const bool skipFirstPass = ( !m_pcRateCtrl->rcIsFinalPass || (m_pcEncCfg->m_LookAhead && outPic->isPreAnalysis)) && outPic->gopEntry->m_skipFirstPass;
+  const bool skipFirstPass = ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && outPic->gopEntry->m_skipFirstPass;
   if( m_pcEncCfg->m_useAMaxBT && ! skipFirstPass )
   {
     m_BlkStat.updateMaxBT( *outPic->slices[0], outPic->picBlkStat );
@@ -697,7 +697,7 @@ void EncGOP::xSyncAlfAps( Picture& pic )
 void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 {
   // first pass temporal down-sampling
-  if( ( !m_pcRateCtrl->rcIsFinalPass || (m_pcEncCfg->m_LookAhead && pic->isPreAnalysis)) && pic->gopEntry->m_skipFirstPass )
+  if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic->gopEntry->m_skipFirstPass )
   {
     pic->isReconstructed = true;
     pic->writePic        = true;
@@ -2155,7 +2155,7 @@ void EncGOP::xSelectReferencePictureList( Slice* slice ) const
 void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
   // first pass temporal down-sampling
-  if(( !m_pcRateCtrl->rcIsFinalPass || (m_pcEncCfg->m_LookAhead && pic.isPreAnalysis)) && pic.gopEntry->m_skipFirstPass )
+  if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic.gopEntry->m_skipFirstPass )
   {
     m_pcRateCtrl->addRCPassStats( pic.cs->slice->poc,
         0,                /* qp */
@@ -2179,7 +2179,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
   au.poc           = pic.poc;
   au.temporalLayer = pic.TLayer;
   au.refPic        = pic.isReferenced;
-  if ( ! pic.slices.empty() )
+  if( ! pic.slices.empty() )
   {
     au.sliceType = pic.slices[ 0 ]->sliceType;
   }
