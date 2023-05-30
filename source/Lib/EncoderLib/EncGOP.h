@@ -121,7 +121,6 @@ private:
   SEIEncoder                m_seiEncoder;
   EncReshape                m_Reshaper;
   BlkStat                   m_BlkStat;
-  bool                      m_hitFastForwardPOC;
 
   ParameterSetMap<SPS>      m_spsMap;
   ParameterSetMap<PPS>      m_ppsMap;
