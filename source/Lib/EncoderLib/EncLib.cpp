@@ -359,7 +359,7 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
 
-  if( m_firstPassCfg.m_FirstPassMode == 1 )
+  if( m_firstPassCfg.m_FirstPassMode >= 1 )
   {
     unsigned interBlockSize = m_firstPassCfg.m_SourceWidth >= 1280 && m_firstPassCfg.m_SourceHeight >= 720 ? 64 : 32;
     m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
