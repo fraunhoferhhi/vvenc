@@ -119,14 +119,21 @@ public:
 
       uint64_t count() { return m_count; }
 
-      uint64_t getBps()
+      double getBps( double framerate )
       {
-        return (m_periods ? m_bytes*8/m_periods : 0);
+        return (m_bytes ? (m_bytes*8 * framerate / (double)m_count ) : NAN);
+      }
+
+      double getKbps( double framerate )
+      {
+        return (m_bytes ? (getBps(framerate) / 1000.0 ) : NAN);
       }
 
       double getAvgQp()
       {      
-        return (m_qps.empty()) ? -1.0 : std::accumulate( m_qps.begin(), m_qps.end(), 0.0)/m_qps.size();
+        return (m_qps.empty()) ? 
+        (m_qpCur.empty() ? NAN : std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size() ) :
+        std::accumulate( m_qps.begin(), m_qps.end(), 0.0)/m_qps.size();
       }
 
     private:
@@ -148,7 +155,7 @@ public:
 
   int init( int framerate, int framescale, int maxFrames )
   {
-    m_framerate = std::ceil(framerate/(double)framescale);    
+    m_framerate = (framerate/(double)framescale);    
     m_maxFrames = maxFrames;
     m_bytes     = 0;
     m_bytesCur  = 0;
@@ -171,7 +178,7 @@ public:
     m_framesCur++;
     m_AUStats[(int)au->sliceType].addAU(au);
 
-    if( m_bytes && m_framesCur >= m_framerate )
+    if( m_bytes && m_framesCur >= std::ceil(m_framerate) )
     {
       m_periods++;
       *periodDone = true;
@@ -191,12 +198,12 @@ public:
   std::string getAndResetCurBitrate()
   {
     std::stringstream css;
-    uint64_t bitrate = m_bytesCur*8;
-
     m_tEnd = std::chrono::steady_clock::now();
 
-    if( m_periods && m_bytesCur )
+    if( m_bytesCur )
     {
+      uint64_t bitrate = m_bytesCur*8;
+
       double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tEnd)-(m_tStart)).count() / 1000;
       double dFps = dTimeSec ? (double)m_framesCur / dTimeSec : 0;
 
@@ -204,7 +211,7 @@ public:
       css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " fps= " << dFps;
       css << std::fixed << std::setprecision(2) << " bitrate= " << (double)bitrate/1000.0 << " kbps";
 
-      bitrate = m_periods ? m_bytes*8/m_periods : 0;
+      bitrate = m_periods ? m_bytes*8/m_periods : m_bytes*8;
       css << std::fixed << std::setprecision(2) << " avg_bitrate= " << (double)bitrate/1000.0 << " kbps ";
       css << std::setprecision(-1) << std::endl;
     }
@@ -219,20 +226,17 @@ public:
   std::string getFinalStats()
   {
     std::stringstream css;
-    if( m_periods && m_bytes ){    
+    if( m_bytes )
+    {    
       css << std::fixed << std::setprecision(2);
-
-      double qpI = m_AUStats[VVENC_I_SLICE].getAvgQp();
-      double qpP = m_AUStats[VVENC_P_SLICE].getAvgQp();
-      double qpB = m_AUStats[VVENC_B_SLICE].getAvgQp();
       //css << "stats general: rap count " << m_rapCnt << std::endl;
 
-      css << "stats frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getBps()/1000.0
-      << " AvgQP: " << ((qpI > 0.0) ? qpI : NAN) << std::endl;
-      css << "stats frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getBps()/1000.0
-      << " AvgQP: " << ((qpP > 0.0) ? qpP : NAN) << std::endl;
-      css << "stats frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getBps()/1000.0
-      << " AvgQP: " << ((qpB > 0.0) ? qpB : NAN) << std::endl;
+      css << "stats: frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getKbps(m_framerate)
+      << " AvgQP: " << m_AUStats[VVENC_I_SLICE].getAvgQp() << std::endl;
+      css << "stats: frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getKbps(m_framerate)
+      << " AvgQP: " << m_AUStats[VVENC_P_SLICE].getAvgQp() << std::endl;
+      css << "stats: frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getKbps(m_framerate)
+      << " AvgQP: " << m_AUStats[VVENC_B_SLICE].getAvgQp() << std::endl;
       
       css << std::setprecision(-1) << std::endl;
     }
@@ -240,7 +244,8 @@ public:
   }
   
 private:
-   double m_framerate     = 1.0;
+   
+   double m_framerate  = 1.0;
    int m_maxFrames     = 0;
 
    uint64_t m_bytes    = 0;
