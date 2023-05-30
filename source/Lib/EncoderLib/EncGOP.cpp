@@ -53,7 +53,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/MD5.h"
 #include "NALwrite.h"
-#include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
 #include "EncHRD.h"
 #include "GOPCfg.h"
