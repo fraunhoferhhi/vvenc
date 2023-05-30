@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
@@ -87,7 +87,7 @@ public:
       std::string info(au->infoString);
       if( !info.empty() )
       {
-        std::size_t fQP = info.find("QP");          
+        std::size_t fQP = info.find("QP");
         if (fQP !=std::string::npos)
         {
           std::size_t fQPEnd = info.find(",",fQP+1);
@@ -104,9 +104,9 @@ public:
       }
     }
 
-    void addPeriod() 
-    { 
-      m_periods++; 
+    void addPeriod()
+    {
+      m_periods++;
 
       if( !m_qpCur.empty() )
       {
@@ -130,7 +130,7 @@ public:
 
     double getAvgQp()
     {
-      return (m_qps.empty()) ? 
+      return (m_qps.empty()) ?
       (m_qpCur.empty() ? NAN : std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size() ) :
       std::accumulate( m_qps.begin(), m_qps.end(), 0.0)/m_qps.size();
     }
@@ -154,7 +154,7 @@ public:
 
   int init( int framerate, int framescale, int maxFrames )
   {
-    m_framerate   = (framerate/(double)framescale);    
+    m_framerate   = (framerate/(double)framescale);
     m_maxFrames   = maxFrames;
     m_bytes       = 0;
     m_bytesCur    = 0;
@@ -170,8 +170,8 @@ public:
 
   int addAU( vvencAccessUnit* au, bool* periodDone )
   {
-    if( !au ){ return -1; } 
-    
+    if( !au ){ return -1; }
+
     *periodDone = false;
 
     m_frames++;
@@ -247,14 +247,14 @@ public:
       << " AvgQP: " << m_AUStats[VVENC_P_SLICE].getAvgQp() << std::endl;
       css << "stats summary: frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getKbps(m_framerate)
       << " AvgQP: " << m_AUStats[VVENC_B_SLICE].getAvgQp() << std::endl;
-      
+
       css << std::setprecision(-1) << std::endl;
     }
     return css.str();
   }
-  
+
 private:
-   
+
   double m_framerate  = 1.0;
   int m_maxFrames     = 0;
 
@@ -270,13 +270,12 @@ private:
   AUStats m_AUStats[3];    // stats per slice type
 
   std::chrono::steady_clock::time_point m_tStart;
-  std::chrono::steady_clock::time_point m_tEnd; 
+  std::chrono::steady_clock::time_point m_tEnd;
 
   std::chrono::steady_clock::time_point m_tGlobStart;
-  std::chrono::steady_clock::time_point m_tGlobEnd; 
+  std::chrono::steady_clock::time_point m_tGlobEnd;
 };
 
 } // namespace apputils
 
 //! \}
-
