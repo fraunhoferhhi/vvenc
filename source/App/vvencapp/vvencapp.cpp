@@ -383,10 +383,6 @@ int main( int argc, char* argv[] )
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
         }
-        else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
-        {
-          msgApp( nullptr, VVENC_INFO, "EOF reached\n" );
-        }
       }
 
       // call encode
@@ -424,7 +420,6 @@ int main( int argc, char* argv[] )
 
     cYuvFileInput.close();
     
-    msgApp( nullptr, VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
     msgApp( nullptr, VVENC_INFO, cStats.getFinalStats().c_str() );
   }
 

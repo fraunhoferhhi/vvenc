@@ -71,78 +71,77 @@ public:
   class AUStats
   {
     public:
-      AUStats()
-      {}
-      ~AUStats()
-      {
-        m_qpCur.clear();
-        m_qps.clear();
-      }
+    AUStats()
+    {}
+    ~AUStats()
+    {
+      m_qpCur.clear();
+      m_qps.clear();
+    }
 
-      void addAU( vvencAccessUnit* au )
-      {
-        m_count++;
-        m_bytes += au->payloadUsedSize;
+    void addAU( vvencAccessUnit* au )
+    {
+      m_count++;
+      m_bytes += au->payloadUsedSize;
 
-        std::string info(au->infoString);
-        if( !info.empty() )
+      std::string info(au->infoString);
+      if( !info.empty() )
+      {
+        std::size_t fQP = info.find("QP");          
+        if (fQP !=std::string::npos)
         {
-          std::size_t fQP = info.find("QP");          
-          if (fQP !=std::string::npos)
+          std::size_t fQPEnd = info.find(",",fQP+1);
+          if (fQPEnd ==std::string::npos)
           {
-            std::size_t fQPEnd = info.find(",",fQP+1);
-            if (fQPEnd ==std::string::npos)
-            {
-              fQPEnd = info.find(")",fQP+1);
-            }
-            std::string qp = info.substr (fQP+3,fQPEnd-fQP-3);
-
-            if ( !qp.empty() )
-            {
-              m_qpCur.push_back( std::stoi( qp ));
-            }
+            fQPEnd = info.find(")",fQP+1);
+          }
+          std::string qp = info.substr (fQP+3,fQPEnd-fQP-3);
+          if ( !qp.empty() )
+          {
+            m_qpCur.push_back( std::stoi( qp ));
           }
         }
       }
+    }
 
-      void addPeriod() 
-      { 
-        m_periods++; 
+    void addPeriod() 
+    { 
+      m_periods++; 
 
-        if( !m_qpCur.empty() )
-        {
-          // calc. average over cur. period
-          m_qps.push_back(std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size());
-          m_qpCur.clear();
-        }
-      }
-
-      uint64_t count() { return m_count; }
-
-      double getBps( double framerate )
+      if( !m_qpCur.empty() )
       {
-        return (m_bytes ? (m_bytes*8 * framerate / (double)m_count ) : NAN);
+        // calc. average over cur. period
+        m_qps.push_back(std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size());
+        m_qpCur.clear();
       }
+    }
 
-      double getKbps( double framerate )
-      {
-        return (m_bytes ? (getBps(framerate) / 1000.0 ) : NAN);
-      }
+    uint64_t count() { return m_count; }
 
-      double getAvgQp()
-      {      
-        return (m_qps.empty()) ? 
-        (m_qpCur.empty() ? NAN : std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size() ) :
-        std::accumulate( m_qps.begin(), m_qps.end(), 0.0)/m_qps.size();
-      }
+    double getBps( double framerate )
+    {
+      return (m_bytes ? (m_bytes*8 * framerate / (double)m_count ) : NAN);
+    }
 
-    private:
-       uint64_t  m_count   = 0;
-       uint64_t  m_bytes   = 0;
-       int       m_periods = 0;
+    double getKbps( double framerate )
+    {
+      return (m_bytes ? (getBps(framerate) / 1000.0 ) : NAN);
+    }
 
-       std::vector <double>  m_qps;
-       std::vector <int>     m_qpCur;
+    double getAvgQp()
+    {
+      return (m_qps.empty()) ? 
+      (m_qpCur.empty() ? NAN : std::accumulate( m_qpCur.begin(), m_qpCur.end(), 0.0)/m_qpCur.size() ) :
+      std::accumulate( m_qps.begin(), m_qps.end(), 0.0)/m_qps.size();
+    }
+
+   private:
+      uint64_t  m_count   = 0;
+      uint64_t  m_bytes   = 0;
+      int       m_periods = 0;
+
+      std::vector <double>  m_qps;
+      std::vector <int>     m_qpCur;
   };
 
   Stats()
@@ -155,15 +154,16 @@ public:
 
   int init( int framerate, int framescale, int maxFrames )
   {
-    m_framerate = (framerate/(double)framescale);    
-    m_maxFrames = maxFrames;
-    m_bytes     = 0;
-    m_bytesCur  = 0;
-    m_periods   = 0;
-    m_frames    = 0;
-    m_framesCur = 0;
-    m_rapCnt    = 0;
-    m_tStart = std::chrono::steady_clock::now();
+    m_framerate   = (framerate/(double)framescale);    
+    m_maxFrames   = maxFrames;
+    m_bytes       = 0;
+    m_bytesCur    = 0;
+    m_periods     = 0;
+    m_frames      = 0;
+    m_framesCur   = 0;
+    m_rapCnt      = 0;
+    m_tStart      = std::chrono::steady_clock::now();
+    m_tGlobStart  = std::chrono::steady_clock::now();
 
     return 0;
   }
@@ -199,20 +199,22 @@ public:
   {
     std::stringstream css;
     m_tEnd = std::chrono::steady_clock::now();
+    m_tGlobEnd = std::chrono::steady_clock::now();
 
     if( m_bytesCur )
     {
-      uint64_t bitrate = m_bytesCur*8;
-
-      double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tEnd)-(m_tStart)).count() / 1000;
-      double dFps = dTimeSec ? (double)m_framesCur / dTimeSec : 0;
+      double bitrate = (m_bytesCur*8 * m_framerate / (double)m_framesCur );
+      double dTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tEnd)-(m_tStart)).count() / 1000;
+      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tGlobEnd)-(m_tGlobStart)).count() / 1000;
+      double dFps = dTime ? (double)m_framesCur / dTime : 0;
+      double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
       css << "stats:";
-      css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " fps= " << dFps;
-      css << std::fixed << std::setprecision(2) << " bitrate= " << (double)bitrate/1000.0 << " kbps";
+      css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " fps= " << dFps << " avg_fps= " << dFpsAvg;
+      css << std::fixed << std::setprecision(2) << " bitrate= " << bitrate/1000.0 << " kbps";
 
-      bitrate = m_periods ? m_bytes*8/m_periods : m_bytes*8;
-      css << std::fixed << std::setprecision(2) << " avg_bitrate= " << (double)bitrate/1000.0 << " kbps ";
+      bitrate = m_bytes*8 * m_framerate/(double)m_frames;
+      css << std::fixed << std::setprecision(2) << " avg_bitrate= " << bitrate/1000.0 << " kbps ";
       css << std::setprecision(-1) << std::endl;
     }
 
@@ -226,16 +228,24 @@ public:
   std::string getFinalStats()
   {
     std::stringstream css;
-    if( m_bytes )
-    {    
-      css << std::fixed << std::setprecision(2);
-      //css << "stats general: rap count " << m_rapCnt << std::endl;
+    m_tGlobEnd = std::chrono::steady_clock::now();
 
-      css << "stats: frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getKbps(m_framerate)
+    if( m_bytes )
+    {
+      double bitrate = (m_bytes*8 * m_framerate / (double)m_frames );
+      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tGlobEnd)-(m_tGlobStart)).count() / 1000;
+      double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
+
+      css << "stats summary:";
+      css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " avg_fps= " << dFpsAvg;
+      css << std::fixed << std::setprecision(2) << " avg_bitrate= " << bitrate/1000.0 << " kbps";
+      css << std::endl;
+
+      css << "stats summary: frame I: " << m_AUStats[VVENC_I_SLICE].count() << " kbps: " << m_AUStats[VVENC_I_SLICE].getKbps(m_framerate)
       << " AvgQP: " << m_AUStats[VVENC_I_SLICE].getAvgQp() << std::endl;
-      css << "stats: frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getKbps(m_framerate)
+      css << "stats summary: frame P: " << m_AUStats[VVENC_P_SLICE].count() << " kbps: " << m_AUStats[VVENC_P_SLICE].getKbps(m_framerate)
       << " AvgQP: " << m_AUStats[VVENC_P_SLICE].getAvgQp() << std::endl;
-      css << "stats: frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getKbps(m_framerate)
+      css << "stats summary: frame B: " << m_AUStats[VVENC_B_SLICE].count() << " kbps: " << m_AUStats[VVENC_B_SLICE].getKbps(m_framerate)
       << " AvgQP: " << m_AUStats[VVENC_B_SLICE].getAvgQp() << std::endl;
       
       css << std::setprecision(-1) << std::endl;
@@ -245,22 +255,25 @@ public:
   
 private:
    
-   double m_framerate  = 1.0;
-   int m_maxFrames     = 0;
+  double m_framerate  = 1.0;
+  int m_maxFrames     = 0;
 
-   uint64_t m_bytes    = 0;
-   uint64_t m_bytesCur = 0;
+  uint64_t m_bytes    = 0;
+  uint64_t m_bytesCur = 0;
 
-   int m_periods       = 0;
-   int m_frames        = 0;
-   int m_framesCur     = 0;
+  int m_periods       = 0;
+  int m_frames        = 0;
+  int m_framesCur     = 0;
 
-   int m_rapCnt        = 0;
+  int m_rapCnt        = 0;
 
-   AUStats m_AUStats[3];    // stats per slice type
+  AUStats m_AUStats[3];    // stats per slice type
 
-   std::chrono::steady_clock::time_point m_tStart;
-   std::chrono::steady_clock::time_point m_tEnd; 
+  std::chrono::steady_clock::time_point m_tStart;
+  std::chrono::steady_clock::time_point m_tEnd; 
+
+  std::chrono::steady_clock::time_point m_tGlobStart;
+  std::chrono::steady_clock::time_point m_tGlobEnd; 
 };
 
 } // namespace apputils

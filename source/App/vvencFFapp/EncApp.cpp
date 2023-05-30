@@ -385,7 +385,6 @@ int EncApp::encode()
     // close input YUV
     m_yuvInputFile.close();
 
-    msgApp( VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
     msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
   }
 
