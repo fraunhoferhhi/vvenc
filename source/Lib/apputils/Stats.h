@@ -106,8 +106,6 @@ public:
 
     void addPeriod()
     {
-      m_periods++;
-
       if( !m_qpCur.empty() )
       {
         // calc. average over cur. period
@@ -138,7 +136,6 @@ public:
    private:
       uint64_t  m_count   = 0;
       uint64_t  m_bytes   = 0;
-      int       m_periods = 0;
 
       std::vector <double>  m_qps;
       std::vector <int>     m_qpCur;
@@ -158,10 +155,8 @@ public:
     m_maxFrames   = maxFrames;
     m_bytes       = 0;
     m_bytesCur    = 0;
-    m_periods     = 0;
     m_frames      = 0;
     m_framesCur   = 0;
-    m_rapCnt      = 0;
     m_tStart      = std::chrono::steady_clock::now();
     m_tGlobStart  = std::chrono::steady_clock::now();
 
@@ -180,15 +175,11 @@ public:
 
     if( m_bytes && m_framesCur >= std::ceil(m_framerate) )
     {
-      m_periods++;
       *periodDone = true;
       m_AUStats[VVENC_I_SLICE].addPeriod();
       m_AUStats[VVENC_P_SLICE].addPeriod();
       m_AUStats[VVENC_B_SLICE].addPeriod();
     }
-
-    if( au->rap )
-      m_rapCnt++;
 
     m_bytes    += au->payloadUsedSize;
     m_bytesCur += au->payloadUsedSize;
@@ -261,11 +252,8 @@ private:
   uint64_t m_bytes    = 0;
   uint64_t m_bytesCur = 0;
 
-  int m_periods       = 0;
   int m_frames        = 0;
   int m_framesCur     = 0;
-
-  int m_rapCnt        = 0;
 
   AUStats m_AUStats[3];    // stats per slice type
 
