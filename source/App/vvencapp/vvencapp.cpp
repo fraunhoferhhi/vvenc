@@ -358,7 +358,7 @@ int main( int argc, char* argv[] )
     int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
 
     cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, framesToEncode );
-    bool printBitrate = false;
+    bool printStats = false;
 
     while( !bEof || !bEncodeDone )
     {
@@ -398,10 +398,10 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
-        cStats.addAU( &AU, &printBitrate );
-        if( printBitrate )
+        cStats.addAU( &AU, &printStats );
+        if( printStats )
         {
-          msgApp( nullptr, VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
+          msgApp( nullptr, VVENC_INFO, cStats.getInfoString().c_str() );
         }
 
         if( cOutBitstream.is_open() )

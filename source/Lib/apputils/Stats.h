@@ -174,22 +174,22 @@ public:
     return 0;
   }
 
-  int addAU( vvencAccessUnit* au, bool* periodDone )
+  int addAU( vvencAccessUnit* au, bool* infoReady )
   {
     if( !au ){ return -1; }
 
-    *periodDone = false;
+    *infoReady = false;
 
     m_frames++;
     m_framesCur++;
     m_AUStats[(int)au->sliceType].addAU(au);
 
     if( m_bytes && m_framesCur >= std::ceil(m_framerate) )
-    {
-      *periodDone = true;
+    {      
       m_AUStats[VVENC_I_SLICE].calc();
       m_AUStats[VVENC_P_SLICE].calc();
       m_AUStats[VVENC_B_SLICE].calc();
+      *infoReady = true;
     }
 
     m_bytes    += au->payloadUsedSize;
@@ -197,7 +197,7 @@ public:
     return 0;
   }
 
-  std::string getAndResetCurBitrate()
+  std::string getInfoString()
   {
     std::stringstream css;
     m_tEnd = std::chrono::steady_clock::now();

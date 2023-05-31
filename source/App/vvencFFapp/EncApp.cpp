@@ -317,7 +317,7 @@ int EncApp::encode()
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
     int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
     cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, framesToEncode );
-    bool printBitrate = false;
+    bool printStats = false;
 
     // loop over input YUV data
     bool inputDone  = false;
@@ -373,12 +373,11 @@ int EncApp::encode()
       {
         outputAU( au );
 
-        cStats.addAU( &au, &printBitrate );
-        if( printBitrate )
+        cStats.addAU( &au, &printStats );
+        if( printStats )
         {
-          msgApp( VVENC_INFO, cStats.getAndResetCurBitrate().c_str() );
+          msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
         }
-
       }
     }
 
