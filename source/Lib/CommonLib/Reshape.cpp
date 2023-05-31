@@ -85,7 +85,7 @@ int ReshapeData::calculateChromaAdjVpduNei( const TransformUnit& tu, const CompA
   xPos &= mask;
   yPos &= mask;
 
-  if( !true )
+  if( !true/*isEncoder*/ )
   {
     if( isVPDUprocessed( xPos, yPos ) )
     {
@@ -143,7 +143,7 @@ int ReshapeData::calculateChromaAdjVpduNei( const TransformUnit& tu, const CompA
   }
 
   int chromaScale = calculateChromaAdj(lumaValue);
-  if( !true )
+  if( !true/*isEncoder*/)
   {
     m_chromaScale = chromaScale;
   }

@@ -441,7 +441,7 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
 
 void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf )
 {
-  if (!true)
+  if (!true/*isEncoder*/ )
   {
     if (CU::isIBC(cu))
     {
