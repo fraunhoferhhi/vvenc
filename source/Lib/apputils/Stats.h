@@ -111,7 +111,7 @@ public:
       }
     }
 
-    void addPeriod()
+    void calc()
     {
       if( !m_qpCur.empty() )
       {
@@ -187,9 +187,9 @@ public:
     if( m_bytes && m_framesCur >= std::ceil(m_framerate) )
     {
       *periodDone = true;
-      m_AUStats[VVENC_I_SLICE].addPeriod();
-      m_AUStats[VVENC_P_SLICE].addPeriod();
-      m_AUStats[VVENC_B_SLICE].addPeriod();
+      m_AUStats[VVENC_I_SLICE].calc();
+      m_AUStats[VVENC_P_SLICE].calc();
+      m_AUStats[VVENC_B_SLICE].calc();
     }
 
     m_bytes    += au->payloadUsedSize;
