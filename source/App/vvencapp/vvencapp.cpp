@@ -357,7 +357,7 @@ int main( int argc, char* argv[] )
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
     int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
 
-    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, framesToEncode );
+    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, (int)framesToEncode );
     bool printStats = false;
 
     while( !bEof || !bEncodeDone )
