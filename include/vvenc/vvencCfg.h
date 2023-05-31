@@ -727,6 +727,15 @@ typedef struct vvenc_config
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
 
+  // obsolete options
+  int                 m_cfgUnused17;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused18;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused19;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused20;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused21;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused22;                                                     // TODO: remove unused memory from configuration
+  char                m_cfgUnused23[2][VVENC_MAX_STRING_LEN];                            // TODO: remove unused memory from configuration
+
   // trace rules
   bool                m_listTracingChannels;
   char                m_traceRule[VVENC_MAX_STRING_LEN];
