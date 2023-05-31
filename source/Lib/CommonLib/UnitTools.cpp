@@ -3655,14 +3655,14 @@ bool allowLfnstWithMip(const Size& block)
   return false;
 }
 
-bool refPicCtuLineReady( const Slice& slice, const int refCtuRow )
+bool refPicCtuLineReady( const Slice& slice, const int refCtuRow, const PreCalcValues& pcv )
 {
   for( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
   {
     int numOfActiveRef = slice.numRefIdx[ refList ];
     for( int i = 0; i < numOfActiveRef; i++ )
     {
-      if( ! slice.refPicList[ refList ][ i ]->m_ctuLineReady->at(refCtuRow) )
+      if( slice.refPicList[ refList ][ i ]->m_ctusDoneInLine->at(refCtuRow) < pcv.widthInCtus )
       {
         return false;
       }

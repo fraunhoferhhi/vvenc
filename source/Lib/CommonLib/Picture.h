@@ -274,7 +274,7 @@ public:
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
   std::vector<short>            m_alfCtbFilterIndex;
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
-  std::vector<std::atomic<bool>>* m_ctuLineReady = nullptr;
+  std::vector<std::atomic<int>>*  m_ctusDoneInLine = nullptr;
 
 public:
   Slice*          allocateNewSlice();

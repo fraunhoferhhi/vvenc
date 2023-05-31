@@ -761,6 +761,10 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   if( slice.sps->alfEnabled )
   {
     m_pALF->initEncProcess( slice );
+    if( m_pcEncCfg->m_fppLinesSynchro )
+    {
+      m_pALF->initDerivation( slice );
+    }
   }
 
   std::fill( m_processStates.begin(), m_processStates.end(), CTU_ENCODE );
@@ -888,7 +892,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
   // process ctu's line wise from left to right
-  if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && currState == CTU_ENCODE && ctuPosX > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) )
+  const bool tileParallel = encSlice->m_pcEncCfg->m_tileParallelCtuEnc;
+  if( tileParallel && currState == CTU_ENCODE && ctuPosX > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) )
     ; // for CTU_ENCODE on tile boundaries, allow parallel processing of tiles
   else if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= currState && currState < PROCESS_DONE )
     return false;
@@ -900,9 +905,13 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // CTU line-wise frame parallel processing synchronization
         const int syncLines = encSlice->m_pcEncCfg->m_fppLinesSynchro;
-        if( syncLines && ctuPosX == 0 && ctuPosY + syncLines < pcv.heightInCtus && !refPicCtuLineReady( slice, ctuPosY + syncLines ) )
+        if( syncLines )
         {
-          return false;
+          const bool lineStart = ctuPosX == 0 || ( tileParallel && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) );
+          if( lineStart && ctuPosY + syncLines < pcv.heightInCtus && !refPicCtuLineReady( slice, ctuPosY + syncLines, pcv ) )
+          {
+            return false;
+          }
         }
 
         // general wpp conditions, top and top-right ctu have to be encoded
@@ -1092,32 +1101,21 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           if( ctuPosX+1 == pcv.widthInCtus )  recoBuf.extendBorderPelRgt( y, height, fltSize );
           if( ctuPosY == 0 )                  recoBuf.extendBorderPelTop( xL, xR-xL, fltSize );
           if( ctuPosY+1 == pcv.heightInCtus ) recoBuf.extendBorderPelBot( xL, xR-xL, fltSize );
+
+          encSlice->m_pALF->copyCTUforALF(cs, ctuPosX, ctuPosY);
         }
 
+        // DMVR refinement can be stored now
+        if( slice.sps->DMVR && !slice.picHeader->disDmvrFlag )
+        {
+          CS::setRefinedMotionFieldCTU( cs, ctuPosX, ctuPosY );
+        }
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );
 
         const int tileCol = slice.pps->ctuToTileCol[ctuPosX];
         const int lastCtuColInTileRow = slice.pps->tileColBd[tileCol] + slice.pps->tileColWidth[tileCol] - 1;
         if( ctuPosX == lastCtuColInTileRow )
         {
-          // on finishing of CTU-line of a tile (picture)
-          // copy rec. samples for ALF
-          const int firstCtuInRow = ctuPosX + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
-          if( slice.sps->alfEnabled )
-          {
-            for (int curCtuPosX = firstCtuInRow; curCtuPosX <= ctuPosX; curCtuPosX++)
-            {
-              encSlice->m_pALF->copyCTUforALF(cs, curCtuPosX, ctuPosY);
-            }
-          }
-          // DMVR refinement can be stored now
-          if( slice.sps->DMVR && !slice.picHeader->disDmvrFlag )
-          {
-            for (int curCtuPosX = firstCtuInRow; curCtuPosX <= ctuPosX; curCtuPosX++)
-            {
-              CS::setRefinedMotionFieldCTU( cs, curCtuPosX, ctuPosY );
-            }
-          }
           processStates[ctuRsAddr] = ALF_GET_STATISTICS;
         }
         else
@@ -1206,7 +1204,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[lineIdx];
             PerThreadRsrc* taskRsrc = encSlice->m_ThreadRsrc[threadIdx];
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
-            if( ctuPosY == 0 ) encSlice->m_pALF->initDerivation( slice );
             for(int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++)
             {
               encSlice->m_pALF->selectFilterForCTU( cs, &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, ctu );
@@ -1386,7 +1383,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
 
         // extend pic border
-        if( !( slice.pps->getNumTiles() > 1 && !slice.pps->loopFilterAcrossTilesEnabled ) )
+        pic->m_ctusDoneInLine->at(ctuPosY) += slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+        if( pic->m_ctusDoneInLine->at(ctuPosY) >= pcv.widthInCtus )
         {
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
           const int margin = cs.picture->margin;
@@ -1396,11 +1394,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2 * margin, margin );
           if(ctuPosY + 1 == pcv.heightInCtus)
             recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2 * margin, margin );
-        }
-
-        if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
-        {
-          pic->m_ctuLineReady->at(ctuPosY) = true;
         }
 
         // perform finish only once for whole picture
