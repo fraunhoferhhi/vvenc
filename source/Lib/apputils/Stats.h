@@ -223,7 +223,7 @@ public:
       css << std::fixed << std::setprecision(2) << " bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
 
       bitrate = m_bytes*8 * m_framerate/(double)m_frames;
-      css << " avg_bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps ";
+      css << " avg_bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
 
       int sec   = std::ceil(dGlobTime);
       int days  = sec/86400;
