@@ -647,51 +647,6 @@ void SampleAdaptiveOffset::offsetCTU( const UnitArea& area, const CPelUnitBuf& s
   } //compIdx
 }
 
-void SampleAdaptiveOffset::SAOProcess( CodingStructure& cs, SAOBlkParam* saoBlkParams )
-{
-  CHECK(!saoBlkParams, "No parameters present");
-
-  xReconstructBlkSAOParams(cs, saoBlkParams);
-
-  const uint32_t numberOfComponents = getNumberValidComponents(cs.area.chromaFormat);
-  bool bAllDisabled = true;
-  for (uint32_t compIdx = 0; compIdx < numberOfComponents; compIdx++)
-  {
-    if (m_picSAOEnabled[compIdx])
-    {
-      bAllDisabled = false;
-    }
-  }
-  if (bAllDisabled)
-  {
-    return;
-  }
-
-  const PreCalcValues& pcv = *cs.pcv;
-  Picture& pic             = *cs.picture;
-  PelUnitBuf recBuf        = pic.getRecoBuf();
-  PelUnitBuf saoBuf        = pic.getSaoBuf();
-  saoBuf.copyFrom( recBuf );
-
-  int ctuRsAddr = 0;
-  for( uint32_t yPos = 0; yPos < pcv.lumaHeight; yPos += pcv.maxCUSize )
-  {
-    const uint32_t height = (yPos + pcv.maxCUSize > pcv.lumaHeight) ? (pcv.lumaHeight - yPos) : pcv.maxCUSize;
-    for( uint32_t xPos = 0; xPos < pcv.lumaWidth; xPos += pcv.maxCUSize )
-    {
-      const uint32_t width  = (xPos + pcv.maxCUSize  > pcv.lumaWidth)  ? (pcv.lumaWidth - xPos)  : pcv.maxCUSize;
-      const UnitArea area( cs.area.chromaFormat, Area(xPos , yPos, width, height) );
-
-      offsetCTU( area, saoBuf, recBuf, cs.picture->getSAO()[ctuRsAddr], cs);
-      ctuRsAddr++;
-    }
-  }
-
-  DTRACE_PIC_COMP(D_REC_CB_LUMA_SAO, cs, cs.getRecoBuf(), COMP_Y);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_SAO, cs, cs.getRecoBuf(), COMP_Cb);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_SAO, cs, cs.getRecoBuf(), COMP_Cr);
-}
-
 void SampleAdaptiveOffset::deriveLoopFilterBoundaryAvailibility(CodingStructure& cs, const Position& pos, uint8_t& availMask ) const
 {
   const int cuSize = cs.pcv->maxCUSize;

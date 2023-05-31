@@ -86,7 +86,6 @@ public:
 
   SampleAdaptiveOffset();
   virtual ~SampleAdaptiveOffset();
-  void        SAOProcess      ( CodingStructure& cs, SAOBlkParam* saoBlkParams );
   void        init            ( ChromaFormat format, uint32_t maxCUWidth, uint32_t maxCUHeight, uint32_t lumaBitShift, uint32_t chromaBitShift );
   static int  getMaxOffsetQVal( const int channelBitDepth) { return (1<<(std::min<int>(channelBitDepth,MAX_SAO_TRUNCATED_BITDEPTH)-5))-1; } //Table 9-32, inclusive
 

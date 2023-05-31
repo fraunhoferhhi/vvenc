@@ -209,7 +209,7 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
   pReco.copyFrom( piPred );
 
-  if( cs.pcv->isEncoder )
+  if( true )
   {
     cs.picture->getRecoBuf( area ).copyFrom( pReco );
   }
@@ -540,7 +540,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
 
           //    Mv mv[3];
           CHECK(cu.refIdx[eRefList] < 0, "Unexpected negative refIdx.");
-          if (!cu.cs->pcv->isEncoder)
+          if (!true)
           {
             cu.mvd[eRefList][0].changeAffinePrecAmvr2Internal(cu.imv);
             cu.mvd[eRefList][1].changeAffinePrecAmvr2Internal(cu.imv);
@@ -570,7 +570,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
       CU::fillIBCMvpCand(cu, amvpInfo);
       cu.mvpNum[REF_PIC_LIST_0] = amvpInfo.numCand;
       Mv mvd = cu.mvd[REF_PIC_LIST_0][0];
-      if (!cu.cs->pcv->isEncoder)
+      if (!true)
       {
         mvd.changeIbcPrecAmvr2Internal(cu.imv);
       }
@@ -591,7 +591,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
           AMVPInfo amvpInfo;
           CU::fillMvpCand(cu, eRefList, cu.refIdx[eRefList], amvpInfo);
           cu.mvpNum [eRefList] = amvpInfo.numCand;
-          if (!cu.cs->pcv->isEncoder)
+          if (!true)
           {
             cu.mvd[eRefList][0].changeTransPrecAmvr2Internal(cu.imv);
           }

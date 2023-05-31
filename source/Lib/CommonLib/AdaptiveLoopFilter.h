@@ -100,7 +100,6 @@ public:
   void        reconstructCoeffAPSs    ( CodingStructure& cs, bool luma, bool chroma, bool isRdo);
   void        reconstructCoeffFixedAPSs(CodingStructure& cs, bool luma, bool chroma, bool isRdo);
   void        reconstructCoeff(AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo = false);
-  void        ALFProcess              ( CodingStructure& cs);
   void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int inputBitDepth[MAX_NUM_CH] );
   void        destroy                 ();
   static void deriveClassificationBlk ( AlfClassifier *classifier,
