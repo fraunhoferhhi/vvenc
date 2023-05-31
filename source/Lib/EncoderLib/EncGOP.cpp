@@ -2607,7 +2607,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
     c += 32;
   }
 
-  if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
+  // create info string
   {
     if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
     {
@@ -2770,7 +2770,7 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     }
   }
 
-  if( !accessUnit.InfoString.empty() )
+  if( !accessUnit.InfoString.empty() && m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
     std::string cPicInfo = accessUnit.InfoString;
     cPicInfo.append("\n");
