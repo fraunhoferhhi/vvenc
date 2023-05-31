@@ -376,6 +376,13 @@ void EncLib::xInitRCCfg()
 // Public member functions
 // ====================================================================================================================
 
+// The current I/O work flow consists of three main parts:
+//   1. At the beginning, the encoder can consume input YUV buffers without an output.
+//   2. After the first encoded picture/access unit is output, on each next call: one yuv-buffer IN / one encoded access unit (AU) OUT.
+//      Hence, in stage-parallel mode, we must wait until next encoded picture (AU) is going to be output
+//   3. When no more input is available, the top level goes into flushing mode: nullptr IN / one encoded access unit (AU) OUT. 
+//      The encoder flushes the encoded AUs until the queues are empty.
+
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -386,13 +393,13 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   au.clearAu();
 
   // NOTE regarding the stage parallel processing
-  // The next input yuv-frame must be passed to the encoding process (1.Stage).
-  // Following should be considered:
-  // 1. The final stage is non-blocking, so it dosen't wait until picture is reconstructed.
-  // 2. Generally the stages have different throughput, last stage is the slowest.
-  // 3. The number of picture-units, required for the input frames, is limited.
-  // 4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
-  // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
+  // The next input yuv-buffer must be passed to the encoding process (1.Stage).
+  // The following should be considered:
+  //   1. The final stage is non-blocking, so it doesn't wait until picture is reconstructed.
+  //   2. Generally, the stages have different throughput; last stage is the slowest.
+  //   3. The number of picture-units required for the input yuv-buffers is limited.
+  //   4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
+  //   5. Then we have to wait for the next available picture-unit, so the input frame can be passed to the 1.stage.
 
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );
@@ -418,7 +425,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     for( auto encStage : m_encStages )
     {
       encStage->runStage( flush, au );
-      isQueueEmpty &= encStage->isStageDone() && m_AuList.empty();
+      isQueueEmpty &= encStage->isStageDone();
     }
 
     if( !au.empty() )
@@ -461,6 +468,9 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     au.clearAu();
   }
+
+  // finally, ensure that the whole queue is empty
+  isQueueEmpty &= m_AuList.empty();
 }
 
 void EncLib::printSummary()
