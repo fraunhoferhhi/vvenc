@@ -344,7 +344,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_QP                                      = VVENC_DEFAULT_QP;
   c->m_RCTargetBitrate                         = 0;
 
-  c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
+  c->m_verbosity                               = VVENC_INFO;    ///< encoder verbosity
 
   // basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
