@@ -241,7 +241,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
     m_MCTF->initStage( m_encCfg, minQueueSize, -leadFrames, true, true, false );
-    m_MCTF->init( m_encCfg, m_threadPool );
+    m_MCTF->init( m_encCfg, m_rateCtrl->rcIsFinalPass, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
