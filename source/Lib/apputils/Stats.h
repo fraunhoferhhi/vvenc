@@ -206,17 +206,51 @@ public:
     if( m_bytesCur )
     {
       double bitrate = (m_bytesCur*8 * m_framerate / (double)m_framesCur );
-      double dTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tEnd)-(m_tStart)).count() / 1000;
-      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tGlobEnd)-(m_tGlobStart)).count() / 1000;
+      double dTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tEnd-m_tStart).count() / 1000.0;
+      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tGlobEnd-m_tGlobStart).count() / 1000.0;
       double dFps = dTime ? (double)m_framesCur / dTime : 0;
       double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
-      css << "stats:";
-      css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " fps= " << dFps << " avg_fps= " << dFpsAvg;
-      css << std::fixed << std::setprecision(2) << " bitrate= " << bitrate/1000.0 << " kbps";
+      double dDone = m_frames * 100.0 / m_maxFrames;
+      
+      css << "stats: ";
+      css << std::fixed << std::setprecision(1) << std::setfill(' ') << std::setw(4) << dDone << "%%";
+
+      int numDigits = m_maxFrames ? static_cast<int>(std::log10(std::abs(m_maxFrames))) + 1 : 1;
+      css << " frame= " << std::setfill(' ') << std::setw(numDigits) << m_frames << "/" << m_maxFrames;
+
+      css << " fps= " << std::setfill(' ') << std::setw(4) << dFps << " avg_fps= " << std::setfill(' ') << std::setw(4) << dFpsAvg;
+      css << std::fixed << std::setprecision(2) << " bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
 
       bitrate = m_bytes*8 * m_framerate/(double)m_frames;
-      css << std::fixed << std::setprecision(2) << " avg_bitrate= " << bitrate/1000.0 << " kbps ";
+      css << " avg_bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps ";
+
+      int sec   = std::ceil(dGlobTime);
+      int days  = sec/86400;
+      int hours = sec%86400/3600;
+      int min   = sec%3600/60;
+      sec=sec%60;
+
+      css << " elapsed= ";
+      if( days )
+        css << std::setfill('0') << std::setw(2) << days << "d:";
+      css << std::setfill('0') << std::setw(2) << hours << "h:";
+      css << std::setfill('0') << std::setw(2) << min << "m:";
+      css << std::setfill('0') << std::setw(2) << sec << "s";
+
+      double dRemaining = (dGlobTime * m_maxFrames / m_frames) - dGlobTime;
+      sec   = std::ceil(dRemaining);
+      days  = sec/86400;
+      hours = sec%86400/3600;
+      min   = sec%3600/60;
+      sec=sec%60;
+
+      css << " left= ";
+      if( days )
+        css << std::setfill('0') << std::setw(2) << days << "d:";
+      css << std::setfill('0') << std::setw(2) << hours << "h:";
+      css << std::setfill('0') << std::setw(2) << min << "m:";
+      css << std::setfill('0') << std::setw(2) << sec << "s";
       css << std::setprecision(-1) << std::endl;
     }
 
@@ -235,11 +269,11 @@ public:
     if( m_bytes )
     {
       double bitrate = (m_bytes*8 * m_framerate / (double)m_frames );
-      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>((m_tGlobEnd)-(m_tGlobStart)).count() / 1000;
+      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tGlobEnd-m_tGlobStart).count() / 1000.0;
       double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
       css << "stats summary:";
-      css << std::fixed << std::setprecision(2) << " frame= " << m_frames << "/" << m_maxFrames << " avg_fps= " << dFpsAvg;
+      css << std::fixed << std::setprecision(1) << " frame= " << m_frames << "/" << m_maxFrames << " avg_fps= " << dFpsAvg;
       css << std::fixed << std::setprecision(2) << " avg_bitrate= " << bitrate/1000.0 << " kbps";
       css << std::endl;
 
