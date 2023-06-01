@@ -908,7 +908,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( syncLines )
         {
           const bool lineStart = ctuPosX == 0 || ( tileParallel && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) );
-          if( lineStart && ctuPosY + syncLines < pcv.heightInCtus && !refPicCtuLineReady( slice, ctuPosY + syncLines, pcv ) )
+          if( lineStart && !refPicCtuLineReady( slice, ctuPosY + syncLines, pcv ) )
           {
             return false;
           }
