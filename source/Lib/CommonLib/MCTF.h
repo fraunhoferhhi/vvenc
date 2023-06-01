@@ -125,7 +125,7 @@ public:
   MCTF();
   virtual ~MCTF();
 
-  void init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool );
+  void init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool );
 
 protected:
   virtual void initPicture    ( Picture* pic );
@@ -166,6 +166,7 @@ private:
 
   const VVEncCfg*       m_encCfg;
   NoMallocThreadPool*   m_threadPool;
+  bool                  m_isFinalPass;
   int                   m_filterPoc;
   Area                  m_area;
   int                   m_MCTFSpeedVal;
