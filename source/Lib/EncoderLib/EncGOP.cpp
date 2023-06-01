@@ -852,9 +852,9 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   const BitDepths& bitDepths = m_spsMap.getFirstPS()->bitDepths;
   //-- all
-  std::string summary = "\n";
+  std::string summary( "\n" );
   if( m_pcEncCfg->m_verbosity >= VVENC_DETAILS )
-    summary.append("\nSUMMARY --------------------------------------------------------\n");
+    summary.append("\nvvenc [info]: SUMMARY --------------------------------------------------------\n");
 
   summary.append( m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
@@ -864,13 +864,13 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   }
   else
   {
-    summary.append( "\n\nI Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: I Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-    summary.append( "\n\nP Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: P Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-    summary.append( "\n\nB Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: B Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
     msg.log( VVENC_DETAILS,summary.c_str() );
   }
