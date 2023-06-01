@@ -152,12 +152,8 @@ void EncPicture::finalizePicture( Picture& pic )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
 
   xCalcDistortion( pic, *slice->sps );
-  
+
   // finalize
-  if( slice->pps->getNumTiles() > 1 && !slice->pps->loopFilterAcrossTilesEnabled )
-  {
-    pic.extendPicBorder();
-  }
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );
@@ -332,6 +328,64 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
   else
   {
     slice->checkLDC = true;
+  }
+}
+
+
+void EncPicture::skipCompressPicture( Picture& pic )
+{
+  CodingStructure& cs = *(pic.cs);
+  Slice* slice        = pic.slices[ 0 ];
+
+  if( slice->sps->saoEnabled )
+  {
+    m_SliceEncoder.saoDisabledRate( cs, pic.getSAO( 1 ) );
+  }
+
+  if ( slice->sps->alfEnabled && ( slice->alfEnabled[COMP_Y] || slice->ccAlfCbEnabled || slice->ccAlfCrEnabled ) )
+  {
+    // Assign the correct APS to slice and emulate the setting of ALF start APS ID
+    int changedApsId = -1;
+    ParameterSetMap<APS>* apsMap = &pic.picApsMap;
+    for( int apsId = ALF_CTB_MAX_NUM_APS - 1; apsId >= 0; apsId-- )
+    {
+      int psId = ( apsId << NUM_APS_TYPE_LEN ) + ALF_APS;
+      APS* aps = apsMap->getPS( psId );
+
+      // Set APS for slice
+      slice->alfAps[apsId] = aps;
+
+      if( aps )
+      {
+        DTRACE( g_trace_ctx, D_ALF, "%d: id=%d, apsId=%d, t=%d, ch=%d, lid=%d, tid=%d, nf=%d,%d\n", slice->poc, psId, aps->apsId, aps->apsType, apsMap->getChangedFlag( psId ), aps->layerId, aps->temporalId, aps->alfParam.newFilterFlag[CH_L], aps->alfParam.newFilterFlag[CH_C] );
+
+        if( apsMap->getChangedFlag( psId ) )
+        {
+          changedApsId = apsId;
+          aps->poc = pic.poc;
+        }
+      }
+    }
+
+    if( changedApsId >= 0 )
+    {
+      apsMap->setApsIdStart( changedApsId );
+    }
+
+    DTRACE( g_trace_ctx, D_ALF, "m_apsIdStart=%d\n", apsMap->getApsIdStart() );
+  }
+
+  if( slice->sps->lumaReshapeEnable )
+  {
+    const int lmcsApsId          = slice->picHeader->lmcsApsId;
+    const int apsMapIdx          = ( lmcsApsId << NUM_APS_TYPE_LEN ) + LMCS_APS;
+    slice->picHeader->lmcsAps    = pic.picApsMap.getPS( apsMapIdx ); // just to be sure
+  }
+
+  if( m_pcEncCfg->m_fppLinesSynchro )
+  {
+    if( pic.m_ctuLineReady )
+      std::fill( pic.m_ctuLineReady->begin(), pic.m_ctuLineReady->end(), true );
   }
 }
 

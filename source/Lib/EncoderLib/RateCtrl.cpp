@@ -298,6 +298,7 @@ RateCtrl::RateCtrl(MsgLog& logger)
   m_updateNoisePoc     = -1;
   m_resetNoise         = true;
   std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
+  std::fill_n( m_tempDownSamplStats, VVENC_MAX_TLAYER + 1, TRCPassStats() );
 }
 
 RateCtrl::~RateCtrl()
@@ -456,8 +457,26 @@ void RateCtrl::readStatsHeader()
 }
 #endif // VVENC_ENABLE_THIRDPARTY_JSON
 
-void RateCtrl::storeStatsData( const TRCPassStats& statsData )
+void RateCtrl::storeStatsData( TRCPassStats statsData )
 {
+  if( m_pcEncCfg->m_FirstPassMode == 2 )
+  {
+    CHECK( statsData.tempLayer > VVENC_MAX_TLAYER, "array index out of bounds" );
+    if( statsData.numBits )
+    {
+      m_tempDownSamplStats[ statsData.tempLayer ] = statsData;
+    }
+    else
+    {
+      const TRCPassStats& srcData = m_tempDownSamplStats[ statsData.tempLayer ];
+      CHECK( srcData.numBits == 0,                                 "miss stats data from previous frame for temporal down-sampling" );
+      CHECK( statsData.poc - srcData.poc >= m_pcEncCfg->m_GOPSize, "miss stats data from previous frame for temporal down-sampling" );
+      statsData.qp      = srcData.qp;
+      statsData.lambda  = srcData.lambda;
+      statsData.numBits = srcData.numBits;
+      statsData.psnrY   = srcData.psnrY;
+    }
+  }
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   nlohmann::json data = {
     { "poc",            statsData.poc },

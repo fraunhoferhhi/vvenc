@@ -546,10 +546,11 @@ double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, con
 }
 
 MCTF::MCTF()
-  : m_encCfg    ( nullptr )
-  , m_threadPool( nullptr )
-  , m_filterPoc ( 0 )
-  , m_lastPicIn ( nullptr )
+  : m_encCfg     ( nullptr )
+  , m_threadPool ( nullptr )
+  , m_isFinalPass( true )
+  , m_filterPoc  ( 0 )
+  , m_lastPicIn  ( nullptr )
 {
   m_motionErrorLumaIntX     = motionErrorLumaInt;
   m_motionErrorLumaInt8     = motionErrorLumaInt;
@@ -574,14 +575,15 @@ MCTF::~MCTF()
 {
 }
 
-void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
+void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool )
 {
   CHECK( encCfg.m_vvencMCTF.numFrames != encCfg.m_vvencMCTF.numStrength, "should have been checked before" );
 
-  m_encCfg     = &encCfg;
-  m_threadPool = threadPool;
-  m_area       = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
-  m_filterPoc  = 0;
+  m_encCfg      = &encCfg;
+  m_threadPool  = threadPool;
+  m_isFinalPass = isFinalPass;
+  m_filterPoc   = 0;
+  m_area        = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
   const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2) };
@@ -661,6 +663,12 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
   Picture* pic = picFifo[ filterIdx ];
+
+  // first pass temporal down-sampling
+  if( ! m_isFinalPass && pic->gopEntry->m_skipFirstPass )
+  {
+    return;
+  }
 
   const int mctfIdx            = pic->gopEntry ? pic->gopEntry->m_mctfIndex : -1;
   const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;

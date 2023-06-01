@@ -241,7 +241,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
     m_MCTF->initStage( m_encCfg, minQueueSize, -leadFrames, true, true, false );
-    m_MCTF->init( m_encCfg, m_threadPool );
+    m_MCTF->init( m_encCfg, m_rateCtrl->rcIsFinalPass, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
@@ -358,8 +358,8 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
-  
-  if( m_firstPassCfg.m_FirstPassMode == 1 )
+
+  if( m_firstPassCfg.m_FirstPassMode >= 1 )
   {
     unsigned interBlockSize = m_firstPassCfg.m_SourceWidth >= 1280 && m_firstPassCfg.m_SourceHeight >= 720 ? 64 : 32;
     m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
@@ -431,6 +431,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     if( !au.empty() )
     {
       m_AuList.push_back( au );
+
       au.detachNalUnitList();
       au.clearAu();
       // NOTE: delay AU output in stage parallel mode only
@@ -439,7 +440,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
-    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
+    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
     {
       break;

@@ -415,6 +415,7 @@ public:
   bool         m_forceY4mInput                 = false;        ///< If true, y4m input file syntax is forced (only needed for input via std::cin)
   bool         m_showVersion                   = false;
   bool         m_showHelp                      = false;
+  bool         m_printStats                    = true;
 
   std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
@@ -545,6 +546,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   ("help,h",                                          do_help,                                             "show default help")
   ("fullhelp",                                        do_full_help,                                        "show full help")
   ("Verbosity,v",                                     toMsgLevel,                                          "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
+  ("stats",                                           m_printStats,                                        "enable or disable printing of statistics (fps, bitrate, estimation of encoding time)")
   ("version",                                         m_showVersion,                                       "show version ")
   ;
 
@@ -1074,7 +1076,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastInferMerge",                                  c->m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
     ("NumIntraModesFullRD",                             c->m_numIntraModesFullRD,                            "Number modes for full RD intra search [-1, 1..3] (default: -1 auto)")
     ("ReduceIntraChromaModesFullRD",                    c->m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
-    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "FirstPassMode (0: default, 1: faster")
+    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "Mode for first encoding pass when using rate control (0: default, 1: faster, 2: faster with temporal downsampling)" )
     ;
 
     opts.setSubSection("Input Options");

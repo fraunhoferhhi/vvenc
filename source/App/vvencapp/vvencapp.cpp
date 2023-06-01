@@ -62,6 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/Stats.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -351,6 +352,13 @@ int main( int argc, char* argv[] )
       iSeqNumber=iRemSkipFrames;
     }
 
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
+    int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
+
+    apputils::Stats cStats;
+    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    bool statsInfoReady = false;
+
     while( !bEof || !bEncodeDone )
     {
       vvencYUVBuffer* ptrYUVInputBuffer = nullptr;
@@ -374,10 +382,6 @@ int main( int argc, char* argv[] )
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
         }
-        else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
-        {
-          msgApp( nullptr, VVENC_INFO, "EOF reached\n" );
-        }
       }
 
       // call encode
@@ -393,6 +397,15 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
+        if( vvencappCfg.m_printStats )
+        {
+          cStats.addAU( &AU, &statsInfoReady );
+          if( statsInfoReady )
+          {
+            msgApp( nullptr, VVENC_INFO, cStats.getInfoString().c_str() );
+          }
+        }
+
         if( cOutBitstream.is_open() )
         {
           // write output
@@ -408,6 +421,11 @@ int main( int argc, char* argv[] )
     }
 
     cYuvFileInput.close();
+    
+    if( vvencappCfg.m_printStats )
+    {
+      msgApp( nullptr, VVENC_INFO, cStats.getFinalStats().c_str() );
+    }
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
