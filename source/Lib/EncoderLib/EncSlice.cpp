@@ -1383,8 +1383,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
 
         // extend pic border
-        pic->m_ctusDoneInLine->at(ctuPosY) += slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
-        if( pic->m_ctusDoneInLine->at(ctuPosY) >= pcv.widthInCtus )
+        const int curCtusDone = pic->m_ctusDoneInLine->at(ctuPosY) + slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
+        if( curCtusDone >= pcv.widthInCtus )
         {
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
           const int margin = cs.picture->margin;
@@ -1394,7 +1394,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2 * margin, margin );
           if(ctuPosY + 1 == pcv.heightInCtus)
             recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2 * margin, margin );
+  
         }
+        pic->m_ctusDoneInLine->at(ctuPosY) = curCtusDone;
 
         // perform finish only once for whole picture
         const unsigned finishCtu = pcv.sizeInCtus - 1;
