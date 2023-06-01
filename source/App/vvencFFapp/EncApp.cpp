@@ -317,7 +317,7 @@ int EncApp::encode()
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
     int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
     cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
-    bool printStats = false;
+    bool statsInfoReady = false;
 
     // loop over input YUV data
     bool inputDone  = false;
@@ -373,18 +373,26 @@ int EncApp::encode()
       {
         outputAU( au );
 
-        cStats.addAU( &au, &printStats );
-        if( printStats )
+        if( appCfg.m_printStats )
         {
-          msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
+          cStats.addAU( &au, &statsInfoReady );
+          if( statsInfoReady )
+          {
+            msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
+          }
         }
+
+
       }
     }
 
     // close input YUV
     m_yuvInputFile.close();
 
-    msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
+    if( appCfg.m_printStats )
+    {
+      msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
+    }
   }
 
   printRateSummary( framesRcvd - ( vvencCfg.m_leadFrames + vvencCfg.m_trailFrames ) );
