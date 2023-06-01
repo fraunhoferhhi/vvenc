@@ -1286,7 +1286,7 @@ void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer
   }
 }
 #if DOWNSAMPLE
-static void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
+void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
 {
   const int widthd = yuvPlaneOut.width;
   const int heightd = yuvPlaneOut.height;
