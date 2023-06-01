@@ -629,7 +629,6 @@ void RateCtrl::readStatsFile()
 #if DOWNSAMPLE
 void RateCtrl::adjustStatsFileDownsample()
 {
-  int bits_multiplier = 20;
   int meanValue = 0; //MCTF or Activity
   int amount = 0;
   auto itr = m_listRCFirstPassStats.begin();
@@ -646,7 +645,7 @@ void RateCtrl::adjustStatsFileDownsample()
       meanValue += statValue;
       amount++;
     }
-    stat.numBits = (stat.numBits * bits_multiplier) / 10;
+    stat.numBits = stat.numBits << 1;
   }
   if (meanValue != 0)
   {
@@ -729,7 +728,7 @@ void RateCtrl::adjustStatsFileDownsample()
       }
       if ((stat.gopNum != 0) && doChangeBits)
       {
-        stat.numBits = (((stat.numBits * 10) / bits_multiplier) * (bits_multiplier + 10)) / 10;
+        stat.numBits = (stat.numBits * 3) >> 1;
       }
     }
   }

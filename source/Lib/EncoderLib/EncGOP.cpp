@@ -464,7 +464,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 #if USE_VISACT
   if ((m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
   {
-    int bits_multiplier = 20;
     for (auto pic : picList)
     {
       if (!pic->resetVisAct)
@@ -479,7 +478,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
             int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
             if (partVisAct > 20)
             {
-              it->numBits = (((it->numBits * 10) / bits_multiplier) * (bits_multiplier + 10)) / 10;
+              it->numBits = (it->numBits * 3) >> 1;
             }
             it->visActY = pic->picVisActY;
             pic->resetVisAct = true;
