@@ -527,7 +527,6 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic->gopEntry->m_skipFirstPass )
   {
     pic->isReconstructed = true;
-    pic->writePic        = true;
     m_freePicEncoderList.push_back( picEncoder );
     return;
   }
