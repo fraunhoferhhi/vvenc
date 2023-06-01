@@ -389,6 +389,12 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
+#if DOWNSAMPLE
+  if (rcIsFinalPass && (encCfg.m_FirstPassMode > 2))
+  {
+    adjustStatsFileDownsample();
+  }
+#endif
 #else
   CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
 #endif
@@ -459,7 +465,7 @@ void RateCtrl::readStatsHeader()
 
 void RateCtrl::storeStatsData( TRCPassStats statsData )
 {
-  if( m_pcEncCfg->m_FirstPassMode == 2 )
+  if( m_pcEncCfg->m_FirstPassMode == 2 || m_pcEncCfg->m_FirstPassMode == 4)
   {
     CHECK( statsData.tempLayer > VVENC_MAX_TLAYER, "array index out of bounds" );
     if( statsData.numBits )
@@ -491,6 +497,12 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
+    #if USE_MCTF_INFO
+    { "meanRMS",        statsData.meanRmsAcrossPic },
+#endif
+#if USE_SP_ACT
+    { "spAct",        statsData.spVisAct },
+#endif
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -527,6 +539,12 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+#if USE_MCTF_INFO
+                                                    data["meanRMS"],
+#endif
+#if USE_SP_ACT
+                                                    data["spAct"],
+#endif
                                                     statsData.minNoiseLevels
                                                     ) );
   }
@@ -551,21 +569,28 @@ void RateCtrl::readStatsFile()
 
   int lineNum = 2;
   std::string line;
-  while( std::getline( m_rcStatsFHandle, line ) )
+  while (std::getline(m_rcStatsFHandle, line))
   {
-    nlohmann::json data = nlohmann::json::parse( line );
-    if( data.find( "poc" )               == data.end() || ! data[ "poc" ].is_number()
-        || data.find( "qp" )             == data.end() || ! data[ "qp" ].is_number()
-        || data.find( "lambda" )         == data.end() || ! data[ "lambda" ].is_number()
-        || data.find( "visActY" )        == data.end() || ! data[ "visActY" ].is_number()
-        || data.find( "numBits" )        == data.end() || ! data[ "numBits" ].is_number()
-        || data.find( "psnrY" )          == data.end() || ! data[ "psnrY" ].is_number()
-        || data.find( "isIntra" )        == data.end() || ! data[ "isIntra" ].is_boolean()
-        || data.find( "tempLayer" )      == data.end() || ! data[ "tempLayer" ].is_number()
-        || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
-        || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
-        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
-        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number() )
+    nlohmann::json data = nlohmann::json::parse(line);
+    if (data.find("poc") == data.end() || !data["poc"].is_number()
+      || data.find("qp") == data.end() || !data["qp"].is_number()
+      || data.find("lambda") == data.end() || !data["lambda"].is_number()
+      || data.find("visActY") == data.end() || !data["visActY"].is_number()
+      || data.find("numBits") == data.end() || !data["numBits"].is_number()
+      || data.find("psnrY") == data.end() || !data["psnrY"].is_number()
+      || data.find("isIntra") == data.end() || !data["isIntra"].is_boolean()
+      || data.find("tempLayer") == data.end() || !data["tempLayer"].is_number()
+      || data.find("isStartOfIntra") == data.end() || !data["isStartOfIntra"].is_boolean()
+      || data.find("isStartOfGop") == data.end() || !data["isStartOfGop"].is_boolean()
+      || data.find("gopNum") == data.end() || !data["gopNum"].is_number()
+      || data.find("scType") == data.end() || !data["scType"].is_number()
+#if USE_MCTF_INFO
+      || data.find("meanRMS") == data.end() || !data["meanRMS"].is_number()
+#endif
+#if USE_SP_ACT
+      || data.find("spAct") == data.end() || !data["spAct"].is_number()
+#endif
+      )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
@@ -581,6 +606,12 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+#if USE_MCTF_INFO
+                                                    data["meanRMS"],
+#endif
+#if USE_SP_ACT
+                                                    data["spAct"],
+#endif
                                                     minNoiseLevels
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
@@ -595,6 +626,115 @@ void RateCtrl::readStatsFile()
     lineNum++;
   }
 }
+#if DOWNSAMPLE
+void RateCtrl::adjustStatsFileDownsample()
+{
+  int bits_multiplier = 20;
+  int meanValue = 0; //MCTF or Activity
+  int amount = 0;
+  auto itr = m_listRCFirstPassStats.begin();
+  for (; itr != m_listRCFirstPassStats.end(); itr++)
+  {
+    auto& stat = *itr;
+#if USE_SP_ACT
+    int statValue = stat.spVisAct;
+#else
+    int statValue = stat.meanRmsAcrossPic;
+#endif
+    if (statValue != 0)
+    {
+      meanValue += statValue;
+      amount++;
+    }
+    stat.numBits = (stat.numBits * bits_multiplier) / 10;
+  }
+  if (meanValue != 0)
+  {
+    meanValue = meanValue / amount;
+#if ADDMCTF_VAR && USE_SP_ACT
+    int sumVar = 0;
+    int numVar = 0;
+    auto itrv = m_listRCFirstPassStats.begin();
+    for (; itrv != m_listRCFirstPassStats.end(); itrv++)
+    {
+      auto& stat = *itrv;
+      if (stat.spVisAct != 0)
+      {
+        sumVar += (abs(stat.spVisAct - meanValue) * abs(stat.spVisAct - meanValue));
+        numVar++;
+      }
+    }
+    if (numVar)
+    {
+      sumVar = sumVar / (numVar - 1);
+      sumVar = sqrt(sumVar);
+    }
+#endif
+    int value_gopbefore = 0;
+    int value_gopcur = 0;
+    int num_gopcur = 0;
+    int gopcur = 0;
+    bool doChangeBits = false;
+    auto itr = m_listRCFirstPassStats.begin();
+    for (; itr != m_listRCFirstPassStats.end(); itr++)
+    {
+      auto& stat = *itr;
+#if USE_SP_ACT
+      int statValue = stat.spVisAct;
+#else
+      int statValue = stat.meanRmsAcrossPic;
+#endif
+      if (gopcur != stat.gopNum)
+      {
+        gopcur = stat.gopNum;
+        if (num_gopcur)
+        {
+          value_gopbefore = value_gopcur / num_gopcur;
+        }
+        else
+        {
+          value_gopbefore = value_gopcur;
+        }
+        value_gopcur = 0;
+        num_gopcur = 0;
+        doChangeBits = false;
+      }
+      if (statValue != 0)
+      {
+        value_gopcur += statValue;
+        num_gopcur++;
+        if (stat.gopNum != 0)
+        {
+#if ADDMCTF_VAR && USE_SP_ACT
+          int var_cur = abs(statValue - meanValue);
+          if (var_cur > (sumVar << 1))
+          {
+            doChangeBits = true;
+          }
+#endif
+          int partMCTF = (((value_gopcur / num_gopcur) * 100) / meanValue);
+          int partMCTFbefore = (value_gopbefore == 0) ? 100 : (((value_gopcur / num_gopcur) * 100) / value_gopbefore);
+          if ((partMCTF > 140) || (partMCTF < 60)
+            || (partMCTFbefore > 140) || (partMCTFbefore < 60))
+          {
+            doChangeBits = true;
+          }
+#if USE_SP_ACT
+          else if (doChangeBits)
+          {
+            doChangeBits = false;
+          }
+#endif
+        }
+      }
+      if ((stat.gopNum != 0) && doChangeBits)
+      {
+        stat.numBits = (((stat.numBits * 10) / bits_multiplier) * (bits_multiplier + 10)) / 10;
+      }
+    }
+  }
+}
+#endif
 #endif
 
 void RateCtrl::processFirstPassData( const bool flush, const int poc /*= -1*/ )
@@ -902,9 +1042,22 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfGop,
                                const int gopNum,
                                const SceneType scType,
+#if USE_MCTF_INFO
+                               int meanRmsAcrossPic,
+#endif
+#if USE_SP_ACT
+                               int spVisAct,
+#endif
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, 
+#if USE_MCTF_INFO
+    meanRmsAcrossPic,
+#endif 
+#if USE_SP_ACT
+    spVisAct,
+#endif
+    minNoiseLevels));
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )

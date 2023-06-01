@@ -198,9 +198,18 @@ Picture::Picture()
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
     , refApsGlobal      ( nullptr )
+#if USE_SP_ACT
+    , picSpatVisAct     ( 0 )
+#endif
+#if USE_MCTF_INFO
+    , meanRmsAcrossPic  ( 0.0 )
+#endif
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
+#if USE_VISACT
+  resetVisAct = false;
+#endif
 }
 
 void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder )

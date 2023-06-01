@@ -341,12 +341,44 @@ void EncLib::xInitRCCfg()
 
   // initialize first pass configuration
   m_firstPassCfg = m_encCfg;
+#if DOWNSAMPLE
+  if (m_encCfg.m_FirstPassMode > 2)
+  {
+    int stepDown = 2;
+    int bord = 8 * stepDown;
+    m_firstPassCfg.m_PadSourceWidth = (m_encCfg.m_PadSourceWidth % bord) ? (m_encCfg.m_PadSourceWidth - (m_encCfg.m_PadSourceWidth % bord)) / stepDown : m_encCfg.m_PadSourceWidth / stepDown;
+    m_firstPassCfg.m_SourceWidth = (m_encCfg.m_SourceWidth % bord) ? (m_encCfg.m_SourceWidth - (m_encCfg.m_SourceWidth % bord)) / stepDown : m_encCfg.m_SourceWidth / stepDown;
+    m_firstPassCfg.m_PadSourceHeight = (m_encCfg.m_PadSourceHeight % bord) ? (m_encCfg.m_PadSourceHeight - (m_encCfg.m_PadSourceHeight % bord)) / stepDown : m_encCfg.m_PadSourceHeight / stepDown;
+    m_firstPassCfg.m_SourceHeight = (m_encCfg.m_SourceHeight % bord) ? (m_encCfg.m_SourceHeight - (m_encCfg.m_SourceHeight % bord)) / stepDown : m_encCfg.m_SourceHeight / stepDown;
+  }
+#endif
   vvenc_init_preset( &m_firstPassCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
   // fixed-QP encoding in first rate control pass
+#if !DOWNSAMPLE
   const double d = (3840.0 * 2160.0) / double (m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
+#else
+  double d = (3840.0 * 2160.0) / double(m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
+  if (m_encCfg.m_FirstPassMode > 2)
+  {
+    d = (3840.0 * 2160.0) / double(m_firstPassCfg.m_SourceWidth * m_firstPassCfg.m_SourceHeight);
+  }
+#endif
   m_firstPassCfg.m_RCTargetBitrate = 0;
-  m_firstPassCfg.m_QP /*base QP*/  = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+#if DOWNSAMPLE
+  if (m_encCfg.m_FirstPassMode > 2)
+  {
+    int d_down = (3840.0 * 2160.0) / double(m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
+    int qp_down = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d_down * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+    int TARBIT_SETcur = int(((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
+    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * TARBIT_SETcur) / 500000.0))));
+    m_firstPassCfg.m_QP -= 2;// ADDQP;
+  }
+  else
+#endif
+  {
+    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+  }
 
   // preserve some settings
   m_firstPassCfg.m_intraQPOffset   = m_encCfg.m_intraQPOffset;
@@ -411,7 +443,11 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       picShared = xGetFreePicShared();
       if( picShared )
       {
+#if DOWNSAMPLE
+        picShared->reuse(m_picsRcvd, yuvInBuf, m_encCfg);
+#else
         picShared->reuse( m_picsRcvd, yuvInBuf );
+#endif
         m_encStages[ 0 ]->addPicSorted( picShared );
         m_picsRcvd  += 1;
         inputPending = false;

@@ -786,7 +786,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ), "TargetBitrate must be between 0 - 800000000" );
 
+#if DOWNSAMPLE
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4" );
+#else
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 2 ), "FirstPassMode must be 0 , 1 or 2" );
+#endif
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {

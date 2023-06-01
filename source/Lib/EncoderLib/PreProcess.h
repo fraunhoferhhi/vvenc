@@ -89,7 +89,11 @@ class PreProcess : public EncStage
     Picture* xGetStartOfLastGop   ( const PicList& picList ) const;
     void     xLinkPrevQpaBufs     ( Picture* pic, const PicList& picList ) const;
     void     xGetVisualActivity   ( Picture* pic, const PicList& picList ) const;
+#if USE_SP_ACT
+    uint16_t xGetPicVisualActivity( Picture* curPic, const Picture* refPic1, const Picture* refPic2) const;
+#else
     uint16_t xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const;
+#endif
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
 };

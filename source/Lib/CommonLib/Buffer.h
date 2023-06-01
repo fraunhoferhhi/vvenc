@@ -1089,6 +1089,10 @@ private:
 struct Window;
 
 void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+#if DOWNSAMPLE
+void copyPadToPelUnitBufDown(PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt);
+static void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, int shiftBits);
+#endif
 //void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
 void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow );
 

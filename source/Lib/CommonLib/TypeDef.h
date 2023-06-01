@@ -67,6 +67,14 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
+#define DOWNSAMPLE     1
+#if DOWNSAMPLE
+#define USE_VISACT     1
+#define USE_SP_ACT     1
+#define USE_MCTF_INFO  1&& !USE_SP_ACT
+#define ADDMCTF_VAR    1
+#endif
+
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)

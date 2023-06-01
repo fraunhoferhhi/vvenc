@@ -269,6 +269,15 @@ public:
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
+#if USE_SP_ACT
+  uint32_t                      picSpatVisAct;
+#endif
+#if USE_VISACT
+  bool                          resetVisAct;
+#endif
+#if USE_MCTF_INFO
+  double                        meanRmsAcrossPic;
+#endif
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
