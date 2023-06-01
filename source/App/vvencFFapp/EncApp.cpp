@@ -55,6 +55,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 
 #include "vvenc/vvenc.h"
+#include "apputils/Stats.h"
+
 
 using namespace std;
 
@@ -311,6 +313,12 @@ int EncApp::encode()
       return -1;
     }
 
+    apputils::Stats cStats;
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
+    int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
+    cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    bool statsInfoReady = false;
+
     // loop over input YUV data
     bool inputDone  = false;
     bool encDone    = false;
@@ -364,11 +372,27 @@ int EncApp::encode()
       if( au.payloadUsedSize )
       {
         outputAU( au );
+
+        if( appCfg.m_printStats )
+        {
+          cStats.addAU( &au, &statsInfoReady );
+          if( statsInfoReady )
+          {
+            msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
+          }
+        }
+
+
       }
     }
 
     // close input YUV
     m_yuvInputFile.close();
+
+    if( appCfg.m_printStats )
+    {
+      msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
+    }
   }
 
   printRateSummary( framesRcvd - ( vvencCfg.m_leadFrames + vvencCfg.m_trailFrames ) );
