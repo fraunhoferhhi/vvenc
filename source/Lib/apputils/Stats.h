@@ -221,13 +221,18 @@ public:
       double dFps = dTime ? (double)m_framesCur / dTime : 0;
       double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
-      double dDone = m_frames * 100.0 / m_maxFrames;
-      
       css << m_preString << "stats: ";
-      css << std::fixed << std::setprecision(1) << std::setfill(' ') << std::setw(5) << dDone << "%%";
-
-      int numDigits = m_maxFrames ? static_cast<int>(std::log10(std::abs(m_maxFrames))) + 1 : 1;
-      css << " frame= " << std::setfill(' ') << std::setw(numDigits) << m_frames << "/" << m_maxFrames;
+      if( m_maxFrames > 0 )
+      {
+        double dDone = m_frames * 100.0 / m_maxFrames;
+        int numDigits = m_maxFrames ? static_cast<int>(std::log10(std::abs(m_maxFrames))) + 1 : 1;        
+        css << std::fixed << std::setprecision(1) << std::setfill(' ') << std::setw(5) << dDone << "%%";
+        css << " frame= " << std::setfill(' ') << std::setw(numDigits) << m_frames << "/" << m_maxFrames;
+      }
+      else
+      {
+        css << " frame= " << std::setfill(' ') << std::setw(4) << m_frames;
+      }
 
       css << " fps= " << std::setfill(' ') << std::setw(4) << dFps << " avg_fps= " << std::setfill(' ') << std::setw(4) << dFpsAvg;
       css << std::fixed << std::setprecision(2) << " bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
@@ -248,19 +253,22 @@ public:
       css << std::setfill('0') << std::setw(2) << min << "m:";
       css << std::setfill('0') << std::setw(2) << sec << "s";
 
-      double dRemaining = (dGlobTime * m_maxFrames / m_frames) - dGlobTime;
-      sec   = std::ceil(dRemaining);
-      days  = sec/86400;
-      hours = sec%86400/3600;
-      min   = sec%3600/60;
-      sec=sec%60;
+      if( m_maxFrames > 0 )
+      {
+        double dRemaining = (dGlobTime * m_maxFrames / m_frames) - dGlobTime;
+        sec   = std::ceil(dRemaining);
+        days  = sec/86400;
+        hours = sec%86400/3600;
+        min   = sec%3600/60;
+        sec=sec%60;
 
-      css << " left= ";
-      if( days )
-        css << std::setfill('0') << std::setw(2) << days << "d:";
-      css << std::setfill('0') << std::setw(2) << hours << "h:";
-      css << std::setfill('0') << std::setw(2) << min << "m:";
-      css << std::setfill('0') << std::setw(2) << sec << "s";
+        css << " left= ";
+        if( days )
+          css << std::setfill('0') << std::setw(2) << days << "d:";
+        css << std::setfill('0') << std::setw(2) << hours << "h:";
+        css << std::setfill('0') << std::setw(2) << min << "m:";
+        css << std::setfill('0') << std::setw(2) << sec << "s";
+      }
       css << std::setprecision(-1) << std::endl;
     }
 
@@ -283,11 +291,16 @@ public:
       double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
       css << std::endl << m_preString << "stats summary:";
-      css << std::fixed << std::setprecision(1) << " frame= " << m_frames << "/" << m_maxFrames << " avg_fps= " << dFpsAvg;
+      css << " frame= " << m_frames;
+      if( m_maxFrames > 0 )
+      {
+         css << "/" << m_maxFrames;  
+      }
+      css << std::fixed << std::setprecision(1) << " avg_fps= " << dFpsAvg;  
       css << std::fixed << std::setprecision(2) << " avg_bitrate= " << bitrate << " kbps";
       css << std::endl;
 
-      int numDigitsF = m_maxFrames ? static_cast<int>(std::log10(std::abs(m_maxFrames))) + 1 : 1;
+      int numDigitsF = (m_maxFrames>0) ? static_cast<int>(std::log10(std::abs(m_maxFrames))) + 1 : 4;
       int numDigitsB = m_AUStats[VVENC_I_SLICE].getNumDigitsKbps();
       if( m_AUStats[VVENC_P_SLICE].getNumDigitsKbps() > numDigitsB )
         numDigitsB = m_AUStats[VVENC_P_SLICE].getNumDigitsKbps();
