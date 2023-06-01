@@ -1878,6 +1878,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
   vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+#if DOWNSAMPLE
+  vvenc_confirmParameter( c, (c->m_LookAhead || c->m_RCNumPasses == 1) && c->m_FirstPassMode > 2, "Look-ahead or one pass RC can not be used with resolution downsampling" );
+#endif
 
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
