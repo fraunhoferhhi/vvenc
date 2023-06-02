@@ -237,6 +237,22 @@ static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
   return css.str();
 }
 
+static inline std::string vvenc_getDecodingRefreshTypeStr(  int type )
+{
+  std::string cType( "CRA");
+  switch( type )
+  {
+    case 0: cType = "none"; break;
+    case 1: cType = "CRA"; break;
+    case 2: cType = "IDR"; break;
+    case 3: cType = "RecPointSEI"; break;
+    case 4: cType = "IDR2"; break;
+    case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
+    default: cType = "unknown"; break;
+  }
+  return cType;
+}
+
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
   GOPEntry->m_POC                       = -1;
@@ -2922,9 +2938,22 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
       css << "QP " <<  c->m_QP << "\n";
+
+    css << loglvl << "Percept QPA                            : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Intra period (Keyframe)                : " << c->m_IntraPeriod << "\n";
+    css << loglvl << "Decoding refresh type                  : " << vvenc_getDecodingRefreshTypeStr(c->m_DecodingRefreshType) << "\n";
+
+    if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
+    {
+      css << loglvl << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
+    }
+    if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
+    {
+      css << loglvl << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
+    }
   }
 
-  if( eMsgLevel >= VVENC_INFO )
+  if( eMsgLevel >= VVENC_NOTICE )
   {
     css << loglvl << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
     css << loglvl << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
@@ -2943,10 +2972,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << loglvl << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
     css << loglvl << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
     css << loglvl << "Motion search range                    : " << c->m_SearchRange << "\n";
-    css << loglvl << "Intra period                           : " << c->m_IntraPeriod << "\n";
-    css << loglvl << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
     css << loglvl << "QP                                     : " << c->m_QP << "\n";
-    css << loglvl << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
     css << loglvl << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
     css << loglvl << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
     css << loglvl << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
@@ -2962,15 +2988,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
     css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
-
-    if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
-    {
-      css << loglvl << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
-    }
-    if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
-    {
-      css << loglvl << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
-    }
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )
