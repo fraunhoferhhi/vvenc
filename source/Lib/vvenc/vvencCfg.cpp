@@ -360,7 +360,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_QP                                      = VVENC_DEFAULT_QP;
   c->m_RCTargetBitrate                         = 0;
 
-  c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
+  c->m_verbosity                               = VVENC_INFO;    ///< encoder verbosity
 
   // basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
@@ -1996,7 +1996,7 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "FPP CTU-lines synchro: SMVD cannot be used" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "FPP CTU-lines synchro: MMVD cannot be used" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileCols > 1, "FPP CTU-lines synchro: Only single tile column is supported" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileRows > 1,  "FPP CTU-lines synchro: Only single tile row is supported" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0 || c->m_fppLinesSynchro > (c->m_SourceHeight/c->m_CTUSize - 1), "fppLinesSynchro must be greater than 0 and less than max number of CTU lines" );
   }
 

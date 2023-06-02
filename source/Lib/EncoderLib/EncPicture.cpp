@@ -157,7 +157,7 @@ void EncPicture::finalizePicture( Picture& pic )
   xCalcDistortion( pic, *slice->sps );
 
   // finalize
-  if( !pic.encPic || ( slice->pps->getNumTiles() > 1 && !slice->pps->loopFilterAcrossTilesEnabled ) )
+  if( !pic.encPic )
   {
     pic.extendPicBorder();
   }
@@ -394,8 +394,8 @@ void EncPicture::skipCompressPicture( Picture& pic )
 
   if( m_pcEncCfg->m_fppLinesSynchro )
   {
-    if( pic.m_ctuLineReady )
-      std::fill( pic.m_ctuLineReady->begin(), pic.m_ctuLineReady->end(), true );
+    if( pic.m_ctusDoneInLine )
+      std::fill( pic.m_ctusDoneInLine->begin(), pic.m_ctusDoneInLine->end(), cs.pcv->widthInCtus );
   }
 }
 

@@ -95,6 +95,7 @@ public:
     , m_totalBytes    ( 0 )
   {
     vvenc_config_default( &m_vvenc_config );
+    m_vvenc_config.m_verbosity = VVENC_VERBOSE;
 
     m_cEncAppCfg.setPresetChangeCallback(changePreset);
 
