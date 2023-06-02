@@ -1383,8 +1383,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
 
         // extend pic border
-        const int curCtusDone = pic->m_ctusDoneInLine->at(ctuPosY) + slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
-        if( curCtusDone >= pcv.widthInCtus )
+        // CCALF stage is done per tile, wait until all tiles in current CTU row are done  
+        if( ++(pic->m_tileColsDone->at(ctuPosY)) >= pps.numTileCols )
         {
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
           const int margin = cs.picture->margin;
@@ -1394,9 +1394,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
             recoBuf.extendBorderPelTop( -margin, pcv.lumaWidth + 2 * margin, margin );
           if(ctuPosY + 1 == pcv.heightInCtus)
             recoBuf.extendBorderPelBot( -margin, pcv.lumaWidth + 2 * margin, margin );
-  
+
+          // for FPP lines synchro, do an additional increment signaling that CTU row is ready
+          if( encSlice->m_pcEncCfg->m_fppLinesSynchro )
+            ++(pic->m_tileColsDone->at( ctuPosY ));
         }
-        pic->m_ctusDoneInLine->at(ctuPosY) = curCtusDone;
 
         // perform finish only once for whole picture
         const unsigned finishCtu = pcv.sizeInCtus - 1;

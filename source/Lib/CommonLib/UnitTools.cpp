@@ -3663,7 +3663,8 @@ bool refPicCtuLineReady( const Slice& slice, const int refCtuRow, const PreCalcV
     int numOfActiveRef = slice.numRefIdx[refList];
     for (int i = 0; i < numOfActiveRef; i++)
     {
-      if (slice.refPicList[refList][i]->m_ctusDoneInLine->at( checkRow ) < pcv.widthInCtus)
+      // NOTE: one additional tile column signals finished CTU row
+      if (slice.refPicList[refList][i]->m_tileColsDone->at( checkRow ) < (slice.pps->numTileCols + 1) )
       {
         return false;
       }

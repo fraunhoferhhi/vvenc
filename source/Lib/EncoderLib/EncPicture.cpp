@@ -394,8 +394,8 @@ void EncPicture::skipCompressPicture( Picture& pic )
 
   if( m_pcEncCfg->m_fppLinesSynchro )
   {
-    if( pic.m_ctusDoneInLine )
-      std::fill( pic.m_ctusDoneInLine->begin(), pic.m_ctusDoneInLine->end(), cs.pcv->widthInCtus );
+    if( pic.m_tileColsDone )
+      std::fill( pic.m_tileColsDone->begin(), pic.m_tileColsDone->end(), cs.pcv->widthInCtus );
   }
 }
 
