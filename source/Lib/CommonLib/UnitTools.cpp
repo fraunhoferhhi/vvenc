@@ -3657,17 +3657,15 @@ bool allowLfnstWithMip(const Size& block)
 
 bool refPicCtuLineReady( const Slice& slice, const int refCtuRow, const PreCalcValues& pcv )
 {
-  if (refCtuRow < pcv.heightInCtus)
+  const int checkRow = std::min( refCtuRow, (int)( pcv.heightInCtus ) - 1  );
+  for (int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
   {
-    for (int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
+    int numOfActiveRef = slice.numRefIdx[refList];
+    for (int i = 0; i < numOfActiveRef; i++)
     {
-      int numOfActiveRef = slice.numRefIdx[refList];
-      for (int i = 0; i < numOfActiveRef; i++)
+      if (slice.refPicList[refList][i]->m_ctusDoneInLine->at( checkRow ) < pcv.widthInCtus)
       {
-        if (slice.refPicList[refList][i]->m_ctusDoneInLine->at( refCtuRow ) < pcv.widthInCtus)
-        {
-          return false;
-        }
+        return false;
       }
     }
   }
