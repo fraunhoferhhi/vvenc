@@ -1383,7 +1383,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_recon );
 
         // extend pic border
-        // CCALF stage is done per tile, wait until all tiles in current CTU row are done  
+        // CCALF reconstruction stage is done per tile, ensure that all tiles in current CTU row are done  
         if( ++(pic->m_tileColsDone->at(ctuPosY)) >= pps.numTileCols )
         {
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();

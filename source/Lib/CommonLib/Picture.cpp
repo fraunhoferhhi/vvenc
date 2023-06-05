@@ -278,8 +278,6 @@ void Picture::destroy( bool bPicHeader )
 
   delete m_tileColsDone;
 
-  slices.clear();
-
   SEIs.clear();
 }
 
