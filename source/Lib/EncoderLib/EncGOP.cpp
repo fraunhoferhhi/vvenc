@@ -1147,6 +1147,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   {
     VUI& vui = sps.vuiParameters;
     vui.aspectRatioInfoPresent        = m_pcEncCfg->m_aspectRatioInfoPresent;
+    vui.aspectRatioConstantFlag       = true; // true if SampleAspectRatioInfoSEIEnabled, but this SEI is not used
     vui.aspectRatioIdc                = m_pcEncCfg->m_aspectRatioIdc;
     vui.sarWidth                      = m_pcEncCfg->m_sarWidth;
     vui.sarHeight                     = m_pcEncCfg->m_sarHeight;
