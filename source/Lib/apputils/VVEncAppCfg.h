@@ -413,7 +413,6 @@ public:
   bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
   bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_forceY4mInput                 = false;        ///< If true, y4m input file syntax is forced (only needed for input via std::cin)
-  bool         m_decode                        = false;
   bool         m_showVersion                   = false;
   bool         m_showHelp                      = false;
   bool         m_printStats                    = true;
@@ -527,8 +526,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToArr<char>                toTraceRule                   ( &c->m_traceRule[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toTraceFile                   ( &c->m_traceFile[0], VVENC_MAX_STRING_LEN  );
-  IStreamToArr<char>                toDecodeBitstreams0           ( &c->m_decodeBitstreams[0][0], VVENC_MAX_STRING_LEN  );
-  IStreamToArr<char>                toDecodeBitstreams1           ( &c->m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
 
@@ -997,20 +994,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SummaryVerboseness",                              c->m_summaryVerboseness,                             "Specifies the level of the verboseness of the text output")
     ;
 
-    opts.setSubSection("Decoding options (debugging)");
-    opts.addOptions()
-    ("DebugBitstream",                                  toDecodeBitstreams0,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DecodeBitstream1",                                toDecodeBitstreams0,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DecodeBitstream2",                                toDecodeBitstreams1,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DebugPOC",                                        c->m_switchPOC,                                      "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
-    ("SwitchPOC",                                       c->m_switchPOC,                                      "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
-    ("SwitchDQP",                                       c->m_switchDQP,                                      "delta QP applied to picture with switchPOC and subsequent pictures." )
-    ("FastForwardToPOC",                                c->m_fastForwardToPOC,                               "Get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC." )
-    ("StopAfterFFtoPOC",                                c->m_stopAfterFFtoPOC,                               "If using fast forward to POC, after the POC of interest has been hit, stop further encoding.")
-    ("DecodeBitstream2ModPOCAndType",                   c->m_bs2ModPOCAndType,                               "Modify POC and NALU-type of second input bitstream, to use second BS as closing I-slice")
-    ("ForceDecodeBitstream1",                           c->m_forceDecodeBitstream1,                          "force decoding of bitstream 1 - use this only if you are really sure about what you are doing ")
-    ;
-
     opts.setSubSection("Coding tools");
     opts.addOptions()
     ("SMVD",                                            c->m_SMVD,                                           "Enable Symmetric MVD (0:off 1:vtm 2:fast 3:faster\n")
@@ -1130,7 +1113,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), c->m_GOPList[i] );
   }
-  opts.addOptions()("decode",                           m_decode,                                            "Decode only");
 
   if( !m_easyMode )
   {
@@ -1289,12 +1271,6 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
       rcOstr << "error: bitstream file name must be specified (" << (m_easyMode ? "--output" : "--BitstreamFile") << "=bit.266)" << std::endl;
       ret = true;
     }
-  }
-
-  // check remaining parameters in encode mode only
-  if( m_decode )
-  {
-    return ret;
   }
 
   // check remaining parameter set
@@ -1476,20 +1452,6 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   {
     rcOstr << "error: two pass rate control within single application call and reading from stdin not supported" << std::endl;
     ret = false;
-  }
-
-  if( ! m_bitstreamFileName.empty() )
-  {
-    if( c->m_decodeBitstreams[0][0] != '\0' && c->m_decodeBitstreams[0] == m_bitstreamFileName )
-    {
-      rcOstr << "error: debug bitstream and the output bitstream cannot be equal" << std::endl;
-      ret = false;
-    }
-    if( c->m_decodeBitstreams[1][0] != '\0' && c->m_decodeBitstreams[1] == m_bitstreamFileName )
-    {
-      rcOstr << "error: decode2 bitstream and the output bitstream cannot be equal" << std::endl;
-      ret = false;
-    }
   }
 
 #ifndef VVENC_ENABLE_THIRDPARTY_JSON

@@ -661,16 +661,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
 
-  memset( c->m_decodeBitstreams[0], '\0', sizeof(c->m_decodeBitstreams[0]) );
-  memset( c->m_decodeBitstreams[1], '\0', sizeof(c->m_decodeBitstreams[1]) );
-
-  c->m_switchPOC                               = -1;
-  c->m_switchDQP                               = 0;
-  c->m_fastForwardToPOC                        = -1;
-  c->m_stopAfterFFtoPOC                        = false;
-  c->m_bs2ModPOCAndType                        = false;
-  c->m_forceDecodeBitstream1                   = false;
-
   c->m_listTracingChannels                     = false;
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
   memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
@@ -1612,8 +1602,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   // check char array and reset them, if they seems to be unset
-  vvenc_checkCharArrayStr( c->m_decodeBitstreams[0], VVENC_MAX_STRING_LEN);
-  vvenc_checkCharArrayStr( c->m_decodeBitstreams[1], VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_traceRule, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
@@ -1790,8 +1778,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
-
-  vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
@@ -2084,20 +2070,12 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
   }
 
-  if( c->m_fastForwardToPOC != -1 )
-  {
-    if( c->m_cabacInitPresent ) msg.log( VVENC_WARNING, "Configuration warning: usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
-    if( c->m_alf )              msg.log( VVENC_WARNING, "Configuration warning: usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
-  }
-
   if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
     if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
 
     checkCfgPicPartitioningParameter( c );
   }
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 && !c->m_LookAhead ), "Debug-bitstream for the rate-control in one pass mode is not supported yet" );
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && c->m_maxParallelFrames > 1 && ( c->m_LookAhead || c->m_RCTargetBitrate > 0 ), "Debug-bitstream in frame-parallel mode and enabled rate-control or look-ahead is not supported yet" );
 
   return( c->m_confirmFailed );
 }
