@@ -3149,7 +3149,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "\n" << loglvl << "PARALLEL PROCESSING CFG: ";
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
-    css << "fppLinesSynchro:" << ( int ) c->m_fppLinesSynchro << " ";
+    css << "FppLinesSynchro:" << ( int ) c->m_fppLinesSynchro << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
