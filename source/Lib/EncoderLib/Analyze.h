@@ -159,7 +159,7 @@ public:
   {
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
-    std::string info;
+    std::string info("vvenc [info]:");
 
     double MSEBasedSNR[MAX_NUM_COMP];
     if (printMSEBasedSNR)
@@ -205,7 +205,7 @@ public:
           }
 
           //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-           info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
+           info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
@@ -232,7 +232,7 @@ public:
             info.append(prnt("\n"));
           }
 
-          info.append(prnt("From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+          info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  MSEBasedSNR[COMP_Y] ));
@@ -256,7 +256,7 @@ public:
           }
 
           //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-          info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          info.append(prnt("vvenc[info]:\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
@@ -317,7 +317,7 @@ public:
             }
 
             //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-            info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
@@ -357,7 +357,7 @@ public:
               info.append(prnt("\n"));
             }
 
-            info.append(prnt("From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+            info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    MSEBasedSNR[COMP_Y ],
@@ -387,7 +387,7 @@ public:
             }
 
             //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-            info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            info.append(prnt("vvenc [info]:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
@@ -430,7 +430,7 @@ public:
         }
         break;
       default:
-        info.append(prnt("Unknown format during print out\n"));
+        info.append(prnt("vvenc [info]: Unknown format during print out\n"));
         break;
     }
     return info;
