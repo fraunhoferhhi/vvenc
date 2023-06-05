@@ -394,8 +394,8 @@ void EncPicture::skipCompressPicture( Picture& pic )
 
   if( m_pcEncCfg->m_fppLinesSynchro )
   {
-    if( pic.m_ctusDoneInLine )
-      std::fill( pic.m_ctusDoneInLine->begin(), pic.m_ctusDoneInLine->end(), cs.pcv->widthInCtus );
+    if( pic.m_tileColsDone != nullptr )
+      std::fill( pic.m_tileColsDone->begin(), pic.m_tileColsDone->end(), slice->pps->numTileCols + 1 ); // one extra tile for FPP lines synchro signaling
   }
 }
 
