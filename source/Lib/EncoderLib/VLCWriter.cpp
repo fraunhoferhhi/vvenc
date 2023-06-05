@@ -586,6 +586,7 @@ void HLSWriter::codeVUI( const VUI *pcVUI, const SPS* pcSPS )
   WRITE_FLAG(pcVUI->aspectRatioInfoPresent,               "aspect_ratio_info_present_flag");
   if (pcVUI->aspectRatioInfoPresent)
   {
+    WRITE_FLAG(pcVUI->aspectRatioConstantFlag,            "vui_aspect_ratio_constant_flag");   
     WRITE_CODE(pcVUI->aspectRatioIdc, 8,                  "aspect_ratio_idc" );
     if (pcVUI->aspectRatioIdc == 255)
     {
