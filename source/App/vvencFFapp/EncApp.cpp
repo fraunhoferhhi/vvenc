@@ -55,6 +55,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 
 #include "vvenc/vvenc.h"
+#include "apputils/Stats.h"
+
 
 using namespace std;
 
@@ -166,11 +168,6 @@ bool EncApp::parseCfg( int argc, char* argv[])
     m_vvenc_config.m_RCNumPasses = 2;
   }
 
-  if( m_cEncAppCfg.m_decode )
-  {
-    return ret;
-  }
-
   if( vvenc_init_config_parameter( &m_vvenc_config ) )
   {
     ret = false;
@@ -194,11 +191,6 @@ int EncApp::encode()
 {
   apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
   vvenc_config&          vvencCfg = m_vvenc_config;
-
-  if( appCfg.m_decode )
-  {
-    return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
-  }
 
   // initialize encoder lib
   m_encCtx = vvenc_encoder_create();
@@ -311,6 +303,12 @@ int EncApp::encode()
       return -1;
     }
 
+    apputils::Stats cStats;
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
+    int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
+    cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    bool statsInfoReady = false;
+
     // loop over input YUV data
     bool inputDone  = false;
     bool encDone    = false;
@@ -364,11 +362,27 @@ int EncApp::encode()
       if( au.payloadUsedSize )
       {
         outputAU( au );
+
+        if( appCfg.m_printStats )
+        {
+          cStats.addAU( &au, &statsInfoReady );
+          if( statsInfoReady )
+          {
+            msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
+          }
+        }
+
+
       }
     }
 
     // close input YUV
     m_yuvInputFile.close();
+
+    if( appCfg.m_printStats )
+    {
+      msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
+    }
   }
 
   printRateSummary( framesRcvd - ( vvencCfg.m_leadFrames + vvencCfg.m_trailFrames ) );
@@ -428,7 +442,7 @@ bool EncApp::openFileIO()
     m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
     if( ! m_bitstream )
     {
-      msgApp( VVENC_ERROR, "open bitstream file failed\n" );
+      msgApp( VVENC_ERROR, "vvencFFapp [error]: open bitstream file failed\n" );
       return false;
     }
   }
@@ -450,10 +464,10 @@ void EncApp::printRateSummary( int64_t framesRcvd )
 
   int fps = m_vvenc_config.m_FrameRate/m_vvenc_config.m_FrameScale;
   double time = (double) framesRcvd / fps;
-  msgApp( VVENC_DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
+  msgApp( VVENC_DETAILS,"vvencFFapp [details]: Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
   if( m_vvenc_config.m_summaryVerboseness > 0 )
   {
-    msgApp( VVENC_DETAILS, "Bytes for SPS/PPS/APS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time );
+    msgApp( VVENC_DETAILS, "vvencFFapp [details]: Bytes for SPS/PPS/APS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time );
   }
 }
 
@@ -469,11 +483,12 @@ void EncApp::printChromaFormat()
       case VVENC_CHROMA_420:  ssOut << "  420"; break;
       case VVENC_CHROMA_422:  ssOut << "  422"; break;
       case VVENC_CHROMA_444:  ssOut << "  444"; break;
-      default:          msgApp( VVENC_ERROR, "invalid chroma format\n" );
+      default:          msgApp( VVENC_ERROR, "vvencFFapp [error]: invalid input chroma format\n" );
                         return;
     }
-    ssOut << std::endl;
+    msgApp( VVENC_DETAILS, "vvencFFapp [details]: %s\n", ssOut.str().c_str() );
 
+    ssOut=std::stringstream();
     ssOut << std::setw(43) << "Output (intern) ChromaFormat = ";
     switch( m_vvenc_config.m_internChromaFormat )
     {
@@ -481,10 +496,10 @@ void EncApp::printChromaFormat()
       case VVENC_CHROMA_420:  ssOut << "  420"; break;
       case VVENC_CHROMA_422:  ssOut << "  422"; break;
       case VVENC_CHROMA_444:  ssOut << "  444"; break;
-      default:          msgApp( VVENC_ERROR, "invalid chroma format\n" );
+      default:          msgApp( VVENC_ERROR, "vvencFFapp [error]: invalid intern chroma format\n" );
                         return;
     }
-    msgApp( VVENC_DETAILS, "%s\n", ssOut.str().c_str() );
+    msgApp( VVENC_DETAILS, "vvencFFapp [details]: %s\n", ssOut.str().c_str() );
   }
 }
 

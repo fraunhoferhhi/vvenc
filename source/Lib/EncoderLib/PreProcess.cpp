@@ -74,7 +74,7 @@ PreProcess::~PreProcess()
 
 void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
 {
-  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF );
+  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode );
   CHECK( m_gopCfg.getMaxTLayer() != encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   m_encCfg      = &encCfg;

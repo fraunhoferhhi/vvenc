@@ -241,7 +241,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     const int leadFrames   = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
     m_MCTF->initStage( m_encCfg, minQueueSize, -leadFrames, true, true, false );
-    m_MCTF->init( m_encCfg, m_threadPool );
+    m_MCTF->init( m_encCfg, m_rateCtrl->rcIsFinalPass, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
@@ -358,8 +358,8 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
-  
-  if( m_firstPassCfg.m_FirstPassMode == 1 )
+
+  if( m_firstPassCfg.m_FirstPassMode >= 1 )
   {
     unsigned interBlockSize = m_firstPassCfg.m_SourceWidth >= 1280 && m_firstPassCfg.m_SourceHeight >= 720 ? 64 : 32;
     m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
@@ -376,6 +376,13 @@ void EncLib::xInitRCCfg()
 // Public member functions
 // ====================================================================================================================
 
+// The current I/O work flow consists of three main parts:
+//   1. At the beginning, the encoder can consume input YUV buffers without an output.
+//   2. After the first encoded picture/access unit is output, on each next call: one yuv-buffer IN / one encoded access unit (AU) OUT.
+//      Hence, in stage-parallel mode, we must wait until next encoded picture (AU) is going to be output
+//   3. When no more input is available, the top level goes into flushing mode: nullptr IN / one encoded access unit (AU) OUT. 
+//      The encoder flushes the encoded AUs until the queues are empty.
+
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -386,13 +393,13 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   au.clearAu();
 
   // NOTE regarding the stage parallel processing
-  // The next input yuv-frame must be passed to the encoding process (1.Stage).
-  // Following should be considered:
-  // 1. The final stage is non-blocking, so it dosen't wait until picture is reconstructed.
-  // 2. Generally the stages have different throughput, last stage is the slowest.
-  // 3. The number of picture-units, required for the input frames, is limited.
-  // 4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
-  // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
+  // The next input yuv-buffer must be passed to the encoding process (1.Stage).
+  // The following should be considered:
+  //   1. The final stage is non-blocking, so it doesn't wait until picture is reconstructed.
+  //   2. Generally, the stages have different throughput; last stage is the slowest.
+  //   3. The number of picture-units required for the input yuv-buffers is limited.
+  //   4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
+  //   5. Then we have to wait for the next available picture-unit, so the input frame can be passed to the 1.stage.
 
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );
@@ -424,6 +431,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     if( !au.empty() )
     {
       m_AuList.push_back( au );
+
       au.detachNalUnitList();
       au.clearAu();
       // NOTE: delay AU output in stage parallel mode only
@@ -432,7 +440,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
-    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
+    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
     {
       break;
@@ -461,6 +469,9 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     au.clearAu();
   }
+
+  // finally, ensure that the whole queue is empty
+  isQueueEmpty &= m_AuList.empty();
 }
 
 void EncLib::printSummary()

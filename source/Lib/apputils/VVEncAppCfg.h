@@ -198,15 +198,21 @@ const std::vector<SVPair<vvencChromaFormat>> ChromaFormatToEnumMap =
 
 const std::vector<SVPair<vvencHashType>> HashTypeToEnumMap =
 {
-  { "md5",                     VVENC_HASHTYPE_MD5      },
-  { "crc",                     VVENC_HASHTYPE_CRC      },
-  { "checksum",                VVENC_HASHTYPE_CHECKSUM },
-  { "off",                     VVENC_HASHTYPE_NONE     },
+  { "md5",                     VVENC_HASHTYPE_MD5          },
+  { "crc",                     VVENC_HASHTYPE_CRC          },
+  { "checksum",                VVENC_HASHTYPE_CHECKSUM     },
+  { "log_md5",                 VVENC_HASHTYPE_MD5_LOG      },
+  { "log_crc",                 VVENC_HASHTYPE_CRC_LOG      },
+  { "log_checksum",            VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "off",                     VVENC_HASHTYPE_NONE         },
   // for backward compatibility support values as well
-  { "1",                       VVENC_HASHTYPE_MD5      },
-  { "2",                       VVENC_HASHTYPE_CRC      },
-  { "3",                       VVENC_HASHTYPE_CHECKSUM },
-  { "0",                       VVENC_HASHTYPE_NONE     }
+  { "1",                       VVENC_HASHTYPE_MD5          },
+  { "2",                       VVENC_HASHTYPE_CRC          },
+  { "3",                       VVENC_HASHTYPE_CHECKSUM     },
+  { "11",                      VVENC_HASHTYPE_MD5_LOG      },
+  { "12",                      VVENC_HASHTYPE_CRC_LOG      },
+  { "13",                      VVENC_HASHTYPE_CHECKSUM_LOG },
+  { "0",                       VVENC_HASHTYPE_NONE         }
 };
 
 const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap =
@@ -407,9 +413,9 @@ public:
   bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
   bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_forceY4mInput                 = false;        ///< If true, y4m input file syntax is forced (only needed for input via std::cin)
-  bool         m_decode                        = false;
   bool         m_showVersion                   = false;
   bool         m_showHelp                      = false;
+  bool         m_printStats                    = true;
 
   std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
@@ -520,8 +526,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToArr<char>                toTraceRule                   ( &c->m_traceRule[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toTraceFile                   ( &c->m_traceFile[0], VVENC_MAX_STRING_LEN  );
-  IStreamToArr<char>                toDecodeBitstreams0           ( &c->m_decodeBitstreams[0][0], VVENC_MAX_STRING_LEN  );
-  IStreamToArr<char>                toDecodeBitstreams1           ( &c->m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryOutFilename          ( &c->m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toSummaryPicFilenameBase      ( &c->m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
 
@@ -529,6 +533,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
+  IStreamToInt8                     toFppLinesSynchro             ( &c->m_fppLinesSynchro );
 
   po::Options opts;
   if( m_easyMode )
@@ -541,6 +546,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   ("help,h",                                          do_help,                                             "show default help")
   ("fullhelp",                                        do_full_help,                                        "show full help")
   ("Verbosity,v",                                     toMsgLevel,                                          "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
+  ("stats",                                           m_printStats,                                        "enable or disable printing of statistics (fps, bitrate, estimation of encoding time)")
   ("version",                                         m_showVersion,                                       "show version ")
   ;
 
@@ -988,20 +994,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SummaryVerboseness",                              c->m_summaryVerboseness,                             "Specifies the level of the verboseness of the text output")
     ;
 
-    opts.setSubSection("Decoding options (debugging)");
-    opts.addOptions()
-    ("DebugBitstream",                                  toDecodeBitstreams0,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DecodeBitstream1",                                toDecodeBitstreams0,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DecodeBitstream2",                                toDecodeBitstreams1,                                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-    ("DebugPOC",                                        c->m_switchPOC,                                      "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
-    ("SwitchPOC",                                       c->m_switchPOC,                                      "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
-    ("SwitchDQP",                                       c->m_switchDQP,                                      "delta QP applied to picture with switchPOC and subsequent pictures." )
-    ("FastForwardToPOC",                                c->m_fastForwardToPOC,                               "Get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC." )
-    ("StopAfterFFtoPOC",                                c->m_stopAfterFFtoPOC,                               "If using fast forward to POC, after the POC of interest has been hit, stop further encoding.")
-    ("DecodeBitstream2ModPOCAndType",                   c->m_bs2ModPOCAndType,                               "Modify POC and NALU-type of second input bitstream, to use second BS as closing I-slice")
-    ("ForceDecodeBitstream1",                           c->m_forceDecodeBitstream1,                          "force decoding of bitstream 1 - use this only if you are really sure about what you are doing ")
-    ;
-
     opts.setSubSection("Coding tools");
     opts.addOptions()
     ("SMVD",                                            c->m_SMVD,                                           "Enable Symmetric MVD (0:off 1:vtm 2:fast 3:faster\n")
@@ -1061,6 +1053,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TileColumnWidthArray",                            toTileColumnWidth,                                   "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
     ("TileRowHeightArray",                              toTileRowHeight,                                     "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
     ("TileParallelCtuEnc",                              c->m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
+    ("FppLinesSynchro",                                 toFppLinesSynchro,                                   "Number of CTU-lines synchronization due to MV restriction for FPP mode")
     ;
 
     opts.setSubSection("Coding tools");
@@ -1083,7 +1076,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastInferMerge",                                  c->m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
     ("NumIntraModesFullRD",                             c->m_numIntraModesFullRD,                            "Number modes for full RD intra search [-1, 1..3] (default: -1 auto)")
     ("ReduceIntraChromaModesFullRD",                    c->m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
-    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "FirstPassMode (0: default, 1: faster")
+    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "Mode for first encoding pass when using rate control (0: default, 1: faster, 2: faster with temporal downsampling)" )
     ;
 
     opts.setSubSection("Input Options");
@@ -1120,7 +1113,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), c->m_GOPList[i] );
   }
-  opts.addOptions()("decode",                           m_decode,                                            "Decode only");
 
   if( !m_easyMode )
   {
@@ -1281,12 +1273,6 @@ bool checkCfg( vvenc_config* c, std::ostream& rcOstr )
     }
   }
 
-  // check remaining parameters in encode mode only
-  if( m_decode )
-  {
-    return ret;
-  }
-
   // check remaining parameter set
   if( !xCheckCfg( c, rcOstr ) )
   {
@@ -1350,26 +1336,38 @@ static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned
 virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
-   bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+  std::string loglvl("vvenc ");
+  switch ( eMsgLevel )
+  {
+    case VVENC_SILENT : loglvl.append("[silent]: ");  break;
+    case VVENC_ERROR  : loglvl.append("[error]: ");   break;
+    case VVENC_WARNING: loglvl.append("[warning]: "); break;
+    case VVENC_INFO   : loglvl.append("[info]: ");    break;
+    case VVENC_NOTICE : loglvl.append("[notice]: ");  break;
+    case VVENC_VERBOSE: loglvl.append("[verbose]: "); break;
+    case VVENC_DETAILS: loglvl.append("[details]: "); break;
+    default: break;
+  }
 
+  bool isY4m = ( m_forceY4mInput || apputils::FileIOHelper::isY4mInputFilename( m_inputFileName ) ) ? true : false;
+  std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
+  std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+  std::string format = isY4m ? "y4m" : "yuv";
+
+  if( eMsgLevel >= VVENC_INFO )
+  {
+    if( format != ext )
+      css << loglvl << "Input File                             : " << m_inputFileName << " (" << format << ")\n";
+    else
+      css << loglvl << "Input File                             : " << m_inputFileName << "\n";
+    css << loglvl << "Bitstream File                         : " << m_bitstreamFileName << "\n";
+  }
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    css << "Input          File                    : " << m_inputFileName << "\n";
-    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
-    css << "Reconstruction File                    : " << m_reconFileName << "\n";
-    css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
-  }
-  else if( eMsgLevel >= VVENC_INFO )
-  {
-    std::string ext = apputils::FileIOHelper::getFileExtension( m_inputFileName );
-    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
-    std::string format = isY4m ? "y4m" : "yuv";
-    if( format != ext )
-      css << "Input     File : " << m_inputFileName << " (" << format << ")\n";
-    else
-      css << "Input     File : " << m_inputFileName << "\n";
-
-    css << "Bitstream File : " << m_bitstreamFileName << "\n";
+    if( !m_easyMode )
+      css << loglvl << "Reconstruction File                    : " << m_reconFileName << "\n";
+    if ( c->m_RCTargetBitrate > 0 )
+      css << loglvl << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
   }
 
   if ( c )
@@ -1399,20 +1397,12 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
       }
 
       if ( m_FrameSkip )
-        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");
-    
-      if( eMsgLevel >= VVENC_DETAILS )
-        css << "Real     Format                        : ";
-      else
-        css << "Real Format    : ";
-
+        framesStr << " skip " << m_FrameSkip << ( m_FrameSkip > 1 ? " frames " : " frame ");         
+        
+      css << loglvl << "Real Format                            : ";      
       css << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << "  "
           << inputFmt << "  " << (double)c->m_FrameRate/c->m_FrameScale << " Hz  " << getDynamicRangeStr(c->m_HdrMode) << "  " << frameCountStr.str() << "\n";
-      
-      if( eMsgLevel >= VVENC_DETAILS )
-        css << "                                       : " << framesStr.str() << "\n";
-      else
-        css << "               : " << framesStr.str() << "\n";
+      css << loglvl << "Frames                                 : " << framesStr.str() << "\n";
     }
   }
 
@@ -1462,20 +1452,6 @@ bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
   {
     rcOstr << "error: two pass rate control within single application call and reading from stdin not supported" << std::endl;
     ret = false;
-  }
-
-  if( ! m_bitstreamFileName.empty() )
-  {
-    if( c->m_decodeBitstreams[0][0] != '\0' && c->m_decodeBitstreams[0] == m_bitstreamFileName )
-    {
-      rcOstr << "error: debug bitstream and the output bitstream cannot be equal" << std::endl;
-      ret = false;
-    }
-    if( c->m_decodeBitstreams[1][0] != '\0' && c->m_decodeBitstreams[1] == m_bitstreamFileName )
-    {
-      rcOstr << "error: decode2 bitstream and the output bitstream cannot be equal" << std::endl;
-      ret = false;
-    }
   }
 
 #ifndef VVENC_ENABLE_THIRDPARTY_JSON

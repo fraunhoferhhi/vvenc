@@ -74,24 +74,25 @@ namespace vvenc {
                   {
                     std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
                   }
-    int       poc;
-    int       qp;
-    double    lambda;
-    uint16_t  visActY;
-    uint32_t  numBits;
-    double    psnrY;
-    bool      isIntra;
-    int       tempLayer;
-    bool      isStartOfIntra;
-    bool      isStartOfGop;
-    int       gopNum;
-    SceneType scType;
-    uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
-    bool      isNewScene;
-    bool      refreshParameters;
-    double    frameInGopRatio;
-    int       targetBits;
-    bool      addedToList;
+    TRCPassStats() {};
+    int       poc                                     { 0 };
+    int       qp                                      { 0 };
+    double    lambda                                  { 0.0 };
+    uint16_t  visActY                                 { 0 };
+    uint32_t  numBits                                 { 0 };
+    double    psnrY                                   { 0.0 };
+    bool      isIntra                                 { false };
+    int       tempLayer                               { 0 };
+    bool      isStartOfIntra                          { false };
+    bool      isStartOfGop                            { false };
+    int       gopNum                                  { 0 };
+    SceneType scType                                  { SCT_NONE };
+    uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ]  {};
+    bool      isNewScene                              { false };
+    bool      refreshParameters                       { false };
+    double    frameInGopRatio                         { 0.0 };
+    int       targetBits                              { 0 };
+    bool      addedToList                             { false };
   };
 
   class EncRCSeq
@@ -103,7 +104,6 @@ namespace vvenc {
     void create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
     void updateAfterPic (const int actBits, const int tgtBits);
-    void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
     bool            isLookAhead;
@@ -122,6 +122,7 @@ namespace vvenc {
     unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastIntraQP;
+    bool            lastIntraBitsSaved;
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
     double          maxEstLambda;
@@ -142,16 +143,13 @@ namespace vvenc {
     int     targetBits;
     int     tmpTargetBits;
     int     poc;
+    bool    refreshParams;
     uint16_t visActSteady;
 
   protected:
-    int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
-
     EncRCSeq* encRCSeq;
     int     frameLevel;
     int     picQP;           // in integer form
-    bool    isNewScene;
-    bool    refreshParams;
   };
 
   class RateCtrl
@@ -195,7 +193,7 @@ namespace vvenc {
     MsgLog&                 msg;
 
     void xProcessFirstPassData( const bool flush, const int poc );
-    void storeStatsData( const TRCPassStats& statsData );
+    void storeStatsData( TRCPassStats statsData );
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
     void writeStatsHeader();
@@ -216,6 +214,7 @@ namespace vvenc {
     int                     m_updateNoisePoc;
     bool                    m_resetNoise;
     uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
+    TRCPassStats            m_tempDownSamplStats[ VVENC_MAX_TLAYER + 1 ];
   };
 
 }

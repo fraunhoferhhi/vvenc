@@ -125,7 +125,7 @@ public:
   MCTF();
   virtual ~MCTF();
 
-  void init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool );
+  void init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool );
 
 protected:
   virtual void initPicture    ( Picture* pic );
@@ -147,6 +147,7 @@ private:
 
   void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
 
+  void( *m_applyPlanarCorrection )( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride, const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError );
   void( *m_applyBlock )( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts, double weightScaling, double sigmaSq );
   double( *m_calcVar ) ( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
 
@@ -165,6 +166,7 @@ private:
 
   const VVEncCfg*       m_encCfg;
   NoMallocThreadPool*   m_threadPool;
+  bool                  m_isFinalPass;
   int                   m_filterPoc;
   Area                  m_area;
   int                   m_MCTFSpeedVal;

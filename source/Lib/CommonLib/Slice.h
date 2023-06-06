@@ -1263,7 +1263,7 @@ public:
                               Slice();
   virtual                     ~Slice();
   void                        resetSlicePart();
-  void                        constructRefPicList(const PicList& rcListPic, bool extBorder);
+  void                        constructRefPicList(const PicList& rcListPic, bool extBorder, const bool usingLongTerm = true);
   void                        updateRefPicCounter( int step );
   bool                        checkRefPicsReconstructed() const;
   void                        setRefPOCList();
@@ -1295,7 +1295,7 @@ public:
   void                        copySliceInfo( const Slice* slice, bool cpyAlmostAll = true);
 
   void                        checkLeadingPictureRestrictions( const PicList& rcListPic ) const;
-  void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
+  void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps, const bool usingLongTerm = true )  const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
   bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
   void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );
@@ -1562,7 +1562,7 @@ protected:
 class PreCalcValues
 {
 public:
-  PreCalcValues( const SPS& sps, const PPS& pps, const unsigned _maxQtSize[3], bool _isEncoder )
+  PreCalcValues( const SPS& sps, const PPS& pps, const unsigned _maxQtSize[3] )
     : chrFormat           ( sps.chromaFormatIdc )
     , maxCUSize           ( sps.CTUSize )
     , maxCUSizeMask       ( maxCUSize  - 1 )
@@ -1577,7 +1577,6 @@ public:
     , lumaWidth           ( pps.picWidthInLumaSamples )
     , lumaHeight          ( pps.picHeightInLumaSamples )
     , fastDeltaQPCuMaxSize( Clip3<unsigned>( (1 << sps.log2MinCodingBlockSize), sps.CTUSize, 32u) )
-    , isEncoder           ( _isEncoder )
     , ISingleTree         ( !sps.dualITree )
     , wrapArround         ( sps.wrapAroundEnabled )
     , maxMTTDepth         { sps.maxMTTDepth[0], sps.maxMTTDepth[1], sps.maxMTTDepth[2] }
@@ -1604,7 +1603,6 @@ public:
   const unsigned     lumaWidth;
   const unsigned     lumaHeight;
   const unsigned     fastDeltaQPCuMaxSize;
-  const bool         isEncoder;
   const bool         ISingleTree;
   const bool         wrapArround;
 

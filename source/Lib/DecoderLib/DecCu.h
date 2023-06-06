@@ -45,7 +45,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "CABACReader.h"
 #include "CommonLib/TrQuant.h"
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/IntraPrediction.h"
@@ -68,7 +67,6 @@ public:
   virtual ~DecCu();
 
   void  init              ( TrQuant* pcTrQuant, IntraPrediction* pcIntra, InterPrediction* pcInter, ChromaFormat chrFormat );
-  void  decompressCtu     ( CodingStructure& cs, const UnitArea& ctuArea );
 
 protected:
   void xIntraRecQT        ( CodingUnit&      cu, const ChannelType chType );

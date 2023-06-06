@@ -159,8 +159,8 @@ public:
 
   void        codeAlfCtuEnabled          ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam );
   void        codeAlfCtuEnabled          ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam );
-  void        codeAlfCtuEnabledFlag      ( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx, AlfParam* alfParam );
-  void        codeAlfCtuFilterIndex      ( CodingStructure& cs, uint32_t ctuRsAddr, bool alfEnableLuma );
+  void        codeAlfCtuEnabledFlag      ( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx );
+  void        codeAlfCtuFilterIndex      ( CodingStructure& cs, uint32_t ctuRsAddr );
 
   void        codeAlfCtuAlternatives     ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam );
   void        codeAlfCtuAlternatives     ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam );

@@ -503,7 +503,7 @@ private:
                                     bool                  bBi = false
                                   );
 
-  void xTZSearch                  ( const CodingUnit&     cu,
+  void xTZSearch( const CodingUnit& cu,
                                     RefPicList            refPicList,
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
@@ -512,6 +512,8 @@ private:
                                     const bool            bExtendedSettings,
                                     const bool            bFastSettings = false
                                   );
+
+  void xClipMvSearch              ( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int fppLinesSynchro );
 
   void xSetSearchRange            ( const CodingUnit&     cu,
                                     const Mv&             cMvPred,

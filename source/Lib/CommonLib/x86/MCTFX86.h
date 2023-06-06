@@ -838,6 +838,358 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
   }
 }
 
+static const int32_t xSzm[6] = {0, 1, 20, 336, 5440, 87296};
+
+// works for bit depths up to incl. 12 and power-of-2 block dimensions in both directions
+template<X86_VEXT vext>
+void applyPlanarCorrectionSIMD( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride, const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError )
+{
+  const int32_t blockSize = w * h;
+  const int32_t log2Width = floorLog2 (w);
+  const int32_t maxPelVal = clpRng.max();
+  const int32_t mWeight   = std::min (512u, (uint32_t) motionError * (uint32_t) motionError);
+  const int32_t xSum      = (blockSize * (w - 1)) >> 1;
+  int32_t x1yzm = 0,  x2yzm = 0,  ySum = 0;
+  int32_t b0, b1, b2;
+  int64_t numer, denom;
+  int32_t tmp;
+
+#if USE_AVX2
+  if (w > 8)
+  {
+    __m256i vz;
+    __m256i vzz = _mm256_set_epi32(0,0,0,0,0,0,0,0);
+    __m256i vDst;
+    __m256i vRef;
+    __m256i vtmp;
+    __m256i v16 = _mm256_set_epi16(16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16);
+    __m256i v1 = _mm256_set_epi16(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+    __m256i vy = _mm256_set_epi16(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    __m256i vx2yzm = _mm256_set_epi32(0,0,0,0,0,0,0,0);
+    __m256i vx1yzm = _mm256_set_epi32(0,0,0,0,0,0,0,0);
+
+    for (int32_t y = 0; y < h; y++) // sum up dot-products between indices and sample diffs
+    {
+      __m256i vx = _mm256_set_epi16(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0);
+
+      for (int32_t x = 0; x < w; x += 16)
+      {
+        vDst = _mm256_loadu_si256( (const __m256i* ) (dstPel+y*dstStride + x ));
+        vRef = _mm256_loadu_si256( (const __m256i* ) (refPel+y*refStride + x ));
+        vz = _mm256_sub_epi16 (vDst, vRef);
+        vtmp = _mm256_madd_epi16(vz,vx);
+        vx1yzm = _mm256_add_epi32(vx1yzm,vtmp);
+        vtmp = _mm256_madd_epi16(vz,v1);
+        vzz = _mm256_add_epi32(vzz,vtmp);
+        vtmp = _mm256_madd_epi16(vz,vy);
+        vx2yzm = _mm256_add_epi32(vx2yzm,vtmp);
+        vx = _mm256_add_epi16(vx,v16);
+      }
+      vy = _mm256_add_epi16(vy,v1);
+    }
+    vx1yzm = _mm256_hadd_epi32(vx1yzm,vx1yzm);
+    vx1yzm = _mm256_hadd_epi32(vx1yzm,vx1yzm);
+    tmp = _mm256_extract_epi32 (vx1yzm, 0);
+    x1yzm += tmp;
+    tmp = _mm256_extract_epi32 (vx1yzm, 4);
+    x1yzm += tmp;
+
+    vx2yzm = _mm256_hadd_epi32(vx2yzm,vx2yzm);
+    vx2yzm = _mm256_hadd_epi32(vx2yzm,vx2yzm);
+    tmp = _mm256_extract_epi32 (vx2yzm, 0);
+    x2yzm += tmp;
+    tmp = _mm256_extract_epi32 (vx2yzm, 4);
+    x2yzm += tmp;
+
+    vzz = _mm256_hadd_epi32(vzz,vzz);
+    vzz = _mm256_hadd_epi32(vzz,vzz);
+    tmp = _mm256_extract_epi32 (vzz, 0);
+    ySum += tmp;
+    tmp = _mm256_extract_epi32 (vzz, 4);
+    ySum += tmp;
+  }
+  else
+#endif
+  {
+    __m128i vz;
+    __m128i vzz = _mm_set_epi32(0,0,0,0);
+    __m128i vDst;
+    __m128i vRef;
+    __m128i vtmp;
+    __m128i v8 = _mm_set_epi16(8,8,8,8,8,8,8,8);
+    __m128i vx2yzm = _mm_set_epi32(0,0,0,0);
+    __m128i vx1yzm = _mm_set_epi32(0,0,0,0);
+    __m128i v1 = _mm_set_epi16(1,1,1,1,1,1,1,1);
+
+    if (w == 4)
+    {
+      __m128i vy = _mm_set_epi16(1,1,1,1,0,0,0,0);
+      __m128i v2 = _mm_set_epi16(2,2,2,2,2,2,2,2);
+
+      for (int32_t y = 0; y < h; y += 2) // sum up dot-products between indices and sample diffs
+      {
+        __m128i vx = _mm_set_epi16(3,2,1,0,3,2,1,0);
+        vDst = _mm_loadu_si64( ( __m128i const * ) (dstPel+y*dstStride));
+        vRef = _mm_loadu_si64( ( __m128i const * ) (refPel+y*refStride));
+        __m128i vDsth = _mm_loadu_si64( ( __m128i const * ) (dstPel+(y+1)*dstStride));
+        __m128i vRefh = _mm_loadu_si64( ( __m128i const * ) (refPel+(y+1)*refStride));
+        vDsth = _mm_bslli_si128 (vDsth,8);
+        vRefh = _mm_bslli_si128 (vRefh,8);
+        vDst = _mm_or_si128(vDst,vDsth);
+        vRef = _mm_or_si128(vRef,vRefh);
+
+        vz = _mm_sub_epi16 (vDst, vRef);
+        vtmp = _mm_madd_epi16(vz,vx);
+        vx1yzm = _mm_add_epi32(vx1yzm,vtmp);
+        vtmp = _mm_madd_epi16(vz,v1);
+        vzz = _mm_add_epi32(vzz,vtmp);
+        vtmp = _mm_madd_epi16(vz,vy);
+        vx2yzm = _mm_add_epi32(vx2yzm,vtmp);
+        vy = _mm_add_epi16(vy,v2);
+      }
+      vx1yzm = _mm_hadd_epi32(vx1yzm,vx1yzm);
+      vx1yzm = _mm_hadd_epi32(vx1yzm,vx1yzm);
+      tmp = _mm_extract_epi32 (vx1yzm, 0);
+      x1yzm += tmp;
+
+      vx2yzm = _mm_hadd_epi32(vx2yzm,vx2yzm);
+      vx2yzm = _mm_hadd_epi32(vx2yzm,vx2yzm);
+      tmp = _mm_extract_epi32 (vx2yzm, 0);
+      x2yzm += tmp;
+
+      vzz = _mm_hadd_epi32(vzz,vzz);
+      vzz = _mm_hadd_epi32(vzz,vzz);
+      tmp = _mm_extract_epi32 (vzz, 0);
+      ySum += tmp;
+    }
+    else
+    {
+      __m128i vy = _mm_set_epi16(0,0,0,0,0,0,0,0);
+      __m128i v1 = _mm_set_epi16(1,1,1,1,1,1,1,1);
+
+      for (int32_t y = 0; y < h; y++) // sum up dot-products between indices and sample diffs
+      {
+        __m128i vx = _mm_set_epi16(7,6,5,4,3,2,1,0);
+
+        for (int32_t x = 0; x < w; x += 8)
+        {
+          vDst = _mm_loadu_si128( ( __m128i const * ) (dstPel+y*dstStride + x ));
+          vRef = _mm_loadu_si128( ( __m128i const * ) (refPel+y*refStride + x ));
+          vz = _mm_sub_epi16 (vDst, vRef);
+          vtmp = _mm_madd_epi16(vz,vx);
+          vx1yzm = _mm_add_epi32(vx1yzm,vtmp);
+          vtmp = _mm_madd_epi16(vz,v1);
+          vzz = _mm_add_epi32(vzz,vtmp);
+          vtmp = _mm_madd_epi16(vz,vy);
+          vx2yzm = _mm_add_epi32(vx2yzm,vtmp);
+          vx = _mm_add_epi16(vx,v8);
+        }
+        vy = _mm_add_epi16(vy,v1);
+      }
+      vx1yzm = _mm_hadd_epi32(vx1yzm,vx1yzm);
+      vx1yzm = _mm_hadd_epi32(vx1yzm,vx1yzm);
+      tmp = _mm_extract_epi32 (vx1yzm, 0);
+      x1yzm += tmp;
+
+      vx2yzm = _mm_hadd_epi32(vx2yzm,vx2yzm);
+      vx2yzm = _mm_hadd_epi32(vx2yzm,vx2yzm);
+      tmp = _mm_extract_epi32 (vx2yzm, 0);
+      x2yzm += tmp;
+
+      vzz = _mm_hadd_epi32(vzz,vzz);
+      vzz = _mm_hadd_epi32(vzz,vzz);
+      tmp = _mm_extract_epi32 (vzz, 0);
+      ySum += tmp;
+    }
+  }
+
+  denom = blockSize * xSzm[log2Width]; // plane-fit parameters, in fixed-point arithmetic
+  numer = (int64_t) mWeight * ((int64_t) x1yzm * blockSize - xSum * ySum);
+  b1 = int32_t ((numer < 0 ? numer - (denom >> 1) : numer + (denom >> 1)) / denom);
+  b1 = (b1 < INT16_MIN ? INT16_MIN : (b1 > INT16_MAX ? INT16_MAX : b1));
+  numer = (int64_t) mWeight * ((int64_t) x2yzm * blockSize - xSum * ySum);
+  b2 = int32_t ((numer < 0 ? numer - (denom >> 1) : numer + (denom >> 1)) / denom);
+  b2 = (b2 > INT16_MAX ? INT16_MAX : (b2 < INT16_MIN ? INT16_MIN : b2));
+  b0 = (mWeight * ySum - (b1 + b2) * xSum + (blockSize >> 1)) >> (log2Width << 1);
+
+  if (b0 == 0 && b1 == 0 && b2 == 0) return;
+
+#if USE_AVX2
+  if (w > 8)
+  {
+    __m256i vb0 = _mm256_set1_epi32 (b0);
+    __m256i vb1 = _mm256_set1_epi16 ((int16_t) b1);
+    __m256i vb2 = _mm256_set1_epi16 ((int16_t) b2);
+    __m256i vy = _mm256_set_epi16(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    __m256i v1 = _mm256_set_epi16(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+    __m256i v0 = _mm256_set_epi16(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    __m256i v8 = _mm256_set_epi16(8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8);
+    __m256i v256 = _mm256_set_epi32 (256,256,256,256,256,256,256,256);
+
+    __m256i vpelmin   = _mm256_set1_epi16(0);
+    __m256i vpelmax   = _mm256_set1_epi16(maxPelVal);
+
+    for (int32_t y = 0; y < h; y++) // perform deblocking by adding fitted correction plane
+    {
+      __m256i vx = _mm256_set_epi16(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0);
+
+      for (int32_t x = 0; x < w; x += 16)
+      {
+        __m256i vDst = _mm256_loadu_si256( ( __m256i const * ) (dstPel+y*dstStride + x ));
+
+        __m256i vDstl = _mm256_unpacklo_epi16 (vDst,v0);
+        __m256i vDsth = _mm256_unpackhi_epi16 (vDst,v0);
+
+        //const int32_t p = (b0 + b1 * x + b2 * y + 256) >> 9; // fixed-point plane corrector
+        __m256i vtmph =_mm256_mulhi_epi16(vb1,vx);
+        __m256i vtmpl =_mm256_mullo_epi16(vb1,vx);
+        __m256i vb1l  = _mm256_unpacklo_epi16(vtmpl,vtmph);
+        __m256i vb1h  = _mm256_unpackhi_epi16(vtmpl,vtmph);
+
+        vtmph =_mm256_mulhi_epi16(vb2,vy);
+        vtmpl =_mm256_mullo_epi16(vb2,vy);
+        __m256i vb2l  = _mm256_unpacklo_epi16(vtmpl,vtmph);
+        __m256i vb2h  = _mm256_unpackhi_epi16(vtmpl,vtmph);
+
+        vb1l = _mm256_add_epi32(vb1l,vb2l);
+        vb1h = _mm256_add_epi32(vb1h,vb2h);
+
+        vb1l = _mm256_add_epi32(vb1l,vb0);
+        vb1h = _mm256_add_epi32(vb1h,vb0);
+
+        vb1l = _mm256_add_epi32(vb1l,v256);
+        vb1h = _mm256_add_epi32(vb1h,v256);
+
+        vb1l = _mm256_srai_epi32 (vb1l,9);
+        vb1h = _mm256_srai_epi32 (vb1h,9);
+
+        vDstl = _mm256_sub_epi32 (vDstl,vb1l);
+        vDsth = _mm256_sub_epi32 (vDsth,vb1h);
+
+        vDst = _mm256_packs_epi32 (vDstl,vDsth);
+        vDst = _mm256_min_epi16( vpelmax, _mm256_max_epi16( vpelmin, vDst ) );
+        _mm256_storeu_si256 ((__m256i* ) (dstPel+y*dstStride + x ) ,vDst);
+
+        vx = _mm256_add_epi16(vx,v8);
+      }
+      vy = _mm256_add_epi16(vy,v1);
+    }
+  }
+  else
+#endif
+  {
+    __m128i vb0 = _mm_set1_epi32 (b0);
+    __m128i vb1 = _mm_set1_epi16 ((int16_t) b1);
+    __m128i vb2 = _mm_set1_epi16 ((int16_t) b2);
+    __m128i v0 = _mm_set_epi16(0,0,0,0,0,0,0,0);
+    __m128i v256 = _mm_set_epi32 (256,256,256,256);
+
+    __m128i vpelmin = _mm_set1_epi16(0);
+    __m128i vpelmax = _mm_set1_epi16(maxPelVal);
+
+    if (w == 4)
+    {
+      __m128i vy = _mm_set_epi16(1,1,1,1,0,0,0,0);
+      __m128i v2 = _mm_set_epi16(2,2,2,2,2,2,2,2);
+
+      for (int32_t y = 0; y < h; y += 2) // perform deblocking by adding fitted correction plane
+      {
+        __m128i vx = _mm_set_epi16(3,2,1,0,3,2,1,0);
+
+        {
+          __m128i vDst = _mm_loadu_si64( ( __m128i const * ) (dstPel+y*dstStride));
+          __m128i vDsth = _mm_loadu_si64( ( __m128i const * ) (dstPel+(y+1)*dstStride));
+          vDsth = _mm_bslli_si128 (vDsth,8);
+          vDst = _mm_or_si128(vDst,vDsth);
+          __m128i vDstl = _mm_unpacklo_epi16 (vDst,v0);
+          vDsth = _mm_unpackhi_epi16 (vDst,v0);
+
+          //const int32_t p = (b0 + b1 * x + b2 * y + 256) >> 9; // fixed-point plane corrector
+          __m128i vtmph =_mm_mulhi_epi16(vb1,vx);
+          __m128i vtmpl =_mm_mullo_epi16(vb1,vx);
+          __m128i vb1l  = _mm_unpacklo_epi16(vtmpl,vtmph);
+          __m128i vb1h  = _mm_unpackhi_epi16(vtmpl,vtmph);
+          vtmph =_mm_mulhi_epi16(vb2,vy);
+          vtmpl =_mm_mullo_epi16(vb2,vy);
+          __m128i vb2l  = _mm_unpacklo_epi16(vtmpl,vtmph);
+          __m128i vb2h  = _mm_unpackhi_epi16(vtmpl,vtmph);
+
+          vb1l = _mm_add_epi32(vb1l,vb2l);
+          vb1h = _mm_add_epi32(vb1h,vb2h);
+
+          vb1l = _mm_add_epi32(vb1l,vb0);
+          vb1h = _mm_add_epi32(vb1h,vb0);
+
+          vb1l = _mm_add_epi32(vb1l,v256);
+          vb1h = _mm_add_epi32(vb1h,v256);
+
+          vb1l = _mm_srai_epi32 (vb1l,9);
+          vb1h = _mm_srai_epi32 (vb1h,9);
+          vDstl = _mm_sub_epi32 (vDstl,vb1l);
+          vDsth = _mm_sub_epi32 (vDsth,vb1h);
+
+          vDst = _mm_packs_epi32 (vDstl,vDsth);
+          vDst = _mm_min_epi16( vpelmax, _mm_max_epi16( vpelmin, vDst ) );
+
+          _mm_storeu_si64 ((__m128i* ) (dstPel+y*dstStride),vDst);
+          _mm_storeu_si64 ((__m128i* ) (dstPel+(y+1)*dstStride),_mm_srli_si128(vDst,8));
+        }
+        vy = _mm_add_epi16(vy,v2);
+      }
+    }
+    else
+    {
+      __m128i vy = _mm_set_epi16(0,0,0,0,0,0,0,0);
+      __m128i v1 = _mm_set_epi16(1,1,1,1,1,1,1,1);
+      __m128i v8 = _mm_set_epi16(8,8,8,8,8,8,8,8);
+
+      for (int32_t y = 0; y < h; y++) // perform deblocking by adding fitted correction plane
+      {
+        __m128i vx = _mm_set_epi16(7,6,5,4,3,2,1,0);
+
+        for (int32_t x = 0; x < w; x += 8)
+        {
+          __m128i vDst = _mm_loadu_si128( ( __m128i const * ) (dstPel+y*dstStride + x ));
+          __m128i vDstl = _mm_unpacklo_epi16 (vDst,v0);
+          __m128i vDsth = _mm_unpackhi_epi16 (vDst,v0);
+
+          //const int32_t p = (b0 + b1 * x + b2 * y + 256) >> 9; // fixed-point plane corrector
+          __m128i vtmph =_mm_mulhi_epi16(vb1,vx);
+          __m128i vtmpl =_mm_mullo_epi16(vb1,vx);
+          __m128i vb1l  = _mm_unpacklo_epi16(vtmpl,vtmph);
+          __m128i vb1h  = _mm_unpackhi_epi16(vtmpl,vtmph);
+          vtmph =_mm_mulhi_epi16(vb2,vy);
+          vtmpl =_mm_mullo_epi16(vb2,vy);
+          __m128i vb2l  = _mm_unpacklo_epi16(vtmpl,vtmph);
+          __m128i vb2h  = _mm_unpackhi_epi16(vtmpl,vtmph);
+
+          vb1l = _mm_add_epi32(vb1l,vb2l);
+          vb1h = _mm_add_epi32(vb1h,vb2h);
+
+          vb1l = _mm_add_epi32(vb1l,vb0);
+          vb1h = _mm_add_epi32(vb1h,vb0);
+
+          vb1l = _mm_add_epi32(vb1l,v256);
+          vb1h = _mm_add_epi32(vb1h,v256);
+
+          vb1l = _mm_srai_epi32 (vb1l,9);
+          vb1h = _mm_srai_epi32 (vb1h,9);
+          vDstl = _mm_sub_epi32 (vDstl,vb1l);
+          vDsth = _mm_sub_epi32 (vDsth,vb1h);
+
+          vDst = _mm_packs_epi32 (vDstl,vDsth);
+
+          vDst = _mm_min_epi16( vpelmax, _mm_max_epi16( vpelmin, vDst ) );
+          _mm_storeu_si128 ((__m128i* )  (dstPel+y*dstStride + x ) ,vDst);
+
+          vx = _mm_add_epi16(vx,v8);
+        }
+        vy = _mm_add_epi16(vy,v1);
+      }
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel **correctedPics, int numRefs, const int *verror, const double *refStrenghts, double weightScaling, double sigmaSq )
 {
@@ -1126,8 +1478,9 @@ void MCTF::_initMCTF_X86()
   m_applyFrac[0][0] = applyFrac6tap_SIMD_8x<vext>;
   m_applyFrac[1][0] = applyFrac6tap_SIMD_4x<vext>;
 
-  m_applyBlock      = applyBlockSIMD<vext>;
-  m_calcVar         = calcVarSse<vext>;
+  m_applyPlanarCorrection = applyPlanarCorrectionSIMD<vext>;
+  m_applyBlock            = applyBlockSIMD<vext>;
+  m_calcVar               = calcVarSse<vext>;
 }
 
 template

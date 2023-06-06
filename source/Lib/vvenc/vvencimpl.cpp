@@ -88,8 +88,6 @@ static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits p
 
 // ====================================================================================================================
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
-
 VVEncImpl::VVEncImpl()
 {
   setSIMDExtension( nullptr );   // ensure SIMD-detection is finished
@@ -839,44 +837,6 @@ std::string VVEncImpl::createEncoderInfoStr()
   cInfoStr += cssCap.str();
 
   return cInfoStr;
-}
-
-///< decode bitstream with limited build in decoder
-int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule)
-{
-  int ret = 0;
-  FFwdDecoder ffwdDecoder;
-  Picture cPicture; cPicture.poc=-8000;
-  MsgLog msg;
-
-#if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule, msg );
-#endif
-
-  std::string filename(FileName );
-#if HANDLE_EXCEPTION
-  try
-#endif
-  {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, msg, false, cPicture.poc, false );
-    if( ret )  
-    { 
-      msg.log( VVENC_ERROR, "decoding failed\n");
-      return VVENC_ERR_UNSPECIFIED; 
-    }
-  }
-#if HANDLE_EXCEPTION
-  catch( std::exception& e )
-  {
-    msg.log( VVENC_ERROR, "decoding failed: %s\n", e.what() );
-    return VVENC_ERR_UNSPECIFIED;
-  }
-#endif
-
-#if ENABLE_TRACING
-  tracing_uninit( g_trace_ctx );
-#endif
-  return ret;
 }
 
 
