@@ -80,6 +80,7 @@ protected:
   InterpolationFilter  m_if;
   Pel*                 m_filteredBlock        [LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][MAX_NUM_COMP];
   Pel*                 m_filteredBlockTmp     [LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][MAX_NUM_COMP];
+  int                  m_fppLinesSynchro;
 
   int  xRightShiftMSB         ( int numer, int denom );
   void xApplyBDOF             ( PelBuf& yuvDst, const ClpRng& clpRng );
@@ -167,7 +168,7 @@ public:
   InterPrediction();
   virtual ~InterPrediction();
 
-  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize);
+  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize, const int fppLinesSynchro = 0 );
   void    destroy               ();
 
   // inter

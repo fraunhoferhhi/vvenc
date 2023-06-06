@@ -237,6 +237,22 @@ static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
   return css.str();
 }
 
+static inline std::string vvenc_getDecodingRefreshTypeStr(  int type )
+{
+  std::string cType( "CRA");
+  switch( type )
+  {
+    case 0: cType = "none"; break;
+    case 1: cType = "CRA"; break;
+    case 2: cType = "IDR"; break;
+    case 3: cType = "RecPointSEI"; break;
+    case 4: cType = "IDR2"; break;
+    case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
+    default: cType = "unknown"; break;
+  }
+  return cType;
+}
+
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
   GOPEntry->m_POC                       = -1;
@@ -344,7 +360,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_QP                                      = VVENC_DEFAULT_QP;
   c->m_RCTargetBitrate                         = 0;
 
-  c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
+  c->m_verbosity                               = VVENC_INFO;    ///< encoder verbosity
 
   // basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
@@ -630,6 +646,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
   c->m_tileParallelCtuEnc                      = true;
+  c->m_fppLinesSynchro                         = 0;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -643,16 +660,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
   memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
-
-  memset( c->m_decodeBitstreams[0], '\0', sizeof(c->m_decodeBitstreams[0]) );
-  memset( c->m_decodeBitstreams[1], '\0', sizeof(c->m_decodeBitstreams[1]) );
-
-  c->m_switchPOC                               = -1;
-  c->m_switchDQP                               = 0;
-  c->m_fastForwardToPOC                        = -1;
-  c->m_stopAfterFFtoPOC                        = false;
-  c->m_bs2ModPOCAndType                        = false;
-  c->m_forceDecodeBitstream1                   = false;
 
   c->m_listTracingChannels                     = false;
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
@@ -785,7 +792,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ), "TargetBitrate must be between 0 - 800000000" );
 
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 1 ), "FirstPassMode must be 0 or 1" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 2 ), "FirstPassMode must be 0 , 1 or 2" );
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -867,12 +874,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_numThreads = c->m_SourceWidth >= 1280 && c->m_SourceHeight >= 720 ? 8 : 4;
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
-  if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ? 1   : 0   ;
-  if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ? 0   : 1   ;
-  if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ? 0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = 1   ;
-  if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ? 0.0 : 0.75;
-  if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ? 0.0 : 0.5 ;
+  if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
+  if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
+  if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_fppLinesSynchro ? 0   : 1   ;
+  if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ?      0.0 : 0.75;
+  if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
@@ -1595,8 +1602,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   // check char array and reset them, if they seems to be unset
-  vvenc_checkCharArrayStr( c->m_decodeBitstreams[0], VVENC_MAX_STRING_LEN);
-  vvenc_checkCharArrayStr( c->m_decodeBitstreams[1], VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_traceRule, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
@@ -1773,8 +1778,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
-
-  vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
@@ -1972,6 +1975,15 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
+
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Affine,    "FPP CTU-lines synchro: Affine cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Geo,       "FPP CTU-lines synchro: GPM (GEO) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_AMVRspeed, "FPP CTU-lines synchro: AMVR (IMV) cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "FPP CTU-lines synchro: SMVD cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "FPP CTU-lines synchro: MMVD cannot be used" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileRows > 1,  "FPP CTU-lines synchro: Only single tile row is supported" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0 || c->m_fppLinesSynchro > (c->m_SourceHeight/c->m_CTUSize - 1), "fppLinesSynchro must be greater than 0 and less than max number of CTU lines" );
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
@@ -2058,20 +2070,12 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
   }
 
-  if( c->m_fastForwardToPOC != -1 )
-  {
-    if( c->m_cabacInitPresent ) msg.log( VVENC_WARNING, "Configuration warning: usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
-    if( c->m_alf )              msg.log( VVENC_WARNING, "Configuration warning: usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
-  }
-
   if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
     if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
 
     checkCfgPicPartitioningParameter( c );
   }
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 && !c->m_LookAhead ), "Debug-bitstream for the rate-control in one pass mode is not supported yet" );
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && c->m_maxParallelFrames > 1 && ( c->m_LookAhead || c->m_RCTargetBitrate > 0 ), "Debug-bitstream in frame-parallel mode and enabled rate-control or look-ahead is not supported yet" );
 
   return( c->m_confirmFailed );
 }
@@ -2876,19 +2880,24 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLevel eMsgLevel )
 {
   std::stringstream css;
-
-  if( eMsgLevel >= VVENC_DETAILS )
+  std::string loglvl("vvenc ");
+  switch ( eMsgLevel )
   {
-    css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
-    css << "Rate Control                           : ";
+    case VVENC_SILENT : loglvl.append("[silent]: ");  break;
+    case VVENC_ERROR  : loglvl.append("[error]: ");   break;
+    case VVENC_WARNING: loglvl.append("[warning]: "); break;
+    case VVENC_INFO   : loglvl.append("[info]: ");    break;
+    case VVENC_NOTICE : loglvl.append("[notice]: ");  break;
+    case VVENC_VERBOSE: loglvl.append("[verbose]: "); break;
+    case VVENC_DETAILS: loglvl.append("[details]: "); break;
+    default: break;
   }
-  else if( eMsgLevel >= VVENC_INFO )
-  {
-    css << "Rate Control   : ";
-  }
 
-  if( eMsgLevel >= VVENC_INFO )        
+  if( eMsgLevel >= VVENC_INFO )
   {
+    css << loglvl << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << loglvl << "Rate Control                           : ";
+
     if ( c->m_RCTargetBitrate > 0 )
     {
       if( c->m_RCTargetBitrate < 1000000 )
@@ -2907,62 +2916,63 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
       css << "QP " <<  c->m_QP << "\n";
-  }
 
-  if( eMsgLevel >= VVENC_DETAILS )
-  {
-    css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
-    css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
-    css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
-    css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
-    css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
-    //css << "Frame/Field                            : Frame based coding\n";
-    if ( c->m_framesToBeEncoded > 0 )
-      css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
-    else
-      css << "Frame index                            : all frames\n";
-
-    css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
-    css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
-    css << "CU size                                : " << c->m_CTUSize << "\n";
-    css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
-    css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
-    css << "Motion search range                    : " << c->m_SearchRange << "\n";
-    css << "Intra period                           : " << c->m_IntraPeriod << "\n";
-    css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
-    css << "QP                                     : " << c->m_QP << "\n";
-    css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
-    css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
-    css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
-    css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
-    css << "GOP size                               : " << c->m_GOPSize << "\n";
-    css << "PicReordering                          : " << c->m_picReordering << "\n";
-    css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
-    css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
-    css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
-    css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
-    if (c->m_bUseSAO)
-    {
-      css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
-      css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
-    }
-    css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Percept QPA                            : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Intra period (Keyframe)                : " << c->m_IntraPeriod << "\n";
+    css << loglvl << "Decoding refresh type                  : " << vvenc_getDecodingRefreshTypeStr(c->m_DecodingRefreshType) << "\n";
 
     if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
     {
-      css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
+      css << loglvl << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
     }
     if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
     {
-      css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
+      css << loglvl << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
     }
-    css << "\n";
+  }
+
+  if( eMsgLevel >= VVENC_NOTICE )
+  {
+    css << loglvl << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
+    css << loglvl << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
+    //css << loglvl << "Frame/Field                            : Frame based coding\n";
+    if ( c->m_framesToBeEncoded > 0 )
+      css << loglvl << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
+    else
+      css << loglvl << "Frame index                            : all frames\n";
+
+    css << loglvl << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
+    css << loglvl << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
+    css << loglvl << "CU size                                : " << c->m_CTUSize << "\n";
+    css << loglvl << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
+    css << loglvl << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
+    css << loglvl << "Motion search range                    : " << c->m_SearchRange << "\n";
+    css << loglvl << "QP                                     : " << c->m_QP << "\n";
+    css << loglvl << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
+    css << loglvl << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
+    css << loglvl << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
+    css << loglvl << "GOP size                               : " << c->m_GOPSize << "\n";
+    css << loglvl << "PicReordering                          : " << c->m_picReordering << "\n";
+    css << loglvl << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
+    css << loglvl << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
+    css << loglvl << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
+    css << loglvl << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
+    if (c->m_bUseSAO)
+    {
+      css << loglvl << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
+      css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
+    }
+    css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )
-  {
+  {    
     // verbose output
-    css << "CODING TOOL CFG: ";
+    css << "\n";
+    css << loglvl << "CODING TOOL CFG: ";
     css << "CTU" << c->m_CTUSize << " QTMin" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
     css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
     css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
@@ -3035,7 +3045,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "IBC:" << c->m_IBCMode << " ";
     css << "BCW:" << c->m_BCW << " ";
 
-    css << "\nENC. ALG. CFG: ";
+    css << "\n" << loglvl << "ENC. ALG. CFG: ";
     css << "QPA:" << c->m_usePerceptQPA << " ";
     css << "HAD:" << c->m_bUseHADME << " ";
     if( c->m_fastHad ) css << "(fast) ";
@@ -3047,12 +3057,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
     css << "BIM:" << c->m_blockImportanceMapping << " ";
 
-    css << "\nPRE-ANALYSIS CFG: ";
+    css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";
     css << "LeadFrames:" << c->m_leadFrames << " ";
     css << "TrailFrames:" << c->m_trailFrames << " ";
 
-    css << "\nFAST TOOL CFG: ";
+    css << "\n" << loglvl << "FAST TOOL CFG: ";
     css << "ECU:" << c->m_useEarlyCU << " ";
     css << "FEN:" << c->m_fastInterSearchMode << " ";
     css << "FDM:" << c->m_useFastDecisionForMerge << " ";
@@ -3098,7 +3108,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "QuantThr:" << (c->m_quantThresholdVal >> 1) << " ";
     css << "SelectiveRDQO:" << ( int ) c->m_useSelectiveRDOQ << " ";
 
-    css << "\nRATE CONTROL CFG: ";
+    css << "\n" << loglvl << "RATE CONTROL CFG: ";
     css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
     if ( c->m_RCTargetBitrate > 0 )
     {
@@ -3114,9 +3124,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << "LookAhead:" << c->m_LookAhead << " ";
 
-    css << "\nPARALLEL PROCESSING CFG: ";
+    css << "\n" << loglvl << "PARALLEL PROCESSING CFG: ";
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+    css << "FppLinesSynchro:" << ( int ) c->m_fppLinesSynchro << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

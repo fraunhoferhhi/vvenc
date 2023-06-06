@@ -150,4 +150,7 @@ else()
 endif()
 
 # set the folder where to place the projects
-set_target_properties( ${LIB_NAME} PROPERTIES FOLDER lib )
+set_target_properties( ${LIB_NAME} PROPERTIES
+                                   VERSION ${PROJECT_VERSION}
+                                   SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+                                   FOLDER lib )

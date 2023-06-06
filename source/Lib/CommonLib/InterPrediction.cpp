@@ -246,7 +246,7 @@ void InterPrediction::destroy()
   m_IBCBuffer.destroy();
 }
 
-void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize )
+void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize, const int fppLinesSynchro )
 {
   // if it has been initialised before, but the chroma format has changed, release the memory and start again.
   if( m_yuvPred[L0].getOrigin( COMP_Y ) != nullptr && m_currChromaFormat != chFormat )
@@ -279,6 +279,7 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     m_IBCBufferWidth = g_IBCBufferSize / ctuSize;
     m_IBCBuffer.create(UnitArea(chFormat, Area(0, 0, m_IBCBufferWidth, ctuSize)));
   }
+  InterPredInterpolation::m_fppLinesSynchro = fppLinesSynchro;
 }
 
 // ====================================================================================================================
@@ -440,7 +441,7 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
 
 void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf )
 {
-  if (!cu.cs->pcv->isEncoder)
+  if (!true/*isEncoder*/ )
   {
     if (CU::isIBC(cu))
     {
@@ -614,6 +615,7 @@ InterPredInterpolation::InterPredInterpolation()
   , m_skipPROF(false)
   , m_encOnly(false)
   , m_isBi(false)
+  , m_fppLinesSynchro(0)
 {
 
 }
@@ -725,6 +727,7 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
 
   bool  wrapRef = false;
   Mv    mv(_mv);
+  CHECKD( m_fppLinesSynchro && !srcPadBuf && !CU::isMvInRangeFPP( cu, mv, m_fppLinesSynchro, compID, shiftVer ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
   if( !isIBC && cu.cs->pcv->wrapArround )
   {
     wrapRef = wrapClipMv( mv, cu.blocks[0].pos(), cu.blocks[0].size(), *cu.cs);
@@ -784,36 +787,32 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
   {
     m_if.filterVer(compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, true, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
   }
+  else if( bilinearMC )
+  {
+    m_if.filterN2_2D( compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, width, height, xFrac, yFrac, clpRng );
+  }
+  else if( backupWidth == 4 && backupHeight == 4 )
+  {
+    m_if.filter4x4( compID, (Pel*)refBuf.buf, refBuf.stride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
+  else if( backupWidth == 16 )
+  {
+    m_if.filter16x16( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
+  else if( backupWidth == 8 )
+  {
+    m_if.filter8x8( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+  }
   else
   {
-    int vFilterSize = bilinearMC ? NTAPS_BILINEAR : isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA;
+    const int vFilterSize = isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA;
 
-    if( backupWidth == 4 && backupHeight == 4 && !bilinearMC )
-    {
-      m_if.filter4x4( compID, (Pel*)refBuf.buf, refBuf.stride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-    }
-    else if( !bilinearMC && ( backupWidth & 15 ) == 0 )
-    {
-      for( int dx = 0; dx < backupWidth; dx += 16 )
-      {
-        m_if.filter16x16( compID, refBuf.buf + dx, refBuf.stride, dstBuf.buf + dx, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-      }
-    }
-    else if( !bilinearMC && ( backupWidth & 7 ) == 0 )
-    {
-      for( int dx = 0; dx < backupWidth; dx += 8 )
-      {
-        m_if.filter8x8( compID, refBuf.buf + dx, refBuf.stride, dstBuf.buf + dx, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
-      }
-    }
-    else
-    {
-      PelBuf tmpBuf( m_filteredBlockTmp[0][compID], dmvrWidth ? dmvrWidth : dstBuf.stride, dmvrWidth ? Size( dmvrWidth, dmvrHeight ) : cu.blocks[compID].size() );
+    PelBuf tmpBuf( m_filteredBlockTmp[0][compID], dmvrWidth ? dmvrWidth : dstBuf.stride, dmvrWidth ? Size( dmvrWidth, dmvrHeight ) : cu.blocks[compID].size() );
 
-      m_if.filterHor(compID, (Pel*)refBuf.buf - ((vFilterSize >> 1) - 1) * refBuf.stride, refBuf.stride, tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-      m_if.filterVer(compID, (Pel*)tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-    }
+    m_if.filterHor(compID, (Pel*)refBuf.buf - ((vFilterSize >> 1) - 1) * refBuf.stride, refBuf.stride, tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
+    m_if.filterVer(compID, (Pel*)tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
   }
+
   if (bdofApplied && compID == COMP_Y)
   {
     const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
@@ -1585,6 +1584,8 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) * (1 << iMvShift);
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
   const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
+  
+  CHECKD( m_fppLinesSynchro, "Full FPP is not implemented for Affine" );
 
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;

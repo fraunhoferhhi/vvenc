@@ -227,6 +227,9 @@ InterpolationFilter::InterpolationFilter()
   m_filter16x16[0][1] = filterXxY_N8<true , 16>;
   m_filter16x16[1][0] = filterXxY_N4<false, 16>;
   m_filter16x16[1][1] = filterXxY_N4<true , 16>;
+
+  m_filterN2_2D = scalarFilterN2_2D;
+
 //  m_weightedTriangleBlk = xWeightedTriangleBlk;
   m_weightedGeoBlk = xWeightedGeoBlk;
 }
@@ -549,7 +552,10 @@ void InterpolationFilter::filterHor(const ComponentID compID, Pel const *src, in
 {
   if( frac == 0 )
   {
-    m_filterCopy[true][isLast](clpRng, src, srcStride, dst, dstStride, width, height, biMCForDMVR);
+    if( isLast )
+      g_pelBufOP.copyBuffer( ( const char* ) src, srcStride * sizeof( Pel ), ( char* ) dst, dstStride * sizeof( Pel ), width * sizeof( Pel ), height );
+    else
+      m_filterCopy[true][isLast]( clpRng, src, srcStride, dst, dstStride, width, height, biMCForDMVR );
   }
   else if( isLuma( compID ) )
   {
@@ -658,6 +664,20 @@ void InterpolationFilter::filterVer(const ComponentID compID, Pel const *src, in
   }
 }
 
+void InterpolationFilter::filterN2_2D( const ComponentID compID, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY, const ClpRng& clpRng )
+{
+  m_filterN2_2D( clpRng, src, srcStride, dst, dstStride, width, height, m_bilinearFilterPrec4[fracX], m_bilinearFilterPrec4[fracY] );
+}
+
+
+void InterpolationFilter::scalarFilterN2_2D( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *ch, TFilterCoeff const *cv )
+{
+  Pel *tmp = ( Pel* ) alloca( width * ( height + 1 ) * sizeof( Pel ) );
+
+  filter<2, false, true,  false>( clpRng, src, srcStride, tmp, width,     width, height + 1, ch, true );
+  filter<2, true , false, false>( clpRng, tmp, width,     dst, dstStride, width, height,     cv, true );
+}
+
 void InterpolationFilter::filter4x4( const ComponentID compID, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng,bool useAltHpelIf/*= false*/,int nFilterIdx /*= 0*/ )
 {
   const int vFilterSize = nFilterIdx == 1 ? 2 : ( isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA );
@@ -738,6 +758,73 @@ void InterpolationFilter::filter16x16( const ComponentID compID, const Pel* src,
   else
   {
     THROW( "16x16 interpolation filter does not support bilinear filtering!" );
+  }
+}
+
+template<bool isLast, int w>
+void InterpolationFilter::filterXxY_N2( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* _dst, int dstStride, int width, int h, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+{
+  int row, col;
+
+  Pel cH[2];
+  cH[0] = coeffH[0]; cH[1] = coeffH[1];
+  Pel cV[2];
+  cV[0] = coeffV[0]; cV[1] = coeffV[1];
+
+  int offset1st, offset2nd;
+  int headRoom   = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  int shift1st   = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
+  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
+  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
+
+  if( isLast )
+  {
+    shift1st  -= headRoom;
+    shift2nd  += headRoom;
+    offset1st  = -IF_INTERNAL_OFFS << shift1st;
+    offset2nd  = 1 << ( shift2nd - 1 );
+    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+  }
+  else
+  {
+    shift1st -= headRoom;
+    offset1st = -IF_INTERNAL_OFFS << shift1st;
+    offset2nd = 0;
+  }
+
+  int *tmp = ( int * ) alloca( w * h * sizeof( int ) );
+  memset( tmp, 0, w * h * sizeof( int ) );
+
+  int** dst = ( int ** ) alloca( h * sizeof( int * ) );
+
+  for( int i = 0; i < h; i++ ) dst[i] = &tmp[i * w];
+
+  for( row = 0; row < ( h + 1 ); row++ )
+  {
+    for( col = 0; col < w; col++ )
+    {
+      int sum;
+
+      sum  = src[col    ] * cH[0];
+      sum += src[col + 1] * cH[1];
+
+      sum = ( sum + offset1st ) >> shift1st;
+
+      if( row >= 0 && row < h ) dst[row    ][col] += sum * cV[0];
+
+      if( row >= 1 )
+      {
+        int val = ( dst[row - 1][col] + sum * cV[1] + offset2nd ) >> shift2nd;
+        if( isLast )
+        {
+          val = ClipPel( val, clpRng );
+        }
+        _dst[col] = val;
+      }
+    }
+
+    src += srcStride;
+    _dst += dstStride;
   }
 }
 

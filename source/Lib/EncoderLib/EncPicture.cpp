@@ -126,7 +126,7 @@ void EncPicture::finalizePicture( Picture& pic )
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[0];
   // ALF
-  if( slice->sps->alfEnabled && pic.encPic )
+  if( slice->sps->alfEnabled )
   {
 #ifdef TRACE_ENABLE_ITT
     std::stringstream ss;
@@ -146,18 +146,14 @@ void EncPicture::finalizePicture( Picture& pic )
     DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
   }
 
-  if( pic.writePic )
-  {
-    // write picture
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
-    xWriteSliceData( pic );
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
-  }
+  // write picture
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
+  xWriteSliceData( pic );
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
 
   xCalcDistortion( pic, *slice->sps );
-  
+
   // finalize
-  pic.extendPicBorder();
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );
@@ -181,14 +177,10 @@ void EncPicture::finalizePicture( Picture& pic )
       }
     }
     dst.setApsIdStart( src.getApsIdStart() );
-    pic.picApsGlobal->tid = pic.TLayer; // signal that APS is initialized
   }
 
   // cleanup
-  if( pic.encPic )
-  {
-    pic.cs->releaseIntermediateData();
-  }
+  pic.cs->releaseIntermediateData();
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
   pic.destroyTempBuffers();
@@ -336,58 +328,6 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
   else
   {
     slice->checkLDC = true;
-  }
-}
-
-
-void EncPicture::skipCompressPicture( Picture& pic )
-{
-  CodingStructure& cs = *(pic.cs);
-  Slice* slice        = pic.slices[ 0 ];
-
-  if( slice->sps->saoEnabled )
-  {
-    m_SliceEncoder.saoDisabledRate( cs, pic.getSAO( 1 ) );
-  }
-
-  if ( slice->sps->alfEnabled && ( slice->alfEnabled[COMP_Y] || slice->ccAlfCbEnabled || slice->ccAlfCrEnabled ) )
-  {
-    // Assign the correct APS to slice and emulate the setting of ALF start APS ID
-    int changedApsId = -1;
-    ParameterSetMap<APS>* apsMap = &pic.picApsMap;
-    for( int apsId = ALF_CTB_MAX_NUM_APS - 1; apsId >= 0; apsId-- )
-    {
-      int psId = ( apsId << NUM_APS_TYPE_LEN ) + ALF_APS;
-      APS* aps = apsMap->getPS( psId );
-
-      // Set APS for slice
-      slice->alfAps[apsId] = aps;
-
-      if( aps )
-      {
-        DTRACE( g_trace_ctx, D_ALF, "%d: id=%d, apsId=%d, t=%d, ch=%d, lid=%d, tid=%d, nf=%d,%d\n", slice->poc, psId, aps->apsId, aps->apsType, apsMap->getChangedFlag( psId ), aps->layerId, aps->temporalId, aps->alfParam.newFilterFlag[CH_L], aps->alfParam.newFilterFlag[CH_C] );
-
-        if( apsMap->getChangedFlag( psId ) )
-        {
-          changedApsId = apsId;
-          aps->poc = pic.poc;
-        }
-      }
-    }
-
-    if( changedApsId >= 0 )
-    {
-      apsMap->setApsIdStart( changedApsId );
-    }
-
-    DTRACE( g_trace_ctx, D_ALF, "m_apsIdStart=%d\n", apsMap->getApsIdStart() );
-  }
-
-  if( slice->sps->lumaReshapeEnable )
-  {
-    const int lmcsApsId          = slice->picHeader->lmcsApsId;
-    const int apsMapIdx          = ( lmcsApsId << NUM_APS_TYPE_LEN ) + LMCS_APS;
-    slice->picHeader->lmcsAps    = pic.picApsMap.getPS( apsMapIdx ); // just to be sure
   }
 }
 

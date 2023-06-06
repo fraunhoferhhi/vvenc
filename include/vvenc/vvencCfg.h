@@ -301,11 +301,13 @@ typedef enum
 
 typedef enum
 {
-  VVENC_HASHTYPE_MD5        = 0,
-  VVENC_HASHTYPE_CRC        = 1,
-  VVENC_HASHTYPE_CHECKSUM   = 2,
-  VVENC_HASHTYPE_NONE       = 3,
-  VVENC_NUMBER_OF_HASHTYPES = 4
+  VVENC_HASHTYPE_MD5          = 0,
+  VVENC_HASHTYPE_CRC          = 1,
+  VVENC_HASHTYPE_CHECKSUM     = 2,
+  VVENC_HASHTYPE_MD5_LOG      = 10, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CRC_LOG      = 11, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_CHECKSUM_LOG = 12, //log only, do not write SEI message into the bitstream
+  VVENC_HASHTYPE_NONE
 }vvencHashType;
 
 // ====================================================================================================================
@@ -725,14 +727,14 @@ typedef struct vvenc_config
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
 
-  // decode bitstream options
-  int                 m_switchPOC;                                                       // dbg poc.
-  int                 m_switchDQP;                                                       // switch DQP.
-  int                 m_fastForwardToPOC;                                                // get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
-  bool                m_stopAfterFFtoPOC;
-  bool                m_bs2ModPOCAndType;
-  bool                m_forceDecodeBitstream1;
-  char                m_decodeBitstreams[2][VVENC_MAX_STRING_LEN];                       // filename for decode bitstreams.
+  // obsolete options
+  int                 m_cfgUnused17;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused18;                                                     // TODO: remove unused memory from configuration
+  int                 m_cfgUnused19;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused20;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused21;                                                     // TODO: remove unused memory from configuration
+  bool                m_cfgUnused22;                                                     // TODO: remove unused memory from configuration
+  char                m_cfgUnused23[2][VVENC_MAX_STRING_LEN];                            // TODO: remove unused memory from configuration
 
   // trace rules
   bool                m_listTracingChannels;
@@ -757,7 +759,8 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_reservedFlag[3];
+  bool                m_reservedFlag[2];
+  int8_t              m_fppLinesSynchro;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;
   bool                m_addGOP32refPics;

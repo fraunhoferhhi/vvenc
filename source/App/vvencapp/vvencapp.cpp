@@ -62,6 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/Stats.h"
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
@@ -284,7 +285,7 @@ int main( int argc, char* argv[] )
   if( vvenccfg.m_verbosity > VVENC_WARNING )
   {
     std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    msgApp( nullptr, VVENC_INFO, "started @ %s\n", std::ctime(&startTime2) );
+    msgApp( nullptr, VVENC_NOTICE, "vvencapp [notice]: started @ %s", std::ctime(&startTime2) );
   }
 
   unsigned int uiFrames = 0;
@@ -351,6 +352,13 @@ int main( int argc, char* argv[] )
       iSeqNumber=iRemSkipFrames;
     }
 
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
+    int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
+
+    apputils::Stats cStats;
+    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    bool statsInfoReady = false;
+
     while( !bEof || !bEncodeDone )
     {
       vvencYUVBuffer* ptrYUVInputBuffer = nullptr;
@@ -374,10 +382,6 @@ int main( int argc, char* argv[] )
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.sequenceNumber << " cts " << cYUVInputBuffer.cts << std::endl;
         }
-        else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
-        {
-          msgApp( nullptr, VVENC_INFO, "EOF reached\n" );
-        }
       }
 
       // call encode
@@ -393,6 +397,15 @@ int main( int argc, char* argv[] )
 
       if( AU.payloadUsedSize > 0 )
       {
+        if( vvencappCfg.m_printStats )
+        {
+          cStats.addAU( &AU, &statsInfoReady );
+          if( statsInfoReady )
+          {
+            msgApp( nullptr, VVENC_INFO, cStats.getInfoString().c_str() );
+          }
+        }
+
         if( cOutBitstream.is_open() )
         {
           // write output
@@ -408,6 +421,11 @@ int main( int argc, char* argv[] )
     }
 
     cYuvFileInput.close();
+    
+    if( vvencappCfg.m_printStats )
+    {
+      msgApp( nullptr, VVENC_INFO, cStats.getFinalStats().c_str() );
+    }
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
@@ -433,7 +451,7 @@ int main( int argc, char* argv[] )
 
   if( 0 == uiFrames )
   {
-    msgApp( nullptr, VVENC_INFO, "no frames encoded\n" );
+    msgApp( nullptr, VVENC_INFO, "vvencapp [info]: no frames encoded" );
   }
 
   if( uiFrames && vvenccfg.m_verbosity > VVENC_SILENT )
@@ -441,11 +459,11 @@ int main( int argc, char* argv[] )
     if( vvenccfg.m_verbosity > VVENC_WARNING )
     {
       std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-      msgApp( nullptr, VVENC_INFO, "finished @ %s\n", std::ctime(&endTime2) );
+      msgApp( nullptr, VVENC_NOTICE, "vvencapp [notice]: finished @ %s", std::ctime(&endTime2) );
     }
 
     double dFps = (double)uiFrames / dTimeSec;
-    msgApp( nullptr, VVENC_INFO, "Total Time: %.3f sec. Fps(avg): %.3f encoded Frames %d\n", dTimeSec, dFps, uiFrames );
+    msgApp( nullptr, VVENC_INFO, "vvencapp [info]: Total Time: %.3f sec. Fps(avg): %.3f encoded Frames %d\n", dTimeSec, dFps, uiFrames );
   }
 
   return 0;

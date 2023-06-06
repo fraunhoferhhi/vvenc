@@ -53,7 +53,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/MD5.h"
 #include "NALwrite.h"
-#include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
 #include "EncHRD.h"
 #include "GOPCfg.h"
@@ -73,58 +72,6 @@ static __itt_domain* itt_domain_gopEncoder   = __itt_domain_create( "GOPEncoder"
 // ====================================================================================================================
 // fast forward decoder in encoder
 // ====================================================================================================================
-bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int intraPeriod )
-{
-  CHECK( intraPeriod % gopSize != 0, "broken for aip" );
-  int  tarGop = targetPoc / gopSize;
-  int  curGop = curPoc / gopSize;
-
-  if( tarGop + 1 == curGop )
-  {
-    // part of next GOP only for tl0 pics
-    return curTLayer == 0;
-  }
-
-  int  tarIFr = ( targetPoc / intraPeriod ) * intraPeriod;
-  int  curIFr = ( curPoc / intraPeriod ) * intraPeriod;
-
-  if( curIFr != tarIFr )
-  {
-    return false;
-  }
-
-  int  tarId = targetPoc - tarGop * gopSize;
-
-  if( tarGop > curGop )
-  {
-    return ( tarId == 0 ) ? ( 0 == curTLayer ) : ( 1 >= curTLayer );
-  }
-
-  if( tarGop + 1 < curGop )
-  {
-    return false;
-  }
-
-  int  curId = curPoc - curGop * gopSize;
-  int  tarTL = 0;
-
-  while( tarId != 0 )
-  {
-    gopSize /= 2;
-    if( tarId >= gopSize )
-    {
-      tarId -= gopSize;
-      if( curId != 0 ) curId -= gopSize;
-    }
-    else if( curId == gopSize )
-    {
-      curId = 0;
-    }
-    tarTL++;
-  }
-
-  return curTLayer <= tarTL && curId == 0;
-}
 
 void initPicAuxQPOffsets( const Slice* slice, const bool isBIM ) // get m_picShared->m_picAuxQpOffset and m_picShared->m_ctuBimQpOffset if unavailable
 {
@@ -166,110 +113,6 @@ void initPicAuxQPOffsets( const Slice* slice, const bool isBIM ) // get m_picSha
   }
 }
 
-void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap, MsgLog& msg )
-{
-  // check if we should decode a leading bitstream
-  if( cfg.m_decodeBitstreams[0][0] != '\0' )
-  {
-    if( ffwdDecoder.bDecode1stPart )
-    {
-      if( cfg.m_forceDecodeBitstream1 )
-      {
-        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, msg, false ) ) )
-        {
-          decPic = ffwdDecoder.bDecode1stPart;
-        }
-      }
-      else
-      {
-        // update decode decision
-        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, msg, false, cfg.m_switchPOC ) ) ) )
-        {
-          decPic = ffwdDecoder.bDecode1stPart;
-          return;
-        }
-        else if( pic->getPOC() )
-        {
-          // reset decoder if used and not required any further
-          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, &apsMap, msg );
-        }
-      }
-    }
-
-    encPic |= cfg.m_forceDecodeBitstream1 && !decPic;
-    if( cfg.m_forceDecodeBitstream1 ) { return; }
-  }
-
-
-  // check if we should decode a trailing bitstream
-  if( cfg.m_decodeBitstreams[1][0] != '\0' )
-  {
-    CHECK( cfg.m_IntraPeriod % cfg.m_GOPSize != 0, "broken for aip" );
-    const int  iNextKeyPOC    = (1+cfg.m_switchPOC  / cfg.m_GOPSize)     *cfg.m_GOPSize;
-    const int  iNextIntraPOC  = (1+(cfg.m_switchPOC / cfg.m_IntraPeriod))*cfg.m_IntraPeriod;
-    const int  iRestartIntraPOC   = iNextIntraPOC + (((iNextKeyPOC == iNextIntraPOC) && cfg.m_switchDQP ) ? cfg.m_IntraPeriod : 0);
-
-    bool bDecode2ndPart = (pic->getPOC() >= iRestartIntraPOC);
-    int expectedPoc = pic->getPOC();
-    Slice slice0;
-    if ( cfg.m_bs2ModPOCAndType )
-    {
-      expectedPoc = pic->getPOC() - iRestartIntraPOC;
-      slice0.copySliceInfo( pic->slices[ 0 ], false );
-    }
-    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, &apsMap, msg, true )) ))
-    {
-      decPic = bDecode2ndPart;
-      if ( cfg.m_bs2ModPOCAndType )
-      {
-        for( int i = 0; i < (int)pic->slices.size(); i++ )
-        {
-          pic->slices[ i ]->poc = slice0.poc;
-          if ( pic->slices[ i ]->nalUnitType != slice0.nalUnitType
-              && pic->slices[ i ]->getIdrPicFlag()
-              && slice0.getRapPicFlag()
-              && slice0.isIntra() )
-          {
-            // patch IDR-slice to CRA-Intra-slice
-            pic->slices[ i ]->nalUnitType   = slice0.nalUnitType;
-            pic->slices[ i ]->lastIDR       = slice0.lastIDR;
-            pic->slices[ i ]->colFromL0Flag = slice0.colFromL0Flag;
-            pic->slices[ i ]->colRefIdx     = slice0.colRefIdx;
-          }
-        }
-      }
-      return;
-    }
-  }
-
-  // leave here if we do not use forward to poc
-  if( cfg.m_fastForwardToPOC < 0 )
-  {
-    // let's encode
-    encPic = true;
-    return;
-  }
-
-  // this is the forward to poc section
-  if( ffwdDecoder.bHitFastForwardPOC || isPicEncoded( cfg.m_fastForwardToPOC, pic->getPOC(), pic->TLayer, cfg.m_GOPSize, cfg.m_IntraPeriod ) )
-  {
-    ffwdDecoder.bHitFastForwardPOC |= cfg.m_fastForwardToPOC == pic->getPOC(); // once we hit the poc we continue encoding
-
-    if( ffwdDecoder.bHitFastForwardPOC && cfg.m_stopAfterFFtoPOC && cfg.m_fastForwardToPOC != pic->getPOC() )
-    {
-      return;
-    }
-
-    //except if FastForwardtoPOC is meant to be a SwitchPOC in thist case drop all preceding pictures
-    if( ffwdDecoder.bHitFastForwardPOC && ( cfg.m_switchPOC == cfg.m_fastForwardToPOC ) && ( cfg.m_fastForwardToPOC > pic->getPOC() ) )
-    {
-      return;
-    }
-    // let's encode
-    encPic   = true;
-  }
-}
-
 
 // ====================================================================================================================
 // Constructor / destructor / initialization / destroy
@@ -296,21 +139,13 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
-  , m_appliedSwitchDQP   ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
-  , m_trySkipOrDecodePicture( false )
 {
 }
 
 EncGOP::~EncGOP()
 {
-  if( m_pcEncCfg && ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' ) )
-  {
-    // reset potential decoder resources
-    tryDecodePicture( nullptr, 0, std::string(""), m_ffwdDecoder, nullptr, msg );
-  }
-
   freePicList();
 
   for( auto& picEncoder : m_freePicEncoderList )
@@ -359,7 +194,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   m_seiEncoder.init( encCfg, gopCfg, m_EncHRD );
   m_Reshaper.init  ( encCfg );
 
-  m_appliedSwitchDQP = 0;
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
@@ -377,10 +211,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   {
     m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)m_pcEncCfg->m_FrameScale/(int64_t)m_pcEncCfg->m_FrameRate);
   }
-
-  m_trySkipOrDecodePicture = ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' )
-                            && m_pcRateCtrl->rcIsFinalPass
-                            && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis );
 }
 
 
@@ -504,13 +334,18 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
         // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
-        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) ) 
+        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) )
         {
           break;
         }
 
         // get next picture ready to be encoded
-        auto picItr             = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+        const VVEncCfg* encCfg = m_pcEncCfg;
+        auto picItr             = find_if( m_procList.begin(), m_procList.end(), [encCfg]( auto pic ) {
+          // if ALF enabled and ALFTempPred is used, ensure that refAps is initialized
+          return ( encCfg->m_fppLinesSynchro || pic->slices[ 0 ]->checkRefPicsReconstructed() )
+            && ( !encCfg->m_alf || ( !pic->refApsGlobal || pic->refApsGlobal->initalized ) ); } );
+
         const bool nextPicReady = picItr != m_procList.end();
 
         // check at least one picture and one pic encoder ready
@@ -575,10 +410,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
   Picture* outPic = m_gopEncListOutput.front();
   m_gopEncListOutput.pop_front();
 
-  if( outPic->writePic )
-  {
-    xWritePicture( *outPic, auList, false );
-  }
+  xWritePicture( *outPic, auList, false );
 
   // update pending RC
   // first pic has been written to bitstream
@@ -591,7 +423,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       {
         if( pic != outPic )
         {
-          pic->actualHeadBits = outPic->actualHeadBits;
+          pic->actualHeadBits  = outPic->actualHeadBits;
           pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         }
         m_pcRateCtrl->xUpdateAfterPicRC( pic );
@@ -604,7 +436,8 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
       m_rcUpdateList.pop_front();
   }
 
-  if( m_pcEncCfg->m_useAMaxBT )
+  const bool skipFirstPass = ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && outPic->gopEntry->m_skipFirstPass;
+  if( m_pcEncCfg->m_useAMaxBT && ! skipFirstPass )
   {
     m_BlkStat.updateMaxBT( *outPic->slices[0], outPic->picBlkStat );
   }
@@ -633,36 +466,10 @@ void EncGOP::xSyncAlfAps( Picture& pic )
     return;
   }
 
-  // get previous APS (in coding order) to propagate from it
-  // in parallelization case (parallel pictures), we refer to APS from lower temporal layer
-  // NOTE: elements in the global APS list are following in coding order
-
-  PicApsGlobal* refAps = nullptr;
-  auto curApsItr = std::find_if( m_globalApsList.begin(), m_globalApsList.end(), [&pic]( auto p ) { return p->poc == pic.poc; } );
-  CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
-  if( curApsItr != m_globalApsList.begin() )
-  {
-    if( mtPicParallel )
-    {
-      auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
-      auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
-      auto refApsItr = ( pic.TLayer > 0 ) ? std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid  < pic.TLayer; } ):
-                                            std::find_if( r_begin, r_end, [&pic]( auto p ) { return p->tid == pic.TLayer; } );
-      if( refApsItr == r_end )
-        return;
-      refAps = *refApsItr;
-    }
-    else
-    {
-      curApsItr--;
-      refAps = *curApsItr;
-    }
-  }
-
+  const PicApsGlobal* refAps = pic.refApsGlobal;
   if( !refAps )
     return;
-
-  CHECK( refAps->tid == MAX_UINT, "Attempt referencing from an uninitialized APS" );
+  CHECK( !refAps->initalized, "Attempt referencing from an uninitialized APS" );
 
   // copy ref APSs to current picture
   const ParameterSetMap<APS>& src = refAps->apsMap;
@@ -716,9 +523,15 @@ void EncGOP::xSyncAlfAps( Picture& pic )
 
 void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 {
+  // first pass temporal down-sampling
+  if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic->gopEntry->m_skipFirstPass )
+  {
+    pic->isReconstructed = true;
+    m_freePicEncoderList.push_back( picEncoder );
+    return;
+  }
+
   // decoder in encoder
-  bool decPic = false;
-  bool encPic = false;
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "finalpass", m_pcRateCtrl->rcIsFinalPass ? 1: 0 ) );
 
   if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
@@ -727,20 +540,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
     xSyncAlfAps( *pic );
   }
 
-  if( m_trySkipOrDecodePicture )
-  {
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, pic->picApsMap, msg );
-  }
-  else
-  {
-    encPic = true;
-  }
-
   // initialize next picture
-  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
-  pic->writePic = decPic || encPic;
-  pic->encPic   = encPic;
   pic->isPreAnalysis = m_isPreAnalysis;
 
   if( pic->slices[0]->TLayer + 1 < m_pcEncCfg->m_maxTLayer ) // skip for highest two temporal levels
@@ -757,23 +557,17 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   }
 
   // compress next picture
-  if( pic->encPic )
-  {
-    picEncoder->compressPicture( *pic, *this );
-  }
-  else
-  {
-    picEncoder->skipCompressPicture( *pic );
-  }
+  picEncoder->compressPicture( *pic, *this );
 
   // finish picture encoding and cleanup
-  if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
+  if( m_pcEncCfg->m_numThreads > 0 )
   {
     static auto finishTask = []( int, FinishTaskParam* param ) {
       param->picEncoder->finalizePicture( *param->pic );
       {
         std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
         param->pic->isReconstructed = true;
+        if( param->pic->picApsGlobal ) param->pic->picApsGlobal->initalized = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
         param->gopEncoder->m_gopEncCond.notify_one();
       }
@@ -787,6 +581,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   {
     picEncoder->finalizePicture( *pic );
     pic->isReconstructed = true;
+    if( pic->picApsGlobal ) pic->picApsGlobal->initalized = true;
     m_freePicEncoderList.push_back( picEncoder );
   }
 }
@@ -843,12 +638,6 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList, bool a
 
 void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr )
 {
-
-  if( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' && m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' && m_pcEncCfg->m_fastForwardToPOC < 0 )
-  {
-    CHECK( !( m_numPicsCoded == m_AnalyzeAll.getNumPic() ), "Unspecified error" );
-  }
-
   //--CFG_KDY
   //const int rateMultiplier = 1;
   double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale;
@@ -861,9 +650,9 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   const BitDepths& bitDepths = m_spsMap.getFirstPS()->bitDepths;
   //-- all
-  std::string summary = "\n";
+  std::string summary( "\n" );
   if( m_pcEncCfg->m_verbosity >= VVENC_DETAILS )
-    summary.append("\nSUMMARY --------------------------------------------------------\n");
+    summary.append("\nvvenc [info]: SUMMARY --------------------------------------------------------\n");
 
   summary.append( m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
@@ -873,13 +662,13 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   }
   else
   {
-    summary.append( "\n\nI Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: I Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-    summary.append( "\n\nP Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: P Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-    summary.append( "\n\nB Slices--------------------------------------------------------\n" );
+    summary.append( "\n\nvvenc [info]: B Slices--------------------------------------------------------\n" );
     summary.append( m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
     msg.log( VVENC_DETAILS,summary.c_str() );
   }
@@ -1133,7 +922,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   }
 
   sps.alfEnabled                    = m_pcEncCfg->m_alf;
-  sps.ccalfEnabled                  = m_pcEncCfg->m_ccalf && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400;
+  sps.ccalfEnabled                  = m_pcEncCfg->m_ccalf && sps.alfEnabled && m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400;
 
   sps.saoEnabled                    = m_pcEncCfg->m_bUseSAO;
   sps.jointCbCr                     = m_pcEncCfg->m_JointCbCrMode;
@@ -1156,6 +945,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   {
     VUI& vui = sps.vuiParameters;
     vui.aspectRatioInfoPresent        = m_pcEncCfg->m_aspectRatioInfoPresent;
+    vui.aspectRatioConstantFlag       = true; // false if SampleAspectRatioInfoSEIEnabled, but this SEI is not used
     vui.aspectRatioIdc                = m_pcEncCfg->m_aspectRatioIdc;
     vui.sarWidth                      = m_pcEncCfg->m_sarWidth;
     vui.sarHeight                     = m_pcEncCfg->m_sarHeight;
@@ -1276,7 +1066,6 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   pps.outputFlagPresent                 = false;
   pps.deblockingFilterOverrideEnabled   = !m_pcEncCfg->m_loopFilterOffsetInPPS;
   pps.deblockingFilterDisabled          = m_pcEncCfg->m_bLoopFilterDisable;
-  pps.dbfInfoInPh                       = m_pcEncCfg->m_picPartitionFlag && !m_pcEncCfg->m_loopFilterOffsetInPPS && !m_pcEncCfg->m_bLoopFilterDisable;
 
   if (! pps.deblockingFilterDisabled)
   {
@@ -1325,7 +1114,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
 
   xInitPPSforTiles( pps, sps );
 
-  pps.pcv            = new PreCalcValues( sps, pps, m_pcEncCfg->m_MaxQT, true );
+  pps.pcv            = new PreCalcValues( sps, pps, m_pcEncCfg->m_MaxQT );
 }
 
 void EncGOP::xInitPPSforTiles(PPS &pps,const SPS &sps) const
@@ -1491,6 +1280,60 @@ bool EncGOP::xIsSliceTemporalSwitchingPoint( const Slice* slice, const PicList& 
   return isSTSA;
 }
 
+void EncGOP::xSetupPicAps( Picture* pic )
+{
+  // manage global APS list
+  m_globalApsList.push_back( new PicApsGlobal( pic->poc, pic->TLayer ) );
+  CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
+
+  // the max size of global APS list is more than enough to support parallelization 
+  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
+  {
+    delete m_globalApsList.front();
+    m_globalApsList.pop_front();
+  }
+
+  pic->picApsGlobal = m_globalApsList.back();
+
+  // determine reference APS
+  const bool mtPicParallel = m_pcEncCfg->m_numThreads > 0;
+  if( mtPicParallel && pic->slices[0]->isIntra() )
+  {
+    // reset APS propagation on Intra-Slice in MT-mode
+    return;
+  }
+
+  // get previous APS (in coding order) to propagate from it
+  // in parallelization case (parallel pictures), we refer to APS from lower temporal layer
+  // NOTE: elements in the global APS list are following in coding order
+
+  PicApsGlobal* refAps = nullptr;
+  auto curApsItr = std::find_if( m_globalApsList.begin(), m_globalApsList.end(), [pic]( auto p ) { return p->poc == pic->poc; } );
+  CHECK( curApsItr == m_globalApsList.end(), "Should not happen" );
+
+  if( curApsItr != m_globalApsList.begin() )
+  {
+    if( mtPicParallel )
+    {
+      auto r_begin = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(curApsItr);
+      auto r_end   = std::reverse_iterator<std::deque<PicApsGlobal*>::iterator>(m_globalApsList.begin());
+      auto refApsItr = ( pic->TLayer > 0 ) ? std::find_if( r_begin, r_end, [pic]( auto p ) { return p->tid  < pic->TLayer; } ):
+                                             std::find_if( r_begin, r_end, [pic]( auto p ) { return p->tid == pic->TLayer; } );
+      if( refApsItr == r_end )
+        return;
+      refAps = *refApsItr;
+    }
+    else
+    {
+      curApsItr--;
+      refAps = *curApsItr;
+    }
+  }
+
+  //CHECK( !refAps, "Faied to get reference APS" );
+  pic->refApsGlobal = refAps;
+}
+
 void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 {
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
@@ -1519,15 +1362,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 
     if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
     {
-      m_globalApsList.push_back( new PicApsGlobal( pic->poc ) );
-      CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
-      pic->picApsGlobal = m_globalApsList.back();
-      // the max size of global APS list is more than enough to support parallelization 
-      if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
-      {
-        delete m_globalApsList.front();
-        m_globalApsList.pop_front();
-      }
+        xSetupPicAps( pic );
     }
 
     // continue with next picture
@@ -1544,24 +1379,6 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 
 void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode )
 {
-  // decoder in encoder and FPP: restrict processing list to the default sequential coding order
-  if( m_trySkipOrDecodePicture && m_pcEncCfg->m_maxParallelFrames > 0 )
-  {
-    auto& pic = m_gopEncListInput.front();
-    if( pic->poc == m_pcEncCfg->m_switchPOC )
-    {
-      m_trySkipOrDecodePicture = false;
-    }
-    else
-    {
-      // try to skip or decode picture
-      procList.push_back( pic );
-      rcUpdateList.push_back( pic );
-      m_gopEncListInput.pop_front();
-      return;
-    }
-  }
-
   // in lockstep mode, process only pics of same temporal layer
   if( lockStepMode )
   {
@@ -1599,7 +1416,7 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
     if( ! m_gopEncListOutput.empty() )
       rcUpdateList.push_back( m_gopEncListOutput.front() );
   }
-  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(),                                                         "first picture in RC update and in output list have to be the same" );
+  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(), "first picture in RC update and in output list have to be the same" );
 }
 
 void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncodeLtRef )
@@ -1675,7 +1492,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
-  slice->applyReferencePictureListBasedMarking( picList, slice->rpl[0], slice->rpl[1], 0, *slice->pps );
+  slice->applyReferencePictureListBasedMarking( picList, slice->rpl[0], slice->rpl[1], 0, *slice->pps, m_pcEncCfg->m_numThreads == 0 );
 
   // nalu type refinement
   if ( xIsSliceTemporalSwitchingPoint( slice, picList ) )
@@ -1692,7 +1509,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[0]->numberOfActivePictures ) : slice->rpl[0]->numberOfActivePictures );
   slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : ( numRefs ? std::min( numRefs, slice->rpl[1]->numberOfActivePictures ) : slice->rpl[1]->numberOfActivePictures );
-  slice->constructRefPicList  ( picList, false );
+  slice->constructRefPicList  ( picList, false, m_pcEncCfg->m_numThreads == 0 );
 
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
@@ -1840,13 +1657,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     }
   }
   pic.picApsGlobal = nullptr;
+  pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
-  if( pic.poc == m_pcEncCfg->m_switchPOC )
-  {
-    m_appliedSwitchDQP = m_pcEncCfg->m_switchDQP;
-  }
-  pic.seqBaseQp = m_pcEncCfg->m_QP + m_appliedSwitchDQP;
+  pic.seqBaseQp = m_pcEncCfg->m_QP;
 
   pic.isInitDone = true;
 }
@@ -2117,13 +1931,32 @@ void EncGOP::xSelectReferencePictureList( Slice* slice ) const
 
 void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
+  // first pass temporal down-sampling
+  if( ( ! m_pcRateCtrl->rcIsFinalPass || m_isPreAnalysis ) && pic.gopEntry->m_skipFirstPass )
+  {
+    m_pcRateCtrl->addRCPassStats( pic.cs->slice->poc,
+        0,                /* qp */
+        0,                /* lambda */
+        pic.picVisActY,
+        0,                /* numBits */
+        0,                /* psnrY */
+        pic.cs->slice->isIntra(),
+        pic.cs->slice->TLayer,
+        pic.gopEntry->m_isStartOfIntra,
+        pic.gopEntry->m_isStartOfGop,
+        pic.gopEntry->m_gopNum,
+        pic.gopEntry->m_scType,
+        pic.m_picShared->m_minNoiseLevels );
+    return;
+  }
+
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
   pic.encTime.startTimer();
 
   au.poc           = pic.poc;
   au.temporalLayer = pic.TLayer;
   au.refPic        = pic.isReferenced;
-  if ( ! pic.slices.empty() )
+  if( ! pic.slices.empty() )
   {
     au.sliceType = pic.slices[ 0 ]->sliceType;
   }
@@ -2331,7 +2164,14 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
     m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
+    if ( m_pcEncCfg->m_decodedPictureHashSEIType < VVENC_HASHTYPE_MD5_LOG )
+    {
     trailingSeiMessages.push_back( decodedPictureHashSei );
+  }
+    else
+    {
+      delete decodedPictureHashSei;
+    }
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
@@ -2573,7 +2413,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
     c += 32;
   }
 
-  if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
+  // create info string
   {
     if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
     {
@@ -2714,12 +2554,15 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
     {
       case VVENC_HASHTYPE_MD5:
+      case VVENC_HASHTYPE_MD5_LOG:
         modeName = "MD5";
         break;
       case VVENC_HASHTYPE_CRC:
+      case VVENC_HASHTYPE_CRC_LOG:
         modeName = "CRC";
         break;
       case VVENC_HASHTYPE_CHECKSUM:
+      case VVENC_HASHTYPE_CHECKSUM_LOG:
         modeName = "Checksum";
         break;
       default:
@@ -2733,7 +2576,7 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     }
   }
 
-  if( !accessUnit.InfoString.empty() )
+  if( !accessUnit.InfoString.empty() && m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
     std::string cPicInfo = accessUnit.InfoString;
     cPicInfo.append("\n");

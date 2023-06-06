@@ -160,8 +160,6 @@ Picture::Picture()
     , isNeededForOutput ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
-    , encPic            ( true )
-    , writePic          ( true )
     , precedingDRAP     ( false )
     , gopEntry          ( nullptr )
     , refCounter        ( 0 )
@@ -197,6 +195,7 @@ Picture::Picture()
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
+    , refApsGlobal      ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
@@ -225,8 +224,6 @@ void Picture::reset()
   isFinished          = false;
   isLongTerm          = false;
   isMeanQPLimited     = false;
-  encPic              = false;
-  writePic            = false;
   precedingDRAP       = false;
 
   gopEntry            = nullptr;
@@ -239,6 +236,9 @@ void Picture::reset()
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
+ 
+  if( m_tileColsDone )
+    std::fill( m_tileColsDone->begin(), m_tileColsDone->end(), 0 );
 
   encTime.resetTimer();
 }
@@ -271,6 +271,8 @@ void Picture::destroy( bool bPicHeader )
   {
     delete psei;
   }
+
+  delete m_tileColsDone;
 
   SEIs.clear();
 }
@@ -369,6 +371,11 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   {
     m_picBufs[ PIC_RECONSTRUCTION ].create( chromaFormat, Area( lumaPos(), lumaSize() ), sps.CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
   }
+  if( !m_tileColsDone )
+  {
+    m_tileColsDone = new std::vector<std::atomic<int>> ( pps.pcv->heightInCtus );
+  }
+  std::fill( m_tileColsDone->begin(), m_tileColsDone->end(), 0 );
 
   sliceDataStreams.clear();
   sliceDataNumBins = 0;

@@ -368,6 +368,56 @@ inline static float fastExp( float n, float d )
   return x;
 }
 
+static const int32_t xSzm[6] = {0, 1, 20, 336, 5440, 87296};
+
+// works for bit depths up to incl. 12 and power-of-2 block dimensions in both directions
+void applyPlanarCorrectionCore( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride, const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError )
+{
+  const int32_t blockSize = w * h;
+  const int32_t log2Width = floorLog2 (w);
+  const int32_t maxPelVal = clpRng.max();
+  const int32_t mWeight   = std::min (512u, (uint32_t) motionError * (uint32_t) motionError);
+  const int32_t xSum      = (blockSize * (w - 1)) >> 1;
+  int32_t x1yzm = 0,  x2yzm = 0,  ySum = 0;
+  int32_t b0, b1, b2;
+  int64_t numer, denom;
+
+  for (int32_t y = 0; y < h; y++) // sum up dot-products between indices and sample diffs
+  {
+    for (int32_t x = 0; x < w; x++)
+    {
+      const Pel* pDst = dstPel + y * dstStride + x;
+      const Pel* pRef = refPel + y * refStride + x;
+      const int32_t z = *pDst - *pRef;
+
+      x1yzm += x * z;  x2yzm += y * z;  ySum += z;
+    }
+  }
+
+  denom = blockSize * xSzm[log2Width]; // plane-fit parameters, in fixed-point arithmetic
+  numer = (int64_t) mWeight * ((int64_t) x1yzm * blockSize - xSum * ySum);
+  b1 = int32_t ((numer < 0 ? numer - (denom >> 1) : numer + (denom >> 1)) / denom);
+  b1 = (b1 < INT16_MIN ? INT16_MIN : (b1 > INT16_MAX ? INT16_MAX : b1));
+  numer = (int64_t) mWeight * ((int64_t) x2yzm * blockSize - xSum * ySum);
+  b2 = int32_t ((numer < 0 ? numer - (denom >> 1) : numer + (denom >> 1)) / denom);
+  b2 = (b2 > INT16_MAX ? INT16_MAX : (b2 < INT16_MIN ? INT16_MIN : b2));
+  b0 = (mWeight * ySum - (b1 + b2) * xSum + (blockSize >> 1)) >> (log2Width << 1);
+
+  if (b0 == 0 && b1 == 0 && b2 == 0) return;
+
+  for (int32_t y = 0; y < h; y++) // perform deblocking by adding fitted correction plane
+  {
+    for (int32_t x = 0; x < w; x++)
+    {
+      Pel* const pDst = dstPel + y * dstStride + x;
+      const int32_t p = (b0 + b1 * x + b2 * y + 256) >> 9; // fixed-point plane corrector
+      const int32_t z = *pDst - p;
+
+      *pDst = Pel (z < 0 ? 0 : (z > maxPelVal ? maxPelVal : z));
+    }
+  }
+}
+
 void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double refStrenghts[4], double weightScaling, double sigmaSq )
 {
   const int         w = blk.width;
@@ -496,10 +546,11 @@ double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, con
 }
 
 MCTF::MCTF()
-  : m_encCfg    ( nullptr )
-  , m_threadPool( nullptr )
-  , m_filterPoc ( 0 )
-  , m_lastPicIn ( nullptr )
+  : m_encCfg     ( nullptr )
+  , m_threadPool ( nullptr )
+  , m_isFinalPass( true )
+  , m_filterPoc  ( 0 )
+  , m_lastPicIn  ( nullptr )
 {
   m_motionErrorLumaIntX     = motionErrorLumaInt;
   m_motionErrorLumaInt8     = motionErrorLumaInt;
@@ -511,6 +562,7 @@ MCTF::MCTF()
   m_applyFrac[0][1]         = applyFrac8Core_4Tap;
   m_applyFrac[1][0]         = applyFrac8Core_6Tap;
   m_applyFrac[1][1]         = applyFrac8Core_4Tap;
+  m_applyPlanarCorrection   = applyPlanarCorrectionCore;
   m_applyBlock              = applyBlockCore;
   m_calcVar                 = calcVarCore;
 
@@ -523,14 +575,15 @@ MCTF::~MCTF()
 {
 }
 
-void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
+void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool )
 {
   CHECK( encCfg.m_vvencMCTF.numFrames != encCfg.m_vvencMCTF.numStrength, "should have been checked before" );
 
-  m_encCfg     = &encCfg;
-  m_threadPool = threadPool;
-  m_area       = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
-  m_filterPoc  = 0;
+  m_encCfg      = &encCfg;
+  m_threadPool  = threadPool;
+  m_isFinalPass = isFinalPass;
+  m_filterPoc   = 0;
+  m_area        = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
   const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2) };
@@ -610,6 +663,12 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
   Picture* pic = picFifo[ filterIdx ];
+
+  // first pass temporal down-sampling
+  if( ! m_isFinalPass && pic->gopEntry->m_skipFirstPass )
+  {
+    return;
+  }
 
   const int mctfIdx            = pic->gopEntry ? pic->gopEntry->m_mctfIndex : -1;
   const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;
@@ -1248,6 +1307,11 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
             const int16_t* yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
 
             m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, w, h, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
+          }
+
+          if( mv.rmsme > 0 && m_encCfg->m_QP <= 32 && w == h && w <= 32 ) // "deblocking"
+          {
+            m_applyPlanarCorrection( orgPic.bufs[c].bufAt( bx, by ), orgPic.bufs[c].stride, dst, dstStride, w, h, clpRng, mv.rmsme );
           }
 
           verror[i] = mv.error;

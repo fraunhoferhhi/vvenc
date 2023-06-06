@@ -98,8 +98,8 @@ public:
   AdaptiveLoopFilter();
   virtual ~AdaptiveLoopFilter() {}
   void        reconstructCoeffAPSs    ( CodingStructure& cs, bool luma, bool chroma, bool isRdo);
-  void        reconstructCoeff        ( AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo = false);
-  void        ALFProcess              ( CodingStructure& cs);
+  void        reconstructCoeffFixedAPSs(CodingStructure& cs, bool luma, bool chroma, bool isRdo);
+  void        reconstructCoeff(AlfParam& alfParam, ChannelType channel, const bool isRdo, const bool isRedo = false);
   void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int inputBitDepth[MAX_NUM_CH] );
   void        destroy                 ();
   static void deriveClassificationBlk ( AlfClassifier *classifier,
@@ -156,6 +156,10 @@ protected:
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_chromaClippFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
+  short                        m_coeffApsLumaFixed[ALF_CTB_MAX_NUM_APS][MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_CLASSES];
+  short                        m_clippApsLumaFixed[ALF_CTB_MAX_NUM_APS][MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_CLASSES];
+  short                        m_chromaCoeffFinalFixed[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
+  short                        m_chromaClippFinalFixed[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   uint8_t*                     m_ctuEnableFlag[MAX_NUM_COMP];
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];
   PelStorage                   m_tempBuf;

@@ -169,17 +169,16 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
   {
     for (int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++)
     {
-      codeAlfCtuEnabledFlag(cs, ctuRsAddr, compIdx, NULL);
-      if (isLuma(ComponentID(compIdx)))
+      if(cs.slice->alfEnabled[compIdx])
       {
-        codeAlfCtuFilterIndex(cs, ctuRsAddr, cs.slice->alfEnabled[COMP_Y]);
-      }
-      if (isChroma(ComponentID(compIdx)))
-      {
-        const uint8_t* ctbAlfFlag = cs.slice->alfEnabled[compIdx] ? cs.slice->pic->m_alfCtuEnabled[ compIdx ].data() : nullptr;
-        if( ctbAlfFlag && ctbAlfFlag[ctuRsAddr] )
+        codeAlfCtuEnabledFlag(cs, ctuRsAddr, compIdx);
+        if (isLuma(ComponentID(compIdx)))
         {
-          codeAlfCtuAlternative( cs, ctuRsAddr, compIdx );
+          codeAlfCtuFilterIndex(cs, ctuRsAddr);
+        }
+        if (isChroma(ComponentID(compIdx)))
+        {
+          codeAlfCtuAlternative(cs, ctuRsAddr, compIdx, &cs.slice->alfAps[cs.slice->chromaApsId]->alfParam );
         }
       }
     }
@@ -2894,36 +2893,33 @@ void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ComponentID compID, Al
 
   for( int ctuIdx = 0; ctuIdx < numCTUs; ctuIdx++ )
   {
-    codeAlfCtuEnabledFlag( cs, ctuIdx, compID, alfParam );
+    codeAlfCtuEnabledFlag( cs, ctuIdx, compID );
   }
 }
 
 
-void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx, AlfParam* alfParam)
+void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx)
 {
-  const bool alfComponentEnabled = (alfParam != NULL) ? alfParam->alfEnabled[compIdx] : cs.slice->alfEnabled[compIdx];
+  CHECKD( !cs.sps->alfEnabled, "ALF is disabled in SPS" ); 
 
-  if( cs.sps->alfEnabled && alfComponentEnabled )
-  {
-    const PreCalcValues& pcv = *cs.pcv;
-    int                 frame_width_in_ctus = pcv.widthInCtus;
-    int                 ry = ctuRsAddr / frame_width_in_ctus;
-    int                 rx = ctuRsAddr - ry * frame_width_in_ctus;
-    const Position      pos( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
-    const uint32_t          curSliceIdx = cs.slice->independentSliceIdx;
-    const uint32_t      curTileIdx = cs.pps->getTileIdx( pos );
-    bool                leftAvail = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0 ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
-    bool                aboveAvail = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
+  const PreCalcValues& pcv = *cs.pcv;
+  int                 frame_width_in_ctus = pcv.widthInCtus;
+  int                 ry = ctuRsAddr / frame_width_in_ctus;
+  int                 rx = ctuRsAddr - ry * frame_width_in_ctus;
+  const Position      pos( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
+  const uint32_t      curSliceIdx = cs.slice->independentSliceIdx;
+  const uint32_t      curTileIdx  = cs.pps->getTileIdx( pos );
+  bool                leftAvail   = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0 ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
+  bool                aboveAvail  = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
 
-    int leftCTUAddr = leftAvail ? ctuRsAddr - 1 : -1;
-    int aboveCTUAddr = aboveAvail ? ctuRsAddr - frame_width_in_ctus : -1;
+  int leftCTUAddr = leftAvail ? ctuRsAddr - 1 : -1;
+  int aboveCTUAddr = aboveAvail ? ctuRsAddr - frame_width_in_ctus : -1;
 
-    const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
-    int ctx = 0;
-    ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
-    ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
-    m_BinEncoder.encodeBin( ctbAlfFlag[ctuRsAddr], Ctx::ctbAlfFlag( compIdx * 3 + ctx ) );
-  }
+  const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
+  int ctx = 0;
+  ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
+  ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
+  m_BinEncoder.encodeBin( ctbAlfFlag[ctuRsAddr], Ctx::ctbAlfFlag( compIdx * 3 + ctx ) );
 }
 
 
@@ -3009,13 +3005,8 @@ void CABACWriter::mip_pred_mode( const CodingUnit& cu )
 }
 
 
-void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr, bool alfEnableLuma)
+void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr)
 {
-  if ( (!cs.sps->alfEnabled) || (!alfEnableLuma))
-  {
-    return;
-  }
-
   const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ COMP_Y ].data();
   if (!ctbAlfFlag[ctuRsAddr])
   {
@@ -3085,16 +3076,13 @@ void CABACWriter::codeAlfCtuAlternative( CodingStructure& cs, uint32_t ctuRsAddr
 {
   if( compIdx == COMP_Y )
     return;
-  int apsIdx = alfParam ? 0 : cs.slice->chromaApsId;
-  const AlfParam& alfParamRef = alfParam ? (*alfParam) : cs.slice->alfAps[apsIdx]->alfParam;
 
-  if( alfParam || (cs.sps->alfEnabled && cs.slice->alfEnabled[compIdx]) )
   {
     const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
 
     if( ctbAlfFlag[ctuRsAddr] )
     {
-      const int numAlts = alfParamRef.numAlternativesChroma;
+      const int numAlts = alfParam->numAlternativesChroma;
       const uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
       unsigned numOnes = ctbAlfAlternative[ctuRsAddr];
       assert( ctbAlfAlternative[ctuRsAddr] < numAlts );
