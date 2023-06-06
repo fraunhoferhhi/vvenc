@@ -215,6 +215,7 @@ public:
   bool                          isNeededForOutput;
   bool                          isFinished;
   bool                          isLongTerm;
+  bool                          isFlush;
   bool                          precedingDRAP; // preceding a DRAP picture in decoding order
 
   const GOPEntry*               gopEntry;
