@@ -374,11 +374,11 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
           if( pic->gopEntry->m_isStartOfGop )
           {
             // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
-            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! m_procList.back()->isFlush )
+            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! pic->isFlush )
             {
               break;
             }
-            m_pcRateCtrl->processFirstPassData( m_procList.back()->isFlush, pic->poc );
+            m_pcRateCtrl->processFirstPassData( pic->isFlush, pic->poc );
           }
         }
 
