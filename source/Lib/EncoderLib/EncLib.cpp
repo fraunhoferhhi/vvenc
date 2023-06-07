@@ -412,7 +412,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( picShared )
       {
         picShared->reuse( m_picsRcvd, yuvInBuf );
-        m_encStages[ 0 ]->addPicSorted( picShared );
+        m_encStages[ 0 ]->addPicSorted( picShared, flush );
         m_picsRcvd  += 1;
         inputPending = false;
       }

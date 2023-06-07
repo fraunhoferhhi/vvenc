@@ -605,10 +605,10 @@ void MCTF::initPicture( Picture* pic )
   pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void MCTF::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // ensure this is only processed if necessary 
-  if( !flush && (picList.empty() || ( m_lastPicIn == picList.back())))
+  if( picList.empty() || ( m_lastPicIn == picList.back() && ! picList.back()->isFlush ))
   {
     return;
   }

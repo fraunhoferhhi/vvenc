@@ -285,21 +285,21 @@ void EncGOP::waitForFreeEncoders()
   }
 }
 
-void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
 
   // create list of pictures ordered in coding order and ready to be encoded
-  xInitPicsInCodingOrder( picList, flush );
+  xInitPicsInCodingOrder( picList );
 
   // encode pictures
-  xProcessPictures( flush, auList, doneList );
+  xProcessPictures( auList, doneList );
+
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
   // release pictures not needed anymore
-  const bool allDone = flush && m_numPicsCoded >= m_picCount;
-  xReleasePictures( picList, freeList, allDone );
+  xReleasePictures( picList, freeList );
 
   // clear output access unit
   if( m_isPreAnalysis )
@@ -308,7 +308,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   }
 }
 
-void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& doneList )
+void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
 {
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = (m_pcEncCfg->m_RCTargetBitrate > 0 || (m_pcEncCfg->m_LookAhead > 0 && !m_isPreAnalysis)) && (m_pcEncCfg->m_maxParallelFrames > 0);
@@ -374,11 +374,11 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
           if( pic->gopEntry->m_isStartOfGop )
           {
             // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
-            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && !flush )
+            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! pic->isFlush )
             {
               break;
             }
-            m_pcRateCtrl->processFirstPassData( flush, pic->poc );
+            m_pcRateCtrl->processFirstPassData( pic->isFlush, pic->poc );
           }
         }
 
@@ -627,11 +627,12 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
   }
 }
 
-void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList, bool allDone )
+void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
 {
+  const bool allPicsDone = m_numPicsCoded >= m_picCount && ( picList.empty() || picList.back()->isFlush );
   for( auto pic : picList )
   {
-    if( allDone || ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) )
+    if( ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) || allPicsDone )
       freeList.push_back( pic );
   }
 }
@@ -1334,7 +1335,7 @@ void EncGOP::xSetupPicAps( Picture* pic )
   pic->refApsGlobal = refAps;
 }
 
-void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
+void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 {
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no frame parallel processing enabled, but multiple pics in flight" );
@@ -1346,7 +1347,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     if( pic->isInitDone )
       continue;
     // continue with next pic in increasing coding number order
-    if( ! flush && pic->gopEntry->m_codingNum != m_lastCodingNum + 1 )
+    if( pic->gopEntry->m_codingNum != m_lastCodingNum + 1 && ! picList.back()->isFlush )
       break;
 
     CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );

@@ -129,7 +129,7 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic );
-  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 

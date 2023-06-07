@@ -160,6 +160,7 @@ Picture::Picture()
     , isNeededForOutput ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
+    , isFlush           ( false )
     , precedingDRAP     ( false )
     , gopEntry          ( nullptr )
     , refCounter        ( 0 )
@@ -223,6 +224,7 @@ void Picture::reset()
   isNeededForOutput   = true;
   isFinished          = false;
   isLongTerm          = false;
+  isFlush             = false;
   isMeanQPLimited     = false;
   precedingDRAP       = false;
 
