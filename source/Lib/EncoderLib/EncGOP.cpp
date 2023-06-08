@@ -371,6 +371,10 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
         {
           CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
 
+          if( pic->isFlush )
+          {
+            m_pcRateCtrl->setRCRateSavingState(0); // tell budget estimation that end of video is near
+          }
           if( pic->gopEntry->m_isStartOfGop )
           {
             // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
