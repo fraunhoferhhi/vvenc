@@ -107,14 +107,15 @@ namespace vvenc {
 
     bool            twoPass;
     bool            isLookAhead;
-    unsigned        framesCoded;
-    int             targetRate;
+    bool            isIntraGOP;
+    bool            isRateSavingMode;
     double          frameRate;
+    int             targetRate;
+    int             maxGopRate;
     int             gopSize;
     unsigned        intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
-    int64_t         bitsUsedIn1stPass;
     int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
@@ -122,7 +123,7 @@ namespace vvenc {
     unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastIntraQP;
-    bool            lastIntraBitsSaved;
+    double          lastIntraSM; // temporal stationarity measure; 1: highly stationary (static), 0: highly nonstationary (irregular)
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
     double          maxEstLambda;
@@ -136,10 +137,11 @@ namespace vvenc {
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp);
     void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
+    double  frameGopRatio; // frame bits/GOP bits
     int     targetBits;
     int     tmpTargetBits;
     int     poc;
@@ -148,8 +150,9 @@ namespace vvenc {
 
   protected:
     EncRCSeq* encRCSeq;
-    int     frameLevel;
-    int     picQP;           // in integer form
+    int       frameLevel;    // non-I: TLayer + 1
+    int16_t   picQP;         // in integer form
+    uint16_t  picBits;       // after 2nd pass
   };
 
   class RateCtrl
@@ -166,6 +169,7 @@ namespace vvenc {
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
                          const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+    void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void processGops();
     void updateMinNoiseLevelsGop( const bool flush, const int poc );
