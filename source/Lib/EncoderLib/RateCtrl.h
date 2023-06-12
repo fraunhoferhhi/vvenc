@@ -66,10 +66,11 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
                   const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const SceneType _scType,
-                  const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
+                  const uint16_t _motionEstError, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
                   isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
+                  motionEstError( _motionEstError ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {
                     std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
@@ -87,6 +88,7 @@ namespace vvenc {
     bool      isStartOfGop                            { false };
     int       gopNum                                  { 0 };
     SceneType scType                                  { SCT_NONE };
+    uint16_t  motionEstError                          { 0 };
     uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ]  {};
     bool      isNewScene                              { false };
     bool      refreshParameters                       { false };
@@ -114,6 +116,7 @@ namespace vvenc {
     int             maxGopRate;
     int             gopSize;
     unsigned        intraPeriod;
+    bool            scRelax;
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         bitsUsedQPLimDiff;
@@ -168,15 +171,10 @@ namespace vvenc {
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
-                         const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+                         const uint16_t motEstError, const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
     void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
-    void processGops();
-    void updateMinNoiseLevelsGop( const bool flush, const int poc );
-    double updateQPstartModelVal();
-    double getAverageBitsFromFirstPass();
-    void detectSceneCuts();
-    void xUpdateAfterPicRC( const Picture* pic );
+    void updateAfterPicEncRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
@@ -198,6 +196,12 @@ namespace vvenc {
 
     void xProcessFirstPassData( const bool flush, const int poc );
     void storeStatsData( TRCPassStats statsData );
+    double getAverageBitsFromFirstPass();
+    void detectSceneCuts();
+    void processGops();
+    void updateMotionErrStatsGop( const bool flush, const int poc );
+    bool isLookAheadBoostAllowed( const int thresholdDivisor );
+    double updateQPstartModelVal();
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
     void writeStatsHeader();
@@ -217,6 +221,9 @@ namespace vvenc {
     int                     m_numPicAddedToList;
     int                     m_updateNoisePoc;
     bool                    m_resetNoise;
+    uint8_t                 m_gopMEErrorCBufIdx;
+    uint16_t                m_maxPicMotionError;
+    uint16_t                m_gopMEErrorCBuf[ QPA_MAX_NOISE_LEVELS ];
     uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
     TRCPassStats            m_tempDownSamplStats[ VVENC_MAX_TLAYER + 1 ];
   };

@@ -664,7 +664,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   Picture* pic = picFifo[ filterIdx ];
 
-  // first pass temporal down-sampling
+  // first-pass temporal downsampling
   if( ! m_isFinalPass && pic->gopEntry->m_skipFirstPass )
   {
     return;
@@ -696,8 +696,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   {
     isFilterThisFrame = false;
   }
-
-  pic->m_picShared->m_picAuxQpOffset = 0;
 
   if ( isFilterThisFrame )
   {
@@ -826,6 +824,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             nMax++; // count all CTUs with non-zero motion error (excludes e.g. black borders). CTU with the motion error peak is subtracted below
           }
         }
+        pic->m_picShared->m_picMotEstError = uint16_t (0.5 + meanRmsAcrossPic / numCtu);
 
         if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {

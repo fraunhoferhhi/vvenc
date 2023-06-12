@@ -77,6 +77,7 @@ EncRCSeq::EncRCSeq()
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
   lastIntraQP         = 0;
   lastIntraSM         = 0.0;
+  scRelax             = false;
   bitDepth            = 0;
 }
 
@@ -287,6 +288,9 @@ RateCtrl::RateCtrl(MsgLog& logger)
   m_numPicAddedToList  = 0;
   m_updateNoisePoc     = -1;
   m_resetNoise         = true;
+  m_gopMEErrorCBufIdx  = 0;
+  m_maxPicMotionError  = 0;
+  std::fill_n( m_gopMEErrorCBuf, QPA_MAX_NOISE_LEVELS, 0 );
   std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
   std::fill_n( m_tempDownSamplStats, VVENC_MAX_TLAYER + 1, TRCPassStats() );
 }
@@ -517,6 +521,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+                                                    statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
   }
@@ -571,6 +576,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+                                                    0, // motionEstError
                                                     minNoiseLevels
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
@@ -668,10 +674,10 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 
   if( m_pcEncCfg->m_GOPSize > 8
       && m_pcEncCfg->m_IntraPeriod >= m_pcEncCfg->m_GOPSize
-      && m_pcEncCfg->m_usePerceptQPA
+      && ( m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_vvencMCTF.MCTF > 0 )
       && m_pcEncCfg->m_RCNumPasses == 1 )
   {
-    updateMinNoiseLevelsGop( flush, poc );
+    updateMotionErrStatsGop( flush, poc );
   }
 
   encRCSeq->firstPassData = m_listRCFirstPassStats;
@@ -764,7 +770,7 @@ void RateCtrl::detectSceneCuts()
     }
     if (it->scType == SCT_TL0_SCENE_CUT && !needRefresh[0]) // assume scene cuts at all adapted I-frames
     {
-      it->isNewScene = needRefresh[0] = needRefresh[1] = true;
+      it->isNewScene = needRefresh[0] = needRefresh[1] = needRefresh[2] = true;
     }
 
     it->refreshParameters = needRefresh[tmpLevel];
@@ -886,7 +892,7 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
+void RateCtrl::updateMotionErrStatsGop( const bool flush, const int poc )
 {
   CHECK( poc <= m_updateNoisePoc, "given TL0 poc before last TL0 poc" );
 
@@ -895,6 +901,7 @@ void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
   // reset only if full gop pics available or previous gop ends with intra frame
   if( ! bIncomplete || m_resetNoise )
   {
+    m_maxPicMotionError = 0;
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
   }
   m_resetNoise = true;
@@ -902,6 +909,7 @@ void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
   // currently disabled for last incomplete gop (TODO: check)
   if( bIncomplete && flush )
   {
+    m_maxPicMotionError = 0;
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     return;
   }
@@ -919,9 +927,13 @@ void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
     const auto& stat = *itr;
     if( stat.poc > poc )
     {
+      m_gopMEErrorCBufIdx = ( m_gopMEErrorCBufIdx + 1u ) & uint8_t( QPA_MAX_NOISE_LEVELS - 1 );
+      m_gopMEErrorCBuf[ m_gopMEErrorCBufIdx ] = m_maxPicMotionError;
       m_resetNoise = stat.isIntra; // in case last update poc is intra, we cannot reuse the old noise levels for the next gop
       break;
     }
+    m_maxPicMotionError = std::max( m_maxPicMotionError, stat.motionEstError );
+
     for( int i = 0; i < QPA_MAX_NOISE_LEVELS; i++ )
     {
       if( stat.minNoiseLevels[ i ] < m_minNoiseLevels[ i ] )
@@ -933,6 +945,23 @@ void RateCtrl::updateMinNoiseLevelsGop( const bool flush, const int poc )
 
   // store highest poc used for current update
   m_updateNoisePoc = poc;
+}
+
+bool RateCtrl::isLookAheadBoostAllowed( const int thresholdDivisor )
+{
+  const unsigned thresh = 128 / std::max (1, thresholdDivisor);
+  unsigned num = 0, sum = 0;
+
+  for (int i = 0; i < QPA_MAX_NOISE_LEVELS; i++) // go through non-zero values in circ. buffer
+  {
+    if (m_gopMEErrorCBuf[i] > 0)
+    {
+      num++;
+      sum += m_gopMEErrorCBuf[i];
+    }
+  }
+
+  return (num > 0 && m_gopMEErrorCBuf[m_gopMEErrorCBufIdx] * num > sum + thresh * num);
 }
 
 double RateCtrl::updateQPstartModelVal()
@@ -965,12 +994,13 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfGop,
                                const int gopNum,
                                const SceneType scType,
+                               const uint16_t motEstError,
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, motEstError, minNoiseLevels));
 }
 
-void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
+void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 {
   const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
   const double scale = encRCSeq->intraPeriod / ( encRCSeq->intraPeriod + encRCSeq->lastIntraSM * encRCSeq->gopSize );
@@ -1012,6 +1042,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           const double sqrOfResRatio = double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 );
           const int firstPassSliceQP = it->qp;
           const int secondPassBaseQP = ( m_pcEncCfg->m_LookAhead ? ( m_pcEncCfg->m_QP + getBaseQP() ) >> 1 : m_pcEncCfg->m_QP );
+          const int budgetRelaxScale = ( encRCSeq->maxGopRate + 0.5 < 2.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate ? 2 : 3 ); // quarters
           const bool isEndOfSequence = ( it->poc >= flushPOC && flushPOC >= 0 );
           double d = (double)it->targetBits, tmpVal;
           uint16_t visAct = it->visActY;
@@ -1049,16 +1080,40 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           }
           if ( it->isStartOfGop )
           {
-            encRCSeq->isIntraGOP = ( it->isStartOfIntra && !isEndOfSequence && !encRCSeq->isRateSavingMode );
+            bool allowMoreRatePeaks = false;
+
+            if ( m_pcEncCfg->m_LookAhead && !encRCSeq->isRateSavingMode ) // bitrate "booster"
+            {
+              const bool maxRateCap = ( encRCSeq->maxGopRate + 0.5 >= 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate );
+
+              if ( isLookAheadBoostAllowed( maxRateCap ? 3 : budgetRelaxScale - 1 ) )
+              {
+                allowMoreRatePeaks = true;
+                if ( !maxRateCap )
+                {
+                  encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( (4 - budgetRelaxScale) * encRCSeq->estimatedBitUsage + budgetRelaxScale * encRCSeq->bitsUsed + 2 ) >> 2 );
+                }
+                else
+                {
+                  encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, encRCSeq->bitsUsed ); // min. rate constraint
+                  encRCSeq->lastIntraSM = 1.0;
+                }
+              }
+            }
+            encRCSeq->isIntraGOP = ( ( it->isStartOfIntra || allowMoreRatePeaks ) && !isEndOfSequence && !encRCSeq->isRateSavingMode );
           }
+          else if ( frameLevel == 2 && it->refreshParameters && encRCSeq->scRelax && !isEndOfSequence && !encRCSeq->isRateSavingMode )
+          {
+            encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, encRCSeq->bitsUsed ); // cut: relax rate constraint
+          }
+          encRCSeq->scRelax = ( frameLevel < 2 && it->refreshParameters && encRCSeq->estimatedBitUsage > encRCSeq->bitsUsed );
+
           CHECK( slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7" );
 
           tmpVal = ( encRCSeq->isIntraGOP ? 0.5 + 0.5 * encRCSeq->lastIntraSM : 0.5 ); // IGOP
           if ( !isEndOfSequence && !m_pcEncCfg->m_LookAhead && frameLevel == 2 && encRCSeq->maxGopRate + 0.5 < 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate )
           {
-            const int relaxScale = ( encRCSeq->maxGopRate + 0.5 < 2.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate ? 2 : 3 ); // quarters
-
-            encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( relaxScale * encRCSeq->estimatedBitUsage + ( 4 - relaxScale ) * encRCSeq->bitsUsed + 2 ) >> 2 );
+            encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( budgetRelaxScale * encRCSeq->estimatedBitUsage + ( 4 - budgetRelaxScale ) * encRCSeq->bitsUsed + 2 ) >> 2 );
           }
 
           // calculate the difference of under or overspent bits and adjust the current target bits based on the GOP and frame ratio
