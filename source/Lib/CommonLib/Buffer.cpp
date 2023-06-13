@@ -1255,47 +1255,16 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
+void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
 {
-  CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
-  pelUnitBuf.chromaFormat = chFmt;
-  const int numComp = getNumberValidComponents( chFmt );
-  for ( int i = 0; i < numComp; i++ )
-  {
-    const vvencYUVPlane& src = yuvBuffer.planes[ i ];
-    CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
-    PelBuf& dest = pelUnitBuf.bufs[i];
-    CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
-
-    for( int y = 0; y < src.height; y++ )
-    {
-      ::memcpy( dest.buf + y*dest.stride, src.ptr + y*src.stride, src.width * sizeof(int16_t) );
-
-      // pad right if required
-      for( int x = src.width; x < dest.width; x++ )
-      {
-        dest.buf[ x + y*dest.stride] = dest.buf[ src.width - 1 + y*dest.stride];
-      }
-    }
-
-    // pad bottom if required
-    for( int y = src.height; y < dest.height; y++ )
-    {
-      ::memcpy( dest.buf + y*dest.stride, dest.buf + (src.height-1)*dest.stride, dest.width * sizeof(int16_t) );
-    }
-  }
-}
-
-void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
-{
-  const int widthd = yuvPlaneOut.width;
-  const int heightd = yuvPlaneOut.height;
-  int16_t* dstd = yuvPlaneOut.ptr;
+  const int widthd = dest.width;
+  const int heightd = dest.height;
+  int difStride = dest.stride - dest.width;
 
   const int16_t* src = yuvPlaneIn.ptr;
   const int instride = yuvPlaneIn.stride;
   const int width = yuvPlaneIn.width;
-
+  int n = 0;
   for (int j = 0; j < heightd; j++)
   {
     int i = 0;
@@ -1311,53 +1280,50 @@ void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlan
         }
       }
       src += downsampleStep;
-      dstd[0] = (int16_t)((b + 2) / (downsampleStep << 1));
-      dstd++;
+      dest.buf[n] = (int16_t)((b + 2) / (downsampleStep << 1));
+      n++;
     }
+    n += difStride;
     src = src - downsampleStep * i + width;
 
     src += (instride * (downsampleStep - 1));
   }
 }
 
-void copyPadToPelUnitBufDown(PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt)
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
-  vvencYUVBuffer yuvInBufdown;
-  for (int i = 0; i < 3; i++)
-  {
-    vvencYUVPlane& yuvPlane = yuvInBufdown.planes[i];
-    yuvPlane.width = pelUnitBuf.bufs[i].width;
-    yuvPlane.height = pelUnitBuf.bufs[i].height;
-    yuvPlane.stride = pelUnitBuf.bufs[i].width;
-    const int size = yuvPlane.stride * yuvPlane.height;
-    yuvPlane.ptr = (size > 0) ? new int16_t[size] : nullptr;
-  }
-  //
-  CHECK(pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized");
+  CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
   pelUnitBuf.chromaFormat = chFmt;
-  const int numComp = getNumberValidComponents(chFmt);
-  for (int i = 0; i < numComp; i++)
+  const int numComp = getNumberValidComponents( chFmt );
+  for ( int i = 0; i < numComp; i++ )
   {
-    const vvencYUVPlane& src1 = yuvBuffer.planes[i];
-    CHECK(src1.ptr == nullptr, "yuvBuffer not setup");
+    const vvencYUVPlane& src = yuvBuffer.planes[ i ];
+    CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
     PelBuf& dest = pelUnitBuf.bufs[i];
-    CHECK(dest.buf == nullptr, "yuvBuffer not setup");
+    CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
 
-    vvencYUVPlane yuvPlanedown;
-    yuvPlanedown = yuvInBufdown.planes[i];
-    downsampleYuvPlane(yuvPlanedown, src1, 2 );
-
-    for (int y = 0; y < dest.height; y++)
+    if (dest.width < src.width)
     {
-      ::memcpy(dest.buf + y * dest.stride, yuvPlanedown.ptr + y * dest.width, dest.width * sizeof(int16_t));
-      for (int x = yuvPlanedown.width; x < dest.width; x++)
-      {
-        dest.buf[x + y * dest.stride] = dest.buf[yuvPlanedown.width - 1 + y * dest.stride];
-      }
+      downsampleYuv(dest, src, 2);
     }
-    for (int y = yuvPlanedown.height; y < dest.height; y++)
+    else
     {
-      ::memcpy(dest.buf + y * dest.stride, dest.buf + (yuvPlanedown.height - 1) * dest.stride, dest.width * sizeof(int16_t));
+      for (int y = 0; y < src.height; y++)
+      {
+        ::memcpy(dest.buf + y * dest.stride, src.ptr + y * src.stride, src.width * sizeof(int16_t));
+
+        // pad right if required
+        for (int x = src.width; x < dest.width; x++)
+        {
+          dest.buf[x + y * dest.stride] = dest.buf[src.width - 1 + y * dest.stride];
+        }
+      }
+
+      // pad bottom if required
+      for (int y = src.height; y < dest.height; y++)
+      {
+        ::memcpy(dest.buf + y * dest.stride, dest.buf + (src.height - 1) * dest.stride, dest.width * sizeof(int16_t));
+      }
     }
   }
 }

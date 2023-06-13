@@ -133,14 +133,7 @@ public:
     CHECK( m_refCount < 0, "PicShared not created" );
     CHECK( isUsed(),       "PicShared still in use" );
 
-    if(m_origBuf.bufs[0].width < yuvInBuf->planes[0].width)
-    {
-      copyPadToPelUnitBufDown(m_origBuf, *yuvInBuf, getChromaFormat());
-    }
-    else
-    {
-      copyPadToPelUnitBuf(m_origBuf, *yuvInBuf, getChromaFormat());
-    }
+    copyPadToPelUnitBuf(m_origBuf, *yuvInBuf, getChromaFormat());
 
     m_isSccWeak    = false;
     m_isSccStrong  = false;
