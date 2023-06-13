@@ -802,9 +802,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 && ( m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
       {
         const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
-#if USE_MCTF_INFO
-        double meanRmsAcrossPic = 0.0;
-#endif
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
           const Position pos ((i % widthInCtus) * ctuSize, (i / widthInCtus) * ctuSize);
@@ -813,9 +810,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           double meanInCTU;
 
           sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
-#if USE_MCTF_INFO
-          meanRmsAcrossPic += bd12bScale * sumRMS[i] / blkCount[i];
-#endif
           meanInCTU = bd12bScale * sumRMS[i] / blkCount[i];
           meanRmsAcrossPic += meanInCTU;
           if (meanInCTU < pic->m_picShared->m_minNoiseLevels[avgIndex])
@@ -831,10 +825,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             nMax++; // count all CTUs with non-zero motion error (excludes e.g. black borders). CTU with the motion error peak is subtracted below
           }
         }
-#if USE_MCTF_INFO
-        meanRmsAcrossPic /= (double)numCtu;
-        pic->m_picShared->m_meanRmsAcrossPic = meanRmsAcrossPic;
-#endif
 
         if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
@@ -843,20 +833,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
         }
       }
-#if USE_MCTF_INFO
-      else
-      {
-        const double bd12bScale = double(m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
-        double meanRmsAcrossPic = 0.0;
-        for (int i = 0; i < numCtu; i++) // start noise estimation with motion errors
-        {
-          sumRMS[i] = std::min(sumRMS[i], sumRMS[i + numCtu]);
-          meanRmsAcrossPic += bd12bScale * sumRMS[i] / blkCount[i];
-        }
-        meanRmsAcrossPic /= (double)numCtu;
-        pic->m_picShared->m_meanRmsAcrossPic = meanRmsAcrossPic;
-      }
-#endif
 
       if( !m_encCfg->m_blockImportanceMapping || !pic->useScMCTF )
       {

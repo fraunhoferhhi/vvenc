@@ -269,14 +269,9 @@ public:
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
-#if USE_SP_ACT
+#if DOWNSAMPLE
   uint32_t                      picSpatVisAct;
-#endif
-#if USE_VISACT
   bool                          resetVisAct;
-#endif
-#if USE_MCTF_INFO
-  double                        meanRmsAcrossPic;
 #endif
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];

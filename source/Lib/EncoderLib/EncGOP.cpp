@@ -461,7 +461,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 
   // create list of pictures ordered in coding order and ready to be encoded
   xInitPicsInCodingOrder( picList, flush );
-#if USE_VISACT
+#if DOWNSAMPLE
   if ((m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
   {
     for (auto pic : picList)
@@ -2197,10 +2197,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
         pic.gopEntry->m_isStartOfGop,
         pic.gopEntry->m_gopNum,
         pic.gopEntry->m_scType,
-#if USE_MCTF_INFO
-        pic.meanRmsAcrossPic,
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
         pic.picSpatVisAct,
 #endif
         pic.m_picShared->m_minNoiseLevels );
@@ -2635,10 +2632,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
                                   pic->gopEntry->m_scType,
-#if USE_MCTF_INFO
-                                  pic->meanRmsAcrossPic,
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                                   pic->picSpatVisAct,
 #endif
                                   pic->m_picShared->m_minNoiseLevels );

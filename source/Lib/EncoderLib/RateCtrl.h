@@ -66,20 +66,14 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
                   const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const SceneType _scType,
-#if USE_MCTF_INFO
-                  int _meanRmsAcrossPic,
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                   int _spVisAct,
 #endif
                   const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
                   isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
-#if USE_MCTF_INFO
-                  meanRmsAcrossPic(_meanRmsAcrossPic),
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                   spVisAct(_spVisAct),
 #endif
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
@@ -99,10 +93,7 @@ namespace vvenc {
     bool      isStartOfGop                            { false };
     int       gopNum                                  { 0 };
     SceneType scType                                  { SCT_NONE };
-#if USE_MCTF_INFO
-    int       meanRmsAcrossPic;
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
     int       spVisAct;
 #endif
     uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ]  {};
@@ -183,10 +174,7 @@ namespace vvenc {
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
-#if USE_MCTF_INFO
-                         int meanRmsAcrossPic,
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                          int spVisAct,
 #endif
                          const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );

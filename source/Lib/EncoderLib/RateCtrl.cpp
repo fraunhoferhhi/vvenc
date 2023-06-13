@@ -497,10 +497,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
-    #if USE_MCTF_INFO
-    { "meanRMS",        statsData.meanRmsAcrossPic },
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
     { "spAct",        statsData.spVisAct },
 #endif
   };
@@ -539,10 +536,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-#if USE_MCTF_INFO
-                                                    data["meanRMS"],
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                                                     data["spAct"],
 #endif
                                                     statsData.minNoiseLevels
@@ -584,10 +578,7 @@ void RateCtrl::readStatsFile()
       || data.find("isStartOfGop") == data.end() || !data["isStartOfGop"].is_boolean()
       || data.find("gopNum") == data.end() || !data["gopNum"].is_number()
       || data.find("scType") == data.end() || !data["scType"].is_number()
-#if USE_MCTF_INFO
-      || data.find("meanRMS") == data.end() || !data["meanRMS"].is_number()
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
       || data.find("spAct") == data.end() || !data["spAct"].is_number()
 #endif
       )
@@ -606,10 +597,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-#if USE_MCTF_INFO
-                                                    data["meanRMS"],
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                                                     data["spAct"],
 #endif
                                                     minNoiseLevels
@@ -635,11 +623,7 @@ void RateCtrl::adjustStatsFileDownsample()
   for (; itr != m_listRCFirstPassStats.end(); itr++)
   {
     auto& stat = *itr;
-#if USE_SP_ACT
     int statValue = stat.spVisAct;
-#else
-    int statValue = stat.meanRmsAcrossPic;
-#endif
     if (statValue != 0)
     {
       meanValue += statValue;
@@ -650,7 +634,6 @@ void RateCtrl::adjustStatsFileDownsample()
   if (meanValue != 0)
   {
     meanValue = meanValue / amount;
-#if ADDMCTF_VAR && USE_SP_ACT
     int sumVar = 0;
     int numVar = 0;
     auto itrv = m_listRCFirstPassStats.begin();
@@ -668,7 +651,6 @@ void RateCtrl::adjustStatsFileDownsample()
       sumVar = sumVar / (numVar - 1);
       sumVar = sqrt(sumVar);
     }
-#endif
     int value_gopbefore = 0;
     int value_gopcur = 0;
     int num_gopcur = 0;
@@ -678,11 +660,7 @@ void RateCtrl::adjustStatsFileDownsample()
     for (; itr != m_listRCFirstPassStats.end(); itr++)
     {
       auto& stat = *itr;
-#if USE_SP_ACT
       int statValue = stat.spVisAct;
-#else
-      int statValue = stat.meanRmsAcrossPic;
-#endif
       if (gopcur != stat.gopNum)
       {
         gopcur = stat.gopNum;
@@ -704,13 +682,11 @@ void RateCtrl::adjustStatsFileDownsample()
         num_gopcur++;
         if (stat.gopNum != 0)
         {
-#if ADDMCTF_VAR && USE_SP_ACT
           int var_cur = abs(statValue - meanValue);
           if (var_cur > (sumVar << 1))
           {
             doChangeBits = true;
           }
-#endif
           int partMCTF = (((value_gopcur / num_gopcur) * 100) / meanValue);
           int partMCTFbefore = (value_gopbefore == 0) ? 100 : (((value_gopcur / num_gopcur) * 100) / value_gopbefore);
           if ((partMCTF > 140) || (partMCTF < 60)
@@ -718,12 +694,10 @@ void RateCtrl::adjustStatsFileDownsample()
           {
             doChangeBits = true;
           }
-#if USE_SP_ACT
           else if (doChangeBits)
           {
             doChangeBits = false;
           }
-#endif
         }
       }
       if ((stat.gopNum != 0) && doChangeBits)
@@ -1041,19 +1015,13 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfGop,
                                const int gopNum,
                                const SceneType scType,
-#if USE_MCTF_INFO
-                               int meanRmsAcrossPic,
-#endif
-#if USE_SP_ACT
+#if DOWNSAMPLE
                                int spVisAct,
 #endif
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
   storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, 
-#if USE_MCTF_INFO
-    meanRmsAcrossPic,
-#endif 
-#if USE_SP_ACT
+#if DOWNSAMPLE
     spVisAct,
 #endif
     minNoiseLevels));

@@ -65,7 +65,7 @@ namespace vvenc {
                                              const uint32_t bitDepth,
                                              const bool isUHD,
                                              unsigned* minVA 
-#if USE_SP_ACT
+#if DOWNSAMPLE
     , unsigned* spaVA
 #endif
   );

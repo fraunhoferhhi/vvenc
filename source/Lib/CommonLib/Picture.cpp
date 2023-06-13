@@ -198,16 +198,13 @@ Picture::Picture()
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
     , refApsGlobal      ( nullptr )
-#if USE_SP_ACT
+#if DOWNSAMPLE
     , picSpatVisAct     ( 0 )
-#endif
-#if USE_MCTF_INFO
-    , meanRmsAcrossPic  ( 0.0 )
 #endif
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
-#if USE_VISACT
+#if DOWNSAMPLE
   resetVisAct = false;
 #endif
 }

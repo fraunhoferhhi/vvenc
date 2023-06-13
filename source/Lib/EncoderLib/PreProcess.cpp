@@ -83,7 +83,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
-#if USE_VISACT
+#if DOWNSAMPLE
   m_doVisAct = m_encCfg->m_usePerceptQPA
                   || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
                   || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
@@ -294,7 +294,7 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
 {
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
-#if USE_VISACT
+#if DOWNSAMPLE
   pic->resetVisAct = false;
 #endif
 
@@ -324,11 +324,11 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   pic->picVisActY           = picVisActY;
   picShared->m_picVisActTL0 = picVisActTL0;
   picShared->m_picVisActY   = picVisActY;
-#if USE_SP_ACT
+#if DOWNSAMPLE
   picShared->m_picSpatVisAct = pic->picSpatVisAct;
 #endif
 }
-#if USE_SP_ACT
+#if DOWNSAMPLE
 uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
 #else
 uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const
@@ -337,7 +337,7 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
-#if USE_SP_ACT
+#if DOWNSAMPLE
   unsigned spatActivityCTU = 0;
 #endif
 
@@ -360,13 +360,13 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
       bitDepth,
       m_isHighRes,
       nullptr 
-#if USE_SP_ACT
+#if DOWNSAMPLE
     , &spatActivityCTU
 #endif
   );
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
-#if USE_SP_ACT
+#if DOWNSAMPLE
   curPic->picSpatVisAct = spatActivityCTU;
 #endif
   return ret;

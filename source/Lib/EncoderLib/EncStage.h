@@ -66,11 +66,8 @@ public:
   bool             m_isSccStrong;
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
-#if USE_SP_ACT
+#if DOWNSAMPLE
   uint16_t         m_picSpatVisAct;
-#endif
-#if USE_MCTF_INFO
-  double           m_meanRmsAcrossPic;
 #endif
   int              m_picMemorySTA;
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
@@ -94,11 +91,8 @@ public:
   , m_isSccStrong   ( false )
   , m_picVisActTL0  ( 0 )
   , m_picVisActY    ( 0 )
-#if USE_SP_ACT
+#if DOWNSAMPLE
   , m_picSpatVisAct   ( 0 )
-#endif
-#if USE_MCTF_INFO
-  , m_meanRmsAcrossPic( 0.0 )
 #endif
   , m_picMemorySTA  ( 0 )
   , m_picAuxQpOffset( 0 )
@@ -160,11 +154,8 @@ public:
     m_isSccStrong  = false;
     m_picVisActTL0 = 0;
     m_picVisActY   = 0;
-#if USE_SP_ACT
+#if DOWNSAMPLE
     m_picSpatVisAct = 0;
-#endif
-#if USE_MCTF_INFO
-    m_meanRmsAcrossPic = 0.0;
 #endif
     m_picMemorySTA = 0;
     m_cts          = yuvInBuf->cts;
@@ -189,11 +180,8 @@ public:
     pic->isSccStrong    = m_isSccStrong;
     pic->picVisActTL0   = m_picVisActTL0;
     pic->picVisActY     = m_picVisActY;
-#if USE_SP_ACT
+#if DOWNSAMPLE
     pic->picSpatVisAct = m_picSpatVisAct;
-#endif
-#if USE_MCTF_INFO
-    pic->meanRmsAcrossPic = m_meanRmsAcrossPic;
 #endif
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;
