@@ -69,13 +69,14 @@ namespace vvenc {
 #if DOWNSAMPLE
                   int _spVisAct,
 #endif
-                  const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
+                  const uint16_t _motionEstError, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
                   isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
 #if DOWNSAMPLE
                   spVisAct(_spVisAct),
 #endif
+                  motionEstError( _motionEstError ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {
                     std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
@@ -94,8 +95,9 @@ namespace vvenc {
     int       gopNum                                  { 0 };
     SceneType scType                                  { SCT_NONE };
 #if DOWNSAMPLE
-    int       spVisAct;
+    int       spVisAct                                { 0 };
 #endif
+    uint16_t  motionEstError                          { 0 };
     uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ]  {};
     bool      isNewScene                              { false };
     bool      refreshParameters                       { false };
@@ -116,14 +118,16 @@ namespace vvenc {
 
     bool            twoPass;
     bool            isLookAhead;
-    unsigned        framesCoded;
-    int             targetRate;
+    bool            isIntraGOP;
+    bool            isRateSavingMode;
     double          frameRate;
+    int             targetRate;
+    int             maxGopRate;
     int             gopSize;
     unsigned        intraPeriod;
+    bool            scRelax;
     int             bitDepth;
     int64_t         bitsUsed;
-    int64_t         bitsUsedIn1stPass;
     int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
@@ -131,7 +135,7 @@ namespace vvenc {
     unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastIntraQP;
-    bool            lastIntraBitsSaved;
+    double          lastIntraSM; // temporal stationarity measure; 1: highly stationary (static), 0: highly nonstationary (irregular)
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
     double          maxEstLambda;
@@ -145,10 +149,11 @@ namespace vvenc {
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp);
     void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
+    double  frameGopRatio; // frame bits/GOP bits
     int     targetBits;
     int     tmpTargetBits;
     int     poc;
@@ -157,8 +162,9 @@ namespace vvenc {
 
   protected:
     EncRCSeq* encRCSeq;
-    int     frameLevel;
-    int     picQP;           // in integer form
+    int       frameLevel;    // non-I: TLayer + 1
+    int16_t   picQP;         // in integer form
+    uint16_t  picBits;       // after 2nd pass
   };
 
   class RateCtrl
@@ -177,14 +183,10 @@ namespace vvenc {
 #if DOWNSAMPLE
                          int spVisAct,
 #endif
-                         const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] );
+                         const uint16_t motEstError, const uint8_t minNoiseLevels[QPA_MAX_NOISE_LEVELS]);
+    void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
-    void processGops();
-    void updateMinNoiseLevelsGop( const bool flush, const int poc );
-    double updateQPstartModelVal();
-    double getAverageBitsFromFirstPass();
-    void detectSceneCuts();
-    void xUpdateAfterPicRC( const Picture* pic );
+    void updateAfterPicEncRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
@@ -206,6 +208,12 @@ namespace vvenc {
 
     void xProcessFirstPassData( const bool flush, const int poc );
     void storeStatsData( TRCPassStats statsData );
+    double getAverageBitsFromFirstPass();
+    void detectSceneCuts();
+    void processGops();
+    void updateMotionErrStatsGop( const bool flush, const int poc );
+    bool isLookAheadBoostAllowed( const int thresholdDivisor );
+    double updateQPstartModelVal();
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
     void writeStatsHeader();
@@ -228,6 +236,9 @@ namespace vvenc {
     int                     m_numPicAddedToList;
     int                     m_updateNoisePoc;
     bool                    m_resetNoise;
+    uint8_t                 m_gopMEErrorCBufIdx;
+    uint16_t                m_maxPicMotionError;
+    uint16_t                m_gopMEErrorCBuf[ QPA_MAX_NOISE_LEVELS ];
     uint8_t                 m_minNoiseLevels[ QPA_MAX_NOISE_LEVELS ];
     TRCPassStats            m_tempDownSamplStats[ VVENC_MAX_TLAYER + 1 ];
   };

@@ -97,7 +97,7 @@ int main(int argc, char* argv[])
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime2) );
+  msgApp( VVENC_INFO, "vvencFFapp [info]: started @ %s", std::ctime(&startTime2) );
   clock_t startClock = clock();
 
   // call encoding function
@@ -111,8 +111,8 @@ int main(int argc, char* argv[])
 
   delete pcEncApp;
 
-  msgApp( VVENC_INFO, "\n finished @ %s", std::ctime(&endTime2) );
-  msgApp( VVENC_INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
+  msgApp( VVENC_INFO, "\nvvencFFapp [info]: finished @ %s", std::ctime(&endTime2) );
+  msgApp( VVENC_INFO, "vvencFFapp [info]: Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
 
   return ret;
 }

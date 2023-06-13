@@ -204,7 +204,7 @@ int       getNumModesMip                (const Size& block);
 int       getMipSizeId                  (const Size& block);
 bool      allowLfnstWithMip             (const Size& block);
 
-bool      refPicCtuLineReady            (const Slice& slice, const int refCtuRow);
+bool      refPicCtuLineReady            (const Slice& slice, const int refCtuRow, const PreCalcValues& pcv);
 
 template<typename T, size_t N>
 uint32_t updateCandList( T uiMode, double uiCost, static_vector<T, N> &candModeList, static_vector<double, N> &candCostList, size_t uiFastCandNum = N, int *iserttPos = nullptr )

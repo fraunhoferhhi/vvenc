@@ -413,7 +413,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
   const int  bitDepth         = slice->sps->bitDepths[CH_L];
-  const double hpEnerPicNorm  = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, (encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back()),
+  double hpEnerPicNorm        = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, (encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back()),
                                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
   const PreCalcValues& pcv    = *pic->cs->pcv;
 
@@ -433,6 +433,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       uint32_t spatVisAct = 0;
 #endif
       const PosType guardSize = (isHighResolution ? 2 : 1);
+      unsigned zeroMinActCTUs = 0;
 
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
@@ -456,6 +457,9 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
           , &spatActivityCTU
 #endif
         );
+
+        if (minActivityPart == 0) zeroMinActCTUs++;
+
         hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
         pic->ctuQpaLambda[ctuRsAddr] = hpEner[1]; // temporary backup of CTU mean visual activity
         pic->ctuAdaptedQP[ctuRsAddr] = (int) pic->getOrigBuf (ctuArea).getAvg(); // and mean luma
@@ -492,6 +496,10 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         pic->picSpatVisAct = (spatVisAct + (nCtu >> 1)) / nCtu;
       }
 #endif
+      if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && slice->poc >= encCfg->m_GOPSize && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
+      {
+        hpEnerPicNorm *= sqrt (zeroMinActCTUs * 2.0 / float (ctuBoundingAddr - ctuStartAddr)); // frozen-image mode
+      }
     }
     else // chroma: only picture-wise operation required
     {
@@ -503,7 +511,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
                                                         picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
                                                         bitDepth, isHighResolution && (pic->chromaFormat == CHROMA_444));
 
-      const int adaptChromaQPOffset = 2.0 * hpEner[comp] <= hpEner[0] ? 0 : apprI3Log2 (2.0 * hpEner[comp] / hpEner[0]);
+      const int adaptChromaQPOffset = 1.5 * hpEner[comp] <= hpEner[0] ? 0 : apprI3Log2 (1.5 * hpEner[comp] / hpEner[0]);
 
       if (averageAdaptedLumaQP < 0) // YUV is not 4:0:0!
       {

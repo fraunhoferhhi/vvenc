@@ -1562,7 +1562,7 @@ protected:
 class PreCalcValues
 {
 public:
-  PreCalcValues( const SPS& sps, const PPS& pps, const unsigned _maxQtSize[3], bool _isEncoder )
+  PreCalcValues( const SPS& sps, const PPS& pps, const unsigned _maxQtSize[3] )
     : chrFormat           ( sps.chromaFormatIdc )
     , maxCUSize           ( sps.CTUSize )
     , maxCUSizeMask       ( maxCUSize  - 1 )
@@ -1577,7 +1577,6 @@ public:
     , lumaWidth           ( pps.picWidthInLumaSamples )
     , lumaHeight          ( pps.picHeightInLumaSamples )
     , fastDeltaQPCuMaxSize( Clip3<unsigned>( (1 << sps.log2MinCodingBlockSize), sps.CTUSize, 32u) )
-    , isEncoder           ( _isEncoder )
     , ISingleTree         ( !sps.dualITree )
     , wrapArround         ( sps.wrapAroundEnabled )
     , maxMTTDepth         { sps.maxMTTDepth[0], sps.maxMTTDepth[1], sps.maxMTTDepth[2] }
@@ -1604,7 +1603,6 @@ public:
   const unsigned     lumaWidth;
   const unsigned     lumaHeight;
   const unsigned     fastDeltaQPCuMaxSize;
-  const bool         isEncoder;
   const bool         ISingleTree;
   const bool         wrapArround;
 

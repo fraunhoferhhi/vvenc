@@ -44,9 +44,6 @@ add_vvenc_test( compare_output-tooltest 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${
 add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_tooltest.cfg -c ${CFG_DIR}/gop32.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --SIMD=SCALAR -b OUTPUT )
 add_vvenc_test( compare_output-tooltest-Scalar 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-tooltesttrans 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ${CFG_DIR}/randomaccess_tooltest.cfg -c ${CFG_DIR}/gop32.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
-add_vvenc_test( output-tooltesttrans     30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
-
 add_vvenc_test( vvencapp-faster       30 OUT_VVC   ""                       vvencapp --preset faster -s 80x44 -r 15 -i ${TEST_YUV} -f 11 -o OUTPUT )
 add_vvenc_test( vvencFFapp-faster     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_faster.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 11 -b OUTPUT )
 add_vvenc_test( compare_output-faster 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
@@ -54,9 +51,6 @@ add_vvenc_test( compare_output-faster 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CM
 add_vvenc_test( vvencapp-fast       40 OUT_VVC   ""                       vvencapp --preset fast -s 80x44 -r 15 -i ${TEST_YUV} -f 8 -o OUTPUT )
 add_vvenc_test( vvencFFapp-fast     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_fast.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 -b OUTPUT )
 add_vvenc_test( compare_output-fast 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
-
-add_vvenc_test( vvencFFapp-transcoding 20 OUT_VVC   "${OUTF_VVC}"            vvencFFapp -c ${CFG_DIR}/randomaccess_fast.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --DebugBitstream=${OUTF_VVC} --DebugPOC=3 -b OUTPUT )
-add_vvenc_test( output-transcoding     30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
 add_vvenc_test( vvencapp-medium       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -f 5 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 -b OUTPUT )
@@ -70,8 +64,7 @@ add_vvenc_test( vvencapp-medium_noqpa_0thr       30 OUT_VVC   ""                
 add_vvenc_test( vvencFFapp-medium_noqpa_0thr     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -qpa 0 --WppBitEqual=0 --Threads=0 -f 5 -b OUTPUT )
 add_vvenc_test( compare_output-medium_noqpa_0thr 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
-add_vvenc_test( vvencFFapp-lowdelay_medium_enc 30 OUTF_VVC  ""            vvencFFapp -c ${CFG_DIR}/experimental/lowdelay_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} --IntraPeriod=-1 -dph 1 -f 8 -b OUTPUT )
-add_vvenc_test( vvencFFapp-lowdelay_medium_dec 30 NO_OUTPUT "${OUTF_VVC}" vvencFFapp --decode -b ${OUTF_VVC} )
+add_vvenc_test( vvencFFapp-lowdelay_medium 30 OUTF_VVC  ""            vvencFFapp -c ${CFG_DIR}/experimental/lowdelay_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} --IntraPeriod=-1 -dph 1 -f 8 -b OUTPUT )
 
 add_vvenc_test( vvencapp-medium_rc2p       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -f 5 --Bitrate=10000 --Passes=2 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium_rc2p     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 --TargetBitrate=10000 --Passes=2 -b OUTPUT )

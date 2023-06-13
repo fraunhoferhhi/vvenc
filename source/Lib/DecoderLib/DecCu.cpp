@@ -86,67 +86,6 @@ void DecCu::init( TrQuant* pcTrQuant, IntraPrediction* pcIntra, InterPrediction*
 }
 
 // ====================================================================================================================
-// Public member functions
-// ====================================================================================================================
-
-void DecCu::decompressCtu( CodingStructure& cs, const UnitArea& ctuArea )
-{
-  const int maxNumChannelType = cs.pcv->chrFormat != CHROMA_400 && CS::isDualITree( cs ) ? 2 : 1;
-  if (cs.resetIBCBuffer)
-  {
-    m_pcInterPred->resetIBCBuffer(cs.pcv->chrFormat, cs.slice->sps->CTUSize);
-    cs.resetIBCBuffer = false;
-  }
-  m_pcIntraPred->reset();
-
-  for( int ch = 0; ch < maxNumChannelType; ch++ )
-  {
-    const ChannelType chType = ChannelType( ch );
-
-    for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType ) )
-    {
-      if (currCU.Y().valid())
-      {
-        const int vSize = cs.slice->sps->CTUSize > 64 ? 64 : cs.slice->sps->CTUSize;
-        if ((currCU.Y().x % vSize) == 0 && (currCU.Y().y % vSize) == 0)
-        {
-          for (int x = currCU.Y().x; x < currCU.Y().x + currCU.Y().width; x += vSize)
-          {
-            for (int y = currCU.Y().y; y < currCU.Y().y + currCU.Y().height; y += vSize)
-            {
-              m_pcInterPred->resetVPDUforIBC(cs.pcv->chrFormat, cs.slice->sps->CTUSize, vSize, x + g_IBCBufferSize / cs.slice->sps->CTUSize / 2, y);
-            }
-          }
-        }
-      }
-      if (currCU.predMode != MODE_INTRA && currCU.predMode != MODE_PLT && currCU.Y().valid())
-      {
-        xDeriveCUMV(currCU);
-      }
-
-      switch( currCU.predMode )
-      {
-      case MODE_INTER:
-      case MODE_IBC:
-        xReconInter( currCU );
-        break;
-      case MODE_PLT:
-      case MODE_INTRA:
-        xReconIntraQT( currCU );
-        break;
-      default:
-        THROW( "Invalid prediction mode" );
-        break;
-      }
-      m_pcInterPred->xFillIBCBuffer(currCU);
-      LoopFilter::calcFilterStrengths(currCU);
-
-      DTRACE_BLOCK_REC( cs.picture->getRecoBuf( currCU ), currCU, currCU.predMode );
-    }
-  }
-}
-
-// ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
 
@@ -270,7 +209,7 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
   pReco.copyFrom( piPred );
 
-  if( cs.pcv->isEncoder )
+  if( true/*isEncoder*/ )
   {
     cs.picture->getRecoBuf( area ).copyFrom( pReco );
   }
@@ -601,7 +540,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
 
           //    Mv mv[3];
           CHECK(cu.refIdx[eRefList] < 0, "Unexpected negative refIdx.");
-          if (!cu.cs->pcv->isEncoder)
+          if (!true/*isEncoder*/)
           {
             cu.mvd[eRefList][0].changeAffinePrecAmvr2Internal(cu.imv);
             cu.mvd[eRefList][1].changeAffinePrecAmvr2Internal(cu.imv);
@@ -631,7 +570,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
       CU::fillIBCMvpCand(cu, amvpInfo);
       cu.mvpNum[REF_PIC_LIST_0] = amvpInfo.numCand;
       Mv mvd = cu.mvd[REF_PIC_LIST_0][0];
-      if (!cu.cs->pcv->isEncoder)
+      if (!true/*isEncoder*/)
       {
         mvd.changeIbcPrecAmvr2Internal(cu.imv);
       }
@@ -652,7 +591,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
           AMVPInfo amvpInfo;
           CU::fillMvpCand(cu, eRefList, cu.refIdx[eRefList], amvpInfo);
           cu.mvpNum [eRefList] = amvpInfo.numCand;
-          if (!cu.cs->pcv->isEncoder)
+          if (!true/*isEncoder*/)
           {
             cu.mvd[eRefList][0].changeTransPrecAmvr2Internal(cu.imv);
           }
