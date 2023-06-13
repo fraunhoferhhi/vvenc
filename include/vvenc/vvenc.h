@@ -64,6 +64,21 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
+#ifdef __GNUC__
+#    define VVENC_GCC_VERSION_AT_LEAST(x,y) (__GNUC__ > (x) || __GNUC__ == (x) && __GNUC_MINOR__ >= (y))
+#    define VVENC_GCC_VERSION_AT_MOST(x,y)  (__GNUC__ < (x) || __GNUC__ == (x) && __GNUC_MINOR__ <= (y))
+#else
+#    define VVENC_GCC_VERSION_AT_LEAST(x,y) 0
+#    define VVENC_GCC_VERSION_AT_MOST(x,y)  0
+#endif
+
+#if VVENC_GCC_VERSION_AT_LEAST(3,1)
+#    define attribute_deprecated __attribute__((deprecated))
+#elif defined(_MSC_VER)
+#    define attribute_deprecated __declspec(deprecated)
+#else
+#    define attribute_deprecated
+#endif
 
 /*
   The vvencEncoder struct provides the encoder's user interface.
@@ -431,6 +446,16 @@ VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat chFmt, co
  \retval[ ]  true if tracing is enabled, else false
 */
 VVENC_DECL bool  vvenc_is_tracing_enabled( void );
+
+/* vvenc_decode_bitstream
+* @deprecated
+ \param[in]  FileName of bitstream that should be decoded
+ \param[in]  trcFile filename of a trace rule file
+ \param[in]  trcRule trace rules
+ \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
+*/
+attribute_deprecated
+VVENC_DECL int   vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 
 VVENC_NAMESPACE_END
