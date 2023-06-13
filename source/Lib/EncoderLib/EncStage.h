@@ -66,9 +66,7 @@ public:
   bool             m_isSccStrong;
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
-#if DOWNSAMPLE
   uint16_t         m_picSpatVisAct;
-#endif
   int              m_picMemorySTA;
   uint16_t         m_picMotEstError;
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
@@ -92,9 +90,7 @@ public:
   , m_isSccStrong   ( false )
   , m_picVisActTL0  ( 0 )
   , m_picVisActY    ( 0 )
-#if DOWNSAMPLE
   , m_picSpatVisAct   ( 0 )
-#endif
   , m_picMemorySTA  ( 0 )
   , m_picMotEstError( 0 )
   , m_picAuxQpOffset( 0 )
@@ -132,22 +128,16 @@ public:
     m_origBuf.create( chromaFormat, Area( Position(), size ), 0, padding );
   }
 
-#if DOWNSAMPLE
-  void reuse(int poc, const vvencYUVBuffer* yuvInBuf, VVEncCfg vvenccfg)
-#else
   void reuse( int poc, const vvencYUVBuffer* yuvInBuf )
-#endif
   {
     CHECK( m_refCount < 0, "PicShared not created" );
     CHECK( isUsed(),       "PicShared still in use" );
 
-#if DOWNSAMPLE
-    if ((vvenccfg.m_FirstPassMode > 2) && (vvenccfg.m_RCTargetBitrate == 0))
+    if(m_origBuf.bufs[0].width < yuvInBuf->planes[0].width)
     {
       copyPadToPelUnitBufDown(m_origBuf, *yuvInBuf, getChromaFormat());
     }
     else
-#endif
     {
       copyPadToPelUnitBuf(m_origBuf, *yuvInBuf, getChromaFormat());
     }
@@ -156,9 +146,7 @@ public:
     m_isSccStrong  = false;
     m_picVisActTL0 = 0;
     m_picVisActY   = 0;
-#if DOWNSAMPLE
     m_picSpatVisAct = 0;
-#endif
     m_picMemorySTA = 0;
     m_cts          = yuvInBuf->cts;
     m_poc          = poc;
@@ -183,9 +171,7 @@ public:
     pic->isSccStrong    = m_isSccStrong;
     pic->picVisActTL0   = m_picVisActTL0;
     pic->picVisActY     = m_picVisActY;
-#if DOWNSAMPLE
     pic->picSpatVisAct = m_picSpatVisAct;
-#endif
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;
     pic->cts            = m_cts;

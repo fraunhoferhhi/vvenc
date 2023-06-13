@@ -66,17 +66,11 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
                   const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum, const SceneType _scType,
-#if DOWNSAMPLE
-                  int _spVisAct,
-#endif
-                  const uint16_t _motionEstError, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
+                  int _spVisAct, const uint16_t _motionEstError, const uint8_t _minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
                   isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ), scType( _scType ),
-#if DOWNSAMPLE
-                  spVisAct(_spVisAct),
-#endif
-                  motionEstError( _motionEstError ),
+                  spVisAct(_spVisAct), motionEstError( _motionEstError ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {
                     std::memcpy( minNoiseLevels, _minNoiseLevels, sizeof( minNoiseLevels ) );
@@ -94,9 +88,7 @@ namespace vvenc {
     bool      isStartOfGop                            { false };
     int       gopNum                                  { 0 };
     SceneType scType                                  { SCT_NONE };
-#if DOWNSAMPLE
     int       spVisAct                                { 0 };
-#endif
     uint16_t  motionEstError                          { 0 };
     uint8_t   minNoiseLevels[ QPA_MAX_NOISE_LEVELS ]  {};
     bool      isNewScene                              { false };
@@ -180,10 +172,7 @@ namespace vvenc {
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
-#if DOWNSAMPLE
-                         int spVisAct,
-#endif
-                         const uint16_t motEstError, const uint8_t minNoiseLevels[QPA_MAX_NOISE_LEVELS]);
+                         int spVisAct, const uint16_t motEstError, const uint8_t minNoiseLevels[QPA_MAX_NOISE_LEVELS]);
     void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void updateAfterPicEncRC( const Picture* pic );
@@ -219,9 +208,7 @@ namespace vvenc {
     void writeStatsHeader();
     void readStatsHeader();
     void readStatsFile();
-#if DOWNSAMPLE
     void adjustStatsFileDownsample();
-#endif
 #endif
 
   private:

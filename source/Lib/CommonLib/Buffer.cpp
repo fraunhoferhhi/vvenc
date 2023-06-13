@@ -1285,7 +1285,7 @@ void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer
     }
   }
 }
-#if DOWNSAMPLE
+
 void downsampleYuvPlane(vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
 {
   const int widthd = yuvPlaneOut.width;
@@ -1361,7 +1361,7 @@ void copyPadToPelUnitBufDown(PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuf
     }
   }
 }
-#endif
+
 /*
 void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt )
 {

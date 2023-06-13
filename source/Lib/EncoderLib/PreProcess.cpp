@@ -83,15 +83,9 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
-#if DOWNSAMPLE
   m_doVisAct = m_encCfg->m_usePerceptQPA
                   || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
                   || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
-#else
-  m_doVisAct    =    m_encCfg->m_usePerceptQPA
-                  || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate )
-                  || ( m_encCfg->m_RCNumPasses > 1 && ! isFinalPass );
-#endif
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 
 
@@ -294,9 +288,7 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
 {
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
-#if DOWNSAMPLE
   pic->resetVisAct = false;
-#endif
 
   if( m_doVisAct && ! m_doVisActQpa ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
   {
@@ -324,22 +316,15 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   pic->picVisActY           = picVisActY;
   picShared->m_picVisActTL0 = picVisActTL0;
   picShared->m_picVisActY   = picVisActY;
-#if DOWNSAMPLE
   picShared->m_picSpatVisAct = pic->picSpatVisAct;
-#endif
 }
-#if DOWNSAMPLE
+
 uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
-#else
-uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const
-#endif
 {
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
-#if DOWNSAMPLE
   unsigned spatActivityCTU = 0;
-#endif
 
   CPelBuf orig[ 3 ];
   orig[ 0 ] = curPic->getOrigBuf( COMP_Y );
@@ -359,16 +344,11 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
       m_encCfg->m_FrameRate / m_encCfg->m_FrameScale,
       bitDepth,
       m_isHighRes,
-      nullptr 
-#if DOWNSAMPLE
-    , &spatActivityCTU
-#endif
-  );
+      nullptr, 
+      &spatActivityCTU);
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
-#if DOWNSAMPLE
   curPic->picSpatVisAct = spatActivityCTU;
-#endif
   return ret;
 }
 

@@ -268,10 +268,8 @@ public:
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
-#if DOWNSAMPLE
   uint32_t                      picSpatVisAct;
   bool                          resetVisAct;
-#endif
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

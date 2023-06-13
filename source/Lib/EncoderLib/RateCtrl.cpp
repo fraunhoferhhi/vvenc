@@ -383,12 +383,11 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
-#if DOWNSAMPLE
+
   if (rcIsFinalPass && (encCfg.m_FirstPassMode > 2))
   {
     adjustStatsFileDownsample();
   }
-#endif
 #else
   CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
 #endif
@@ -491,9 +490,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
-#if DOWNSAMPLE
     { "spAct",        statsData.spVisAct },
-#endif
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -530,9 +527,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-#if DOWNSAMPLE
                                                     data["spAct"],
-#endif
                                                     statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
@@ -573,9 +568,7 @@ void RateCtrl::readStatsFile()
       || data.find("isStartOfGop") == data.end() || !data["isStartOfGop"].is_boolean()
       || data.find("gopNum") == data.end() || !data["gopNum"].is_number()
       || data.find("scType") == data.end() || !data["scType"].is_number()
-#if DOWNSAMPLE
       || data.find("spAct") == data.end() || !data["spAct"].is_number()
-#endif
       )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
@@ -592,9 +585,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-#if DOWNSAMPLE
                                                     data["spAct"],
-#endif
                                                     0, // motionEstError
                                                     minNoiseLevels
                                                     ) );
@@ -610,7 +601,7 @@ void RateCtrl::readStatsFile()
     lineNum++;
   }
 }
-#if DOWNSAMPLE
+
 void RateCtrl::adjustStatsFileDownsample()
 {
   int meanValue = 0; //MCTF or Activity
@@ -703,7 +694,6 @@ void RateCtrl::adjustStatsFileDownsample()
     }
   }
 }
-#endif
 #endif
 
 void RateCtrl::setRCRateSavingState( const int maxRate )
@@ -1107,17 +1097,11 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfGop,
                                const int gopNum,
                                const SceneType scType,
-#if DOWNSAMPLE
                                int spVisAct,
-#endif
                                const uint16_t motEstError,
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType,
-#if DOWNSAMPLE
-    spVisAct,
-#endif 
-    motEstError, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, spVisAct, motEstError, minNoiseLevels));
 }
 
 void RateCtrl::updateAfterPicEncRC( const Picture* pic )

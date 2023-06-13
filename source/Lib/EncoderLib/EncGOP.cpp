@@ -291,7 +291,7 @@ void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, Pi
 
   // create list of pictures ordered in coding order and ready to be encoded
   xInitPicsInCodingOrder(picList);
-#if DOWNSAMPLE
+
   if ((m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
   {
     for (auto pic : picList)
@@ -318,7 +318,6 @@ void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, Pi
       }
     }
   }
-#endif
 
   // encode pictures
   xProcessPictures( auList, doneList );
@@ -1979,9 +1978,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
         pic.gopEntry->m_isStartOfGop,
         pic.gopEntry->m_gopNum,
         pic.gopEntry->m_scType,
-#if DOWNSAMPLE
         pic.picSpatVisAct,
-#endif
         pic.m_picShared->m_picMotEstError,
         pic.m_picShared->m_minNoiseLevels );
     return;
@@ -2415,9 +2412,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
                                   pic->gopEntry->m_scType,
-#if DOWNSAMPLE
                                   pic->picSpatVisAct,
-#endif
                                   pic->m_picShared->m_picMotEstError,
                                   pic->m_picShared->m_minNoiseLevels );
   }
