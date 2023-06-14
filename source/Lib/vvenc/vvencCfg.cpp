@@ -1214,17 +1214,24 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       int iIDRPeriod  = (fps * c->m_IntraPeriodSec);
       if( iIDRPeriod < c->m_GOPSize )
       {
-        iIDRPeriod = c->m_GOPSize;
-      }
-
-      int iDiff = iIDRPeriod % c->m_GOPSize;
-      if( iDiff < c->m_GOPSize >> 1 )
-      {
-        c->m_IntraPeriod = iIDRPeriod - iDiff;
+        iIDRPeriod = (fps > 8 ) ? (iIDRPeriod -4) : 8;
+        while ( iIDRPeriod % 8 != 0 )
+        {
+          iIDRPeriod++;
+        }
+        c->m_IntraPeriod = iIDRPeriod;     
       }
       else
       {
-        c->m_IntraPeriod = iIDRPeriod + c->m_GOPSize - iDiff;
+        int iDiff = iIDRPeriod % 8;
+        if( iDiff < 8 >> 1 )
+        {
+          c->m_IntraPeriod = iIDRPeriod - iDiff;
+        }
+        else
+        {
+          c->m_IntraPeriod = iIDRPeriod + 8 - iDiff;
+        }
       }
     }
   }
