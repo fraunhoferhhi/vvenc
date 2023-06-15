@@ -1211,26 +1211,32 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     else
     {
-      int iIDRPeriod  = (fps * c->m_IntraPeriodSec);
-      if( iIDRPeriod < c->m_GOPSize )
+      int idrPeriod  = (fps * c->m_IntraPeriodSec);
+      int minGopSize = std::min( fps, std::min( c->m_GOPSize, 8 ));
+      if(c->m_GOPSize != 1 && minGopSize == 1)
       {
-        iIDRPeriod = (fps > 8 ) ? (iIDRPeriod -4) : 8;
-        while ( iIDRPeriod % 8 != 0 )
+        minGopSize = 2; // exception, for fps=1, do not set IntraPeriod=1, since not permitted for RA
+      }
+
+      if( idrPeriod < c->m_GOPSize )
+      {
+        idrPeriod = (fps > minGopSize ) ? (idrPeriod - (minGopSize>>1)) : minGopSize;
+        while ( idrPeriod % minGopSize != 0 )
         {
-          iIDRPeriod++;
+          idrPeriod++;
         }
-        c->m_IntraPeriod = iIDRPeriod;     
+        c->m_IntraPeriod = idrPeriod;     
       }
       else
       {
-        int iDiff = iIDRPeriod % 8;
-        if( iDiff < 8 >> 1 )
+        int diff = idrPeriod % minGopSize;
+        if( diff < minGopSize >> 1 )
         {
-          c->m_IntraPeriod = iIDRPeriod - iDiff;
+          c->m_IntraPeriod = idrPeriod - diff;
         }
         else
         {
-          c->m_IntraPeriod = iIDRPeriod + 8 - iDiff;
+          c->m_IntraPeriod = idrPeriod + minGopSize - diff;
         }
       }
     }
