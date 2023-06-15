@@ -283,11 +283,7 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
 {
-  WCGChromaQPControl->enabled         = false;  ///< Enabled flag (0:default)
-  WCGChromaQPControl->chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
-  WCGChromaQPControl->chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
-  WCGChromaQPControl->chromaQpScale   = 0.0;    ///< Chroma QP Scale (0.0:default)
-  WCGChromaQPControl->chromaQpOffset  = 0-0;    ///< Chroma QP Offset (0.0:default)
+  memset( WCGChromaQPControl, 0, sizeof( vvencWCGChromaQPControl ) );
 }
 
 VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTableParams *p )
@@ -463,7 +459,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   c->m_lumaLevelToDeltaQPEnabled               = false;
-  vvenc_WCGChromaQPControl_default(&c->m_wcgChromaQpControl );
+  vvenc_WCGChromaQPControl_default( &c->m_cfgUnused24 );
 
   c->m_internChromaFormat                      = VVENC_NUM_CHROMA_FORMAT;
   c->m_useIdentityTableForNon420Chroma         = true;
