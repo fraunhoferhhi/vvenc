@@ -356,20 +356,19 @@ typedef struct vvencRPLEntry
 
 VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry );
 
-/// <summary>
-/// Deprecated, dont use!
-/// </summary>
-typedef struct vvencWCGChromaQPControl
+// begin: unused, will be removed in future versions
+typedef struct vvencUnusedStruct0
 {
-  bool   enabled        ;    // Enabled flag (0:default)
-  double chromaCbQpScale;    // Chroma Cb QP Scale (1.0:default)
-  double chromaCrQpScale;    // Chroma Cr QP Scale (1.0:default)
-  double chromaQpScale  ;    // Chroma QP Scale (0.0:default)
-  double chromaQpOffset ;    // Chroma QP Offset (0.0:default)
-}vvencWCGChromaQPControl;
+  bool   m_cfgUnused0; // TODO: remove unused memory from configuration
+  double m_cfgUnused1; // TODO: remove unused memory from configuration
+  double m_cfgUnused2; // TODO: remove unused memory from configuration
+  double m_cfgUnused3; // TODO: remove unused memory from configuration
+  double m_cfgUnused4; // TODO: remove unused memory from configuration
+}vvencUnusedStruct0;
 
+typedef vvencUnusedStruct0 vvencWCGChromaQPControl;
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl );
-
+// end: unused
 
 typedef struct vvencChromaQpMappingTableParams
 {
@@ -529,7 +528,7 @@ typedef struct vvenc_config
   int                 m_usePerceptQPATempFiltISlice;                                     // Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   bool                m_lumaLevelToDeltaQPEnabled;
-  vvencWCGChromaQPControl  m_wcgChromaQpControl;
+  vvencUnusedStruct0  m_cfgUnused24;
 
   vvencChromaFormat   m_internChromaFormat;
   bool                m_useIdentityTableForNon420Chroma;

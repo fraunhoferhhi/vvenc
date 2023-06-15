@@ -283,11 +283,7 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
 {
-  WCGChromaQPControl->enabled         = false;  ///< Enabled flag (0:default)
-  WCGChromaQPControl->chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
-  WCGChromaQPControl->chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
-  WCGChromaQPControl->chromaQpScale   = 0.0;    ///< Chroma QP Scale (0.0:default)
-  WCGChromaQPControl->chromaQpOffset  = 0-0;    ///< Chroma QP Offset (0.0:default)
+  memset( WCGChromaQPControl, 0, sizeof( vvencWCGChromaQPControl ) );
 }
 
 VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTableParams *p )
