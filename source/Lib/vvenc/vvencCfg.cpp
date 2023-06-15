@@ -1204,44 +1204,39 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
-  {
-    if ( fps % c->m_GOPSize == 0 )
+  {  
+    int idrPeriod = fps * c->m_IntraPeriodSec;
+    if( idrPeriod % c->m_GOPSize != 0 )
     {
-      c->m_IntraPeriod = fps * c->m_IntraPeriodSec;
-    }
-    else
-    {
-      int idrPeriod  = (fps * c->m_IntraPeriodSec);
-      int minGopSize = std::min( fps, std::min( c->m_GOPSize, 8 ));
-      if(c->m_GOPSize != 1 && minGopSize == 1)
-      {
-        minGopSize = 2; // exception, for fps=1, do not set IntraPeriod=1, since not permitted for RA
-      }
-
+      const int minGopSize = std::min( (fps * c->m_IntraPeriodSec), std::min( c->m_GOPSize, 8 ));   
       if( idrPeriod < c->m_GOPSize )
       {
-        idrPeriod = (fps > minGopSize ) ? (idrPeriod - (minGopSize>>1)) : minGopSize;
-        while ( idrPeriod % minGopSize != 0 )
+        if( (idrPeriod % minGopSize) != 0)
         {
-          idrPeriod++;
+          idrPeriod = (fps > minGopSize ) ? (idrPeriod - (minGopSize>>1)) : minGopSize;
+          while ( idrPeriod % minGopSize != 0 )
+          {
+            idrPeriod++;
+          }
         }
-        c->m_IntraPeriod = idrPeriod;     
       }
       else
       {
         int diff = idrPeriod % minGopSize;
         if( diff < minGopSize >> 1 )
         {
-          c->m_IntraPeriod = idrPeriod - diff;
+          idrPeriod -= diff;
         }
         else
         {
-          c->m_IntraPeriod = idrPeriod + minGopSize - diff;
+          idrPeriod += (minGopSize - diff);
         }
       }
     }
+    c->m_IntraPeriod = idrPeriod;
   }
-  else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
+  
+  if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
   {
     // TODO 2.0: make this an error
     msg.log( VVENC_WARNING, "Configuration warning: IntraPeriod is 1, thus GOPSize is set to 1 too and given gop structures are resetted\n\n" );
