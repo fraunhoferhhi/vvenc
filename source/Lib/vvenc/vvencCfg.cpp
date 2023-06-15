@@ -459,7 +459,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   c->m_lumaLevelToDeltaQPEnabled               = false;
-  vvenc_WCGChromaQPControl_default(&c->m_wcgChromaQpControl );
+  vvenc_WCGChromaQPControl_default( &c->m_cfgUnused24 );
 
   c->m_internChromaFormat                      = VVENC_NUM_CHROMA_FORMAT;
   c->m_useIdentityTableForNon420Chroma         = true;
