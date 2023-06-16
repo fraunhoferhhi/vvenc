@@ -5401,9 +5401,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValuesCTU( CodingStructure &cs, c
   uint64_t bestSSD       = MAX_UINT64;
   double   bestRate      = MAX_DOUBLE;
   double   bestCost      = MAX_DOUBLE;  
-  const uint32_t thresholdS = std::min<int>(heightC - yCtu, ctuHeightC) << getComponentScaleY(COMP_Cb, m_chromaFormat);
-  const uint32_t numberOfChromaSamples = std::min<int>(heightC - yCtu, ctuHeightC) * std::min<int>(widthC - xCtu, ctuWidthC);
-  const uint32_t thresholdC = (numberOfChromaSamples >> 2);
 
   CABACEstimator->getCtx() = ctxBest;
   ctxStart                 = SubCtx(Ctx::CcAlfFilterControlFlag, CABACEstimator->getCtx());
@@ -5682,9 +5679,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
       double   bestCost      = MAX_DOUBLE;
       uint8_t  bestFilterIdc = 0;
       uint8_t  bestFilterIdx = 0;
-      const uint32_t thresholdS = std::min<int>(buf->height - yCtu, ctuHeightC) << getComponentScaleY(COMP_Cb, m_chromaFormat);
-      const uint32_t numberOfChromaSamples = std::min<int>(buf->height - yCtu, ctuHeightC) * std::min<int>(buf->width - xCtu, ctuWidthC);
-      const uint32_t thresholdC = (numberOfChromaSamples >> 2);
 
       m_CABACEstimator->getCtx() = ctxBest;
       ctxStart                   = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
