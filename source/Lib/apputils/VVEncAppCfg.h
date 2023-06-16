@@ -490,8 +490,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
-  IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8);
-  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap);
+  IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8 );
+  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap );
+  IStreamToAbbr<int,int>                  toMaxRate              ( &c->m_RCMaxBitrate,    &BitrateAbrevToIntMap );
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &c->m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &c->m_AccessUnitDelimiter,         &FlagToIntMap );
@@ -593,7 +594,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Output Options");
     opts.addOptions()
-    ("output,o",          m_bitstreamFileName,      "Bitstream output file name")
+    ("output,o",                                        m_bitstreamFileName,                                 "bitstream output file name")
     ;
   }
   else
@@ -610,19 +611,21 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Encoder Options");
     opts.addOptions()
-    ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
-    ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise bits/second "
-                                                                                                             "(use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000))" )
-    ("passes,p",                                        c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
-    ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
-    ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
-    ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0-63)")
-    ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("threads,t",                                       c->m_numThreads,                                     "Number of threads default: [size < 720p: 4, >= 720p: 8]")
-    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
+    ("preset",                                          toPreset,                                            "preset for detailed parameter configuration (faster, fast, medium, slow, slower)")
+    ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise\n"
+                                                                                                             "bits/second; use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000)")
+    ("maxrate,m",                                       toMaxRate,                                           "approximate maximum instantaneous bitrate for constrained VBR in rate control (0:\n"
+                                                                                                             "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000)")
+    ("passes,p",                                        c->m_RCNumPasses,                                    "number of encoding passes with rate control (1: single-pass, -1, 2: two-pass RC)")
+    ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1: both, 1: first, 2: second pass)")
+    ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
+    ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
+    ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
+    ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, >= 720p: 8 threads)")
+    ("refreshtype,-rt",                                 toDecRefreshType,                                    "Intra refresh type (idr, cra, idr2, cra_cre: CRA, constrained RASL picture encoding)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "Intra period/refresh in seconds")
-    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
-    ("tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
+    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: specify Intra period in seconds instead, see -refreshsec)")
+    ("tiles",                                           toNumTiles,                                          "number of tile columns and rows")
     ;
   }
   else
@@ -650,9 +653,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
     ("LookAhead",                                       c->m_LookAhead,                                      "Enable pre-analysis pass with picture look-ahead (-1,0,1)")
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
-    ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
+    ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bitrate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
+    ("MaxBitrate",                                      toMaxRate,                                           "Rate control: approximate maximum instantaneous bitrate [bits/second] (0: no rate cap; least constraint)" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt nal unit type)")
+    ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt NAL unit type)")
     ;
 
     opts.setSubSection("Quantization parameters");
@@ -663,9 +667,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
-  ("Profile",                                           toProfile,                                           "select profile (main_10, main_10_still_picture)")
-  ("Level",                                             toLevel,                                             "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
-  ("Tier",                                              toLevelTier,                                         "Tier to use for interpretation of level (main or high)")
+  ("Profile",                                           toProfile,                                           "profile (main_10, main_10_still_picture)")
+  ("Level",                                             toLevel,                                             "level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
+  ("Tier",                                              toLevelTier,                                         "tier for interpretation of level (main, high)")
   ;
 
   if( m_easyMode )
@@ -674,7 +678,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.addOptions()
     ("sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
                                                                                                              "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
-    ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
+    ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+ SEI messages for hlg) "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
   }

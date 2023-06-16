@@ -406,7 +406,7 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFUnitSize;
-  int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
+  int                 mctfUnused;                                                        // TODO: remove unused memory from configuration
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -432,7 +432,7 @@ typedef struct vvenc_config
   int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, else 8threads (limited to available cores))
 
   int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
-  int                 m_RCTargetBitrate;                                                 // target bitrate in bps, (default. 0 (rc disabled))
+  int                 m_RCTargetBitrate;                                                 // target bitrate in bps (default: 0 (RC disabled))
 
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity level
 
@@ -767,7 +767,9 @@ typedef struct vvenc_config
   int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
   bool                m_treatAsSubPic;
 
-  double              m_reservedDouble[10];
+  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or 3*m_RCTargetBitrate))
+  int                 m_reservedInt;
+  double              m_reservedDouble[9];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )
