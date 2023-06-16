@@ -631,7 +631,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useNonLinearAlfChroma                   = true;
   c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
   c->m_ccalf                                   = false;
-  c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;
   c->m_alfUnitSize                             = -1;
 
@@ -1389,8 +1388,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
-
-  if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
   if( c->m_treatAsSubPic )
   {

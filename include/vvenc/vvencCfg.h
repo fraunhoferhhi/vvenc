@@ -701,7 +701,7 @@ typedef struct vvenc_config
   bool                m_useNonLinearAlfChroma;
   unsigned            m_maxNumAlfAlternativesChroma;
   bool                m_ccalf;
-  int                 m_ccalfQpThreshold;
+  int                 m_cfgUnused25;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
   int                 m_alfSpeed;
 

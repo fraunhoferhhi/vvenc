@@ -384,7 +384,6 @@ private:
   uint8_t*               m_filterControl;         // current iterations filter control
   uint8_t*               m_bestFilterControl;     // best saved filter control
   int                    m_reuseApsId[2];
-  bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
   int                    m_maxAsuWidth;
   int                    m_maxAsuHeight;
