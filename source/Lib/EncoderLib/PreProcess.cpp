@@ -84,7 +84,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
   m_doVisAct    =    m_encCfg->m_usePerceptQPA
-                  || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate )
+                  || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0 )
                   || ( m_encCfg->m_RCNumPasses > 1 && ! isFinalPass );
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 

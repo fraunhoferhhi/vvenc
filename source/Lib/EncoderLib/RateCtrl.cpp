@@ -86,13 +86,13 @@ EncRCSeq::~EncRCSeq()
   destroy();
 }
 
-void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats )
+void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int maxBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats )
 {
   destroy();
   twoPass             = twoPassRC;
   isLookAhead         = lookAhead;
   targetRate          = std::min( INT32_MAX / 3, targetBitrate );
-  maxGopRate          = int( 0.5 + std::min( (double) INT32_MAX, (double) std::max( targetRate, 3 * targetRate ) * GOPSize / frRate ) ); // TODO hlm: make the "3 * targetRate" user-definable (with 1.5-3 being the valid range)
+  maxGopRate          = int( 0.5 + std::min( (double) INT32_MAX, (double) std::min( 3 * targetRate, maxBitrate ) * GOPSize / frRate ) ); // 1.5x-3x is the valid range
   frameRate           = frRate;
   intraPeriod         = Clip3<unsigned>( GOPSize, 4 * VVENC_MAX_GOP, intraPer );
   gopSize             = GOPSize;
@@ -330,7 +330,8 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   m_pcEncCfg = &encCfg;
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale, m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, m_pcEncCfg->m_RCMaxBitrate, (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale,
+                    m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
 int RateCtrl::getBaseQP()
@@ -1038,12 +1039,13 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
       {
         if ( it->poc == slice->poc && it->numBits > 0 )
         {
-          const double dLimit = std::max ( 2.0, 6.0 - double( frameLevel >> 1 ) );
           const double sqrOfResRatio = double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 );
           const int firstPassSliceQP = it->qp;
           const int secondPassBaseQP = ( m_pcEncCfg->m_LookAhead ? ( m_pcEncCfg->m_QP + getBaseQP() ) >> 1 : m_pcEncCfg->m_QP );
           const int budgetRelaxScale = ( encRCSeq->maxGopRate + 0.5 < 2.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate ? 2 : 3 ); // quarters
+          const bool isRateCapperMax = ( encRCSeq->maxGopRate + 0.5 >= 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate );
           const bool isEndOfSequence = ( it->poc >= flushPOC && flushPOC >= 0 );
+          const double dLimit = ( isRateCapperMax ? 3.0 : 0.5 * budgetRelaxScale + 0.5 );
           double d = (double)it->targetBits, tmpVal;
           uint16_t visAct = it->visActY;
 
@@ -1084,12 +1086,10 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
             if ( m_pcEncCfg->m_LookAhead && !encRCSeq->isRateSavingMode ) // bitrate "booster"
             {
-              const bool maxRateCap = ( encRCSeq->maxGopRate + 0.5 >= 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate );
-
-              if ( isLookAheadBoostAllowed( maxRateCap ? 3 : budgetRelaxScale - 1 ) )
+              if ( isLookAheadBoostAllowed( isRateCapperMax ? 3 : budgetRelaxScale - 1 ) )
               {
                 allowMoreRatePeaks = true;
-                if ( !maxRateCap )
+                if ( !isRateCapperMax )
                 {
                   encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( (4 - budgetRelaxScale) * encRCSeq->estimatedBitUsage + budgetRelaxScale * encRCSeq->bitsUsed + 2 ) >> 2 );
                 }
