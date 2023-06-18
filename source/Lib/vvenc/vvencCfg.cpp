@@ -209,6 +209,12 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
   return cT;
 }
 
+static inline bool isHDRMode( vvencHDRMode hdrMode )
+{
+  return ( hdrMode == VVENC_HDR_PQ || hdrMode == VVENC_HDR_PQ_BT2020 ||
+           hdrMode == VVENC_HDR_HLG || hdrMode == VVENC_HDR_HLG_BT2020 ) ? true : false;
+}
+
 static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
 {
   std::stringstream css;
@@ -1759,8 +1765,8 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
 
-  vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internalBitDepth[0] < 10 )     ,       "InternalBitDepth must be at least 10 bit for HDR");
-  vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internChromaFormat != VVENC_CHROMA_420 ) ,"ChromaFormatIDC must be YCbCr 4:2:0 for HDR");
+  vvenc_confirmParameter( c, (isHDRMode(c->m_HdrMode) && c->m_internalBitDepth[0] < 10 )     ,       "InternalBitDepth must be at least 10 bit for HDR");
+  vvenc_confirmParameter( c, (isHDRMode(c->m_HdrMode) && c->m_internChromaFormat != VVENC_CHROMA_420 ) ,"ChromaFormatIDC must be YCbCr 4:2:0 for HDR");
   vvenc_confirmParameter( c, (c->m_contentLightLevel[0] < 0 || c->m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
   vvenc_confirmParameter( c, (c->m_contentLightLevel[1] < 0 || c->m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
 
