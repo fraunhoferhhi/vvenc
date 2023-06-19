@@ -1324,6 +1324,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
   }
 
+#if !NEW_MCTF_QP_DEPENDENCY
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
     // TODO 2.0: add some kind of auto-behavior
@@ -1331,6 +1332,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTF         = 0;
     c->m_blockImportanceMapping = false; // TODO: change, when BIM is independent from MCTF
   }
+#endif
   if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
   {
     const int log2GopSize = std::min<int>( 6, vvenc::floorLog2( c->m_GOPSize ) );
