@@ -292,33 +292,6 @@ void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   // create list of pictures ordered in coding order and ready to be encoded
   xInitPicsInCodingOrder(picList);
 
-  if ((m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
-  {
-    for (auto pic : picList)
-    {
-      if (!pic->resetVisAct)
-      {
-        EncRCSeq* encRcSeq = m_pcRateCtrl->encRCSeq;
-        std::list<TRCPassStats>::iterator it;
-
-        for (it = encRcSeq->firstPassData.begin(); it != encRcSeq->firstPassData.end(); it++)
-        {
-          if (it->poc == pic->poc)
-          {
-            int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
-            if (partVisAct > 20)
-            {
-              it->numBits = (it->numBits * 3) >> 1;
-            }
-            it->visActY = pic->picVisActY;
-            pic->resetVisAct = true;
-            break;
-          }
-        }
-      }
-    }
-  }
-
   // encode pictures
   xProcessPictures( auList, doneList );
 
@@ -1399,6 +1372,27 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 
     // continue with next picture
     m_lastCodingNum = pic->gopEntry->m_codingNum;
+
+    if ( !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
+    {
+      EncRCSeq* encRcSeq = m_pcRateCtrl->encRCSeq;
+      std::list<TRCPassStats>::iterator it;
+
+      for (it = encRcSeq->firstPassData.begin(); it != encRcSeq->firstPassData.end(); it++)
+      {
+        if (it->poc == pic->poc)
+        {
+          int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
+          if (partVisAct > 20)
+          {
+            it->numBits = (it->numBits * 3) >> 1;
+          }
+          it->visActY = pic->picVisActY;
+          pic->resetVisAct = true;
+          break;
+        }
+      }        
+    }
 
     // in single threading initialize only one picture per encoding loop
     if( m_pcEncCfg->m_maxParallelFrames <= 0 )

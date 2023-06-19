@@ -345,10 +345,10 @@ void EncLib::xInitRCCfg()
   {
     int stepDown = 2;
     int bord = 8 * stepDown;
-    m_firstPassCfg.m_PadSourceWidth = (m_encCfg.m_PadSourceWidth % bord) ? (m_encCfg.m_PadSourceWidth - (m_encCfg.m_PadSourceWidth % bord)) / stepDown : m_encCfg.m_PadSourceWidth / stepDown;
     m_firstPassCfg.m_SourceWidth = (m_encCfg.m_SourceWidth % bord) ? (m_encCfg.m_SourceWidth - (m_encCfg.m_SourceWidth % bord)) / stepDown : m_encCfg.m_SourceWidth / stepDown;
-    m_firstPassCfg.m_PadSourceHeight = (m_encCfg.m_PadSourceHeight % bord) ? (m_encCfg.m_PadSourceHeight - (m_encCfg.m_PadSourceHeight % bord)) / stepDown : m_encCfg.m_PadSourceHeight / stepDown;
     m_firstPassCfg.m_SourceHeight = (m_encCfg.m_SourceHeight % bord) ? (m_encCfg.m_SourceHeight - (m_encCfg.m_SourceHeight % bord)) / stepDown : m_encCfg.m_SourceHeight / stepDown;
+    m_firstPassCfg.m_PadSourceWidth = m_firstPassCfg.m_SourceWidth;
+    m_firstPassCfg.m_PadSourceHeight = m_firstPassCfg.m_SourceHeight;
   }
   vvenc_init_preset( &m_firstPassCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
