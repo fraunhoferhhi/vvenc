@@ -104,7 +104,7 @@ namespace vvenc {
     EncRCSeq();
     ~EncRCSeq();
 
-    void create( bool twoPassRC, bool lookAhead, int targetBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
+    void create( bool twoPassRC, bool lookAhead, int targetBitrate, int maxBitrate, double frRate, int intraPer, int GOPSize, int bitDpth, std::list<TRCPassStats> &firstPassStats );
     void destroy();
     void updateAfterPic (const int actBits, const int tgtBits);
 

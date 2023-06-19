@@ -1033,31 +1033,15 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
     pps.picInitQPMinus26 = std::min( maxDQP, std::max( minDQP, baseQp ) );
   }
 
-  if (m_pcEncCfg->m_wcgChromaQpControl.enabled )
-  {
-    const int baseQp      = m_pcEncCfg->m_QP + pps.ppsId;
-    const double chromaQp = m_pcEncCfg->m_wcgChromaQpControl.chromaQpScale * baseQp + m_pcEncCfg->m_wcgChromaQpControl.chromaQpOffset;
-    const double dcbQP    = m_pcEncCfg->m_wcgChromaQpControl.chromaCbQpScale * chromaQp;
-    const double dcrQP    = m_pcEncCfg->m_wcgChromaQpControl.chromaCrQpScale * chromaQp;
-    const int cbQP        = std::min(0, (int)(dcbQP + ( dcbQP < 0 ? -0.5 : 0.5) ));
-    const int crQP        = std::min(0, (int)(dcrQP + ( dcrQP < 0 ? -0.5 : 0.5) ));
-    pps.chromaQpOffset[COMP_Y]          = 0;
-    pps.chromaQpOffset[COMP_Cb]         = Clip3( -12, 12, cbQP + m_pcEncCfg->m_chromaCbQpOffset);
-    pps.chromaQpOffset[COMP_Cr]         = Clip3( -12, 12, crQP + m_pcEncCfg->m_chromaCrQpOffset);
-    pps.chromaQpOffset[COMP_JOINT_CbCr] = Clip3( -12, 12, ( cbQP + crQP ) / 2 + m_pcEncCfg->m_chromaCbCrQpOffset);
-  }
-  else
-  {
-    pps.chromaQpOffset[COMP_Y]          = 0;
-    pps.chromaQpOffset[COMP_Cb]         = m_pcEncCfg->m_chromaCbQpOffset;
-    pps.chromaQpOffset[COMP_Cr]         = m_pcEncCfg->m_chromaCrQpOffset;
-    pps.chromaQpOffset[COMP_JOINT_CbCr] = m_pcEncCfg->m_chromaCbCrQpOffset;
-  }
+  pps.chromaQpOffset[COMP_Y]          = 0;
+  pps.chromaQpOffset[COMP_Cb]         = m_pcEncCfg->m_chromaCbQpOffset;
+  pps.chromaQpOffset[COMP_Cr]         = m_pcEncCfg->m_chromaCrQpOffset;
+  pps.chromaQpOffset[COMP_JOINT_CbCr] = m_pcEncCfg->m_chromaCbCrQpOffset;
 
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
+    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate > 0) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
     if( ! bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400 ) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
@@ -2445,7 +2429,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
 
   // create info string
   {
-    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
+    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate > 0) || !m_pcRateCtrl->rcIsFinalPass)
     {
       std::string cInfo;
       if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC

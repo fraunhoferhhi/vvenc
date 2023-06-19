@@ -283,11 +283,7 @@ VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
 {
-  WCGChromaQPControl->enabled         = false;  ///< Enabled flag (0:default)
-  WCGChromaQPControl->chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
-  WCGChromaQPControl->chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
-  WCGChromaQPControl->chromaQpScale   = 0.0;    ///< Chroma QP Scale (0.0:default)
-  WCGChromaQPControl->chromaQpOffset  = 0-0;    ///< Chroma QP Offset (0.0:default)
+  memset( WCGChromaQPControl, 0, sizeof( vvencWCGChromaQPControl ) );
 }
 
 VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTableParams *p )
@@ -364,7 +360,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numThreads                              = 0;             ///< number of worker threads
 
   c->m_QP                                      = VVENC_DEFAULT_QP;
-  c->m_RCTargetBitrate                         = 0;
+  c->m_RCTargetBitrate                         = VVENC_RC_OFF;
+  c->m_RCMaxBitrate                            = 0;
 
   c->m_verbosity                               = VVENC_INFO;    ///< encoder verbosity
 
@@ -463,7 +460,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   c->m_lumaLevelToDeltaQPEnabled               = false;
-  vvenc_WCGChromaQPControl_default(&c->m_wcgChromaQpControl );
+  vvenc_WCGChromaQPControl_default( &c->m_cfgUnused24 );
 
   c->m_internChromaFormat                      = VVENC_NUM_CHROMA_FORMAT;
   c->m_useIdentityTableForNon420Chroma         = true;
@@ -634,7 +631,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useNonLinearAlfChroma                   = true;
   c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
   c->m_ccalf                                   = false;
-  c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;
   c->m_alfUnitSize                             = -1;
 
@@ -757,8 +753,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( VVENC_RC_OFF == c->m_RCTargetBitrate )
   {
-     vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
-     vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+    vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled, "Enabling bufferingPeriod SEI requires rate control" );
+    vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,   "Enabling pictureTiming SEI requires rate control" );
+    vvenc_confirmParameter( c, c->m_RCMaxBitrate > 0,          "Specifying a maximum bitrate requires rate control" );
+  }
+  else if ( c->m_RCMaxBitrate <= 0 )
+  {
+    c->m_RCMaxBitrate = INT32_MAX;
   }
 
   vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_SDR_BT470BG,  "Sdr/Hdr Mode must be in the range 0 - 8" );
@@ -796,9 +797,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_QP == VVENC_AUTO_QP ) c->m_QP = VVENC_DEFAULT_QP;
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
 
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ), "TargetBitrate must be between 0 - 800000000" );
-
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
+  vvenc_confirmParameter(c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1204,31 +1205,39 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
-  {
-    if ( fps % c->m_GOPSize == 0 )
+  {  
+    int idrPeriod = fps * c->m_IntraPeriodSec;
+    if( idrPeriod % c->m_GOPSize != 0 )
     {
-      c->m_IntraPeriod = fps * c->m_IntraPeriodSec;
-    }
-    else
-    {
-      int iIDRPeriod  = (fps * c->m_IntraPeriodSec);
-      if( iIDRPeriod < c->m_GOPSize )
+      const int minGopSize = std::min( (fps * c->m_IntraPeriodSec), std::min( c->m_GOPSize, 8 ));   
+      if( idrPeriod < c->m_GOPSize )
       {
-        iIDRPeriod = c->m_GOPSize;
-      }
-
-      int iDiff = iIDRPeriod % c->m_GOPSize;
-      if( iDiff < c->m_GOPSize >> 1 )
-      {
-        c->m_IntraPeriod = iIDRPeriod - iDiff;
+        if( (idrPeriod % minGopSize) != 0)
+        {
+          idrPeriod = (fps > minGopSize ) ? (idrPeriod - (minGopSize>>1)) : minGopSize;
+          while ( idrPeriod % minGopSize != 0 )
+          {
+            idrPeriod++;
+          }
+        }
       }
       else
       {
-        c->m_IntraPeriod = iIDRPeriod + c->m_GOPSize - iDiff;
+        int diff = idrPeriod % minGopSize;
+        if( diff < minGopSize >> 1 )
+        {
+          idrPeriod -= diff;
+        }
+        else
+        {
+          idrPeriod += (minGopSize - diff);
+        }
       }
     }
+    c->m_IntraPeriod = idrPeriod;
   }
-  else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
+  
+  if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
   {
     // TODO 2.0: make this an error
     msg.log( VVENC_WARNING, "Configuration warning: IntraPeriod is 1, thus GOPSize is set to 1 too and given gop structures are resetted\n\n" );
@@ -1353,7 +1362,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
   if ( c->m_usePerceptQPATempFiltISlice > 0
-      && ( c->m_vvencMCTF.MCTF == 0 || ! c->m_usePerceptQPA) )
+      && ( c->m_vvencMCTF.MCTF == 0 || ! c->m_usePerceptQPA ) )
   {
     c->m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
@@ -1379,8 +1388,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
-
-  if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
   if( c->m_treatAsSubPic )
   {
@@ -2303,6 +2310,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
   c->m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
+  c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps (0: 3*targetbitrate)
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
   
@@ -2902,8 +2910,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
   if( eMsgLevel >= VVENC_INFO )
   {
-    css << loglvl << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
-    css << loglvl << "Rate Control                           : ";
+    css << loglvl << "Internal format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << loglvl << "Rate control                           : ";
 
     if ( c->m_RCTargetBitrate > 0 )
     {
@@ -2913,19 +2921,26 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
         css << "VBR  " <<  (double)c->m_RCTargetBitrate/1000000.0 << " Mbps  ";
       if( c->m_RCNumPasses == 2 )
       {
-        css << "twopass";
+        css << "two-pass";
         if ( c->m_RCPass >= 0 )
-          css  << "  pass " << c->m_RCPass << "/2";
+          css << "  pass " << c->m_RCPass << "/2";
       }
       else
-        css << "singlepass";
+        css << "single-pass";
+      if( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+      {
+        if( c->m_RCMaxBitrate < 1000000 )
+          css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000.0 << " kbps)";
+        else
+          css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000000.0 << " Mbps)";
+      }
       css << "\n";
     }
     else
       css << "QP " <<  c->m_QP << "\n";
 
-    css << loglvl << "Percept QPA                            : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
-    css << loglvl << "Intra period (Keyframe)                : " << c->m_IntraPeriod << "\n";
+    css << loglvl << "Perceptual optimization                : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
+    css << loglvl << "Intra period (keyframe)                : " << c->m_IntraPeriod << "\n";
     css << loglvl << "Decoding refresh type                  : " << vvenc_getDecodingRefreshTypeStr(c->m_DecodingRefreshType) << "\n";
 
     if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
@@ -3122,6 +3137,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "Passes:" << c->m_RCNumPasses << " ";
       css << "Pass:" << c->m_RCPass << " ";
       css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
+      css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
       css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     }
     else
