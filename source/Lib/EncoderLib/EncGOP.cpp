@@ -1372,7 +1372,6 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
             it->numBits = (it->numBits * 3) >> 1;
           }
           it->visActY = pic->picVisActY;
-          pic->resetVisAct = true;
           break;
         }
       }        

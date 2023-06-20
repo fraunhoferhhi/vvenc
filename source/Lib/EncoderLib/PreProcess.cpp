@@ -288,7 +288,6 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
 {
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
-  pic->resetVisAct = false;
 
   if( m_doVisAct && ! m_doVisActQpa ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
   {
