@@ -528,7 +528,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-                                                    data["spVisAct"],
+                                                    data[ "spVisAct" ],
                                                     statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
@@ -554,48 +554,48 @@ void RateCtrl::readStatsFile()
 
   int lineNum = 2;
   std::string line;
-  while (std::getline(m_rcStatsFHandle, line))
+  while( std::getline( m_rcStatsFHandle, line ) )
   {
-    nlohmann::json data = nlohmann::json::parse(line);
-    if (data.find("poc") == data.end() || !data["poc"].is_number()
-      || data.find("qp") == data.end() || !data["qp"].is_number()
-      || data.find("lambda") == data.end() || !data["lambda"].is_number()
-      || data.find("visActY") == data.end() || !data["visActY"].is_number()
-      || data.find("numBits") == data.end() || !data["numBits"].is_number()
-      || data.find("psnrY") == data.end() || !data["psnrY"].is_number()
-      || data.find("isIntra") == data.end() || !data["isIntra"].is_boolean()
-      || data.find("tempLayer") == data.end() || !data["tempLayer"].is_number()
-      || data.find("isStartOfIntra") == data.end() || !data["isStartOfIntra"].is_boolean()
-      || data.find("isStartOfGop") == data.end() || !data["isStartOfGop"].is_boolean()
-      || data.find("gopNum") == data.end() || !data["gopNum"].is_number()
-      || data.find("scType") == data.end() || !data["scType"].is_number()
-      || data.find("spVisAct") == data.end() || !data["spVisAct"].is_number())
+    nlohmann::json data = nlohmann::json::parse( line );
+    if( data.find( "poc" )               == data.end() || ! data[ "poc" ].is_number()
+        || data.find( "qp" )             == data.end() || ! data[ "qp" ].is_number()
+        || data.find( "lambda" )         == data.end() || ! data[ "lambda" ].is_number()
+        || data.find( "visActY" )        == data.end() || ! data[ "visActY" ].is_number()
+        || data.find( "numBits" )        == data.end() || ! data[ "numBits" ].is_number()
+        || data.find( "psnrY" )          == data.end() || ! data[ "psnrY" ].is_number()
+        || data.find( "isIntra" )        == data.end() || ! data[ "isIntra" ].is_boolean()
+        || data.find( "tempLayer" )      == data.end() || ! data[ "tempLayer" ].is_number()
+        || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
+        || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
+        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
+        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number()
+        || data.find( "spVisAct" )       == data.end() || ! data[ "spVisAct" ].is_number() )
     {
-      THROW("syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")");
+      THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
-    m_listRCFirstPassStats.push_back(TRCPassStats(data["poc"],
-      data["qp"],
-      data["lambda"],
-      data["visActY"],
-      data["numBits"],
-      data["psnrY"],
-      data["isIntra"],
-      data["tempLayer"],
-      data["isStartOfIntra"],
-      data["isStartOfGop"],
-      data["gopNum"],
-      data["scType"],
-      data["spVisAct"],
-      0, // motionEstError
-      minNoiseLevels
-    ));
-    if (data.find("pqpaStats") != data.end())
+    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
+                                                    data[ "qp" ],
+                                                    data[ "lambda" ],
+                                                    data[ "visActY" ],
+                                                    data[ "numBits" ],
+                                                    data[ "psnrY" ],
+                                                    data[ "isIntra" ],
+                                                    data[ "tempLayer" ],
+                                                    data[ "isStartOfIntra" ],
+                                                    data[ "isStartOfGop" ],
+                                                    data[ "gopNum" ],
+                                                    data[ "scType" ],
+                                                    data[ "spVisAct" ],
+                                                    0, // motionEstError
+                                                    minNoiseLevels
+                                                    ) );
+    if( data.find( "pqpaStats" ) != data.end() )
     {
-      CHECK(!data["pqpaStats"].is_array(), "pqpa array data in rate control statistics file not recognized");
-      std::vector<uint8_t> pqpaTemp = data["pqpaStats"];
-      for (auto el : pqpaTemp)
+      CHECK( ! data[ "pqpaStats" ].is_array(), "pqpa array data in rate control statistics file not recognized" );
+      std::vector<uint8_t> pqpaTemp = data[ "pqpaStats" ];
+      for( auto el : pqpaTemp )
       {
-        m_listRCIntraPQPAStats.push_back(el);
+        m_listRCIntraPQPAStats.push_back( el );
       }
     }
     lineNum++;
