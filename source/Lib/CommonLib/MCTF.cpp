@@ -1325,11 +1325,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
 void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
 {
-#if NEW_MCTF_QP_DEPENDENCY
-  const double lumaSigmaSq = m_sigmaMultiplier * ( LM_SGM_OFFSET + 3.0 / 256.0 * m_encCfg->m_QP * m_encCfg->m_QP * m_encCfg->m_QP );
-#else
-  const double lumaSigmaSq = (m_encCfg->m_QP - m_sigmaZeroPoint) * (m_encCfg->m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
-#endif
+  const double lumaSigmaSq = m_sigmaMultiplier * ( 128.0 + 3.0 / 256.0 * m_encCfg->m_QP * m_encCfg->m_QP * m_encCfg->m_QP );
   const double chromaSigmaSq = 30 * 30;
 
   double sigmaSqCh[MAX_NUM_CH];
