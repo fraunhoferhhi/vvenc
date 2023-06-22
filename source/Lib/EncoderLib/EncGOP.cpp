@@ -290,7 +290,7 @@ void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   CHECK( picList.empty(), "empty input picture list given" );
 
   // create list of pictures ordered in coding order and ready to be encoded
-  xInitPicsInCodingOrder(picList);
+  xInitPicsInCodingOrder( picList );
 
   // encode pictures
   xProcessPictures( auList, doneList );
@@ -1359,22 +1359,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 
     if ( !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
     {
-      EncRCSeq* encRcSeq = m_pcRateCtrl->encRCSeq;
-      std::list<TRCPassStats>::iterator it;
-
-      for (it = encRcSeq->firstPassData.begin(); it != encRcSeq->firstPassData.end(); it++)
-      {
-        if (it->poc == pic->poc)
-        {
-          int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
-          if (partVisAct > 20)
-          {
-            it->numBits = (it->numBits * 3) >> 1;
-          }
-          it->visActY = pic->picVisActY;
-          break;
-        }
-      }        
+      m_pcRateCtrl->adjustStatBitsVisAct(pic);        
     }
 
     // in single threading initialize only one picture per encoding loop
@@ -1955,7 +1940,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
         pic.gopEntry->m_isStartOfGop,
         pic.gopEntry->m_gopNum,
         pic.gopEntry->m_scType,
-        pic.picSpatVisAct,
+        pic.picSpVisAct,
         pic.m_picShared->m_picMotEstError,
         pic.m_picShared->m_minNoiseLevels );
     return;
@@ -2389,7 +2374,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
                                   pic->gopEntry->m_scType,
-                                  pic->picSpatVisAct,
+                                  pic->picSpVisAct,
                                   pic->m_picShared->m_picMotEstError,
                                   pic->m_picShared->m_minNoiseLevels );
   }

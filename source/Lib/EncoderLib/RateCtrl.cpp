@@ -491,7 +491,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
-    { "spAct",        statsData.spVisAct },
+    { "spVisAct",       statsData.spVisAct },
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -528,7 +528,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-                                                    data["spAct"],
+                                                    data["spVisAct"],
                                                     statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
@@ -569,34 +569,33 @@ void RateCtrl::readStatsFile()
       || data.find("isStartOfGop") == data.end() || !data["isStartOfGop"].is_boolean()
       || data.find("gopNum") == data.end() || !data["gopNum"].is_number()
       || data.find("scType") == data.end() || !data["scType"].is_number()
-      || data.find("spAct") == data.end() || !data["spAct"].is_number()
-      )
+      || data.find("spVisAct") == data.end() || !data["spVisAct"].is_number())
     {
-      THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
+      THROW("syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")");
     }
-    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
-                                                    data[ "qp" ],
-                                                    data[ "lambda" ],
-                                                    data[ "visActY" ],
-                                                    data[ "numBits" ],
-                                                    data[ "psnrY" ],
-                                                    data[ "isIntra" ],
-                                                    data[ "tempLayer" ],
-                                                    data[ "isStartOfIntra" ],
-                                                    data[ "isStartOfGop" ],
-                                                    data[ "gopNum" ],
-                                                    data[ "scType" ],
-                                                    data["spAct"],
-                                                    0, // motionEstError
-                                                    minNoiseLevels
-                                                    ) );
-    if( data.find( "pqpaStats" ) != data.end() )
+    m_listRCFirstPassStats.push_back(TRCPassStats(data["poc"],
+      data["qp"],
+      data["lambda"],
+      data["visActY"],
+      data["numBits"],
+      data["psnrY"],
+      data["isIntra"],
+      data["tempLayer"],
+      data["isStartOfIntra"],
+      data["isStartOfGop"],
+      data["gopNum"],
+      data["scType"],
+      data["spVisAct"],
+      0, // motionEstError
+      minNoiseLevels
+    ));
+    if (data.find("pqpaStats") != data.end())
     {
-      CHECK( ! data[ "pqpaStats" ].is_array(), "pqpa array data in rate control statistics file not recognized" );
-      std::vector<uint8_t> pqpaTemp = data[ "pqpaStats" ];
-      for( auto el : pqpaTemp )
+      CHECK(!data["pqpaStats"].is_array(), "pqpa array data in rate control statistics file not recognized");
+      std::vector<uint8_t> pqpaTemp = data["pqpaStats"];
+      for (auto el : pqpaTemp)
       {
-        m_listRCIntraPQPAStats.push_back( el );
+        m_listRCIntraPQPAStats.push_back(el);
       }
     }
     lineNum++;
@@ -1297,6 +1296,24 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
   qp = sliceQP;
   finalLambda = lambda;
+}
+
+void RateCtrl::adjustStatBitsVisAct(Picture* pic)
+{
+  std::list<TRCPassStats>::iterator it;
+  for (it = encRCSeq->firstPassData.begin(); it != encRCSeq->firstPassData.end(); it++)
+  {
+    if (it->poc == pic->poc)
+    {
+      int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
+      if (partVisAct > 20)
+      {
+        it->numBits = (it->numBits * 3) >> 1;
+      }
+      it->visActY = pic->picVisActY;
+      break;
+    }
+  }
 }
 
 }

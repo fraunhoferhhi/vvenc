@@ -177,6 +177,7 @@ namespace vvenc {
     void processFirstPassData( const bool flush, const int poc = -1 );
     void updateAfterPicEncRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
+    void adjustStatBitsVisAct( Picture* pic );
 
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }

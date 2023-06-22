@@ -65,7 +65,7 @@ namespace vvenc {
                                              const uint32_t bitDepth,
                                              const bool isUHD,
                                              unsigned* minVA , 
-                                             unsigned* spaVA);
+                                             unsigned* spVisAct);
 
   // BitAllocation functions
   namespace BitAllocation

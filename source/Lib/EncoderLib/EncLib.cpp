@@ -343,10 +343,8 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg = m_encCfg;
   if (m_encCfg.m_FirstPassMode > 2)
   {
-    int stepDown = 2;
-    int bord = 8 * stepDown;
-    m_firstPassCfg.m_SourceWidth = (m_encCfg.m_SourceWidth % bord) ? (m_encCfg.m_SourceWidth - (m_encCfg.m_SourceWidth % bord)) / stepDown : m_encCfg.m_SourceWidth / stepDown;
-    m_firstPassCfg.m_SourceHeight = (m_encCfg.m_SourceHeight % bord) ? (m_encCfg.m_SourceHeight - (m_encCfg.m_SourceHeight % bord)) / stepDown : m_encCfg.m_SourceHeight / stepDown;
+    m_firstPassCfg.m_SourceWidth = ( m_encCfg.m_SourceWidth / 2 ) & (~7);
+    m_firstPassCfg.m_SourceHeight = ( m_encCfg.m_SourceHeight / 2 ) & (~7);
     m_firstPassCfg.m_PadSourceWidth = m_firstPassCfg.m_SourceWidth;
     m_firstPassCfg.m_PadSourceHeight = m_firstPassCfg.m_SourceHeight;
   }
@@ -359,9 +357,9 @@ void EncLib::xInitRCCfg()
   {
     int d_down = (3840.0 * 2160.0) / double(m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
     int qp_down = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d_down * m_encCfg.m_RCTargetBitrate) / 500000.0))));
-    int TARBIT_SETcur = int(((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
-    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * TARBIT_SETcur) / 500000.0))));
-    m_firstPassCfg.m_QP -= 2;// ADDQP;
+    int targetBitrate_down = int(((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
+    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * targetBitrate_down) / 500000.0))));
+    m_firstPassCfg.m_QP -= 2;
   }
   else
   {

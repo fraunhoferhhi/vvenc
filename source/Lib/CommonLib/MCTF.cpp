@@ -800,6 +800,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 && ( m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
       {
         const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
+
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
           const Position pos ((i % widthInCtus) * ctuSize, (i / widthInCtus) * ctuSize);

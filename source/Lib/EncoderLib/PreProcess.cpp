@@ -315,7 +315,7 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   pic->picVisActY           = picVisActY;
   picShared->m_picVisActTL0 = picVisActTL0;
   picShared->m_picVisActY   = picVisActY;
-  picShared->m_picSpatVisAct = pic->picSpatVisAct;
+  picShared->m_picSpVisAct  = pic->picSpVisAct;
 }
 
 uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
@@ -323,7 +323,7 @@ uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPi
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
-  unsigned spatActivityCTU = 0;
+  unsigned picSpVisAct = 0;
 
   CPelBuf orig[ 3 ];
   orig[ 0 ] = curPic->getOrigBuf( COMP_Y );
@@ -344,10 +344,10 @@ uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPi
       bitDepth,
       m_isHighRes,
       nullptr, 
-      &spatActivityCTU);
+      &picSpVisAct);
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
-  curPic->picSpatVisAct = spatActivityCTU;
+  curPic->picSpVisAct = picSpVisAct;
   return ret;
 }
 

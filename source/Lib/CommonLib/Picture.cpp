@@ -197,7 +197,7 @@ Picture::Picture()
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
     , refApsGlobal      ( nullptr )
-    , picSpatVisAct     ( 0 )
+    , picSpVisAct          ( 0 )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );
