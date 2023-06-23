@@ -2309,8 +2309,8 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_QP                  = qp;                       // quantization parameter 0-63
   c->m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
-  c->m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
-  c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps (0: 3*targetbitrate)
+  c->m_RCTargetBitrate     = targetbitrate;            // target bitrate for rate ctrl. in bps
+  c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
   
@@ -3137,7 +3137,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "Passes:" << c->m_RCNumPasses << " ";
       css << "Pass:" << c->m_RCPass << " ";
       css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
-      css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
+      if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+      {
+        css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
+      }
       css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     }
     else

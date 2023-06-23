@@ -126,6 +126,7 @@ namespace vvenc {
     uint64_t        actualBitCnt[8];
     unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
+    int             lastAverageQP;
     int             lastIntraQP;
     double          lastIntraSM; // temporal stationarity measure; 1: highly stationary (static), 0: highly nonstationary (irregular)
     std::list<TRCPassStats> firstPassData;
@@ -141,7 +142,7 @@ namespace vvenc {
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp);
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp, int* qpAvg);
     void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 

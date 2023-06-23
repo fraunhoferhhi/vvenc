@@ -262,7 +262,6 @@ public:
   bool                          useScSelectiveRdoq;
   int                           useScFastMrg;
   int                           useQtbttSpeedUpMode;
-  int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
