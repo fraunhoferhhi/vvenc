@@ -1255,6 +1255,41 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
+void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
+{
+  const int widthd = dest.width;
+  const int heightd = dest.height;
+  int difStride = dest.stride - dest.width;
+
+  const int16_t* src = yuvPlaneIn.ptr;
+  const int instride = yuvPlaneIn.stride;
+  const int width = yuvPlaneIn.width;
+  int n = 0;
+  for (int j = 0; j < heightd; j++)
+  {
+    int i = 0;
+    for (i = 0; i < widthd; i++)
+    {
+      long int b = 0;
+      for (int r = 0; r < downsampleStep; r++)
+      {
+        int posr = width * r;
+        for (int n = 0; n < downsampleStep; n++)
+        {
+          b += src[posr + n];
+        }
+      }
+      src += downsampleStep;
+      dest.buf[n] = (int16_t)((b + 2) / (downsampleStep << 1));
+      n++;
+    }
+    n += difStride;
+    src = src - downsampleStep * i + width;
+
+    src += (instride * (downsampleStep - 1));
+  }
+}
+
 void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
@@ -1267,24 +1302,32 @@ void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer
     PelBuf& dest = pelUnitBuf.bufs[i];
     CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
 
-    for( int y = 0; y < src.height; y++ )
+    if (dest.width < src.width)
     {
-      ::memcpy( dest.buf + y*dest.stride, src.ptr + y*src.stride, src.width * sizeof(int16_t) );
-
-      // pad right if required
-      for( int x = src.width; x < dest.width; x++ )
-      {
-        dest.buf[ x + y*dest.stride] = dest.buf[ src.width - 1 + y*dest.stride];
-      }
+      downsampleYuv(dest, src, 2);
     }
-
-    // pad bottom if required
-    for( int y = src.height; y < dest.height; y++ )
+    else
     {
-      ::memcpy( dest.buf + y*dest.stride, dest.buf + (src.height-1)*dest.stride, dest.width * sizeof(int16_t) );
+      for (int y = 0; y < src.height; y++)
+      {
+        ::memcpy(dest.buf + y * dest.stride, src.ptr + y * src.stride, src.width * sizeof(int16_t));
+
+        // pad right if required
+        for (int x = src.width; x < dest.width; x++)
+        {
+          dest.buf[x + y * dest.stride] = dest.buf[src.width - 1 + y * dest.stride];
+        }
+      }
+
+      // pad bottom if required
+      for (int y = src.height; y < dest.height; y++)
+      {
+        ::memcpy(dest.buf + y * dest.stride, dest.buf + (src.height - 1) * dest.stride, dest.width * sizeof(int16_t));
+      }
     }
   }
 }
+
 /*
 void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt )
 {

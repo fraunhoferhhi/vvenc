@@ -80,7 +80,7 @@ static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bit
 
 double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
                                           const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
-                                          uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr)
+                                          uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVA = nullptr, unsigned* spVisAct = nullptr)
 {
   double spatAct = 0.0, tempAct = 0.0;
   uint64_t saAct = 0;   // spatial absolute activity sum
@@ -111,6 +111,10 @@ double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride,
   if (minVA) // spatial pt scaled to 12 bit
   {
     *minVA = unsigned (0.5 + spatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
+  }
+  if (spVisAct) // spatial pt scaled to 12 bit
+  {
+    *spVisAct = unsigned(0.5 + spatAct * double(bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
   }
 
   // skip first row as there may be a black border frame
@@ -419,6 +423,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
     if (isLuma (compID)) // luma: CTU-wise QPA operation
     {
+      uint32_t picSpVisAct = 0;
       const PosType guardSize = (isHighResolution ? 2 : 1);
       unsigned zeroMinActCTUs = 0;
 
@@ -433,10 +438,12 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         const CPelBuf  picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
         const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
         unsigned minActivityPart = 0;
+        unsigned spVisActCTU = 0;
 
         hpEner[1] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                        picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
-                                                       bitDepth, isHighResolution, &minActivityPart);
+                                                       bitDepth, isHighResolution, &minActivityPart, &spVisActCTU);
+
         if (minActivityPart == 0) zeroMinActCTUs++;
 
         hpEner[comp] += hpEner[1] * double (ctuArea.width * ctuArea.height);
@@ -457,6 +464,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         {
           updateMinNoiseLevelsPic (pic->m_picShared->m_minNoiseLevels, bitDepth, pic->ctuAdaptedQP[ctuRsAddr], minActivityPart);
         }
+        picSpVisAct += spVisActCTU;
       }
 
       hpEner[comp] /= double (encCfg->m_SourceWidth * encCfg->m_SourceHeight);
@@ -464,7 +472,12 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       {
         *picVisActLuma = ClipBD (uint16_t (0.5 + hpEner[comp]), bitDepth);
       }
+      if (ctuBoundingAddr > ctuStartAddr)
+      {
+        const uint32_t nCtu = ctuBoundingAddr - ctuStartAddr;
 
+        pic->picSpVisAct = (picSpVisAct + (nCtu >> 1)) / nCtu;
+      }
       if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && slice->poc >= encCfg->m_GOPSize && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {
         hpEnerPicNorm *= sqrt (zeroMinActCTUs * 2.0 / float (ctuBoundingAddr - ctuStartAddr)); // frozen-image mode

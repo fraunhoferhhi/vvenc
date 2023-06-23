@@ -799,7 +799,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 2 ), "FirstPassMode must be 0, 1, or 2" );
+  vvenc_confirmParameter(c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1889,6 +1889,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
   vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+  vvenc_confirmParameter( c, (c->m_LookAhead || c->m_RCNumPasses == 1) && c->m_FirstPassMode > 2, "Look-ahead or one pass RC can not be used with resolution downsampling" );
 
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
