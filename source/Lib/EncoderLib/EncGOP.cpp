@@ -1649,8 +1649,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
-  pic.seqBaseQp = m_pcEncCfg->m_QP;
-
   pic.isInitDone = true;
 }
 
