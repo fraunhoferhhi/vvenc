@@ -71,7 +71,7 @@ Feel free to contribute. To do so:
 
 * Fork the current-most state of the master branch
 * Apply the desired changes
-* For larger contributions, add your name to [AUTHORS.md](./AUTHORS.md)
+* For non-trivial contributions, add your name to [AUTHORS.md](./AUTHORS.md)
 * Create a pull-request to the upstream repository
 
 ## License
