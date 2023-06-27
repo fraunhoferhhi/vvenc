@@ -66,6 +66,7 @@ public:
   bool             m_isSccStrong;
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
+  uint16_t         m_picSpVisAct;
   int              m_picMemorySTA;
   uint16_t         m_picMotEstError;
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
@@ -89,6 +90,7 @@ public:
   , m_isSccStrong   ( false )
   , m_picVisActTL0  ( 0 )
   , m_picVisActY    ( 0 )
+  , m_picSpVisAct   ( 0 )
   , m_picMemorySTA  ( 0 )
   , m_picMotEstError( 0 )
   , m_picAuxQpOffset( 0 )
@@ -137,6 +139,7 @@ public:
     m_isSccStrong  = false;
     m_picVisActTL0 = 0;
     m_picVisActY   = 0;
+    m_picSpVisAct  = 0;
     m_picMemorySTA = 0;
     m_cts          = yuvInBuf->cts;
     m_poc          = poc;
@@ -161,6 +164,7 @@ public:
     pic->isSccStrong    = m_isSccStrong;
     pic->picVisActTL0   = m_picVisActTL0;
     pic->picVisActY     = m_picVisActY;
+    pic->picSpVisAct    = m_picSpVisAct;
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;
     pic->cts            = m_cts;

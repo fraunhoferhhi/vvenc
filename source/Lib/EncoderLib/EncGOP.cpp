@@ -1357,6 +1357,11 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     // continue with next picture
     m_lastCodingNum = pic->gopEntry->m_codingNum;
 
+    if ( !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
+    {
+      m_pcRateCtrl->adjustStatBitsVisAct(pic);        
+    }
+
     // in single threading initialize only one picture per encoding loop
     if( m_pcEncCfg->m_maxParallelFrames <= 0 )
       break;
@@ -1649,8 +1654,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
-  pic.seqBaseQp = m_pcEncCfg->m_QP;
-
   pic.isInitDone = true;
 }
 
@@ -1935,6 +1938,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
         pic.gopEntry->m_isStartOfGop,
         pic.gopEntry->m_gopNum,
         pic.gopEntry->m_scType,
+        pic.picSpVisAct,
         pic.m_picShared->m_picMotEstError,
         pic.m_picShared->m_minNoiseLevels );
     return;
@@ -2368,6 +2372,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
                                   pic->gopEntry->m_scType,
+                                  pic->picSpVisAct,
                                   pic->m_picShared->m_picMotEstError,
                                   pic->m_picShared->m_minNoiseLevels );
   }

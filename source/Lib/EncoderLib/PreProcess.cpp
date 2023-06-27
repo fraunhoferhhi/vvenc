@@ -83,9 +83,9 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
-  m_doVisAct    =    m_encCfg->m_usePerceptQPA
-                  || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0 )
-                  || ( m_encCfg->m_RCNumPasses > 1 && ! isFinalPass );
+  m_doVisAct = m_encCfg->m_usePerceptQPA
+                  || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
+                  || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 
 
@@ -315,13 +315,15 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   pic->picVisActY           = picVisActY;
   picShared->m_picVisActTL0 = picVisActTL0;
   picShared->m_picVisActY   = picVisActY;
+  picShared->m_picSpVisAct  = pic->picSpVisAct;
 }
 
-uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const
+uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
 {
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
+  unsigned picSpVisAct = 0;
 
   CPelBuf orig[ 3 ];
   orig[ 0 ] = curPic->getOrigBuf( COMP_Y );
@@ -341,9 +343,11 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
       m_encCfg->m_FrameRate / m_encCfg->m_FrameScale,
       bitDepth,
       m_isHighRes,
-      nullptr );
+      nullptr, 
+      &picSpVisAct);
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
+  curPic->picSpVisAct = picSpVisAct;
   return ret;
 }
 

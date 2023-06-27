@@ -75,6 +75,7 @@ EncRCSeq::EncRCSeq()
   std::memset (actualBitCnt, 0, sizeof (actualBitCnt));
   std::memset (currFrameCnt, 0, sizeof (currFrameCnt));
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
+  lastAverageQP       = 0;
   lastIntraQP         = 0;
   lastIntraSM         = 0.0;
   scRelax             = false;
@@ -179,7 +180,7 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp)
+void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int maxTL, const double resRatio, int &qp, int* qpAvg)
 {
   const int rShift = (resRatio < 0.03125 ? 12 : (resRatio < 0.125 ? 13 : (resRatio < 0.5 ? 14 : 15)));
   const int initQP = qp;
@@ -209,6 +210,9 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     halvedAvgQP += (*it)->picQP;
   }
+
+  if (qpAvg && !listPreviousPictures.empty()) *qpAvg = int ((halvedAvgQP + 1 + (listPreviousPictures.size() >> 1)) / listPreviousPictures.size());
+
   if (listPreviousPictures.size() >= 1) halvedAvgQP = int ((halvedAvgQP + 1 + listPreviousPictures.size()) / (2 * listPreviousPictures.size()));
   if (frameLevel <= 1 && lastPrevTLQP < halvedAvgQP) lastPrevTLQP = halvedAvgQP; // TL0I
   if (frameLevel == 1 && lastCurrTLQP < 0) lastCurrTLQP = encRCSeq->lastIntraQP; // TL0B
@@ -231,9 +235,9 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     qp = Clip3 ((encRCSeq->lastIntraQP >> 1) + 1, MAX_QP, qp);
   }
 
-  if (qp != initQP) // adjust target bits according to QP change as in VCIP paper Tab. 1
+  if (qp != initQP) // adjust target bits according to QP change as in VCIP paper eq.(4)
   {
-    targetBits = (int) std::max (1.0, 0.5 + targetBits * pow (2.0, (initQP - qp) / 5.0));
+    targetBits = (int) std::max (1.0, 0.5 + targetBits * pow (2.0, (initQP - qp) / ((105.0 / 128.0) * sqrt ((double) std::max (1, initQP)))));
   }
 }
 
@@ -251,8 +255,9 @@ void EncRCPic::updateAfterPicture (const int picActualBits, const int averageQP)
     encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
 
     if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
+    if (refreshParams && frameLevel <= 2) encRCSeq->lastAverageQP = 0;
 
-    encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
+    encRCSeq->qpCorrection[frameLevel] = (105.0 / 128.0) * sqrt ((double) std::max (1, encRCSeq->lastAverageQP)) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // adjust target bits as in VCIP paper eq.(4)
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal, clipVal, encRCSeq->qpCorrection[frameLevel]);
 
     if (frameLevel > std::max (1, int (log ((double) encRCSeq->gopSize) / log (2.0))))
@@ -384,6 +389,11 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
+
+  if (rcIsFinalPass && (encCfg.m_FirstPassMode > 2))
+  {
+    adjustStatsFileDownsample();
+  }
 #else
   CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
 #endif
@@ -454,7 +464,7 @@ void RateCtrl::readStatsHeader()
 
 void RateCtrl::storeStatsData( TRCPassStats statsData )
 {
-  if( m_pcEncCfg->m_FirstPassMode == 2 )
+  if( m_pcEncCfg->m_FirstPassMode == 2 || m_pcEncCfg->m_FirstPassMode == 4)
   {
     CHECK( statsData.tempLayer > VVENC_MAX_TLAYER, "array index out of bounds" );
     if( statsData.numBits )
@@ -486,6 +496,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
+    { "spVisAct",       statsData.spVisAct },
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -522,6 +533,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+                                                    data[ "spVisAct" ],
                                                     statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
@@ -561,7 +573,8 @@ void RateCtrl::readStatsFile()
         || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
         || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
         || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
-        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number() )
+        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number()
+        || data.find( "spVisAct" )       == data.end() || ! data[ "spVisAct" ].is_number() )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
@@ -577,6 +590,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
+                                                    data[ "spVisAct" ],
                                                     0, // motionEstError
                                                     minNoiseLevels
                                                     ) );
@@ -590,6 +604,99 @@ void RateCtrl::readStatsFile()
       }
     }
     lineNum++;
+  }
+}
+
+void RateCtrl::adjustStatsFileDownsample()
+{
+  int meanValue = 0; //MCTF or Activity
+  int amount = 0;
+  auto itr = m_listRCFirstPassStats.begin();
+  for (; itr != m_listRCFirstPassStats.end(); itr++)
+  {
+    auto& stat = *itr;
+    int statValue = stat.spVisAct;
+    if (statValue != 0)
+    {
+      meanValue += statValue;
+      amount++;
+    }
+    stat.numBits = stat.numBits << 1;
+  }
+  if (meanValue != 0)
+  {
+    meanValue = meanValue / amount;
+    int sumVar = 0;
+    int numVar = 0;
+    auto itrv = m_listRCFirstPassStats.begin();
+    for (; itrv != m_listRCFirstPassStats.end(); itrv++)
+    {
+      auto& stat = *itrv;
+      if (stat.spVisAct != 0)
+      {
+        sumVar += (abs(stat.spVisAct - meanValue) * abs(stat.spVisAct - meanValue));
+        numVar++;
+      }
+    }
+    if (numVar)
+    {
+      sumVar = sumVar / (numVar - 1);
+      sumVar = sqrt(sumVar);
+    }
+    int value_gopbefore = 0;
+    int value_gopcur = 0;
+    int num_gopcur = 0;
+    int gopcur = 0;
+    bool doChangeBits = false;
+    auto itr = m_listRCFirstPassStats.begin();
+    for (; itr != m_listRCFirstPassStats.end(); itr++)
+    {
+      auto& stat = *itr;
+      int statValue = stat.spVisAct;
+      if (gopcur != stat.gopNum)
+      {
+        gopcur = stat.gopNum;
+        if (num_gopcur)
+        {
+          value_gopbefore = value_gopcur / num_gopcur;
+        }
+        else
+        {
+          value_gopbefore = value_gopcur;
+        }
+        value_gopcur = 0;
+        num_gopcur = 0;
+        doChangeBits = false;
+      }
+      if (statValue != 0)
+      {
+        value_gopcur += statValue;
+        num_gopcur++;
+        if (stat.gopNum != 0)
+        {
+          int var_cur = abs(statValue - meanValue);
+          if (var_cur > (sumVar << 1))
+          {
+            doChangeBits = true;
+          }
+          int partMCTF = (((value_gopcur / num_gopcur) * 100) / meanValue);
+          int partMCTFbefore = (value_gopbefore == 0) ? 100 : (((value_gopcur / num_gopcur) * 100) / value_gopbefore);
+          if ((partMCTF > 140) || (partMCTF < 60)
+            || (partMCTFbefore > 140) || (partMCTFbefore < 60))
+          {
+            doChangeBits = true;
+          }
+          else if (doChangeBits)
+          {
+            doChangeBits = false;
+          }
+        }
+      }
+      if ((stat.gopNum != 0) && doChangeBits)
+      {
+        stat.numBits = (stat.numBits * 3) >> 1;
+      }
+    }
   }
 }
 #endif
@@ -995,10 +1102,11 @@ void RateCtrl::addRCPassStats( const int poc,
                                const bool isStartOfGop,
                                const int gopNum,
                                const SceneType scType,
+                               int spVisAct,
                                const uint16_t motEstError,
                                const uint8_t minNoiseLevels[ QPA_MAX_NOISE_LEVELS ] )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, motEstError, minNoiseLevels));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum, scType, spVisAct, motEstError, minNoiseLevels));
 }
 
 void RateCtrl::updateAfterPicEncRC( const Picture* pic )
@@ -1117,12 +1225,12 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           }
 
           // calculate the difference of under or overspent bits and adjust the current target bits based on the GOP and frame ratio
-          d = std::max( 1.0, encRcPic->tmpTargetBits + ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * tmpVal * it->frameInGopRatio );
+          d = encRcPic->tmpTargetBits + std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * tmpVal * it->frameInGopRatio;
 
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change
           if ( isEndOfSequence )
           {
-            d = std::max( 1.0, d + ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * ( 1.0 - tmpVal ) * it->frameInGopRatio );
+            d += std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * ( 1.0 - tmpVal ) * it->frameInGopRatio;
           }
           else if ( d > dLimit * encRcPic->tmpTargetBits )
           {
@@ -1140,14 +1248,16 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
             if ( d > fBits * encRCSeq->maxGopRate ) d = fBits * encRCSeq->maxGopRate;
           }
-          encRcPic->targetBits = (int)std::max( 1.0, d + 0.5 );
+          d = std::max( 1.0, d );
+          encRcPic->targetBits = int( d + 0.5 );
 
           tmpVal = updateQPstartModelVal() + log (sqrOfResRatio) / log (2.0); // GOP's QPstart
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
           sliceQP = int( 0.5 + d + 0.5 * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
-          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ), ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP );
+          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : secondPassBaseQP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ) ),
+                                  ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRCSeq->minEstLambda, encRCSeq->maxEstLambda, lambda );
 
@@ -1177,7 +1287,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             {
               sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
               lambda *= 0.7937; // * pow (2, -1/3)
-              encRcPic->targetBits = ( 3 + encRcPic->targetBits * 8 ) / 7; // as in VCIP paper
+              encRcPic->targetBits = (int) std::max (1.0, 0.5 + encRcPic->targetBits * pow (2.0, 1.0 / ((105.0 / 128.0) * sqrt (sliceQP + 1.0)))); // adjust target bits as in VCIP paper eq.(4)
             }
           }
           if ( it->isIntra ) // update history for parameter clipping in subsequent key frames
@@ -1193,6 +1303,24 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
   qp = sliceQP;
   finalLambda = lambda;
+}
+
+void RateCtrl::adjustStatBitsVisAct(Picture* pic)
+{
+  std::list<TRCPassStats>::iterator it;
+  for (it = encRCSeq->firstPassData.begin(); it != encRCSeq->firstPassData.end(); it++)
+  {
+    if (it->poc == pic->poc)
+    {
+      int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
+      if (partVisAct > 20)
+      {
+        it->numBits = (it->numBits * 3) >> 1;
+      }
+      it->visActY = pic->picVisActY;
+      break;
+    }
+  }
 }
 
 }

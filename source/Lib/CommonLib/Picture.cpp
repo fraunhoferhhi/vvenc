@@ -191,12 +191,12 @@ Picture::Picture()
     , useScNumRefs      ( false )
     , useScFastMrg      ( 0 )
     , useQtbttSpeedUpMode( 0 )
-    , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
     , picApsGlobal      ( nullptr )
     , refApsGlobal      ( nullptr )
+    , picSpVisAct       ( 0 )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );

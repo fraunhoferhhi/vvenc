@@ -402,7 +402,8 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
   else
   {
     const SliceType sliceType = slice->sliceType;
-    qp = slice->pic->seqBaseQp;
+
+    qp = m_pcEncCfg->m_QP;
 
     if( sliceType == VVENC_I_SLICE )
     {

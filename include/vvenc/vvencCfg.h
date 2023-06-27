@@ -767,7 +767,7 @@ typedef struct vvenc_config
   int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
   bool                m_treatAsSubPic;
 
-  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or 3*m_RCTargetBitrate))
+  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or least constrained VBR))
   int                 m_reservedInt;
   double              m_reservedDouble[9];
 

@@ -799,7 +799,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 2 ), "FirstPassMode must be 0, 1, or 2" );
+  vvenc_confirmParameter(c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1882,6 +1882,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
   vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+  vvenc_confirmParameter( c, (c->m_LookAhead || c->m_RCNumPasses == 1) && c->m_FirstPassMode > 2, "Look-ahead or one pass RC can not be used with resolution downsampling" );
 
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
@@ -2301,8 +2302,8 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_QP                  = qp;                       // quantization parameter 0-63
   c->m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
-  c->m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
-  c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps (0: 3*targetbitrate)
+  c->m_RCTargetBitrate     = targetbitrate;            // target bitrate for rate ctrl. in bps
+  c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
   
@@ -3129,7 +3130,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "Passes:" << c->m_RCNumPasses << " ";
       css << "Pass:" << c->m_RCPass << " ";
       css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
-      css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
+      if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+      {
+        css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
+      }
       css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     }
     else

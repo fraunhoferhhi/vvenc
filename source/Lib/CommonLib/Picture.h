@@ -262,12 +262,12 @@ public:
   bool                          useScSelectiveRdoq;
   int                           useScFastMrg;
   int                           useQtbttSpeedUpMode;
-  int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
+  uint32_t                      picSpVisAct;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
