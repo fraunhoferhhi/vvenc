@@ -61,6 +61,7 @@ PreProcess::PreProcess( MsgLog& _m )
   , m_lastPoc    ( 0 )
   , m_isHighRes  ( false )
   , m_doSTA      ( false )
+  , m_doTempDown ( false )
   , m_doVisAct   ( false )
   , m_doVisActQpa( false )
 {
@@ -83,7 +84,8 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
-  m_doVisAct = m_encCfg->m_usePerceptQPA
+  m_doTempDown  = m_encCfg->m_FirstPassMode == 2 || m_encCfg->m_FirstPassMode == 4;
+  m_doVisAct    = m_encCfg->m_usePerceptQPA
                   || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
                   || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
@@ -119,10 +121,17 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
       // detect scc
       xDetectScc( pic );
 
-      // detect STA picture
+      // slice type adaptation
       if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
       {
+        // detect scene cut in gop and adapt slice type
         xDetectSTA( pic, picList );
+
+        // disable temporal downsampling for gop with scene cut
+        if( m_doTempDown && pic->gopEntry->m_scType == SCT_TL0_SCENE_CUT )
+        {
+          xDisableTempDown( pic, picList );
+        }
       }
     }
 
@@ -169,8 +178,8 @@ void PreProcess::xFreeUnused( Picture* pic, const PicList& picList, PicList& don
     // keep previous frames for visual activity
     keepPic  |= m_doVisAct && idx < NUM_QPA_PREV_FRAMES;
     // keep previous (first) tl0 pic for sta
-    keepPic  |= ! foundTl0 && tp->gopEntry->m_temporalId == 0;
-    foundTl0 |=               tp->gopEntry->m_temporalId == 0;  // update found tl0
+    keepPic  |= ! foundTl0 && ( tp->gopEntry->m_temporalId == 0 || m_doTempDown );
+    foundTl0 |=                 tp->gopEntry->m_temporalId == 0;  // update found tl0
     // keep start of last gop
     keepPic  |= ( tp == startOfGop );
 
@@ -384,6 +393,20 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
     {
       m_gopCfg.startIntraPeriod( picShared->m_gopEntry );
     }
+  }
+}
+
+
+void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList )
+{
+  for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
+  {
+    Picture* tp = *itr;
+    if( pic == tp )
+      continue;
+    if( pic->gopEntry->m_gopNum != tp->gopEntry->m_gopNum )
+      break;
+    tp->m_picShared->m_gopEntry.m_skipFirstPass = false;
   }
 }
 
