@@ -402,8 +402,6 @@ void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList )
   for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
   {
     Picture* tp = *itr;
-    if( pic == tp )
-      continue;
     if( pic->gopEntry->m_gopNum != tp->gopEntry->m_gopNum )
       break;
     tp->m_picShared->m_gopEntry.m_skipFirstPass = false;
