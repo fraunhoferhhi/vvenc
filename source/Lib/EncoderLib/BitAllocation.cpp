@@ -112,9 +112,9 @@ double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride,
   {
     *minVA = unsigned (0.5 + spatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
   }
-  if (spVisAct) // spatial pt scaled to 12 bit
+  if (spVisAct)
   {
-    *spVisAct = unsigned(0.5 + spatAct * double(bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
+    *spVisAct = unsigned (0.5 + spatAct * double(bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
   }
 
   // skip first row as there may be a black border frame
@@ -423,9 +423,8 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
     if (isLuma (compID)) // luma: CTU-wise QPA operation
     {
-      uint32_t picSpVisAct = 0;
       const PosType guardSize = (isHighResolution ? 2 : 1);
-      unsigned zeroMinActCTUs = 0;
+      unsigned zeroMinActCTUs = 0, picSpVisAct = 0;
 
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
@@ -437,8 +436,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
         const CPelBuf  picOrig   = pic->getOrigBuf (fltArea);
         const CPelBuf  picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
         const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
-        unsigned minActivityPart = 0;
-        unsigned spVisActCTU = 0;
+        unsigned minActivityPart = 0, spVisActCTU = 0;
 
         hpEner[1] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                        picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate / encCfg->m_FrameScale,
@@ -476,7 +474,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       {
         const uint32_t nCtu = ctuBoundingAddr - ctuStartAddr;
 
-        pic->picSpVisAct = (picSpVisAct + (nCtu >> 1)) / nCtu;
+        pic->picSpVisAct = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), bitDepth);
       }
       if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && slice->poc >= encCfg->m_GOPSize && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {

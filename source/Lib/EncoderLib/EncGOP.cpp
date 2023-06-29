@@ -1357,11 +1357,6 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     // continue with next picture
     m_lastCodingNum = pic->gopEntry->m_codingNum;
 
-    if ( !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_FirstPassMode > 2))//2.Pass
-    {
-      m_pcRateCtrl->adjustStatBitsVisAct(pic);        
-    }
-
     // in single threading initialize only one picture per encoding loop
     if( m_pcEncCfg->m_maxParallelFrames <= 0 )
       break;
