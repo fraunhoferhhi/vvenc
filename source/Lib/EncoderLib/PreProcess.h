@@ -67,6 +67,7 @@ class PreProcess : public EncStage
     int             m_lastPoc;
     bool            m_isHighRes;
     bool            m_doSTA;
+    bool            m_doTempDown;
     bool            m_doVisAct;
     bool            m_doVisActQpa;
 
@@ -92,6 +93,7 @@ class PreProcess : public EncStage
     uint16_t xGetPicVisualActivity( Picture* curPic, const Picture* refPic1, const Picture* refPic2) const;
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
+    void     xDisableTempDown     ( Picture* pic, const PicList& picList );
 };
 
 } // namespace vvenc
