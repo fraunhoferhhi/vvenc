@@ -1336,7 +1336,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
       c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
     }
-    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP - 4.0 ) * 3.0 / 32.0 );  // used by JVET
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP - 4.0 ) * 3.0 / 32.0 );
   }
 
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );

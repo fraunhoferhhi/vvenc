@@ -245,6 +245,7 @@ public:
   int16_t                       picMemorySTA;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
+  uint16_t                      picSpVisAct;
   double                        psnr[MAX_NUM_COMP];
   double                        mse [MAX_NUM_COMP];
 
@@ -267,7 +268,6 @@ public:
   EncRCPic*                     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
-  uint32_t                      picSpVisAct;
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

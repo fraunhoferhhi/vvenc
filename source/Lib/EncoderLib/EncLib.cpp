@@ -351,19 +351,19 @@ void EncLib::xInitRCCfg()
   vvenc_init_preset( &m_firstPassCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
   // fixed-QP encoding in first rate control pass
-  const double d = (3840.0 * 2160.0) / double(m_firstPassCfg.m_SourceWidth * m_firstPassCfg.m_SourceHeight);
+  const double d = (3840.0 * 2160.0) / double (m_firstPassCfg.m_SourceWidth * m_firstPassCfg.m_SourceHeight);
   m_firstPassCfg.m_RCTargetBitrate = 0;
   if (m_encCfg.m_FirstPassMode > 2)
   {
-    int d_down = (3840.0 * 2160.0) / double(m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
-    int qp_down = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d_down * m_encCfg.m_RCTargetBitrate) / 500000.0))));
-    int targetBitrate_down = int(((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
-    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * targetBitrate_down) / 500000.0))));
-    m_firstPassCfg.m_QP -= 2;
+    int d_down = (3840.0 * 2160.0) / double (m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
+    int qp_down = (m_encCfg.m_RCInitialQP > 0 ? Clip3 ( 0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d_down * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+    int targetBitrate_down = int (((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
+    m_firstPassCfg.m_QP /*baseQP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * targetBitrate_down) / 500000.0))));
+    m_firstPassCfg.m_QP = std::max (0, m_firstPassCfg.m_QP - 2); // TODO hlm, henkel: find easier (two-line?) formula
   }
   else
   {
-    m_firstPassCfg.m_QP /*base QP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3(17, MAX_QP, m_encCfg.m_RCInitialQP) : std::max(17, MAX_QP_PERCEPT_QPA - 2 - int(0.5 + sqrt((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+    m_firstPassCfg.m_QP /*baseQP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
   }
 
   // preserve some settings

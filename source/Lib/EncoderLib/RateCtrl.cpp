@@ -71,9 +71,9 @@ EncRCSeq::EncRCSeq()
   bitsUsed            = 0;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
+  rateBoostFac        = 1.0;
   std::memset (qpCorrection, 0, sizeof (qpCorrection));
   std::memset (actualBitCnt, 0, sizeof (actualBitCnt));
-  std::memset (currFrameCnt, 0, sizeof (currFrameCnt));
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
   lastAverageQP       = 0;
   lastIntraQP         = 0;
@@ -109,7 +109,6 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int ma
   estimatedBitUsage   = 0;
   std::memset (qpCorrection, 0, sizeof (qpCorrection));
   std::memset (actualBitCnt, 0, sizeof (actualBitCnt));
-  std::memset (currFrameCnt, 0, sizeof (currFrameCnt));
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
 }
 
@@ -124,7 +123,7 @@ void EncRCSeq::updateAfterPic (const int actBits, const int tgtBits)
 
   if (isLookAhead)
   {
-    const uint64_t* const tlBits  = actualBitCnt; // recently updated in EncRCPic::updateAfterPicture()
+    const uint64_t* const tlBits = actualBitCnt; // recently updated in EncRCPic::updateAfterPicture()
 
     bitsUsed = tlBits[0] + tlBits[1] + tlBits[2] + tlBits[3] + tlBits[4] + tlBits[5] + tlBits[6] + tlBits[7];
   }
@@ -138,7 +137,6 @@ void EncRCSeq::updateAfterPic (const int actBits, const int tgtBits)
 EncRCPic::EncRCPic()
 {
   encRCSeq            = NULL;
-  frameGopRatio       = 0.0;
   frameLevel          = 0;
   targetBits          = 0;
   tmpTargetBits       = 0;
@@ -254,7 +252,6 @@ void EncRCPic::updateAfterPicture (const int picActualBits, const int averageQP)
     encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
     encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
 
-    if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
     if (refreshParams && frameLevel <= 2) encRCSeq->lastAverageQP = 0;
 
     encRCSeq->qpCorrection[frameLevel] = (105.0 / 128.0) * sqrt ((double) std::max (1, encRCSeq->lastAverageQP)) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // adjust target bits as in VCIP paper eq.(4)
@@ -349,7 +346,7 @@ int RateCtrl::getBaseQP()
 
   if (firstPassData.size() > 0 && encRCSeq->frameRate > 0.0)
   {
-    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset)));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0;  // sum of first-pass frame bits
 
     for (auto& stats : firstPassData)
@@ -368,7 +365,7 @@ int RateCtrl::getBaseQP()
     baseQP = int (0.5 + d + 0.5 * std::max (0.0, baseQP - d));
   }
 
-  return Clip3 (17, MAX_QP, baseQP);
+  return Clip3 (0, MAX_QP, baseQP);
 }
 
 void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* statsFName)
@@ -389,14 +386,14 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
-
-  if (rcIsFinalPass && (encCfg.m_FirstPassMode > 2))
-  {
-    adjustStatsFileDownsample();
-  }
 #else
   CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
 #endif
+
+  if (rcIsFinalPass && (encCfg.m_FirstPassMode > 2))
+  {
+    adjustStatsDownsample();
+  }
 }
 
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
@@ -606,8 +603,9 @@ void RateCtrl::readStatsFile()
     lineNum++;
   }
 }
+#endif
 
-void RateCtrl::adjustStatsFileDownsample()
+void RateCtrl::adjustStatsDownsample()
 {
   int meanValue = 0; //MCTF or Activity
   int amount = 0;
@@ -641,7 +639,7 @@ void RateCtrl::adjustStatsFileDownsample()
     if (numVar)
     {
       sumVar = sumVar / (numVar - 1);
-      sumVar = sqrt(sumVar);
+      sumVar = (int) sqrt((double) sumVar);
     }
     int value_gopbefore = 0;
     int value_gopcur = 0;
@@ -699,7 +697,6 @@ void RateCtrl::adjustStatsFileDownsample()
     }
   }
 }
-#endif
 
 void RateCtrl::setRCRateSavingState( const int maxRate )
 {
@@ -1055,9 +1052,9 @@ void RateCtrl::updateMotionErrStatsGop( const bool flush, const int poc )
   m_updateNoisePoc = poc;
 }
 
-bool RateCtrl::isLookAheadBoostAllowed( const int thresholdDivisor )
+double RateCtrl::getLookAheadBoostFac( const int thresholdDivisor )
 {
-  const unsigned thresh = 128 / std::max (1, thresholdDivisor);
+  const unsigned thresh = 64 / std::max (1, thresholdDivisor);
   unsigned num = 0, sum = 0;
 
   for (int i = 0; i < QPA_MAX_NOISE_LEVELS; i++) // go through non-zero values in circ. buffer
@@ -1069,7 +1066,11 @@ bool RateCtrl::isLookAheadBoostAllowed( const int thresholdDivisor )
     }
   }
 
-  return (num > 0 && m_gopMEErrorCBuf[m_gopMEErrorCBufIdx] * num > sum + thresh * num);
+  if (num > 0 && m_gopMEErrorCBuf[m_gopMEErrorCBufIdx] * num > sum + thresh * num) // boosting
+  {
+    return double (m_gopMEErrorCBuf[m_gopMEErrorCBufIdx] * num) / (sum + thresh * num);
+  }
+  return 1.0;
 }
 
 double RateCtrl::updateQPstartModelVal()
@@ -1112,13 +1113,11 @@ void RateCtrl::addRCPassStats( const int poc,
 void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 {
   const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
-  const double scale = encRCSeq->intraPeriod / ( encRCSeq->intraPeriod + encRCSeq->lastIntraSM * encRCSeq->gopSize );
-  const double fBits = scale * encRCSeq->targetRate * ( encRCSeq->isIntraGOP ? 1.0 + encRCSeq->lastIntraSM : 1.0 ) / encRCSeq->frameRate; // target frame bits
   EncRCPic* encRCPic = pic->encRCPic;
 
   encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
-  encRCSeq->updateAfterPic( pic->actualTotalBits, ( encRCSeq->isLookAhead ? int( 0.5 + fBits * encRCSeq->gopSize * encRCPic->frameGopRatio ) : encRCPic->tmpTargetBits ) );
+  encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 
   if ( encRCSeq->isLookAhead )
   {
@@ -1173,7 +1172,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             }
           }
           encRcPic->visActSteady  = visAct; // TODO: try removing all visAct(Y) related code except for the one in detectSceneCuts()
-          encRcPic->tmpTargetBits = it->targetBits;
 
           if ( it->refreshParameters ) // reset counters for budget usage in subsequent frames
           {
@@ -1191,21 +1189,19 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           if ( it->isStartOfGop )
           {
             bool allowMoreRatePeaks = false;
+            encRCSeq->rateBoostFac  = 1.0;
 
-            if ( m_pcEncCfg->m_LookAhead && !encRCSeq->isRateSavingMode ) // bitrate "booster"
+            if ( m_pcEncCfg->m_LookAhead && !encRCSeq->isRateSavingMode ) // rate boost factor
             {
-              if ( isLookAheadBoostAllowed( isRateCapperMax ? 3 : budgetRelaxScale - 1 ) )
+              encRCSeq->rateBoostFac = getLookAheadBoostFac( isRateCapperMax ? 2 : budgetRelaxScale - 1 );
+              allowMoreRatePeaks = ( encRCSeq->rateBoostFac > 1.0 && isRateCapperMax );
+              if ( allowMoreRatePeaks && !isEndOfSequence )
               {
-                allowMoreRatePeaks = true;
-                if ( !isRateCapperMax )
-                {
-                  encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( (4 - budgetRelaxScale) * encRCSeq->estimatedBitUsage + budgetRelaxScale * encRCSeq->bitsUsed + 2 ) >> 2 );
-                }
-                else
-                {
-                  encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, encRCSeq->bitsUsed ); // min. rate constraint
-                  encRCSeq->lastIntraSM = 1.0;
-                }
+                encRCSeq->lastIntraSM = 1.0;
+              }
+              if ( encRCSeq->rateBoostFac > 1.0 && !isEndOfSequence )
+              {
+                encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, encRCSeq->bitsUsed ); // TL<2: relax constraint
               }
             }
             encRCSeq->isIntraGOP = ( ( it->isStartOfIntra || allowMoreRatePeaks ) && !isEndOfSequence && !encRCSeq->isRateSavingMode );
@@ -1224,6 +1220,12 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             encRCSeq->estimatedBitUsage = std::max( encRCSeq->estimatedBitUsage, ( budgetRelaxScale * encRCSeq->estimatedBitUsage + ( 4 - budgetRelaxScale ) * encRCSeq->bitsUsed + 2 ) >> 2 );
           }
 
+          if ( encRCSeq->rateBoostFac > 1.0 )
+          {
+            it->targetBits = int( it->targetBits * encRCSeq->rateBoostFac + 0.5 ); // boosting
+          }
+          encRcPic->tmpTargetBits = it->targetBits;
+
           // calculate the difference of under or overspent bits and adjust the current target bits based on the GOP and frame ratio
           d = encRcPic->tmpTargetBits + std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * tmpVal * it->frameInGopRatio;
 
@@ -1241,7 +1243,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             d = encRcPic->tmpTargetBits / dLimit; // prevent small spendings after hard scenes
           }
 
-          if ( !m_pcEncCfg->m_LookAhead && it->isStartOfGop && it->poc > 0 ) // bitrate capper
+          if ( !isEndOfSequence && it->isStartOfGop && it->poc > 0 ) // target bitrate capping
           {
             const double scale = encRCSeq->intraPeriod / ( encRCSeq->intraPeriod + encRCSeq->lastIntraSM * encRCSeq->gopSize );
             const double fBits = scale * ( encRCSeq->isIntraGOP ? 1.0 + encRCSeq->lastIntraSM : 1.0 ) * it->frameInGopRatio; // IGOP
@@ -1281,14 +1283,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
                 encRCSeq->bitsUsedQPLimDiff += ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed - encRcPic->targetBits ) >> 1;
               }
             }
-            encRcPic->frameGopRatio = ( encRCSeq->isIntraGOP ? it->frameInGopRatio : ( 1.0 - encRCSeq->lastIntraSM ) * it->frameInGopRatio + encRCSeq->lastIntraSM / encRCSeq->gopSize );
-
-            if ( sliceQP > 0 && slice->pps->sliceChromaQpFlag && slice->isIntra() && !pic.cs->pcv->ISingleTree && !encRCSeq->isRateSavingMode && encRCSeq->estimatedBitUsage >= encRCSeq->bitsUsed )
-            {
-              sliceQP--; // balance BD-rate performance across all YCbCr components; see also code in EncSlice::xInitSliceLambdaQP()
-              lambda *= 0.7937; // * pow (2, -1/3)
-              encRcPic->targetBits = (int) std::max (1.0, 0.5 + encRcPic->targetBits * pow (2.0, 1.0 / ((105.0 / 128.0) * sqrt (sliceQP + 1.0)))); // adjust target bits as in VCIP paper eq.(4)
-            }
           }
           if ( it->isIntra ) // update history for parameter clipping in subsequent key frames
           {
@@ -1303,24 +1297,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
   qp = sliceQP;
   finalLambda = lambda;
-}
-
-void RateCtrl::adjustStatBitsVisAct(Picture* pic)
-{
-  std::list<TRCPassStats>::iterator it;
-  for (it = encRCSeq->firstPassData.begin(); it != encRCSeq->firstPassData.end(); it++)
-  {
-    if (it->poc == pic->poc)
-    {
-      int partVisAct = ((it->visActY * 100) / pic->picVisActY) - 100;
-      if (partVisAct > 20)
-      {
-        it->numBits = (it->numBits * 3) >> 1;
-      }
-      it->visActY = pic->picVisActY;
-      break;
-    }
-  }
 }
 
 }
