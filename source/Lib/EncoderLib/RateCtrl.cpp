@@ -496,8 +496,13 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
     { "isStartOfGop",   statsData.isStartOfGop },
     { "gopNum",         statsData.gopNum },
     { "scType",         statsData.scType },
-    { "spVisAct",       statsData.spVisAct },
   };
+
+  if( m_pcEncCfg->m_FirstPassMode > 2 )
+  {
+    data[ "spVisAct" ] = statsData.spVisAct;
+    statsData.spVisAct = data[ "spVisAct" ];
+  }
 
   if( m_rcStatsFHandle.is_open() )
   {
@@ -533,7 +538,7 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-                                                    data[ "spVisAct" ],
+                                                    statsData.spVisAct,
                                                     statsData.motionEstError,
                                                     statsData.minNoiseLevels
                                                     ) );
@@ -573,10 +578,15 @@ void RateCtrl::readStatsFile()
         || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
         || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
         || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number()
-        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number()
-        || data.find( "spVisAct" )       == data.end() || ! data[ "spVisAct" ].is_number() )
+        || data.find( "scType" )         == data.end() || ! data[ "scType" ].is_number() )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
+    }
+    int spVisAct = 0;
+    if( data.find( "spVisAct" ) != data.end() )
+    {
+      CHECK( ! data[ "spVisAct" ].is_number(), "spatial visual activity in rate control statistics file must be a number" );
+      spVisAct = data[ "spVisAct" ];
     }
     m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
                                                     data[ "qp" ],
@@ -590,7 +600,7 @@ void RateCtrl::readStatsFile()
                                                     data[ "isStartOfGop" ],
                                                     data[ "gopNum" ],
                                                     data[ "scType" ],
-                                                    data[ "spVisAct" ],
+                                                    spVisAct,
                                                     0, // motionEstError
                                                     minNoiseLevels
                                                     ) );

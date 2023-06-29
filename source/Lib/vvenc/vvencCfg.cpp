@@ -2446,8 +2446,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
     case vvencPresetMode::VVENC_FASTER:
 
-      c->m_FirstPassMode                   = 1;
-      
+      c->m_FirstPassMode                   = 2;
+
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
