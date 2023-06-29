@@ -122,9 +122,9 @@ namespace vvenc {
     int64_t         bitsUsed;
     int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
+    double          rateBoostFac;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
-    unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastAverageQP;
     int             lastIntraQP;
@@ -146,7 +146,6 @@ namespace vvenc {
     void   updateAfterPicture (const int picActualBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
-    double  frameGopRatio; // frame bits/GOP bits
     int     targetBits;
     int     tmpTargetBits;
     int     poc;
@@ -173,12 +172,11 @@ namespace vvenc {
     void addRCPassStats( const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum, const SceneType scType,
-                         int spVisAct, const uint16_t motEstError, const uint8_t minNoiseLevels[QPA_MAX_NOISE_LEVELS]);
+                         int spVisAct, const uint16_t motEstError, const uint8_t minNoiseLevels[QPA_MAX_NOISE_LEVELS] );
     void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void updateAfterPicEncRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
-    void adjustStatBitsVisAct( Picture* pic );
 
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
@@ -203,15 +201,15 @@ namespace vvenc {
     void detectSceneCuts();
     void processGops();
     void updateMotionErrStatsGop( const bool flush, const int poc );
-    bool isLookAheadBoostAllowed( const int thresholdDivisor );
+    double getLookAheadBoostFac ( const int thresholdDivisor );
     double updateQPstartModelVal();
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );
     void writeStatsHeader();
     void readStatsHeader();
     void readStatsFile();
-    void adjustStatsFileDownsample();
 #endif
+    void adjustStatsDownsample();
 
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;

@@ -356,7 +356,8 @@ uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPi
       &picSpVisAct);
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
-  curPic->picSpVisAct = picSpVisAct;
+  curPic->picSpVisAct = ClipBD( (uint16_t) picSpVisAct, bitDepth );
+
   return ret;
 }
 
