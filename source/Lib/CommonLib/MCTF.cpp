@@ -66,7 +66,6 @@ static __itt_domain* itt_domain_MCTF_flt   = __itt_domain_create( "MCTFFlt" );
 
 const double MCTF::m_chromaFactor     =  0.55;
 const double MCTF::m_sigmaMultiplier  =  9.0;
-const double MCTF::m_sigmaZeroPoint   = 10.0;
 const int MCTF::m_range               = VVENC_MCTF_RANGE;
 const int MCTF::m_motionVectorFactor  = 16;
 const int MCTF::m_padding             = MCTF_PADDING;
@@ -1325,7 +1324,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
 void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
 {
-  const double lumaSigmaSq = (m_encCfg->m_QP - m_sigmaZeroPoint) * (m_encCfg->m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
+  const double lumaSigmaSq = m_sigmaMultiplier * ( 128.0 + 3.0 / 256.0 * m_encCfg->m_QP * m_encCfg->m_QP * m_encCfg->m_QP );
   const double chromaSigmaSq = 30 * 30;
 
   double sigmaSqCh[MAX_NUM_CH];
