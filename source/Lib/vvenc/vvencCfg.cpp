@@ -800,7 +800,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
   vvenc_confirmParameter(c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4), "FirstPassMode must be 0 , 1 , 2 , 3 or 4");
-  vvenc_confirmParameter(c, std::min(c->m_SourceWidth,c->m_SourceHeight) <= 720 && (c->m_FirstPassMode == 3 || c->m_FirstPassMode == 4), "no support resolution downsampling for small resolutions");
+  vvenc_confirmParameter(c, std::min(c->m_SourceWidth,c->m_SourceHeight) <= 720 && (c->m_FirstPassMode == 3 || c->m_FirstPassMode == 4), "Spatial downsampling cannot be applied to small-resolution videos (i.e. below 720p), use FirstPassMode value up to '2'");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
