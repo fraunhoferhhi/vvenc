@@ -687,10 +687,10 @@ void RateCtrl::adjustStatsDownsample()
           {
             doChangeBits = true;
           }
-          int partMCTF = (((value_gopcur / num_gopcur) * 100) / meanValue);
-          int partMCTFbefore = (value_gopbefore == 0) ? 100 : (((value_gopcur / num_gopcur) * 100) / value_gopbefore);
-          if ((partMCTF > 140) || (partMCTF < 60)
-            || (partMCTFbefore > 140) || (partMCTFbefore < 60))
+          int rate1 = (((value_gopcur / num_gopcur) * 100) / meanValue);
+          int rate2 = (value_gopbefore == 0) ? 100 : (((value_gopcur / num_gopcur) * 100) / value_gopbefore);
+          if ((rate1 > 140) || (rate1 < 60)
+            || (rate2 > 140) || (rate2 < 60))
           {
             doChangeBits = true;
           }
