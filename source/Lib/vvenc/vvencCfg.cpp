@@ -680,7 +680,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_addGOP32refPics                         = false;
   c->m_numRefPics                              = 0;
   c->m_numRefPicsSCC                           = -1;
-  
+
   c->m_FirstPassMode                           = 0;
 
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -2446,8 +2446,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
     case vvencPresetMode::VVENC_FASTER:
 
-      c->m_FirstPassMode                   = 1;
-      
+      c->m_FirstPassMode                   = 2;
+
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
@@ -2506,6 +2506,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       break;
 
     case vvencPresetMode::VVENC_FAST:
+
+      c->m_FirstPassMode                   = 2;
 
       // motion estimation
       c->m_SearchRange                     = 128;
