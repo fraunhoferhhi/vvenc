@@ -1099,9 +1099,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection( "Tracing" );
     opts.addOptions()
-    ("tracechannellist",              c->m_listTracingChannels,  "List all available tracing channels")
-    ("tracerule",                     toTraceRule,               "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("tracefile",                     toTraceFile,               "Tracing file")
+    ("tracechannellist",              c->m_listTracingChannels,  "list all available tracing channels")
+    ("tracerule",                     toTraceRule,               "tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("tracefile",                     toTraceFile,               "tracing file")
     ;
   }
 
