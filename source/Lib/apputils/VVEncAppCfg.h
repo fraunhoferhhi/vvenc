@@ -560,17 +560,17 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("format,c",                                        toInputFormatBitdepth,                               "set input format (yuv420, yuv420_10, yuv420_10_packed)")
     ("framerate,r",                                     c->m_FrameRate,                                      "temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000 ")
     ("framescale",                                      c->m_FrameScale,                                     "temporal scale (framerate denominator) e.g. 1, 1001 ")
-    ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
+    ("fps",                                             toFps,                                               "framerate as int or fraction (num/denom) ")
 
-    ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000, -1: ticks per frame=1)")
+    ("tickspersec",                                     c->m_TicksPerSecond,                                 "ticks per second for dts generation, (1..27000000, -1: ticks per frame=1)")
     ("frames,f",                                        c->m_framesToBeEncoded,                              "max. frames to encode [all]")
     ;
   }
   else
   {
     opts.addOptions()
-    ("InputFile,i",                                     m_inputFileName,                                     "original YUV input file name or '-' for reading from stdin")
-    ("Size,s",                                          toSourceSize,                                        "input resolution (WidthxHeight)")
+    ("InputFile,i",                                     m_inputFileName,                                     "Original YUV input file name or '-' for reading from stdin")
+    ("Size,s",                                          toSourceSize,                                        "Input resolution (WidthxHeight)")
     ("InputBitDepth",                                   c->m_inputBitDepth[ 0 ],                             "Bit-depth of input file")
     ("FramesToBeEncoded,f",                             c->m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
     ("FrameRate,-fr",                                   c->m_FrameRate,                                      "Temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000")
@@ -583,11 +583,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   }
 
   opts.addOptions()
-  ("FrameSkip,-fs",                                     m_FrameSkip,                                         "Number of frames to skip at start of input YUV [off]")
+  ("FrameSkip,-fs",                                     m_FrameSkip,                                         "number of frames to skip at start of input YUV [off]")
   ("segment",                                           toSegment,                                           "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
-                                                                                                             "first: first segment           \n"
-                                                                                                             "mid  : all segments between first and last segment\n"
-                                                                                                             "last : last segment")
+                                                                                                             " first: first segment           \n"
+                                                                                                             " mid  : all segments between first and last segment\n"
+                                                                                                             " last : last segment")
   ;
 
   if( m_easyMode )
@@ -622,9 +622,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, >= 720p: 8 threads)")
-    ("refreshtype,-rt",                                 toDecRefreshType,                                    "Intra refresh type (idr, cra, idr2, cra_cre: CRA, constrained RASL picture encoding)")
-    ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "Intra period/refresh in seconds")
-    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: specify Intra period in seconds instead, see -refreshsec)")
+    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, idr2, cra_cre: CRA, constrained RASL picture encoding)")
+    ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
+    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify Intra period in seconds instead, see -refreshsec)")
     ("tiles",                                           toNumTiles,                                          "number of tile columns and rows")
     ;
   }
@@ -702,11 +702,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Encoder Options");
     opts.addOptions()
-    ("internal-bitdepth",                               c->m_internalBitDepth[0],                           "internal bitdepth (8,10)")
-    ("accessunitdelimiter,-aud",                        toAud,                                              "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-    ("vuiparameterspresent,-vui",                       toVui,                                              "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-    ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "Emit VUI HRD information (0: off, 1: on; default: 1)")
-    ("decodedpicturehash,-dph",                         toHashType,                                         "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
+    ("internal-bitdepth",                               c->m_internalBitDepth[0],                           "internal bitdepth (8, 10)")
+    ("accessunitdelimiter,-aud",                        toAud,                                              "emit Access Unit Delimiter NALUs  (auto(-1), off(0), on(1); default: auto - only if needed by dependent options)", true)
+    ("vuiparameterspresent,-vui",                       toVui,                                              "emit VUI information (auto(-1), off(0), on(1); default: auto - only if needed by dependent options)", true)
+    ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "emit VUI HRD information (0: off, 1: on; default: 1)")
+    ("decodedpicturehash,-dph",                         toHashType,                                         "control generation of decode picture hash SEI messages, (0: off, 1: md5, 2: crc, 3: checksum)")
     ;
   }
 
@@ -1051,7 +1051,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TileColumnWidthArray",                            toTileColumnWidth,                                   "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
     ("TileRowHeightArray",                              toTileRowHeight,                                     "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
     ("TileParallelCtuEnc",                              c->m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
-    ("FppLinesSynchro",                                 toFppLinesSynchro,                                   "Number of CTU-lines synchronization due to MV restriction for FPP mode")
+    ("FppLinesSynchro",                                 toFppLinesSynchro,                                   "(experimental) Number of CTU-lines synchronization due to MV restriction for FPP mode")
     ;
 
     opts.setSubSection("Coding tools");
@@ -1074,7 +1074,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FastInferMerge",                                  c->m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
     ("NumIntraModesFullRD",                             c->m_numIntraModesFullRD,                            "Number modes for full RD intra search [-1, 1..3] (default: -1 auto)")
     ("ReduceIntraChromaModesFullRD",                    c->m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
-    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "Mode for first encoding pass when using rate control (0: default, 1: faster, 2: faster with temporal downsampling, 3: faster with resolution downsampling, 4: faster with temporal and resolution downsampling)")
+    ("FirstPassMode",                                   c->m_FirstPassMode,                                  "Mode for first encoding pass when using rate control "
+                                                                                                               "(0: default, 1: faster, 2: faster with temporal downsampling, "
+                                                                                                                "3: (experimental) faster with resolution downsampling, "
+                                                                                                                "4: (experimental) faster with temporal and resolution downsampling)" )
     ;
 
     opts.setSubSection("Input Options");
@@ -1096,9 +1099,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection( "Tracing" );
     opts.addOptions()
-    ("tracechannellist",              c->m_listTracingChannels,  "List all available tracing channels")
-    ("tracerule",                     toTraceRule,               "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("tracefile",                     toTraceFile,               "Tracing file")
+    ("tracechannellist",              c->m_listTracingChannels,  "list all available tracing channels")
+    ("tracerule",                     toTraceRule,               "tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("tracefile",                     toTraceFile,               "tracing file")
     ;
   }
 
