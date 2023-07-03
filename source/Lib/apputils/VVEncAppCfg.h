@@ -624,7 +624,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, >= 720p: 8 threads)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, idr2, cra_cre: CRA, constrained RASL picture encoding)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
-    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify Intra period in seconds instead, see -refreshsec)")
+    ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify intra period in seconds instead, see -refreshsec)")
     ("tiles",                                           toNumTiles,                                          "number of tile columns and rows")
     ;
   }

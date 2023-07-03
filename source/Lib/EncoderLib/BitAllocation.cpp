@@ -476,7 +476,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
         pic->picSpVisAct = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), bitDepth);
       }
-      if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && slice->poc >= encCfg->m_GOPSize && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
+      if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && pic->getOrigBuf (compID).buf != pic->getOrigBufPrev (compID, PREV_FRAME_1).buf && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {
         hpEnerPicNorm *= sqrt (zeroMinActCTUs * 2.0 / float (ctuBoundingAddr - ctuStartAddr)); // frozen-image mode
       }
