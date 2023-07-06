@@ -8,7 +8,7 @@ set( CFG_DIR  "${PROJECT_SOURCE_DIR}/cfg" )
 # add test
 add_test( NAME Test_vvencinterfacetest COMMAND vvencinterfacetest )
 
-add_test( NAME Test_vvenclibtest-paramerter_range        COMMAND vvenclibtest 1 )
+add_test( NAME Test_vvenclibtest-parameter_range         COMMAND vvenclibtest 1 )
 add_test( NAME Test_vvenclibtest-calling_order           COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params            COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-sdk_default             COMMAND vvenclibtest 4 )
