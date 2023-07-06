@@ -783,24 +783,28 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // set a lot of dependent parameters
   //
 
-  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+  vvenc::MsgLog msg(c->m_msgCtx, c->m_msgFnc);
+
+  const double d = (3840.0 * 2160.0) / double (c->m_SourceWidth * c->m_SourceHeight);
+  const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_PERCEPT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, c->m_RCTargetBitrate)) / 500000.0))));
 
   // TODO 2.0: make this an error
   //vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != VVENC_DEFAULT_QP, "Rate-control and QP based encoding are mutually exclusive!" );
 
-  if( c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != VVENC_DEFAULT_QP )
+  if( c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != rcQP )
   {
     msg.log( VVENC_WARNING, "Configuration warning: Rate control is enabled since a target bitrate is specified, ignoring QP value\n\n" );
     c->m_QP = VVENC_AUTO_QP;
   }
 
-  if( c->m_QP == VVENC_AUTO_QP ) c->m_QP = VVENC_DEFAULT_QP;
+  if( c->m_QP == VVENC_AUTO_QP ) c->m_QP = ( c->m_RCTargetBitrate != VVENC_RC_OFF ? rcQP : VVENC_DEFAULT_QP );
+
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4 ), "FirstPassMode must be 0, 1, 2, 3 or 4");
-  vvenc_confirmParameter( c, std::min(c->m_SourceWidth,c->m_SourceHeight) <= 720 && (c->m_FirstPassMode == 3 || c->m_FirstPassMode == 4 ), "Spatial downsampling cannot be applied to small-resolution videos (i.e. below 720p), use FirstPassMode value up to '2'");
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4 ), "FirstPassMode must be 0, 1, 2, 3, or 4" );
+  vvenc_confirmParameter( c, std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 && ( c->m_FirstPassMode == 3 || c->m_FirstPassMode == 4 ), "Spatial downsampling cannot be applied to small-resolution videos (i.e. below 720p), use FirstPassMode values up to '2'");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -879,7 +883,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_numThreads < 0 )
   {
     const int numCores = std::thread::hardware_concurrency();
-    c->m_numThreads = c->m_SourceWidth >= 1280 && c->m_SourceHeight >= 720 ? 8 : 4;
+    c->m_numThreads = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 4 : 8;
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
@@ -1322,7 +1326,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_vvencMCTF.MCTFUnitSize == -1 )
   {
-    c->m_vvencMCTF.MCTFUnitSize = c->m_SourceWidth <= 1280 && c->m_SourceHeight <= 720 ? 8 : 16;
+    c->m_vvencMCTF.MCTFUnitSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 8 : 16;
   }
 
   if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
@@ -1366,9 +1370,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_cuQpDeltaSubdiv = 0;
     if ( c->m_usePerceptQPA
         && c->m_QP <= vvenc::MAX_QP_PERCEPT_QPA
-        && ( c->m_CTUSize == 128 || ( c->m_CTUSize == 64 && c->m_PadSourceWidth <= 1024 && c->m_PadSourceHeight <= 640 ) )
-        && c->m_PadSourceWidth <= 2048
-        && c->m_PadSourceHeight <= 1280 )
+        && ( c->m_CTUSize == 128 || ( c->m_CTUSize == 64 && std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ) )
+        && std::min( c->m_SourceWidth, c->m_SourceHeight ) <= 1280 )
     {
       c->m_cuQpDeltaSubdiv = 2;
     }

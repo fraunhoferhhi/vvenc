@@ -346,7 +346,7 @@ int RateCtrl::getBaseQP()
 
   if (firstPassData.size() > 0 && encRCSeq->frameRate > 0.0)
   {
-    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset)));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? std::min (MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - (m_pcEncCfg->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0;  // sum of first-pass frame bits
 
     for (auto& stats : firstPassData)

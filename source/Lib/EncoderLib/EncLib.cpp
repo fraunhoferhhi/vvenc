@@ -341,29 +341,16 @@ void EncLib::xInitRCCfg()
 
   // initialize first pass configuration
   m_firstPassCfg = m_encCfg;
-  if (m_encCfg.m_FirstPassMode > 2)
-  {
-    m_firstPassCfg.m_SourceWidth = ( m_encCfg.m_SourceWidth / 2 ) & (~7);
-    m_firstPassCfg.m_SourceHeight = ( m_encCfg.m_SourceHeight / 2 ) & (~7);
-    m_firstPassCfg.m_PadSourceWidth = m_firstPassCfg.m_SourceWidth;
-    m_firstPassCfg.m_PadSourceHeight = m_firstPassCfg.m_SourceHeight;
-  }
   vvenc_init_preset( &m_firstPassCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
   // fixed-QP encoding in first rate control pass
-  const double d = (3840.0 * 2160.0) / double (m_firstPassCfg.m_SourceWidth * m_firstPassCfg.m_SourceHeight);
   m_firstPassCfg.m_RCTargetBitrate = 0;
-  if (m_encCfg.m_FirstPassMode > 2)
+  if( m_firstPassCfg.m_FirstPassMode > 2 )
   {
-    int d_down = (3840.0 * 2160.0) / double (m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
-    int qp_down = (m_encCfg.m_RCInitialQP > 0 ? Clip3 ( 0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d_down * m_encCfg.m_RCTargetBitrate) / 500000.0))));
-    int targetBitrate_down = int (((MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * (MAX_QP_PERCEPT_QPA - 2.5 - qp_down) * 500000.0) / d);
-    m_firstPassCfg.m_QP /*baseQP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * targetBitrate_down) / 500000.0))));
-    m_firstPassCfg.m_QP = std::max (0, m_firstPassCfg.m_QP - 2); // TODO hlm, henkel: find easier (two-line?) formula
-  }
-  else
-  {
-    m_firstPassCfg.m_QP /*baseQP*/ = (m_encCfg.m_RCInitialQP > 0 ? Clip3 (0, MAX_QP, m_encCfg.m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0))));
+    m_firstPassCfg.m_SourceWidth  = ( m_encCfg.m_SourceWidth  >> 1 ) & ( ~7 );
+    m_firstPassCfg.m_SourceHeight = ( m_encCfg.m_SourceHeight >> 1 ) & ( ~7 );
+    m_firstPassCfg.m_PadSourceWidth  = m_firstPassCfg.m_SourceWidth;
+    m_firstPassCfg.m_PadSourceHeight = m_firstPassCfg.m_SourceHeight;
   }
 
   // preserve some settings
@@ -377,14 +364,14 @@ void EncLib::xInitRCCfg()
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
 
-  if( m_firstPassCfg.m_FirstPassMode >= 1 )
+  // set Inter block size
+  if( m_firstPassCfg.m_FirstPassMode > 0 )
   {
-    unsigned interBlockSize = std::min( m_firstPassCfg.m_SourceWidth, m_firstPassCfg.m_SourceHeight ) >= 720 ? 64 : 32;
-    m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ]  = interBlockSize;
+    m_firstPassCfg.m_MinQT[ 1 ] = m_firstPassCfg.m_MaxQT[ 1 ] = ( std::min( m_firstPassCfg.m_SourceWidth, m_firstPassCfg.m_SourceHeight ) < 720 ? 32 : 64 );
   }
 
   // clear MaxCuDQPSubdiv
-  if( m_firstPassCfg.m_CTUSize < 128 && ( m_firstPassCfg.m_PadSourceWidth > 1024 || m_firstPassCfg.m_PadSourceHeight > 640 ) )
+  if( m_firstPassCfg.m_CTUSize < 128 && std::min( m_firstPassCfg.m_SourceWidth, m_firstPassCfg.m_SourceHeight ) >= 720 )
   {
     m_firstPassCfg.m_cuQpDeltaSubdiv = 0;
   }

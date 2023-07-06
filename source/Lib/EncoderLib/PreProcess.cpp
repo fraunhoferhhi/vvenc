@@ -81,7 +81,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_encCfg      = &encCfg;
 
   m_lastPoc     = std::numeric_limits<int>::min();
-  m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
+  m_isHighRes   = (std::min (m_encCfg->m_SourceWidth, m_encCfg->m_SourceHeight) > 1280);
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
   m_doTempDown  = m_encCfg->m_FirstPassMode == 2 || m_encCfg->m_FirstPassMode == 4;
