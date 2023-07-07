@@ -2871,7 +2871,7 @@ static void simdInterpolateN2_2D( const ClpRng& clpRng, const Pel* src, const in
     __m256i mm256CoeffH    = _mm256_set1_epi16( ch[1] );
     __m256i mm256CoeffV    = _mm256_set1_epi16( cv[1] );
     __m256i mm256LastH [8];
-    __m128i mmLast4H;
+    __m128i mmLast4H       = _mm_setzero_si128();
 
     for( int row = -1; row < height; row++ )
     {
