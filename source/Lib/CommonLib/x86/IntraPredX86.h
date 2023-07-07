@@ -214,13 +214,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
       if (( width & 15 ) == 0 )
       {
-        __m256i vbdmin,vbdmax;
-
-        if (useCubicFilter)
-        {
-          vbdmin = _mm256_set1_epi16( clpRng.min() );
-          vbdmax = _mm256_set1_epi16( clpRng.max() );
-        }
+        __m256i vbdmin = _mm256_set1_epi16( clpRng.min() );
+        __m256i vbdmax = _mm256_set1_epi16( clpRng.max() );
 
         for (int y = 0; y<height; y++ )
         {
@@ -284,14 +279,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
       }
       else // width =8
       {
-        //				printf("AVX2 Block %d \n",width);
-        __m128i vbdmin,vbdmax;
-
-        if (useCubicFilter)
-        {
-          vbdmin = _mm_set1_epi16( clpRng.min() );
-          vbdmax = _mm_set1_epi16( clpRng.max() );
-        }
+        __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+        __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
         for (int y = 0; y<height; y++ )
         {
@@ -337,14 +326,10 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
     {
       __m128i shflmask1= _mm_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2,   0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0 );
       __m128i shflmask2= _mm_set_epi8( 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6,   0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4 );
-      __m128i vbdmin,vbdmax;
-
       __m128i offset = _mm_set1_epi32( 32 );
-      if (useCubicFilter)
-      {
-        vbdmin = _mm_set1_epi16( clpRng.min() );
-        vbdmax = _mm_set1_epi16( clpRng.max() );
-      }
+      __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+      __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
+
       for (int y = 0; y<height; y++ )
       {
         int deltaInt   = deltaPos >> 5;
@@ -398,15 +383,9 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
   {
     __m128i shflmask1= _mm_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2,   0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0 );
     __m128i shflmask2= _mm_set_epi8( 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6,   0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4 );
-    __m128i vbdmin,vbdmax;
-
     __m128i offset = _mm_set1_epi32( 32 );
-
-    if (useCubicFilter)
-    {
-      vbdmin = _mm_set1_epi16( clpRng.min() );
-      vbdmax = _mm_set1_epi16( clpRng.max() );
-    }
+    __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
+    __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
     for (int y = 0; y<height; y++ )
     {
