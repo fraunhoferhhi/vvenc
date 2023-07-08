@@ -404,7 +404,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
   if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
-    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xEncodersFinished() ) )
+    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
   {
     return;
   }
