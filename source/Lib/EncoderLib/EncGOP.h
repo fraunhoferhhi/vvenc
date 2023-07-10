@@ -218,6 +218,11 @@ private:
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
   inline bool xEncodersFinished       () { return ( int ) m_freePicEncoderList.size() >= std::max(1, m_pcEncCfg->m_maxParallelFrames); }
+  inline bool xLockStepPicsFinished   ()
+  {
+    std::lock_guard<std::mutex> lock( m_gopEncMutex );
+    return ( int ) m_freePicEncoderList.size() >= std::max(1, m_pcEncCfg->m_maxParallelFrames); 
+  }
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc
