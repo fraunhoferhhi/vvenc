@@ -67,6 +67,7 @@ class PreProcess : public EncStage
     int             m_lastPoc;
     bool            m_isHighRes;
     bool            m_doSTA;
+    bool            m_doTempDown;
     bool            m_doVisAct;
     bool            m_doVisActQpa;
 
@@ -80,7 +81,7 @@ class PreProcess : public EncStage
 
   protected:
     virtual void initPicture    ( Picture* pic );
-    virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+    virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 
   private:
     void     xFreeUnused          ( Picture* pic, const PicList& picList, PicList& doneList, PicList& freeList ) const;
@@ -89,9 +90,10 @@ class PreProcess : public EncStage
     Picture* xGetStartOfLastGop   ( const PicList& picList ) const;
     void     xLinkPrevQpaBufs     ( Picture* pic, const PicList& picList ) const;
     void     xGetVisualActivity   ( Picture* pic, const PicList& picList ) const;
-    uint16_t xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const;
+    uint16_t xGetPicVisualActivity( Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const;
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
+    void     xDisableTempDown     ( Picture* pic, const PicList& picList );
 };
 
 } // namespace vvenc

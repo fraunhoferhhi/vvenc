@@ -61,6 +61,7 @@ PreProcess::PreProcess( MsgLog& _m )
   , m_lastPoc    ( 0 )
   , m_isHighRes  ( false )
   , m_doSTA      ( false )
+  , m_doTempDown ( false )
   , m_doVisAct   ( false )
   , m_doVisActQpa( false )
 {
@@ -80,12 +81,13 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_encCfg      = &encCfg;
 
   m_lastPoc     = std::numeric_limits<int>::min();
-  m_isHighRes   = ( m_encCfg->m_PadSourceWidth > 2048 || m_encCfg->m_PadSourceHeight > 1280 );
+  m_isHighRes   = (std::min (m_encCfg->m_SourceWidth, m_encCfg->m_SourceHeight) > 1280);
 
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
-  m_doVisAct    =    m_encCfg->m_usePerceptQPA
-                  || ( m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate )
-                  || ( m_encCfg->m_RCNumPasses > 1 && ! isFinalPass );
+  m_doTempDown  = m_encCfg->m_FirstPassMode == 2 || m_encCfg->m_FirstPassMode == 4;
+  m_doVisAct    = m_encCfg->m_usePerceptQPA
+                  || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
+                  || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 
 
@@ -97,7 +99,7 @@ void PreProcess::initPicture( Picture* pic )
 }
 
 
-void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // continue with next poc
   if( ! picList.empty() && picList.back()->poc > m_lastPoc )
@@ -119,10 +121,17 @@ void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnit
       // detect scc
       xDetectScc( pic );
 
-      // detect STA picture
+      // slice type adaptation
       if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
       {
+        // detect scene cut in gop and adapt slice type
         xDetectSTA( pic, picList );
+
+        // disable temporal downsampling for gop with scene cut
+        if( m_doTempDown && pic->gopEntry->m_scType == SCT_TL0_SCENE_CUT )
+        {
+          xDisableTempDown( pic, picList );
+        }
       }
     }
 
@@ -131,7 +140,7 @@ void PreProcess::processPictures( const PicList& picList, bool flush, AccessUnit
 
     m_lastPoc = picList.back()->poc;
   }
-  else if( flush )
+  else if( ! picList.empty() && picList.back()->isFlush  )
   {
     // first flush call, fix start of last gop
     if( ! picList.empty() )
@@ -169,8 +178,8 @@ void PreProcess::xFreeUnused( Picture* pic, const PicList& picList, PicList& don
     // keep previous frames for visual activity
     keepPic  |= m_doVisAct && idx < NUM_QPA_PREV_FRAMES;
     // keep previous (first) tl0 pic for sta
-    keepPic  |= ! foundTl0 && tp->gopEntry->m_temporalId == 0;
-    foundTl0 |=               tp->gopEntry->m_temporalId == 0;  // update found tl0
+    keepPic  |= ! foundTl0 && ( tp->gopEntry->m_temporalId == 0 || m_doTempDown );
+    foundTl0 |=                 tp->gopEntry->m_temporalId == 0;  // update found tl0
     // keep start of last gop
     keepPic  |= ( tp == startOfGop );
 
@@ -315,13 +324,15 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   pic->picVisActY           = picVisActY;
   picShared->m_picVisActTL0 = picVisActTL0;
   picShared->m_picVisActY   = picVisActY;
+  picShared->m_picSpVisAct  = pic->picSpVisAct;
 }
 
-uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture* refPic1, const Picture* refPic2 ) const
+uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
 {
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
+  unsigned picSpVisAct = 0;
 
   CPelBuf orig[ 3 ];
   orig[ 0 ] = curPic->getOrigBuf( COMP_Y );
@@ -341,9 +352,12 @@ uint16_t PreProcess::xGetPicVisualActivity( const Picture* curPic, const Picture
       m_encCfg->m_FrameRate / m_encCfg->m_FrameScale,
       bitDepth,
       m_isHighRes,
-      nullptr );
+      nullptr, 
+      &picSpVisAct);
 
   uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
+  curPic->picSpVisAct = ClipBD( (uint16_t) picSpVisAct, bitDepth );
+
   return ret;
 }
 
@@ -380,6 +394,18 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
     {
       m_gopCfg.startIntraPeriod( picShared->m_gopEntry );
     }
+  }
+}
+
+
+void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList )
+{
+  for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
+  {
+    Picture* tp = *itr;
+    if( pic->gopEntry->m_gopNum != tp->gopEntry->m_gopNum )
+      break;
+    tp->m_picShared->m_gopEntry.m_skipFirstPass = false;
   }
 }
 

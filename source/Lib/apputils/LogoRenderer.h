@@ -293,7 +293,7 @@ public:
 
   int uninit()
   {
-    if( m_bInitialized )
+    if( !m_bInitialized )
     { 
       return -1;
     }

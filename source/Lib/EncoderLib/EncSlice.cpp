@@ -334,6 +334,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   double dQP     = (rcp ? (double) slice->pic->picInitialQP : xGetQPForPicture (slice));
   double dLambda = (rcp ? slice->pic->picInitialLambda : xCalculateLambda (slice, slice->TLayer, dQP, dQP, iQP));
   int sliceChromaQpOffsetIntraOrPeriodic[2] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[0], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[1] };
+  const int lookAheadRCCQpOffset = 0;   // was (m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && CS::isDualITree (*slice->pic->cs) ? 1 : 0);
   int cbQP = 0, crQP = 0, cbCrQP = 0;
 
   if (m_pcEncCfg->m_usePerceptQPA) // adapt sliceChromaQpOffsetIntraOrPeriodic and pic->ctuAdaptedQP
@@ -358,19 +359,17 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
 
   if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
-    const int rateCtrlQpOffset = (m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead ? 1 : 0);
-
-    cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + rateCtrlQpOffset; // set QP offets for dual-tree
-    crQP = m_pcEncCfg->m_chromaCrQpOffsetDualTree + rateCtrlQpOffset;
-    cbCrQP = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree + rateCtrlQpOffset;
+    cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + lookAheadRCCQpOffset; // QP offset for dual-tree
+    crQP = m_pcEncCfg->m_chromaCrQpOffsetDualTree + lookAheadRCCQpOffset;
+    cbCrQP = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree + lookAheadRCCQpOffset;
   }
   else if (slice->pps->sliceChromaQpFlag)
   {
     const GOPEntry &gopEntry             = *(slice->pic->gopEntry);
     const bool bUseIntraOrPeriodicOffset = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
 
-    cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[0] : gopEntry.m_CbQPoffset;
-    crQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[1] : gopEntry.m_CrQPoffset;
+    cbQP = (bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[0] : gopEntry.m_CbQPoffset) + lookAheadRCCQpOffset;
+    crQP = (bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[1] : gopEntry.m_CrQPoffset) + lookAheadRCCQpOffset;
     cbCrQP = (cbQP + crQP) >> 1; // use floor of average CbCr chroma QP offset for joint-CbCr coding
 
     cbQP = Clip3 (-12, 12, cbQP + slice->pps->chromaQpOffset[COMP_Cb]) - slice->pps->chromaQpOffset[COMP_Cb];
@@ -403,7 +402,8 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
   else
   {
     const SliceType sliceType = slice->sliceType;
-    qp = slice->pic->seqBaseQp;
+
+    qp = m_pcEncCfg->m_QP;
 
     if( sliceType == VVENC_I_SLICE )
     {

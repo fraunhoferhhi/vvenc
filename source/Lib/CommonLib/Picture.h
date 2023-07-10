@@ -215,6 +215,7 @@ public:
   bool                          isNeededForOutput;
   bool                          isFinished;
   bool                          isLongTerm;
+  bool                          isFlush;
   bool                          precedingDRAP; // preceding a DRAP picture in decoding order
 
   const GOPEntry*               gopEntry;
@@ -244,6 +245,7 @@ public:
   int16_t                       picMemorySTA;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
+  uint16_t                      picSpVisAct;
   double                        psnr[MAX_NUM_COMP];
   double                        mse [MAX_NUM_COMP];
 
@@ -261,7 +263,6 @@ public:
   bool                          useScSelectiveRdoq;
   int                           useScFastMrg;
   int                           useQtbttSpeedUpMode;
-  int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;

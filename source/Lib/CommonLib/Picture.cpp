@@ -160,6 +160,7 @@ Picture::Picture()
     , isNeededForOutput ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
+    , isFlush           ( false )
     , precedingDRAP     ( false )
     , gopEntry          ( nullptr )
     , refCounter        ( 0 )
@@ -178,6 +179,7 @@ Picture::Picture()
     , picMemorySTA      ( -1 )
     , picVisActTL0      ( 0 )
     , picVisActY        ( 0 )
+    , picSpVisAct       ( 0 )
     , isSccWeak         ( false )
     , isSccStrong       ( false )
     , useScME           ( false )
@@ -190,7 +192,6 @@ Picture::Picture()
     , useScNumRefs      ( false )
     , useScFastMrg      ( 0 )
     , useQtbttSpeedUpMode( 0 )
-    , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
@@ -223,6 +224,7 @@ void Picture::reset()
   isNeededForOutput   = true;
   isFinished          = false;
   isLongTerm          = false;
+  isFlush             = false;
   isMeanQPLimited     = false;
   precedingDRAP       = false;
 

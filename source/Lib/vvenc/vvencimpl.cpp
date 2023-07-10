@@ -839,5 +839,13 @@ std::string VVEncImpl::createEncoderInfoStr()
   return cInfoStr;
 }
 
+///< decode bitstream is deprecated and will be removed
+int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule)
+{
+  MsgLog msg;
+  msg.log( VVENC_ERROR, "vvenc_decode_bitstream is deprecated and not working anymore." );
+  return VVENC_ERR_NOT_SUPPORTED;
+}
+
 
 } // namespace

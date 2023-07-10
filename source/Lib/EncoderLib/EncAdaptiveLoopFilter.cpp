@@ -1982,20 +1982,9 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
     slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = false; // currently disabled
 
     // CCALF
-    if( 1 )
-    {
-      // currently CCALF is off
-      m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
-    }
-    else
-    {
-      m_limitCcAlf = m_encCfg->m_QP >= m_encCfg->m_ccalfQpThreshold;
-      if(m_limitCcAlf && slice.sliceQp <= m_encCfg->m_QP + 1)
-      {
-        m_ccAlfFilterParam.ccAlfFilterEnabled[0] = false;
-        m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
-      }
-    }
+    // currently CCALF is off
+    m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
+
     slice.ccAlfCbEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[0];
     slice.ccAlfCrEnabled = m_ccAlfFilterParam.ccAlfFilterEnabled[1];
   }
@@ -5412,9 +5401,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValuesCTU( CodingStructure &cs, c
   uint64_t bestSSD       = MAX_UINT64;
   double   bestRate      = MAX_DOUBLE;
   double   bestCost      = MAX_DOUBLE;  
-  const uint32_t thresholdS = std::min<int>(heightC - yCtu, ctuHeightC) << getComponentScaleY(COMP_Cb, m_chromaFormat);
-  const uint32_t numberOfChromaSamples = std::min<int>(heightC - yCtu, ctuHeightC) * std::min<int>(widthC - xCtu, ctuWidthC);
-  const uint32_t thresholdC = (numberOfChromaSamples >> 2);
 
   CABACEstimator->getCtx() = ctxBest;
   ctxStart                 = SubCtx(Ctx::CcAlfFilterControlFlag, CABACEstimator->getCtx());
@@ -5424,12 +5410,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValuesCTU( CodingStructure &cs, c
   const Position lumaPos = Position({ xCtu << scaleX,
                                       yCtu << scaleY });
 
-  uint64_t lumaSwingCount = 0, chromaMidPointCount = 0;
-  if (m_limitCcAlf)
-  {
-    lumaSwingCount      = countLumaSwingGreaterThanThresholdCTU( dstYuv.get(COMP_Y).bufAt(0, lumaPos.y), lumaPos.x, lumaPos.y, dstYuv.get(COMP_Y).stride, dstYuv.get(COMP_Y).height, dstYuv.get(COMP_Y).width, cs.pcv->maxCUSizeLog2, cs.pcv->maxCUSizeLog2 );
-    chromaMidPointCount = countChromaSampleValueNearMidPointCTU( dstYuv.get(compID).bufAt(0,      yCtu), xCtu, yCtu,           dstYuv.get(compID).stride, dstYuv.get(compID).height, dstYuv.get(compID).width, cs.pcv->maxCUSizeLog2- scaleX, cs.pcv->maxCUSizeLog2 - scaleY );
-  }
   DTRACE(g_trace_ctx, D_MISC, "CCALF_%d: ctuIdx=%d\n", (int)compID, ctuIdx );
 
   for (int filterIdx = 0; filterIdx <= MAX_NUM_CC_ALF_FILTERS; filterIdx++)
@@ -5440,9 +5420,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValuesCTU( CodingStructure &cs, c
     {
       continue;
     }
-
-    if (m_limitCcAlf && filterIdx < MAX_NUM_CC_ALF_FILTERS && (lumaSwingCount >= thresholdS || chromaMidPointCount >= thresholdC))
-      continue;
 
     if (filterIdx == MAX_NUM_CC_ALF_FILTERS)
     {
@@ -5702,9 +5679,6 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
       double   bestCost      = MAX_DOUBLE;
       uint8_t  bestFilterIdc = 0;
       uint8_t  bestFilterIdx = 0;
-      const uint32_t thresholdS = std::min<int>(buf->height - yCtu, ctuHeightC) << getComponentScaleY(COMP_Cb, m_chromaFormat);
-      const uint32_t numberOfChromaSamples = std::min<int>(buf->height - yCtu, ctuHeightC) * std::min<int>(buf->width - xCtu, ctuWidthC);
-      const uint32_t thresholdC = (numberOfChromaSamples >> 2);
 
       m_CABACEstimator->getCtx() = ctxBest;
       ctxStart                   = SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx());
@@ -5734,13 +5708,7 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
         rate = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
         cost = rate * m_lambda[compID] + ssd;
 
-        bool limitationExceeded = false;
-        if (m_limitCcAlf && filterIdx < MAX_NUM_CC_ALF_FILTERS)
-        {
-          limitationExceeded = limitationExceeded || (lumaSwingGreaterThanThresholdCount[ctuIdx] >= thresholdS);
-          limitationExceeded = limitationExceeded || (chromaSampleCountNearMidPoint[ctuIdx] >= thresholdC);
-        }
-        if (cost < bestCost && !limitationExceeded)
+        if (cost < bestCost)
         {
           bestCost      = cost;
           bestRate      = rate;
@@ -5924,13 +5892,6 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
     return;
   }
 
-  m_limitCcAlf = m_encCfg->m_QP >= m_encCfg->m_ccalfQpThreshold;
-  if (m_limitCcAlf && cs.slice->sliceQp <= m_encCfg->m_QP + 1)
-  {
-    m_ccAlfFilterParam.ccAlfFilterEnabled[compID - 1] = false;
-    return;
-  }
-
   uint8_t bestMapFilterIdxToFilterIdc[MAX_NUM_CC_ALF_FILTERS+1];
   const int scaleX               = getComponentScaleX(compID, cs.pcv->chrFormat);
   const int scaleY               = getComponentScaleY(compID, cs.pcv->chrFormat);
@@ -5942,14 +5903,6 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
 
 
   //DTRACE_FRAME_BLOCKWISE( g_trace_ctx, D_TMP, dstYuv.bufs[COMP_Y].bufAt(0, 0), dstYuv.bufs[COMP_Y].stride, dstYuv.bufs[COMP_Y].width, dstYuv.bufs[COMP_Y].height, 64, 64 );
-  if (m_limitCcAlf)
-  {
-    countLumaSwingGreaterThanThreshold(dstYuv.get(COMP_Y).bufAt(0, 0), dstYuv.get(COMP_Y).stride, dstYuv.get(COMP_Y).height, dstYuv.get(COMP_Y).width, cs.pcv->maxCUSizeLog2, cs.pcv->maxCUSizeLog2, m_lumaSwingGreaterThanThresholdCount, m_numCTUsInWidth);
-  }
-  if (m_limitCcAlf)
-  {
-    countChromaSampleValueNearMidPoint(dstYuv.get(compID).bufAt(0, 0), dstYuv.get(compID).stride, dstYuv.get(compID).height, dstYuv.get(compID).width, cs.pcv->maxCUSizeLog2- scaleX, cs.pcv->maxCUSizeLog2 - scaleY, m_chromaSampleCountNearMidPoint, m_numCTUsInWidth);
-  }
 
   for ( int filterIdx = 0; filterIdx <= MAX_NUM_CC_ALF_FILTERS; filterIdx++ )
   {

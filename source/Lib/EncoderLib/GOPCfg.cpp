@@ -561,7 +561,7 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
-  if( m_firstPassMode == 2 )
+  if( m_firstPassMode == 2 || m_firstPassMode == 4 )
   {
     xSetSkipFirstPass( gopList );
   }
