@@ -66,7 +66,6 @@ static __itt_domain* itt_domain_MCTF_flt   = __itt_domain_create( "MCTFFlt" );
 
 const double MCTF::m_chromaFactor     =  0.55;
 const double MCTF::m_sigmaMultiplier  =  9.0;
-const double MCTF::m_sigmaZeroPoint   = 10.0;
 const int MCTF::m_range               = VVENC_MCTF_RANGE;
 const int MCTF::m_motionVectorFactor  = 16;
 const int MCTF::m_padding             = MCTF_PADDING;
@@ -605,10 +604,10 @@ void MCTF::initPicture( Picture* pic )
   pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void MCTF::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   // ensure this is only processed if necessary 
-  if( !flush && (picList.empty() || ( m_lastPicIn == picList.back())))
+  if( picList.empty() || ( m_lastPicIn == picList.back() && ! picList.back()->isFlush ))
   {
     return;
   }
@@ -664,7 +663,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   Picture* pic = picFifo[ filterIdx ];
 
-  // first pass temporal down-sampling
+  // first-pass temporal downsampling
   if( ! m_isFinalPass && pic->gopEntry->m_skipFirstPass )
   {
     return;
@@ -696,8 +695,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   {
     isFilterThisFrame = false;
   }
-
-  pic->m_picShared->m_picAuxQpOffset = 0;
 
   if ( isFilterThisFrame )
   {
@@ -826,6 +823,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
             nMax++; // count all CTUs with non-zero motion error (excludes e.g. black borders). CTU with the motion error peak is subtracted below
           }
         }
+        pic->m_picShared->m_picMotEstError = uint16_t (0.5 + meanRmsAcrossPic / numCtu);
 
         if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
@@ -1326,7 +1324,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
 void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
 {
-  const double lumaSigmaSq = (m_encCfg->m_QP - m_sigmaZeroPoint) * (m_encCfg->m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
+  const double lumaSigmaSq = m_sigmaMultiplier * ( 128.0 + 3.0 / 256.0 * m_encCfg->m_QP * m_encCfg->m_QP * m_encCfg->m_QP );
   const double chromaSigmaSq = 30 * 30;
 
   double sigmaSqCh[MAX_NUM_CH];

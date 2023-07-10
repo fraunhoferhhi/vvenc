@@ -1,10 +1,48 @@
 /////////////////////////////////////////
+tag 1.9.0-rc1
+
+* libvvenc:
+  - removed library parameters: vvenc_config::m_wcgChromaQpControl, vvenc_config::m_ccalfQpThreshold,
+                                vvenc_config::m_switchPOC, vvenc_config::m_switchDQP,
+                                vvenc_config::m_fastForwardToPOC, vvenc_config::m_stopAfterFFtoPOC,
+                                vvenc_config::m_bs2ModPOCAndType, vvenc_config::m_forceDecodeBitstream1,
+                                vvenc_config::m_decodeBitstreams
+  - removed deprecated struct: vvencWCGChromaQPControl
+  - added library parameters:
+    - vvenc_config::m_fppLinesSynchro (controls CTU line offset for dependent frame parallelism)
+    - vvenc_config::m_RCMaxBitrate (controls the maximum instantaneous rate for rate control encoding)
+  - changed library parameters:
+    - vvenc_config::m_FirstPassMode (added spatial and temporal subsampling to first pass)
+  - vvenc_config::m_decodedPictureHashSEIType (when >= 10, the hash is calculated and logged,
+                                               but no SEI message is generated)
+  - vvenc_config::m_IntraPeriodSec (will now round the intra period to a multiple of 8 frames,
+                                    instead of GOP size)
+  - added rate capping during rate control (must be at least 1.5x of target rate)
+  - extensive improvements and cleanups to rate control, especially single pass
+  - improved efficiency by 1-2%
+  - speedup of first pass, especially for preset faster (around 15% overall runtime)
+  - unified MCTF activation for low- and high-rate encoding
+  - various speedups, fixes, and cleanups
+  
+* vvencapp:
+  - added parameter: stats (when enabled, prints a statistical summary of encoding every second of input)
+                     maxrate (enables to specify maximum rate for RC, must be at least 1.5x of target rate)
+
+* vvencFFapp:
+  - added parameter: MaxBitrate (enables to specify maximum rate for RC, must be at least 1.5x of target rate)
+                     stats (when enabled, prints a statistical summary of encoding every second of input)
+  - removed parameters: WCGPPSEnable, WCGPPSCbQpScale, WCGPPSCrQpScale, WCGPPSChromaQpScale,
+                        WCGPPSChromaQpOffset, DebugBitstream, DecodeBitstream1, DecodeBitstream2,
+                        DebugPOC, SwitchPOC, SwitchDQP, FastForwardToPOC, StopAfterFFtoPOC,
+                        DecodeBitstream2ModPOCAndType, ForceDecodeBitstream1, CCALFQpTh, decode
+
+/////////////////////////////////////////
 tag 1.8.0
 
 * libvvenc:
   - removed library parameters:
     - vvenc_config::m_temporalSubsampleRatio, vvenc_config::m_MaxCodingDepth, vvenc_config::m_RCForceIntraQP,
-      vvenc_config::m_log2DiffMaxMinCodingBlockSize, 
+      vvenc_config::m_log2DiffMaxMinCodingBlockSize
   - added library parameters:
     - vvenc_config::m_FirstPassMode
   - changed library parameters:

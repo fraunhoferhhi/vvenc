@@ -356,20 +356,19 @@ typedef struct vvencRPLEntry
 
 VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry );
 
-/// <summary>
-/// Deprecated, dont use!
-/// </summary>
-typedef struct vvencWCGChromaQPControl
+// begin: unused, will be removed in future versions
+typedef struct vvencUnusedStruct0
 {
-  bool   enabled        ;    // Enabled flag (0:default)
-  double chromaCbQpScale;    // Chroma Cb QP Scale (1.0:default)
-  double chromaCrQpScale;    // Chroma Cr QP Scale (1.0:default)
-  double chromaQpScale  ;    // Chroma QP Scale (0.0:default)
-  double chromaQpOffset ;    // Chroma QP Offset (0.0:default)
-}vvencWCGChromaQPControl;
+  bool   m_cfgUnused0; // TODO: remove unused memory from configuration
+  double m_cfgUnused1; // TODO: remove unused memory from configuration
+  double m_cfgUnused2; // TODO: remove unused memory from configuration
+  double m_cfgUnused3; // TODO: remove unused memory from configuration
+  double m_cfgUnused4; // TODO: remove unused memory from configuration
+}vvencUnusedStruct0;
 
+typedef vvencUnusedStruct0 vvencWCGChromaQPControl;
 VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl );
-
+// end: unused
 
 typedef struct vvencChromaQpMappingTableParams
 {
@@ -407,7 +406,7 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFUnitSize;
-  int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
+  int                 mctfUnused;                                                        // TODO: remove unused memory from configuration
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -433,7 +432,7 @@ typedef struct vvenc_config
   int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, else 8threads (limited to available cores))
 
   int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
-  int                 m_RCTargetBitrate;                                                 // target bitrate in bps, (default. 0 (rc disabled))
+  int                 m_RCTargetBitrate;                                                 // target bitrate in bps (default: 0 (RC disabled))
 
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity level
 
@@ -529,7 +528,7 @@ typedef struct vvenc_config
   int                 m_usePerceptQPATempFiltISlice;                                     // Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   bool                m_lumaLevelToDeltaQPEnabled;
-  vvencWCGChromaQPControl  m_wcgChromaQpControl;
+  vvencUnusedStruct0  m_cfgUnused24;
 
   vvencChromaFormat   m_internChromaFormat;
   bool                m_useIdentityTableForNon420Chroma;
@@ -702,7 +701,7 @@ typedef struct vvenc_config
   bool                m_useNonLinearAlfChroma;
   unsigned            m_maxNumAlfAlternativesChroma;
   bool                m_ccalf;
-  int                 m_ccalfQpThreshold;
+  int                 m_cfgUnused25;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
   int                 m_alfSpeed;
 
@@ -768,7 +767,9 @@ typedef struct vvenc_config
   int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
   bool                m_treatAsSubPic;
 
-  double              m_reservedDouble[10];
+  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or least constrained VBR))
+  int                 m_reservedInt;
+  double              m_reservedDouble[9];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

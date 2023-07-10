@@ -129,7 +129,7 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic );
-  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 
@@ -154,7 +154,6 @@ private:
 private:
   static const double   m_chromaFactor;
   static const double   m_sigmaMultiplier;
-  static const double   m_sigmaZeroPoint;
   static const int      m_range;
   static const int      m_motionVectorFactor;
   static const int      m_padding;

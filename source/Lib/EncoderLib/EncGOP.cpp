@@ -285,21 +285,21 @@ void EncGOP::waitForFreeEncoders()
   }
 }
 
-void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
 
   // create list of pictures ordered in coding order and ready to be encoded
-  xInitPicsInCodingOrder( picList, flush );
+  xInitPicsInCodingOrder( picList );
 
   // encode pictures
-  xProcessPictures( flush, auList, doneList );
+  xProcessPictures( auList, doneList );
+
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
   // release pictures not needed anymore
-  const bool allDone = flush && m_numPicsCoded >= m_picCount;
-  xReleasePictures( picList, freeList, allDone );
+  xReleasePictures( picList, freeList );
 
   // clear output access unit
   if( m_isPreAnalysis )
@@ -308,7 +308,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   }
 }
 
-void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& doneList )
+void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
 {
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = (m_pcEncCfg->m_RCTargetBitrate > 0 || (m_pcEncCfg->m_LookAhead > 0 && !m_isPreAnalysis)) && (m_pcEncCfg->m_maxParallelFrames > 0);
@@ -371,14 +371,18 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
         {
           CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
 
+          if( pic->isFlush )
+          {
+            m_pcRateCtrl->setRCRateSavingState(0); // tell budget estimation that end of video is near
+          }
           if( pic->gopEntry->m_isStartOfGop )
           {
             // check the RC final pass requirement for availability of preprocessed pictures (GOP + 1)
-            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && !flush )
+            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && ! pic->isFlush )
             {
               break;
             }
-            m_pcRateCtrl->processFirstPassData( flush, pic->poc );
+            m_pcRateCtrl->processFirstPassData( pic->isFlush, pic->poc );
           }
         }
 
@@ -400,7 +404,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
   if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
-    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xEncodersFinished() ) )
+    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
   {
     return;
   }
@@ -426,7 +430,7 @@ void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& done
           pic->actualHeadBits  = outPic->actualHeadBits;
           pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         }
-        m_pcRateCtrl->xUpdateAfterPicRC( pic );
+        m_pcRateCtrl->updateAfterPicEncRC( pic );
       }
     }
 
@@ -627,11 +631,12 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
   }
 }
 
-void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList, bool allDone )
+void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
 {
+  const bool allPicsDone = m_numPicsCoded >= m_picCount && ( picList.empty() || picList.back()->isFlush );
   for( auto pic : picList )
   {
-    if( allDone || ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) )
+    if( ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) || allPicsDone )
       freeList.push_back( pic );
   }
 }
@@ -1028,31 +1033,15 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
     pps.picInitQPMinus26 = std::min( maxDQP, std::max( minDQP, baseQp ) );
   }
 
-  if (m_pcEncCfg->m_wcgChromaQpControl.enabled )
-  {
-    const int baseQp      = m_pcEncCfg->m_QP + pps.ppsId;
-    const double chromaQp = m_pcEncCfg->m_wcgChromaQpControl.chromaQpScale * baseQp + m_pcEncCfg->m_wcgChromaQpControl.chromaQpOffset;
-    const double dcbQP    = m_pcEncCfg->m_wcgChromaQpControl.chromaCbQpScale * chromaQp;
-    const double dcrQP    = m_pcEncCfg->m_wcgChromaQpControl.chromaCrQpScale * chromaQp;
-    const int cbQP        = std::min(0, (int)(dcbQP + ( dcbQP < 0 ? -0.5 : 0.5) ));
-    const int crQP        = std::min(0, (int)(dcrQP + ( dcrQP < 0 ? -0.5 : 0.5) ));
-    pps.chromaQpOffset[COMP_Y]          = 0;
-    pps.chromaQpOffset[COMP_Cb]         = Clip3( -12, 12, cbQP + m_pcEncCfg->m_chromaCbQpOffset);
-    pps.chromaQpOffset[COMP_Cr]         = Clip3( -12, 12, crQP + m_pcEncCfg->m_chromaCrQpOffset);
-    pps.chromaQpOffset[COMP_JOINT_CbCr] = Clip3( -12, 12, ( cbQP + crQP ) / 2 + m_pcEncCfg->m_chromaCbCrQpOffset);
-  }
-  else
-  {
-    pps.chromaQpOffset[COMP_Y]          = 0;
-    pps.chromaQpOffset[COMP_Cb]         = m_pcEncCfg->m_chromaCbQpOffset;
-    pps.chromaQpOffset[COMP_Cr]         = m_pcEncCfg->m_chromaCrQpOffset;
-    pps.chromaQpOffset[COMP_JOINT_CbCr] = m_pcEncCfg->m_chromaCbCrQpOffset;
-  }
+  pps.chromaQpOffset[COMP_Y]          = 0;
+  pps.chromaQpOffset[COMP_Cb]         = m_pcEncCfg->m_chromaCbQpOffset;
+  pps.chromaQpOffset[COMP_Cr]         = m_pcEncCfg->m_chromaCrQpOffset;
+  pps.chromaQpOffset[COMP_JOINT_CbCr] = m_pcEncCfg->m_chromaCbCrQpOffset;
 
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
+    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate > 0) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
     if( ! bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400 ) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
@@ -1287,7 +1276,8 @@ void EncGOP::xSetupPicAps( Picture* pic )
   CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
 
   // the max size of global APS list is more than enough to support parallelization 
-  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
+  // additional +2 offset, due two max possible processing delay of two GOPs (Threads=1 mode)
+  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 ) ) )
   {
     delete m_globalApsList.front();
     m_globalApsList.pop_front();
@@ -1334,7 +1324,7 @@ void EncGOP::xSetupPicAps( Picture* pic )
   pic->refApsGlobal = refAps;
 }
 
-void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
+void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 {
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no frame parallel processing enabled, but multiple pics in flight" );
@@ -1346,7 +1336,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
     if( pic->isInitDone )
       continue;
     // continue with next pic in increasing coding number order
-    if( ! flush && pic->gopEntry->m_codingNum != m_lastCodingNum + 1 )
+    if( pic->gopEntry->m_codingNum != m_lastCodingNum + 1 && ! picList.back()->isFlush )
       break;
 
     CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
@@ -1660,8 +1650,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
-  pic.seqBaseQp = m_pcEncCfg->m_QP;
-
   pic.isInitDone = true;
 }
 
@@ -1946,6 +1934,8 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
         pic.gopEntry->m_isStartOfGop,
         pic.gopEntry->m_gopNum,
         pic.gopEntry->m_scType,
+        pic.picSpVisAct,
+        pic.m_picShared->m_picMotEstError,
         pic.m_picShared->m_minNoiseLevels );
     return;
   }
@@ -2378,6 +2368,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   pic->gopEntry->m_isStartOfGop,
                                   pic->gopEntry->m_gopNum,
                                   pic->gopEntry->m_scType,
+                                  pic->picSpVisAct,
+                                  pic->m_picShared->m_picMotEstError,
                                   pic->m_picShared->m_minNoiseLevels );
   }
 
@@ -2415,7 +2407,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
 
   // create info string
   {
-    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
+    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate > 0) || !m_pcRateCtrl->rcIsFinalPass)
     {
       std::string cInfo;
       if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC
