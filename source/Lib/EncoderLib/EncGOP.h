@@ -220,15 +220,8 @@ private:
   inline bool xEncodersFinished       () { return ( int ) m_freePicEncoderList.size() >= std::max(1, m_pcEncCfg->m_maxParallelFrames); }
   inline bool xLockStepPicsFinished   ()
   {
-#if 1
     std::lock_guard<std::mutex> lock( m_gopEncMutex );
     return ( int ) m_freePicEncoderList.size() >= std::max(1, m_pcEncCfg->m_maxParallelFrames); 
-#else
-      for( auto pic : m_rcUpdateList )
-        if( !pic->isReconstructed ) 
-          return false;
-      return true;
-#endif
   }
 };// END CLASS DEFINITION EncGOP
 
