@@ -1276,7 +1276,8 @@ void EncGOP::xSetupPicAps( Picture* pic )
   CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
 
   // the max size of global APS list is more than enough to support parallelization 
-  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 1 ) ) )
+  // additional +2 offset, due two max possible processing delay of two GOPs (Threads=1 mode)
+  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 ) ) )
   {
     delete m_globalApsList.front();
     m_globalApsList.pop_front();
