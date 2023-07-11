@@ -473,10 +473,12 @@ void RateCtrl::storeStatsData( TRCPassStats statsData )
       const TRCPassStats& srcData = m_tempDownSamplStats[ statsData.tempLayer ];
       CHECK( srcData.numBits == 0,                                 "miss stats data from previous frame for temporal down-sampling" );
       CHECK( statsData.poc - srcData.poc >= m_pcEncCfg->m_GOPSize, "miss stats data from previous frame for temporal down-sampling" );
-      statsData.qp      = srcData.qp;
-      statsData.lambda  = srcData.lambda;
-      statsData.numBits = srcData.numBits;
-      statsData.psnrY   = srcData.psnrY;
+      statsData.qp        = srcData.qp;
+      statsData.lambda    = srcData.lambda;
+      if( statsData.visActY == 0 )
+        statsData.visActY = srcData.visActY;
+      statsData.numBits   = srcData.numBits;
+      statsData.psnrY     = srcData.psnrY;
     }
   }
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
