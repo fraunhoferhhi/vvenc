@@ -1092,7 +1092,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
     m_alfCovarianceFrameCcAlf[compIdx - 1] = new AlfCovariance[numFilters];
     for (int k = 0; k < numFilters; k++)
     {
-      m_alfCovarianceFrameCcAlf[compIdx - 1][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, 1);
+      m_alfCovarianceFrameCcAlf[compIdx - 1][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
     }
 
     m_alfCovarianceCcAlf[compIdx - 1] = new AlfCovariance *[numFilters];
@@ -1101,7 +1101,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
       m_alfCovarianceCcAlf[compIdx - 1][j] = new AlfCovariance[m_numCTUsInPic];
       for (int k = 0; k < m_numCTUsInPic; k++)
       {
-        m_alfCovarianceCcAlf[compIdx - 1][j][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, 1);
+        m_alfCovarianceCcAlf[compIdx - 1][j][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
       }
     }
   }
