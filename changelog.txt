@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.9.0-rc1
+tag 1.9.0
 
 * libvvenc:
   - removed library parameters: vvenc_config::m_wcgChromaQpControl, vvenc_config::m_ccalfQpThreshold,
@@ -15,8 +15,6 @@ tag 1.9.0-rc1
     - vvenc_config::m_FirstPassMode (added spatial and temporal subsampling to first pass)
   - vvenc_config::m_decodedPictureHashSEIType (when >= 10, the hash is calculated and logged,
                                                but no SEI message is generated)
-  - vvenc_config::m_IntraPeriodSec (will now round the intra period to a multiple of 8 frames,
-                                    instead of GOP size)
   - added rate capping during rate control (must be at least 1.5x of target rate)
   - extensive improvements and cleanups to rate control, especially single pass
   - improved efficiency by 1-2%
