@@ -1187,6 +1187,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   int fps = c->m_FrameRate/c->m_FrameScale;
+  vvenc_confirmParameter( c, fps <= 0, "Quotient of FrameRate by FrameScale must be greater or equal than 1" );
 
   c->m_reshapeCW.rspFps     = fps;
   c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
@@ -1211,38 +1212,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
-  {  
-    int idrPeriod = fps * c->m_IntraPeriodSec;
-    if( idrPeriod % c->m_GOPSize != 0 )
+  {
+    int idrPeriod = std::max( fps * c->m_IntraPeriodSec, c->m_GOPSize );
+    int diff      = idrPeriod % c->m_GOPSize;
+    if( diff && diff >= c->m_GOPSize >> 1 )
     {
-      const int minGopSize = std::min( (fps * c->m_IntraPeriodSec), std::min( c->m_GOPSize, 8 ));   
-      if( idrPeriod < c->m_GOPSize )
-      {
-        if( (idrPeriod % minGopSize) != 0)
-        {
-          idrPeriod = (fps > minGopSize ) ? (idrPeriod - (minGopSize>>1)) : minGopSize;
-          while ( idrPeriod % minGopSize != 0 )
-          {
-            idrPeriod++;
-          }
-        }
-      }
-      else
-      {
-        int diff = idrPeriod % minGopSize;
-        if( diff < minGopSize >> 1 )
-        {
-          idrPeriod -= diff;
-        }
-        else
-        {
-          idrPeriod += (minGopSize - diff);
-        }
-      }
+      diff -= c->m_GOPSize;
     }
-    c->m_IntraPeriod = idrPeriod;
+    c->m_IntraPeriod = idrPeriod - diff;
   }
-  
+
   if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
   {
     // TODO 2.0: make this an error
