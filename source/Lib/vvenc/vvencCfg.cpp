@@ -793,7 +793,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != rcQP )
   {
-    msg.log( VVENC_WARNING, "Configuration warning: Rate control is enabled since a target bitrate is specified, ignoring QP value\n\n" );
+    if( c->m_QP != VVENC_DEFAULT_QP )
+      msg.log( VVENC_WARNING, "Configuration warning: Rate control is enabled since a target bitrate is specified, ignoring QP value\n\n" );
     c->m_QP = VVENC_AUTO_QP;
   }
 

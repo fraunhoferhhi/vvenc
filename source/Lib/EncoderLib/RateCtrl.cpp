@@ -361,7 +361,7 @@ int RateCtrl::getBaseQP()
   else if (m_pcEncCfg->m_LookAhead)
   {
     baseQP = int (24.5 - log (d) / log (2.0)); // QPstart, equivalent to round (24 + 2*log2 (resRatio))
-    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log (double (encRCSeq->intraPeriod / encRCSeq->gopSize)) / log (2.0);
+    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log ((double) encRCSeq->intraPeriod / encRCSeq->gopSize) / log (2.0);
     baseQP = int (0.5 + d + 0.5 * std::max (0.0, baseQP - d));
   }
 
@@ -807,8 +807,8 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
   if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
-    const int gopsInIp  = encRCSeq->intraPeriod / encRCSeq->gopSize;
-    int l = 1;
+    const int gopsInIp  = (2 * encRCSeq->intraPeriod + (encRCSeq->gopSize >> 1)) / encRCSeq->gopSize;
+    int l = 2 - (gopsInIp & 1); // fract. tuning
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
 
@@ -832,14 +832,14 @@ double RateCtrl::getAverageBitsFromFirstPass()
       l = 0; // no I-frame in the analysis range
     }
 
-    totalBitsFirstPass = (tlBits[0] + (tlCount[0] >> 1)) / std::max (1u, tlCount[0]) +
+    totalBitsFirstPass = (2 * tlBits[0] + (tlCount[0] >> 1)) / std::max (1u, tlCount[0]) +
         ((gopsInIp - l) * tlBits[1] + (tlCount[1] >> 1)) / std::max (1u, tlCount[1]);
     for (l = 2; l <= 7; l++)
     {
       totalBitsFirstPass += ((gopsInIp << (l - 2)) * tlBits[l] + (tlCount[l] >> 1)) / std::max (1u, tlCount[l]);
     }
 
-    return totalBitsFirstPass / (double) encRCSeq->intraPeriod;
+    return totalBitsFirstPass / (2.0 * encRCSeq->intraPeriod);
   }
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // for two-pass RC
