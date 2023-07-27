@@ -863,9 +863,7 @@ namespace DQIntern
       m_coeffFracBits = m_gtxFracBitsArray[ 0 ];
       m_goRicePar     = 0;
       m_goRiceZero    = 0;
-#if ENABLE_VALGRIND_CODE
-      memset( m_state, 0, sizeof( m_state ) );
-#endif
+      VALGRIND_MEMCLEAR( m_state, sizeof( m_state ) );
     }
 
     void checkRdCosts( const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decision& decisionA, Decision& decisionB ) const
