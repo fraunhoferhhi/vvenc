@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.9.0-rc1
+tag 1.9.0
 
 * libvvenc:
   - removed library parameters: vvenc_config::m_wcgChromaQpControl, vvenc_config::m_ccalfQpThreshold,
