@@ -6290,7 +6290,11 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
 
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
   const bool useSimd = read_x86_extension_flags() > SCALAR;
+#else
+  const bool useSimd = false;
+#endif
 
   Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
   Pel yLocal[4][4];
