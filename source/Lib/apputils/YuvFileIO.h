@@ -102,6 +102,10 @@ public:
     m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );
     m_MSBExtendedBitDepth = MSBExtendedBitDepth;
     m_bitdepthShift       = internalBitDepth - m_MSBExtendedBitDepth;
+    if( internalBitDepth == 8 && fileBitDepth == 10 && MSBExtendedBitDepth == fileBitDepth )
+    {
+      m_bitdepthShift     = 0;
+    }
     m_fileChrFmt          = fileChrFmt;
     m_bufferChrFmt        = bufferChrFmt;
     m_clipToRec709        = clipToRec709;
@@ -143,7 +147,7 @@ public:
       if( !cLogoFilename.empty() )
       {
         std::stringstream strstr;
-        if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, internalBitDepth, strstr ) )
+        if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, fileBitDepth, strstr ) )
         {
           if( !strstr.str().empty() )
             m_lastError = strstr.str();

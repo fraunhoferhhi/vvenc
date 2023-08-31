@@ -261,10 +261,10 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   }
   m_tmpStorageLCU.create( UnitArea( cform, Area( 0, 0, MAX_CU_SIZE, MAX_CU_SIZE ) ) );
   m_pTempPel = new Pel[ encCfg.m_CTUSize * encCfg.m_CTUSize ];
-  m_tmpAffiStorage.create(UnitArea(cform, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE)));
+  m_tmpAffiStorage.create(UnitArea(cform, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE + 2)));  // allow overread by 2 samples
   m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
-  m_tmpAffiDeri[0] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
-  m_tmpAffiDeri[1] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
+  m_tmpAffiDeri[0] = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
+  m_tmpAffiDeri[1] = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
 
   CompArea chromaArea( COMP_Cb, cform, Area( 0, 0, encCfg.m_CTUSize, encCfg.m_CTUSize ), true );
   for( int i = 0; i < 4; i++ )
@@ -2197,7 +2197,7 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
                                       Mv&                   rcMv,
                                       Distortion&           ruiSAD )
 {
-  if( cu.cs->picture->useScME )
+  if( cu.cs->picture->useME )
   {
     switch ( m_motionEstimationSearchMethodSCC )
     {
@@ -3446,7 +3446,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   const uint32_t numTBlocks    = getNumberValidTBlocks   ( *cs.pcv );
   CodingUnit& cu               = *cs.getCU(partitioner.chType, partitioner.treeType);
   const unsigned currDepth = partitioner.currTrDepth;
-  const bool useTS = cs.picture->useScTS;
+  const bool useTS = cs.picture->useTS;
 
   bool bCheckFull  = !partitioner.canSplit( TU_MAX_TR_SPLIT, cs );
   if( cu.sbtInfo && partitioner.canSplit( CU::getSbtTuSplit( cu.sbtInfo ), cs ) )
@@ -5315,7 +5315,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
 
   int64_t  i64EqualCoeff[7][7];
   Pel    *piError = m_tmpAffiError;
-  int    *pdDerivate[2];
+  Pel    *pdDerivate[2];
   pdDerivate[0] = m_tmpAffiDeri[0];
   pdDerivate[1] = m_tmpAffiDeri[1];
 
@@ -5354,7 +5354,6 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
 
   ::memcpy(acMv, acMvTemp, sizeof(Mv) * 3);
 
-  const int bufStride = pBuf->Y().stride;
   const int predBufStride = predBuf.Y().stride;
   Mv prevIterMv[7][3];
   int iIterTime;
@@ -5379,23 +5378,13 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     *                         use gradient to update mv
     *********************************************************************************/
     // get Error Matrix
-    const Pel* pOrg = pBuf->Y().buf;
-    Pel* pPred = predBuf.Y().buf;
-    for (int j = 0; j< height; j++)
-    {
-      for (int i = 0; i< width; i++)
-      {
-        piError[i + j * width] = pOrg[i] - pPred[i];
-      }
-      pOrg += bufStride;
-      pPred += predBufStride;
-    }
+    PelBuf( piError, width, height ).subtract( pBuf->Y(), predBuf.Y() );
 
     // sobel x direction
     // -1 0 1
     // -2 0 2
     // -1 0 1
-    pPred = predBuf.Y().buf;
+    Pel* pPred = predBuf.Y().buf;
     m_HorizontalSobelFilter(pPred, predBufStride, pdDerivate[0], width, width, height);
 
     // sobel y direction
@@ -5410,9 +5399,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
       memset(&i64EqualCoeff[row][0], 0, iParaNum * sizeof(int64_t));
     }
 
-    m_EqualCoeffComputer(piError, width, pdDerivate, width, i64EqualCoeff, width, height
-      , (cu.affineType == AFFINEMODEL_6PARAM)
-    );
+    m_EqualCoeffComputer[cu.affineType]( piError, width, pdDerivate, width, width, height, i64EqualCoeff );
 
     for (int row = 0; row < iParaNum; row++)
     {

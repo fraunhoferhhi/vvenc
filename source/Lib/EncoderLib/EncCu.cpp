@@ -721,7 +721,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
       bool isReuseCU = m_modeCtrl.isReusingCuValid( cs, partitioner, qp );
 
-      bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useScIBC && (partitioner.chType == CH_L);
+      bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useIBC && (partitioner.chType == CH_L);
       if ((m_pcEncCfg->m_IBCFastMethod>3) && (cs.area.lwidth() * cs.area.lheight()) > (16 * 16))
       {
         checkIbc = false;
@@ -1954,7 +1954,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg >= 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
       {
-        if( candCostList[i] > MRG_FAST_RATIO[tempCS->picture->useScFastMrg] * candCostList[0] )
+        if( candCostList[i] > MRG_FAST_RATIO[tempCS->picture->useFastMrg] * candCostList[0] )
         {
           uiNumMrgSATDCand = i;
           break;

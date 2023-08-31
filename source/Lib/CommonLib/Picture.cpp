@@ -182,15 +182,15 @@ Picture::Picture()
     , picSpVisAct       ( 0 )
     , isSccWeak         ( false )
     , isSccStrong       ( false )
-    , useScME           ( false )
-    , useScMCTF         ( false )
-    , useScTS           ( false )
-    , useScBDPCM        ( false )
-    , useScIBC          ( false )
-    , useScLMCS         ( false )
-    , useScSAO          ( false )
-    , useScNumRefs      ( false )
-    , useScFastMrg      ( 0 )
+    , useME           ( false )
+    , useMCTF         ( false )
+    , useTS           ( false )
+    , useBDPCM        ( false )
+    , useIBC          ( false )
+    , useLMCS         ( false )
+    , useSAO          ( false )
+    , useNumRefs      ( false )
+    , useFastMrg      ( 0 )
     , useQtbttSpeedUpMode( 0 )
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
@@ -385,16 +385,16 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
 void Picture::setSccFlags( const VVEncCfg* encCfg )
 {
-  useScME      = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
-  useScTS      = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
-  useScBDPCM   = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
-  useScMCTF    = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
-  useScLMCS    = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
-  useScIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
-  useScSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
-  useScSelectiveRdoq = encCfg->m_useSelectiveRDOQ == 2 ? !isSccWeak : !!encCfg->m_useSelectiveRDOQ;
-  useScNumRefs = isSccStrong;
-  useScFastMrg = isSccStrong ? 0 : std::max(0, encCfg->m_useFastMrg - 2);
+  useME      = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
+  useTS      = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
+  useBDPCM   = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
+  useMCTF    = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
+  useLMCS    = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
+  useIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+  useSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
+  useSelectiveRdoq = encCfg->m_useSelectiveRDOQ == 2 ? !isSccWeak : !!encCfg->m_useSelectiveRDOQ;
+  useNumRefs = isSccStrong;
+  useFastMrg = isSccStrong ? 0 : std::max(0, encCfg->m_useFastMrg - 2);
   useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
 
   if( ( encCfg->m_qtbttSpeedUpMode & 2 ) && isSccStrong )

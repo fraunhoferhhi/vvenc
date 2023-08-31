@@ -1092,7 +1092,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
     m_alfCovarianceFrameCcAlf[compIdx - 1] = new AlfCovariance[numFilters];
     for (int k = 0; k < numFilters; k++)
     {
-      m_alfCovarianceFrameCcAlf[compIdx - 1][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
+      m_alfCovarianceFrameCcAlf[compIdx - 1][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, 1);
     }
 
     m_alfCovarianceCcAlf[compIdx - 1] = new AlfCovariance *[numFilters];
@@ -1101,7 +1101,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
       m_alfCovarianceCcAlf[compIdx - 1][j] = new AlfCovariance[m_numCTUsInPic];
       for (int k = 0; k < m_numCTUsInPic; k++)
       {
-        m_alfCovarianceCcAlf[compIdx - 1][j][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, numBins);
+        m_alfCovarianceCcAlf[compIdx - 1][j][k].create(m_filterShapesCcAlf[compIdx - 1].numCoeff, 1);
       }
     }
   }
@@ -1965,7 +1965,6 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
 {
-  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = false;
   if( isSkipAlfForFrame( *slice.pic ) )
   {
     return;
@@ -1973,8 +1972,8 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
 
   // NOTE: ALF is here enabled per default. However it can be disabled during filter derivation part.
   //       In line synchronized FPP mode, it cannot be disabled.
-  slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = true;
-  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = slice.alfEnabled[COMP_Y] ? true : false;
+  slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = slice.sps->alfEnabled;
+  m_ccAlfFilterParam.ccAlfFilterEnabled[0] = m_ccAlfFilterParam.ccAlfFilterEnabled[1] = slice.sps->ccalfEnabled;
 
   if( m_encCfg->m_fppLinesSynchro )
   {

@@ -377,7 +377,7 @@ protected:
   EncAffineMotion   m_affineMotion;
   PelStorage        m_tmpAffiStorage;
   Pel*              m_tmpAffiError;
-  int*              m_tmpAffiDeri[2];
+  Pel*              m_tmpAffiDeri[2];
   MotionInfo        m_subPuMiBuf[(MAX_CU_SIZE * MAX_CU_SIZE) >> (MIN_CU_LOG2 << 1)];
   // Misc.
   Pel*              m_pTempPel;

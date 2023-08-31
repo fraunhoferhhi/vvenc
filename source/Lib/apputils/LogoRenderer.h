@@ -166,7 +166,7 @@ public:
     if( m_bInitialized ){ uninit(); }
   }
   
-  int init( const std::string &fileName, vvencChromaFormat chromaFormat, int internalBitdepth, std::ostream& rcOstr )
+  int init( const std::string &fileName, vvencChromaFormat chromaFormat, int inputBitdepth, std::ostream& rcOstr )
   {
     if( m_bInitialized )
     { 
@@ -212,7 +212,13 @@ public:
     {
       rcOstr << "Logo input file error: invalid size " << m_cLogo.inputOpts.sourceWidth  << "x" << m_cLogo.inputOpts.sourceHeight << std::endl;
       return -1; 
-    } 
+    }
+    
+    if( inputBitdepth == 8 && m_cLogo.inputOpts.bitdepth == 10 )
+    {
+      m_cLogo.inputOpts.bgColorMin = ( m_cLogo.inputOpts.bgColorMin + 2) >> 2;
+      m_cLogo.inputOpts.bgColorMax = ( m_cLogo.inputOpts.bgColorMax + 2) >> 2;      
+    }
        
     vvenc_YUVBuffer_default( &m_cYuvBufLogo );
     vvenc_YUVBuffer_alloc_buffer( &m_cYuvBufLogo, chromaFormat, m_cLogo.inputOpts.sourceWidth, m_cLogo.inputOpts.sourceHeight );
@@ -257,8 +263,9 @@ public:
 
     // read the logo int yuvBuffer
     bool is16bit       = m_cLogo.inputOpts.bitdepth > 8 ? true : false;
-    int  bitdepthShift = internalBitdepth  - m_cLogo.inputOpts.bitdepth;
-    const LPel maxVal = ( 1 << m_cLogo.inputOpts.bitdepth ) - 1;
+    int  bitdepthShift = inputBitdepth  - m_cLogo.inputOpts.bitdepth;
+    const LPel maxVal = ( 1 << inputBitdepth ) - 1;
+    
     for( int comp = 0; comp < 3; comp++ )
     {
       vvencYUVPlane yuvPlane = m_cYuvBufLogo.planes[ comp ];   

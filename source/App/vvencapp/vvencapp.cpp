@@ -353,6 +353,7 @@ int main( int argc, char* argv[] )
     }
 
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( vvencappCfg.m_inputFileName, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight, vvenccfg.m_inputBitDepth[0], vvencappCfg.m_packedYUVInput );
+    frameCount = std::max<int64_t>( 0, frameCount-vvencappCfg.m_FrameSkip );
     int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
 
     apputils::Stats cStats;

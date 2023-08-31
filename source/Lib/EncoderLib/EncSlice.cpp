@@ -313,7 +313,7 @@ void EncSlice::initPic( Picture* pic )
   }
 
   m_ctuEncDelay = 1;
-  if( pic->useScIBC )
+  if( pic->useIBC )
   {
     // IBC needs unfiltered samples up to max IBC search range
     // therefore ensure that numCtuDelayLUT CTU's have been enocded first
@@ -552,7 +552,7 @@ void EncSlice::compressSlice( Picture* pic )
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
     lnRsrc->m_CachedBvs         .resetIbcBvCand();
 
-    if( slice->sps->saoEnabled && pic->useScSAO )
+    if( slice->sps->saoEnabled && pic->useSAO )
     {
       lnRsrc->m_encSao          .initSlice( slice );
     }
@@ -711,7 +711,7 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   CodingStructure& cs = *pic->cs;
 
   // finalize
-  if( slice.sps->saoEnabled && pic->useScSAO )
+  if( slice.sps->saoEnabled && pic->useSAO )
   {
     // store disabled statistics
     if( !m_pcEncCfg->m_numThreads )
@@ -740,7 +740,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     setJointCbCrModes( cs, Position(0, 0), cs.area.lumaSize() );
   }
 
-  if( slice.sps->saoEnabled && pic->useScSAO )
+  if( slice.sps->saoEnabled && pic->useSAO )
   {
     // check SAO enabled or disabled
     EncSampleAdaptiveOffset::decidePicParams( cs, m_saoDisabledRate, m_saoEnabled, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, m_pcEncCfg->m_internChromaFormat );
@@ -1073,7 +1073,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKSTART( itt_domain_encode, itt_handle_sao );
 
         // SAO filter
-        if( slice.sps->saoEnabled && pic->useScSAO )
+        if( slice.sps->saoEnabled && pic->useSAO )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_SAO, &cs, CH_L );
           TileLineEncRsrc* lineEncRsrc    = encSlice->m_TileLineEncRsrc[ lineIdx ];

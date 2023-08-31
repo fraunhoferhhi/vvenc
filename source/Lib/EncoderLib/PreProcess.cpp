@@ -87,7 +87,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_doTempDown  = m_encCfg->m_FirstPassMode == 2 || m_encCfg->m_FirstPassMode == 4;
   m_doVisAct    = m_encCfg->m_usePerceptQPA
                   || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
-                  || (m_encCfg->m_RCNumPasses > 1 && ((!isFinalPass) || (m_encCfg->m_FirstPassMode > 2)));
+                  || (m_encCfg->m_RCNumPasses > 1 && (!isFinalPass));
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 
 

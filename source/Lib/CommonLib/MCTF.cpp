@@ -468,6 +468,8 @@ void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
         }
       }
     }
+    variance <<= 2*(10-clpRng.bd);
+    diffsum <<= 2*(10-clpRng.bd);
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;
     vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
@@ -691,7 +693,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( !pic->useScMCTF && !pic->gopEntry->m_isStartOfGop )
+  if( !pic->useMCTF && !pic->gopEntry->m_isStartOfGop )
   {
     isFilterThisFrame = false;
   }
@@ -749,7 +751,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // filter
-    if( pic->useScMCTF )
+    if( pic->useMCTF )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
@@ -798,7 +800,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
       if( distFactor[0] < 3 && distFactor[1] < 3 && ( m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop ) )
       {
-        const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 1 << (12 - m_encCfg->m_internalBitDepth[CH_L]) : 1);
+        const double bd12bScale = double (m_encCfg->m_internalBitDepth[CH_L] < 12 ? 4 : 1);
 
         for( int i = 0; i < numCtu; i++ ) // start noise estimation with motion errors
         {
@@ -825,7 +827,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         }
         pic->m_picShared->m_picMotEstError = uint16_t (0.5 + meanRmsAcrossPic / numCtu);
 
-        if( pic->gopEntry->m_isStartOfGop && !pic->useScMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
+        if( pic->gopEntry->m_isStartOfGop && !pic->useMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
           // force filter
           fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
@@ -833,7 +835,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         }
       }
 
-      if( !m_encCfg->m_blockImportanceMapping || !pic->useScMCTF )
+      if( !m_encCfg->m_blockImportanceMapping || !pic->useMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
         return;
@@ -1001,7 +1003,7 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 }
 
 bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
-  const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const
+  const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY, int bitDepth ) const
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH );
 
@@ -1145,10 +1147,12 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     const int w = std::min<int>( blockSize, orig.Y().width  - blockX ) & ~7;
     const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
 
-    const double dvar = m_calcVar( orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h );
-    const double mse  = best.error / double( w * h );
+    CHECKD(bitDepth>10, "unsupported internal bit depth (also in calcVar)" );
+    const double bdScale = double(1<<(2*(10-bitDepth)));
+    const double dvar = m_calcVar( orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h ) * bdScale;
+    const double mse  = best.error * bdScale / double( w * h );
 
-    best.error   = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
+    best.error   = ( int ) ( 20 * ( ( best.error*bdScale + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
     best.rmsme   = uint16_t( 0.5 + sqrt( mse ) );
     best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
 
@@ -1162,6 +1166,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 {
   const int stepSize = blockSize;
   const int origHeight = orig.Y().height;
+  const int bitDepth = m_encCfg->m_internalBitDepth[CH_L];
 
   if( m_threadPool )
   {
@@ -1177,6 +1182,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       int   factor; 
       bool  doubleRes;
       int   blockY;
+      int   bitDepth;
       const MCTF* mctf;
     };
 
@@ -1190,7 +1196,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       {
         ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
 
-        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY );
+        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
 
         ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
         return ret;
@@ -1208,6 +1214,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       cEstParams.doubleRes = doubleRes;
       cEstParams.mctf = this;
       cEstParams.blockY = blockY;
+      cEstParams.bitDepth = bitDepth;
 
       m_threadPool->addBarrierTask<EstParams>( task, &cEstParams, &taskCounter);
     }
@@ -1218,7 +1225,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
     for( int blockY = 0; blockY + 7 <= origHeight; blockY += stepSize )
     {
       std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
-      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY );
+      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY, bitDepth );
     }
 
   }

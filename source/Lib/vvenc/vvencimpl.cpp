@@ -338,7 +338,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
       }
     }
 
-    if ( ! xVerifyYUVBuffer( pcYUVBuffer ) )
+    if ( ! xConvertVerifyYUVBuffer( pcYUVBuffer ) )
     {     
       m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
       return VVENC_ERR_UNSPECIFIED;
@@ -557,9 +557,16 @@ int VVEncImpl::printSummary() const
   return 0;
 }
 
-bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
+bool VVEncImpl::xConvertVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
 {
   if( pcYUVBuffer == nullptr ){ return false; }
+
+  bool conv8bit = false;
+  if ( m_cVVEncCfg.m_inputBitDepth[0] == 10 && m_cVVEncCfg.m_internalBitDepth[0] == 8 &&
+       m_cVVEncCfg.m_inputBitDepth[0] == m_cVVEncCfg.m_MSBExtendedBitDepth[0] )
+  {
+    conv8bit = true;
+  }
 
   const int numComp  = (m_cVVEncCfg.m_internChromaFormat==VVENC_CHROMA_400) ? 1 : 3;
   const int16_t mask = ~( ( 1 << m_cVVEncCfg.m_internalBitDepth[0] ) - 1 );
@@ -568,11 +575,26 @@ bool VVEncImpl::xVerifyYUVBuffer( vvencYUVBuffer* pcYUVBuffer )
   {
     vvencYUVPlane& plane = pcYUVBuffer->planes[ comp ];
     int16_t* dst     = plane.ptr;
-    for( int y = 0; y < plane.height; y++, dst += plane.stride )
+
+    if ( conv8bit )
     {
-      for( int x = 0; x < plane.width; x++ )
+      for( int y = 0; y < plane.height; y++, dst += plane.stride )
       {
-        dstSum |= dst[ x ] & mask;
+        for( int x = 0; x < plane.width; x++ )
+        {
+          dst[ x ] = (Pel)std::min<Pel>( 255, ( dst[x] + 2 ) >> 2 );
+          dstSum |= dst[ x ] & mask;
+        }
+      }
+    }
+    else
+    {
+      for( int y = 0; y < plane.height; y++, dst += plane.stride )
+      {
+        for( int x = 0; x < plane.width; x++ )
+        {
+          dstSum |= dst[ x ] & mask;
+        }
       }
     }
   }

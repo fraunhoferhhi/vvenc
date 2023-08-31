@@ -270,7 +270,7 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
 
   if( useRDOQ )
   {
-    if( !tu.cs->picture->useScSelectiveRdoq || xNeedRDOQ( tu, compID, piCoef, cQP ) )
+    if( !tu.cs->picture->useSelectiveRdoq || xNeedRDOQ( tu, compID, piCoef, cQP ) )
     {
       if( useTransformSkip )
       {
