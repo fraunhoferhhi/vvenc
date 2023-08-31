@@ -857,13 +857,40 @@ void EncGOP::xInitSPS(SPS &sps) const
   profileTierLevel->subProfileIdc.clear();
   profileTierLevel->subProfileIdc.push_back( m_pcEncCfg->m_subProfile );
 
-  sps.maxPicWidthInLumaSamples      = m_pcEncCfg->m_PadSourceWidth;
-  sps.maxPicHeightInLumaSamples     = m_pcEncCfg->m_PadSourceHeight;
-  sps.conformanceWindow.setWindow( m_pcEncCfg->m_confWinLeft, m_pcEncCfg->m_confWinRight, m_pcEncCfg->m_confWinTop, m_pcEncCfg->m_confWinBottom );
+  if( m_pcEncCfg->m_maxPicWidth != 0 && m_pcEncCfg->m_maxPicHeight != 0 )
+  {
+    const int minCuSize = std::max( 1 << ( vvenc::MIN_CU_LOG2 + 1 ), 1 << m_pcEncCfg->m_log2MinCodingBlockSize );
+    int padRight = 0, padBottom = 0;
+    if( m_pcEncCfg->m_maxPicWidth % minCuSize )
+    {
+      padRight = ( ( m_pcEncCfg->m_maxPicWidth / minCuSize) + 1 ) * minCuSize - m_pcEncCfg->m_maxPicWidth;
+    }
+    if( m_pcEncCfg->m_maxPicHeight % minCuSize )
+    {
+      padBottom = ( ( m_pcEncCfg->m_maxPicHeight / minCuSize) + 1 ) * minCuSize - m_pcEncCfg->m_maxPicHeight;
+    }
+    sps.maxPicWidthInLumaSamples      = m_pcEncCfg->m_maxPicWidth + padRight;
+    sps.maxPicHeightInLumaSamples     = m_pcEncCfg->m_maxPicHeight + padBottom;
+    
+    sps.conformanceWindow.setWindow( 0, padRight, 0, padBottom );
+  }
+  else
+  {
+    sps.maxPicWidthInLumaSamples      = m_pcEncCfg->m_PadSourceWidth;
+    sps.maxPicHeightInLumaSamples     = m_pcEncCfg->m_PadSourceHeight;
+    sps.conformanceWindow.setWindow( m_pcEncCfg->m_confWinLeft, m_pcEncCfg->m_confWinRight, m_pcEncCfg->m_confWinTop, m_pcEncCfg->m_confWinBottom );
+  }
   sps.chromaFormatIdc               = m_pcEncCfg->m_internChromaFormat;
   sps.CTUSize                       = m_pcEncCfg->m_CTUSize;
   sps.maxMTTDepth[0]                = m_pcEncCfg->m_maxMTTDepthI;
-  sps.maxMTTDepth[1]                = m_pcEncCfg->m_maxMTTDepth >= 10 ? 3 : m_pcEncCfg->m_maxMTTDepth;
+  int maxMTTDepthVal = m_pcEncCfg->m_maxMTTDepth;
+  int minMaxMttD = maxMTTDepthVal % 10;
+  while( maxMTTDepthVal )
+  {
+    minMaxMttD      = std::min( minMaxMttD, maxMTTDepthVal % 10 );
+    maxMTTDepthVal /= 10;
+  }
+  sps.maxMTTDepth[1]                = minMaxMttD;
   sps.maxMTTDepth[2]                = m_pcEncCfg->m_maxMTTDepthIChroma;
   for( int i = 0; i < 3; i++)
   {
@@ -1462,7 +1489,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     if( ( i == 1 ) && ( m_pcEncCfg->m_maxMTTDepth >= 10 ) )
     {
       slice->picHeader->maxMTTDepth[i]    = int( m_pcEncCfg->m_maxMTTDepth / pow( 10, sps.maxTLayers - slice->TLayer - 1 ) ) % 10;
-      slice->picHeader->splitConsOverride = true;
+      slice->picHeader->splitConsOverride = slice->picHeader->maxMTTDepth[i] != sps.maxMTTDepth[i];
     }
   }
 
@@ -1492,7 +1519,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   }
 
   const int maxTLayer  = m_pcEncCfg->m_picReordering && m_pcEncCfg->m_GOPSize > 1 ? vvenc::ceilLog2( m_pcEncCfg->m_GOPSize ) : 0;
-  const int numRefCode = pic.useScNumRefs ? m_pcEncCfg->m_numRefPicsSCC : m_pcEncCfg->m_numRefPics;
+  const int numRefCode = pic.useNumRefs ? m_pcEncCfg->m_numRefPicsSCC : m_pcEncCfg->m_numRefPics;
   const int tLayer     = slice->TLayer;
   const int numRefs    = numRefCode < 10 ? numRefCode : ( int( numRefCode / pow( 10, maxTLayer - tLayer ) ) % 10 );
 
@@ -1775,7 +1802,7 @@ void EncGOP::xInitLMCS( Picture& pic )
   Slice* slice = pic.cs->slice;
   const SliceType sliceType = slice->sliceType;
 
-  if( ! pic.useScLMCS || (!slice->isIntra() && m_disableLMCSIP) )
+  if( ! pic.useLMCS || (!slice->isIntra() && m_disableLMCSIP) )
   {
     pic.reshapeData.copyReshapeData( m_Reshaper );
     m_Reshaper.setCTUFlag     ( false );

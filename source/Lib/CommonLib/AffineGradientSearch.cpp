@@ -64,8 +64,9 @@ namespace vvenc {
   AffineGradientSearch::AffineGradientSearch()
   {
     m_HorizontalSobelFilter = xHorizontalSobelFilter;
-    m_VerticalSobelFilter = xVerticalSobelFilter;
-    m_EqualCoeffComputer = xEqualCoeffComputer;
+    m_VerticalSobelFilter   = xVerticalSobelFilter;
+    m_EqualCoeffComputer[0] = xEqualCoeffComputer<false>;
+    m_EqualCoeffComputer[1] = xEqualCoeffComputer<true>;
 
 #if ENABLE_SIMD_OPT_AFFINE_ME
 #ifdef TARGET_SIMD_X86
@@ -74,7 +75,7 @@ namespace vvenc {
 #endif
   }
 
-  void AffineGradientSearch::xHorizontalSobelFilter(Pel* const pPred, const int predStride, int *const pDerivate, const int derivateBufStride, const int width, const int height)
+  void AffineGradientSearch::xHorizontalSobelFilter(Pel* const pPred, const int predStride, Pel *const pDerivate, const int derivateBufStride, const int width, const int height)
   {
     for (int j = 1; j < height - 1; j++)
     {
@@ -106,7 +107,7 @@ namespace vvenc {
     }
   }
 
-  void AffineGradientSearch::xVerticalSobelFilter(Pel* const pPred, const int predStride, int *const pDerivate, const int derivateBufStride, const int width, const int height)
+  void AffineGradientSearch::xVerticalSobelFilter(Pel* const pPred, const int predStride, Pel *const pDerivate, const int derivateBufStride, const int width, const int height)
   {
     for (int k = 1; k < width - 1; k++)
     {
@@ -139,7 +140,8 @@ namespace vvenc {
     }
   }
 
-  void AffineGradientSearch::xEqualCoeffComputer(Pel* pResidue, int residueStride, int **ppDerivate, int derivateBufStride, int64_t(*pEqualCoeff)[7], int width, int height, bool b6Param)
+  template<bool b6Param>
+  void AffineGradientSearch::xEqualCoeffComputer(Pel* const pResidue, const int residueStride, Pel **const ppDerivate, const int derivateBufStride, const int width, const int height, int64_t(*pEqualCoeff)[7])
   {
     int affineParamNum = b6Param ? 6 : 4;
 

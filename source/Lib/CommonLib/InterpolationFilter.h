@@ -72,15 +72,15 @@ class InterpolationFilter
   static const TFilterCoeff m_bilinearFilterPrec4[LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS][NTAPS_BILINEAR]; ///< bilinear filter taps
 public:
   template<bool isFirst, bool isLast>
-  static void filterCopy(const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height,                                                       bool biMCForDMVR);
+  static void filterCopy(const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool biMCForDMVR);
 
   template<int N, bool isVertical, bool isFirst, bool isLast>
-  static void filter    (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height,                            TFilterCoeff const *coeff, bool biMCForDMVR);
+  static void filter    (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height,                            TFilterCoeff const *coeff);
   template<int N>
-  void filterHor        (const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool isLast,               TFilterCoeff const *coeff, bool biMCForDMVR);
+  void filterHor        (const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool isLast,               TFilterCoeff const *coeff);
 
   template<int N>
-  void filterVer        (const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool isFirst, bool isLast, TFilterCoeff const *coeff, bool biMCForDMVR);
+  void filterVer        (const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool isFirst, bool isLast, TFilterCoeff const *coeff);
 
   template<bool isLast, int w>
   static void filterXxY_N2     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
@@ -101,8 +101,8 @@ public:
   ~InterpolationFilter() {}
 
   void( *m_filterN2_2D        )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *ch, TFilterCoeff const *cv );
-  void( *m_filterHor[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
-  void( *m_filterVer[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff, bool biMCForDMVR);
+  void( *m_filterHor[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff);
+  void( *m_filterVer[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff);
   void( *m_filterCopy[2][2] )  ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, bool biMCForDMVR);
   void( *m_filter4x4  [2][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
   void( *m_filter8x8  [3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );

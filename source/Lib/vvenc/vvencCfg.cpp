@@ -400,6 +400,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_PadSourceWidth                          = 0;                                     ///< source width in pixel
   c->m_PadSourceHeight                         = 0;                                     ///< source height in pixel (when interlaced = field height)
 
+  c->m_maxPicWidth                             = 0;
+  c->m_maxPicHeight                            = 0;
+
   memset(&c->m_aiPad,0, sizeof(c->m_aiPad));                                    ///< number of padded pixels for width and height
   c->m_enablePictureHeaderInSliceHeader        = true;
   c->m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
@@ -1208,6 +1211,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_resChangeInClvsEnabled = true;
     c->m_craAPSreset            = true;
     c->m_rprRASLtoolSwitch      = true;
+  }
+  
+  if( c->m_maxPicWidth > 0 && c->m_maxPicHeight > 0 )
+  {
+    vvenc_confirmParameter( c, !c->m_rprEnabledFlag || !c->m_resChangeInClvsEnabled, "if a maxSize is set, both RPR and resChangeInClvsEnabled have to enabled" );
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )

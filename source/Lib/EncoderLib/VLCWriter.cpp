@@ -1863,7 +1863,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
     }
 
     //Write L1 related syntax elements
-      if (!slice->pps->rpl1IdxPresent && slice->pps->rpl1IdxPresent)
+      if (slice->sps->getNumRPL(1) > 1 && slice->pps->rpl1IdxPresent)
       {
         WRITE_FLAG(slice->rplIdx[1] != -1 ? 1 : 0, "ref_pic_list_sps_flag[1]");
       }

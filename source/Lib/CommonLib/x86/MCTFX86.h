@@ -1325,6 +1325,8 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     xvar = _mm_hadd_epi32( xvar, xvar );
     int64_t variance = _mm_cvtsi128_si32( xvar );
     int64_t diffsum  = _mm_extract_epi32( xvar, 1 );
+    variance <<= 2*(10-clpRng.bd);
+    diffsum <<= 2*(10-clpRng.bd);
 
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;

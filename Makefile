@@ -1,4 +1,4 @@
-# VVCEnc/Makefile
+# VVenC/Makefile
 #
 # How to build a single target:
 #  make <project>-r  => build variant=release
@@ -163,22 +163,22 @@ DEFAULT_BUILD_TARGETS_SHARED := $(foreach t,$(DEFAULT_BUILD_TARGETS_STATIC),$(t)
 DEFAULT_BUILD_TARGETS := $(DEFAULT_BUILD_TARGETS_STATIC) $(DEFAULT_BUILD_TARGETS_SHARED)
 
 
-release: $(BUILD_DIR-release)
+release: $(BUILD_DIR-release)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
-debug: $(BUILD_DIR-debug)
+debug: $(BUILD_DIR-debug)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
-relwithdebinfo: $(BUILD_DIR-relwithdebinfo)
+relwithdebinfo: $(BUILD_DIR-relwithdebinfo)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
-release-shared: $(BUILD_DIR-release-shared)
+release-shared: $(BUILD_DIR-release-shared)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
-debug-shared: $(BUILD_DIR-debug-shared)
+debug-shared: $(BUILD_DIR-debug-shared)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
-relwithdebinfo-shared: $(BUILD_DIR-relwithdebinfo-shared)
+relwithdebinfo-shared: $(BUILD_DIR-relwithdebinfo-shared)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-$@) $(BUILD_JOBS) $(BUILD_TOOL_OPTIONS)
 
 $(foreach t,$(DEFAULT_BUILD_TARGETS),clean-$(t)):
@@ -204,37 +204,37 @@ install-relwithdebinfo-shared: relwithdebinfo-shared
 
 
 ifeq ($(CMAKE_MCONFIG),)
-$(BUILD_DIR-release) configure-release:
+$(BUILD_DIR-release)/CMakeCache.txt configure-release:
 	cmake -S . -B $(BUILD_DIR-release) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=Release
 
-$(BUILD_DIR-debug) configure-debug:
+$(BUILD_DIR-debug)/CMakeCache.txt configure-debug:
 	cmake -S . -B $(BUILD_DIR-debug) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=Debug
 
-$(BUILD_DIR-relwithdebinfo) configure-relwithdebinfo:
+$(BUILD_DIR-relwithdebinfo)/CMakeCache.txt configure-relwithdebinfo:
 	cmake -S . -B $(BUILD_DIR-relwithdebinfo) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-$(BUILD_DIR-release-shared) configure-release-shared:
+$(BUILD_DIR-release-shared)/CMakeCache.txt configure-release-shared:
 	cmake -S . -B $(BUILD_DIR-release-shared) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1
 
-$(BUILD_DIR-debug-shared) configure-debug-shared:
+$(BUILD_DIR-debug-shared)/CMakeCache.txt configure-debug-shared:
 	cmake -S . -B $(BUILD_DIR-debug-shared) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=1
 
-$(BUILD_DIR-relwithdebinfo-shared) configure-relwithdebinfo-shared:
+$(BUILD_DIR-relwithdebinfo-shared)/CMakeCache.txt configure-relwithdebinfo-shared:
 	cmake -S . -B $(BUILD_DIR-relwithdebinfo-shared) $(CONFIG_OPTIONS) -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_SHARED_LIBS=1
 
 configure-static: $(foreach t,$(DEFAULT_BUILD_TARGETS_STATIC),configure-$(t))
 configure-shared: $(foreach t,$(DEFAULT_BUILD_TARGETS_SHARED),configure-$(t))
 
 else
-$(BUILD_DIR_STATIC) configure-static $(foreach t,$(DEFAULT_BUILD_TARGETS_STATIC),configure-$(t)):
+$(BUILD_DIR_STATIC)/CMakeCache.txt configure-static $(foreach t,$(DEFAULT_BUILD_TARGETS_STATIC),configure-$(t)):
 	cmake -S . -B $(BUILD_DIR_STATIC) $(CONFIG_OPTIONS)
 
-$(BUILD_DIR_SHARED) configure-shared $(foreach t,$(DEFAULT_BUILD_TARGETS_SHARED),configure-$(t)):
+$(BUILD_DIR_SHARED)/CMakeCache.txt configure-shared $(foreach t,$(DEFAULT_BUILD_TARGETS_SHARED),configure-$(t)):
 	cmake -S . -B $(BUILD_DIR_SHARED) $(CONFIG_OPTIONS) -DBUILD_SHARED_LIBS=1
 endif
 
 static: $(DEFAULT_BUILD_TARGETS_STATIC)
-shared: $(DEFAULT_BUILD_TARGETS_SHARED) 
+shared: $(DEFAULT_BUILD_TARGETS_SHARED)
 
 all: static shared
 
@@ -303,26 +303,24 @@ TARGETS_RELEASE_CLEAN_FIRST := $(foreach t,$(TARGETS),$(t)-cr)
 TARGETS_DEBUG_CLEAN_FIRST := $(foreach t,$(TARGETS),$(t)-cd)
 TARGETS_RELWITHDEBINFO_CLEAN_FIRST := $(foreach t,$(TARGETS),$(t)-cp)
 
-$(TARGETS_RELEASE): $(BUILD_DIR-release)
+$(TARGETS_RELEASE): $(BUILD_DIR-release)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-release) $(BUILD_JOBS) --target $(patsubst %-r,%,$@) $(BUILD_TOOL_OPTIONS)
 
-$(TARGETS_RELEASE_CLEAN_FIRST): $(BUILD_DIR-release)
+$(TARGETS_RELEASE_CLEAN_FIRST): $(BUILD_DIR-release)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-release) $(BUILD_JOBS) --clean-first --target $(patsubst %-cr,%,$@) $(BUILD_TOOL_OPTIONS)
 
-$(TARGETS_DEBUG): $(BUILD_DIR-debug)
+$(TARGETS_DEBUG): $(BUILD_DIR-debug)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-debug) $(BUILD_JOBS) --target $(patsubst %-d,%,$@) $(BUILD_TOOL_OPTIONS)
 
-$(TARGETS_DEBUG_CLEAN_FIRST): $(BUILD_DIR-debug)
+$(TARGETS_DEBUG_CLEAN_FIRST): $(BUILD_DIR-debug)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-debug) $(BUILD_JOBS) --clean-first --target $(patsubst %-cd,%,$@) $(BUILD_TOOL_OPTIONS)
 
-$(TARGETS_RELWITHDEBINFO): $(BUILD_DIR-relwithdebinfo)
+$(TARGETS_RELWITHDEBINFO): $(BUILD_DIR-relwithdebinfo)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-relwithdebinfo) $(BUILD_JOBS) --target $(patsubst %-p,%,$@) $(BUILD_TOOL_OPTIONS)
 
-$(TARGETS_RELWITHDEBINFO_CLEAN_FIRST): $(BUILD_DIR-relwithdebinfo)
+$(TARGETS_RELWITHDEBINFO_CLEAN_FIRST): $(BUILD_DIR-relwithdebinfo)/CMakeCache.txt
 	cmake $(BUILD_OPTIONS-relwithdebinfo) $(BUILD_JOBS) --clean-first --target $(patsubst %-cp,%,$@) $(BUILD_TOOL_OPTIONS)
 
-.PHONY: install
+.PHONY: install clean realclean distclean
 
-ifeq ($(OS),Windows_NT)
 .NOTPARALLEL:
-endif

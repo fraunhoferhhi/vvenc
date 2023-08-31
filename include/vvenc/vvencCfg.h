@@ -498,8 +498,8 @@ typedef struct vvenc_config
   int                 m_cfgUnused4[ 7 ];                                                 // TODO: remove unused memory from configuration
   int                 m_cfgUnused5[ 7 ];
   int                 m_cfgUnused6;
-  int                 m_cfgUnused7;
-  int                 m_cfgUnused8;
+  int                 m_maxPicWidth;
+  int                 m_maxPicHeight;
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;

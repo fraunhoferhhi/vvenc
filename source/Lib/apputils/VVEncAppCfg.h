@@ -479,6 +479,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &c->m_verbosity,   &MsgLevelToEnumMap );
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, c, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &c->m_SourceWidth, &c->m_SourceHeight }, true, 'x' );
+  IStreamToRefVec<int>              toMaxPicSize                 ( { &c->m_maxPicWidth, &c->m_maxPicHeight }, true, 'x' );
   IStreamToRefVec<int>              toFps                        ( { &c->m_FrameRate, &c->m_FrameScale }, false, '/' );
 
   IStreamToEnum<vvencProfile>       toProfile                    ( &c->m_profile,                     &ProfileToEnumMap      );
@@ -754,6 +755,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("VerticalPadding",                                 c->m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
     ("InputChromaFormat",                               toInputFileChromaFormat,                             "input file chroma format (400, 420, 422, 444)")
     ("PackedInput",                                     m_packedYUVInput,                                    "Enable 10-bit packed YUV input data ( pack 4 samples( 8-byte) into 5-bytes consecutively.")
+
+    ("MaxPicSize",                                      toMaxPicSize,                                        "Maximum resolution (maxWidth x maxHeight)")
+    ("MaxPicWidth",                                     c->m_maxPicWidth,                                    "Maximum picture width")
+    ("MaxPicHeight",                                    c->m_maxPicHeight,                                   "Maximum picture height")
     ;
 
     opts.setSubSection("Profile, Level, Tier");
@@ -1201,6 +1206,11 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     if( !m_bitstreamFileName.empty() && !apputils::FileIOHelper::checkBitstreamFile( m_bitstreamFileName, cErr ) )
     {
       err.warn( "Bitstream file" ) << cErr;
+    }
+
+    if ( m_FrameSkip < 0 )
+    {
+      err.error( "number of frames to skip" ) << (m_easyMode ? "frameskip must be >= 0\n" : "FrameSkip must be >= 0\n");
     }
 
     // check for y4m input
