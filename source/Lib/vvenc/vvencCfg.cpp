@@ -741,7 +741,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     css << "TicksPerSecond must be a multiple of FrameRate/Framescale (" << c->m_FrameRate << "/" << c->m_FrameScale << "). Use 27000000 for NTSC content"  << std::endl;
   }
-  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 ) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, css.str().c_str() );
+  vvenc_confirmParameter( c, ( c->m_TicksPerSecond > 0 && c->m_FrameRate > 0) && ((int64_t)c->m_TicksPerSecond*(int64_t)c->m_FrameScale)%c->m_FrameRate, css.str().c_str() );
 
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,                              "Number of threads out of range (-1 <= t <= 256)");
@@ -788,6 +788,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc::MsgLog msg(c->m_msgCtx, c->m_msgFnc);
 
+  if( c->m_FirstPassMode > 2 && c->m_RCTargetBitrate != 0 )
+  {
+    // lookahead will only be set to 0 later
+    if( c->m_LookAhead > 0 || c->m_RCNumPasses == 1 || std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ) 
+    {
+      c->m_FirstPassMode -= 2;  
+      msg.log( VVENC_NOTICE, "First pass spatial downsampling (FirstPassMode=3/4) cannot be used for single pass encoding and videos with resolution lower than 720p, changing FirstPassMode to %d!\n", c->m_FirstPassMode );
+    }
+  }
+
   const double d = (3840.0 * 2160.0) / double (c->m_SourceWidth * c->m_SourceHeight);
   const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_PERCEPT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, c->m_RCTargetBitrate)) / 500000.0))));
 
@@ -808,7 +818,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4 ), "FirstPassMode must be 0, 1, 2, 3, or 4" );
-  vvenc_confirmParameter( c, std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 && ( c->m_FirstPassMode == 3 || c->m_FirstPassMode == 4 ), "Spatial downsampling cannot be applied to small-resolution videos (i.e. below 720p), use FirstPassMode values up to '2'");
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1215,7 +1224,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   
   if( c->m_maxPicWidth > 0 && c->m_maxPicHeight > 0 )
   {
-    vvenc_confirmParameter( c, !c->m_rprEnabledFlag || !c->m_resChangeInClvsEnabled, "if a maxSize is set, both RPR and resChangeInClvsEnabled have to enabled" );
+    vvenc_confirmParameter( c, !c->m_rprEnabledFlag || !c->m_resChangeInClvsEnabled, "if max picture size is set, both RPR and resChangeInClvsEnabled have to be enabled" );
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
@@ -1895,8 +1904,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
   vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
   vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
-  vvenc_confirmParameter( c, (c->m_LookAhead || c->m_RCNumPasses == 1) && c->m_FirstPassMode > 2, "Look-ahead or one pass RC can not be used with resolution downsampling" );
-
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
@@ -2588,6 +2595,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       break;
 
     case vvencPresetMode::VVENC_MEDIUM:
+    case vvencPresetMode::VVENC_MEDIUM_LOWDECNRG:
 
       // motion estimation
       c->m_SearchRange                     = 384;
@@ -2657,6 +2665,28 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // scc
       c->m_IBCFastMethod                   = 3;
       c->m_TSsize                          = 4;
+
+      if( preset == vvencPresetMode::VVENC_MEDIUM_LOWDECNRG )
+      {
+        c->m_numRefPics                    = 2;
+        c->m_deblockLastTLayers            = 1;
+        c->m_maxMTTDepth                   = 332222;
+        c->m_maxMTTDepthI                  = 3;
+        c->m_Affine                        = 3;
+        c->m_alfSpeed                      = 1;
+        c->m_BCW                           = 2;
+        c->m_BDOF                          = 0;
+        c->m_DMVR                          = 0;
+        c->m_ISP                           = 0;
+        c->m_LFNST                         = 0;
+        c->m_lumaReshapeEnable             = 0;
+        c->m_MIP                           = 0;
+        c->m_useFastMIP                    = 0;
+        c->m_bUseSAO                       = true;
+        c->m_saoScc                        = true;
+        c->m_SbTMVP                        = 0;
+        c->m_useFastMrg                    = 2;
+      }
 
       break;
 
@@ -2918,7 +2948,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
   if( eMsgLevel >= VVENC_INFO )
   {
-    css << loglvl << "Internal format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << loglvl << "Internal format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << "  " <<  (double)c->m_FrameRate/c->m_FrameScale << " Hz  "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+    css << loglvl << "Threads                                : " << c->m_numThreads << "  (parallel frames: " << c->m_maxParallelFrames <<")\n";
+
     css << loglvl << "Rate control                           : ";
 
     if ( c->m_RCTargetBitrate > 0 )
@@ -3157,6 +3189,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
 
     css << "LookAhead:" << c->m_LookAhead << " ";
+    css << "FirstPassMode:" << c->m_FirstPassMode << " ";
 
     css << "\n" << loglvl << "PARALLEL PROCESSING CFG: ";
     css << "NumThreads:" << c->m_numThreads << " ";

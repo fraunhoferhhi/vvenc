@@ -114,7 +114,7 @@ double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride,
   }
   if (spVisAct)
   {
-    *spVisAct = unsigned (0.5 + spatAct * double(bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
+    *spVisAct = unsigned (0.5 + spatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
   }
 
   // skip first row as there may be a black border frame
@@ -474,7 +474,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       {
         const uint32_t nCtu = ctuBoundingAddr - ctuStartAddr;
 
-        pic->picSpVisAct = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), bitDepth);
+        pic->picSpVisAct = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), 12);
       }
       if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && pic->getOrigBuf (compID).buf != pic->getOrigBufPrev (compID, PREV_FRAME_1).buf && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {
