@@ -1,4 +1,22 @@
 /////////////////////////////////////////
+tag 1.9.1-rc1
+* libvvenc:
+  - added library parameters:
+    - vvenc_config::m_maxPicWidth, vvenc_config::m_maxPicHeight to signal maximal possible picture size when
+      encoding for resolution change (e.g. using CRA_CRE decoder refresh)
+  - added medium_lowDecEnergy as a built-in preset (in C-API: VVENC_MEDIUM_LOWDECNRG)
+  - refactoring and improvements of affine search and interpolation filtering
+  - fixed 8-bit encoding from 10-bit input and proper handling of 8-bit video in BIM
+  - added proper setting of conformance window
+  - refactoring and improvements to rate control (RC)
+    - fixed potential integer overflow
+    - finalized spatial subsampling implementation for 2-pass RC
+
+* vvencFFapp:
+  - added parameter: MaxPicSize/MaxPicWidth/MaxPicHeight to control the signaled maximal picture size during
+                     resolution change
+
+/////////////////////////////////////////
 tag 1.9.0
 
 * libvvenc:

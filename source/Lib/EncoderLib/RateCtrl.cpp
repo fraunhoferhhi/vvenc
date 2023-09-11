@@ -635,7 +635,7 @@ void RateCtrl::readStatsFile()
 
 void RateCtrl::adjustStatsDownsample()
 {
-  int meanValue = 0; //MCTF or Activity
+  int64_t meanValue = 0; //MCTF or Activity
   int amount = 0;
   auto itr = m_listRCFirstPassStats.begin();
   for (; itr != m_listRCFirstPassStats.end(); itr++)
@@ -652,7 +652,7 @@ void RateCtrl::adjustStatsDownsample()
   if (meanValue != 0)
   {
     meanValue = meanValue / amount;
-    int sumVar = 0;
+    int64_t sumVar = 0;
     int numVar = 0;
     auto itrv = m_listRCFirstPassStats.begin();
     for (; itrv != m_listRCFirstPassStats.end(); itrv++)
@@ -666,8 +666,8 @@ void RateCtrl::adjustStatsDownsample()
     }
     if (numVar)
     {
-      sumVar = sumVar / (numVar - 1);
-      sumVar = (int) sqrt((double) sumVar);
+      sumVar = sumVar / std::max(1, numVar - 1);
+      sumVar = int64_t (0.5 + sqrt((double) sumVar));
     }
     int value_gopbefore = 0;
     int value_gopcur = 0;
@@ -701,7 +701,7 @@ void RateCtrl::adjustStatsDownsample()
         doChangeBits = false;
         if (stat.gopNum != 0)
         {
-          int var_cur = abs(statValue - meanValue);
+          const int64_t var_cur = abs(statValue - meanValue);
           if (var_cur > (sumVar << 1))
           {
             doChangeBits = true;

@@ -121,6 +121,8 @@ const std::vector<SVPair<vvencPresetMode>> PresetToEnumMap =
   { "medium",    vvencPresetMode::VVENC_MEDIUM },
   { "slow",      vvencPresetMode::VVENC_SLOW },
   { "slower",    vvencPresetMode::VVENC_SLOWER },
+  { "medium_lowDecEnergy", vvencPresetMode::VVENC_MEDIUM_LOWDECNRG },
+  { "medium_lowdecenergy", vvencPresetMode::VVENC_MEDIUM_LOWDECNRG },
   { "firstpass", vvencPresetMode::VVENC_FIRSTPASS },
   { "tooltest",  vvencPresetMode::VVENC_TOOLTEST },
 };
@@ -612,7 +614,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Encoder Options");
     opts.addOptions()
-    ("preset",                                          toPreset,                                            "preset for detailed parameter configuration (faster, fast, medium, slow, slower)")
+    ("preset",                                          toPreset,                                            "preset for detailed parameter configuration (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
     ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise\n"
                                                                                                              "bits/second; use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000)")
     ("maxrate,m",                                       toMaxRate,                                           "approximate maximum instantaneous bitrate for constrained VBR in rate control (0:\n"
@@ -634,7 +636,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Threading, performance");
     opts.addOptions()
     ("Threads,t",                                       c->m_numThreads,                                     "Number of threads")
-    ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
+    ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
     ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
 
@@ -1081,8 +1083,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("ReduceIntraChromaModesFullRD",                    c->m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
     ("FirstPassMode",                                   c->m_FirstPassMode,                                  "Mode for first encoding pass when using rate control "
                                                                                                                "(0: default, 1: faster, 2: faster with temporal downsampling, "
-                                                                                                                "3: (experimental) faster with resolution downsampling, "
-                                                                                                                "4: (experimental) faster with temporal and resolution downsampling)" )
+                                                                                                                "3: faster with resolution downsampling, "
+                                                                                                                "4: faster with temporal and resolution downsampling)" )
     ;
 
     opts.setSubSection("Input Options");
@@ -1370,7 +1372,7 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
   if( eMsgLevel >= VVENC_INFO )
   {
     if( format != ext )
-      css << loglvl << "Input File                             : " << m_inputFileName << " (" << format << ")\n";
+      css << loglvl << "Input File                             : " << m_inputFileName << "  (" << format << ")\n";
     else
       css << loglvl << "Input File                             : " << m_inputFileName << "\n";
     css << loglvl << "Bitstream File                         : " << m_bitstreamFileName << "\n";
