@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.9.1-rc1
+tag 1.9.1
 * libvvenc:
   - added library parameters:
     - vvenc_config::m_maxPicWidth, vvenc_config::m_maxPicHeight to signal maximal possible picture size when
