@@ -613,7 +613,7 @@ struct CtuPos
   CtuPos( int _x, int _y, int _a ) : ctuPosX( _x ), ctuPosY( _y ), ctuRsAddr( _a ) {}
 };
 
-class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
+class CtuTsIterator
 {
   private:
     const CodingStructure& cs;
@@ -673,6 +673,12 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
 
     CtuTsIterator begin() { return CtuTsIterator( cs, m_startTsAddr, m_endTsAddr, m_ctuAddrMap ); };
     CtuTsIterator end()   { return CtuTsIterator( cs, m_startTsAddr, m_endTsAddr, m_ctuAddrMap, m_endTsAddr ); };
+
+    using iterator_category = std::forward_iterator_tag;
+    using value_type        = int;
+    using pointer           = int*;
+    using reference         = int&;
+    using difference_type   = ptrdiff_t;
 
     void setWppPattern()
     {
