@@ -275,7 +275,7 @@ class NoMallocThreadPool
     };
 
   public:
-    class Iterator : public std::iterator<std::forward_iterator_tag, Slot>
+    class Iterator
     {
       Slot*  m_slot  = nullptr;
       Chunk* m_chunk = nullptr;
@@ -339,6 +339,12 @@ class NoMallocThreadPool
       Slot& operator*() { return *m_slot; }
 
       bool isValid() const { return m_slot != nullptr && m_chunk != nullptr; }
+
+      using iterator_category = std::forward_iterator_tag;
+      using value_type        = Slot;
+      using pointer           = Slot*;
+      using reference         = Slot&;
+      using difference_type   = ptrdiff_t;
     };
 
     ChunkedTaskQueue() = default;

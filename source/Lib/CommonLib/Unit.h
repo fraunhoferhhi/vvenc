@@ -438,19 +438,21 @@ private:
 // ---------------------------------------------------------------------------
 
 template<typename T>
-class UnitIterator : public std::iterator<std::forward_iterator_tag, T>
+class UnitIterator
 {
 private:
-  T* m_punit;
+  T* m_punit = nullptr;
 
 public:
-  UnitIterator(           ) : m_punit( nullptr ) { }
-  UnitIterator( T* _punit ) : m_punit( _punit  ) { }
+  explicit UnitIterator( T* _punit ) : m_punit( _punit ) {}
 
-  typedef T&       reference;
-  typedef T const& const_reference;
-  typedef T*       pointer;
-  typedef T const* const_pointer;
+  using iterator_category = std::forward_iterator_tag;
+  using value_type        = T;
+  using pointer           = T*;
+  using const_pointer     = T const*;
+  using reference         = T&;
+  using const_reference   = T const&;
+  using difference_type   = ptrdiff_t;
 
   reference        operator*()                                      { return *m_punit; }
   const_reference  operator*()                                const { return *m_punit; }
