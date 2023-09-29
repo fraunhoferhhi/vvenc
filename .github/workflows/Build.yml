@@ -12,13 +12,14 @@ jobs:
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
     strategy:
+      fail-fast: false
       matrix:
         config:
           - {
               name: "Windows MSVC 64 Bit",
-              os: windows-2019,
-              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-              generators: "Visual Studio 16 2019",
+              os: windows-2022,
+              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+              generators: "Visual Studio 17 2022",
               msvc_arch: x64
             }
           - {
@@ -30,7 +31,7 @@ jobs:
             }
           - {
               name: "Windows MinGW",
-              os: windows-2019,
+              os: windows-2022,
               cc: "gcc",
               cxx: "g++",
               generators: "MinGW Makefiles"
@@ -56,7 +57,7 @@ jobs:
     env:
       CMAKE_GENERATOR: "${{ matrix.config.generators }}"
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: git fetch --prune --unshallow
 
     - name: Ubuntu/Mac OS X/MinGW build
