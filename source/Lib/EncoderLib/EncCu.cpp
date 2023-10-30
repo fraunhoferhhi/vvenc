@@ -1050,16 +1050,19 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
                       + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
   const double cost   = m_cRdCost.calcRdCost( uint64_t( splitBits + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
+  
+  const bool chromaNotSplit = modeTypeParent == MODE_TYPE_ALL && modeTypeChild == MODE_TYPE_INTRA ? true : false;
+  const bool isChromaTooBig = isChromaEnabled( tempCS->pps->pcv->chrFormat ) && std::max( tempCS->area.Y().width, tempCS->area.Y().height ) > tempCS->sps->getMaxTbSize();
 
-  if( cost > bestCS->cost + bestCS->costDbOffset )
+  if( cost > bestCS->cost + bestCS->costDbOffset // speedup
+      || ( chromaNotSplit && isChromaTooBig ) // TODO: proper fix, for now inhibit chroma TU split that we cannot handle, resulting in missing chroma encoding!
+      )
   {
     m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::SplitFlag(), split_ctx_size ), ctxSplitFlags );
     // DTRACE( g_trace_ctx, D_TMP, "%d exit split %f %f %f\n", g_trace_ctx->getChannelCounter(D_TMP), cost, bestCS->cost, bestCS->costDbOffset );
     xCheckBestMode( tempCS, bestCS, partitioner, encTestMode );
     return;
   }
-
-  const bool chromaNotSplit = modeTypeParent == MODE_TYPE_ALL && modeTypeChild == MODE_TYPE_INTRA ? true : false;
 
   if( partitioner.treeType == TREE_D )
   {
