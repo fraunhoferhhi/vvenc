@@ -75,7 +75,7 @@ PreProcess::~PreProcess()
 
 void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
 {
-  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode );
+  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode );
   CHECK( m_gopCfg.getMaxTLayer() != encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   m_encCfg      = &encCfg;
@@ -86,7 +86,7 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
   m_doSTA       = m_encCfg->m_sliceTypeAdapt > 0;
   m_doTempDown  = m_encCfg->m_FirstPassMode == 2 || m_encCfg->m_FirstPassMode == 4;
   m_doVisAct    = m_encCfg->m_usePerceptQPA
-                  || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate)
+                  || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0)
                   || (m_encCfg->m_RCNumPasses > 1 && (!isFinalPass));
   m_doVisActQpa = m_encCfg->m_usePerceptQPA;
 
@@ -295,6 +295,7 @@ void PreProcess::xLinkPrevQpaBufs( Picture* pic, const PicList& picList ) const
 
 void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) const
 {
+  const bool cappedCRF  = ( m_encCfg->m_RCNumPasses != 2 && m_encCfg->m_RCTargetBitrate == 0 && m_encCfg->m_RCMaxBitrate > 0 && m_encCfg->m_RCMaxBitrate != INT32_MAX );
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
 
@@ -305,34 +306,38 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
     xGetPrevPics( pic, picList, prevPics );
     // get luma visual activity for whole picture
     CHECK( NUM_QPA_PREV_FRAMES < 2, "access out of array index" );
-    picVisActY = xGetPicVisualActivity( pic, prevPics[ 0 ], prevPics[ 1 ] );
+    picVisActY = xGetPicVisualActivity( pic, prevPics[ 0 ], prevPics[ 1 ], false );
   }
 
-  if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
+  if( ( m_doSTA || cappedCRF || !m_doVisAct || m_doVisActQpa ) && pic->gopEntry->m_temporalId == 0 )
   {
     // find previous tl0 picture
     const Picture* prevTl0 = xGetPrevTl0Pic( pic, picList );
     // get visual activity to previous tl0 frame
     if( prevTl0 )
     {
-      picVisActTL0 = xGetPicVisualActivity( pic, prevTl0, nullptr );
+      picVisActTL0 = xGetPicVisualActivity( pic, prevTl0, nullptr, cappedCRF );
+    }
+    else if( !m_doVisAct || m_doVisActQpa )
+    {
+      xGetPicVisualActivity( pic, pic, nullptr, cappedCRF );
     }
   }
 
-  PicShared* picShared      = pic->m_picShared;
-  pic->picVisActTL0         = picVisActTL0;
-  pic->picVisActY           = picVisActY;
-  picShared->m_picVisActTL0 = picVisActTL0;
-  picShared->m_picVisActY   = picVisActY;
-  picShared->m_picSpVisAct  = pic->picSpVisAct;
+  PicShared* picShared           = pic->m_picShared;
+  pic->picVisActTL0              = picVisActTL0;
+  pic->picVisActY                = picVisActY;
+  picShared->m_picVisActTL0      = picVisActTL0;
+  picShared->m_picVisActY        = picVisActY;
+  picShared->m_picSpVisAct[CH_L] = pic->picSpVisAct;
 }
 
-uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPic1, const Picture* refPic2) const
+uint16_t PreProcess::xGetPicVisualActivity( Picture* curPic, const Picture* refPic1, const Picture* refPic2, const bool doChroma ) const
 {
   CHECK( curPic == nullptr || refPic1 == nullptr, "no pictures given to compute visual activity" );
 
   const int bitDepth = m_encCfg->m_internalBitDepth[ CH_L ];
-  unsigned picSpVisAct = 0;
+  unsigned minVisAct = 0, picSpVisAct = 0;
 
   CPelBuf orig[ 3 ];
   orig[ 0 ] = curPic->getOrigBuf( COMP_Y );
@@ -352,13 +357,31 @@ uint16_t PreProcess::xGetPicVisualActivity(Picture* curPic, const Picture* refPi
       m_encCfg->m_FrameRate / m_encCfg->m_FrameScale,
       bitDepth,
       m_isHighRes,
-      nullptr, 
+      &minVisAct,
       &picSpVisAct);
 
-  uint16_t ret = ClipBD( (uint16_t)( 0.5 + visActY ), bitDepth );
+  if( doChroma )
+  {
+    unsigned sumVisActC = 0, picSpVisActC = 0;
+
+    for (uint32_t comp = 1; comp < getNumberValidComponents (curPic->chromaFormat); comp++)
+    {
+      const ComponentID compID = (ComponentID) comp;
+
+      orig[0] = curPic->getOrigBuf (compID);
+      orig[1] = refPic1->getOrigBuf(compID);
+      filterAndCalculateAverageActivity(orig[0].buf, orig[0].stride, orig[0].height, orig[0].width,
+                                        orig[1].buf, orig[1].stride, orig[2].buf, orig[2].stride, 24,
+                                        bitDepth, m_isHighRes && (curPic->chromaFormat == CHROMA_444), nullptr, &picSpVisActC);
+      sumVisActC += picSpVisActC;
+    }
+    curPic->m_picShared->m_picSpVisAct[CH_C] = ClipBD (uint16_t ((sumVisActC + 1) >> 1), 12); // when available, get average CbCr chroma spatial visual activity
+    curPic->m_picShared->m_minNoiseLevels[0] = uint8_t (minVisAct > 0 && minVisAct < 255 ? minVisAct : 255); // temporary storage of TL0 minimum visual activity
+  }
+
   curPic->picSpVisAct = ClipBD( (uint16_t) picSpVisAct, 12 );
 
-  return ret;
+  return ClipBD( uint16_t( 0.5 + visActY ), bitDepth );
 }
 
 

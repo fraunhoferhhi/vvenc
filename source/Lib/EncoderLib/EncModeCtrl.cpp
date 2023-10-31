@@ -948,7 +948,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
     if (m_pcEncCfg->m_FastInferMerge && !slice.isIntra() && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
-      if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
+      if (bestCS && (bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;

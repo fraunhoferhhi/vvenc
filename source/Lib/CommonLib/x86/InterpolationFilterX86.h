@@ -386,6 +386,106 @@ static void simdInterpolateVerM2( const int16_t* src, ptrdiff_t srcStride, int16
   }
 }
 
+template<X86_VEXT vext, int N, bool shiftBack>
+static void simdInterpolateVerM1( const int16_t* src, ptrdiff_t srcStride, int16_t* dst, ptrdiff_t dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
+{
+  CHECKD( width != 1, "Width has to be '1'!" );
+
+  cond_mm_prefetch( ( const char* ) &src[0 * srcStride], _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) &src[1 * srcStride], _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) &src[2 * srcStride], _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) &src[3 * srcStride], _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) &src[4 * srcStride], _MM_HINT_T0 );
+
+  const __m128i vcoeffv  = _mm_set1_epi64x( *( int64_t const* ) coeff );
+  const __m128i vzero    = _mm_setzero_si128();
+  const __m128i voffset  = _mm_set1_epi32( offset );
+  const __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
+  const __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
+
+  if( N == 4 )
+  {
+    const __m128i vshufsrc = _mm_setr_epi8( 10, 11, 12, 13, 14, 15, -1, -1, 12, 13, 14, 15, -1, -1, -1, -1 );
+
+    __m128i vsrc, vnl, vsum;
+
+    const ptrdiff_t nextLine = srcStride * ( N - 1 );
+
+    vsrc = _mm_setr_epi16( 0, 0, 0, 0, 0, src[0 * srcStride], src[1 * srcStride], src[2 * srcStride] );
+
+    for( int row = 0; row < height; row += 2 )
+    {
+      const bool has2rows = row + 1 < height;
+
+      _mm_prefetch( ( const char* ) &src[( N + 1 ) * srcStride], _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) &src[( N + 2 ) * srcStride], _MM_HINT_T0 );
+
+      vnl  = _mm_setr_epi16   ( 0, 0, 0, src[nextLine], 0, 0, src[nextLine], src[nextLine + has2rows * srcStride] );
+      vsrc = _mm_shuffle_epi8 ( vsrc, vshufsrc );
+      vsrc = _mm_or_si128     ( vsrc, vnl );
+      vsum = _mm_madd_epi16   ( vsrc, vcoeffv );
+      vsum = _mm_hadd_epi32   ( vsum, vzero );
+
+      vsum = _mm_add_epi32    ( vsum, voffset );
+      vsum = _mm_srai_epi32   ( vsum, shift );
+      vsum = _mm_packs_epi32  ( vsum, vzero );
+
+      if( shiftBack ) //clip
+      {
+        vsum = _mm_min_epi16  ( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
+      }
+
+      //if( row < height )
+        dst[0 * dstStride] = _mm_extract_epi16( vsum, 0 );
+      if( has2rows )
+        dst[1 * dstStride] = _mm_extract_epi16( vsum, 1 );
+
+      src += 2 * srcStride;
+      dst += 2 * dstStride;
+    }
+  }
+  else
+  {
+    cond_mm_prefetch( ( const char* ) &src[5 * srcStride], _MM_HINT_T0 );
+    cond_mm_prefetch( ( const char* ) &src[6 * srcStride], _MM_HINT_T0 );
+    cond_mm_prefetch( ( const char* ) &src[7 * srcStride], _MM_HINT_T0 );
+
+    const __m128i vshufsrc = _mm_setr_epi8( 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1, -1 );
+
+    __m128i vsrc, vnl, vsum;
+
+    const ptrdiff_t nextLine = srcStride * ( N - 1 );
+
+    vsrc = _mm_setr_epi16( 0, src[0], src[1 * srcStride], src[2 * srcStride], src[3 * srcStride], src[4 * srcStride], src[5 * srcStride], src[6 * srcStride] );
+
+    for( int row = 0; row < height; row++ )
+    {
+      _mm_prefetch( ( const char* ) &src[N * srcStride], _MM_HINT_T0 );
+
+      vnl  = _mm_set_epi16    ( src[nextLine], 0, 0, 0, 0, 0, 0, 0 );
+      vsrc = _mm_shuffle_epi8 ( vsrc, vshufsrc );
+      vsrc = _mm_or_si128     ( vsrc, vnl );
+      vsum = _mm_madd_epi16   ( vsrc, vcoeffv );
+      vsum = _mm_hadd_epi32   ( vsum, vzero );
+      vsum = _mm_hadd_epi32   ( vsum, vzero );
+
+      vsum = _mm_add_epi32    ( vsum, voffset );
+      vsum = _mm_srai_epi32   ( vsum, shift );
+      vsum = _mm_packs_epi32  ( vsum, vzero );
+
+      if( shiftBack ) //clip
+      {
+        vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
+      }
+
+      dst[0] = _mm_extract_epi16( vsum, 0 );
+
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
+}
+
 
 // SIMD interpolation horizontal, block width modulo 4
 template<X86_VEXT vext, int N, bool shiftBack>
@@ -1517,7 +1617,7 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     else if( ( width & 1 ) == 0 )
       simdInterpolateVerM2<vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     else
-      goto scalar_if;
+      simdInterpolateVerM1<vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     return;
   }
   else// if( N == 2 )

@@ -66,7 +66,7 @@ static __itt_domain* itt_domain_MCTF_flt   = __itt_domain_create( "MCTFFlt" );
 
 const double MCTF::m_chromaFactor     =  0.55;
 const double MCTF::m_sigmaMultiplier  =  9.0;
-const int MCTF::m_range               = VVENC_MCTF_RANGE;
+const int MCTF::m_range               = VVENC_MCTF_RANGE-2;
 const int MCTF::m_motionVectorFactor  = 16;
 const int MCTF::m_padding             = MCTF_PADDING;
 const int16_t MCTF::m_interpolationFilter8[16][8] =
@@ -109,12 +109,11 @@ const int16_t MCTF::m_interpolationFilter4[16][4] =
   {  0,  4, 62, -2 },    //15-->-->
 };
 
-const double MCTF::m_refStrengths[3][4] =
+const double MCTF::m_refStrengths[2][4] =
 { // abs(POC offset)
-  //  1,    2     3     4
-  {0.85, 0.57, 0.41, 0.33},  // m_range * 2
-  {1.13, 0.97, 0.81, 0.57},  // m_range
-  {0.30, 0.30, 0.30, 0.30}   // otherwise
+  // 1,    2     3     4
+  {0.85, 0.57, 0.41, 0.33}, // RA
+  {1.13, 0.97, 0.81, 0.57 } // LD
 };
 
 const int    MCTF::m_cuTreeThresh[4] = { 75, 60,     30, 15 };
@@ -658,6 +657,65 @@ void MCTF::processPictures( const PicList& picList, AccessUnitList& auList, PicL
   m_filterPoc += 1;
 }
 
+void MCTF::motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, const PelStorage& origBuf, PelStorage& origSubsampled2, PelStorage& origSubsampled4, PelStorage& origSubsampled8, std::vector<double> &mvErr, double &minError, bool addLevel, bool calcErr)
+{
+  srcFrameInfo.push_back(TemporalFilterSourcePicInfo());
+  TemporalFilterSourcePicInfo& srcPic = srcFrameInfo.back();
+
+  const int wInBlks = (m_area.width + m_mctfUnitSize - 1) / m_mctfUnitSize;
+  const int hInBlks = (m_area.height + m_mctfUnitSize - 1) / m_mctfUnitSize;
+
+  srcPic.picBuffer.createFromBuf(curPic->getOrigBuf());
+  srcPic.mvs.allocate(wInBlks, hInBlks);
+  srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
+
+
+  {
+    const int width = m_area.width;
+    const int height = m_area.height;
+    Array2D<MotionVector> mv_0(width / (m_mctfUnitSize * 8) + 1, height / (m_mctfUnitSize * 8) + 1);
+    Array2D<MotionVector> mv_1(width / (m_mctfUnitSize * 4) + 1, height / (m_mctfUnitSize * 4) + 1);
+    Array2D<MotionVector> mv_2(width / (m_mctfUnitSize * 2) + 1, height / (m_mctfUnitSize * 2) + 1);
+
+    PelStorage bufferSub2;
+    PelStorage bufferSub4;
+
+    subsampleLuma(srcPic.picBuffer, bufferSub2);
+    subsampleLuma(bufferSub2, bufferSub4);
+
+    if (addLevel)
+    {
+      Array2D<MotionVector> mv_m(width / (m_mctfUnitSize * 16) + 1, height / (m_mctfUnitSize * 16) + 1);
+      PelStorage bufferSub8;
+      subsampleLuma(bufferSub4, bufferSub8);
+      motionEstimationLuma(mv_m, origSubsampled8, bufferSub8, 2 * m_mctfUnitSize);
+      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize, &mv_m, 2);
+    }
+    else
+    {
+      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize);
+    }
+    motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * m_mctfUnitSize, &mv_0, 2);
+    motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2);
+
+    motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, m_mctfUnitSize, &mv_2, 1, true);
+
+    if (calcErr)
+    {
+      double sumErr = 0.0;
+      for (int y = 0; y < srcPic.mvs.h(); y++) // going over ref pic in block steps
+      {
+        for (int x = 0; x < srcPic.mvs.w(); x++)
+        {
+          sumErr += srcPic.mvs.get(x, y).error;
+        }
+      }
+      double S = 1.0 / (srcPic.mvs.w() * srcPic.mvs.h());
+      mvErr.push_back(sumErr * S);
+      minError = std::min(minError, sumErr * S);
+    }
+  }
+}
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
@@ -688,10 +746,10 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
   }
 
-  const int filterFrames = VVENC_MCTF_RANGE - dropFrames;
+  const int filterFrames = VVENC_MCTF_RANGE - 2 - dropFrames;
 
-  int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
-  int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
+  int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames + 2 );
+  int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames + 2 );
 
   if( !pic->useMCTF && !pic->gopEntry->m_isStartOfGop )
   {
@@ -700,14 +758,24 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
   if ( isFilterThisFrame )
   {
+    bool  useMCTFadaptation = true;
+    const bool condAddLevel = useMCTFadaptation && m_area.width >= 1920;
+    std::vector<double> mvErr;
+    double minError = MAX_DOUBLE;
+
     const PelStorage& origBuf = pic->getOrigBuffer();
           PelStorage& fltrBuf = pic->getFilteredOrigBuffer();
 
     // subsample original picture so it only needs to be done once
     PelStorage origSubsampled2;
     PelStorage origSubsampled4;
+    PelStorage origSubsampled8;
     subsampleLuma( origBuf,         origSubsampled2 );
     subsampleLuma( origSubsampled2, origSubsampled4 );
+    if (condAddLevel)
+    {
+      subsampleLuma(origSubsampled4, origSubsampled8);
+    }
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
@@ -718,36 +786,71 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         continue;
       }
-      srcFrameInfo.push_back( TemporalFilterSourcePicInfo() );
-      TemporalFilterSourcePicInfo &srcPic = srcFrameInfo.back();
+      motionEstimationMCTF(curPic, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8 ,mvErr, minError, condAddLevel, useMCTFadaptation);
+    }
 
-      const int wInBlks = ( m_area.width  + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
-      const int hInBlks = ( m_area.height + m_mctfUnitSize - 1 ) / m_mctfUnitSize;
+    int lastIndexRefFr = -1;
+    if ((m_encCfg->m_vvencMCTF.MCTFSpeed < 4) && (minError > 80))
+    {
+      useMCTFadaptation = false;
+    }
+    if (useMCTFadaptation && minError)
+    {
+      const double errThr = 0.75 * minError * srcFrameInfo.size();
+      int avgErrCond = 0;
+      int minErrCond = 0;
+      double factErr = m_encCfg->m_vvencMCTF.MCTFSpeed < 4 ? 1.0 : 2.0 ;
+      double SizeThi = m_encCfg->m_vvencMCTF.MCTFSpeed < 4  ? filterFrames + 1 : 3.0;
 
-      srcPic.picBuffer.createFromBuf( curPic->getOrigBuf() );
-      srcPic.mvs.allocate( wInBlks, hInBlks );
-
+      for (const double& framMvErr : mvErr)
       {
-        const int width  = m_area.width;
-        const int height = m_area.height;
-        Array2D<MotionVector> mv_0( width / ( m_mctfUnitSize * 8 ) + 1, height / ( m_mctfUnitSize * 8 ) + 1 );
-        Array2D<MotionVector> mv_1( width / ( m_mctfUnitSize * 4 ) + 1, height / ( m_mctfUnitSize * 4 ) + 1 );
-        Array2D<MotionVector> mv_2( width / ( m_mctfUnitSize * 2 ) + 1, height / ( m_mctfUnitSize * 2 ) + 1 );
-
-        PelStorage bufferSub2;
-        PelStorage bufferSub4;
-
-        subsampleLuma( srcPic.picBuffer, bufferSub2 );
-        subsampleLuma( bufferSub2,       bufferSub4 );
-
-        motionEstimationLuma( mv_0, origSubsampled4, bufferSub4,       2 * m_mctfUnitSize );
-        motionEstimationLuma( mv_1, origSubsampled2, bufferSub2,       2 * m_mctfUnitSize, &mv_0, 2 );
-        motionEstimationLuma( mv_2, origBuf,         srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2 );
-
-        motionEstimationLuma( srcPic.mvs, origBuf,   srcPic.picBuffer,     m_mctfUnitSize, &mv_2, 1, true );
+        if (factErr * framMvErr > errThr)
+        {
+          avgErrCond++;
+        }
+        if (framMvErr > SizeThi * minError)
+        {
+          minErrCond++;
+        }
       }
+      int newFilterFrames = minErrCond ? filterFrames : (filterFrames + 2 - avgErrCond);
+      if (filterFrames <= 2 && newFilterFrames > 3)   newFilterFrames = 3;
 
-      srcPic.index = std::min( 3, std::abs( curPic->poc - m_filterPoc ) - 1 );
+      for (int curIdx = filterFrames + 1; (curIdx < newFilterFrames + 1)&&((lastIndexRefFr == -1)); curIdx++)
+      {
+        for (int i = 0; i < picFifo.size(); i++)
+        {
+          Picture* curPic = picFifo[i];
+          if (curIdx == std::abs(curPic->poc - m_filterPoc))
+          {
+            motionEstimationMCTF(curPic, srcFrameInfo, origBuf, origSubsampled2, origSubsampled4, origSubsampled8, mvErr, minError, condAddLevel, m_encCfg->m_vvencMCTF.MCTFSpeed == 4);
+            if (m_encCfg->m_vvencMCTF.MCTFSpeed == 4)
+            {
+              int nSize = (int(srcFrameInfo.size()) & 1) + int(srcFrameInfo.size());
+              const double errThrcur = 0.75 * minError * nSize;
+              if (mvErr.back() > errThrcur)
+              {
+                lastIndexRefFr = curIdx;
+                break;
+              }
+            }
+          }
+        }
+      }
+      if ((lastIndexRefFr != -1))
+      {
+        for (auto it = srcFrameInfo.begin(); it != srcFrameInfo.end(); )
+        {
+          if ((it->index + 1) >= lastIndexRefFr)
+          {
+            it = srcFrameInfo.erase(it);
+          }
+          else
+          {
+            ++it;
+          }
+        }
+      }
     }
 
     // filter
@@ -1010,7 +1113,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
-  for( int blockX = blockX_.load(); blockX + 7 <= origWidth; blockX += stepSize, blockX_.store( blockX) )
+  for( int blockX = blockX_.load(); blockX + 8 <= origWidth; blockX += stepSize, blockX_.store( blockX) )
   {
     if( prevLineX && blockX >= prevLineX->load() ) return false;
 
@@ -1190,7 +1293,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
     WaitCounter taskCounter;
 
-    for( int n = 0, blockY = 0; blockY + 7 <= origHeight; blockY += stepSize, n++ )
+    for( int n = 0, blockY = 0; blockY + 8 <= origHeight; blockY += stepSize, n++ )
     {
       static auto task = []( int tId, EstParams* params)
       {
@@ -1222,7 +1325,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   }
   else
   {
-    for( int blockY = 0; blockY + 7 <= origHeight; blockY += stepSize )
+    for( int blockY = 0; blockY + 8 <= origHeight; blockY += stepSize )
     {
       std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
       estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY, bitDepth );
@@ -1237,15 +1340,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
   const int numRefs = int(srcFrameInfo.size());
 
-  int refStrengthRow = 2;
-  if( numRefs == m_range * 2 )
-  {
-    refStrengthRow = 0;
-  }
-  else if( numRefs == m_range )
-  {
-    refStrengthRow = 1;
-  }
+  int refStrengthRow = m_encCfg->m_picReordering ? 0 : 1;
 
   // max 64*64*8*2 = 2^(6+6+3+1)=2^16=64kbps, usually 16*16*8*2=2^(4+4+3+1)=4kbps, and allow for overread of one line
   Pel* dstBufs = ( Pel* ) alloca( sizeof( Pel ) * ( numRefs * m_mctfUnitSize * m_mctfUnitSize + m_mctfUnitSize ) );

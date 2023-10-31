@@ -64,7 +64,7 @@ namespace vvenc {
                                              uint32_t frameRate,
                                              const uint32_t bitDepth,
                                              const bool isUHD,
-                                             unsigned* minVA,
+                                             unsigned* minVisAct,
                                              unsigned* spVisAct);
 
   // BitAllocation functions

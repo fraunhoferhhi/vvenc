@@ -515,7 +515,9 @@ private:
 
   void xClipMvSearch              ( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int fppLinesSynchro );
 
-  void xSetSearchRange            ( const CodingUnit&     cu,
+  void xClipMvToFppLine           ( Mv& mv, const int yB, const int nH, const int fppLinesSynchro, const PreCalcValues& pcv );
+  void xCheckAndClipMvToFppLine   ( Mv& mv, const int yB, const int nH, const int fppLinesSynchro, const PreCalcValues& pcv );
+  void xSetSearchRange            ( const CodingUnit& cu,
                                     const Mv&             cMvPred,
                                     const int             iSrchRng,
                                     SearchRange&          sr                                  
@@ -581,7 +583,7 @@ private:
                                    bool                  bBi = false
                                  );
 
-  void        xEstimateAffineAMVP     ( CodingUnit& cu, AffineAMVPInfo& affineAMVPInfo, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv acMvPred[3], Distortion& distBiP);
+  bool        xEstimateAffineAMVP     ( CodingUnit& cu, AffineAMVPInfo& affineAMVPInfo, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv acMvPred[3], Distortion& distBiP);
 
   Distortion  xGetAffineTemplateCost  ( CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx);
   void        xCopyAffineAMVPInfo     ( AffineAMVPInfo& src, AffineAMVPInfo& dst );

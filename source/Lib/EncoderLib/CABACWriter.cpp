@@ -540,7 +540,7 @@ void CABACWriter::coding_tree(const CodingStructure& cs, Partitioner& partitione
 void CABACWriter::mode_constraint( const PartSplit split, const CodingStructure& cs, Partitioner& partitioner, const ModeType modeType )
 {
   CHECK( split == CU_DONT_SPLIT, "splitMode shall not be no split" );
-  int val = cs.signalModeCons( split, partitioner, partitioner.modeType );
+  int val = CS::signalModeCons( cs, partitioner.currArea(), split, partitioner.modeType);
   if( val == LDT_MODE_TYPE_SIGNAL )
   {
     CHECK( modeType == MODE_TYPE_ALL, "shall not be no constraint case" );
@@ -2870,28 +2870,26 @@ void CABACWriter::exp_golomb_eqprob( unsigned symbol, unsigned count )
 }
 
 
-void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ChannelType channel, AlfParam* alfParam)
+void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ChannelType channel, AlfParam* alfParam, const int numCtus )
 {
   if( isLuma( channel ) )
   {
     if (alfParam->alfEnabled[COMP_Y])
-      codeAlfCtuEnabled( cs, COMP_Y, alfParam );
+      codeAlfCtuEnabled( cs, COMP_Y, alfParam, numCtus );
   }
   else
   {
     if (alfParam->alfEnabled[COMP_Cb])
-      codeAlfCtuEnabled( cs, COMP_Cb, alfParam );
+      codeAlfCtuEnabled( cs, COMP_Cb, alfParam, numCtus );
     if (alfParam->alfEnabled[COMP_Cr])
-      codeAlfCtuEnabled( cs, COMP_Cr, alfParam );
+      codeAlfCtuEnabled( cs, COMP_Cr, alfParam, numCtus );
   }
 }
 
 
-void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ComponentID compID, AlfParam* alfParam)
+void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ComponentID compID, AlfParam* alfParam, const int numCtus )
 {
-  uint32_t numCTUs = cs.pcv->sizeInCtus;
-
-  for( int ctuIdx = 0; ctuIdx < numCTUs; ctuIdx++ )
+  for( int ctuIdx = 0; ctuIdx < numCtus; ctuIdx++ )
   {
     codeAlfCtuEnabledFlag( cs, ctuIdx, compID );
   }
@@ -3043,26 +3041,25 @@ void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr)
 }
 
 
-void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ChannelType channel, AlfParam* alfParam)
+void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ChannelType channel, AlfParam* alfParam, const int numCtus )
 {
   if( isChroma( channel ) )
   {
     if (alfParam->alfEnabled[COMP_Cb])
-      codeAlfCtuAlternatives( cs, COMP_Cb, alfParam );
+      codeAlfCtuAlternatives( cs, COMP_Cb, alfParam, numCtus );
     if (alfParam->alfEnabled[COMP_Cr])
-      codeAlfCtuAlternatives( cs, COMP_Cr, alfParam );
+      codeAlfCtuAlternatives( cs, COMP_Cr, alfParam, numCtus );
   }
 }
 
 
-void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ComponentID compID, AlfParam* alfParam)
+void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ComponentID compID, AlfParam* alfParam, const int numCtus)
 {
   if( compID == COMP_Y )
     return;
-  uint32_t numCTUs = cs.pcv->sizeInCtus;
   const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compID ].data();
 
-  for( int ctuIdx = 0; ctuIdx < numCTUs; ctuIdx++ )
+  for( int ctuIdx = 0; ctuIdx < numCtus; ctuIdx++ )
   {
     if( ctbAlfFlag[ctuIdx] )
     {

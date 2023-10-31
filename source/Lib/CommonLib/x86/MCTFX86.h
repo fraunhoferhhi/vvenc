@@ -55,6 +55,9 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
+#define cond_mm_prefetch(a,b) _mm_prefetch(a,b)
+//#define cond_mm_prefetch(a,b)
+
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
 
 namespace vvenc {
@@ -65,6 +68,11 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
   int error = 0;
   __m128i xerror = _mm_setzero_si128();
 
+  cond_mm_prefetch( ( const char* ) ( org ),              _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) ( org + origStride ), _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) ( buf ),              _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) ( buf + buffStride ), _MM_HINT_T0 );
+
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
 #if USE_AVX2
@@ -74,6 +82,11 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
     {
       const Pel* origRowStart   = org + y1 * origStride;
       const Pel* bufferRowStart = buf + y1 * buffStride;
+
+      cond_mm_prefetch( ( const char* ) ( origRowStart   + 2 * origStride ), _MM_HINT_T0 );
+      cond_mm_prefetch( ( const char* ) ( origRowStart   + 3 * origStride ), _MM_HINT_T0 );
+      cond_mm_prefetch( ( const char* ) ( bufferRowStart + 2 * buffStride ), _MM_HINT_T0 );
+      cond_mm_prefetch( ( const char* ) ( bufferRowStart + 3 * buffStride ), _MM_HINT_T0 );
 
       __m256i vsum = _mm256_setzero_si256();
 
@@ -427,6 +440,9 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
   
   CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
 
+  cond_mm_prefetch( ( const char* )   org,                            _MM_HINT_T0 );
+  cond_mm_prefetch( ( const char* ) ( buf + base + -1 * buffStride ), _MM_HINT_T0 );
+
 #if USE_AVX2
   if( vext >= AVX2 && ( w & 15 ) == 0 )
   {
@@ -461,6 +477,9 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
       for( int y1 = 0; y1 < h + 3; y1++, rowStart += buffStride )
       {
+        cond_mm_prefetch( ( const char* ) ( origRow  + origStride ), _MM_HINT_T0 );
+        cond_mm_prefetch( ( const char* ) ( rowStart + buffStride ), _MM_HINT_T0 );
+
         __m256i xsrc1 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[0] );
         __m256i xsrc2 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[1] );
         __m256i xsrc3 = _mm256_loadu_si256( ( const __m256i * ) &rowStart[2] );
@@ -565,6 +584,9 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 
     for( int y1 = 0; y1 < h + 3; y1++, rowStart += buffStride )
     {
+      cond_mm_prefetch( ( const char* ) ( origRow + origStride  ), _MM_HINT_T0 );
+      cond_mm_prefetch( ( const char* ) ( rowStart + buffStride ), _MM_HINT_T0 );
+
       __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &rowStart[0] );
       __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &rowStart[1] );
       __m128i xsrc3 = _mm_loadu_si128( ( const __m128i * ) &rowStart[2] );

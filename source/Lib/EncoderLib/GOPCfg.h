@@ -80,6 +80,7 @@ class GOPCfg
     bool m_picReordering;
     int  m_refreshType;
     int  m_fixIntraPeriod;
+    bool m_poc0idr;
     int  m_maxGopSize;
     int  m_defGopSize;
     int  m_nextListIdx;
@@ -101,6 +102,7 @@ class GOPCfg
       , m_picReordering   ( false )
       , m_refreshType     ( 0 )
       , m_fixIntraPeriod  ( 0 )
+      , m_poc0idr         ( false )
       , m_maxGopSize      ( 0 )
       , m_defGopSize      ( 0 )
       , m_nextListIdx     ( 0 )
@@ -120,7 +122,7 @@ class GOPCfg
     {
     };
 
-    void initGopList( int refreshType, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode );
+    void initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode );
     void getNextGopEntry( GOPEntry& gopEntry );
     void startIntraPeriod( GOPEntry& gopEntry );
     void fixStartOfLastGop( GOPEntry& gopEntry ) const;

@@ -157,13 +157,13 @@ public:
   void        joint_cb_cr               ( const TransformUnit&          tu,       const int cbfMask );
 
 
-  void        codeAlfCtuEnabled          ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam );
-  void        codeAlfCtuEnabled          ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam );
+  void        codeAlfCtuEnabled          ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam, const int numCtus );
+  void        codeAlfCtuEnabled          ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam, const int numCtus );
   void        codeAlfCtuEnabledFlag      ( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx );
   void        codeAlfCtuFilterIndex      ( CodingStructure& cs, uint32_t ctuRsAddr );
 
-  void        codeAlfCtuAlternatives     ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam );
-  void        codeAlfCtuAlternatives     ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam );
+  void        codeAlfCtuAlternatives     ( CodingStructure& cs, ChannelType channel, AlfParam* alfParam, const int numCtus );
+  void        codeAlfCtuAlternatives     ( CodingStructure& cs, ComponentID compID, AlfParam* alfParam, const int numCtus );
   void        codeAlfCtuAlternative      ( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx, const AlfParam* alfParam = NULL );
   void        codeCcAlfFilterControlIdc  ( uint8_t idcVal, CodingStructure &cs, const ComponentID compID, const int curIdx,
                                            const uint8_t *filterControlIdc, Position lumaPos, const int filterCount);

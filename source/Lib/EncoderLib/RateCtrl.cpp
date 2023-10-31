@@ -196,7 +196,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
     }
     if ((*it)->frameLevel == frameLevel - 1 && (*it)->picQP >= 0) // last temporal level
     {
-      lastPrevTLQP = ((*it)->picQP * (frameLevel == 1 ? 3 : 4)) >> 2;
+      lastPrevTLQP = (frameLevel == 1 ? ((*it)->picQP * 3) >> 2 : std::max<int> (encRCSeq->lastIntraQP, (*it)->picQP));
     }
     if ((*it)->frameLevel == 1 && frameLevel == 0 && refreshParams && lastCurrTLQP < 0)
     {
@@ -818,6 +818,10 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 
 double RateCtrl::getAverageBitsFromFirstPass()
 {
+  const uint16_t vaMin = 1u << (encRCSeq->bitDepth - 6);
+  const int16_t factor = (m_pcEncCfg->m_QP > 27 ? 2 : 3);
+  const uint32_t shift = (m_pcEncCfg->m_QP > 37 ? 1 : 4);
+  int vaTm1 = 0, vaTm2 = 0; // temporal memories
   uint64_t totalBitsFirstPass = 0;
   std::list<TRCPassStats>::iterator it;
 
@@ -860,7 +864,20 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // for two-pass RC
   {
-    totalBitsFirstPass += it->numBits;
+    const int vaTmp = std::max (0, (it->visActY << (12 - encRCSeq->bitDepth)) - it->spVisAct);
+    const int vaSum = vaTmp + vaTm2; // improve rate match on temporally downsampled or very dark videos
+
+    if (vaSum > 0 && vaTm1 * 2 * factor < vaSum && vaTm2 * 4 > vaTmp * 3 && vaTm2 * 3 < vaTmp * 4)
+    {
+      totalBitsFirstPass += (it->numBits * uint64_t (vaSum + vaTm1 * 2) * factor + (vaSum * 2)) / (vaSum * (factor + 1));
+    }
+    else
+    {
+      totalBitsFirstPass += (it->visActY >= vaMin && it->visActY < vaMin + (1u << shift) ? (it->numBits * (it->visActY + 1u - vaMin)) >> shift : it->numBits);
+    }
+
+    vaTm2 = vaTm1;
+    vaTm1 = vaTmp;
   }
 
   return totalBitsFirstPass / (double) m_listRCFirstPassStats.size();

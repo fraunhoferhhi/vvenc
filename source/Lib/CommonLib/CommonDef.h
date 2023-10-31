@@ -501,6 +501,10 @@ static constexpr uint8_t MAX_TMP_BUFS = 6;
 
 static constexpr int QPA_MAX_NOISE_LEVELS = 8;
 
+static constexpr int FPPLS_ALF_DERIVE_LINES   = 1; ///< number of CTU lines for ALF filter derivation
+static constexpr int FPPLS_CCALF_DERIVE_LINES = 1; ///< number of CTU lines for CCALF filter derivation
+
+
 // ====================================================================================================================
 // Macro functions
 // ====================================================================================================================
