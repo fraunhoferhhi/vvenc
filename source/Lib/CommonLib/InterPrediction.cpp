@@ -727,7 +727,7 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
 
   bool  wrapRef = false;
   Mv    mv(_mv);
-  CHECKD( m_fppLinesSynchro && !srcPadBuf && !CU::isMvInRangeFPP( cu, mv, m_fppLinesSynchro, compID, shiftVer ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
+  CHECKD( m_fppLinesSynchro && !srcPadBuf && !CU::isMvInRangeFPP( cu[compID].y, cu[compID].height, mv.ver, m_fppLinesSynchro, *cu.cs->pcv, getComponentScaleY(compID, chFmt) ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
   if( !isIBC && cu.cs->pcv->wrapArround )
   {
     wrapRef = wrapClipMv( mv, cu.blocks[0].pos(), cu.blocks[0].size(), *cu.cs);
@@ -1258,13 +1258,12 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
   }
 }
 
-void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t *deltaMV, uint64_t *pSADsArray )
+static void xDMVRSubPixelErrorSurface( int16_t *totalDeltaMV, int16_t *deltaMV, uint64_t *pSADsArray )
 {
   int sadStride = (((2 * DMVR_NUM_ITERATION) + 1));
   uint64_t sadbuffer[5];
-  if (notZeroCost
-    && (abs(totalDeltaMV[0]) != (2 << MV_FRACTIONAL_BITS_INTERNAL))
-    && (abs(totalDeltaMV[1]) != (2 << MV_FRACTIONAL_BITS_INTERNAL)))
+  if( ( abs( totalDeltaMV[ 0 ] ) != ( 2 << MV_FRACTIONAL_BITS_INTERNAL ) )
+   && ( abs( totalDeltaMV[ 1 ] ) != ( 2 << MV_FRACTIONAL_BITS_INTERNAL ) ) )
   {
     int32_t tempDeltaMv[2] = { 0,0 };
     sadbuffer[0] = pSADsArray[0];
@@ -1348,14 +1347,11 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
     int yStart = 0;
     uint64_t sadArray[((2 * DMVR_NUM_ITERATION) + 1) * ((2 * DMVR_NUM_ITERATION) + 1)];
 
-    for (int y = puPos.y; y < (puPos.y + cu.lumaSize().height); y = y + dy, yStart = yStart + dy)
+    for( int y = puPos.y; y < ( puPos.y + cu.lumaSize().height ); y = y + dy, yStart = yStart + dy )
     {
-      for (int x = puPos.x, xStart = 0; x < (puPos.x + cu.lumaSize().width); x = x + dx, xStart = xStart + dx)
+      for( int x = puPos.x, xStart = 0; x < ( puPos.x + cu.lumaSize().width ); x = x + dx, xStart = xStart + dx )
       {
-        uint64_t minCost = MAX_UINT64;
-        bool notZeroCost = true;
-        int16_t totalDeltaMV[2] = { 0, 0 };
-        int16_t deltaMV[2]      = { 0, 0 };
+        uint64_t minCost        = MAX_UINT64;
 
         // set all entries to MAX_UNIT64
         uint64_t *pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
@@ -1373,52 +1369,53 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
 
         if( minCost < ( dx * dy ) )
         {
-          notZeroCost = false;
+          cu.mvdL0SubPu[num] = Mv( 0, 0 );
         }
         else
         {
+          int16_t totalDeltaMV[2] = { 0, 0 };
+          int16_t deltaMV[2]      = { 0, 0 };
+
           pSADsArray[0] = minCost;
           pSADsArray    = sadArray;
 
-          //xBIPMVRefine
+          for( int ver = -2; ver <= 2; ver++ )
           {
-            for( int ver = -2; ver <= 2; ver++ )
+            const int initHor = -2;
+            const ptrdiff_t offset = initHor + ver * bilinearBufStride;
+              
+            distParam.org.buf = addrL0 + offset;
+            distParam.cur.buf = addrL1 - offset;
+              
+            distParam.dmvrSadX5( distParam, pSADsArray, ver != 0 );
+
+            for( int hor = -2; hor <= 2; hor++, pSADsArray++ )
             {
-              const int initHor = -2;
-              const ptrdiff_t offset = initHor + ver * bilinearBufStride;
-              
-              distParam.org.buf = addrL0 + offset;
-              distParam.cur.buf = addrL1 - offset;
-              
-              distParam.dmvrSadX5( distParam, pSADsArray, ver != 0 );
+              Distortion cost = *pSADsArray;
 
-              for( int hor = -2; hor <= 2; hor++, pSADsArray++ )
+              if( cost < minCost )
               {
-                Distortion cost = *pSADsArray;
-
-                if( cost < minCost )
-                {
-                  minCost = cost;
-                  deltaMV[0] = hor;
-                  deltaMV[1] = ver;
-                }
+                minCost    = cost;
+                deltaMV[0] = hor;
+                deltaMV[1] = ver;
               }
             }
           }
 
           pSADsArray = &sadArray[( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) * ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) >> 1];
+
+          totalDeltaMV[0] += deltaMV[0];
+          totalDeltaMV[1] += deltaMV[1];
+          pSADsArray      += ( ( deltaMV[1] * ( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) ) + deltaMV[0] );
+          totalDeltaMV[0]  = totalDeltaMV[0] * ( 1 << mvShift );
+          totalDeltaMV[1]  = totalDeltaMV[1] * ( 1 << mvShift );
+
+          xDMVRSubPixelErrorSurface( totalDeltaMV, deltaMV, pSADsArray );
+
+          cu.mvdL0SubPu[num] = Mv( totalDeltaMV[0], totalDeltaMV[1] );
         }
 
-        totalDeltaMV[0] += deltaMV[0];
-        totalDeltaMV[1] += deltaMV[1];
-        pSADsArray += ( ( deltaMV[1] * ( ( ( 2 * DMVR_NUM_ITERATION ) + 1 ) ) ) + deltaMV[0] );
-
         bioAppliedType[num] = ( minCost < bioEnabledThres ) ? false : bioApplied;
-        totalDeltaMV[0] = totalDeltaMV[0] * ( 1 << mvShift );
-        totalDeltaMV[1] = totalDeltaMV[1] * ( 1 << mvShift );
-        xDMVRSubPixelErrorSurface( notZeroCost, totalDeltaMV, deltaMV, pSADsArray );
-
-        cu.mvdL0SubPu[num] = Mv( totalDeltaMV[0], totalDeltaMV[1] );
 
         num++;
       }
@@ -1484,7 +1481,8 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
         subPredBuf.bufs[COMP_Cr].buf = pcYuvDst.bufs[COMP_Cr].buf + (xStart >> scaleX) + ((yStart >> scaleY) * dstStride[COMP_Cr]);
       }
 
-      xWeightedAverage(subCu, predBuf[L0], predBuf[L1], subPredBuf, bioAppliedType[num] );
+      xWeightedAverage( subCu, predBuf[L0], predBuf[L1], subPredBuf, bioAppliedType[num] );
+
       num++;
     }
   }
@@ -1561,7 +1559,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   int iDMvVerX = 0;
   int iDMvVerY = 0;
 
-  iDMvHorX = (mvRT - mvLT).hor * (1 << (iBit - Log2(cxWidth)));
+  iDMvHorX = (mvRT - mvLT).hor * (1 <<(iBit - Log2(cxWidth)));
   iDMvHorY = (mvRT - mvLT).ver * (1 <<(iBit - Log2(cxWidth)));
   if (cu.affineType == AFFINEMODEL_6PARAM)
   {
@@ -1585,8 +1583,6 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
   const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
   
-  CHECKD( m_fppLinesSynchro, "Full FPP is not implemented for Affine" );
-
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;
   const bool subblkMVSpreadOverLimit = isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
@@ -1800,6 +1796,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         iMvScaleTmpVer = curMv.ver;
       }
 
+      CHECKD( m_fppLinesSynchro && !CU::isMvInRangeFPP( puY + h, blockHeight, iMvScaleTmpVer, m_fppLinesSynchro, *pps.pcv, iScaleY ), "xPredAffineBlk: FPP MV restriction failed!\n" );
       // get the MV in high precision
       int xFrac, yFrac, xInt, yInt;
 
@@ -1897,6 +1894,160 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     }
   }
 
+}
+
+bool InterPredInterpolation::xIsAffineMvInRangeFPP( const CodingUnit &cu, const Mv* _mv, const int fppLinesSynchro, const int mvPrecShift )
+{
+  const PreCalcValues& pcv = *cu.cs->pcv;
+  if( cu.ly() >= ( ( pcv.heightInCtus - 1 - fppLinesSynchro ) << pcv.maxCUSizeLog2 ) )
+    return true;
+
+  const ChromaFormat chFmt = cu.chromaFormat;
+  const int width       = cu.Y().width;
+  const int height      = cu.Y().height;
+  const int nBW  = AFFINE_MIN_BLOCK_SIZE;
+  const int nBH = AFFINE_MIN_BLOCK_SIZE;
+  const int iHalfBW     = nBW >> 1;
+  const int iHalfBH     = nBH >> 1;
+  const int iBit        = MAX_CU_DEPTH;
+  const int shift       = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
+  Mv mvLT = _mv[0];
+  Mv mvRT = _mv[1];
+  Mv mvLB = _mv[2];
+
+  int iDMvHorX = 0;
+  int iDMvHorY = 0;
+  int iDMvVerX = 0;
+  int iDMvVerY = 0;
+
+  const int iMvScaleVer = mvLT.ver * (1 << iBit);
+
+  int iScaleX = getChannelTypeScaleX(CH_C, chFmt);
+  int iScaleY = getChannelTypeScaleY(CH_C, chFmt);
+  const int cxWidth  = width;
+  const int cxHeight = height;
+
+  iDMvHorX = (mvRT - mvLT).hor * (1 << (iBit - Log2(cxWidth)));
+  iDMvHorY = (mvRT - mvLT).ver * (1 <<(iBit - Log2(cxWidth)));
+  if (cu.affineType == AFFINEMODEL_6PARAM)
+  {
+    iDMvVerX = (mvLB - mvLT).hor * (1 <<(iBit - Log2(cxHeight)));
+    iDMvVerY = (mvLB - mvLT).ver * (1 <<(iBit - Log2(cxHeight)));
+  }
+  else
+  {
+    iDMvVerX = -iDMvHorY;
+    iDMvVerY = iDMvHorX;
+  }
+  const bool subblkMVSpreadOverLimit = InterPrediction::isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
+
+  const int yRefMax     = ( ( ( cu.ly() >> pcv.maxCUSizeLog2 ) + fppLinesSynchro + 1 ) << pcv.maxCUSizeLog2 ) - 1;
+  const int dctifMarginVerBot = 4;
+
+  auto roundMvVal = [&](int mvVal, int shift)
+  {
+    const int nOffset = 1 << (shift - 1);
+    mvVal = (mvVal + nOffset - (mvVal >= 0)) >> shift;
+    return mvVal;
+  };
+  auto calcAffineMv = [&](int w, int h)
+  {
+    int iMvScaleTmpVer;
+    if(!subblkMVSpreadOverLimit)
+    {
+      iMvScaleTmpVer = iMvScaleVer + iDMvHorY * (iHalfBW + w) + iDMvVerY * (iHalfBH + h);
+    }
+    else
+    {
+      iMvScaleTmpVer = iMvScaleVer + iDMvHorY * (cxWidth >> 1) + iDMvVerY * (cxHeight >> 1);
+    }
+    iMvScaleTmpVer = roundMvVal(iMvScaleTmpVer, shift);
+    return iMvScaleTmpVer;
+  };
+
+  auto checkMvLineSync = [&](int yMv, int blkBot, const int scaleVer = 0 )
+  {
+    if( ( ( blkBot ) + (yMv >> ( mvPrecShift + scaleVer) ) > ( yRefMax >> scaleVer ) ) )
+      return false;
+    return true;
+  };
+
+  const int filterMargin = dctifMarginVerBot - 1;
+  int x = cu.lx();
+  int y = cu.ly();
+
+  // luma
+  Position off00 (0, 0);
+  Position blk00 (x + off00.x, y + off00.y);
+  int mvVer00 = calcAffineMv(off00.x, off00.y);
+  if( !checkMvLineSync( mvVer00, blk00.y + filterMargin + nBH ) ) 
+    return false;
+
+  Position off01 (width - nBW, 0);
+  Position blk01 (x + off01.x, y + off01.y);
+  int mvVer01 = calcAffineMv(off01.x, off01.y);
+  if( !checkMvLineSync( mvVer01, blk00.y + filterMargin + nBH ) ) 
+    return false;
+
+  Position off10 (0, height - nBH);
+  Position blk10 (x + off10.x, y + off10.y);
+  int mvVer10 = calcAffineMv(off10.x, off10.y);
+  if( !checkMvLineSync( mvVer10, blk10.y + filterMargin + nBH  ) ) 
+    return false;
+
+  Position off11 (width - nBW, height - nBH);
+  Position blk11 (x + off11.x, y + off11.y);
+  int mvVer11 = calcAffineMv(off11.x, off11.y);
+  if( !checkMvLineSync( mvVer11, blk10.y + filterMargin + nBH  ) ) 
+    return false;
+
+  // chroma
+  if( cu.lwidth() == 8 && cu.lheight() == 8 )
+  {
+    if(iScaleX || iScaleY)
+    {
+      if(iScaleY)
+      {
+        const int blkBot = ((blk00.y + filterMargin) >> iScaleY) + nBH;
+        if(!checkMvLineSync( roundMvVal( mvVer00 + mvVer11, 1 ), blkBot, iScaleY ))
+          return false;
+      }
+      else
+      {
+        if(!checkMvLineSync( roundMvVal( mvVer00 + mvVer01, 1 ), blk00.y + filterMargin + nBH, iScaleY ))
+          return false;
+        if(!checkMvLineSync( roundMvVal( mvVer10 + mvVer11, 1 ), blk10.y + filterMargin + nBH, iScaleY ))
+          return false;
+      }
+    }
+  }
+  else
+  {
+    if(iScaleX || iScaleY)
+    {
+      int blkBot = ((blk00.y + filterMargin) >> iScaleY) + nBH;
+      int mvVer00_ = calcAffineMv(off00.x + nBW, off00.y + (iScaleY ? nBH: 0) );
+      if(!checkMvLineSync( roundMvVal( mvVer00 + mvVer00_, 1 ), blkBot, iScaleY ))
+        return false;
+
+      int _mvVer01 =           calcAffineMv( off01.x - nBW, off01.y       );
+      int mvVer01_ = iScaleY ? calcAffineMv( off01.x      , off01.y + nBH ): mvVer01;
+      if(!checkMvLineSync( roundMvVal( _mvVer01 + mvVer01_, 1 ), blkBot, iScaleY ))
+        return false;
+
+      blkBot = ((blk10.y - (iScaleY ? nBH: 0) + filterMargin) >> iScaleY) + nBH;
+      int _mvVer10 = iScaleY ? calcAffineMv( off10.x      , off10.y - nBH ): mvVer10;
+      int mvVer10_ =           calcAffineMv( off10.x + nBW, off10.y       );
+      if(!checkMvLineSync( roundMvVal( _mvVer10 + mvVer10_, 1 ), blkBot, iScaleY ))
+        return false;
+
+      int _mvVer11 = calcAffineMv( off11.x - nBW, off11.y - (iScaleY ? nBH: 0) );
+      if(!checkMvLineSync( roundMvVal( _mvVer11 + mvVer11, 1 ), blkBot, iScaleY ))
+        return false;
+    }
+  }
+
+  return true;
 }
 
 void InterPrediction::xFillIBCBuffer(CodingUnit& cu)

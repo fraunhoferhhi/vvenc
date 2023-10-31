@@ -74,12 +74,36 @@ UnitArea CS::getArea( const CodingStructure &cs, const UnitArea& area, const Cha
   return isDualITree( cs ) || treeType != TREE_D ? area.singleChan( chType ) : area;
 }
 
+int CS::signalModeCons( const CodingStructure &cs, const UnitArea &currArea, const PartSplit split, const ModeType modeTypeParent )
+{
+  const ChromaFormat chromaFormat = currArea.chromaFormat;
+
+  if( CS::isDualITree( cs ) || modeTypeParent != MODE_TYPE_ALL || chromaFormat == CHROMA_444 || chromaFormat == CHROMA_400 )
+    return LDT_MODE_TYPE_INHERIT;
+
+  int minLumaArea = currArea.lumaSize().area();
+  if( split == CU_QUAD_SPLIT || split == CU_TRIH_SPLIT || split == CU_TRIV_SPLIT ) // the area is split into 3 or 4 parts
+  {
+    minLumaArea = minLumaArea >> 2;
+  }
+  else if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) // the area is split into 2 parts
+  {
+    minLumaArea = minLumaArea >> 1;
+  }
+
+  int minChromaBlock = minLumaArea >> ( getChannelTypeScaleX( CH_C, chromaFormat ) + getChannelTypeScaleY( CH_C, chromaFormat ) );
+  bool is2xNChroma   = ( currArea.chromaSize().width == 4 && split == CU_VERT_SPLIT ) || ( currArea.chromaSize().width == 8 && split == CU_TRIV_SPLIT );
+  return minChromaBlock >= 16 && !is2xNChroma ? LDT_MODE_TYPE_INHERIT
+                                              : ( ( minLumaArea < 32 ) || cs.slice->isIntra() ) ? LDT_MODE_TYPE_INFER
+                                                                                                : LDT_MODE_TYPE_SIGNAL;
+}
+
 void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
 {
   const int dy = std::min<int>( cu.lumaSize().height, DMVR_SUBCU_SIZE );
   const int dx = std::min<int>( cu.lumaSize().width,  DMVR_SUBCU_SIZE );
       
-  static const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
+  static const unsigned scale = 4 * std::max<int>( 1, 4 * AMVP_DECIMATION_FACTOR / 4 );
   static const unsigned mask  = scale - 1;
 
   const Position puPos = cu.lumaPos();
@@ -90,6 +114,8 @@ void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
   {
     for( int x = puPos.x; x < ( puPos.x + cu.lumaSize().width ); x = x + dx, num++ )
     {
+      if( cu.mvdL0SubPu[num] == Mv( 0, 0 ) ) continue;
+
       const Mv subPuMv0 = mv0 + cu.mvdL0SubPu[num];
       const Mv subPuMv1 = mv1 - cu.mvdL0SubPu[num];
 
@@ -128,10 +154,11 @@ void CS::setRefinedMotionFieldCTU( CodingStructure& cs, const int ctuX, const in
   {
     const CodingUnit& cu = *ptrCU;
     
-    if( isLuma( cu.chType ) && CU::checkDMVRCondition( cu ) )
+    if( isLuma( cu.chType ) && cu.mvdL0SubPu && CU::checkDMVRCondition( cu ) )
     {
       refineCU( cu, mb, orgPtr );
     }
+
     ptrCU = ptrCU->next;
   }
 }
@@ -3521,17 +3548,47 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
   return mtsAllowed;
 }
 
-bool CU::isMvInRangeFPP( const CodingUnit &cu, const Mv& mv, const int fppLinesSynchro, const ComponentID compID, const int mvPrecShift )
+bool CU::isMvInRangeFPP( const int yB, const int nH, const int yMv, const int fppLinesSynchro, const PreCalcValues& pcv, const int chromaShift, const int mvPrecShift )
 {
-  const int yCompScale        = getComponentScaleY(compID, cu.chromaFormat);
-  const int maxCUSizeShift    = cu.cs->pcv->maxCUSizeLog2 - yCompScale;
-  const int dctifMarginVerBot = 4 >> yCompScale;
-  const int refPosBot         = cu.block(compID).y + cu.block(compID).height - 1 + dctifMarginVerBot + (mv.ver >> mvPrecShift);
-  const int refCtuRow         = std::min( (int)((refPosBot > 0) ? refPosBot >> maxCUSizeShift: -1), (int)(cu.cs->pcv->heightInCtus - 1));
-  const int curCtuRow         = cu.block(compID).y >> maxCUSizeShift;
-  if( refCtuRow > ( curCtuRow + fppLinesSynchro ) )
-  {
+  //const int dctifMarginVerBot = 4 >> yCompScale;
+  const int ctuLogScale = pcv.maxCUSizeLog2 - chromaShift;
+  const int yBMax       = ( pcv.heightInCtus - 1 - fppLinesSynchro ) << ctuLogScale;
+  const int yRefMax     = ( ( ( yB >> ctuLogScale ) + fppLinesSynchro + 1 ) << ctuLogScale ) - 1;
+  if( yB < yBMax && ( yB + nH + ( 4 >> chromaShift ) + (yMv >> (mvPrecShift + chromaShift) ) - 1 > yRefMax ) )
     return false;
+  return true;
+}
+
+bool CU::isMotionBufInRangeFPP( const CodingUnit &cu, const int fppLinesSynchro )
+{
+  const CMotionBuf mb = cu.getMotionBuf();
+  const ComponentID compID = COMP_Y;
+  const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL;
+
+  const int yCompScale = getComponentScaleY(compID, cu.chromaFormat);
+  const int maxCUSizeShift = cu.cs->pcv->maxCUSizeLog2 - yCompScale;
+  const int dctifMarginVerBot = 4 >> yCompScale;
+  const int curCtuRow = cu.block(compID).y >> maxCUSizeShift;
+  const int cuBottom = cu.block(compID).y + cu.block(compID).height - 1;
+
+  // checking only bottom line of motion buffer
+  for( int y =  0; y < mb.height; y++ )
+  {
+    for( int x = 0; x < mb.width; x++ )
+    {
+      const MotionInfo& mi = mb.at( x, y );
+      for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
+      {
+        if( mi.miRefIdx[i] != MI_NOT_VALID )
+        {
+          const Mv& mv = mi.mv[i];
+          const int refMaxPosY = cuBottom + dctifMarginVerBot + (mv.ver >> mvPrecShift);
+          const int refCtuRow = std::min( (int)((refMaxPosY > 0) ? refMaxPosY >> maxCUSizeShift: -1), (int)(cu.cs->pcv->heightInCtus - 1));
+          if( refCtuRow > ( curCtuRow + fppLinesSynchro ) )
+            return false;
+        }
+      }
+    }
   }
   return true;
 }

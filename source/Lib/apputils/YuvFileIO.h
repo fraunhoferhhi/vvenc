@@ -147,7 +147,7 @@ public:
       if( !cLogoFilename.empty() )
       {
         std::stringstream strstr;
-        if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, fileBitDepth, strstr ) )
+        if ( 0 != m_cLogoRenderer.init( cLogoFilename, m_bufferChrFmt, strstr ) )
         {
           if( !strstr.str().empty() )
             m_lastError = strstr.str();

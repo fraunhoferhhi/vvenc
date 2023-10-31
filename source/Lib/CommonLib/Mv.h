@@ -224,6 +224,15 @@ public:
     roundToPrecision(MV_PRECISION_INTERNAL, m_amvrPrecision[amvr]);
   }
 
+  void roundTransPrecInternal2AmvrVertical(const int amvr)
+  {
+    const int shift = MV_PRECISION_INTERNAL - Mv::m_amvrPrecision[amvr];
+    const int rightShift = shift;
+    const int nOffset = 1 << (rightShift - 1);
+    ver = ver >= 0 ? (ver + nOffset - 1) >> rightShift : (ver + nOffset) >> rightShift;
+    ver = ver << shift;
+  }
+
   // affine MV
   void changeAffinePrecInternal2Amvr(const int amvr)
   {

@@ -80,7 +80,7 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 #define VVENC_MAX_TLAYER                      7      // Explicit temporal layer QP offset - max number of temporal layer
 #define VVENC_MAX_NUM_CQP_MAPPING_TABLES      3      // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
 #define VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA 8
-#define VVENC_MCTF_RANGE                      4      // max number of frames used for MCTF filtering in forward / backward direction
+#define VVENC_MCTF_RANGE                      6      // max number of frames used for MCTF filtering in forward / backward direction
 #define VVENC_MAX_NUM_COMP                    3      // max number of components
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
@@ -196,7 +196,7 @@ typedef enum
   VVENC_DRT_CRA                = 1,
   VVENC_DRT_IDR                = 2,
   VVENC_DRT_RECOVERY_POINT_SEI = 3,
-  VVENC_DRT_IDR2               = 4,
+  VVENC_DRT_IDR2               = 4,             //deprecated
   VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
 }vvencDecodingRefreshType;
 
@@ -759,7 +759,8 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_reservedFlag[2];
+  bool                m_reservedFlag;
+  bool                m_poc0idr;
   int8_t              m_fppLinesSynchro;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;

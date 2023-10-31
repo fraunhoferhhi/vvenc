@@ -187,7 +187,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   xInitRPL( sps0 );
   xInitHrdParameters( sps0 );
 
-  if( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 )
+  if( !m_pcEncCfg->m_poc0idr )
   {
     m_associatedIRAPType = VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
@@ -1246,7 +1246,7 @@ vvencNalUnitType EncGOP::xGetNalUnitType( const Slice* slice ) const
 {
   const GOPEntry& gopEntry = *slice->pic->gopEntry;
 
-  if( gopEntry.m_POC == 0 && m_pcEncCfg->m_DecodingRefreshType != VVENC_DRT_IDR2 )
+  if( gopEntry.m_POC == 0 && m_pcEncCfg->m_poc0idr )
   {
     return VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP;
   }
@@ -1255,9 +1255,16 @@ vvencNalUnitType EncGOP::xGetNalUnitType( const Slice* slice ) const
   {
     if( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_CRA || m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_CRA_CRE )
     {
-      return VVENC_NAL_UNIT_CODED_SLICE_CRA;
+      if( m_lastIDR == 0 && !m_pcEncCfg->m_poc0idr )
+      {
+        return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
+      }
+      else
+      {
+        return VVENC_NAL_UNIT_CODED_SLICE_CRA;
+      }
     }
-    if( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR || m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2  )
+    else
     {
       return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
     }

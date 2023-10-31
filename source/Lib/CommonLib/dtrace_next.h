@@ -158,6 +158,7 @@ enum DTRACE_CHANNEL
   D_MOT_COMP,             // Motion compensation
   D_ALF,
   D_ALF_EST,
+  D_CCALF_EST,
   D_CRC
 };
 #define _CNL_DEF(_s) {_s,(std::string(#_s))}
@@ -258,6 +259,7 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
     _CNL_DEF( D_MOT_COMP ),
     _CNL_DEF( D_ALF ),
     _CNL_DEF( D_ALF_EST ),
+    _CNL_DEF( D_CCALF_EST ),
     _CNL_DEF( D_CRC )
   };
   dtrace_channels_t channels( next_channels, &next_channels[sizeof( next_channels ) / sizeof( next_channels[0] )] );

@@ -223,13 +223,13 @@ const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap
   { "cra",                   VVENC_DRT_CRA },
   { "idr",                   VVENC_DRT_IDR },
   { "rpsei",                 VVENC_DRT_RECOVERY_POINT_SEI },
-  { "idr2",                  VVENC_DRT_IDR2 },
+  { "idr2",                  VVENC_DRT_IDR2 }, //deprecated
   { "cra_cre",               VVENC_DRT_CRA_CRE },
   { "0",                     VVENC_DRT_NONE },
   { "1",                     VVENC_DRT_CRA },
   { "2",                     VVENC_DRT_IDR },
   { "3",                     VVENC_DRT_RECOVERY_POINT_SEI },
-  { "4",                     VVENC_DRT_IDR2 },
+  { "4",                     VVENC_DRT_IDR2 },  //deprecated
   { "5",                     VVENC_DRT_CRA_CRE },
 };
 
@@ -625,7 +625,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, >= 720p: 8 threads)")
-    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, idr2, cra_cre: CRA, constrained RASL picture encoding)")
+    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify intra period in seconds instead, see -refreshsec)")
     ("tiles",                                           toNumTiles,                                          "number of tile columns and rows")
@@ -644,9 +644,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.addOptions()
     ("IntraPeriod,-ip",                                c->m_IntraPeriod,                                     "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
     ("RefreshSec,-rs",                                 c->m_IntraPeriodSec,                                  "Intra period/refresh in seconds")
-    ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE - CRA with constrained encoding for RASL pictures)")
+    ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding, none, rpsei: Recovery Point SEI)")
     ("GOPSize,g",                                      c->m_GOPSize,                                         "GOP size of temporal structure (16,32)")
     ("PicReordering",                                  c->m_picReordering,                                   "Allow reordering of pictures (0:off, 1:on), should be disabled for low delay requirements")
+    ("POC0IDR",                                        c->m_poc0idr,                                         "start encoding with POC 0 IDR" )
     ;
 
     opts.setSubSection("Rate control, Perceptual Quantization");

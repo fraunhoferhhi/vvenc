@@ -167,7 +167,6 @@ public:
 
   void clearTUs( bool force = false );
   void clearCUs( bool force = false );
-  const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
   void createTempBuffers( const bool isTopLayer );
   void destroyTempBuffers();

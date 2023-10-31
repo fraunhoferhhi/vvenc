@@ -961,7 +961,7 @@ public:
 
     return tileRowResIdx + tileRowResIdxRest;
   }
-  bool                   canFilterCtuBdry( int ctuX, int ctuY, int offX, int offY ) const { return getTileIdx( ctuX, ctuY ) == getTileIdx( ctuX + offX, ctuY + offY ) || loopFilterAcrossTilesEnabled; }
+  bool                   canFilterCtuBdry( int ctuX, int ctuY, int offX, int offY ) const { return loopFilterAcrossTilesEnabled || getTileIdx( ctuX, ctuY ) == getTileIdx( ctuX + offX, ctuY + offY ); }
   
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;

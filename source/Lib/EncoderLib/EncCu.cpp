@@ -745,7 +745,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             if (cu)
               cu->mmvdSkip = cu->skip == false ? false : cu->mmvdSkip;
           }
-          if (m_pcEncCfg->m_Geo && cs.slice->isInterB())
+          if (m_pcEncCfg->m_Geo && cs.slice->isInterB() && !bestCS->cus.empty())
           {
             EncTestMode encTestModeGeo = { ETM_MERGE_GEO, ETO_STANDARD, qp, lossless };
             if (m_modeCtrl.tryMode(encTestModeGeo, cs, partitioner))
@@ -955,7 +955,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   const TreeType treeTypeParent  = partitioner.treeType;
   const ChannelType chTypeParent = partitioner.chType;
 
-  int signalModeConsVal = tempCS->signalModeCons( getPartSplit( encTestMode ), partitioner, modeTypeParent );
+  int signalModeConsVal = CS::signalModeCons( *tempCS, partitioner.currArea(), getPartSplit(encTestMode), modeTypeParent);
   int numRoundRdo = signalModeConsVal == LDT_MODE_TYPE_SIGNAL ? 2 : 1;
   bool skipInterPass = false;
   for( int i = 0; i < numRoundRdo; i++ )
@@ -1719,8 +1719,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         }
         mergeCtx.setMergeInfo( cu, uiMergeCand );
         if( m_pcEncCfg->m_fppLinesSynchro && 
-         (  ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
-            ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+         (  ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
+            ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
           ) )
         {
           // skip candidate
@@ -1911,8 +1911,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           }
           mergeCtx.setMmvdMergeCandiInfo(cu, mmvdMergeCand);
           if( m_pcEncCfg->m_fppLinesSynchro &&
-            ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
-              ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+            ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
+              ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
             ) )
           {
             // skip candidate
@@ -2127,8 +2127,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         continue;
       }
       if( m_pcEncCfg->m_fppLinesSynchro && !m_pcEncCfg->m_useFastMrg &&
-        ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L0][0], m_pcEncCfg->m_fppLinesSynchro ) ) ||
-          ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu, cu.mv[L1][0], m_pcEncCfg->m_fppLinesSynchro ) )
+        ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
+          ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
         ) )
       {
         // skip candidate
@@ -2309,6 +2309,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   Distortion bestWholeBlkSad  = MAX_UINT64;
   double     bestWholeBlkCost = MAX_DOUBLE;
   Distortion sadWholeBlk[ GEO_MAX_NUM_UNI_CANDS];
+  bool skipCandFpp[2][GEO_MAX_NUM_UNI_CANDS];
 
   if (m_pcEncCfg->m_Geo == 3)
   {
@@ -2391,6 +2392,14 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       if (sameMV[mergeCand] )
       {
         continue;
+      }
+
+      if( m_pcEncCfg->m_fppLinesSynchro ) 
+      {
+        skipCandFpp[L0][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 0].mv.ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv );
+        skipCandFpp[L1][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 1].mv.ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv );
+        if( skipCandFpp[L0][mergeCand] || skipCandFpp[L1][mergeCand] )
+          continue;
       }
 
       mergeCtx.setMergeInfo(cu, mergeCand);
@@ -2631,6 +2640,13 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       cu.mmvdMergeIdx     = MAX_UINT;
 
       CU::spanGeoMotionInfo(cu, mergeCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
+      if( m_pcEncCfg->m_fppLinesSynchro && 
+        ( skipCandFpp[L0][cu.geoMergeIdx0] || skipCandFpp[L1][cu.geoMergeIdx0] || skipCandFpp[L0][cu.geoMergeIdx1] || skipCandFpp[L1][cu.geoMergeIdx1] ) ) 
+      {
+        tempCS->initStructData(encTestMode.qp);
+        continue;
+      }
+
       tempCS->getPredBuf().copyFrom(geoCombinations[candidateIdx]);
 
       xEncodeInterResidual(tempCS, bestCS, pm, encTestMode, noResidualPass,
@@ -3053,16 +3069,16 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MVD_IMV, tempCS, partitioner.chType );
   bool Test_AMVR = m_pcEncCfg->m_AMVRspeed ? true: false;
-  if (m_pcEncCfg->m_AMVRspeed > 2 && m_pcEncCfg->m_AMVRspeed < 5 && bestCS->getCU(partitioner.chType, partitioner.treeType)->skip)
+  if (m_pcEncCfg->m_AMVRspeed > 2 && m_pcEncCfg->m_AMVRspeed < 5 && !bestCS->cus.empty() && bestCS->getCU(partitioner.chType, partitioner.treeType)->skip)
   {
     Test_AMVR = false;
   }
-  else if (m_pcEncCfg->m_AMVRspeed > 4 && bestCS->getCU(partitioner.chType, partitioner.treeType)->mergeFlag && !bestCS->getCU(partitioner.chType, partitioner.treeType)->ciip)
+  else if (m_pcEncCfg->m_AMVRspeed > 4 && !bestCS->cus.empty() && bestCS->getCU(partitioner.chType, partitioner.treeType)->mergeFlag && !bestCS->getCU(partitioner.chType, partitioner.treeType)->ciip)
   {
     Test_AMVR = false;
   }
-  bool Do_Limit = (m_pcEncCfg->m_AMVRspeed == 4 || m_pcEncCfg->m_AMVRspeed == 6) ? true : false;
-  bool Do_OnceRes = (m_pcEncCfg->m_AMVRspeed == 7) ? true : false;
+  bool Do_Limit = !bestCS->cus.empty() && (m_pcEncCfg->m_AMVRspeed == 4 || m_pcEncCfg->m_AMVRspeed == 6) ? true : false;
+  bool Do_OnceRes = !bestCS->cus.empty() && (m_pcEncCfg->m_AMVRspeed == 7) ? true : false;
 
   if( Test_AMVR )
   {
@@ -3091,6 +3107,8 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
     {
       bcwLoopNum = 1;
     }
+  _CASE( _UNIT_AREA_AT(tempCS->area, 96, 640, 32, 32) && tempCS->slice->poc == 16 )
+    _BREAK;
 
     for (int i = 1; i <= IMV_HPEL; i++)
     {
@@ -4032,6 +4050,12 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
       CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0], REF_PIC_LIST_0 );
       CU::setAllAffineMvField( cu, affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1], REF_PIC_LIST_1 );
       CU::spanMotionInfo( cu );
+    }
+
+    if( m_pcEncCfg->m_fppLinesSynchro && ( !( CU::isMotionBufInRangeFPP( cu, m_pcEncCfg->m_fppLinesSynchro ) ) ) )
+    {
+      // Do not use this mode
+      continue;
     }
 
     distParam.cur = sortedPelBuffer.getTestBuf().Y();

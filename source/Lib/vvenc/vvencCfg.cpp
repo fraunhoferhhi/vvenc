@@ -243,7 +243,7 @@ static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
   return css.str();
 }
 
-static inline std::string vvenc_getDecodingRefreshTypeStr(  int type )
+static inline std::string vvenc_getDecodingRefreshTypeStr(  int type, bool poc0idr )
 {
   std::string cType( "CRA");
   switch( type )
@@ -252,10 +252,11 @@ static inline std::string vvenc_getDecodingRefreshTypeStr(  int type )
     case 1: cType = "CRA"; break;
     case 2: cType = "IDR"; break;
     case 3: cType = "RecPointSEI"; break;
-    case 4: cType = "IDR2"; break;
+    case 4: cType = "IDR2 (deprecated)"; break; //deprecated
     case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
     default: cType = "unknown"; break;
   }
+  if( poc0idr ) cType += " with POC 0 IDR";
   return cType;
 }
 
@@ -362,6 +363,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_QP                                      = VVENC_DEFAULT_QP;
   c->m_RCTargetBitrate                         = VVENC_RC_OFF;
   c->m_RCMaxBitrate                            = 0;
+  c->m_RCInitialQP                             = 0;
 
   c->m_verbosity                               = VVENC_INFO;    ///< encoder verbosity
 
@@ -374,6 +376,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size
+  c->m_poc0idr                                 = false;
   c->m_picReordering                           = 1;
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
@@ -530,8 +533,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_FastIntraTools                          = 0;
   c->m_IntraEstDecBit                          = 1;
 
-  c->m_RCInitialQP                             = 0;
-
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
   c->m_motionEstimationSearchMethodSCC         = 0;
   c->m_SearchRange                             = 96;
@@ -686,7 +687,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_FirstPassMode                           = 0;
 
-  memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
+  c->m_reservedFlag                            = false;
+  c->m_reservedInt                             = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1206,6 +1208,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
+  
+  if( c->m_DecodingRefreshType == VVENC_DRT_IDR2 )
+  {
+    msg.log( VVENC_WARNING, "Configuration warning: DecodingRefreshType IDR2 is deprecated\n\n" );
+    vvenc_confirmParameter( c, c->m_poc0idr, "for using deprecated IDR2, POC0IDR has to be disabled" );
+    c->m_DecodingRefreshType = VVENC_DRT_IDR;
+  }
 
   if( c->m_rprEnabledFlag == -1 )
   {
@@ -1260,6 +1269,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_IntraPeriod = idrPeriod;
   }
   
+  if( c->m_IntraPeriod == 1 && !c->m_poc0idr )
+  {
+    c->m_poc0idr = true;
+  }
+
   if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
   {
     // TODO 2.0: make this an error
@@ -1271,6 +1285,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
+  
+  vvenc_confirmParameter( c, !c->m_poc0idr && ( c->m_IntraPeriod == 1 || !c->m_picReordering ), "when POC 0 is not an IDR frame it is only possible for random access, for all intra and low delay encoding POC0IDR must be set!" );
 
   if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
   {
@@ -1316,10 +1332,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     case VVENC_SEG_MID:
       c->m_leadFrames  = std::max( staFrames, mctfFrames );
       c->m_trailFrames = mctfFrames;
+      c->m_poc0idr     = true;
       break;
     case VVENC_SEG_LAST:
       c->m_leadFrames  = std::max( staFrames, mctfFrames );
       c->m_trailFrames = 0;
+      c->m_poc0idr     = true;
       break;
     default:
       // do nothing
@@ -2002,15 +2020,9 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
-
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Affine,    "FPP CTU-lines synchro: Affine cannot be used" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_Geo,       "FPP CTU-lines synchro: GPM (GEO) cannot be used" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_AMVRspeed, "FPP CTU-lines synchro: AMVR (IMV) cannot be used" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_SMVD,      "FPP CTU-lines synchro: SMVD cannot be used" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_MMVD,      "FPP CTU-lines synchro: MMVD cannot be used" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileRows > 1,  "FPP CTU-lines synchro: Only single tile row is supported" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0 || c->m_fppLinesSynchro > (c->m_SourceHeight/c->m_CTUSize - 1), "fppLinesSynchro must be greater than 0 and less than max number of CTU lines" );
+    vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0, "fppLinesSynchro must be >= 0" );
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
@@ -2981,12 +2993,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << loglvl << "Perceptual optimization                : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
     css << loglvl << "Intra period (keyframe)                : " << c->m_IntraPeriod << "\n";
-    css << loglvl << "Decoding refresh type                  : " << vvenc_getDecodingRefreshTypeStr(c->m_DecodingRefreshType) << "\n";
+    css << loglvl << "Decoding refresh type                  : " << vvenc_getDecodingRefreshTypeStr(c->m_DecodingRefreshType,c->m_poc0idr) << "\n";
 
     if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
     {
       css << loglvl << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
-    }
+  }
     if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
     {
       css << loglvl << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
@@ -3028,7 +3040,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
     css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
-  }
+    }
 
   if( eMsgLevel >= VVENC_VERBOSE )
   {    
