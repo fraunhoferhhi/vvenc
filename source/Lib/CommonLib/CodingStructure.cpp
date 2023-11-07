@@ -600,6 +600,8 @@ void CodingStructure::destroyTempBuffers()
 
   // swap the contents of the vector so that memory released
   std::vector<Mv>().swap( m_dmvrMvCache );
+  std::vector<CodingUnit*>().swap( cus );
+  std::vector<TransformUnit*>().swap( tus );
 }
 
 void CodingStructure::addMiToLut( static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS>& lut, const HPMVInfo& mi )

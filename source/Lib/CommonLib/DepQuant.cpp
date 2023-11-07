@@ -84,26 +84,26 @@ namespace DQIntern
   };
 
 
-  enum ScanPosType { SCAN_ISCSBB = 0, SCAN_SOCSBB = 1, SCAN_EOCSBB = 2 };
+  enum ScanPosType : int8_t { SCAN_ISCSBB = 0, SCAN_SOCSBB = 1, SCAN_EOCSBB = 2 };
 
   struct ScanInfo
   {
     ScanInfo() {}
-    int           sbbSize;
-    int           numSbb;
-    int           scanIdx;
-    int           rasterPos;
-    int           sbbPos;
-    int           insidePos;
+    short         numSbb;
+    short         scanIdx;
+    short         rasterPos;
+    short         sbbPos; // byte
+    short         nextSbbRight;
+    short         nextSbbBelow;
+    int8_t        sbbSize;
+    int8_t        insidePos;
+    int8_t        nextInsidePos;
     ScanPosType   spt;
-    unsigned      sigCtxOffsetNext;
-    unsigned      gtxCtxOffsetNext;
-    int           nextInsidePos;
+    int8_t        posX;
+    int8_t        posY;
+    int8_t        sigCtxOffsetNext;
+    int8_t        gtxCtxOffsetNext;
     NbInfoSbb     currNbInfoSbb;
-    int           nextSbbRight;
-    int           nextSbbBelow;
-    int           posX;
-    int           posY;
   };
 
   class Rom;

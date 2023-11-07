@@ -109,11 +109,11 @@ const int16_t MCTF::m_interpolationFilter4[16][4] =
   {  0,  4, 62, -2 },    //15-->-->
 };
 
-const double MCTF::m_refStrengths[2][4] =
+const double MCTF::m_refStrengths[2][6] = // min(..., {3 or 5} / (1 + 2 * |POC offset|))
 { // abs(POC offset)
-  // 1,    2     3     4
-  {0.85, 0.57, 0.41, 0.33}, // RA
-  {1.13, 0.97, 0.81, 0.57 } // LD
+  // 1       2       3       4       5       6
+  { 0.84375, 0.6, 0.4286, 0.3333, 0.2727, 0.2308 }, // RA
+  { 1.12500, 1.0, 0.7143, 0.5556, 0.4545, 0.3846 }  // LD
 };
 
 const int    MCTF::m_cuTreeThresh[4] = { 75, 60,     30, 15 };
@@ -667,7 +667,7 @@ void MCTF::motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSource
 
   srcPic.picBuffer.createFromBuf(curPic->getOrigBuf());
   srcPic.mvs.allocate(wInBlks, hInBlks);
-  srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
+  srcPic.index = std::min(5, std::abs(curPic->poc - m_filterPoc) - 1);
 
 
   {

@@ -1,6 +1,8 @@
-# Fraunhofer Versatile Video Encoder (VVenC)
+# VVenC
 
-The Fraunhofer Versatile Video Encoder (VVenC) is a fast and efficient H.266/VVC encoder implementation with the following main features:
+![VVenC Logo](https://github.com/fraunhoferhhi/vvenc/wiki/img/VVenC_RGB_small.png)
+
+VVenC, the Fraunhofer Versatile Video Encoder, is a fast and efficient software H.266/VVC encoder implementation with the following main features:
 - Easy to use encoder implementation with five predefined quality/speed presets;
 - Perceptual optimization to improve subjective video quality, based on the XPSNR visual model;
 - Extensive frame-level and task-based parallelization with very good scaling;
@@ -83,3 +85,5 @@ For more information, please contact: vvc@hhi.fraunhofer.de
 **Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.**
 
 **All rights reserved.**
+
+**VVenC® is a registered trademark of the Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.**

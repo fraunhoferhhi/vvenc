@@ -158,7 +158,7 @@ private:
   static const int      m_padding;
   static const int16_t  m_interpolationFilter4[16][4];
   static const int16_t  m_interpolationFilter8[16][8];
-  static const double   m_refStrengths[2][4];
+  static const double   m_refStrengths[2][6];
   static const int      m_cuTreeThresh[4];
   static const double   m_cuTreeCenter;
 

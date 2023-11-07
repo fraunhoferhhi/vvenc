@@ -1399,7 +1399,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     }
     if (m_pcEncCfg->m_FastIntraTools)
     {
-      m_modeCtrl.comprCUCtx->bestIntraMode = m_cIntraSearch.m_ispTestedModes[0].bestIntraMode;
       if (m_cIntraSearch.m_ispTestedModes[0].intraWasTested)
       {
         m_modeCtrl.comprCUCtx->intraWasTested = m_cIntraSearch.m_ispTestedModes[0].intraWasTested;
