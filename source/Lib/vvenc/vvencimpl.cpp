@@ -854,7 +854,7 @@ std::string VVEncImpl::createEncoderInfoStr()
 
 
   std::string cInfoStr;
-  cInfoStr  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  cInfoStr  = "VVenC, the Fraunhofer H.266/VVC Encoder, version " VVENC_VERSION;
   cInfoStr += " ";
   cInfoStr += cssCap.str();
 

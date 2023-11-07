@@ -834,20 +834,6 @@ public:
     return ret;
   }
 
-  void defragment()
-  {
-    m_cache.clear();
-  
-    for( T* chunk : m_cacheChunks )
-    {
-      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
-      {
-        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
-        m_cache.push_back( &chunk[p] );
-      }
-    }
-  }
-
   void cache( T* el )
   {
     m_cache.push_back( el );

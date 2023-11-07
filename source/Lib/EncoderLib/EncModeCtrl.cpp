@@ -141,14 +141,6 @@ void CacheBlkInfoCtrl::init( const Slice &slice )
   m_pcv = slice.pps->pcv;
 }
 
-CodedCUInfo& CacheBlkInfoCtrl::getBlkInfo( const UnitArea& area )
-{
-  unsigned idx1, idx2, idx3, idx4;
-  getAreaIdxNew( area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
-//  DTRACE( g_trace_ctx, D_TMP, "%d loc %d %d %d %d\n", g_trace_ctx->getChannelCounter(D_TMP), idx1, idx2, idx3, idx4);
-  return *m_codedCUInfo[idx1][idx2][idx3][idx4];
-}
-
 void CacheBlkInfoCtrl::initBlk( const UnitArea& area, int poc )
 {
   unsigned idx1, idx2, idx3, idx4;
@@ -166,6 +158,14 @@ void CacheBlkInfoCtrl::initBlk( const UnitArea& area, int poc )
     cuInfo->poc       = poc;
     cuInfo->ctuRsAddr = ctuRsAddr;
   }
+}
+
+CodedCUInfo& CacheBlkInfoCtrl::getBlkInfo( const UnitArea& area )
+{
+  unsigned idx1, idx2, idx3, idx4;
+  getAreaIdxNew( area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
+//  DTRACE( g_trace_ctx, D_TMP, "%d loc %d %d %d %d\n", g_trace_ctx->getChannelCounter(D_TMP), idx1, idx2, idx3, idx4);
+  return *m_codedCUInfo[idx1][idx2][idx3][idx4];
 }
 
 void CodedCUInfo::setMv( const RefPicList refPicList, const int iRefIdx, const Mv& rMv )
@@ -1017,7 +1017,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       }
       if (relatedCU.isIntra)
       {
-        cuECtx.bestIntraMode = relatedCU.bestIntraMode;
         cuECtx.isIntra = relatedCU.isIntra;
       }
     }
@@ -1135,10 +1134,6 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
     relatedCU.isIntra     = true;
     if (m_pcEncCfg->m_FastIntraTools)
     {
-      if (cuECtx.bestCS->cost < relatedCU.bestCost)
-      {
-        relatedCU.bestIntraMode = cuECtx.bestIntraMode;
-      }
       if ( cuECtx.intraWasTested && (!relatedCU.relatedCuIsValid || cuECtx.bestCS->cost < relatedCU.bestCost))
       {
         relatedCU.bestCost = cuECtx.bestCS->cost;
