@@ -672,7 +672,7 @@ static inline unsigned int bit_scan_reverse( int a )
 }
 #endif
 
-#if ENABLE_SIMD_LOG2
+#if ENABLE_SIMD_LOG2 && defined( TARGET_SIMD_X86 )
 static inline int floorLog2( int val )
 {
   CHECKD(val == 0, "invalid input value");
