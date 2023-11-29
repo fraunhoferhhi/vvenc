@@ -666,15 +666,13 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
 
-  if( slice.chromaQpAdjEnabled )
+  if( slice.chromaQpAdjEnabled && partitioner.currQgChromaEnable() )
   {
     // TODO M0133 : double check encoder decisions with respect to chroma QG detection and actual encode
+    int cuChromaQpOffsetSubdiv = slice.isIntra() ? slice.picHeader->cuChromaQpOffsetSubdivIntra : slice.picHeader->cuChromaQpOffsetSubdivInter;
     int lgMinCuSize = sps.log2MinCodingBlockSize +
-      std::max<int>(0, floorLog2(sps.CTUSize - sps.log2MinCodingBlockSize - int((slice.isIntra() ? slice.picHeader->cuChromaQpOffsetSubdivIntra : slice.picHeader->cuChromaQpOffsetSubdivInter) / 2)));
-    if( partitioner.currQgChromaEnable() )
-    {
-      m_cuChromaQpOffsetIdxPlus1 = ( ( uiLPelX >> lgMinCuSize ) + ( uiTPelY >> lgMinCuSize ) ) % ( pps.chromaQpOffsetListLen + 1 );
-    }
+      std::max<int>(0, floorLog2(sps.CTUSize) - sps.log2MinCodingBlockSize - int((cuChromaQpOffsetSubdiv + 1) / 2));
+    m_cuChromaQpOffsetIdxPlus1 = ( ( uiLPelX >> lgMinCuSize ) + ( uiTPelY >> lgMinCuSize ) ) % ( pps.chromaQpOffsetListLen + 1 );
   }
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "cux", uiLPelX ) );
