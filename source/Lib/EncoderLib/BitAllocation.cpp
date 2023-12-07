@@ -299,7 +299,7 @@ static void clipQPValToEstimatedMinimStats (const uint8_t* minNoiseLevels, const
     return;
   }
 
-  i = std::max (0, apprI3Log2 (std::min (16.0, resFac) * i * i, false) + dQPOffset + extraQPOffset); // =6*log2
+  i = std::max (0, apprI3Log2 (std::min (1.0, resFac) * i * i, false) + dQPOffset + extraQPOffset); // = 6*log2
   if (QP < i)
   {
     QP = i;
@@ -806,7 +806,8 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 }
 
 int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
-                                            std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP)
+                                            std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP,
+                                            const bool isBIM)
 {
   if (slice == nullptr || !slice->pps->useDQP || ctuPumpRedQP.size() <= ctuRsAddr) return 0;
 
@@ -824,7 +825,7 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   }
 
   const double sumAbsRatio = double (uiSadBestForQPA * 3 /*TODO: or 4? fine-tune!*/) / double (sumAbsZmOrig == 0 ? 1 : sumAbsZmOrig);
-  const int pumpingReducQP = (int (log (Clip3 (0.25, 4.0, sumAbsRatio)) / log (2.0) + (sumAbsRatio < 1.0 ? -0.5 : 0.5))) >> (baseQP >= 38/*MAX_QP_PERCEPT_QPA*/ ? 1 : 0);
+  const int pumpingReducQP = ((isBIM ? -1 : 0) + int (log (Clip3 (0.25, 4.0, sumAbsRatio)) / log (2.0) + (sumAbsRatio < 1.0 ? -0.5 : 0.5))) >> (baseQP >= 38/*MAX_QP_PERCEPT_QPA*/ ? 1 : 0);
 
   ctuPumpRedQP[ctuRsAddr] += pumpingReducQP;
 

@@ -367,14 +367,14 @@ int RateCtrl::getBaseQP()
         sumFrBits = uint64_t (0.5 + sumFrBits * sqrt (hpEner / (hpEnerPic * firstPassData.size())));
       }
     }
-    baseQP = int (24.5 - log (d) / log (2.0)); // QPstart, equivalent to round (24 + 2*log2 (resRatio))
+    baseQP = int (24.5 - log (std::max (1.0, d)) / log (2.0)); // QPstart, round(24 + 2*log2(resRatio))
     d = (double) m_pcEncCfg->m_RCTargetBitrate * (double) firstPassData.size() / (encRCSeq->frameRate * sumFrBits);
     d = firstPassBaseQP - (105.0 / 128.0) * sqrt ((double) std::max (1, firstPassBaseQP)) * log (d) / log (2.0);
     baseQP = int (0.5 + d + 0.5 * std::max (0.0, baseQP - d));
   }
   else if (m_pcEncCfg->m_LookAhead)
   {
-    baseQP = int (24.5 - log (d) / log (2.0)); // QPstart, equivalent to round (24 + 2*log2 (resRatio))
+    baseQP = int (24.5 - log (std::max (1.0, d)) / log (2.0)); // QPstart, round(24 + 2*log2(resRatio))
     d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log ((double) encRCSeq->intraPeriod / encRCSeq->gopSize) / log (2.0);
     baseQP = int (0.5 + d + 0.5 * std::max (0.0, baseQP - d));
   }
@@ -1192,7 +1192,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
       {
         if ( it->poc == slice->poc && it->numBits > 0 )
         {
-          const double sqrOfResRatio = double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 );
+          const double sqrOfResRatio = std::min( 1.0, double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 ) );
           const int firstPassSliceQP = it->qp;
           const int budgetRelaxScale = ( encRCSeq->maxGopRate + 0.5 < 2.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate ? 2 : 3 ); // quarters
           const bool isRateCapperMax = ( encRCSeq->maxGopRate + 0.5 >= 3.0 * (double)encRCSeq->targetRate * encRCSeq->gopSize / encRCSeq->frameRate );
@@ -1285,7 +1285,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           tmpVal = updateQPstartModelVal() + log (sqrOfResRatio) / log (2.0); // GOP's QPstart
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
-          sliceQP = int( 0.5 + d + 0.5 * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
+          sliceQP = int( 0.5 + d + ( it->isIntra && m_pcEncCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
                                   ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );

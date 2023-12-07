@@ -1,4 +1,24 @@
 /////////////////////////////////////////
+tag 1.10.0-rc1
+* libvvenc:
+  - added library parameters:
+    - vvenc_config::m_poc0idr to force POC0 to be an IDR (otherwise per default it will now be a RASL picture)
+  - changed default GOP structure of the first GOP to align with other GOPs, ensuring all intra-periods
+    and DASH segments have equal length
+  - enable spatial subsampling for 1st pass in 2-pass RC per default for faster preset
+  - adaptively extend the number of neighboring frames in MCTF pre-filtering
+  - allow ALF derivation from partial data for FPPLinesSynchro
+  - improved rate matching accuracy at high target rates on easy-to-encode content, especially for HDR
+  - disable compilation for SSE42 and AVX as no specific code is used,
+    only keep explicit support for SSE41 and AVX2
+  - around 0.5% BDR gain for all presets
+  - minor changes and cleanups to rate control, DMVR, MCTF, QPA and others
+
+* vvencFFapp:
+  - added parameter: POC0IDR to control if POC0 is an IDR (=1, default if PicReordering is 1)
+					 or RASL (=0, default if PicReordering is 0)
+
+/////////////////////////////////////////
 tag 1.9.1
 * libvvenc:
   - added library parameters:

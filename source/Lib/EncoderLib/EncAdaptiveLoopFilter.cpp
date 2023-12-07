@@ -5726,15 +5726,6 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( Picture& pic, CodingStructure& cs
     aps->ccAlfParam.newCcAlfFilter[1] = false;
   }
 
-  // Accumulate ALF statistic
-  const int filterIdx = 0;
-  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-  for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
-  {
-    const ComponentID compID = ComponentID( compIdx );
-    xGetFrameStatsCcalf( compID, filterIdx + 1, numCtus );
-  }
-
   const TempCtx ctxStartCcAlf( m_CtxCache, SubCtx( Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx() ) );
   const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const PelUnitBuf recYuv = cs.getRecoBuf();

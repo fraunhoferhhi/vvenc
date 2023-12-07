@@ -416,7 +416,7 @@ void applyPlanarCorrectionCore( const Pel* refPel, const ptrdiff_t refStride, Pe
   }
 }
 
-void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double refStrenghts[4], double weightScaling, double sigmaSq )
+void applyBlockCore( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts, double weightScaling, double sigmaSq )
 {
   const int         w = blk.width;
   const int         h = blk.height;
@@ -586,7 +586,7 @@ void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* t
   m_area        = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
-  const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2) };
+  const static int sMCTFSpeed[5] { 0, 0, ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (2<<9) + (2<<6) + (0<<3) + 0),   ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 2) };
 
   m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
@@ -1247,17 +1247,20 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
 
-    const int w = std::min<int>( blockSize, orig.Y().width  - blockX ) & ~7;
-    const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
+    if( doubleRes )
+    {
+      const int w = std::min<int>( blockSize, orig.Y().width  - blockX ) & ~7;
+      const int h = std::min<int>( blockSize, orig.Y().height - blockY ) & ~7;
 
-    CHECKD(bitDepth>10, "unsupported internal bit depth (also in calcVar)" );
-    const double bdScale = double(1<<(2*(10-bitDepth)));
-    const double dvar = m_calcVar( orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h ) * bdScale;
-    const double mse  = best.error * bdScale / double( w * h );
+      CHECKD(bitDepth>10, "unsupported internal bit depth (also in calcVar)" );
+      const double bdScale = double(1<<(2*(10-bitDepth)));
+      const double dvar = m_calcVar( orig.Y().bufAt( blockX, blockY ), orig.Y().stride, w, h ) * bdScale;
+      const double mse  = best.error * bdScale / double( w * h );
 
-    best.error   = ( int ) ( 20 * ( ( best.error*bdScale + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
-    best.rmsme   = uint16_t( 0.5 + sqrt( mse ) );
-    best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
+      best.error   = ( int ) ( 20 * ( ( best.error*bdScale + 5.0 ) / ( dvar + 5.0 ) ) + mse / 50.0 );
+      best.rmsme   = uint16_t( 0.5 + sqrt( mse ) );
+      best.overlap = ( ( double ) w * h ) / ( m_mctfUnitSize * m_mctfUnitSize );
+    }
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }

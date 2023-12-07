@@ -2007,7 +2007,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     {
       const Picture*    pic = slice.pic;
       const uint32_t rsAddr = getCtuAddr (partitioner.currQgPos, *pic->cs->pcv);
-      const int pumpReducQP = BitAllocation::getCtuPumpingReducingQP (&slice, tempCS->getOrgBuf (COMP_Y), uiSadBestForQPA, *m_globalCtuQpVector, rsAddr, m_pcEncCfg->m_QP);
+      const int pumpReducQP = BitAllocation::getCtuPumpingReducingQP (&slice, tempCS->getOrgBuf (COMP_Y), uiSadBestForQPA, *m_globalCtuQpVector, rsAddr,
+                              m_pcEncCfg->m_QP, m_pcEncCfg->m_RCNumPasses != 2 && m_pcEncCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
 
       if (pumpReducQP != 0) // subtract QP offset, reduces Intra-period pumping or overcoding
       {

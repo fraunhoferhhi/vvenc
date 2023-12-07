@@ -518,8 +518,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToArr<unsigned int>        toTileColumnWidth            ( &c->m_tileColumnWidth[0], 10 );
   IStreamToArr<unsigned int>        toTileRowHeight              ( &c->m_tileRowHeight[0], 10 );
 
-  IStreamToArr<int>                 toMCTFFrames                 ( &c->m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
-  IStreamToArr<double>              toMCTFStrengths              ( &c->m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
+  IStreamToArr<int>                 toMCTFFrames                 ( &c->m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES, &c->m_vvencMCTF.numFrames );
+  IStreamToArr<double>              toMCTFStrengths              ( &c->m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES, &c->m_vvencMCTF.numStrength );
   IStreamToEnum<int>                toColorPrimaries             ( &c->m_colourPrimaries,        &ColorPrimariesToIntMap );
   IStreamToEnum<int>                toTransferCharacteristics    ( &c->m_transferCharacteristics,&TransferCharacteristicsToIntMap );
   IStreamToEnum<int>                toColorMatrix                ( &c->m_matrixCoefficients,     &ColorMatrixToIntMap );

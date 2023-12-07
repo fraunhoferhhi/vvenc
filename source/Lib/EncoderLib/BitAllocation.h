@@ -90,7 +90,8 @@ namespace vvenc {
                                  const Distortion uiSadBestForQPA,
                                  std::vector<int>& ctuPumpRedQP,
                                  const uint32_t ctuRsAddr,
-                                 const int baseQP );
+                                 const int baseQP,
+                                 const bool isBIM );
   }
 
 } // namespace vvenc
