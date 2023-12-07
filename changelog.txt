@@ -16,7 +16,7 @@ tag 1.10.0-rc1
 
 * vvencFFapp:
   - added parameter: POC0IDR to control if POC0 is an IDR (=1, default if PicReordering is 1)
-					 or RASL (=0, default if PicReordering is 0)
+                     or RASL (=0, default if PicReordering is 0)
 
 /////////////////////////////////////////
 tag 1.9.1
