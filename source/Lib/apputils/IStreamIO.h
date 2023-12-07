@@ -462,6 +462,14 @@ class IStreamToArr
     IStreamToArr( T* v, size_t maxSize )
     : _valVec        ( v )
     , _maxSize       ( maxSize )
+    , _curSize       ( nullptr )
+    {
+    }
+
+    IStreamToArr( T* v, size_t maxSize, int* curSize )
+    : _valVec        ( v )
+    , _maxSize       ( maxSize )
+    , _curSize       ( curSize )
     {
     }
 
@@ -478,6 +486,7 @@ class IStreamToArr
   private:
     T*     _valVec;
     size_t _maxSize;
+    int*   _curSize;
 };
 
 template<typename T>
@@ -487,6 +496,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
 
   bool fail = false;
   size_t pos = 0;
+  if ( toArr._curSize ) *toArr._curSize = 0;
   // split into multiple lines if any
   while ( ! in.eof() )
   {
@@ -527,6 +537,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   {
     in.setstate( std::ios::failbit );
   }
+
+  if ( toArr._curSize ) *toArr._curSize = static_cast<int>( std::min<size_t>( pos, toArr._maxSize ) );
 
   return in;
 }

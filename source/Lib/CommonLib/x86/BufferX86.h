@@ -2374,8 +2374,8 @@ uint64_t AvgHighPassWithDownsamplingDiff1st_SIMD (const int width, const int hei
   pSrc -= iSrcStride;
   pSrcM1-=iSrcM1Stride;
   pSrcM1-=iSrcM1Stride;
-  uint32_t x;
-  uint32_t y;
+  int32_t x;
+  int32_t y;
   const __m128i scale1 = _mm_set_epi16 (1,1,1,1,1,1,1,1);
   for (y = 2; y < height-2; y += 2)
   {
@@ -2456,8 +2456,8 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
 {
   uint64_t taAct = 0;
   uint16_t act = 0;
-  uint32_t y;
-  uint32_t x;
+  int32_t y;
+  int32_t x;
   pSrc -= iSrcStride;
   pSrc -= iSrcStride;
   pSrcM1-=iSM1Stride;
