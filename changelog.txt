@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.10.0-rc1
+tag 1.10.0
 * libvvenc:
   - added library parameters:
     - vvenc_config::m_poc0idr to force POC0 to be an IDR (otherwise per default it will now be a RASL picture)
