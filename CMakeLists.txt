@@ -21,8 +21,18 @@ endif()
 set( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
 message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH}" )
 
+# check for arm architecture support
+set( VVENC_ARM_SIMD_DEFAULT FALSE )
+if( ( "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "aarch64\|arm"
+    OR "${CMAKE_CXX_COMPILER}" MATCHES "aarch64\|arm"
+    OR "${CMAKE_OSX_ARCHITECTURES}" MATCHES "arm64\|armv" )
+    AND NOT "${CMAKE_OSX_ARCHITECTURES}" MATCHES "x86\|x64" )
+  set( VVENC_ARM_SIMD_DEFAULT TRUE )
+endif()
+
 # we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
 set( VVENC_ENABLE_X86_SIMD TRUE CACHE BOOL "enable x86 intrinsics" )
+set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "enable ARM intrinsics" )
 
 include( vvencCompilerSupport )
 
@@ -39,8 +49,13 @@ if( VVENC_ENABLE_X86_SIMD )
     check_missing_intrinsics()
   endif()
 
-  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_X86" )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_X86" )
+  message( STATUS "x86 SIMD intrinsics enabled (using SIMDE for non-x86 targets)" )
+  add_compile_definitions( TARGET_SIMD_X86 )
+endif()
+
+if( VVENC_ENABLE_ARM_SIMD )
+  message( STATUS "ARM SIMD intrinsics enabled" )
+  add_compile_definitions( TARGET_SIMD_ARM )
 endif()
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )

@@ -55,6 +55,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
+using namespace arm_simd;
+
 #define IF_INTERNAL_PREC 14 ///< Number of bits for internal precision
 #define IF_FILTER_PREC    6 ///< Log2 of sum of filter taps
 #define IF_INTERNAL_OFFS (1<<(IF_INTERNAL_PREC-1)) ///< Offset used internally
@@ -116,6 +119,12 @@ public:
   void initInterpolationFilterX86();
   template <X86_VEXT vext>
   void _initInterpolationFilterX86();
+#endif
+	
+#ifdef TARGET_SIMD_ARM
+  void initInterpolationFilterARM();
+  template <ARM_VEXT vext>
+  void _initInterpolationFilterARM();
 #endif
 
   void filterN2_2D(const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,                                        const ClpRng& clpRng);

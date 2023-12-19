@@ -762,9 +762,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,   "Enabling pictureTiming SEI requires rate control" );
     vvenc_confirmParameter( c, c->m_RCMaxBitrate > 0,          "Specifying a maximum bitrate requires rate control" );
   }
-  else if ( c->m_RCMaxBitrate <= 0 )
+  else if ( c->m_RCMaxBitrate == 0 )
   {
     c->m_RCMaxBitrate = INT32_MAX;
+  }
+  else if( c->m_RCMaxBitrate < 0 )
+  {
+    c->m_RCMaxBitrate = ( -c->m_RCMaxBitrate * c->m_RCTargetBitrate + 8 ) >> 4;
   }
 
   vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_SDR_BT470BG,  "Sdr/Hdr Mode must be in the range 0 - 8" );

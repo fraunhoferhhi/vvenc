@@ -66,6 +66,9 @@ struct vvencYUVBuffer;
 
 namespace vvenc {
 
+using namespace x86_simd;
+using namespace arm_simd;
+
 // ---------------------------------------------------------------------------
 // AreaBuf struct
 // ---------------------------------------------------------------------------
@@ -81,6 +84,22 @@ struct PelBufferOps
   template<X86_VEXT vext>
   void _initPelBufOpsX86();
 #endif
+	
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_ARM )
+  void initPelBufOpsARM();
+  template<ARM_VEXT vext>
+  void _initPelBufOpsARM();
+#endif
+
+#define INCX( ptr, stride ) { ptr++; }
+#define INCY( ptr, stride ) { ptr += ( stride ); }
+#define OFFSETX( ptr, stride, x ) { ptr += ( x ); }
+#define OFFSETY( ptr, stride, y ) { ptr += ( y ) * ( stride ); }
+#define OFFSET( ptr, stride, x, y ) { ptr += ( x ) + ( y ) * ( stride ); }
+#define GET_OFFSETX( ptr, stride, x ) ( ( ptr ) + ( x ) )
+#define GET_OFFSETY( ptr, stride, y ) ( ( ptr ) + ( y ) * ( stride ) )
+#define GET_OFFSET( ptr, stride, x, y ) ( ( ptr ) + ( x ) + ( y ) * ( stride ) ) // need in loopFilter.cpp + some ARM files
+
   void ( *roundGeo )      ( const Pel* src, Pel* dest, const int numSamples, unsigned rshift, int offset, const ClpRng &clpRng);
   void ( *addAvg )        ( const Pel* src0, const Pel* src1, Pel* dst, int numsamples, unsigned shift, int offset, const ClpRng& clpRng );
   void ( *reco  )         ( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, const ClpRng& clpRng );

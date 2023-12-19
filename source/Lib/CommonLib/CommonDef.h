@@ -636,22 +636,6 @@ static inline T* aligned_malloc(size_t len, size_t alignement) {
 #    define ALWAYS_INLINE
 #endif
 
-#ifdef TARGET_SIMD_X86
-typedef enum
-{
-  UNDEFINED = -1,
-  SCALAR = 0,
-  SSE41,
-  SSE42,
-  AVX,
-  AVX2,
-  AVX512
-} X86_VEXT;
-#endif
-
-template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
-template <typename ValueType> inline ValueType rightShiftU (const ValueType value, const unsigned shift) { return value >> shift; }
-
 #if defined( _WIN32 ) && defined( TARGET_SIMD_X86 )
 static inline unsigned int bit_scan_reverse( int a )
 {
@@ -671,6 +655,59 @@ static inline unsigned int bit_scan_reverse( int a )
   return __builtin_clz( a ) ^ ( 8 * sizeof( a ) - 1 );
 }
 #endif
+
+#if ENABLE_SIMD_LOG2
+static inline int getLog2( int val )
+{
+  return bit_scan_reverse( val );
+}
+#else
+extern int8_t g_aucLog2[MAX_CU_SIZE + 1];
+static inline int getLog2( int val )
+{
+  CHECKD( g_aucLog2[2] != 1, "g_aucLog2[] has not been initialized yet." );
+  if( val > 0 && val < (int) sizeof( g_aucLog2 ) )
+  {
+    return g_aucLog2[val];
+  }
+  return std::log2( val );
+}
+#endif
+
+#if ENABLE_SIMD_OPT
+
+namespace x86_simd
+{
+#ifdef TARGET_SIMD_X86
+  typedef enum
+  {
+    UNDEFINED = -1,
+    SCALAR = 0,
+    SSE41,
+    SSE42,
+    AVX,
+    AVX2,
+    AVX512
+  } X86_VEXT;
+#endif
+}
+
+namespace arm_simd
+{
+#ifdef TARGET_SIMD_ARM
+  typedef enum
+  {
+    UNDEFINED = -1,
+    SCALAR    = 0,
+    NEON,
+  } ARM_VEXT;
+#endif   // TARGET_SIMD_ARM
+}   // namespace arm_simd
+
+#endif //ENABLE_SIMD_OPT
+
+template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
+template <typename ValueType> inline ValueType rightShiftU (const ValueType value, const unsigned shift) { return value >> shift; }
 
 #if ENABLE_SIMD_LOG2 && defined( TARGET_SIMD_X86 )
 static inline int floorLog2( int val )

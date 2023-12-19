@@ -54,6 +54,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
+
 struct AlfClassifier
 {
   AlfClassifier() {}

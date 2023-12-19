@@ -49,6 +49,8 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+using namespace x86_simd;
+
 template<X86_VEXT vext>
 void simdDeriveClassificationBlk(AlfClassifier *classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight, int vbPos)
 {

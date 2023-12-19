@@ -90,15 +90,6 @@ const uint8_t LoopFilter::sm_betaTable[MAX_QP + 1] =
 // utility functions
 // ====================================================================================================================
 
-#define INCX( ptr, stride ) { ptr++; }
-#define INCY( ptr, stride ) { ptr += ( stride ); }
-#define OFFSETX( ptr, stride, x ) { ptr += ( x ); }
-#define OFFSETY( ptr, stride, y ) { ptr += ( y ) * ( stride ); }
-#define OFFSET( ptr, stride, x, y ) { ptr += ( x ) + ( y ) * ( stride ); }
-#define GET_OFFSETX( ptr, stride, x ) ( ( ptr ) + ( x ) )
-#define GET_OFFSETY( ptr, stride, y ) ( ( ptr ) + ( y ) * ( stride ) )
-#define GET_OFFSET( ptr, stride, x, y ) ( ( ptr ) + ( x ) + ( y ) * ( stride ) )
-
 #define BsSet( val, compIdx ) (   ( val ) << ( ( compIdx ) << 1 ) )     
 #define BsGet( val, compIdx ) ( ( ( val ) >> ( ( compIdx ) << 1 ) ) & 3 )
 

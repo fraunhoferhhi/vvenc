@@ -42,15 +42,21 @@ if( VVENC_ENABLE_X86_SIMD )
   #file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
 endif()
 
+if( VVENC_ENABLE_ARM_SIMD )
+  file( GLOB ARM_SRC_FILES      "../CommonLib/arm/*.cpp"      )
+  file( GLOB ARM_INC_FILES      "../CommonLib/arm/*.h"        )
+
+  file( GLOB ARM_NEON_SRC_FILES "../CommonLib/arm/neon/*.cpp" )
+endif()
+
 # get public/extern include files
 file( GLOB PUBLIC_INC_FILES  "../../../include/${LIB_NAME}/*.h" )
 
+# get all private include files
+set( PRIVATE_INC_FILES ${BASE_INC_FILES} ${X86_INC_FILES} ${ARM_INC_FILES} )
+
 # get all source files
-set( SRC_FILES ${BASE_SRC_FILES} ${X86_SRC_FILES} )
-
-# get all include files
-file( GLOB PRIVATE_INC_FILES ${BASE_INC_FILES} ${X86_INC_FILES}  )
-
+set( SRC_FILES ${BASE_SRC_FILES} ${X86_SRC_FILES} ${ARM_SRC_FILES} )
 set( INC_FILES ${PRIVATE_INC_FILES} ${PUBLIC_INC_FILES}  )
 
 # NATVIS files for Visual Studio
@@ -69,7 +75,7 @@ add_compile_definitions( ${LIB_NAME_UC}_SOURCE )
 
 # set PRIVATE include directories for all targets in this directory
 include_directories( $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
-include_directories( . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../apputils )
+include_directories( . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 ../CommonLib/arm ../apputils )
 include_directories( SYSTEM ../../../thirdparty )
 
 # set common warning flags
@@ -122,12 +128,27 @@ if( VVENC_ENABLE_X86_SIMD )
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES FOLDER lib )
 endif()
 
+if( VVENC_ENABLE_ARM_SIMD )
+  # set needed compile definitions
+  set_property( SOURCE ${ARM_NEON_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON )
+
+  add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_NEON_SRC_FILES} )
+  # NEON is enabled by default for all files, so don't need to disable LTO
+  # set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES
+  #                                             INTERPROCEDURAL_OPTIMIZATION                OFF
+  #                                             INTERPROCEDURAL_OPTIMIZATION_RELEASE        OFF
+  #                                             INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO OFF
+  #                                             INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
+
+  set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES FOLDER lib )
+endif()
+
 # set resource file for MSVC compilers
 if( MSVC )
   set( RESOURCE_FILE ${LIB_NAME}.rc )
 endif()
 
-add_library( ${LIB_NAME} ${SRC_FILES} $<$<TARGET_EXISTS:${LIB_NAME}_x86_simd>:$<TARGET_OBJECTS:${LIB_NAME}_x86_simd>> ${INC_FILES} ${NATVIS_FILES} ${RESOURCE_FILE} )
+add_library( ${LIB_NAME} ${SRC_FILES} $<$<TARGET_EXISTS:${LIB_NAME}_x86_simd>:$<TARGET_OBJECTS:${LIB_NAME}_x86_simd>> $<$<TARGET_EXISTS:${LIB_NAME}_arm_simd>:$<TARGET_OBJECTS:${LIB_NAME}_arm_simd>> ${INC_FILES} ${NATVIS_FILES} ${RESOURCE_FILE} )
 
 target_compile_definitions( ${LIB_NAME} PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:${LIB_NAME},TYPE>,SHARED_LIBRARY>:${LIB_NAME_UC}_DYN_LINK> )
 

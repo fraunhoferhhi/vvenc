@@ -673,6 +673,22 @@ class IStreamToAbbr
     const std::vector<SVPair<A>>* toMap;
 };
 
+template<bool isFloat> class FloatRoundingOffset
+{
+};
+
+template<> class FloatRoundingOffset<true>
+{
+public:
+  static const int offset = 0;
+};
+
+template<> class FloatRoundingOffset<false>
+{
+public:
+  static const int offset = 1;
+};
+
 template<typename T, typename A>
 inline std::istream& operator >> ( std::istream& in, IStreamToAbbr<T,A>& toValue )
 {
@@ -698,7 +714,10 @@ inline std::istream& operator >> ( std::istream& in, IStreamToAbbr<T,A>& toValue
 
       double value = strtod(str.c_str(), NULL); // convert input string to double
       value *= map.value;                       // scale depending on given abbreviation/scaling factor
-      *toValue.dstVal = (T)value;
+      double roundDir    = value < 0 ? -1 : ( value > 0 ? 1 : 0 );
+      double roundOffset = ( FloatRoundingOffset<std::is_floating_point<T>::value>::offset / 2.0 );
+      value += roundDir * roundOffset;
+      *toValue.dstVal = ( T ) value;
       return in;
     }
   }

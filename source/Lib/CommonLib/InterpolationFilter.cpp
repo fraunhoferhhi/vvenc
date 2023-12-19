@@ -1071,12 +1071,16 @@ void InterpolationFilter::xWeightedGeoBlk(const ClpRngs &clpRngs, const CodingUn
 void InterpolationFilter::initInterpolationFilter( bool enable )
 {
 #if ENABLE_SIMD_OPT_MCIF
-#ifdef TARGET_SIMD_X86
   if ( enable )
   {
+#ifdef TARGET_SIMD_X86
     initInterpolationFilterX86();
-  }
 #endif
+		
+#ifdef TARGET_SIMD_ARM
+    initInterpolationFilterARM();
+#endif
+  }
 #endif
 }
 

@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
@@ -40,72 +40,76 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-/** \file     CommonDefX86.h
-*/
+/*
+ * \ingroup CommonLib
+ * \file    InitARM.cpp
+ * \brief   Initialize encoder SIMD functions.
+ */
 
-#pragma once
+#include "CommonDefARM.h"
+#include "CommonLib/CommonDef.h"
+#include "CommonLib/InterpolationFilter.h"
+#include "CommonLib/TrQuant.h"
+#include "CommonLib/RdCost.h"
+#include "CommonLib/Buffer.h"
+#include "CommonLib/TrQuant_EMT.h"
+#include "CommonLib/IntraPrediction.h"
+#include "CommonLib/LoopFilter.h"
+#include "CommonLib/Picture.h"
 
-#include "CommonDef.h"
-
-//! \ingroup CommonLib
-//! \{
-
-#ifdef TARGET_SIMD_X86
-
-#  if REAL_TARGET_X86 || REAL_TARGET_WASM
-#    ifdef _WIN32
-#      include <intrin.h>
-#    else
-#      include <immintrin.h>
-#    endif
-#  else    // !REAL_TARGET_X86 && !REAL_TARGET_WASM
-#    define SIMDE_ENABLE_NATIVE_ALIASES
-#  endif   // !REAL_TARGET_X86 && !REAL_TARGET_WASM
-
-#  include "FixMissingIntrin.h"
-
-#  ifdef USE_AVX512
-#    define SIMDX86 AVX512
-#    include <simde/x86/avx512.h>
-#  elif defined USE_AVX2
-#    define SIMDX86 AVX2
-#    include <simde/x86/avx2.h>
-#  elif defined USE_AVX
-#    define SIMDX86 AVX
-#    include <simde/x86/avx.h>
-#  elif defined USE_SSE42
-#    define SIMDX86 SSE42
-#    include <simde/x86/sse4.2.h>
-#  elif defined USE_SSE41
-#    define SIMDX86 SSE41
-#    include <simde/x86/sse4.1.h>
-#  endif
-
+#include "CommonLib/AdaptiveLoopFilter.h"
+#include "CommonLib/SampleAdaptiveOffset.h"
 
 namespace vvenc
 {
 
-using namespace x86_simd;
+#ifdef TARGET_SIMD_ARM
 
-const std::string& vext_to_string( X86_VEXT vext );
-X86_VEXT           string_to_vext( const std::string& ext_name );
-
-X86_VEXT           read_x86_extension_flags( X86_VEXT request = x86_simd::UNDEFINED );
-const std::string& read_x86_extension_name();
-
-
-#ifdef USE_AVX2
-
-static inline __m128i _mm256_cvtepi32_epi16x( __m256i& v )
+#if ENABLE_SIMD_OPT_MCIF
+void InterpolationFilter::initInterpolationFilterARM()
 {
-  return  _mm_packs_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+  auto vext = read_arm_extension_flags();
+  switch( vext )
+  {
+  case NEON:
+    _initInterpolationFilterARM<NEON>();
+    break;
+  default:
+    break;
+  }
 }
-
 #endif
 
-} // namespace vvenc
+#if ENABLE_SIMD_OPT_BUFFER
+void PelBufferOps::initPelBufOpsARM()
+{
+  auto vext = read_arm_extension_flags();
+  switch( vext )
+  {
+  case NEON:
+    _initPelBufOpsARM<NEON>();
+    break;
+  default:
+    break;
+  }
+}
+#endif
 
-//! \}
+#if ENABLE_SIMD_OPT_DIST
+void RdCost::initRdCostARM()
+{
+  auto vext = read_arm_extension_flags();
+  switch( vext )
+  {
+  case NEON:
+    _initRdCostARM<NEON>();
+    break;
+  default:
+    break;
+  }
+}
+#endif
 
-#endif // TARGET_SIMD_X86
+#endif   // TARGET_SIMD_ARM
 
+}   // namespace vvdec
