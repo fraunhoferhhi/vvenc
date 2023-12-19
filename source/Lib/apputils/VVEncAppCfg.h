@@ -380,6 +380,16 @@ const std::vector<SVPair<int>> BitrateAbrevToIntMap =
   { "bps",                1 }   // bit/sec
 };
 
+const std::vector<SVPair<int>> BitrateOrScaleAbrevToIntMap =
+{
+  { "Mbps",         1000000 },  // mega bit/sec
+  { "M",            1000000 },
+  { "kbps",            1000 },  // kilo bit/sec
+  { "k",               1000 },
+  { "bps",                1 },  //      bit/sec
+  { "x",                -16 }   // negative value: multiplier of target bitrate, with a fixed-point accuracy of 4 bit
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -494,8 +504,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
   IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8 );
-  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap );
-  IStreamToAbbr<int,int>                  toMaxRate              ( &c->m_RCMaxBitrate,    &BitrateAbrevToIntMap );
+  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate,             &BitrateAbrevToIntMap );
+  IStreamToAbbr<int,int>                  toMaxRate              ( &c->m_RCMaxBitrate,                &BitrateOrScaleAbrevToIntMap );
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &c->m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &c->m_AccessUnitDelimiter,         &FlagToIntMap );
@@ -618,7 +628,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise\n"
                                                                                                              "bits/second; use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000)")
     ("maxrate,m",                                       toMaxRate,                                           "approximate maximum instantaneous bitrate for constrained VBR in rate control (0:\n"
-                                                                                                             "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000)")
+                                                                                                             "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000), use suffix 'x' "
+                                                                                                             "to specify as a multiple of target bitrate")
     ("passes,p",                                        c->m_RCNumPasses,                                    "number of encoding passes with rate control (1: single-pass, -1, 2: two-pass RC)")
     ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1: both, 1: first, 2: second pass)")
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
@@ -1134,7 +1145,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("bitrate",                                         toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control, otherwise "
                                                                                                              "bits/second; use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000)")
     ("maxrate",                                         toMaxRate,                                           "approximate maximum instantaneous bitrate for constrained VBR in rate control (0: "
-                                                                                                             "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000)")
+                                                                                                             "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000), use suffix 'x' "
+                                                                                                             "to specify as a multiple of target bitrate")
     ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ;
   }

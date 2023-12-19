@@ -623,7 +623,7 @@ static alf_float_t calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, co
 const AlfCovariance& AlfCovariance::operator+= ( const AlfCovariance& src )
 {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-  if( numCoeff == 13 && read_x86_extension_flags() > SCALAR )
+  if( numCoeff == 13 && read_x86_extension_flags() > x86_simd::SCALAR )
   {
     for( int b0 = 0; b0 < numBins; b0++ )
     {
@@ -737,7 +737,7 @@ alf_float_t AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int
   if( numCoeff == 13 )
   {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-    if( read_x86_extension_flags() > SCALAR )
+    if( read_x86_extension_flags() > x86_simd::SCALAR )
       return calcErrorForCoeffsLin_13_SSE( E, y, coeff, invFactor );
     else
 #endif
@@ -3172,7 +3172,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
   const int halfFilterLength = shape.filterLength >> 1;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-  const bool useSimd = read_x86_extension_flags() > SCALAR;
+  const bool useSimd = read_x86_extension_flags() > x86_simd::SCALAR;
 #else
   const bool useSimd = false;
 #endif
@@ -6135,7 +6135,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
   int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-  const bool useSimd = read_x86_extension_flags() > SCALAR;
+  const bool useSimd = read_x86_extension_flags() > x86_simd::SCALAR;
 #endif
 
   Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];

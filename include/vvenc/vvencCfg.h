@@ -769,7 +769,11 @@ typedef struct vvenc_config
   int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
   bool                m_treatAsSubPic;
 
-  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or least constrained VBR))
+#define VVENC_SET_MAXRATE_FACTOR(f) (-((int)(f*16+0.5)))
+  int                 m_RCMaxBitrate;                                                    // maximum bitrate in bps (default: 0 (RC disabled or least constrained VBR),
+                                                                                         // if negative, the absolute value is interpreted as a 4-bit fixed point multiplier of the target bitrate).
+                                                                                         // -24, i.e. -1.1000 binary, means the maxrate would be set to be the 1.5x of the target bitrate.
+                                                                                         // for convenience use VVENC_SET_MAXRATE_FACTOR, e.g. VVENC_SET_MAXRATE_FACTOR(1.5), to set the multiplier
   int                 m_reservedInt;
   double              m_reservedDouble[9];
 

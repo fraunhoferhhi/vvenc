@@ -58,6 +58,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
+
 typedef void FwdTrans(const TCoeff*, TCoeff*, int, int, int, int);
 typedef void InvTrans(const TCoeff*, TCoeff*, int, int, int, int, const TCoeff, const TCoeff);
 

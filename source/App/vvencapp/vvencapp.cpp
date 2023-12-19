@@ -357,7 +357,7 @@ int main( int argc, char* argv[] )
     int64_t framesToEncode = (vvenccfg.m_framesToBeEncoded == 0 || vvenccfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvenccfg.m_framesToBeEncoded;
 
     apputils::Stats cStats;
-    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    cStats.init( vvenccfg.m_FrameRate, vvenccfg.m_FrameScale, (int)framesToEncode, vvenccfg.m_verbosity, "vvenc [info]: " );
     bool statsInfoReady = false;
 
     while( !bEof || !bEncodeDone )
@@ -404,6 +404,7 @@ int main( int argc, char* argv[] )
           if( statsInfoReady )
           {
             msgApp( nullptr, VVENC_INFO, cStats.getInfoString().c_str() );
+            fflush( stdout );
           }
         }
 
@@ -426,6 +427,7 @@ int main( int argc, char* argv[] )
     if( vvencappCfg.m_printStats )
     {
       msgApp( nullptr, VVENC_INFO, cStats.getFinalStats().c_str() );
+      fflush( stdout );
     }
   }
 

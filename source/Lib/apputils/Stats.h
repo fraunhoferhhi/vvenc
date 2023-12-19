@@ -54,6 +54,12 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <numeric>
 #include <cmath>
 
+#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
+  #include <io.h>
+#elif __linux || __APPLE__
+  #include <unistd.h>
+#endif
+
 #include "vvenc/vvenc.h"
 
 
@@ -165,10 +171,11 @@ public:
   {
   }
 
-  int init( int framerate, int framescale, int maxFrames, std::string prependString = "" )
+  int init( int framerate, int framescale, int maxFrames,  vvencMsgLevel verbosity, std::string prependString = "" )
   {
     m_framerate   = (framerate/(double)framescale);
     m_maxFrames   = maxFrames;
+    m_verbosity   = verbosity;
     m_preString   = prependString;
     m_bytes       = 0;
     m_bytesCur    = 0;
@@ -180,6 +187,12 @@ public:
     m_AUStats[VVENC_I_SLICE].reset(m_framerate);
     m_AUStats[VVENC_P_SLICE].reset(m_framerate);
     m_AUStats[VVENC_B_SLICE].reset(m_framerate);
+
+#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
+    m_istty = _isatty( _fileno(stdout));
+#elif __linux || __APPLE__
+    m_istty = isatty( fileno(stdout));
+#endif
 
     return 0;
   }
@@ -207,20 +220,29 @@ public:
     return 0;
   }
 
-  std::string getInfoString()
+  std::string getInfoString( bool finalInfo = false )
   {
     std::stringstream css;
-    m_tEnd = std::chrono::steady_clock::now();
+    m_tEnd     = std::chrono::steady_clock::now();
     m_tGlobEnd = std::chrono::steady_clock::now();
 
     if( m_bytesCur )
     {
-      double bitrate = (m_bytesCur*8 * m_framerate / (double)m_framesCur );
-      double dTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tEnd-m_tStart).count() / 1000.0;
-      double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tGlobEnd-m_tGlobStart).count() / 1000.0;
-      double dFps = dTime ? (double)m_framesCur / dTime : 0;
-      double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
+      double dTime      = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tEnd-m_tStart).count() / 1000.0;
+      double dGlobTime  = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tGlobEnd-m_tGlobStart).count() / 1000.0;        
+      double bitrateAvg = m_bytes*8 * m_framerate/(double)m_frames / 1000.0;
+      double dFpsAvg    = dGlobTime ? (double)m_frames / dGlobTime : 0;
+      
+      double bitrate    = finalInfo ? bitrateAvg : (m_bytesCur*8 * m_framerate / (double)m_framesCur/ 1000.0 );     
+      double dFps       = finalInfo ? dFpsAvg    : (dTime ? (double)m_framesCur / dTime : 0);
+      
+      if( bitrate > (double)m_maxratekbps )
+      {
+        m_maxratekbps = static_cast<int>(bitrate);
+      }
+      int setwBR = std::max( 8,  (int)std::log10(m_maxratekbps) + 4 );
 
+      if ( m_verbosity <= VVENC_INFO && m_istty ) css << "\r";
       css << m_preString << "stats: ";
       if( m_maxFrames > 0 )
       {
@@ -234,11 +256,12 @@ public:
         css << " frame= " << std::setfill(' ') << std::setw(4) << m_frames;
       }
 
-      css << " fps= " << std::setfill(' ') << std::setw(4) << dFps << " avg_fps= " << std::setfill(' ') << std::setw(4) << dFpsAvg;
-      css << std::fixed << std::setprecision(2) << " bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
-
-      bitrate = m_bytes*8 * m_framerate/(double)m_frames;
-      css << " avg_bitrate= " << std::setfill(' ') << std::setw(7) << bitrate/1000.0 << " kbps";
+      css << std::fixed << std::setprecision(1);
+      css << " fps= "     << std::setfill(' ') << std::setw(5) << dFps;
+      css << " avg_fps= " << std::setfill(' ') << std::setw(5) << dFpsAvg;
+      css << std::fixed << std::setprecision(2);
+      css << " bitrate= "     << std::setfill(' ') << std::setw(setwBR) << bitrate    << " kbps";
+      css << " avg_bitrate= " << std::setfill(' ') << std::setw(setwBR) << bitrateAvg << " kbps";
 
       int sec   = std::ceil(dGlobTime);
       int days  = sec/86400;
@@ -269,7 +292,9 @@ public:
         css << std::setfill('0') << std::setw(2) << min << "m:";
         css << std::setfill('0') << std::setw(2) << sec << "s";
       }
-      css << std::setprecision(-1) << std::endl;
+      css << std::setprecision(-1) << "    ";
+
+      if ( m_verbosity > VVENC_INFO || 0 == m_istty ) css << std::endl;
     }
 
     m_bytesCur = 0;
@@ -290,7 +315,9 @@ public:
       double dGlobTime = (double)std::chrono::duration_cast<std::chrono::milliseconds>(m_tGlobEnd-m_tGlobStart).count() / 1000.0;
       double dFpsAvg = dGlobTime ? (double)m_frames / dGlobTime : 0;
 
-      css << std::endl << m_preString << "stats summary:";
+      css << getInfoString( true );
+      css << std::endl;
+      css << m_preString << "stats summary:";
       css << " frame= " << m_frames;
       if( m_maxFrames > 0 )
       {
@@ -326,10 +353,13 @@ private:
 
   double      m_framerate  = 1.0;
   int         m_maxFrames  = 0;
+  vvencMsgLevel m_verbosity = VVENC_INFO;
   std::string m_preString;
+  int         m_istty      = 0;
 
   uint64_t    m_bytes      = 0;
   uint64_t    m_bytesCur   = 0;
+  int         m_maxratekbps = 0;
 
   int         m_frames     = 0;
   int         m_framesCur  = 0;

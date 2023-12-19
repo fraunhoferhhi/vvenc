@@ -307,7 +307,7 @@ int EncApp::encode()
     int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
     frameCount = std::max<int64_t>( 0, frameCount-appCfg.m_FrameSkip );
     int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
-    cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, "vvenc [info]: " );
+    cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, vvencCfg.m_verbosity, "vvenc [info]: " );
     bool statsInfoReady = false;
 
     // loop over input YUV data
@@ -370,6 +370,7 @@ int EncApp::encode()
           if( statsInfoReady )
           {
             msgApp( VVENC_INFO, cStats.getInfoString().c_str() );
+            fflush( stdout );
           }
         }
 
@@ -383,6 +384,7 @@ int EncApp::encode()
     if( appCfg.m_printStats )
     {
       msgApp( VVENC_INFO, cStats.getFinalStats().c_str() );
+      fflush( stdout );
     }
   }
 

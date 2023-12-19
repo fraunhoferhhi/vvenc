@@ -1518,7 +1518,7 @@ namespace DQIntern
 
 #if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
       // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
-      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 && read_x86_extension_flags() > SCALAR )
+      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 && read_x86_extension_flags() > x86_simd::SCALAR )
       {
         const int sbbSize = tuPars.m_sbbSize;
         // move the pointer to the beginning of the current subblock

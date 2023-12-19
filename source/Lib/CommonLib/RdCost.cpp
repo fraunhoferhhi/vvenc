@@ -141,6 +141,9 @@ void RdCost::create()
 #ifdef TARGET_SIMD_X86
   initRdCostX86();
 #endif
+#ifdef TARGET_SIMD_ARM
+  initRdCostARM();
+#endif
 #endif
 
   m_costMode      = VVENC_COST_STANDARD_LOSSY;

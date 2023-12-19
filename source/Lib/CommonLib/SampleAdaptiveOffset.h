@@ -53,6 +53,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
+
 template<typename T> static inline int sgn( T val )
 {
   return ( T( 0 ) < val ) - ( val < T( 0 ) );

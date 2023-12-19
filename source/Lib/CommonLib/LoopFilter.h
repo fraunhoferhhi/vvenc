@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
 
 #define DEBLOCK_SMALLEST_BLOCK  8
 

@@ -57,6 +57,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+using namespace x86_simd;
+using namespace arm_simd;
+
 class DistParam;
 
 // ====================================================================================================================
@@ -144,6 +147,12 @@ public:
   template <X86_VEXT vext>
   void          _initRdCostX86();
 #endif
+	
+#ifdef TARGET_SIMD_ARM
+  void initRdCostARM();
+  template<ARM_VEXT vext>
+  void _initRdCostARM();
+#endif   // TARGET_SIMD_ARM
 
   void          setReshapeParams    ( const uint32_t* pPLUT, double chrWght)    { m_reshapeLumaLevelToWeightPLUT = pPLUT; m_chromaWeight = chrWght; }
   void          setDistortionWeight ( const ComponentID compID, const double distortionWeight ) { m_distortionWeight[compID] = distortionWeight; }
@@ -201,6 +210,11 @@ public:
   }
   void           getMotionCostIBC(int add) { m_dCostIBC = m_dLambdaMotionSAD + add; }
   Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
+	
+  static Distortion xGetSAD8          ( const DistParam& pcDtParam );
+  static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvdec )
+  static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos ); // needs to be public for xGetSADX5_16xN_SIMD ( NOTE: they are all public in vvdec )
+	
 private:
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
 
@@ -215,15 +229,12 @@ private:
 
   static Distortion xGetSAD           ( const DistParam& pcDtParam );
   static Distortion xGetSAD4          ( const DistParam& pcDtParam );
-  static Distortion xGetSAD8          ( const DistParam& pcDtParam );
-  static Distortion xGetSAD16         ( const DistParam& pcDtParam );
   static Distortion xGetSAD32         ( const DistParam& pcDtParam );
   static Distortion xGetSAD64         ( const DistParam& pcDtParam );
   static Distortion xGetSAD128        ( const DistParam& pcDtParam );
   static Distortion xGetSADwMask      ( const DistParam &pcDtParam );
   
   static void       xGetSAD8X5        ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos );
-  static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos );
   
   static Distortion xCalcHADs2x2      ( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur );
   static Distortion xGetHAD2SADs      ( const DistParam& pcDtParam );
@@ -255,6 +266,11 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
+#ifdef TARGET_SIMD_ARM
+  template <ARM_VEXT vext>
+  static void xGetSADX5_16xN_SIMD   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
+#endif
+	
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
 public:
 

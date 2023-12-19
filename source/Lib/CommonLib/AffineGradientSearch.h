@@ -53,6 +53,8 @@ namespace vvenc {
   //! \ingroup CommonLib
   //! \{
 
+using namespace x86_simd;
+
   class AffineGradientSearch
   {
   public:
