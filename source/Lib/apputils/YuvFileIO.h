@@ -397,7 +397,10 @@ public:
     for( int comp = 0; comp < numComp; comp++ )
     {
       if ( ! FileIOHelper::writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_bufferChrFmt, m_fileChrFmt ) )
+      {
+        vvenc_YUVBuffer_free_buffer( &yuvScaled );
         return false;
+      }
     }
 
     m_packetCount++;

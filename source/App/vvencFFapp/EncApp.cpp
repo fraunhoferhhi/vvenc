@@ -256,7 +256,7 @@ int EncApp::encode()
                              appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput,
                              appCfg.m_forceY4mInput, appCfg.m_logoFileName ))
     {
-      msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
+      msgApp( VVENC_ERROR, "\nopen input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -267,7 +267,7 @@ int EncApp::encode()
     const int remSkipFrames = appCfg.m_FrameSkip - vvencCfg.m_leadFrames;
     if( remSkipFrames < 0 )
     {
-      msgApp( VVENC_ERROR, "skip frames (%d) less than number of lead frames required (%d)\n", appCfg.m_FrameSkip, vvencCfg.m_leadFrames );
+      msgApp( VVENC_ERROR, "\nskip frames (%d) less than number of lead frames required (%d)\n", appCfg.m_FrameSkip, vvencCfg.m_leadFrames );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -279,9 +279,9 @@ int EncApp::encode()
       if( 0 != m_yuvInputFile.skipYuvFrames(remSkipFrames, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) )
       {
         if( ! strcmp( appCfg.m_inputFileName.c_str(), "-" )  )
-          msgApp( VVENC_ERROR, "skip %d frames from stdin failed\n", remSkipFrames );
+          msgApp( VVENC_ERROR, "\nskip %d frames from stdin failed\n", remSkipFrames );
         else
-          msgApp( VVENC_ERROR, "skip %d frames failed. file contains %d frames only.\n", remSkipFrames, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) );
+          msgApp( VVENC_ERROR, "\nskip %d frames failed. file contains %d frames only.\n", remSkipFrames, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) );
 
         vvenc_encoder_close( m_encCtx );
         vvenc_YUVBuffer_free_buffer( &yuvInBuf );
@@ -295,7 +295,7 @@ int EncApp::encode()
     iRet = vvenc_init_pass( m_encCtx, pass, appCfg.m_RCStatsFileName.c_str() );
     if( iRet != 0 )
     {
-      msgApp( VVENC_ERROR, "init pass failed: %s\n", vvenc_get_last_error(m_encCtx) );
+      msgApp( VVENC_ERROR, "\ninit pass failed: %s\n", vvenc_get_last_error(m_encCtx) );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -326,7 +326,7 @@ int EncApp::encode()
       {
         if( 0 != m_yuvInputFile.readYuvBuf( yuvInBuf, inputDone ) )
         {
-          msgApp( VVENC_ERROR, "read input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
+          msgApp( VVENC_ERROR, "\nread input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
           vvenc_encoder_close( m_encCtx );
           vvenc_YUVBuffer_free_buffer( &yuvInBuf );
           vvenc_accessUnit_free_payload( &au );
@@ -354,7 +354,7 @@ int EncApp::encode()
       iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
       if( 0 != iRet )
       {
-        msgApp( VVENC_ERROR, "encoding failed: err code %d: %s\n", iRet, vvenc_get_last_error(m_encCtx) );
+        msgApp( VVENC_ERROR, "\nencoding failed: err code %d: %s\n", iRet, vvenc_get_last_error(m_encCtx) );
         encDone = true;
         inputDone = true;
       }
@@ -362,7 +362,15 @@ int EncApp::encode()
       // write out encoded access units
       if( au.payloadUsedSize )
       {
-        outputAU( au );
+        if ( 0 != outputAU( au ) )
+        {
+          msgApp( VVENC_ERROR, "\nwrite bitstream file failed (disk full?)\n");
+          vvenc_encoder_close( m_encCtx );
+          vvenc_YUVBuffer_free_buffer( &yuvInBuf );
+          vvenc_accessUnit_free_payload( &au );
+          closeFileIO();
+          return -1;
+        }
 
         if( appCfg.m_printStats )
         {
@@ -400,14 +408,19 @@ int EncApp::encode()
   return iRet;
 }
 
-void EncApp::outputAU( const vvencAccessUnit& au )
+int EncApp::outputAU( const vvencAccessUnit& au )
 {
   m_bitstream.write(reinterpret_cast<const char*>(au.payload), au.payloadUsedSize);
+  if( m_bitstream.fail() )
+  {
+    return -1;
+  }
 
   m_totalBytes     += au.payloadUsedSize;
   m_essentialBytes += au.essentialBytes;
 
   m_bitstream.flush();
+  return 0;
 }
 
 void EncApp::outputYuv( void* ctx, vvencYUVBuffer* yuvOutBuf )
@@ -417,7 +430,10 @@ void EncApp::outputYuv( void* ctx, vvencYUVBuffer* yuvOutBuf )
   {
     if ( yuvReconFile->isOpen() && nullptr != yuvOutBuf )
     {
-      yuvReconFile->writeYuvBuf( *yuvOutBuf );
+      if( !yuvReconFile->writeYuvBuf( *yuvOutBuf ) )
+      {
+        msgApp( VVENC_ERROR, "\nwrite reconstruction file for pic %ld failed\n", yuvOutBuf->sequenceNumber);
+      }
     }
   }
 }
