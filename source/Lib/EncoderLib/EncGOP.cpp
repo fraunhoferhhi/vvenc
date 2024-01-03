@@ -611,6 +611,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
         vvencYUVBuffer yuvBuffer;
         vvenc_YUVBuffer_default( &yuvBuffer );
         setupYuvBuffer( pic->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
+        yuvBuffer.sequenceNumber = pic->poc;
         m_recYuvBufFunc( m_recYuvBufCtx, &yuvBuffer );
 
         m_pocRecOut += 1;

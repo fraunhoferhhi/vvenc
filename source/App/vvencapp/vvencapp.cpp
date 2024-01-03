@@ -412,6 +412,14 @@ int main( int argc, char* argv[] )
         {
           // write output
           cOutBitstream.write( (const char*)AU.payload, AU.payloadUsedSize );
+          if( cOutBitstream.fail() )
+          {
+            msgApp( nullptr, VVENC_ERROR, "\nvvencapp [error]: write bitstream file failed (disk full?)\n");
+            vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+            vvenc_accessUnit_free_payload( &AU );
+            vvenc_encoder_close( enc );
+            return VVENC_ERR_UNSPECIFIED;
+          }
         }
         uiFrames++;
       }
