@@ -238,7 +238,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
   {
     OUTSTR( 0, " " );
     OUTSTR( numSymbolsInMantissa, (int)(cntAccumDimVer[i] / (double)scalingFactor) );
-    OUTSTR( numSymbolsInExp, "." );
+    OUTSTR( numSymbolsInExp, " " );
   }
 
   OUTSTR( 0, "\r\n" );

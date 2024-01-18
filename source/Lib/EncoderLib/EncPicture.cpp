@@ -83,7 +83,7 @@ void EncPicture::init( const VVEncCfg& encCfg,
 
 void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs, CH_L );
+  PROFILER_SCOPE_TOP_LEVEL_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs );
   ITT_TASKSTART( itt_domain_picEncoder, itt_handle_start );
 
   pic.encTime.startTimer();
@@ -122,7 +122,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
 void EncPicture::finalizePicture( Picture& pic )
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs, CH_L );
+  PROFILER_SCOPE_TOP_LEVEL_EXT( 1, g_timeProfiler, P_TOP_LEVEL, pic.cs );
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[0];
   // ALF

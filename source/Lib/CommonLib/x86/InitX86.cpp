@@ -374,6 +374,25 @@ void Quant::initQuantX86()
   }
 }
 
+void DepQuant::initDepQuantX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+  case AVX512:
+  case AVX2:
+    _initDepQuantX86<AVX2>();
+    break;
+  case AVX:
+  case SSE42:
+    _initDepQuantX86<SSE42>();
+    break;
+  case SSE41:
+    _initDepQuantX86<SSE41>();
+    break;
+  default:
+    break;
+  }
+}
 
 #endif
 

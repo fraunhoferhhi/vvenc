@@ -132,12 +132,6 @@ private:
   time_point previous = clock::now();
   STAGE    m_eStage;
   const unsigned m_numStages = sizeof( stageNames ) / sizeof( stageNames[0] )/*P_STAGES + 1*/;
-  int      m_iLevel;
-  int      m_iExtData;
-  unsigned m_numBlkHor;
-  unsigned m_numBlkVer;
-  unsigned m_curWId;
-  unsigned m_curHId;
 
 public:
   const time_point start_time = previous;
@@ -293,8 +287,6 @@ public:
     m_curX     = x;
     m_curY     = y;
     m_curZ     = z;
-    //if( s == P_ALF )
-    //  printf( "prof=%d\n", m_id );
   }
   TimeProfiler2D& operator+=( const TimeProfiler2D& other ) 
   {
@@ -392,7 +384,7 @@ public:
 #define PROFILER_EXT_ACCUM_AND_START_NEW_SET_(cond,p,s,t,l,x,y,w,h)   PROF_EXT_ACCUM_AND_START_NEW_SET_COND(cond,p,s,w,h,t)
 #endif
 
-#define PROFILER_EXT_UPDATE(p,s,t)                              PROF_EXT_UPDATE(p,s,t)
+#define PROFILER_SCOPE_TOP_LEVEL_EXT2D(cond,p,s,cs)             PROFILER_SCOPE_AND_STAGE_EXT2D_(cond,p,s,!(cs)->slice->isIntra(), (cs)->slice->TLayer, 0, 0, 0, 0)
 #define PROFILER_SCOPE_AND_STAGE_EXT2D(cond,p,s,cs,ch)          PROFILER_SCOPE_AND_STAGE_EXT2D_(cond,p,s,!(cs)->slice->isIntra(), (cs)->slice->TLayer, BX_(cs,ch), BY_(cs,ch), BW_(cs,ch), BH_(cs,ch) )
 #define PROFILER_EXT_ACCUM_AND_START_NEW_SET(cond,p,s,cs,ch )   PROFILER_EXT_ACCUM_AND_START_NEW_SET_(cond,p,s,!(cs)->slice->isIntra(), (cs)->slice->TLayer, BX_(cs,ch), BY_(cs,ch), BW_(cs,ch), BH_(cs,ch) )
 #endif
@@ -401,12 +393,15 @@ public:
 #define PROFILER_ACCUM_AND_START_NEW_SET(cond,p,s)              (*(p))(s)
 #define PROFILER_EXT_ACCUM_AND_START_NEW_SET(cond,p,s,cs,ch)    (*(p))(s)
 #define PROFILER_SCOPE_AND_STAGE(cond,p,s)                      PROFILER_SCOPE_AND_STAGE_(cond,p,s)
+#define PROFILER_SCOPE_TOP_LEVEL_EXT(cond,p,s,cs)               PROFILER_SCOPE_AND_STAGE_(cond,p,s)
 #define PROFILER_SCOPE_AND_STAGE_EXT(cond,p,s,cs,ch)            PROFILER_SCOPE_AND_STAGE_(cond,p,s)
 #define PROFILER_EXT_UPDATE(p,s,t)
 typedef TimeProfiler TProfiler;
 #else  //ENABLE_TIME_PROFILING_EXTENDED
+#define PROFILER_EXT_UPDATE(p,s,t)                              PROF_EXT_UPDATE(p,s,t)
 #define PROFILER_ACCUM_AND_START_NEW_SET(cond,p,s)              PROF_EXT_ACCUM_AND_START_NEW_SET_COND(cond,p,s,0,0,0)
 #define PROFILER_SCOPE_AND_STAGE(cond,p,s)
+#define PROFILER_SCOPE_TOP_LEVEL_EXT(cond,p,s,cs)               PROFILER_SCOPE_TOP_LEVEL_EXT2D(cond,p,s,cs)
 #define PROFILER_SCOPE_AND_STAGE_EXT(cond,p,s,cs,ch)            PROFILER_SCOPE_AND_STAGE_EXT2D(cond,p,s,cs,ch)
 typedef TimeProfiler2D TProfiler;
 #endif
@@ -427,6 +422,7 @@ void       timeProfilerResults( TProfiler* tp );
 #define PROFILER_EXT_ACCUM_AND_START_NEW_SET(cond,p,s,cs,ch)
 #define PROFILER_SCOPE_AND_STAGE(cond,p,s)
 #define PROFILER_SCOPE_AND_STAGE_EXT(cond,p,s,cs,ch)
+#define PROFILER_SCOPE_TOP_LEVEL_EXT(cond,p,s,cs)
 #define PROFILER_EXT_UPDATE(p,s,t)
 #endif
 

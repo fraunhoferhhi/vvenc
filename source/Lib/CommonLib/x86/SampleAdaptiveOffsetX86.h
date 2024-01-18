@@ -105,7 +105,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
 
 #ifdef USE_AVX2
       // AVX2
-      if ((width>8) && (vext >= AVX2))
+      if( ( width & 15 ) == 0 && vext >= AVX2 )
       {
         __m256i vsrca,vsrcal,vsrcar;
         __m256i vbaseoffset = _mm256_set1_epi16(2) ;
@@ -224,7 +224,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
     }
 #ifdef USE_AVX2
     // AVX2
-    if ((width>8) && (vext >= AVX2))
+    if( ( width & 15 ) == 0 && ( vext >= AVX2 ) )
     {
       __m256i vsrca,vsrcat,vsrcab;
 
@@ -329,7 +329,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       }
 #ifdef USE_AVX2
       // AVX2
-      if ((width>8) && (vext >= AVX2))
+      if( ( width & 15 ) == 0 && vext >= AVX2 )
       {
         __m256i vsrca,vsrcat,vsrcab;
 
@@ -504,7 +504,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
       }
 #ifdef USE_AVX2
       // AVX2
-      if ((width>8) && (vext >= AVX2))
+      if( ( width & 15 ) == 0 && vext >= AVX2 )
       {
         __m256i vsrca,vsrcat,vsrcab;
         __m256i vbaseoffset = _mm256_set1_epi16(2) ;
@@ -644,7 +644,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
     }
 #ifdef USE_AVX2
     // AVX2
-    if ((width>8) && (vext >= AVX2))
+    if( ( width & 15 ) == 0 && vext >= AVX2 )
     {
       __m256i vsrc;
       __m256i vbaseoffset = _mm256_set1_epi16(startIdx) ;

@@ -211,6 +211,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   {
     m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)m_pcEncCfg->m_FrameScale/(int64_t)m_pcEncCfg->m_FrameRate);
   }
+  m_forceSCC = false;
 }
 
 
@@ -1376,8 +1377,14 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 
     CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
 
+    xForceScc( *pic );
+
     // initialize slice header
     pic->encTime.startTimer();
+    if( pic->gopEntry->m_isStartOfGop )
+    {
+      xInitGopQpCascade( *pic, picList );
+    }
     xInitFirstSlice( *pic, picList, false );
     pic->encTime.stopTimer();
 
@@ -1442,6 +1449,115 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
       rcUpdateList.push_back( m_gopEncListOutput.front() );
   }
   CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(), "first picture in RC update and in output list have to be the same" );
+}
+
+void EncGOP::xInitGopQpCascade( Picture& keyPic, const PicList& picList )
+{
+  uint32_t gopMotEstCount = 0, gopMotEstError = 0;
+  uint32_t gopSpVisCount  = 0, gopSpVisActLum = 0, gopSpVisActChr = 0;
+  const double resRatio4K = double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight) / (3840.0 * 2160.0);
+  const bool isHighRes    = (std::min (m_pcEncCfg->m_SourceWidth, m_pcEncCfg->m_SourceHeight) > 1280);
+  const int poc0Offset    = (m_pcEncCfg->m_poc0idr ? -1 : 0); // place leading poc 0 idr in GOP -1
+  const int gopNum = keyPic.gopEntry->m_gopNum + (keyPic.poc == 0 ? poc0Offset : 0);
+  int dQP = 0;
+  double qpStart = 24.0;
+  unsigned num = 0, sum = 0;
+  uint8_t gopMinNoiseLevels[QPA_MAX_NOISE_LEVELS];
+
+  // if max bit-rate not set or rate control enabled, skip QP adaptation
+  if( m_pcEncCfg->m_RCMaxBitrate <= 0
+      || m_pcEncCfg->m_RCMaxBitrate == INT32_MAX
+      || m_pcEncCfg->m_RCNumPasses == 2
+      || m_pcEncCfg->m_LookAhead > 0
+      || m_pcEncCfg->m_RCTargetBitrate != 0 )
+  {
+    return;
+  }
+
+  std::fill_n (gopMinNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u);
+
+  for (auto pic : picList)
+  {
+    const int picGopNum = pic->gopEntry->m_gopNum + (pic->poc == 0 ? poc0Offset : 0);
+
+    if (picGopNum == gopNum && pic->m_picShared->m_picMotEstError > 0)
+    {
+      CHECK( pic->isInitDone, "try to modify GOP qp of picture, which has already been initialized" );
+      // summarize motion errors of all MCTF filtered pictures in GOP
+      gopMotEstCount++;
+      gopMotEstError += pic->m_picShared->m_picMotEstError;
+      // go through ranges, search per-range minimum in GOP
+      for (int i = 0; i < QPA_MAX_NOISE_LEVELS; i++)
+      {
+        gopMinNoiseLevels[i] = std::min<uint8_t> (gopMinNoiseLevels[i], pic->m_picShared->m_minNoiseLevels[i]);
+      }
+    }
+    else if (picGopNum + 1 == gopNum && pic->gopEntry->m_isStartOfGop /*&& !keyPic.gopEntry->m_isStartOfIntra*/) // disabled for start of Intra segments, for segment parallel encoding
+    {
+      // store activities of previous start-of-GOP picture
+      gopSpVisCount  = 1;
+      gopSpVisActLum = pic->m_picShared->m_picSpVisAct[CH_L];
+      gopSpVisActChr = pic->m_picShared->m_picSpVisAct[CH_C];
+    }
+  }
+
+  gopSpVisCount++;  // add current TL-0 spatial activities
+  gopSpVisActLum += keyPic.m_picShared->m_picSpVisAct[CH_L];
+  gopSpVisActChr += keyPic.m_picShared->m_picSpVisAct[CH_C];
+
+  gopMotEstError = (gopMotEstError + (gopMotEstCount >> 1)) / std::max (1u, gopMotEstCount);
+  gopSpVisActLum = (gopSpVisActLum + (gopSpVisCount  >> 1)) / gopSpVisCount;
+  gopSpVisActChr = (gopSpVisActChr + (gopSpVisCount  >> 1)) / gopSpVisCount;
+
+  for (int i = 0; i < QPA_MAX_NOISE_LEVELS; i++) // go through ranges again, find overall min-average in GOP
+  {
+    if (gopMinNoiseLevels[i] < 255)
+    {
+      num++;
+      sum += gopMinNoiseLevels[i];
+    }
+  }
+
+  if (num > 0 && sum > 0)
+  {
+    qpStart += 0.5 * (6.0 * log ((double) sum / (double) num) / log (2.0) - 1.0 - 24.0); // see RateCtrl.cpp
+  }
+  qpStart += log (resRatio4K) / log (2.0); // ICIP23 paper
+
+  // TODO hlm, henkel: adapt GOP's QP offset (capped CQF, adaptive QP cascade)
+  const int bDepth = m_pcEncCfg->m_internalBitDepth[CH_L];
+  const int intraP = Clip3 (m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
+  const int visAct = std::max (uint16_t (gopSpVisActLum >> (12 - bDepth)), keyPic.picVisActY); // when vaY=0
+  const double apa = sqrt ((m_pcEncCfg->m_usePerceptQPATempFiltISlice || !keyPic.gopEntry->m_isStartOfIntra ? 32.0 : 16.0) * double (1 << (2 * bDepth - 10)) / sqrt (resRatio4K));
+  const int auxOff = (m_pcEncCfg->m_blockImportanceMapping && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0);
+  const int iFrmQP = m_pcEncCfg->m_QP + (keyPic.gopEntry->m_isStartOfIntra ? m_pcEncCfg->m_intraQPOffset : 0) + auxOff + int (floor (3.0 * log (visAct / apa) / log (2.0) + 0.5));
+  const int qp32BC = int (16384.0 + 7.21875 * pow ((double) gopSpVisActLum, 4.0/3.0) + 1.46875 * pow ((double) gopSpVisActChr, 4.0/3.0)) * (isHighRes ? 96 : 24); // TODO hlm
+  const int iFrmBC = int (0.5 + qp32BC * pow (2.0, (33 - iFrmQP) / 5.0) * sqrt (resRatio4K)); // * HD tuning
+  const int  shift = (gopMotEstError < 32 ? 5 - (gopMotEstError >> 4) : 3);
+  if (keyPic.m_picShared->m_picMotEstError >= 256) gopMotEstError >>= 2; else // avoid 2 much capping at cuts
+  if (gopMotEstError >= 120) /*TODO tune this*/ gopMotEstError >>= 1;
+  const int bFrmBC = int ((4.0 * iFrmBC * intraP) / sqrt((double)gopSpVisActLum) * std::max (int (gopMotEstError * gopMotEstError) >> (bDepth / 2), (keyPic.picVisActTL0 - visAct) >> shift) * pow(2.0, -1.0 * bDepth));
+
+  const double fac = double (m_pcEncCfg->m_FrameScale * intraP) / m_pcEncCfg->m_FrameRate;
+  const double mBC = (m_pcEncCfg->m_RCMaxBitrate > 0 && m_pcEncCfg->m_RCMaxBitrate != INT32_MAX ? m_pcEncCfg->m_RCMaxBitrate * fac : 0.0);
+
+  if (mBC > 0.0 && iFrmBC + bFrmBC > mBC)  // max. I-period bit-count exceeded
+  {
+    const double d = std::max (0, iFrmQP) - (105.0 / 128.0) * sqrt ((double) std::max (1, iFrmQP)) * log (mBC / double (iFrmBC + bFrmBC)) / log (2.0);
+
+    dQP = Clip3 (0, MAX_QP, int (0.5 + d + 0.5 * std::max (0.0, qpStart - d))) - std::max (0, iFrmQP);
+  }
+
+  for (auto pic : picList) // store in all pictures of GOP
+  {
+    const int picGopNum = pic->gopEntry->m_gopNum + (pic->poc == 0 ? poc0Offset : 0);
+
+    if (picGopNum == gopNum)
+    {
+      pic->gopAdaptedQP = dQP;
+    }
+  }
+  keyPic.gopAdaptedQP = dQP; // TODO: add any additional key-frame offset here
 }
 
 void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncodeLtRef )
@@ -2610,6 +2726,20 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
     msg.log( msgLevel, cPicInfo.c_str() );
     if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
+  }
+}
+
+void EncGOP::xForceScc( Picture& pic )
+{
+  if( pic.gopEntry->m_isStartOfGop )
+  {
+    m_forceSCC = pic.m_picShared->m_forceSCC;
+  }
+  if( m_forceSCC && (!pic.isSccStrong || !pic.isSccWeak) )
+  {
+    pic.isSccStrong = true;
+    pic.isSccWeak = true;
+    pic.setSccFlags(m_pcEncCfg);
   }
 }
 

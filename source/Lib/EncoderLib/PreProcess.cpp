@@ -299,7 +299,7 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
 
-  if( m_doVisAct && ! m_doVisActQpa ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
+  if( ( m_doVisAct && !m_doVisActQpa ) || ( cappedCRF && m_encCfg->m_usePerceptQPA && pic->gopEntry->m_temporalId == 0 ) ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
   {
     // find previous pictures
     const Picture* prevPics[ NUM_QPA_PREV_FRAMES ];
@@ -441,120 +441,152 @@ void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList )
 
 void PreProcess::xDetectScc( Picture* pic ) const
 {
-  CPelUnitBuf yuvOrgBuf = pic->getOrigBuf();
+  if( m_encCfg->m_forceScc > 0 )
+  {
+    pic->isSccStrong = pic->m_picShared->m_isSccStrong = m_encCfg->m_forceScc >= 3;
+    pic->isSccWeak   = pic->m_picShared->m_isSccWeak   = m_encCfg->m_forceScc >= 2;
+    return;
+  }
 
-  bool isSccWeak   = false;
-  bool isSccStrong = false;
+  CPelBuf yuvOrgBuf = pic->getOrigBuf().Y();
 
-  const int SIZE_BL = 4;
-  const int minLevel = 1 << (m_encCfg->m_internalBitDepth[CH_L] - (!m_encCfg->m_videoFullRangeFlag ? 4 : 6)); // 1/16th or 1/64th of range
-  const int K_SC = 25;
-  const Pel* piSrc = yuvOrgBuf.Y().buf;
-  const uint32_t uiStride = yuvOrgBuf.Y().stride;
-  const uint32_t uiWidth  = yuvOrgBuf.Y().width;
-  const uint32_t uiHeight = yuvOrgBuf.Y().height;
-  int size = SIZE_BL;
-  unsigned   hh, ww;
-  int SizeS = SIZE_BL << 1;
+  // blocksize and threshold
+  static constexpr int SIZE_BL =  4;
+  static constexpr int K_SC    = 23;
+  static constexpr int K_noSC  =  8;
+
+  // mean and variance fixed point accuracy
+  static constexpr int accM = 4;
+  static constexpr int accV = 2;
+
+  static_assert( accM <= 4 && accV <= 4, "Maximum Mean and Variance accuracy of 4 allowed!" );
+  static constexpr int shfM = 4 - accM;
+  static constexpr int shfV = 4 + accM - accV;
+  static constexpr int addM = 1 << shfM >> 1;
+  static constexpr int addV = 1 << shfV >> 1;
+
+  static constexpr int SizeS = SIZE_BL << 1;
+
+  const int minLevel = 1 << ( m_encCfg->m_internalBitDepth[CH_L] - ( m_encCfg->m_videoFullRangeFlag ? 6 : 4 ) ); // 1/16th or 1/64th of range
+
+  const Pel*     piSrc    = yuvOrgBuf.buf;
+  const uint32_t uiStride = yuvOrgBuf.stride;
+  const uint32_t uiWidth  = yuvOrgBuf.width;
+  const uint32_t uiHeight = yuvOrgBuf.height;
+
+  CHECK( ( uiWidth & 7 ) != 0 || ( uiHeight & 7 ) != 0, "Width and height have to be multiples of 8!" );
+
+  const int amountBlock = ( uiWidth >> 2 ) * ( uiHeight >> 2 );
+
   int sR[4] = { 0, 0, 0, 0 }; // strong SCC data
   int zR[4] = { 0, 0, 0, 0 }; // zero input data
-  const int amountBlock = (uiWidth >> 2) * (uiHeight >> 2);
-  for( hh = 0; hh < uiHeight; hh += SizeS )
-  {
-    for( ww = 0; ww < uiWidth; ww += SizeS )
-    {
-      int Rx = ww >= (uiWidth  >> 1) ? 1 : 0;
-      int Ry = hh >= (uiHeight >> 1) ? 1 : 0;
-      Ry = Ry << 1 | Rx;
 
-      int i = ww;
-      int j = hh;
+  for( int hh = 0; hh < uiHeight; hh += SizeS )
+  {
+    for( int ww = 0; ww < uiWidth; ww += SizeS )
+    {
+      int Rx = ww >= ( uiWidth  >> 1 ) ? 1 : 0;
+      int Ry = hh >= ( uiHeight >> 1 ) ? 2 : 0;
+      Ry = Ry | Rx;
+
       int n = 0;
       int Var[4];
-      for( j = hh; (j < hh + SizeS) && (j < uiHeight); j += size )
+
+      for( int j = hh; j < hh + SizeS; j += SIZE_BL )
       {
-        for( i = ww; (i < ww + SizeS) && (i < uiWidth); i += size )
+        for( int i = ww; i < ww + SizeS; i += SIZE_BL )
         {
-          int sum = 0;
+          const Pel *p0 = &piSrc[j * uiStride + i];
+
           int Mit = 0;
-          int V = 0;
-          int h = j;
-          int w = i;
-          for( h = j; (h < j + size) && (h < uiHeight); h++ )
+          int V   = 0;
+
+          for( int h = 0; h < SIZE_BL; h++, p0 += uiStride )
           {
-            for( w = i; (w < i + size) && (w < uiWidth); w++ )
+            for( int w = 0; w < SIZE_BL; w++ )
             {
-              sum += int(piSrc[h * uiStride + w]);
+              Mit += p0[w];
             }
           }
-          int sizeEnd = ((h - j) * (w - i));
-          Mit = sum / sizeEnd;
-          for( h = j; (h < j + size) && (h < uiHeight); h++ )
+
+          Mit = ( Mit + addM ) >> shfM;
+
+          p0 = &piSrc[j * uiStride + i];
+
+          for( int h = 0; h < SIZE_BL; h++, p0 += uiStride )
           {
-            for( w = i; (w < i + size) && (w < uiWidth); w++ )
+            for( int w = 0; w < SIZE_BL; w++ )
             {
-              V += abs(Mit - int(piSrc[h * uiStride + w]));
+              V += abs( Mit - ( int( p0[w] ) << accM ) );
             }
           }
-          // Variance in Block (SIZE_BL*SIZE_BL)
-          if (V < sizeEnd && Mit <= minLevel)
+
+          // if variance is lower than 1 and mean is lower/equal to minLevel
+          if( V < ( 1 << ( accM + 4 ) ) && Mit <= ( minLevel << accM ) )
           {
             Var[n] = -1;
           }
           else
           {
-            Var[n] = V / sizeEnd;
+            Var[n] = ( V + addV ) >> shfV;
           }
+
           n++;
         }
       }
+
       for( int i = 0; i < 2; i++ )
       {
-        if( Var[i] == Var[i + 2] )
+        const int var0 = Var[ i];
+        const int var1 = Var[ i + 2];
+        const int var2 = Var[ i << 1];
+        const int var3 = Var[(i << 1) + 1];
+
+        if( var0 < 0 && var1 < 0 && zR[Ry] * 20 < amountBlock )
         {
-          if( Var[i] < 0 && zR[Ry] * 20 < amountBlock )
-          {
-            zR[Ry]++;
-          }
-          else
-          {
-            sR[Ry]++;
-          }
+          zR[Ry]++;
         }
-        if( Var[i << 1] == Var[(i << 1) + 1] )
+        else if( var0 == var1 )
         {
-          if( Var[i << 1] < 0 && zR[Ry] * 20 < amountBlock )
-          {
-            zR[Ry]++;
-          }
-          else
-          {
-            sR[Ry]++;
-          }
+          sR[Ry]++;
+        }
+
+        if( var2 < 0 && var3 < 0 && zR[Ry] * 20 < amountBlock )
+        {
+          zR[Ry]++;
+        }
+        else if( var2 == var3 )
+        {
+          sR[Ry]++;
         }
       }
     }
   }
-  int s = 0;
-  isSccStrong = true;
-  size = 0;
+
+  bool isSccWeak     = false;
+  bool isSccStrong   = false;
+  bool isNoSccStrong = false;
+
+  int numAll   = 0;
+  int numMin   = amountBlock, numMax = 0;
+  int numBelow = 0;
+
   for( int r = 0; r < 4; r++ )
   {
-    s += sR[r];
-    if (size < sR[r]) // find peak quarter
-    {
-      size = sR[r];
-    }
-    if ((sR[r] * 100 / (amountBlock >> 2)) <= K_SC)
-    {
-      isSccStrong = false;
-    }
+    numAll   += sR[r];
+    numMax    = std::max( numMax, sR[r] );
+    numMin    = std::min( numMin, sR[r] );
+    numBelow += sR[r] * 100 <= K_SC * ( amountBlock >> 2 ) ? 1 : 0;
   }
-  isSccWeak = ((s * 100 / amountBlock) > K_SC);
-  if (isSccWeak && (size * 93 / (amountBlock >> 1)) > K_SC)
-  {
-    isSccStrong = true; // peak quarter is above 2.15*K_SC threshold
-  }
+
+  // lowest quarter is above K_SC threshold
+  isSccStrong   = numMin * 100 >  K_SC *   ( amountBlock >> 2 );
+  // lowest quarter is below K_noSC threshold and theres more than one quarter below K_SC threshold
+  isNoSccStrong = numMin * 100 <= K_noSC * ( amountBlock >> 2 ) && numBelow > 1;
+  // overall is above K_SC threshold
+  isSccWeak     = numAll * 100 >  K_SC *     amountBlock;
+  // peak quarter is above 2.15*K_SC threshold
+  isSccStrong  |= isSccWeak && !isNoSccStrong && numMax * 186 > K_SC * amountBlock;
 
   PicShared* picShared     = pic->m_picShared;
   pic->isSccWeak           = isSccWeak;

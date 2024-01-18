@@ -582,9 +582,11 @@ inline std::string prnt( const char* fmt, ...)
 
 #if ( _WIN32 && ( _MSC_VER > 1300 ) ) || defined (__MINGW64_VERSION_MAJOR)
 #define xMalloc( type, len )        _aligned_malloc( sizeof(type)*(len), MEMORY_ALIGN_DEF_SIZE )
+#define xMalloc2( type, len, alg )  _aligned_malloc( sizeof(type)*(len), alg )
 #define xFree( ptr )                _aligned_free  ( ptr )
 #elif defined (__MINGW32__)
 #define xMalloc( type, len )        __mingw_aligned_malloc( sizeof(type)*(len), MEMORY_ALIGN_DEF_SIZE )
+#define xMalloc2( type, len, alg )  __mingw_aligned_malloc( sizeof(type)*(len), alg )
 #define xFree( ptr )                __mingw_aligned_free( ptr )
 #else
 namespace detail {
@@ -599,11 +601,13 @@ static inline T* aligned_malloc(size_t len, size_t alignement) {
 }
 }
 #define xMalloc( type, len )        detail::aligned_malloc<type>( len, MEMORY_ALIGN_DEF_SIZE )
+#define xMalloc2( type, len, alg )  detail::aligned_malloc<type>( len, alg )
 #define xFree( ptr )                free( ptr )
 #endif
 
 #else
 #define xMalloc( type, len )        malloc   ( sizeof(type)*(len) )
+#define xMalloc2( type, len, alg )  malloc   ( sizeof(type)*(len) )
 #define xFree( ptr )                free     ( ptr )
 #endif //#if ALIGNED_MALLOC
 

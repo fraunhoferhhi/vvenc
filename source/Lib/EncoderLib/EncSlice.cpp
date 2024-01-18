@@ -390,6 +390,8 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen > 0;
 }
 
+static const int highTL[6] = { -1, 0, 0, 2, 4, 5 };
+
 int EncSlice::xGetQPForPicture( const Slice* slice )
 {
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
@@ -401,11 +403,13 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
   }
   else
   {
-    const SliceType sliceType = slice->sliceType;
+    qp = m_pcEncCfg->m_QP + slice->pic->gopAdaptedQP;
 
-    qp = m_pcEncCfg->m_QP;
-
-    if( sliceType == VVENC_I_SLICE )
+    if (m_pcEncCfg->m_usePerceptQPA)
+    {
+      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[slice->TLayer] + ((qp * (16 + std::min (2u, slice->TLayer))) >> 4) + 0/*TODO +-1?*/);
+    }
+    else if( slice->isIntra() )
     {
       qp += m_pcEncCfg->m_intraQPOffset;
     }
@@ -735,7 +739,7 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_IGNORE, pic->cs, CH_L );
+  PROFILER_SCOPE_TOP_LEVEL_EXT( 1, g_timeProfiler, P_IGNORE, pic->cs );
   CodingStructure& cs      = *pic->cs;
   Slice&           slice   = *cs.slice;
   const PreCalcValues& pcv = *cs.pcv;

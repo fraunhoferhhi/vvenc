@@ -64,6 +64,7 @@ public:
   GOPEntry         m_gopEntry;
   bool             m_isSccWeak;
   bool             m_isSccStrong;
+  bool             m_forceSCC;
   uint16_t         m_picVisActTL0;
   uint16_t         m_picVisActY;
   uint16_t         m_picSpVisAct[MAX_NUM_CH];
@@ -88,6 +89,7 @@ public:
   PicShared()
   : m_isSccWeak     ( false )
   , m_isSccStrong   ( false )
+  , m_forceSCC      ( false )
   , m_picVisActTL0  ( 0 )
   , m_picVisActY    ( 0 )
   , m_picMemorySTA  ( 0 )
@@ -137,6 +139,7 @@ public:
 
     m_isSccWeak    = false;
     m_isSccStrong  = false;
+    m_forceSCC     = false;
     m_picVisActTL0 = 0;
     m_picVisActY   = 0;
     m_picMemorySTA = 0;
