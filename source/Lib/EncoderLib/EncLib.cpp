@@ -131,10 +131,11 @@ void EncLib::initEncoderLib( const vvenc_config& encCfg )
 #endif
 
 #if ENABLE_TIME_PROFILING
-  if( g_timeProfiler == nullptr )
+  if( g_timeProfiler )
   {
-    g_timeProfiler = timeProfilerCreate( encCfg );
+    delete g_timeProfiler;
   }
+  g_timeProfiler = timeProfilerCreate( encCfg );
 #endif
 }
 
@@ -166,12 +167,17 @@ void EncLib::uninitEncoderLib()
 
 #if ENABLE_TIME_PROFILING
 #if ENABLE_TIME_PROFILING_MT_MODE
-  for( auto& p : m_threadPool->getProfilers() )
+  if( m_threadPool )
   {
-    *g_timeProfiler += *p;
+    for(auto& p : m_threadPool->getProfilers())
+    {
+      *g_timeProfiler += *p;
+    }
   }
 #endif
   timeProfilerResults( g_timeProfiler );
+  delete g_timeProfiler;
+  g_timeProfiler = nullptr;
 #endif
   xUninitLib();
 }
@@ -423,7 +429,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       }
     }
 
-    PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
+    PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, 0 );
 
     // trigger stages
     isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );

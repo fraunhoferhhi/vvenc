@@ -79,13 +79,13 @@ TProfiler* timeProfilerCreate( const vvenc_config& encCfg )
 #if ENABLE_TIME_PROFILING_PIC_TYPES
   tp = new TProfiler( 3, 1, 1, profilerId );
 #elif ENABLE_TIME_PROFILING_TL
-  tp = new TProfiler( encCfg.m_log2GopSize + 2, 1, 1, profilerId );
+  tp = new TProfiler( floorLog2( encCfg.m_GOPSize ) + 2, 1, 1, profilerId );
 #elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
   int   widthInCTU  = ( encCfg.m_PadSourceWidth % encCfg.m_CTUSize )  ? encCfg.m_PadSourceWidth/encCfg.m_CTUSize  + 1 : encCfg.m_PadSourceWidth/encCfg.m_CTUSize;
   int   heightInCTU = ( encCfg.m_PadSourceHeight % encCfg.m_CTUSize ) ? encCfg.m_PadSourceHeight/encCfg.m_CTUSize + 1 : encCfg.m_PadSourceHeight/encCfg.m_CTUSize;
-  tp = new TProfiler( widthInCTU, heightInCTU, 2, 1, profilerId );
+  tp = new TProfiler( widthInCTU, heightInCTU, 2, profilerId );
 #elif ENABLE_TIME_PROFILING_CU_SHAPES
-  tp = new TProfiler( Log2(encCfg.m_CTUSize) + 1, Log2(encCfg.m_CTUSize) + 1, 2, 1, profilerId );
+  tp = new TProfiler( Log2(encCfg.m_CTUSize) + 1, Log2(encCfg.m_CTUSize) + 1, 2, profilerId );
 #endif
   profilerId++;
 #endif
@@ -98,8 +98,6 @@ void timeProfilerResults( TProfiler* tp )
   if( tp )
   {
     std::cout << *tp;
-    delete tp;
-    tp = nullptr;
   }
 #else
   if( tp )
@@ -128,7 +126,7 @@ void timeProfilerResults( TProfiler* tp )
 #elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
     for( int i = 0; i < tp->getCountersSet().size(); i++ )
     {
-      std::cout << "Run-time of selected encoder stages across CTUs of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" << ")" ) << std::endl;
+      std::cout << "Run-time of selected encoder stages across CTUs of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" ) << ")" << std::endl;
       StatCounters::report2D( std::cout, tp->getCountersSet()[i], false, true, false, true, true, -1 );
       if( i > 0 )
         tp->getCountersSet()[0] += tp->getCountersSet()[i];
@@ -151,8 +149,6 @@ void timeProfilerResults( TProfiler* tp )
       StatCounters::report2D( std::cout, tp->getCountersSet()[0],  true, true, false, true, true, -1 );
     }
 #endif
-    delete tp;
-    tp = nullptr;
   }
 #endif
 }

@@ -173,6 +173,7 @@ Picture::Picture()
     , ctsValid          ( false )
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
+    , gopAdaptedQP      ( 0 )
     , isMeanQPLimited   ( false )
     , picInitialQP      ( -1 )
     , picInitialLambda  ( -1.0 )
@@ -232,7 +233,7 @@ void Picture::reset()
   refCounter          = 0;
   poc                 = -1;
   TLayer              = std::numeric_limits<uint32_t>::max();
-
+  gopAdaptedQP        = 0;
   actualHeadBits      = 0;
   actualTotalBits     = 0;
 

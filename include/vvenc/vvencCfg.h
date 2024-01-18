@@ -774,7 +774,7 @@ typedef struct vvenc_config
                                                                                          // if negative, the absolute value is interpreted as a 4-bit fixed point multiplier of the target bitrate).
                                                                                          // -24, i.e. -1.1000 binary, means the maxrate would be set to be the 1.5x of the target bitrate.
                                                                                          // for convenience use VVENC_SET_MAXRATE_FACTOR, e.g. VVENC_SET_MAXRATE_FACTOR(1.5), to set the multiplier
-  int                 m_reservedInt;
+  int                 m_forceScc;
   double              m_reservedDouble[9];
 
   // internal state variables

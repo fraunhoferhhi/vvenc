@@ -29,8 +29,8 @@ if( VVENC_ENABLE_X86_SIMD )
   # get x86 include files
   file( GLOB X86_INC_FILES "../CommonLib/x86/*.h" )
 
-  ## get avx source files
-  #file( GLOB AVX_SRC_FILES "../CommonLib/x86/avx/*.cpp" )
+  # get avx source files
+  file( GLOB AVX_SRC_FILES "../CommonLib/x86/avx/*.cpp" )
 
   # get avx2 source files
   file( GLOB AVX2_SRC_FILES "../CommonLib/x86/avx2/*.cpp" )
@@ -38,8 +38,8 @@ if( VVENC_ENABLE_X86_SIMD )
   # get sse4.1 source files
   file( GLOB SSE41_SRC_FILES "../CommonLib/x86/sse41/*.cpp" )
 
-  ## get sse4.2 source files
-  #file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
+  # get sse4.2 source files
+  file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
@@ -93,31 +93,30 @@ set( CMAKE_VISIBILITY_INLINES_HIDDEN TRUE )
 if( VVENC_ENABLE_X86_SIMD )
   # set needed compile definitions
   set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_SSE41 )
-  #set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_SSE42 )
-  #set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_DEFINITIONS USE_AVX )
+  set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_SSE42 )
+  set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_DEFINITIONS USE_AVX )
   set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_DEFINITIONS USE_AVX2 )
   # set needed compile flags
   if( MSVC )
-    #set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "/arch:AVX" )
+    set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "/arch:AVX" )
     set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "/arch:AVX2" )
   elseif( UNIX OR MINGW )
     include( vvencCompilerSupport )
 
     set_if_compiler_supports_flag( FLAG_mxsave -mxsave  )
     set_if_compiler_supports_flag( FLAG_msse41 -msse4.1 )
-    #set_if_compiler_supports_flag( FLAG_msse42 -msse4.2 )
-    #set_if_compiler_supports_flag( FLAG_mavx   -mavx    )
+    set_if_compiler_supports_flag( FLAG_msse42 -msse4.2 )
+    set_if_compiler_supports_flag( FLAG_mavx   -mavx    )
     set_if_compiler_supports_flag( FLAG_mavx2  -mavx2   )
 
     set_property( SOURCE ${X86_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS ${FLAG_mxsave} )
     set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
-    #set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse42}" )
-    #set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx}"   )
+    set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse42}" )
+    set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx}"   )
     set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx2}"  )
   endif()
 
-  #add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${SSE42_SRC_FILES} ${AVX_SRC_FILES} ${AVX2_SRC_FILES} )
-  add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${AVX2_SRC_FILES} )
+  add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${SSE42_SRC_FILES} ${AVX_SRC_FILES} ${AVX2_SRC_FILES} )
   # disble LTO for the files compiled with special architecture flags
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES
                                               INTERPROCEDURAL_OPTIMIZATION                OFF

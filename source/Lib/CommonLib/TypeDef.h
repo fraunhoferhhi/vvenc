@@ -147,7 +147,7 @@ namespace vvenc {
 
 
 #if defined( TARGET_SIMD_X86 ) && !defined( REAL_TARGET_X86 )
-#  define SIMD_EVERYWHERE_EXTENSION_LEVEL                 SSE42
+#  define SIMD_EVERYWHERE_EXTENSION_LEVEL                 AVX2
 #endif
 
 // End of SIMD optimizations

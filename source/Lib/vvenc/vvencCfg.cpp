@@ -687,8 +687,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_FirstPassMode                           = 0;
 
+  c->m_forceScc                                = 0;
+
   c->m_reservedFlag                            = false;
-  c->m_reservedInt                             = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -760,9 +761,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled, "Enabling bufferingPeriod SEI requires rate control" );
     vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,   "Enabling pictureTiming SEI requires rate control" );
-    vvenc_confirmParameter( c, c->m_RCMaxBitrate > 0,          "Specifying a maximum bitrate requires rate control" );
+    vvenc_confirmParameter( c, c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX && !c->m_usePerceptQPA, "Enabling capped CQF requires PerceptQPA to be enabled" );
+    vvenc_confirmParameter( c, c->m_RCMaxBitrate > 0 && c->m_RCInitialQP > 0, "Specifying an RCInitialQP value requires rate control" );
+    vvenc_confirmParameter( c, c->m_RCMaxBitrate < 0, "Cannot specify a relative max rate when using QCF, please specify an absolute value" );
   }
-  else if ( c->m_RCMaxBitrate == 0 )
+  if( c->m_RCMaxBitrate == 0 )
   {
     c->m_RCMaxBitrate = INT32_MAX;
   }
@@ -804,8 +807,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  const double d = (3840.0 * 2160.0) / double (c->m_SourceWidth * c->m_SourceHeight);
-  const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_PERCEPT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, c->m_RCTargetBitrate)) / 500000.0))));
+  const double d = (c->m_RCTargetBitrate != VVENC_RC_OFF ? 1.0 : 2.25) * (3840.0 * 2160.0) / double (c->m_SourceWidth * c->m_SourceHeight);
+  const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_PERCEPT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, (c->m_RCTargetBitrate != VVENC_RC_OFF ? c->m_RCTargetBitrate : c->m_RCMaxBitrate))) / 500000.0))));
 
   // TODO 2.0: make this an error
   //vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != VVENC_DEFAULT_QP, "Rate-control and QP based encoding are mutually exclusive!" );
@@ -823,6 +826,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX && rcQP + sqrt (c->m_FrameRate / (double) c->m_FrameScale) > c->m_QP + 10.125, "Capped CQF is used and MaxBitrate is too low for specified QP and frame rate/scale" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_FirstPassMode < 0 || c->m_FirstPassMode > 4 ), "FirstPassMode must be 0, 1, 2, 3, or 4" );
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
@@ -2619,7 +2623,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MinQT[ 0 ]                      = 8;
       c->m_MinQT[ 1 ]                      = 8;
       c->m_MinQT[ 2 ]                      = 4;
-      c->m_maxMTTDepth                     = 221111;
+      c->m_maxMTTDepth                     = 1;
       c->m_maxMTTDepthI                    = 2;
 
       // speedups
@@ -2628,7 +2632,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 3;
+      c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 1;
@@ -2639,7 +2643,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
       c->m_meReduceTap                     = 2;
-      c->m_numRefPics                      = 222111;
+      c->m_numRefPics                      = 222221;
       c->m_numRefPicsSCC                   = 0;
 
       // tools
@@ -2976,17 +2980,23 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       }
       else
         css << "single-pass";
-      if( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
-      {
-        if( c->m_RCMaxBitrate < 1000000 )
-          css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000.0 << " kbps)";
-        else
-          css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000000.0 << " Mbps)";
-      }
-      css << "\n";
     }
     else
-      css << "QP " <<  c->m_QP << "\n";
+    {
+      css << "QP " << c->m_QP;
+    }
+    if( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+    {
+      if ( c->m_RCTargetBitrate <= 0 )
+      {
+        css << "  capped CQF";
+      }
+      if( c->m_RCMaxBitrate < 1000000 )
+        css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000.0 << " kbps)";
+      else
+        css << "  (max. rate " <<  (double)c->m_RCMaxBitrate/1000000.0 << " Mbps)";
+    }
+    css << "\n";
 
     css << loglvl << "Perceptual optimization                : " << (c->m_usePerceptQPA ? "Enabled" : "Disabled") << "\n";
     css << loglvl << "Intra period (keyframe)                : " << c->m_IntraPeriod << "\n";
@@ -3186,15 +3196,22 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "Passes:" << c->m_RCNumPasses << " ";
       css << "Pass:" << c->m_RCPass << " ";
       css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
-      if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+      if ( c->m_RCInitialQP > 0 )
       {
-        css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
+        css << "RCInitialQP:" << c->m_RCInitialQP << " ";
       }
-      css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     }
     else
     {
       css << "QP:" << c->m_QP << " ";
+    }
+    if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
+    {
+      if ( c->m_RCTargetBitrate <= 0 )
+      {
+        css << "(capped CQF) ";
+      }
+      css << "MaxBitrate:" << c->m_RCMaxBitrate << " ";
     }
 
     css << "LookAhead:" << c->m_LookAhead << " ";

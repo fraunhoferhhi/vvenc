@@ -40,4 +40,4 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-#include "../AdaptiveLoopFilterX86.h"
+#include "../DepQuantX86.h"
