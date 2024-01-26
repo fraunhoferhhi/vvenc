@@ -1605,10 +1605,50 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       }
       else
       {
-        if (((m_pcEncCfg->m_Affine == 4) && (cu.slice->TLayer >= 2)) || (m_pcEncCfg->m_Affine == 5))
+        if( m_pcEncCfg->m_Affine >= 4 && cu.slice->TLayer >= 2 )
         {
           checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine && m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
         }
+      }
+    }
+    if( checkAffine && cu.Y().width > 8 && cu.Y().height > 8 && m_pcEncCfg->m_Affine > 0 )
+    {
+      // Based on:
+      // H. Pejman*, S. Coulombe*, C. Vazquez*, M. Jamali° and A. Vakili°
+      // *École de technologie supérieure, °Summit Tech Multimedia
+      // "An Adjustable Fast Decision Method for Affine Motion Estimation in VVC,"
+      // ICIP, Kuala Lumpur, Malaysia, 2023, pp. 2695-2699, doi: 10.1109/ICIP49359.2023.10222750.
+      // https://ieeexplore.ieee.org/document/10222750
+
+      static const double affine_thr_coffs[3] = { 2.534229853866437, 0.05173246 ,0.87650414 };
+      static const double affine_thr_param[5] = { 1, 1, 1, 1.3, 2.3 }; // TODO: Adapt if extending m_Affine range!
+      const int qp         = cu.qp;
+      const int blk_area   = cu.Y().area();
+      const double threshold  = affine_thr_param[m_pcEncCfg->m_Affine - 1];
+
+      //Multiple linear regression (MLR):
+      //Y = b0 + b1*(QP) + b2*(LOG2(BLK_AREA))
+      double log_affine_thr =
+        affine_thr_coffs[0] +
+        qp * affine_thr_coffs[1] +
+        log2(blk_area) * affine_thr_coffs[2];
+
+      //log_affine_thr is LOG 2 of estimated thr
+      double affine_thr = pow(2, log_affine_thr) * threshold;
+
+      double scaled_uiHevcCost = (double)uiHevcCost;
+
+      //The trained coefficients are based on the cost of internal 10 BitDepth. So, the cost should be scaled if the internal BitDepth is not 10.
+      if (m_pcEncCfg->m_internalBitDepth[0] !=10)
+      {
+        //Based on the CTC documnet to convert 8 bit to 10 bit video or vice versa, the VTM only multiply (8 to 10 bits) or divide (10 to 8 bits) pixel values to 4.
+        //In this case, the cost values are approximately scaled by 4.
+        //The trained data acquired from internal 10 bit data. So, if internal bit depth is 8, the conversion into 10-bit cost can be done as follows:
+        scaled_uiHevcCost = uiHevcCost * (pow(2.0, 10-m_pcEncCfg->m_internalBitDepth[0]));
+      }
+      if( scaled_uiHevcCost < affine_thr )
+      {
+        checkAffine = false;
       }
     }
     if (cu.Y().width > 8 && cu.Y().height > 8 && cu.slice->sps->Affine && checkAffine)
