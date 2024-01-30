@@ -84,7 +84,7 @@ void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int go
     prevGopList = &m_defaultGopLists[ i ];
     pocOffset += m_defGopSize;
   }
-  if( remainSize && remainSize != m_defGopSize )
+  if( remainSize )
   {
     const int prevGopIdx = Clip3<int>( 0, (int)m_defaultGopLists.size() - 1, numGops - 1 );
     prevGopList = &m_defaultGopLists[ prevGopIdx ];
@@ -108,8 +108,8 @@ void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int go
   CHECK( leadFrames < 0, "negative number of lead frames not supported" );
 
   // start with first gop list
-  m_gopList     = &m_defaultGopLists[ 0 ];
-  m_nextListIdx = std::min( 1, (int)m_defaultGopLists.size() - 1 );
+  m_gopList     = remainSize != 0 && !poc0idr ? &m_remainGopList : &m_defaultGopLists[ 0 ];
+  m_nextListIdx = remainSize != 0 && !poc0idr ? 0 : std::min( 1, (int)m_defaultGopLists.size() - 1 );
   xCreatePocToGopIdx( *m_gopList, !m_poc0idr, m_pocToGopIdx );
 
   // lets start with poc 0
@@ -179,6 +179,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   {
     gopEntry.m_sliceType      = 'I';
     gopEntry.m_isStartOfIntra = true;
+    gopEntry.m_temporalId     = 0;
   }
 
   // check for end of current gop
@@ -232,6 +233,7 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   gopEntry.m_sliceType      = 'I';
   gopEntry.m_isStartOfIntra = true;
   gopEntry.m_isStartOfGop   = true;
+  gopEntry.m_temporalId     = 0;
 
   // start with first gop list
   m_gopList      = &m_defaultGopLists[ 0 ];

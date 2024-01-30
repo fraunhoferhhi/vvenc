@@ -6,8 +6,7 @@ VVenC, the Fraunhofer Versatile Video Encoder, is a fast and efficient software 
 - Easy to use encoder implementation with five predefined quality/speed presets;
 - Perceptual optimization to improve subjective video quality, based on the XPSNR visual model;
 - Extensive frame-level and task-based parallelization with very good scaling;
-- Frame-level single-pass and two-pass rate control supporting variable bit-rate (VBR) encoding;
-- Expert mode encoder interface available, allowing fine-grained control of the encoding process.
+- Frame-level single-pass and two-pass rate control supporting variable bit-rate (VBR) encoding.
 
 ## Information
 
