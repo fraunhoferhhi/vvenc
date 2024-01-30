@@ -38,7 +38,8 @@ function( check_missing_intrinsics )
   _check_intrinsic( _mm_storeu_si64      "${FLAG_msse41}" "int64_t a = 0; _mm_storeu_si64( &a, _mm_setzero_si128() );"                )
   _check_intrinsic( _mm_loadu_si32       "${FLAG_msse41}" "int32_t a = 0; __m128i x = _mm_loadu_si32( &a );"                          )
   _check_intrinsic( _mm_loadu_si64       "${FLAG_msse41}" "int64_t a = 0; __m128i x = _mm_loadu_si64( &a );"                          )
-  _check_intrinsic( _mm_cvtsi128_si64    "${FLAG_msse41}" "int64_t a = 0; a = _mm_cvtsi128_si64( _mm_setzero_si128() );"              ) 
+  _check_intrinsic( _mm_cvtsi128_si64    "${FLAG_msse41}" "int64_t a = 0; a = _mm_cvtsi128_si64( _mm_setzero_si128() );"              )
+  _check_intrinsic( _mm_cvtsi64_si128    "${FLAG_msse41}" "int64_t a = 0; __m128i x = _mm_cvtsi64_si128( a );"                        )  
   _check_intrinsic( _mm_extract_epi64    "${FLAG_msse41}" "int64_t a = 0; a = _mm_extract_epi64( _mm_setzero_si128(), 0 );"           )
 
   # AVX

@@ -772,9 +772,9 @@ void RateCtrl::processFirstPassData( const bool flush, const int poc /*= -1*/ )
           m_firstPassCache.pop_front();
         }
 
-        // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
+        // the chunk is considered to contain a particular number of pictures up to the picture starting the next GOP (including it)
         // in flush-mode, ensure the deterministic definition of last chunk
-        if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
+        if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( m_listRCFirstPassStats.size() > 2 && picStat.isStartOfGop ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
           break;
       }
     }

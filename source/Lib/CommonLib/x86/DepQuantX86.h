@@ -88,9 +88,14 @@ namespace DQIntern
 
   struct StateMem
   {
-    uint8_t tpl[64];
-    uint8_t sum[64];
-    uint8_t val[64];
+    int64_t  rdCost[4];
+    int      remRegBins[4];
+    int32_t  sbbBits0[4];
+    int32_t  sbbBits1[4];
+
+    uint8_t tplAcc[64];
+    uint8_t sum1st[64];
+    uint8_t absVal[64];
 
     struct
     {
@@ -98,16 +103,15 @@ namespace DQIntern
       uint8_t cff[4];
     } ctx;
 
-    int64_t  rdCost[4];
-
-    int32_t  sbbBits0[4];
-    int32_t  sbbBits1[4];
-
     uint8_t  numSig[4];
     int8_t   refSbbCtxId[4];
 
     int32_t  cffBits1[RateEstimator::sm_maxNumGtxCtx + 3];
-    int      remRegBins[4];
+
+    int8_t   m_goRicePar[4];
+    int8_t   m_goRiceZero[4];
+    const BinFracBits*   m_sigFracBitsArray[4];
+    const CoeffFracBits* m_gtxFracBitsArray;
 
     int      cffBitsCtxOffset;
     bool     anyRemRegBinsLt4;
@@ -115,6 +119,8 @@ namespace DQIntern
     unsigned effHeight;
     int      initRemRegBins;
   };
+
+  static constexpr size_t StateMemSkipCpySize = offsetof( StateMem, sbbBits1 );
 
   struct SbbCtx
   {
@@ -199,8 +205,8 @@ namespace DQIntern
               UPDATE(0);
             }
 #undef UPDATE
-            curr.tpl[idAddr] = ( sumNum << 5 ) | sumAbs1;
-            curr.sum[idAddr] = ( uint8_t ) std::min( 255, sumAbs );
+            curr.tplAcc[idAddr] = ( sumNum << 5 ) | sumAbs1;
+            curr.sum1st[idAddr] = ( uint8_t ) std::min( 255, sumAbs );
           }
         }
       }
@@ -223,7 +229,7 @@ namespace DQIntern
 
       for( int i = 0, j = 0; i < ctxSize; i += regSize, j += 4 )
       {
-        __m128i in  = _mm_loadu_si128( ( const __m128i* ) &curr.val[i] );
+        __m128i in  = _mm_loadu_si128( ( const __m128i* ) &curr.absVal[i] );
 
         _mm_storeu_si32( &levels0[j], _mm_shuffle_epi8( in, vshuf0 ) );
         _mm_storeu_si32( &levels1[j], _mm_shuffle_epi8( in, vshuf1 ) );
@@ -245,20 +251,13 @@ namespace DQIntern
   class State
   {
     friend class CommonCtx<vext>;
-  public:
-    State( const RateEstimator& rateEst, CommonCtx<vext>& commonCtx, const int stateId )
-      : m_stateId         ( stateId )
-      , m_sigFracBitsArray( rateEst.sigFlagBits(stateId) )
-      , m_gtxFracBitsArray( rateEst.gtxFracBits() )
-      , m_commonCtx       ( commonCtx )
-    {
-    }
 
-    static inline void updateStates( const ScanInfo &scanInfo, const Decisions &decisions, StateMem &prev, StateMem &curr )
+  public:
+
+    static inline void updateStates( const ScanInfo &scanInfo, const Decisions &decisions, StateMem &curr )
     {
       int8_t s[4] = { 0 }, t[4] = { 0 }, l[4] = { 0 };
 
-#if 1
       __m128i v254_4 = _mm_setr_epi16( 254, 254, 254, 254,  4,  4,  4,  4 );
       __m128i v01    = _mm_setr_epi16(   1,   1,   1,   1,  1,  1,  1,  1 );
       __m128i v032   = _mm_setr_epi8 (   0,   0,   0,   0, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0 );
@@ -282,17 +281,6 @@ namespace DQIntern
       _mm_storeu_si32( l, a_m ); // store abs value
       a_m = _mm_shuffle_epi32( a_m, 1 );
       _mm_storeu_si32( t, a_m ); // store store capped abs value
-#else
-      for( int i = 0; i < 4; ++i )
-      {
-        s[ i ]               = decisions[ i ].prevId;
-        int min4_or_5        = std::min<TCoeff>( 4 + ( decisions[ i ].absLevel & 1 ), decisions[ i ].absLevel );
-        t[ i ]               = decisions[ i ].prevId > -2 ? min4_or_5 : 0;
-        t[ i ]              |= t[i] ? 32 : 0;
-        l[ i ]               = decisions[ i ].prevId > -2 ? std::min( decisions[i].absLevel, 255 ) : 0;
-        //all_above_minus_two &= decision[ i ].prevId > -2;
-      }
-#endif
 
       {
         const int ctxSize = 16 * 4;
@@ -306,27 +294,27 @@ namespace DQIntern
 
         for( int i = 0; i < ctxSize; i += regSize )
         {
-          __m128i vtpl = _mm_loadu_si128( ( const __m128i* ) &prev.tpl[i] );
+          __m128i vtpl = _mm_loadu_si128( ( const __m128i* ) &curr.tplAcc[i] );
           vtpl = _mm_shuffle_epi8( vtpl, vshuf );
-          _mm_storeu_si128( ( __m128i* ) &curr.tpl[i], vtpl );
+          _mm_storeu_si128( ( __m128i* ) &curr.tplAcc[i], vtpl );
 
-          __m128i vval = _mm_loadu_si128( ( const __m128i* ) &prev.val[i] );
+          __m128i vval = _mm_loadu_si128( ( const __m128i* ) &curr.absVal[i] );
           vval = _mm_shuffle_epi8( vval, vshuf );
-          _mm_storeu_si128( ( __m128i* ) &curr.val[i], vval );
+          _mm_storeu_si128( ( __m128i* ) &curr.absVal[i], vval );
 
-          __m128i vsum = _mm_loadu_si128( ( const __m128i* ) &prev.sum[i] );
+          __m128i vsum = _mm_loadu_si128( ( const __m128i* ) &curr.sum1st[i] );
           vsum = _mm_shuffle_epi8( vsum, vshuf );
-          _mm_storeu_si128( ( __m128i* ) &curr.sum[i], vsum );
+          _mm_storeu_si128( ( __m128i* ) &curr.sum1st[i], vsum );
         }
 
-        __m128i numSig = _mm_loadu_si32( prev.numSig );
+        __m128i numSig = _mm_loadu_si32( curr.numSig );
         numSig = _mm_shuffle_epi8( numSig, vshuf );
         __m128i lvls   = _mm_loadu_si32( l );
         lvls   = _mm_cmpgt_epi8( lvls, _mm_setzero_si128() );
         numSig = _mm_subs_epi8( numSig, lvls );
         _mm_storeu_si32( curr.numSig, numSig );
 
-        __m128i rsc = _mm_loadu_si32( prev.refSbbCtxId );
+        __m128i rsc = _mm_loadu_si32( curr.refSbbCtxId );
         rsc         = _mm_shuffle_epi8( rsc, vshuf );
         rsc         = _mm_blendv_epi8( rsc, vshuf, vshuf );
         _mm_storeu_si32( curr.refSbbCtxId, rsc );
@@ -339,7 +327,7 @@ namespace DQIntern
                                                _mm_setzero_si128(),
                                                vshuf ) );
 
-        __m128i rrb = _mm_loadu_si128( ( const __m128i* ) prev.remRegBins );
+        __m128i rrb = _mm_loadu_si128( ( const __m128i* ) curr.remRegBins );
         rrb = _mm_shuffle_epi8( rrb, vshuf );
         rrb = _mm_sub_epi32( rrb, _mm_blendv_epi8( _mm_set1_epi32( 1 ), _mm_setzero_si128(), vshuf ) );
         __m128i mlvl = _mm_loadu_si32( l );
@@ -357,121 +345,73 @@ namespace DQIntern
         curr.anyRemRegBinsLt4 = !_mm_test_all_zeros( rrb, rrb );
 
         __m128i lvl1 = _mm_loadu_si32( l );
-
-        if( scanInfo.currNbInfoSbb.numInv )
-        {
-          //auto adds8 = []( uint8_t a, uint8_t b )
-          //{
-          //  uint8_t c = a + b;
-          //  if( c < a ) c = -1;
-          //  return c;
-          //};
-          //
-          //auto update_deps_scalar = [&]( int k )
-          //{
-          //  for( int i = 0; i < 4; i++ )
-          //  {
-          //    int addr = ( scanInfo.currNbInfoSbb.invInPos[k] << 2 ) + i;
-          //    curr.sum[addr] = adds8( curr.sum[addr], decisions[i].absLevel );
-          //  }
-          //};
-
-          auto update_deps_vec = [&]( int k )
-          {
-            int addr = scanInfo.currNbInfoSbb.invInPos[k] << 2;
-            __m128i msum = _mm_loadu_si32( &curr.sum[addr] );
-            msum = _mm_adds_epu8( msum, mlvl );
-            _mm_storeu_si32( &curr.sum[addr], msum );
-          };
-
-          switch( scanInfo.currNbInfoSbb.numInv )
-          {
-          default:
-          case 5:
-            update_deps_vec( 4 );
-          case 4:
-            update_deps_vec( 3 );
-          case 3:
-            update_deps_vec( 2 );
-          case 2:
-            update_deps_vec( 1 );
-          case 1:
-            update_deps_vec( 0 );
-          }
-        }
-
-        int addr = ( scanInfo.insidePos << 2 );
-        _mm_storeu_si32( &curr.val[addr], lvl1 );
-      }
-
-      {
         __m128i tpl1 = _mm_loadu_si32( t );
 
-        auto update_deps = [&]( int k )
+        auto update_deps_vec = [&]( int k )
         {
           int addr = scanInfo.currNbInfoSbb.invInPos[k] << 2;
-          __m128i tpl = _mm_loadu_si32( &curr.tpl[addr] );
+
+          __m128i msum = _mm_loadu_si32( &curr.sum1st[addr] );
+          msum = _mm_adds_epu8( msum, mlvl );
+          _mm_storeu_si32( &curr.sum1st[addr], msum );
+
+          __m128i tpl = _mm_loadu_si32( &curr.tplAcc[addr] );
           tpl = _mm_add_epi8( tpl, tpl1 );
-          _mm_storeu_si32( &curr.tpl[addr], tpl );
+          _mm_storeu_si32( &curr.tplAcc[addr], tpl );
         };
 
         switch( scanInfo.currNbInfoSbb.numInv )
         {
         default:
         case 5:
-          update_deps( 4 );
+          update_deps_vec( 4 );
         case 4:
-          update_deps( 3 );
+          update_deps_vec( 3 );
         case 3:
-          update_deps( 2 );
+          update_deps_vec( 2 );
         case 2:
-          update_deps( 1 );
+          update_deps_vec( 1 );
         case 1:
-          update_deps( 0 );
+          update_deps_vec( 0 );
+        case 0:
+          ;
         }
+
+        int addr = ( scanInfo.insidePos << 2 );
+        _mm_storeu_si32( &curr.absVal[addr], lvl1 );
       }
 
       {
-        __m128i ones    = _mm_set1_epi32( 1 );
-        __m128i tplAcc  = _mm_loadu_si128( ( __m128i * ) &curr.tpl[ ( scanInfo.nextInsidePos << 2 ) ] );
-        tplAcc          = _mm_cvtepu8_epi32( tplAcc );
+        __m128i tplAcc  = _mm_loadu_si32( &curr.tplAcc[ ( scanInfo.nextInsidePos << 2 ) ] );
 
-        __m128i sumAbs1 = _mm_and_si128 ( tplAcc, _mm_set1_epi32( 31 ) );
-        __m128i sumNum  = _mm_srli_epi32( tplAcc, 5 );
-        __m128i sumGt1  = _mm_sub_epi32 ( sumAbs1, sumNum );
-        sumGt1  = _mm_min_epi32( sumGt1, _mm_set1_epi32( 4 ) );
-        sumGt1  = _mm_add_epi32( _mm_set1_epi32( scanInfo.gtxCtxOffsetNext ), sumGt1 );
-
-        sumAbs1 = _mm_add_epi32( sumAbs1, ones );
-        sumAbs1 = _mm_srai_epi32( sumAbs1, 1 );
-        sumAbs1 = _mm_min_epi32( sumAbs1, _mm_set1_epi32( 3 ) );
-
-        sumAbs1 = _mm_add_epi32( _mm_set1_epi32( scanInfo.sigCtxOffsetNext ), sumAbs1 );
-        sumAbs1 = _mm_packs_epi32( sumAbs1, sumAbs1 );
-        sumAbs1 = _mm_packs_epi16( sumAbs1, sumAbs1 );
-        _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
-
-        sumGt1  = _mm_packs_epi32( sumGt1, sumGt1 );
-        sumGt1  = _mm_packs_epi16( sumGt1, sumGt1 );
+        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_set1_epi8( 31 ) );
+        __m128i sumNum  = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_set1_epi8( 7 ) );
+        __m128i sumGt1  = _mm_sub_epi8 ( sumAbs1, sumNum );
+        sumGt1  = _mm_min_epi8( sumGt1, _mm_set1_epi8( 4 ) );
+        sumGt1  = _mm_add_epi8( _mm_set1_epi8( scanInfo.gtxCtxOffsetNext ), sumGt1 );
         _mm_storeu_si32( curr.ctx.cff, sumGt1 );
+
+        sumAbs1 = _mm_add_epi8  ( sumAbs1, _mm_set1_epi8( 1 ) );
+        sumAbs1 = _mm_srli_epi32( sumAbs1, 1 );
+        sumAbs1 = _mm_and_si128 ( sumAbs1, _mm_set1_epi8( 127 ) );
+        sumAbs1 = _mm_min_epi8  ( sumAbs1, _mm_set1_epi8( 3 ) );
+        sumAbs1 = _mm_add_epi8  ( _mm_set1_epi8( scanInfo.sigCtxOffsetNext ), sumAbs1 );
+        _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
 
         curr.cffBitsCtxOffset = scanInfo.gtxCtxOffsetNext;
       }
     }
 
-    static inline void updateStatesEOS(const ScanInfo &scanInfo, const Decisions &decisions, StateMem& prev, const StateMem& skip, StateMem& curr, CommonCtx<vext> &commonCtx)
+    static inline void updateStatesEOS( const ScanInfo &scanInfo, const Decisions &decisions, const StateMem &skip, StateMem &curr, CommonCtx<vext> &commonCtx )
     {
-      bool rem_reg_all_gte_4 = true;
-
-      int8_t s[4] = { 0 }, l[4] = { 0 };
-
+      int8_t s[4] = { 0 }, l[4] = { 0 }, z[4] = { 0 };
       for( int i = 0; i < 4; ++i )
       {
         s[i]              = decisions.prevId[i] >= 4 ? -2 : decisions.prevId[i];
         l[i]              = s[i] > -2 ? std::min<int>( decisions.absLevel[i], 254 + ( decisions.absLevel[i] & 1 ) ) : 0;
+        z[i]              = 3 - decisions.prevId[i];
         curr.rdCost[i]    = decisions.rdCost[i];
       }
-
       {
         const int ctxSize = 16 * 4;
         const int regSize = 16;
@@ -484,128 +424,118 @@ namespace DQIntern
 
         for( int i = 0; i < ctxSize; i += regSize )
         {
-          __m128i vval = _mm_loadu_si128( ( const __m128i* ) &prev.val[i] );
+          __m128i vval = _mm_loadu_si128( ( const __m128i* ) &curr.absVal[i] );
           vval = _mm_shuffle_epi8( vval, vshuf );
-          _mm_storeu_si128( ( __m128i* ) &curr.val[i], vval );
+          _mm_storeu_si128( ( __m128i* ) &curr.absVal[i], vval );
         }
 
-        __m128i numSig = _mm_loadu_si32( prev.numSig );
+        __m128i numSig = _mm_loadu_si32( curr.numSig );
         numSig = _mm_shuffle_epi8( numSig, vshuf );
         __m128i lvls   = _mm_loadu_si32( l );
+        int addr = ( scanInfo.insidePos << 2 );
+        _mm_storeu_si32( &curr.absVal[addr], lvls );
         lvls   = _mm_cmpgt_epi8( lvls, _mm_setzero_si128() );
         numSig = _mm_subs_epi8( numSig, lvls );
         _mm_storeu_si32( curr.numSig, numSig );
-      }
 
-      {
-        __m128i lvl1 = _mm_loadu_si32( l );
-        int addr = ( scanInfo.insidePos << 2 );
-        _mm_storeu_si32( &curr.val[addr], lvl1 );
+        __m128i rsc = _mm_loadu_si32( curr.refSbbCtxId );
+        rsc         = _mm_shuffle_epi8( rsc, vshuf );
+        rsc         = _mm_blendv_epi8( rsc, vshuf, vshuf );
+        _mm_storeu_si32( curr.refSbbCtxId, rsc );
+        
+        vshuf = _mm_cvtepi8_epi32( vshuf );
+        vshuf = _mm_shuffle_epi8( vshuf, _mm_setr_epi8( 0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12 ) );
+        vshuf = _mm_slli_epi32( vshuf, 2 );
+        vshuf = _mm_add_epi8( vshuf,
+                              _mm_blendv_epi8( _mm_setr_epi8( 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3 ),
+                              _mm_setzero_si128(),
+                              vshuf ) );
+        
+        __m128i rrb = _mm_loadu_si128( ( const __m128i* ) curr.remRegBins );
+        rrb = _mm_shuffle_epi8( rrb, vshuf );
+        rrb = _mm_sub_epi32( rrb, _mm_blendv_epi8( _mm_set1_epi32( 1 ), _mm_setzero_si128(), vshuf ) );
+        __m128i mlvl = _mm_loadu_si32( l );
+        rrb = _mm_blendv_epi8( rrb, _mm_set1_epi32( curr.initRemRegBins ), vshuf );
+
+        __m128i vskip = _mm_cvtepi8_epi32( _mm_loadu_si32( z ) );
+        rrb = _mm_blendv_epi8( rrb, _mm_loadu_si128( ( const __m128i* ) skip.remRegBins ), vskip );
+        
+        __m128i mbins = _mm_cvtepi8_epi32( mlvl );
+        __m128i madd  = _mm_cmpeq_epi32( mbins, _mm_set1_epi32( 1 ) );
+        __m128i mmore = _mm_and_si128( _mm_cmpgt_epi32( mbins, _mm_set1_epi32( 1 ) ), _mm_set1_epi32( 3 ) );
+        madd = _mm_sub_epi32( madd, mmore );
+        madd = _mm_blendv_epi8( madd, _mm_setzero_si128(), _mm_cmplt_epi32(rrb, _mm_set1_epi32(4)));
+        rrb  = _mm_add_epi32( rrb, madd );
+        _mm_storeu_si128( ( __m128i* ) curr.remRegBins, rrb );
+        rrb = _mm_cmplt_epi32( rrb, _mm_set1_epi32( 4 ) );
+        
+        curr.anyRemRegBinsLt4 = !_mm_test_all_zeros( rrb, rrb );
       }
 
       commonCtx.updateAllLvls( scanInfo, curr );
 
-      memset( curr.val, 0, sizeof( curr.val ) );
-      memset( curr.tpl, 0, sizeof( curr.tpl ) );
-      memset( curr.sum, 0, sizeof( curr.sum ) );
+      memset( curr.absVal, 0, sizeof( curr.absVal ) );
+      memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
+      memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
 
       for( int i = 0; i < 4; i++ )
       {
         int prevId = decisions.prevId[i];
-        int level  = decisions.absLevel[i];
 
         if( prevId > -2 )
         {
-          int remRegBins = 0;
-
-          if( prevId  >= 4 )
-          {
-            CHECKD( level != 0, "cannot happen" );
-            remRegBins = skip.remRegBins[prevId - 4];
-          }
-          else if( prevId >= 0 )
-          {
-            remRegBins = prev.remRegBins[prevId] - 1;
-            if( remRegBins >= 4 )
-            {
-              remRegBins -= ( level < 2 ? level : 3 );
-            }
-          }
-          else
-          {
-            remRegBins = curr.initRemRegBins;
-            if( remRegBins >= 4 )
-            {
-              remRegBins -= ( level < 2 ? level : 3 );
-            }
-          }
-
-          curr.remRegBins[i] = remRegBins;
-
-          const int refId = prevId < 0 ? -1 : ( prevId < 4 ? prev.refSbbCtxId[prevId] : prevId - 4 );
+          const int refId = prevId < 0 ? -1 : ( prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4 );
           commonCtx.update( scanInfo, refId, i, curr );
-
-          rem_reg_all_gte_4 &= remRegBins >= 4;
         }
       }
 
-      curr.anyRemRegBinsLt4 = !rem_reg_all_gte_4;
       memset( curr.numSig, 0, sizeof( curr.numSig ) );
 
       {
-        __m128i ones    = _mm_set1_epi32( 1 );
-        __m128i tplAcc  = _mm_loadu_si128( ( __m128i * ) &curr.tpl[ ( scanInfo.nextInsidePos << 2 ) ] );
-        tplAcc          = _mm_cvtepu8_epi32( tplAcc );
+        __m128i tplAcc  = _mm_loadu_si32( &curr.tplAcc[ ( scanInfo.nextInsidePos << 2 ) ] );
 
-        __m128i sumAbs1 = _mm_and_si128 ( tplAcc, _mm_set1_epi32( 31 ) );
-        __m128i sumNum  = _mm_srli_epi32( tplAcc, 5 );
-        __m128i sumGt1  = _mm_sub_epi32 ( sumAbs1, sumNum );
-        sumGt1  = _mm_min_epi32( sumGt1, _mm_set1_epi32( 4 ) );
-        sumGt1  = _mm_add_epi32( _mm_set1_epi32( scanInfo.gtxCtxOffsetNext ), sumGt1 );
-
-        sumAbs1 = _mm_add_epi32( sumAbs1, ones );
-        sumAbs1 = _mm_srai_epi32( sumAbs1, 1 );
-        sumAbs1 = _mm_min_epi32( sumAbs1, _mm_set1_epi32( 3 ) );
-
-        sumAbs1 = _mm_add_epi32( _mm_set1_epi32( scanInfo.sigCtxOffsetNext ), sumAbs1 );
-        sumAbs1 = _mm_packs_epi32( sumAbs1, sumAbs1 );
-        sumAbs1 = _mm_packs_epi16( sumAbs1, sumAbs1 );
-        _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
-
-        sumGt1  = _mm_packs_epi32( sumGt1, sumGt1 );
-        sumGt1  = _mm_packs_epi16( sumGt1, sumGt1 );
+        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_set1_epi8( 31 ) );
+        __m128i sumNum  = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_set1_epi8( 7 ) );
+        __m128i sumGt1  = _mm_sub_epi8 ( sumAbs1, sumNum );
+        sumGt1  = _mm_min_epi8( sumGt1, _mm_set1_epi8( 4 ) );
+        sumGt1  = _mm_add_epi8( _mm_set1_epi8( scanInfo.gtxCtxOffsetNext ), sumGt1 );
         _mm_storeu_si32( curr.ctx.cff, sumGt1 );
+
+        sumAbs1 = _mm_add_epi8  ( sumAbs1, _mm_set1_epi8( 1 ) );
+        sumAbs1 = _mm_srli_epi32( sumAbs1, 1 );
+        sumAbs1 = _mm_and_si128 ( sumAbs1, _mm_set1_epi8( 127 ) );
+        sumAbs1 = _mm_min_epi8  ( sumAbs1, _mm_set1_epi8( 3 ) );
+        sumAbs1 = _mm_add_epi8  ( _mm_set1_epi8( scanInfo.sigCtxOffsetNext ), sumAbs1 );
+        _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
 
         curr.cffBitsCtxOffset = scanInfo.gtxCtxOffsetNext;
       }
     }
 
-    inline void init( StateMem &state )
+    static inline void init( const int stateId, StateMem &state )
     {
-      state.rdCost [m_stateId] = rdCostInit;
-      state.ctx.cff[m_stateId] =  0;
-      state.ctx.sig[m_stateId] =  0;
-      state.numSig [m_stateId] =  0;
-      state.refSbbCtxId[m_stateId]
-                               = -1;
-      state.remRegBins[m_stateId]
-                               =  4;
-      state.cffBitsCtxOffset   =  0;
-      m_goRicePar     = 0;
-      m_goRiceZero    = 0;
+      state.rdCost [stateId]      = rdCostInit;
+      state.ctx.cff[stateId]      =  0;
+      state.ctx.sig[stateId]      =  0;
+      state.numSig[stateId]       =  0;
+      state.refSbbCtxId[stateId]  = -1;
+      state.remRegBins[stateId]   =  4;
+      state.cffBitsCtxOffset      =  0;
+      state.m_goRicePar[stateId]  =  0;
+      state.m_goRiceZero[stateId] =  0;
     }
 
-    void checkRdCosts( const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decisions& decisions, int idxAZ, int idxB, const StateMem& state ) const
+    static inline void checkRdCosts( const int stateId, const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decisions& decisions, int idxAZ, int idxB, const StateMem& state )
     {
-      const int32_t*  goRiceTab = g_goRiceBits[m_goRicePar];
-      int64_t         rdCostA   = state.rdCost[m_stateId] + pqDataA.deltaDist;
-      int64_t         rdCostB   = state.rdCost[m_stateId] + pqDataB.deltaDist;
-      int64_t         rdCostZ   = state.rdCost[m_stateId];
+      const int32_t*  goRiceTab = g_goRiceBits[state.m_goRicePar[stateId]];
+      int64_t         rdCostA   = state.rdCost[stateId] + pqDataA.deltaDist;
+      int64_t         rdCostB   = state.rdCost[stateId] + pqDataB.deltaDist;
+      int64_t         rdCostZ   = state.rdCost[stateId];
 
-      if( state.remRegBins[m_stateId] >= 4 )
+      if( state.remRegBins[stateId] >= 4 )
       {
-        const CoeffFracBits &cffBits = m_gtxFracBitsArray[state.ctx.cff[m_stateId]];
-        const BinFracBits    sigBits = m_sigFracBitsArray[state.ctx.sig[m_stateId]];
+        const CoeffFracBits &cffBits = state.m_gtxFracBitsArray         [state.ctx.cff[stateId]];
+        const BinFracBits    sigBits = state.m_sigFracBitsArray[stateId][state.ctx.sig[stateId]];
 
         if( pqDataA.absLevel < 4 )
           rdCostA += cffBits.bits[ pqDataA.absLevel ];
@@ -625,21 +555,21 @@ namespace DQIntern
 
         if( spt == SCAN_ISCSBB )
         {
-          rdCostA += sigBits.intBits[ 1 ];
-          rdCostB += sigBits.intBits[ 1 ];
-          rdCostZ += sigBits.intBits[ 0 ];
+          rdCostA += sigBits.intBits[1];
+          rdCostB += sigBits.intBits[1];
+          rdCostZ += sigBits.intBits[0];
         }
         else if( spt == SCAN_SOCSBB )
         {
-          rdCostA += state.sbbBits1[m_stateId] + sigBits.intBits[ 1 ];
-          rdCostB += state.sbbBits1[m_stateId] + sigBits.intBits[ 1 ];
-          rdCostZ += state.sbbBits1[m_stateId] + sigBits.intBits[ 0 ];
+          rdCostA += state.sbbBits1[stateId] + sigBits.intBits[1];
+          rdCostB += state.sbbBits1[stateId] + sigBits.intBits[1];
+          rdCostZ += state.sbbBits1[stateId] + sigBits.intBits[0];
         }
-        else if( state.numSig[m_stateId] )
+        else if( state.numSig[stateId] )
         {
-          rdCostA += sigBits.intBits[ 1 ];
-          rdCostB += sigBits.intBits[ 1 ];
-          rdCostZ += sigBits.intBits[ 0 ];
+          rdCostA += sigBits.intBits[1];
+          rdCostB += sigBits.intBits[1];
+          rdCostZ += sigBits.intBits[0];
         }
         else
         {
@@ -648,34 +578,34 @@ namespace DQIntern
       }
       else
       {
-        rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[ pqDataA.absLevel <= m_goRiceZero ? pqDataA.absLevel - 1 : std::min<int>( pqDataA.absLevel, RICEMAX - 1 ) ];
-        rdCostB += ( 1 << SCALE_BITS ) + goRiceTab[ pqDataB.absLevel <= m_goRiceZero ? pqDataB.absLevel - 1 : std::min<int>( pqDataB.absLevel, RICEMAX - 1 ) ];
-        rdCostZ += goRiceTab[ m_goRiceZero ];
+        rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[ pqDataA.absLevel <= state.m_goRiceZero[stateId] ? pqDataA.absLevel - 1 : std::min<int>( pqDataA.absLevel, RICEMAX - 1 ) ];
+        rdCostB += ( 1 << SCALE_BITS ) + goRiceTab[ pqDataB.absLevel <= state.m_goRiceZero[stateId] ? pqDataB.absLevel - 1 : std::min<int>( pqDataB.absLevel, RICEMAX - 1 ) ];
+        rdCostZ += goRiceTab[ state.m_goRiceZero[stateId] ];
       }
 
       if( rdCostA < rdCostZ && rdCostA < decisions.rdCost[idxAZ] )
       {
         decisions.rdCost  [idxAZ] = rdCostA;
         decisions.absLevel[idxAZ] = pqDataA.absLevel;
-        decisions.prevId  [idxAZ] = m_stateId;
+        decisions.prevId  [idxAZ] = stateId;
       }
       else if( rdCostZ < decisions.rdCost[idxAZ] )
       {
         decisions.rdCost  [idxAZ] = rdCostZ;
         decisions.absLevel[idxAZ] = 0;
-        decisions.prevId  [idxAZ] = m_stateId;
+        decisions.prevId  [idxAZ] = stateId;
       }
 
       if( rdCostB < decisions.rdCost[idxB] )
       {
         decisions.rdCost  [idxB] = rdCostB;
         decisions.absLevel[idxB] = pqDataB.absLevel;
-        decisions.prevId  [idxB] = m_stateId;
+        decisions.prevId  [idxB] = stateId;
       }
     }
 
     // has to be called as a first check, assumes no decision has been made yet
-    static void checkAllRdCosts( const ScanPosType spt, State* states, const PQData* pqData, Decisions& decisions, const StateMem& state )
+    static void checkAllRdCosts( const ScanPosType spt, const PQData* pqData, Decisions& decisions, const StateMem& state )
     {
       // State mapping
       // decision 0: either A from 0 (pq0), or B from 1 (pq2), or 0 from 0
@@ -703,10 +633,10 @@ namespace DQIntern
       //
       //rdCostA += cffBits.bits[ pqDataA.absLevel ];
       //rdCostB += cffBits.bits[ pqDataB.absLevel ];
-      __m128i sgbts02   = _mm_unpacklo_epi64( _mm_loadu_si64( &states[0].m_sigFracBitsArray[state.ctx.sig[0]] ),
-                                              _mm_loadu_si64( &states[2].m_sigFracBitsArray[state.ctx.sig[2]] ) );
-      __m128i sgbts13   = _mm_unpacklo_epi64( _mm_loadu_si64( &states[1].m_sigFracBitsArray[state.ctx.sig[1]] ),
-                                              _mm_loadu_si64( &states[3].m_sigFracBitsArray[state.ctx.sig[3]] ) );
+      __m128i sgbts02   = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ) );
+      __m128i sgbts13   = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[3][state.ctx.sig[3]] ) );
 
       {
         __m128i sgbts02_0 = _mm_shuffle_epi32( sgbts02, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
@@ -720,7 +650,7 @@ namespace DQIntern
 
       {
         // coeff context is indepndent of state
-        auto &base = states->m_gtxFracBitsArray;
+        auto &base = state.m_gtxFracBitsArray;
 
         int32_t cffBitsArr[4] =
         {
@@ -739,7 +669,7 @@ namespace DQIntern
 
       {
         // coeff context is indepndent of state
-        auto &base = states->m_gtxFracBitsArray;
+        auto &base = state.m_gtxFracBitsArray;
 
         int32_t cffBitsArr[4] =
         {
@@ -897,18 +827,16 @@ namespace DQIntern
       _mm_storeu_si32( decisions.prevId,   idxBest );
     }
 
-    void checkRdCostsOdd1( const ScanPosType spt, const PQData& pqDataA, Decisions& decisions, int idxA, int idxZ, const StateMem& state ) const
+    static void checkRdCostsOdd1( const int stateId, const ScanPosType spt, const int64_t deltaDist, Decisions& decisions, int idxA, int idxZ, const StateMem& state )
     {
-      CHECKD( pqDataA.absLevel != 1, "" );
+      int64_t         rdCostA   = state.rdCost[stateId] + deltaDist;
+      int64_t         rdCostZ   = state.rdCost[stateId];
 
-      int64_t         rdCostA   = state.rdCost[m_stateId] + pqDataA.deltaDist;
-      int64_t         rdCostZ   = state.rdCost[m_stateId];
-
-      if( state.remRegBins[m_stateId] >= 4 )
+      if( state.remRegBins[stateId] >= 4 )
       {
-        const BinFracBits sigBits = m_sigFracBitsArray[state.ctx.sig[m_stateId]];
+        const BinFracBits sigBits = state.m_sigFracBitsArray[stateId][state.ctx.sig[stateId]];
 
-        rdCostA += m_gtxFracBitsArray[state.ctx.cff[m_stateId]].bits[1];
+        rdCostA += state.m_gtxFracBitsArray[state.ctx.cff[stateId]].bits[1];
 
         if( spt == SCAN_ISCSBB )
         {
@@ -917,10 +845,10 @@ namespace DQIntern
         }
         else if( spt == SCAN_SOCSBB )
         {
-          rdCostA += state.sbbBits1[m_stateId] + sigBits.intBits[ 1 ];
-          rdCostZ += state.sbbBits1[m_stateId] + sigBits.intBits[ 0 ];
+          rdCostA += state.sbbBits1[stateId] + sigBits.intBits[ 1 ];
+          rdCostZ += state.sbbBits1[stateId] + sigBits.intBits[ 0 ];
         }
-        else if( state.numSig[m_stateId] )
+        else if( state.numSig[stateId] )
         {
           rdCostA += sigBits.intBits[ 1 ];
           rdCostZ += sigBits.intBits[ 0 ];
@@ -932,29 +860,29 @@ namespace DQIntern
       }
       else
       {
-        const int32_t*  goRiceTab = g_goRiceBits[m_goRicePar];
+        const int32_t*  goRiceTab = g_goRiceBits[state.m_goRicePar[stateId]];
 
         rdCostA += ( 1 << SCALE_BITS ) + goRiceTab[0];
-        rdCostZ += goRiceTab[m_goRiceZero];
+        rdCostZ += goRiceTab[state.m_goRiceZero[stateId]];
       }
 
       if( rdCostA < decisions.rdCost[idxA] )
       {
         decisions.rdCost  [idxA] = rdCostA;
-        decisions.absLevel[idxA] = pqDataA.absLevel;
-        decisions.prevId  [idxA] = m_stateId;
+        decisions.absLevel[idxA] = 1;
+        decisions.prevId  [idxA] = stateId;
       }
 
       if( rdCostZ < decisions.rdCost[idxZ] )
       {
         decisions.rdCost  [idxZ] = rdCostZ;
         decisions.absLevel[idxZ] = 0;
-        decisions.prevId  [idxZ] = m_stateId;
+        decisions.prevId  [idxZ] = stateId;
       }
     }
 
     // has to be called as a first check, assumes no decision has been made yet!!!
-    static void checkAllRdCostsOdd1( const ScanPosType spt, State* states, const PQData* pqData, Decisions& decisions, const StateMem& state )
+    static inline void checkAllRdCostsOdd1( const ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, Decisions& decisions, const StateMem& state )
     {
       // State mapping
       // decision 0: either 1 from 1 (pqData[2]), or 0 from 0
@@ -969,7 +897,7 @@ namespace DQIntern
       //int64_t         rdCostZ   = state.rdCost[m_stateId]; // done
       __m128i rdCostZ01 = _mm_unpacklo_epi64( mrd01, mrd23 );
       __m128i rdCostZ23 = _mm_unpackhi_epi64( mrd01, mrd23 );
-      __m128i deltaDist = _mm_unpacklo_epi64( _mm_loadu_si64( &pqData[2].deltaDist ), _mm_loadu_si64( &pqData[1].deltaDist ) );
+      __m128i deltaDist = _mm_unpacklo_epi64( _mm_cvtsi64_si128( pq_b_dist ), _mm_cvtsi64_si128( pq_a_dist ) );
       __m128i rdCostA01 = _mm_add_epi64( rdCostZ23, deltaDist );
       __m128i rdCostA23 = _mm_add_epi64( rdCostZ01, deltaDist );
 
@@ -977,10 +905,10 @@ namespace DQIntern
       //
       //rdCostA += m_gtxFracBitsArray[state.ctx.cff[m_stateId]].bits[1]; // done
       //
-      __m128i sgbts02   = _mm_unpacklo_epi64( _mm_loadu_si64( &states[0].m_sigFracBitsArray[state.ctx.sig[0]] ),
-                                              _mm_loadu_si64( &states[2].m_sigFracBitsArray[state.ctx.sig[2]] ) );
-      __m128i sgbts13   = _mm_unpacklo_epi64( _mm_loadu_si64( &states[1].m_sigFracBitsArray[state.ctx.sig[1]] ),
-                                              _mm_loadu_si64( &states[3].m_sigFracBitsArray[state.ctx.sig[3]] ) );
+      __m128i sgbts02   = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ) );
+      __m128i sgbts13   = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[3][state.ctx.sig[3]] ) );
 
       {
         __m128i sgbts02_0 = _mm_shuffle_epi32( sgbts02, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
@@ -1069,7 +997,7 @@ namespace DQIntern
 
         __m128i numSig = _mm_loadu_si32( state.numSig );
 
-        rdCostZ01 = _mm_add_epi64(  rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
+        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
         rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
 
         __m128i mask01 = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3 ) );
@@ -1126,9 +1054,9 @@ namespace DQIntern
       _mm_storeu_si32( decisions.prevId,   idxBest );
     }
 
-    inline void checkRdCostStart(int32_t lastOffset, const PQData &pqData, Decisions &decisions, int idx ) const
+    static inline void checkRdCostStart( int32_t lastOffset, const PQData &pqData, Decisions &decisions, int idx, const StateMem& state )
     {
-      const CoeffFracBits &cffBits = m_gtxFracBitsArray[0];
+      const CoeffFracBits &cffBits = state.m_gtxFracBitsArray[0];
 
       int64_t rdCost = pqData.deltaDist + lastOffset;
       if (pqData.absLevel < 4)
@@ -1149,50 +1077,42 @@ namespace DQIntern
       }
     }
 
-    inline void checkRdCostSkipSbb(Decisions &decisions, int idx, const StateMem& state) const
+    static inline void checkRdCostSkipSbb( const int stateId, Decisions &decisions, int idx, const StateMem &state )
     {
-      int64_t rdCost = state.rdCost[m_stateId] + state.sbbBits0[m_stateId];
+      int64_t rdCost = state.rdCost[stateId] + state.sbbBits0[stateId];
       if( rdCost < decisions.rdCost[idx] )
       {
         decisions.rdCost  [idx] = rdCost;
         decisions.absLevel[idx] = 0;
-        decisions.prevId  [idx] = 4 | m_stateId;
+        decisions.prevId  [idx] = 4 | stateId;
       }
     }
 
-    inline void checkRdCostSkipSbbZeroOut(Decisions &decisions, int idx, const StateMem& state) const
+    static inline void checkRdCostSkipSbbZeroOut( const int stateId, Decisions &decisions, int idx, const StateMem &state )
     {
-      int64_t rdCost          = state.rdCost[m_stateId] + state.sbbBits0[m_stateId];
+      int64_t rdCost          = state.rdCost[stateId] + state.sbbBits0[stateId];
       decisions.rdCost  [idx] = rdCost;
       decisions.absLevel[idx] = 0;
-      decisions.prevId  [idx] = 4 | m_stateId;
+      decisions.prevId  [idx] = 4 | stateId;
     }
 
-    inline void setRiceParam( const ScanInfo& scanInfo, const StateMem& state, bool ge4 )
+    static inline void setRiceParam( const int stateId, const ScanInfo& scanInfo, StateMem& state, bool ge4 )
     {
-      if( state.remRegBins[m_stateId] < 4 || ge4 )
+      if( state.remRegBins[stateId] < 4 || ge4 )
       {
-        const int addr  = ( scanInfo.insidePos << 2 ) + m_stateId;
-        TCoeff  sumAbs  = state.sum[addr];
-        int sumSub      = state.remRegBins[m_stateId] < 4 ? 0 : 4 * 5;
+        const int addr  = ( scanInfo.insidePos << 2 ) + stateId;
+        TCoeff  sumAbs  = state.sum1st[addr];
+        int sumSub      = state.remRegBins[stateId] < 4 ? 0 : 4 * 5;
         int sumAll      = std::max( std::min( 31, ( int ) sumAbs - sumSub ), 0 );
-        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
+        state.m_goRicePar[stateId]
+                        = g_auiGoRiceParsCoeff[sumAll];
 
-        if( state.remRegBins[m_stateId] < 4 )
+        if( state.remRegBins[stateId] < 4 )
         {
-          m_goRiceZero  = g_auiGoRicePosCoeff0( m_stateId, m_goRicePar );
+          state.m_goRiceZero[stateId] = g_auiGoRicePosCoeff0( stateId, state.m_goRicePar[stateId]);
         }
       }
     }
-
-  private:
-
-    int8_t                    m_goRicePar;
-    int8_t                    m_goRiceZero;
-    const int8_t              m_stateId;
-    const BinFracBits*const   m_sigFracBitsArray;
-    const CoeffFracBits*const m_gtxFracBitsArray;
-    CommonCtx<vext>&          m_commonCtx;
   };
 
   /*================================================================================*/
@@ -1220,14 +1140,9 @@ namespace DQIntern
       }
     };
 
-#define TINIT(x) {*this,m_commonCtx,x}
     DepQuantSimd()
       : RateEstimator ()
       , m_commonCtx   ()
-      , m_allStates   {TINIT(0),TINIT(1),TINIT(2),TINIT(3),TINIT(0),TINIT(1),TINIT(2),TINIT(3),TINIT(0),TINIT(1),TINIT(2),TINIT(3)}
-      , m_currStates  (  m_allStates      )
-      , m_prevStates  (  m_currStates + 4 )
-      , m_skipStates  (  m_prevStates + 4 )
     {
       m_scansRom.init();
 
@@ -1375,30 +1290,29 @@ namespace DQIntern
       //===== real init =====
       RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess() );
       m_commonCtx.reset( tuPars, *this );
-      for( int k = 0; k < 12; k++ )
+      for( int k = 0; k < 4; k++ )
       {
-        m_allStates[k].init( m_state_mem[k>>2] );
+        State<vext>::init( k, m_state_curr );
+        State<vext>::init( k, m_state_skip );
+        m_state_curr.m_sigFracBitsArray[k] = RateEstimator::sigFlagBits(k);
       }
+
+      m_state_curr.m_gtxFracBitsArray = RateEstimator::gtxFracBits();
 
       const int numCtx = isLuma( compID ) ? 21 : 11;
       const CoeffFracBits* const cffBits = gtxFracBits();
       for( int i = 0; i < numCtx; i++ )
       {
-        m_state_mem[0].cffBits1[i] = cffBits[i].bits[1];
-        m_state_mem[1].cffBits1[i] = cffBits[i].bits[1];
-        m_state_mem[2].cffBits1[i] = cffBits[i].bits[1];
+        m_state_curr.cffBits1[i] = cffBits[i].bits[1];
       }
 
       int effectWidth  = std::min( 32, effWidth );
       int effectHeight = std::min( 32, effHeight );
-      for (int k = 0; k < 3; k++)
-      {
-        m_state_mem[k].effWidth         = effectWidth;
-        m_state_mem[k].effHeight        = effectHeight;
-        m_state_mem[k].initRemRegBins   = ( effectWidth * effectHeight * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
-        m_state_mem[k].anyRemRegBinsLt4 = true; // for the first coeff use scalar impl., because it check against the init state, which
-                                                // prohibits some paths
-      }
+      m_state_curr.effWidth         = effectWidth;
+      m_state_curr.effHeight        = effectHeight;
+      m_state_curr.initRemRegBins   = ( effectWidth * effectHeight * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
+      m_state_curr.anyRemRegBinsLt4 = true; // for the first coeff use scalar impl., because it check against the init state, which
+                                            // prohibits some paths
 
       //===== populate trellis =====
       for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
@@ -1446,28 +1360,24 @@ namespace DQIntern
     {
       Decisions *decisions = &m_trellis[scanInfo.scanIdx][0];
 
-      std::swap( m_prevStates, m_currStates );
-      std::swap( m_prevStateI, m_currStateI );
-
       xDecide( scanInfo, absCoeff, lastOffset(scanInfo.scanIdx), *decisions, zeroOut, quantCoeff );
 
       if( scanInfo.scanIdx )
       {
+        if( scanInfo.spt == SCAN_SOCSBB )
+        {
+          memcpy( &m_state_skip, &m_state_curr, StateMemSkipCpySize );
+        }
+
         if( scanInfo.insidePos == 0 )
         {
           m_commonCtx.swap();
-          State<vext>::updateStatesEOS( scanInfo, *decisions, m_state_mem[m_prevStateI], m_state_mem[m_skipStateI], m_state_mem[m_currStateI], m_commonCtx );
+          State<vext>::updateStatesEOS( scanInfo, *decisions,  m_state_skip, m_state_curr, m_commonCtx );
           ::memcpy( decisions + 1, decisions, sizeof( Decisions ) );
         }
         else if( !zeroOut )
         {
-          State<vext>::updateStates( scanInfo, *decisions, m_state_mem[m_prevStateI], m_state_mem[m_currStateI] );
-        }
-
-        if( scanInfo.spt == SCAN_SOCSBB )
-        {
-          std::swap( m_prevStates, m_skipStates );
-          std::swap( m_prevStateI, m_skipStateI );
+          State<vext>::updateStates( scanInfo, *decisions, m_state_curr );
         }
       }
     }
@@ -1476,23 +1386,21 @@ namespace DQIntern
     {
       ::memcpy( &decisions, startDec, sizeof( Decisions ) );
 
-      StateMem& prev = m_state_mem[m_prevStateI];
-      StateMem& skip = m_state_mem[m_skipStateI];
+      StateMem& skip = m_state_skip;
 
       if( zeroOut )
       {
         if( scanInfo.spt==SCAN_EOCSBB )
         {
-          m_skipStates[0].checkRdCostSkipSbbZeroOut( decisions, 0, skip );
-          m_skipStates[1].checkRdCostSkipSbbZeroOut( decisions, 1, skip );
-          m_skipStates[2].checkRdCostSkipSbbZeroOut( decisions, 2, skip );
-          m_skipStates[3].checkRdCostSkipSbbZeroOut( decisions, 3, skip );
+          State<vext>::checkRdCostSkipSbbZeroOut( 0, decisions, 0, skip );
+          State<vext>::checkRdCostSkipSbbZeroOut( 1, decisions, 1, skip );
+          State<vext>::checkRdCostSkipSbbZeroOut( 2, decisions, 2, skip );
+          State<vext>::checkRdCostSkipSbbZeroOut( 3, decisions, 3, skip );
         }
         return;
       }
 
-      PQData  pqData[4];
-      //bool near0 = m_quant.preQuantCoeff( absCoeff, pqData, quantCoeff );
+      StateMem &prev = m_state_curr;
 
       /// start inline prequant
       int64_t scaledOrg = int64_t( absCoeff ) * quantCoeff;
@@ -1501,43 +1409,39 @@ namespace DQIntern
       if( qIdx < 0 )
       {
         int64_t scaledAdd = m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
-        PQData& pq_a      = pqData[1];
-        PQData& pq_b      = pqData[2];
-
-        pq_a.deltaDist    = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * 1 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-        pq_a.absLevel     = 1;
-
-        pq_b.deltaDist    = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
-        pq_b.absLevel     = 1;
+        int64_t pq_a_dist = ( ( scaledAdd + 0 * m_quant.m_DistStepAdd ) * 1 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
+        int64_t pq_b_dist = ( ( scaledAdd + 1 * m_quant.m_DistStepAdd ) * 2 + m_quant.m_DistAdd ) >> m_quant.m_DistShift;
         /// stop inline prequant
 
         if( prev.anyRemRegBinsLt4 )
         {
-          m_prevStates[0].setRiceParam( scanInfo, prev, false );
-          m_prevStates[0].checkRdCostsOdd1( scanInfo.spt, pqData[2], decisions, 2, 0, prev );
+          State<vext>::setRiceParam    ( 0, scanInfo, prev, false );
+          State<vext>::checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
 
-          m_prevStates[1].setRiceParam( scanInfo, prev, false );
-          m_prevStates[1].checkRdCostsOdd1( scanInfo.spt, pqData[2], decisions, 0, 2, prev );
+          State<vext>::setRiceParam    ( 1, scanInfo, prev, false );
+          State<vext>::checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
 
-          m_prevStates[2].setRiceParam( scanInfo, prev, false );
-          m_prevStates[2].checkRdCostsOdd1( scanInfo.spt, pqData[1], decisions, 3, 1, prev );
+          State<vext>::setRiceParam    ( 2, scanInfo, prev, false );
+          State<vext>::checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
 
-          m_prevStates[3].setRiceParam( scanInfo, prev, false ); 
-          m_prevStates[3].checkRdCostsOdd1( scanInfo.spt, pqData[1], decisions, 1, 3, prev );
+          State<vext>::setRiceParam    ( 3, scanInfo, prev, false ); 
+          State<vext>::checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
         }
         else
         {
           // has to be called as a first check, assumes no decision has been made yet
-          State<vext>::checkAllRdCostsOdd1( scanInfo.spt, m_prevStates, pqData, decisions, prev );
+          State<vext>::checkAllRdCostsOdd1( scanInfo.spt, pq_a_dist, pq_b_dist, decisions, prev );
         }
 
-        m_prevStates->checkRdCostStart( lastOffset, pqData[2], decisions, 2 );
+        State<vext>::checkRdCostStart( lastOffset, PQData{ 1, pq_b_dist }, decisions, 2, prev );
       }
       else
       {
         /// start inline prequant
         qIdx              = std::max<TCoeff>( 1, std::min<TCoeff>( m_quant.m_maxQIdx, qIdx ) );
         int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
+
+        PQData  pqData[4];
 
         PQData& pq_a      = pqData[( qIdx + 0 ) & 3];
         PQData& pq_b      = pqData[( qIdx + 1 ) & 3];
@@ -1564,55 +1468,48 @@ namespace DQIntern
         {
           if( prev.anyRemRegBinsLt4 || cff02ge4 )
           {
-            m_prevStates[0].setRiceParam( scanInfo, prev, cff02ge4 );
-            m_prevStates[1].setRiceParam( scanInfo, prev, cff02ge4 );
+            State<vext>::setRiceParam( 0, scanInfo, prev, cff02ge4 );
+            State<vext>::setRiceParam( 1, scanInfo, prev, cff02ge4 );
           }
 
           if( prev.anyRemRegBinsLt4 || cff13ge4 )
           {
-            m_prevStates[2].setRiceParam( scanInfo, prev, cff13ge4 );
-            m_prevStates[3].setRiceParam( scanInfo, prev, cff13ge4 ); 
+            State<vext>::setRiceParam( 2, scanInfo, prev, cff13ge4 );
+            State<vext>::setRiceParam( 3, scanInfo, prev, cff13ge4 ); 
           }
 
-          m_prevStates[0].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
-          m_prevStates[1].checkRdCosts( scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
-          m_prevStates[2].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
-          m_prevStates[3].checkRdCosts( scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
+          State<vext>::checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
+          State<vext>::checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
+          State<vext>::checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
+          State<vext>::checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
         }
         else
         {
           // has to be called as a first check, assumes no decision has been made yet
-          State<vext>::checkAllRdCosts( scanInfo.spt, m_prevStates, pqData, decisions, prev );
+          State<vext>::checkAllRdCosts( scanInfo.spt, pqData, decisions, prev );
         }
 
-        m_prevStates->checkRdCostStart( lastOffset, pqData[0], decisions, 0 );
-        m_prevStates->checkRdCostStart( lastOffset, pqData[2], decisions, 2 );
+        State<vext>::checkRdCostStart( lastOffset, pqData[0], decisions, 0, prev );
+        State<vext>::checkRdCostStart( lastOffset, pqData[2], decisions, 2, prev );
       }
 
       if( scanInfo.spt==SCAN_EOCSBB )
       {
-        m_skipStates[0].checkRdCostSkipSbb( decisions, 0, skip );
-        m_skipStates[1].checkRdCostSkipSbb( decisions, 1, skip );
-        m_skipStates[2].checkRdCostSkipSbb( decisions, 2, skip );
-        m_skipStates[3].checkRdCostSkipSbb( decisions, 3, skip );
+        State<vext>::checkRdCostSkipSbb( 0, decisions, 0, skip );
+        State<vext>::checkRdCostSkipSbb( 1, decisions, 1, skip );
+        State<vext>::checkRdCostSkipSbb( 2, decisions, 2, skip );
+        State<vext>::checkRdCostSkipSbb( 3, decisions, 3, skip );
       }
     }
 
   private:
     CommonCtx<vext> m_commonCtx;
-    State<vext>     m_allStates[ 12 ];
-    State<vext>*    m_currStates;
-    State<vext>*    m_prevStates;
-    State<vext>*    m_skipStates;
     Quantizer       m_quant;
     Decisions       m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
     Rom             m_scansRom;
 
-    StateMem        m_state_mem[3];
-
-    int m_currStateI = 0;
-    int m_prevStateI = 1;
-    int m_skipStateI = 2;
+    StateMem        m_state_curr;
+    StateMem        m_state_skip;
   };
 }; // namespace DQIntern
 
