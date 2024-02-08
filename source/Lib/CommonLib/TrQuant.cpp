@@ -292,7 +292,7 @@ void TrQuant::xDeQuant(const TransformUnit& tu,
                        const ComponentID   &compID,
                        const QpParam       &cQP)
 {
-  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_DEQUANT );
   m_quant->dequant( tu, dstCoeff, compID, cQP );
 }
 

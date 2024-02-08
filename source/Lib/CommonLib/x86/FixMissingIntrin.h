@@ -83,6 +83,8 @@ static inline __m128i _mm_loadu_si32( const void* p )
 {
   return _mm_cvtsi32_si128( *(int32_t*)p );
 }
+#elif defined( REAL_TARGET_X86 ) && defined( __GNUC__ ) && !defined( __llvm__ ) && !defined( __INTEL_COMPILER ) && __GNUC__ <= 11 && __GNUC_MINOR__ <= 2
+#define _mm_loadu_si32( p ) _mm_cvtsi32_si128( *(int32_t*)( p ) )
 #endif
 
 #ifdef MISSING_INTRIN_mm_loadu_si64

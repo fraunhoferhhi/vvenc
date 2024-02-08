@@ -181,9 +181,8 @@ namespace CU
   void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);
   void     getIbcMVPsEncOnly            (CodingUnit& cu, Mv* mvPred, int& nbPred);
-  //bool     isMvInRangeFPP               (const CodingUnit &cu, const Mv& mv, const int fppLinesSynchro, const ComponentID compID = COMP_Y, const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL );
-  bool     isMvInRangeFPP               (const int yB, const int nH, const int yMv, const int fppLinesSynchro, const PreCalcValues& pcv, const int yCompScale = 0, const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL);
-  bool     isMotionBufInRangeFPP        (const CodingUnit& cu, const int fppLinesSynchro);
+  bool     isMvInRangeFPP               (const int yB, const int nH, const int yMv, const int ifpLines, const PreCalcValues& pcv, const int yCompScale = 0, const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL);
+  bool     isMotionBufInRangeFPP        (const CodingUnit& cu, const int ifpLines);
 }
 
 // TU tools

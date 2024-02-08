@@ -115,8 +115,6 @@ namespace DQIntern
 
     int      cffBitsCtxOffset;
     bool     anyRemRegBinsLt4;
-    unsigned effWidth;
-    unsigned effHeight;
     int      initRemRegBins;
   };
 
@@ -1157,11 +1155,6 @@ namespace DQIntern
     {
     }
 
-    void init( int dqTrVal )
-    {
-      m_quant.init( dqTrVal );
-    }
-
     void quant( TransformUnit &tu, const CCoeffBuf &srcCoeff, const ComponentID compID, const QpParam &cQP, const double lambda, const Ctx &ctx, TCoeff &absSum, bool enableScalingLists, int *quantCoeff )
     {
       //===== reset / pre-init =====
@@ -1308,8 +1301,6 @@ namespace DQIntern
 
       int effectWidth  = std::min( 32, effWidth );
       int effectHeight = std::min( 32, effHeight );
-      m_state_curr.effWidth         = effectWidth;
-      m_state_curr.effHeight        = effectHeight;
       m_state_curr.initRemRegBins   = ( effectWidth * effectHeight * MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT ) / 16;
       m_state_curr.anyRemRegBinsLt4 = true; // for the first coeff use scalar impl., because it check against the init state, which
                                             // prohibits some paths
@@ -1504,7 +1495,6 @@ namespace DQIntern
 
   private:
     CommonCtx<vext> m_commonCtx;
-    Quantizer       m_quant;
     Decisions       m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
     Rom             m_scansRom;
 

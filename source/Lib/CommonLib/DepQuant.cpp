@@ -1436,7 +1436,7 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
     const uint32_t    log2TrHeight    = Log2(height);
     const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists     = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
-    static_cast<DQIntern::DepQuant*>(p)->quant( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
+    p->quant( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
   }
   else
   {
@@ -1460,7 +1460,7 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
     const uint32_t    log2TrHeight   = Log2(height);
     const bool isLfnstApplied        = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists    = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
-    static_cast<DQIntern::DepQuant*>(p)->dequant( tu, dstCoeff, compID, cQP, enableScalingLists, Quant::getDequantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
+    p->dequant( tu, dstCoeff, compID, cQP, enableScalingLists, Quant::getDequantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
   }
   else
   {
@@ -1472,7 +1472,7 @@ void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
 {
   QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
 
-  static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
+  p->init( thrVal );
 }
 
 } // namespace vvenc

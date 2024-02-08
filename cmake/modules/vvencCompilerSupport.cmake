@@ -83,3 +83,21 @@ function( _emscripten_enable_wasm_simd128 )
     set( CMAKE_REQUIRED_FLAGS -msimd128 PARENT_SCOPE )
   endif()
 endfunction()
+
+function( check_problematic_compiler output_var compiler_id first_bad_version first_fixed_version )
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "${compiler_id}"
+      AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "${first_bad_version}"
+      AND (
+        NOT "${first_fixed_version}"
+        OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS "${first_fixed_version}" ) )
+
+    set( ${output_var} TRUE PARENT_SCOPE )
+
+    if( "${first_fixed_version}" )
+      set( ${output_var}_VERSION_RANGE "(${first_bad_version}...${first_fixed_version}]" PARENT_SCOPE )
+    else()
+      set( ${output_var}_VERSION_RANGE "(${first_bad_version}...)"                       PARENT_SCOPE )
+    endif()
+
+  endif()
+endfunction()

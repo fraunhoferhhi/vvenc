@@ -65,7 +65,8 @@ namespace vvenc
 template<ARM_VEXT vext>
 void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
-  if( ( width & 31 ) == 0 )
+
+  if( ( width & 31 ) == 0 && ( height & 3 ) == 0 )
   {
     int16x8x4_t xtmp1;
     int16x8x4_t xtmp2;
@@ -219,7 +220,7 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
       dst += ( dstStride << 2 );
     }
   }
-  else if( ( width & 15 ) == 0 )
+  else if( ( width & 15 ) == 0 && ( height & 3 ) == 0 )
   {
     int16x8x2_t xtmp1;
     int16x8x2_t xtmp2;
@@ -309,7 +310,7 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
       dst += ( dstStride << 2 );
     }
   }
-  else if( ( width & 7 ) == 0 )
+  else if( ( width & 7 ) == 0 && ( height & 3 ) == 0 )
   {
     int16x8_t xtmp1;
     int16x8_t xtmp2;
@@ -366,7 +367,16 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
       dst += ( dstStride << 2 );
     }
   }
-
+  else
+  {
+#define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
+#define RSP_SGNL_INC        src += srcStride; dst += dstStride;
+    
+    SIZE_AWARE_PER_EL_OP( RSP_SGNL_OP, RSP_SGNL_INC )
+    
+#undef RSP_SGNL_OP
+#undef RSP_SGNL_INC
+  }
   return;
 }
 

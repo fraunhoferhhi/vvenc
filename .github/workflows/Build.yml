@@ -73,6 +73,6 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake ..  -DCMAKE_BUILD_TYPE=Release -A "${{ matrix.config.msvc_arch }}"
+        cmake ..  -DCMAKE_BUILD_TYPE=Release -DVVENC_OVERRIDE_COMPILER_CHECK=ON -A "${{ matrix.config.msvc_arch }}"
         cmake --build . --config Release
       shell: cmd

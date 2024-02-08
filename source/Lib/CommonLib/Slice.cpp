@@ -443,7 +443,7 @@ void Slice::updateRefPicCounter( int step )
   }
 }
 
-bool Slice::checkRefPicsReconstructed() const
+bool Slice::checkAllRefPicsReconstructed() const
 {
   for ( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
   {
@@ -451,6 +451,23 @@ bool Slice::checkRefPicsReconstructed() const
     for ( int i = 0; i < numOfActiveRef; i++ )
     {
       if ( ! refPicList[ refList ][ i ]->isReconstructed )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool Slice::checkAllRefPicsAccessible() const
+{
+  for ( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
+  {
+    int numOfActiveRef = numRefIdx[ refList ];
+    for ( int i = 0; i < numOfActiveRef; i++ )
+    {
+      if ( ! refPicList[ refList ][ i ]->isInProcessList )
       {
         return false;
       }
