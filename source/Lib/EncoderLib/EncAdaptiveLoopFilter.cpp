@@ -1001,7 +1001,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
   m_CtxCache = &ctxCache;
 
 
-  int alfUnitSize = encCfg.m_fppLinesSynchro ? m_encCfg->m_CTUSize: m_encCfg->m_alfUnitSize;
+  int alfUnitSize = encCfg.m_ifpLines ? m_encCfg->m_CTUSize: m_encCfg->m_alfUnitSize;
   initASU( alfUnitSize );
 
   const int numBins = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma ? MaxAlfNumClippingValues : 1;
@@ -1654,7 +1654,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   {
     return;
   }
-  const int numAsus = m_encCfg->m_fppLinesSynchro && numCtus != m_numAsusInPic ? numCtus: m_numAsusInPic;
+  const int numAsus = m_encCfg->m_ifpLines && numCtus != m_numAsusInPic ? numCtus: m_numAsusInPic;
 
   initCABACEstimator( cs.slice );
 
@@ -1740,7 +1740,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   m_CABACEstimator->getCtx() = AlfCtx( ctxStart );
   alfEncoderCtb( cs, alfParam, lambdaChromaWeight, numAsus, numCtus );
 
-  if( m_encCfg->m_fppLinesSynchro )
+  if( m_encCfg->m_ifpLines )
   {
     reconstructCoeffFixedAPSs( cs, !cs.slice->lumaApsId.empty() && cs.slice->alfEnabled[COMP_Y],
       cs.slice->chromaApsId >= 0 && (cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr]), true );
@@ -1986,11 +1986,11 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
   }
 
   // NOTE: ALF is here enabled per default. However it can be disabled during filter derivation part.
-  //       In line synchronized FPP mode, it cannot be disabled.
+  //       In lines synchronized IFP mode, it cannot be disabled.
   slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = slice.sps->alfEnabled;
   slice.ccAlfCbEnabled = slice.ccAlfCrEnabled = slice.sps->ccalfEnabled;
 
-  if( m_encCfg->m_fppLinesSynchro )
+  if( m_encCfg->m_ifpLines )
   {
     // CCALF
    m_ccAlfFilterParam.ccAlfFilterEnabled[0] = slice.ccAlfCbEnabled;
@@ -4936,8 +4936,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   cs.slice->ccAlfCbApsId = newApsId;
   cs.slice->ccAlfCrApsId = newApsId;
 
-  // in case of FPP line synchro, we always trying to use ALF (with final decision at CTU level)
-  if (costOff <= costMin && !m_encCfg->m_fppLinesSynchro)
+  // in case of IFP lines synchro, we always trying to use ALF (with final decision at CTU level)
+  if (costOff <= costMin && !m_encCfg->m_ifpLines)
   {
     memset( cs.slice->alfEnabled, 0, sizeof( cs.slice->alfEnabled ) );
     cs.slice->numAps = (0);

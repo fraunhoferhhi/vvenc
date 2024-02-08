@@ -390,6 +390,14 @@ const std::vector<SVPair<int>> BitrateOrScaleAbrevToIntMap =
   { "x",                -16 }   // negative value: multiplier of target bitrate, with a fixed-point accuracy of 4 bit
 };
 
+const std::vector<SVPair<bool>> IfpToValueMap =
+{
+  { "0",   false },
+  { "off", false },
+  { "1",   1 },
+  { "on",  1 },
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -547,7 +555,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
-  IStreamToInt8                     toFppLinesSynchro             ( &c->m_fppLinesSynchro );
+  IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
+  IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
+  IStreamToEnum<bool>               toUseIfp                      ( &c->m_ifp, &IfpToValueMap );
 
   po::Options opts;
   if( m_easyMode )
@@ -635,7 +645,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
     ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
-    ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, >= 720p: 8 threads)")
+    ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
+    ("ifp",                                             toUseIfp,                                            "inter-frame parallelization(IFP) (0: off, 1: on, with sync. offset of two CTU lines)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify intra period in seconds instead, see -refreshsec)")
@@ -646,7 +657,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Threading, performance");
     opts.addOptions()
-    ("Threads,t",                                       c->m_numThreads,                                     "Number of threads")
+    ("Threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
     ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
@@ -672,6 +683,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MaxBitrate",                                      toMaxRate,                                           "Rate control: approximate maximum instantaneous bitrate [bits/second] (0: no rate cap; least constraint)" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt NAL unit type)")
+    ("MinIntraDistance",                                c->m_minIntraDist,                                   "With STA: set a minimum coded frame distance to the previous intra frame (-1: GOPSize)" )
     ;
 
     opts.setSubSection("Quantization parameters");
@@ -858,7 +870,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
     ("NumRefPics",                                      c->m_numRefPics,                                     "Number of reference pictures in RPL (0: default for RPL, <10: apply for all temporal layers, >=10: each decimal digit specifies the number for a temporal layer, last digit applying to the highest TL)" )
     ("NumRefPicsSCC",                                   c->m_numRefPicsSCC,                                  "Number of reference pictures in RPL for SCC pictures (semantic analogue to NumRefPics, -1: equal to NumRefPics)" )
-    ("ForceSCC",                                        c->m_forceScc,                                       "Force SCC treatment, instead of detection (<=0: use detection, 1: treat all frames as not SCC, 2: treat all frames as weak SCC, 3: treat all frames as strong SCC)" )
+    ("ForceSCC",                                        toForceScc,                                          "Force SCC treatment, instead of detection (<=0: use detection, 1: treat all frames as not SCC, 2: treat all frames as weak SCC, 3: treat all frames as strong SCC)" )
     ;
 
     opts.setSubSection("Low-level QT-BTT partitioning options");
@@ -1071,7 +1083,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TileColumnWidthArray",                            toTileColumnWidth,                                   "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
     ("TileRowHeightArray",                              toTileRowHeight,                                     "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
     ("TileParallelCtuEnc",                              c->m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
-    ("FppLinesSynchro",                                 toFppLinesSynchro,                                   "(experimental) Number of CTU-lines synchronization due to MV restriction for FPP mode")
+    ("FppLinesSynchro",                                 toIfpLines,                                          "(deprecated) Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
+    ("IFPLines",                                        toIfpLines,                                          "Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
+    ("IFP",                                             toUseIfp,                                            "Inter-Frame Parallelization(IFP) (0: off, 1: on, with default setting of IFPLines)")
     ;
 
     opts.setSubSection("Coding tools");

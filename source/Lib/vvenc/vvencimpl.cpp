@@ -70,6 +70,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #  include <malloc.h>
 #endif
 
+#if defined( TARGET_SIMD_ARM )
+#  include "CommonLib/arm/CommonDefARM.h"
+#endif
 
 #if _DEBUG
 #define HANDLE_EXCEPTION 0
@@ -796,6 +799,9 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
     try
     {
       read_x86_extension_flags( request_ext );
+#if defined( TARGET_SIMD_ARM )
+      read_arm_extension_flags( request_ext == x86_simd::UNDEFINED ? arm_simd::UNDEFINED : request_ext != x86_simd::SCALAR ? arm_simd::NEON : arm_simd::SCALAR );
+#endif
     }
     catch( Exception& )
     {

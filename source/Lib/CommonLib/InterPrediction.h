@@ -82,7 +82,7 @@ protected:
   InterpolationFilter  m_if;
   Pel*                 m_filteredBlock        [LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][MAX_NUM_COMP];
   Pel*                 m_filteredBlockTmp     [LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL][MAX_NUM_COMP];
-  int                  m_fppLinesSynchro;
+  int                  m_ifpLines;
 
   int  xRightShiftMSB         ( int numer, int denom );
   void xApplyBDOF             ( PelBuf& yuvDst, const ClpRng& clpRng );
@@ -122,7 +122,7 @@ public:
                             PelUnitBuf &predDst, PelUnitBuf &predSrc0, PelUnitBuf &predSrc1);
 
   static bool isSubblockVectorSpreadOverLimit(int a, int b, int c, int d, int predType);
-  bool xIsAffineMvInRangeFPP (const CodingUnit& cu, const Mv* _mv, const int fppLinesSynchro, const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL);
+  bool xIsAffineMvInRangeFPP (const CodingUnit& cu, const Mv* _mv, const int ifpLines, const int mvPrecShift = MV_FRACTIONAL_BITS_INTERNAL);
 };
 
 class DMVR : public InterPredInterpolation
@@ -171,7 +171,7 @@ public:
   InterPrediction();
   virtual ~InterPrediction();
 
-  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize, const int fppLinesSynchro = 0 );
+  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize, const int ifpLines = 0 );
   void    destroy               ();
 
   // inter

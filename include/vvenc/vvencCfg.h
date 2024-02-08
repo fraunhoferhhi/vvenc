@@ -430,7 +430,7 @@ typedef struct vvenc_config
   int                 m_framesToBeEncoded;                                               // number of encoded frames (default: 0, all)
   int                 m_inputBitDepth[ 2 ];                                              // bit-depth of input pictures (2d array for luma,chroma)
 
-  int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, else 8threads (limited to available cores))
+  int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, <5K 2880p 8threads, else 12threads (limited to available cores))
 
   int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
   int                 m_RCTargetBitrate;                                                 // target bitrate in bps (default: 0 (RC disabled))
@@ -761,7 +761,7 @@ typedef struct vvenc_config
   bool                m_picReordering;
   bool                m_reservedFlag;
   bool                m_poc0idr;
-  int8_t              m_fppLinesSynchro;
+  int8_t              m_ifpLines;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;
   bool                m_addGOP32refPics;
@@ -774,8 +774,14 @@ typedef struct vvenc_config
                                                                                          // if negative, the absolute value is interpreted as a 4-bit fixed point multiplier of the target bitrate).
                                                                                          // -24, i.e. -1.1000 binary, means the maxrate would be set to be the 1.5x of the target bitrate.
                                                                                          // for convenience use VVENC_SET_MAXRATE_FACTOR, e.g. VVENC_SET_MAXRATE_FACTOR(1.5), to set the multiplier
-  int                 m_forceScc;
-  double              m_reservedDouble[9];
+  int8_t              m_forceScc;
+  bool                m_ifp;
+
+  int8_t              m_reservedInt8[2];
+
+  int                 m_minIntraDist;
+  int                 m_reservedInt;
+  double              m_reservedDouble[8];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

@@ -31,10 +31,31 @@ if( ( "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "aarch64\|arm"
 endif()
 
 # we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
-set( VVENC_ENABLE_X86_SIMD TRUE CACHE BOOL "enable x86 intrinsics" )
+set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "enable x86 intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "enable ARM intrinsics" )
 
 include( vvencCompilerSupport )
+check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 "" )
+
+if( VVENC_PROBLEMATIC_COMPILER )
+  set( VVENC_OVERRIDE_COMPILER_CHECK      OFF        CACHE BOOL "Build with known problematic compiler version" )
+
+  if( VVENC_OVERRIDE_COMPILER_CHECK )
+    set( VVENC_PROBLEMATIC_COMPILER_MSG_TYPE     WARNING )
+    set( VVENC_PROBLEMATIC_COMPILER_MSG_OVERRIDE
+         "The performance will not be optimal due to workarounds." )
+  else()
+    set( VVENC_PROBLEMATIC_COMPILER_MSG_TYPE FATAL_ERROR )
+    set( VVENC_PROBLEMATIC_COMPILER_MSG_OVERRIDE
+         "Set -DVVENC_OVERRIDE_COMPILER_CHECK=ON to build with this compiler anyways, which enables workarounds impacting performance.")
+  endif()
+
+  message( ${VVENC_PROBLEMATIC_COMPILER_MSG_TYPE}
+          "Binaries compiled with ${CMAKE_CXX_COMPILER} version ${CMAKE_CXX_COMPILER_VERSION} are known not to behave as intended. "
+          "The problematic version range is ${VVENC_PROBLEMATIC_COMPILER_VERSION_RANGE}. Please consider using a different compiler.\n"
+          ${VVENC_PROBLEMATIC_COMPILER_MSG_OVERRIDE} )
+
+endif()
 
 # enable sse4.1 build for all source files for gcc and clang
 if( VVENC_ENABLE_X86_SIMD )
@@ -81,14 +102,14 @@ endif()
 # enable install target
 set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
 
-# enable postfix                                             
+# enable postfix
 set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
 
 set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
 
 set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE BOOL   "Enable use of thirdparty json library" )
 
-set( VVENC_INSTALL_FULLFEATURE_APP		    OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
+set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
@@ -300,7 +321,7 @@ if( VVENC_ENABLE_INSTALL )
     
     set( CMAKE_INSTALL_RPATH ${RPATH_BASE} ${RPATH_BASE}/${RPATH_REL_DIR} )
     message( STATUS "CMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}" )
-  endif()  
+  endif()
 endif()
 
 

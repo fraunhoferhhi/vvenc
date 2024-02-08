@@ -1715,9 +1715,9 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           continue;
         }
         mergeCtx.setMergeInfo( cu, uiMergeCand );
-        if( m_pcEncCfg->m_fppLinesSynchro && 
-         (  ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
-            ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
+        if( m_pcEncCfg->m_ifpLines && 
+         (  ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) ) ||
+            ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) )
           ) )
         {
           // skip candidate
@@ -1907,9 +1907,9 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             continue;
           }
           mergeCtx.setMmvdMergeCandiInfo(cu, mmvdMergeCand);
-          if( m_pcEncCfg->m_fppLinesSynchro &&
-            ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
-              ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
+          if( m_pcEncCfg->m_ifpLines &&
+            ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) ) ||
+              ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) )
             ) )
           {
             // skip candidate
@@ -2124,9 +2124,9 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         tempCS->initStructData(encTestMode.qp);
         continue;
       }
-      if( m_pcEncCfg->m_fppLinesSynchro && !m_pcEncCfg->m_useFastMrg &&
-        ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) ) ||
-          ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv ) )
+      if( m_pcEncCfg->m_ifpLines && !m_pcEncCfg->m_useFastMrg &&
+        ( ( cu.refIdx[L0] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L0][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) ) ||
+          ( cu.refIdx[L1] >= 0 && !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), cu.mv[L1][0].ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv ) )
         ) )
       {
         // skip candidate
@@ -2392,10 +2392,10 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
         continue;
       }
 
-      if( m_pcEncCfg->m_fppLinesSynchro ) 
+      if( m_pcEncCfg->m_ifpLines ) 
       {
-        skipCandFpp[L0][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 0].mv.ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv );
-        skipCandFpp[L1][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 1].mv.ver, m_pcEncCfg->m_fppLinesSynchro, *cu.cs->pcv );
+        skipCandFpp[L0][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 0].mv.ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
+        skipCandFpp[L1][mergeCand] = !CU::isMvInRangeFPP( cu.ly(), cu.lheight(), mergeCtx.mvFieldNeighbours[(mergeCand << 1) + 1].mv.ver, m_pcEncCfg->m_ifpLines, *cu.cs->pcv );
         if( skipCandFpp[L0][mergeCand] || skipCandFpp[L1][mergeCand] )
           continue;
       }
@@ -2638,7 +2638,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       cu.mmvdMergeIdx     = MAX_UINT;
 
       CU::spanGeoMotionInfo(cu, mergeCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
-      if( m_pcEncCfg->m_fppLinesSynchro && 
+      if( m_pcEncCfg->m_ifpLines && 
         ( skipCandFpp[L0][cu.geoMergeIdx0] || skipCandFpp[L1][cu.geoMergeIdx0] || skipCandFpp[L0][cu.geoMergeIdx1] || skipCandFpp[L1][cu.geoMergeIdx1] ) ) 
       {
         tempCS->initStructData(encTestMode.qp);
@@ -4050,7 +4050,7 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
       CU::spanMotionInfo( cu );
     }
 
-    if( m_pcEncCfg->m_fppLinesSynchro && ( !( CU::isMotionBufInRangeFPP( cu, m_pcEncCfg->m_fppLinesSynchro ) ) ) )
+    if( m_pcEncCfg->m_ifpLines && ( !( CU::isMotionBufInRangeFPP( cu, m_pcEncCfg->m_ifpLines ) ) ) )
     {
       // Do not use this mode
       continue;

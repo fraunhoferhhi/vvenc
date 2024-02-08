@@ -1265,7 +1265,8 @@ public:
   void                        resetSlicePart();
   void                        constructRefPicList(const PicList& rcListPic, bool extBorder, const bool usingLongTerm = true);
   void                        updateRefPicCounter( int step );
-  bool                        checkRefPicsReconstructed() const;
+  bool                        checkAllRefPicsAccessible() const;
+  bool                        checkAllRefPicsReconstructed() const;
   void                        setRefPOCList();
   void                        setSMVDParam();
   void                        checkColRefIdx(uint32_t curSliceSegmentIdx, const Picture* pic) const;

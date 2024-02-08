@@ -161,6 +161,7 @@ Picture::Picture()
     , isFinished        ( false )
     , isLongTerm        ( false )
     , isFlush           ( false )
+    , isInProcessList   ( false )
     , precedingDRAP     ( false )
     , gopEntry          ( nullptr )
     , refCounter        ( 0 )
@@ -226,6 +227,7 @@ void Picture::reset()
   isFinished          = false;
   isLongTerm          = false;
   isFlush             = false;
+  isInProcessList     = false;
   isMeanQPLimited     = false;
   precedingDRAP       = false;
 
@@ -236,6 +238,9 @@ void Picture::reset()
   gopAdaptedQP        = 0;
   actualHeadBits      = 0;
   actualTotalBits     = 0;
+  encRCPic            = nullptr;
+  picApsGlobal        = nullptr;
+  refApsGlobal        = nullptr;
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, NUM_QPA_PREV_FRAMES, nullptr );

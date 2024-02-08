@@ -3548,18 +3548,18 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
   return mtsAllowed;
 }
 
-bool CU::isMvInRangeFPP( const int yB, const int nH, const int yMv, const int fppLinesSynchro, const PreCalcValues& pcv, const int chromaShift, const int mvPrecShift )
+bool CU::isMvInRangeFPP( const int yB, const int nH, const int yMv, const int ifpLines, const PreCalcValues& pcv, const int chromaShift, const int mvPrecShift )
 {
   //const int dctifMarginVerBot = 4 >> yCompScale;
   const int ctuLogScale = pcv.maxCUSizeLog2 - chromaShift;
-  const int yBMax       = ( pcv.heightInCtus - 1 - fppLinesSynchro ) << ctuLogScale;
-  const int yRefMax     = ( ( ( yB >> ctuLogScale ) + fppLinesSynchro + 1 ) << ctuLogScale ) - 1;
+  const int yBMax       = ( pcv.heightInCtus - 1 - ifpLines ) << ctuLogScale;
+  const int yRefMax     = ( ( ( yB >> ctuLogScale ) + ifpLines + 1 ) << ctuLogScale ) - 1;
   if( yB < yBMax && ( yB + nH + ( 4 >> chromaShift ) + (yMv >> (mvPrecShift + chromaShift) ) - 1 > yRefMax ) )
     return false;
   return true;
 }
 
-bool CU::isMotionBufInRangeFPP( const CodingUnit &cu, const int fppLinesSynchro )
+bool CU::isMotionBufInRangeFPP( const CodingUnit &cu, const int ifpLines )
 {
   const CMotionBuf mb = cu.getMotionBuf();
   const ComponentID compID = COMP_Y;
@@ -3584,7 +3584,7 @@ bool CU::isMotionBufInRangeFPP( const CodingUnit &cu, const int fppLinesSynchro 
           const Mv& mv = mi.mv[i];
           const int refMaxPosY = cuBottom + dctifMarginVerBot + (mv.ver >> mvPrecShift);
           const int refCtuRow = std::min( (int)((refMaxPosY > 0) ? refMaxPosY >> maxCUSizeShift: -1), (int)(cu.cs->pcv->heightInCtus - 1));
-          if( refCtuRow > ( curCtuRow + fppLinesSynchro ) )
+          if( refCtuRow > ( curCtuRow + ifpLines ) )
             return false;
         }
       }

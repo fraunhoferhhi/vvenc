@@ -214,6 +214,7 @@ test_vc193x_Win32:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: Win32
+     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
     - vc193x
 
@@ -221,6 +222,7 @@ test_vc193x:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: x64
+     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
     - vc193x
 

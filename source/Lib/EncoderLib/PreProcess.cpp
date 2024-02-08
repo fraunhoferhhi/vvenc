@@ -75,7 +75,7 @@ PreProcess::~PreProcess()
 
 void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
 {
-  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode );
+  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode, encCfg.m_minIntraDist );
   CHECK( m_gopCfg.getMaxTLayer() != encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   m_encCfg      = &encCfg;
@@ -389,10 +389,11 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 {
   const Picture* prevTl0 = xGetPrevTl0Pic( pic, picList );
 
-  int picMemorySTA = 0;
-  bool isSta       = false;
-
-  if( prevTl0 && prevTl0->picVisActTL0 > 0 )
+  int picMemorySTA  = 0;
+  bool isSta        = false;
+  bool intraAllowed = m_gopCfg.isSTAallowed( pic->poc );
+  
+  if( prevTl0 && prevTl0->picVisActTL0 > 0 && intraAllowed )
   {
     const int scThreshold = ( ( pic->isSccStrong ? 6 : ( pic->isSccWeak ? 5 : 4 ) ) * ( m_isHighRes ? 19 : 15 ) ) >> 2;
 
@@ -412,6 +413,7 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
     picShared->m_picMemorySTA         = picMemorySTA;
     picShared->m_gopEntry.m_sliceType = 'I';
     picShared->m_gopEntry.m_scType    = SCT_TL0_SCENE_CUT;
+    m_gopCfg.setLastIntraSTA( pic->poc );
 
     if( m_encCfg->m_sliceTypeAdapt == 2 )
     {

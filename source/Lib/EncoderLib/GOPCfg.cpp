@@ -55,7 +55,7 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode )
+void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
@@ -119,6 +119,8 @@ void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int go
   m_cnOffset     = 0;
   m_numTillGop   = poc0idr ? 0 : (int)m_gopList->size() - 1;
   m_numTillIntra = poc0idr ? 0 : (int)m_gopList->size() - 1;
+  m_minIntraDist = minIntraDist;
+  m_lastIntraPOC = -1;
 }
 
 void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
@@ -158,6 +160,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     gopEntry.m_temporalId     = isTl0 ? 0 : 1;
     gopEntry.m_isStartOfIntra = isStartOfIntra;
     gopEntry.m_isValid        = true;
+    if( isStartOfIntra ) m_lastIntraPOC = m_nextPoc;
 
     // continue with next frame
     m_nextPoc += 1;
@@ -180,6 +183,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     gopEntry.m_sliceType      = 'I';
     gopEntry.m_isStartOfIntra = true;
     gopEntry.m_temporalId     = 0;
+    m_lastIntraPOC            = m_nextPoc;
   }
 
   // check for end of current gop
@@ -234,6 +238,7 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   gopEntry.m_isStartOfIntra = true;
   gopEntry.m_isStartOfGop   = true;
   gopEntry.m_temporalId     = 0;
+  m_lastIntraPOC            = gopEntry.m_POC;
 
   // start with first gop list
   m_gopList      = &m_defaultGopLists[ 0 ];
@@ -251,7 +256,7 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   }
 }
 
-void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry ) const
+void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry )
 {
   gopEntry.m_isStartOfGop = true;
   if( gopEntry.m_gopNum == 0 && ! gopEntry.m_isStartOfIntra )
@@ -259,6 +264,7 @@ void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry ) const
     gopEntry.m_isStartOfIntra = true;
     gopEntry.m_sliceType      = 'I';
     gopEntry.m_temporalId     = 0;
+    m_lastIntraPOC            = gopEntry.m_POC;
   }
 }
 
@@ -273,6 +279,14 @@ void GOPCfg::getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const
     rpl0[ i ].initFromGopEntry( *m_defaultRPLList[ i ], 0 );
     rpl1[ i ].initFromGopEntry( *m_defaultRPLList[ i ], 1 );
   }
+}
+
+bool GOPCfg::isSTAallowed( int poc ) const
+{
+  int intraDistBack    = poc - m_lastIntraPOC;
+  int intraDistForward = m_numTillIntra + 1;
+
+  return ( intraDistBack >= m_minIntraDist && intraDistForward >= m_minIntraDist );
 }
 
 bool GOPCfg::hasNonZeroTemporalId() const

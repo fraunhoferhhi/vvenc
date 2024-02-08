@@ -260,6 +260,16 @@ static inline std::string vvenc_getDecodingRefreshTypeStr(  int type, bool poc0i
   return cType;
 }
 
+static inline int getNumThreadsDefault( vvenc_config *c )
+{
+  const int minSize = std::min( c->m_SourceWidth, c->m_SourceHeight );
+  if( minSize >= 2880 )
+    return 12;
+  else if( minSize >= 720 )
+    return 8;
+  return 4;
+}
+
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
   GOPEntry->m_POC                       = -1;
@@ -381,6 +391,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
   c->m_sliceTypeAdapt                          = -1;            ///< perceptually and objectively motivated slice type adaptation (STA)
+  c->m_minIntraDist                            = -1;
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
@@ -652,7 +663,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
   c->m_tileParallelCtuEnc                      = true;
-  c->m_fppLinesSynchro                         = 0;
+  c->m_ifpLines                                = -1;
+  c->m_ifp                                     = false;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -690,6 +702,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_forceScc                                = 0;
 
   c->m_reservedFlag                            = false;
+  c->m_reservedInt                             = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -756,6 +769,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
   vvenc_confirmParameter( c, c->m_sliceTypeAdapt < -1 || c->m_sliceTypeAdapt > 2,                        "Slice type adaptation (STA) invalid parameter given, range is (-1 .. 2)" );
+  vvenc_confirmParameter( c, c->m_minIntraDist < -1,                                                     "Minimum intra distance cannot be smaller than -1" );
 
   if( VVENC_RC_OFF == c->m_RCTargetBitrate )
   {
@@ -796,6 +810,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
 
   vvenc::MsgLog msg(c->m_msgCtx, c->m_msgFnc);
+#if !IFP_RC_DETERMINISTIC
+  if( c->m_RCTargetBitrate != 0 && c->m_ifp )
+  {
+    msg.log( VVENC_WARNING, "Using RC with IFP. Results are non-deterministic!\n" );
+  }
+#endif
 
   if( c->m_FirstPassMode > 2 && c->m_RCTargetBitrate != 0 )
   {
@@ -906,19 +926,25 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_numThreads < 0 )
   {
     const int numCores = std::thread::hardware_concurrency();
-    c->m_numThreads = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 4 : 8;
+    c->m_numThreads = getNumThreadsDefault( c );
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
   if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
   if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
-  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_fppLinesSynchro ? 0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_ifp        ?      0   : 1   ;
   if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ?      0.0 : 0.75;
   if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ?      0.0 : 0.5 ;
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
   }
+
+  if( c->m_ifpLines > 0 && !c->m_ifp )
+  {
+    msg.log( VVENC_WARNING, "Given IFPLines=%d, but IFP is not enabled, reseting IFPLines to 0.\n", c->m_ifpLines );
+  }
+  c->m_ifpLines = !c->m_ifp ? 0: (c->m_ifpLines == -1 ? 2: c->m_ifpLines);
 
   if( c->m_alfUnitSize < 0 )
     c->m_alfUnitSize = c->m_CTUSize;
@@ -1327,6 +1353,20 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_sliceTypeAdapt = c->m_GOPSize > 8 ? 1 : 0;
   }
   vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
+
+  if( c->m_minIntraDist < 0 )
+  {
+    if( c->m_sliceTypeAdapt > 0 )
+    {
+      c->m_minIntraDist = std::min( c->m_GOPSize, c->m_IntraPeriod );
+    }
+    else
+    {
+      c->m_minIntraDist = 0;
+    }
+  }
+  vvenc_confirmParameter( c, c->m_minIntraDist > 0 && c->m_sliceTypeAdapt == 0,               "STA: Setting a minimal intra distance only works with slice type adaptation enabled" );
+  vvenc_confirmParameter( c, c->m_minIntraDist > c->m_IntraPeriod && c->m_sliceTypeAdapt > 0, "STA: Minimal intra distance can not be larger than intra period" );
 
   // set number of lead / trail frames in segment mode
   const int staFrames  = c->m_sliceTypeAdapt                       ? c->m_GOPSize     : 0;
@@ -2033,9 +2073,18 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1 && c->m_numThreads > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_alfTempPred != 0, "FPP CTU-lines synchro: ALFTempPred is not supported (must be disabled)" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro && c->m_numTileRows > 1,  "FPP CTU-lines synchro: Only single tile row is supported" );
-    vvenc_confirmParameter(c, c->m_fppLinesSynchro < 0, "fppLinesSynchro must be >= 0" );
+    vvenc_confirmParameter(c, c->m_ifpLines && c->m_alfTempPred != 0, "IFP: ALFTempPred is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_ifpLines && c->m_numTileRows > 1,  "IFP: Only single tile row is supported" );
+    vvenc_confirmParameter(c, c->m_ifpLines < 0, "IFPLines must be >= 0" );
+    vvenc_confirmParameter(c, c->m_ifp && c->m_ifpLines == 0, "IFP requires IFPLines=[-1 or >0]" );
+  }
+  if( c->m_ifpLines )
+  {
+    const int minNumThreadsIfp = getNumThreadsDefault( c ) * 2;
+    if( c->m_numThreads < minNumThreadsIfp )
+    {
+      msg.log( VVENC_WARNING, "Using IFP at low number of threads (<%d) does not provide more speedup, consider disabling IFP.\n", minNumThreadsIfp );
+    }
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
@@ -2339,7 +2388,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
-  
+
   iRet = vvenc_init_preset( c, preset );
   return iRet;
 }
@@ -2980,6 +3029,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       }
       else
         css << "single-pass";
+#if !IFP_RC_DETERMINISTIC
+      if( c->m_ifpLines && c->m_numThreads > 1 )
+      {
+        css << " (non-deterministic due to IFP)";
+      }
+#endif
     }
     else
     {
@@ -3220,7 +3275,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "\n" << loglvl << "PARALLEL PROCESSING CFG: ";
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
-    css << "FppLinesSynchro:" << ( int ) c->m_fppLinesSynchro << " ";
+    css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

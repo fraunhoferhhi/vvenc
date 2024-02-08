@@ -315,7 +315,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   const bool lockStepMode = (m_pcEncCfg->m_RCTargetBitrate > 0 || (m_pcEncCfg->m_LookAhead > 0 && !m_isPreAnalysis)) && (m_pcEncCfg->m_maxParallelFrames > 0);
 
   // get list of pictures to be encoded and used for RC update
-  if( m_procList.empty() && ! m_gopEncListInput.empty() )
+  if( m_procList.empty() && (!m_gopEncListInput.empty() || !m_rcInputReorderList.empty()) )
   {
     xGetProcessingLists( m_procList, m_rcUpdateList, lockStepMode );
   }
@@ -344,7 +344,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
         const VVEncCfg* encCfg = m_pcEncCfg;
         auto picItr             = find_if( m_procList.begin(), m_procList.end(), [encCfg]( auto pic ) {
           // if ALF enabled and ALFTempPred is used, ensure that refAps is initialized
-          return ( encCfg->m_fppLinesSynchro || pic->slices[ 0 ]->checkRefPicsReconstructed() )
+          return ( encCfg->m_ifpLines || pic->slices[ 0 ]->checkAllRefPicsReconstructed() )
             && ( !encCfg->m_alf || ( !pic->refApsGlobal || pic->refApsGlobal->initalized ) ); } );
 
         const bool nextPicReady = picItr != m_procList.end();
@@ -398,6 +398,11 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
     }
   }
 
+  if( lockStepMode && m_pcEncCfg->m_ifpLines && !m_rcUpdateList.empty() )
+  {
+    xUpdateRcIfp();
+  }
+
   // picture/AU output
   // 
   // in lock-step mode:
@@ -405,7 +410,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
   if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
-    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
+    ( lockStepMode && !m_pcEncCfg->m_ifpLines && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xLockStepPicsFinished() ) )
   {
     return;
   }
@@ -420,7 +425,7 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
   // update pending RC
   // first pic has been written to bitstream
   // therefore we have at least for this picture a valid total bit and head bit count
-  if( !m_rcUpdateList.empty() && m_rcUpdateList.front() == outPic )
+  if( !m_rcUpdateList.empty() && m_rcUpdateList.front() == outPic && (!lockStepMode || !m_pcEncCfg->m_ifpLines)  )
   {
     if( m_pcEncCfg->m_RCTargetBitrate > 0 )
     {
@@ -475,6 +480,8 @@ void EncGOP::xSyncAlfAps( Picture& pic )
   if( !refAps )
     return;
   CHECK( !refAps->initalized, "Attempt referencing from an uninitialized APS" );
+  pic.refApsGlobal->refCnt--;
+  CHECK( pic.refApsGlobal->refCnt < 0, "Not expected APS ref. counter\n" );
 
   // copy ref APSs to current picture
   const ParameterSetMap<APS>& src = refAps->apsMap;
@@ -1315,8 +1322,11 @@ void EncGOP::xSetupPicAps( Picture* pic )
   // additional +2 offset, due two max possible processing delay of two GOPs (Threads=1 mode)
   if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 ) ) )
   {
-    delete m_globalApsList.front();
-    m_globalApsList.pop_front();
+    if( m_globalApsList.front()->refCnt == 0 )
+    {
+      delete m_globalApsList.front();
+      m_globalApsList.pop_front();
+    }
   }
 
   pic->picApsGlobal = m_globalApsList.back();
@@ -1354,6 +1364,8 @@ void EncGOP::xSetupPicAps( Picture* pic )
       curApsItr--;
       refAps = *curApsItr;
     }
+    if( refAps )
+      refAps->refCnt++;
   }
 
   //CHECK( !refAps, "Faied to get reference APS" );
@@ -1409,41 +1421,128 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
   CHECK( picList.size() && m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() != 1, "no new picture for encoding found" );
 }
 
+void EncGOP::xUpdateRcIfp()
+{
+  // deterministic behavior: RC update on next finished frame in sliding window coding order,
+  //                         evaluate only one finished frame at front of the list that makes place for the next frame
+  //                         whose parameters can be set using the finished frame bits info
+  //
+  // non-deterministic behavior: RC update on any finished frame
+
+#if IFP_RC_DETERMINISTIC
+  if( m_rcUpdateList.front()->isReconstructed && m_rcUpdateList.back()->encRCPic && ( m_rcUpdateList.front()->isFlush || m_rcUpdateList.size() == m_pcEncCfg->m_maxParallelFrames ) )
+  {   
+#endif
+    for( auto it = m_rcUpdateList.begin(); it != m_rcUpdateList.end(); )
+    {
+      auto pic = *it;
+      if( pic->isReconstructed )
+      {
+        pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+        pic->refCounter--;
+        m_pcRateCtrl->updateAfterPicEncRC( pic );
+        it = m_rcUpdateList.erase( it );
+      }
+      else
+      {
+        ++it;
+      }
+#if IFP_RC_DETERMINISTIC
+      // in deterministic case, only one frame is allowed to update the RC
+      break;
+#endif
+    }
+#if IFP_RC_DETERMINISTIC
+  }
+#endif
+}
+
+inline void getReorderedProcList( std::list<Picture*>& inputList, std::list<Picture*>& procList, const int maxSize, bool isIFP )
+{
+  // deliver frames of the same TID (temporal layer) and from the same GOP
+  const int procTL = inputList.size() ? inputList.front()->TLayer             : -1;
+  const int gopNum = inputList.size() ? inputList.front()->gopEntry->m_gopNum : -1;
+  for( auto it = inputList.begin(); it != inputList.end(); )
+  {
+    auto pic = *it;
+    if( pic->gopEntry->m_gopNum == gopNum
+        && pic->TLayer == procTL
+        && ( isIFP ? pic->slices[ 0 ]->checkAllRefPicsAccessible(): pic->slices[ 0 ]->checkAllRefPicsReconstructed() ) )
+    {
+      pic->isInProcessList = true;
+      procList.push_back  ( pic );
+      it = inputList.erase( it );
+    }
+    else
+    {
+      ++it;
+    }
+    if( (int)procList.size() >= maxSize )
+      break;
+  }
+}
+
 void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode )
 {
-  // in lockstep mode, process only pics of same temporal layer
+  // in lockstep mode, frames are reordered in a specific processing order
   if( lockStepMode )
   {
-    // start new parallel chunk only, if next output picture is not reconstructed
-    if( rcUpdateList.empty() )
+    if( m_pcEncCfg->m_ifpLines )
     {
-      const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer             : -1;
-      const int gopNum         = m_gopEncListInput.size() ? m_gopEncListInput.front()->gopEntry->m_gopNum : -1;
+      // in IFP lockstep mode:
+      // we need an additional reordering list to ensure causality of the coding order (ref.pics) on irregular GOP structures
+      // in the first step, the reordered list is filled
+      // in the second, the frames from reordered list are moved to proc. list up to required update-list size
+      const int maxUpdateListSize = m_pcEncCfg->m_maxParallelFrames;
+      if( rcUpdateList.size() < maxUpdateListSize && ( !m_gopEncListInput.empty() || !m_rcInputReorderList.empty()))
+      {
+        while( rcUpdateList.size() < maxUpdateListSize && ( !m_gopEncListInput.empty() || !m_rcInputReorderList.empty()) )
+        {
+          if( !m_rcInputReorderList.empty() )
+          {
+            auto pic = m_rcInputReorderList.front();
+            m_rcInputReorderList.pop_front();
+            pic->refCounter++;
+            procList.push_back( pic );
+            rcUpdateList.push_back( pic );
+          }
+          else
+          {
+            while( m_rcInputReorderList.size() < maxUpdateListSize && !m_gopEncListInput.empty() )
+            {
+              getReorderedProcList( m_gopEncListInput, m_rcInputReorderList, maxUpdateListSize, true );
+            }
+          }
+        }
+      }
+    }
+    else if( rcUpdateList.empty() )
+    {
+      // retrieve next lockstep chunk
+      const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer : -1;
       const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
       const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
-      for( auto it = m_gopEncListInput.begin(); it != m_gopEncListInput.end(); )
-      {
-        auto pic = *it;
-        if( pic->gopEntry->m_gopNum == gopNum
-            && pic->TLayer == procTL
-            && pic->slices[ 0 ]->checkRefPicsReconstructed() )
-        {
-          procList.push_back    ( pic );
-          rcUpdateList.push_back( pic );
-          it = m_gopEncListInput.erase( it );
-        }
-        else
-        {
-          ++it;
-        }
-        if( (int)procList.size() >= maxSize )
-          break;
-      }
+      getReorderedProcList( m_gopEncListInput, procList, maxSize, false );
+      std::copy( procList.begin(), procList.end(), std::back_inserter(rcUpdateList) );
     }
   }
   else
   {
-    procList.splice( procList.end(), m_gopEncListInput );
+    if( m_pcEncCfg->m_ifpLines )
+    {
+      // in case of IFP, using the reordered list brings an additional speedup
+      while( !m_gopEncListInput.empty() )
+      {
+        size_t inputListSize = m_gopEncListInput.size();
+        getReorderedProcList( m_gopEncListInput, procList, (int)procList.size() + m_pcEncCfg->m_maxParallelFrames, true );
+        CHECK( m_gopEncListInput.size() == inputListSize, "IFP processing list derivation: attempting to run in a deadlock" );
+      }
+    }
+    else
+    {
+      // just pass the input list to processing list
+      procList.splice( procList.end(), m_gopEncListInput );
+    }
     m_gopEncListInput.clear();
     if( ! m_gopEncListOutput.empty() )
       rcUpdateList.push_back( m_gopEncListOutput.front() );
@@ -1797,8 +1896,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
       alfAPS->ccAlfParam.reset();
     }
   }
-  pic.picApsGlobal = nullptr;
-  pic.refApsGlobal = nullptr;
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
   pic.isInitDone = true;
@@ -2502,7 +2599,6 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
       }
     }
   }
-
   const uint32_t uibits = numRBSPBytes * 8;
 
   if (m_isPreAnalysis || !m_pcRateCtrl->rcIsFinalPass)

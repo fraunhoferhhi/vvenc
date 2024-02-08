@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncStage.h"
 #include "PreProcess.h"
 #include "EncGOP.h"
+#include "CommonLib/x86/CommonDefX86.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -111,6 +112,13 @@ void EncLib::initEncoderLib( const vvenc_config& encCfg )
   // copy config parameter
   const_cast<VVEncCfg&>(m_encCfg) = encCfg;
 
+#if defined( REAL_TARGET_X86 ) && defined( _MSC_VER ) && _MSC_VER >= 1938 
+  if( read_x86_extension_flags() >= x86_simd::AVX2 )
+  {
+    msg.log( VVENC_WARNING, "WARNING: MSVC version >= 17.8 produces invalid AVX2 code, partially disabling AVX2!\n" );
+  }
+
+#endif
   // setup modified configs for rate control
   if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_LookAhead )
   {

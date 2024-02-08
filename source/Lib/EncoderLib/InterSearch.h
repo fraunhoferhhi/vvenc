@@ -513,10 +513,10 @@ private:
                                     const bool            bFastSettings = false
                                   );
 
-  void xClipMvSearch              ( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int fppLinesSynchro );
+  void xClipMvSearch              ( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const int ifpLines );
 
-  void xClipMvToFppLine           ( Mv& mv, const int yB, const int nH, const int fppLinesSynchro, const PreCalcValues& pcv );
-  void xCheckAndClipMvToFppLine   ( Mv& mv, const int yB, const int nH, const int fppLinesSynchro, const PreCalcValues& pcv );
+  void xClipMvToFppLine           ( Mv& mv, const int yB, const int nH, const int ifpLines, const PreCalcValues& pcv );
+  void xCheckAndClipMvToFppLine   ( Mv& mv, const int yB, const int nH, const int ifpLines, const PreCalcValues& pcv );
   void xSetSearchRange            ( const CodingUnit& cu,
                                     const Mv&             cMvPred,
                                     const int             iSrchRng,

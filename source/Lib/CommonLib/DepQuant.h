@@ -241,8 +241,8 @@ class DepQuantImpl
 public:
   virtual ~DepQuantImpl() {}
   virtual void quant   ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff ) = 0;
-  virtual void dequant ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP,                                                      bool enableScalingLists, int* quantCoeff );
-  virtual void init    ( int dqTrVal );
+  void         dequant ( const TransformUnit& tu,  CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP,                                                      bool enableScalingLists, int* quantCoeff );
+  void         init    ( int dqTrVal );
 
 protected:
   DQIntern::Quantizer  m_quant;

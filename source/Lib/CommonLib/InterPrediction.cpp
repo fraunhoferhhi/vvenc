@@ -246,7 +246,7 @@ void InterPrediction::destroy()
   m_IBCBuffer.destroy();
 }
 
-void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize, const int fppLinesSynchro )
+void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize, const int ifpLines )
 {
   // if it has been initialised before, but the chroma format has changed, release the memory and start again.
   if( m_yuvPred[L0].getOrigin( COMP_Y ) != nullptr && m_currChromaFormat != chFormat )
@@ -279,7 +279,7 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     m_IBCBufferWidth = g_IBCBufferSize / ctuSize;
     m_IBCBuffer.create(UnitArea(chFormat, Area(0, 0, m_IBCBufferWidth, ctuSize)));
   }
-  InterPredInterpolation::m_fppLinesSynchro = fppLinesSynchro;
+  InterPredInterpolation::m_ifpLines = ifpLines;
 }
 
 // ====================================================================================================================
@@ -615,7 +615,7 @@ InterPredInterpolation::InterPredInterpolation()
   , m_skipPROF(false)
   , m_encOnly(false)
   , m_isBi(false)
-  , m_fppLinesSynchro(0)
+  , m_ifpLines(0)
 {
 
 }
@@ -727,7 +727,7 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
 
   bool  wrapRef = false;
   Mv    mv(_mv);
-  CHECKD( m_fppLinesSynchro && !srcPadBuf && !CU::isMvInRangeFPP( cu[compID].y, cu[compID].height, mv.ver, m_fppLinesSynchro, *cu.cs->pcv, getComponentScaleY(compID, chFmt) ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
+  CHECKD( m_ifpLines && !srcPadBuf && cu.cs->picture != refPic && !CU::isMvInRangeFPP( cu[compID].y, cu[compID].height, mv.ver, m_ifpLines, *cu.cs->pcv, getComponentScaleY(compID, chFmt) ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
   if( !isIBC && cu.cs->pcv->wrapArround )
   {
     wrapRef = wrapClipMv( mv, cu.blocks[0].pos(), cu.blocks[0].size(), *cu.cs);
@@ -1796,7 +1796,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         iMvScaleTmpVer = curMv.ver;
       }
 
-      CHECKD( m_fppLinesSynchro && !CU::isMvInRangeFPP( puY + h, blockHeight, iMvScaleTmpVer, m_fppLinesSynchro, *pps.pcv, iScaleY ), "xPredAffineBlk: FPP MV restriction failed!\n" );
+      CHECKD( m_ifpLines && !CU::isMvInRangeFPP( puY + h, blockHeight, iMvScaleTmpVer, m_ifpLines, *pps.pcv, iScaleY ), "xPredAffineBlk: FPP MV restriction failed!\n" );
       // get the MV in high precision
       int xFrac, yFrac, xInt, yInt;
 
@@ -1896,10 +1896,10 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
 }
 
-bool InterPredInterpolation::xIsAffineMvInRangeFPP( const CodingUnit &cu, const Mv* _mv, const int fppLinesSynchro, const int mvPrecShift )
+bool InterPredInterpolation::xIsAffineMvInRangeFPP( const CodingUnit &cu, const Mv* _mv, const int ifpLines, const int mvPrecShift )
 {
   const PreCalcValues& pcv = *cu.cs->pcv;
-  if( cu.ly() >= ( ( pcv.heightInCtus - 1 - fppLinesSynchro ) << pcv.maxCUSizeLog2 ) )
+  if( cu.ly() >= ( ( pcv.heightInCtus - 1 - ifpLines ) << pcv.maxCUSizeLog2 ) )
     return true;
 
   const ChromaFormat chFmt = cu.chromaFormat;
@@ -1941,7 +1941,7 @@ bool InterPredInterpolation::xIsAffineMvInRangeFPP( const CodingUnit &cu, const 
   }
   const bool subblkMVSpreadOverLimit = InterPrediction::isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
 
-  const int yRefMax     = ( ( ( cu.ly() >> pcv.maxCUSizeLog2 ) + fppLinesSynchro + 1 ) << pcv.maxCUSizeLog2 ) - 1;
+  const int yRefMax     = ( ( ( cu.ly() >> pcv.maxCUSizeLog2 ) + ifpLines + 1 ) << pcv.maxCUSizeLog2 ) - 1;
   const int dctifMarginVerBot = 4;
 
   auto roundMvVal = [&](int mvVal, int shift)

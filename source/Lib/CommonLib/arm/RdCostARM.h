@@ -57,100 +57,6 @@ namespace vvenc
 #ifdef TARGET_SIMD_ARM
 #if __ARM_ARCH >= 8
 
-template<ARM_VEXT vext, bool isWdt16>
-Distortion xGetSAD_MxN_SIMD( const DistParam& rcDtParam )
-{
-  if( rcDtParam.bitDepth > 10 )
-    return isWdt16 ? RdCost::xGetSAD16( rcDtParam ) : RdCost::xGetSAD8( rcDtParam );
-
-  //  assert( rcDtParam.iCols == iWidth);
-  const short*    pSrc1       = (const short*) rcDtParam.org.buf;
-  const short*    pSrc2       = (const short*) rcDtParam.cur.buf;
-  const int       iRows       = rcDtParam.org.height;
-  const int       iSubShift   = rcDtParam.subShift;
-  const ptrdiff_t iStrideSrc1 = rcDtParam.org.stride << iSubShift;
-  const ptrdiff_t iStrideSrc2 = rcDtParam.cur.stride << iSubShift;
-
-  uint32_t uiSum = 0;
-
-  int16x8_t vsum16 = vdupq_n_s16( 0 );
-
-  for( int i = 0; i < ( iRows >> 3 ); i++ )
-  {
-    // 0
-    int16x8_t vsrc1 = vld1q_s16( pSrc1 );
-    int16x8_t vsrc2 = vld1q_s16( pSrc2 );
-
-    vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-
-    if( isWdt16 )
-    {
-      vsrc1 = vld1q_s16( pSrc1 + 8 );
-      vsrc2 = vld1q_s16( pSrc2 + 8 );
-
-      vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-    }
-
-    pSrc1 += iStrideSrc1;
-    pSrc2 += iStrideSrc2;
-
-    // 1
-    vsrc1 = vld1q_s16( pSrc1 );
-    vsrc2 = vld1q_s16( pSrc2 );
-
-    vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-
-    if( isWdt16 )
-    {
-      vsrc1 = vld1q_s16( pSrc1 + 8 );
-      vsrc2 = vld1q_s16( pSrc2 + 8 );
-
-      vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-    }
-
-    pSrc1 += iStrideSrc1;
-    pSrc2 += iStrideSrc2;
-
-    // 2
-    vsrc1 = vld1q_s16( pSrc1 );
-    vsrc2 = vld1q_s16( pSrc2 );
-
-    vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-
-    if( isWdt16 )
-    {
-      vsrc1 = vld1q_s16( pSrc1 + 8 );
-      vsrc2 = vld1q_s16( pSrc2 + 8 );
-
-      vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-    }
-
-    pSrc1 += iStrideSrc1;
-    pSrc2 += iStrideSrc2;
-
-    // 3
-    vsrc1 = vld1q_s16( pSrc1 );
-    vsrc2 = vld1q_s16( pSrc2 );
-
-    vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-
-    if( isWdt16 )
-    {
-      vsrc1 = vld1q_s16( pSrc1 + 8 );
-      vsrc2 = vld1q_s16( pSrc2 + 8 );
-
-      vsum16 = vabaq_s16( vsum16, vsrc1, vsrc2 );
-    }
-
-    pSrc1 += iStrideSrc1;
-    pSrc2 += iStrideSrc2;
-  }
-
-  uiSum = vaddlvq_s16( vsum16 );
-  uiSum <<= iSubShift;
-  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
-}
-
 template<ARM_VEXT vext, bool isCalCentrePos>
 void xGetSADX5_16xN_SIMDImp( const DistParam& rcDtParam, Distortion* cost )
 {
@@ -221,10 +127,9 @@ void xGetSADX5_16xN_SIMDImp( const DistParam& rcDtParam, Distortion* cost )
   if( isCalCentrePos )
     sumTwo = vshrq_n_s32( sumTwo, ( 1 + ( DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) ) );
 
-  vst1q_lane_u64( (uint64_t*) &cost[ 0 ], (uint64x2_t) sum, 0 );
-  if( isCalCentrePos )
-    cost[ 2 ] = vgetq_lane_s32( sumTwo, 0 );
-  vst1q_lane_u64( (uint64_t*) &cost[ 3 ], (uint64x2_t) sum, 1 );
+  vst1q_s32( (int32_t*) &cost[0], vzip1q_s32( sum, vdupq_n_s32(0) ) );
+  if (isCalCentrePos) cost[2] = (vgetq_lane_s32(sumTwo,0));
+  vst1q_s32( (int32_t*) &cost[3], vzip2q_s32( sum, vdupq_n_s32(0) ) );
 }
 
 template <ARM_VEXT vext>
@@ -245,8 +150,6 @@ void RdCost::xGetSADX5_16xN_SIMD(const DistParam& rcDtParam, Distortion* cost, b
 template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()
 {
-  m_afpDistortFunc[0][DF_SAD8   ] = xGetSAD_MxN_SIMD<vext, false>;
-  m_afpDistortFunc[0][DF_SAD16  ] = xGetSAD_MxN_SIMD<vext, true>;
 	m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD<vext>;
 }
 

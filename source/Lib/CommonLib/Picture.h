@@ -114,6 +114,7 @@ struct PicApsGlobal{
   int      poc;
   unsigned tid;
   bool     initalized = false;
+  int      refCnt = 0;
   ParameterSetMap<APS> apsMap;
   PicApsGlobal( int _p ) : poc(_p), tid(MAX_UINT), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
   PicApsGlobal( int _p, unsigned _t ) : poc(_p), tid(_t), apsMap( MAX_NUM_APS * MAX_NUM_APS_TYPE ) {}
@@ -216,6 +217,7 @@ public:
   bool                          isFinished;
   bool                          isLongTerm;
   bool                          isFlush;
+  bool                          isInProcessList;
   bool                          precedingDRAP; // preceding a DRAP picture in decoding order
 
   const GOPEntry*               gopEntry;

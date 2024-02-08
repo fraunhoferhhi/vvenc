@@ -91,6 +91,7 @@ namespace vvenc {
   E_( P_INTRA_CHROMA            ) \
   E_( P_INTRA                   ) \
   E_( P_QUANT                   ) \
+  E_( P_DEQUANT                 ) \
   E_( P_TRAFO                   ) \
   E_( P_RESHAPER                ) \
   E_( P_DEBLOCK_FILTER          ) \

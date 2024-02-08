@@ -147,6 +147,7 @@ private:
   std::list<Picture*>       m_gopEncListOutput;
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
+  std::list<Picture*>       m_rcInputReorderList;  // used in RC in IFP lines synchro mode
   std::deque<PicApsGlobal*> m_globalApsList;
 
   std::vector<int>          m_globalCtuQpVector;
@@ -200,6 +201,7 @@ private:
   void xSelectReferencePictureList    ( Slice* slice ) const;
   void xSyncAlfAps                    ( Picture& pic );
 
+  void xUpdateRcIfp                   ();
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
