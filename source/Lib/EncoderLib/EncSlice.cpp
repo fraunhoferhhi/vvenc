@@ -279,6 +279,12 @@ void EncSlice::init( const VVEncCfg& encCfg,
   }
   ctuEncParams.resize( sizeInCtus );
   setArbitraryWppPattern( *pps.pcv, m_ctuAddrMap, 3 );
+
+  const unsigned asuHeightInCtus = m_pALF->getAsuHeightInCtus();
+  const unsigned numDeriveLines  = encCfg.m_ifpLines ? 
+    std::min( ((encCfg.m_ifpLines & (~(asuHeightInCtus - 1))) + asuHeightInCtus), pps.pcv->heightInCtus ) : pps.pcv->heightInCtus;
+  m_alfDeriveLine = numDeriveLines - 1;
+  m_alfDeriveCtu  = numDeriveLines * pps.pcv->widthInCtus - 1;
 }
 
 
@@ -892,7 +898,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   const UnitArea& ctuArea        = ctuEncParam->ctuArea;
   const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
   const TaskType currState       = processStates[ ctuRsAddr ];
-  const int syncLines            = encSlice->m_pcEncCfg->m_ifpLines;
+  const unsigned syncLines       = encSlice->m_pcEncCfg->m_ifpLines;
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
@@ -914,7 +920,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( syncLines )
         {
           const bool lineStart = ctuPosX == 0 || ( tileParallel && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) );
-          if( lineStart && !refPicCtuLineReady( slice, ctuPosY + syncLines, pcv ) )
+          if( lineStart && !refPicCtuLineReady( slice, ctuPosY + (int)syncLines, pcv ) )
           {
             return false;
           }
@@ -1161,19 +1167,18 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_stat );
 
         // start alf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = encSlice->m_alfDeriveCtu;
         processStates[ctuRsAddr] = (ctuRsAddr < deriveFilterCtu) ? ALF_RECONSTRUCT: ALF_DERIVE_FILTER;
       }
       break;
 
     case ALF_DERIVE_FILTER:
       {
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = encSlice->m_alfDeriveCtu;
         if( ctuRsAddr == deriveFilterCtu )
         {
           // ensure statistics from all previous ctu's have been collected
-          int numCheckLines = syncLines ? std::min((int)pcv.heightInCtus, (syncLines + 1)): pcv.heightInCtus;
-          for( int y = 0; y < numCheckLines; y++ )
+          for( int y = 0; y <= encSlice->m_alfDeriveLine; y++ )
           {
             for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
             {
@@ -1200,7 +1205,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           if( ctuRsAddr == deriveFilterCtu )
           {
             encSlice->m_pALF->initDerivation( slice );
-            encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas(), syncLines ? pcv.widthInCtus * (syncLines + 1): pcv.sizeInCtus );
+            encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas(), deriveFilterCtu + 1 );
             encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->alfEnabled[COMP_Y], cs.slice->alfEnabled[COMP_Cb] || cs.slice->alfEnabled[COMP_Cr], false );
           }
           else if( syncLines )
@@ -1225,9 +1230,16 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case ALF_RECONSTRUCT:
       {
         // start alf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = encSlice->m_alfDeriveCtu;
         if( processStates[deriveFilterCtu] < ALF_RECONSTRUCT )
           return false;
+        else if( syncLines && ctuRsAddr > deriveFilterCtu && encSlice->m_pALF->getAsuHeightInCtus() > 1 )
+        {
+          const int asuHeightInCtus = encSlice->m_pALF->getAsuHeightInCtus();
+          const int botCtuLineInAsu = std::min( (( ctuPosY & ( ~(asuHeightInCtus - 1) ) ) + asuHeightInCtus - 1), (int)pcv.heightInCtus - 1 );
+          if( processStates[botCtuLineInAsu * ctuStride + ctuPosX] < ALF_RECONSTRUCT ) 
+            return false;
+        }
 
         if( checkReadyState )
           return true;
@@ -1277,7 +1289,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_stat );
 
         // start alf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
         processStates[ctuRsAddr] = (ctuRsAddr < deriveFilterCtu) ? CCALF_RECONSTRUCT: CCALF_DERIVE_FILTER;
       }
       break;
@@ -1285,11 +1297,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CCALF_DERIVE_FILTER:
       {
         // synchronization dependencies
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
         if( ctuRsAddr == deriveFilterCtu )
         {
           // ensure statistics from all previous ctu's have been collected
-          int numCheckLines = syncLines ? std::min((int)pcv.heightInCtus, (syncLines + 1)): pcv.heightInCtus;
+          int numCheckLines = syncLines ? std::min(syncLines + 1, pcv.heightInCtus): pcv.heightInCtus;
           for( int y = 0; y < numCheckLines; y++ )
           {
             for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
@@ -1316,7 +1328,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           if( ctuRsAddr == deriveFilterCtu )
           {
-            encSlice->m_pALF->deriveCcAlfFilter( *cs.picture, cs, syncLines ? pcv.widthInCtus * (syncLines + 1): pcv.sizeInCtus );
+            encSlice->m_pALF->deriveCcAlfFilter( *cs.picture, cs, syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus): pcv.sizeInCtus );
           }
           else if( syncLines )
           {
@@ -1337,7 +1349,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CCALF_RECONSTRUCT:
       {
         // start ccalf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * (syncLines + 1) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
         if( processStates[deriveFilterCtu] < CCALF_RECONSTRUCT )
           return false;
 

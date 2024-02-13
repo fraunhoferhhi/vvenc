@@ -1,5 +1,49 @@
 /////////////////////////////////////////
+tag 1.11.0-rc1
+
+* libvvenc:
+  - added library parameters:
+    - vvenc_config::m_forceScc to force a specific SCC detection decision for all frames
+      (0: do not use, 1/2/3: no SCC/weak SCC/strong SCC)
+    - vvenc_config::m_ifp to enable inter-frame parallelism
+    - vvenc_config::m_minIntraDist to define minimal distance between intra frames (in presentation order)
+  - changed parameters:
+    - vvenc_config::m_RCMaxBitrate can now be specified as factor of target bitrate, use the macro
+      VVENC_SET_MAXRATE_FACTOR to set the value (absolute of negative values will be interpreted as
+      a 4-bit fixed-point factor)
+    - vvenc_config::m_numThreads will now per default be set to 12 for 5K and higher resolutions
+  - renamed library parameters:
+    - vvenc_config::m_fppLinesSynchro to vvenc_config::m_ifpLines
+  - added an affine speedup based on Pejman et al., ICIP 2023.
+  - added vectorized DQ implementation
+  - finalized inter-frame parallelization (previously FPP) improving performance during
+    execution with high number of threads (harmonized with rate control)
+  - improved SCC detection by reducing false positives
+  - overall speedups:
+    - 6% for fast/slow/slower
+    - 12% for medium, 25%+ for multi-threaded execution with long intra periods
+
+* vvencFFapp:
+  - added parameters:
+    - IFP: enables the usage of inter-frame parallelism
+    - IFPLines: defines the synchronization offset in CTU lines
+    - ForceSCC: forces a specific SCC detection decision
+    - MinIntraDistance: defines a minimal distance between intra pictures in presentation order
+  - changed parameters:
+    - FppLinesSynchro: now deprecated, please use IFP and IFPLines
+    - NumThreads: if set to default (-1), will now cause the encoder to use 12 threads for 5K and higher resolutions
+    - MaxRate: if specified with suffix "x", e.g. "2x", the value will be interpreted as multiple of target bitrate
+
+* vvencapp:
+  - added parameters:
+    - ifp: when set, will enable inter-frame parallelism with a default synchronization offset of two CTU lines
+  - changed parameters:
+    - threads, t: if set to default (-1), will now cause the encoder to use 12 threads for 5K and higher resolutions
+    - maxrate, m: if specified with suffix "x", e.g. "2x", the value will be interpreted as multiple of target bitrate
+
+/////////////////////////////////////////
 tag 1.10.0
+
 * libvvenc:
   - added library parameters:
     - vvenc_config::m_poc0idr to force POC0 to be an IDR (otherwise per default it will now be a RASL picture)
@@ -20,6 +64,7 @@ tag 1.10.0
 
 /////////////////////////////////////////
 tag 1.9.1
+
 * libvvenc:
   - added library parameters:
     - vvenc_config::m_maxPicWidth, vvenc_config::m_maxPicHeight to signal maximal possible picture size when
