@@ -415,7 +415,7 @@ public:
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs, int numCtus );
   void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas, const int numCtus );
-  void selectFilterForCTU        ( CodingStructure& cs, CABACWriter* CABACEstimator, CtxCache* ctxCache, int ctuIdx );
+  void selectFilterForCTU           ( CodingStructure& cs, CABACWriter* CABACEstimator, CtxCache* ctxCache, int ctuIdx );
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, const int ctuRsAddr, PelStorage& alfTempCtuBuf );
 //  void alfReconstructor             ( CodingStructure& cs );
@@ -423,13 +423,14 @@ public:
   void initDerivation               ( Slice& slice );
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
+  int  getAsuHeightInCtus           () { return m_numCtusInAsuHeight; }
 private:
   void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
   void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
   void   xStoreAlfAsuFilterIdx      ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex );
-  double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
-  double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda );
-  double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, const double ctuLambda );
+  double xCodeAlfAsuEnabledFlag     ( CodingStructure& cs, int ctuIdx, const int compIdx, CABACWriter* CABACEstimator, const double ctuLambda );
+  double xCodeAlfAsuAlternative     ( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, CABACWriter* CABACEstimator, const double ctuLambda );
+  double xCodeAlfAsuLumaFilterIdx   ( CodingStructure& cs, int asuIdx, int ctuIdx, CABACWriter* CABACEstimator, const double ctuLambda );
   void   xGetStatisticsCTU          ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int xPos, const int yPos, const int asuRsAddr, PelStorage& alfTempCtuBuf );
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight, const int numAsus, const int numCtus );
 

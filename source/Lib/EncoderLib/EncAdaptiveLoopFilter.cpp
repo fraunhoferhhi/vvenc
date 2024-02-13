@@ -1000,9 +1000,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, const PPS& pps, CABACW
   m_CABACEstimator = &cabacEstimator;
   m_CtxCache = &ctxCache;
 
-
-  int alfUnitSize = encCfg.m_ifpLines ? m_encCfg->m_CTUSize: m_encCfg->m_alfUnitSize;
-  initASU( alfUnitSize );
+  initASU( m_encCfg->m_alfUnitSize );
 
   const int numBins = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma ? MaxAlfNumClippingValues : 1;
 
@@ -1654,7 +1652,9 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   {
     return;
   }
-  const int numAsus = m_encCfg->m_ifpLines && numCtus != m_numAsusInPic ? numCtus: m_numAsusInPic;
+  const int numCtuLines = numCtus / cs.pcv->widthInCtus;
+  const int numAsusVer  = numCtuLines / m_numCtusInAsuWidth + ( ( numCtuLines % m_numCtusInAsuWidth ) ? 1 : 0 );
+  const int numAsus     = numAsusVer * m_numAsusInWidth;
 
   initCABACEstimator( cs.slice );
 
@@ -2156,42 +2156,23 @@ void EncAdaptiveLoopFilter::xStoreAlfAsuFilterIdx( CodingStructure& cs, int ctuX
   }
 }
 
-double EncAdaptiveLoopFilter::xCodeAlfAsuEnabledFlag( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
-{
-  m_CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compIdx );
-  return ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-}
-
-double EncAdaptiveLoopFilter::xCodeAlfAsuLumaFilterIdx( CodingStructure& cs, int asuIdx, int ctuIdx, const double ctuLambda )
-{
-  m_CABACEstimator->resetBits();
-  m_CABACEstimator->codeAlfCtuFilterIndex( cs, ctuIdx );
-  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-}
-
-double EncAdaptiveLoopFilter::xCodeAlfAsuAlternative( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, const double ctuLambda )
-{
-  m_CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compIdx, alfParam );
-  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
-}
-
-double xCodeAlfCtuEnabledFlag( CodingStructure& cs, int ctuIdx, const int compIdx, AlfParam* alfParam, CABACWriter* CABACEstimator, const double ctuLambda )
+double EncAdaptiveLoopFilter::xCodeAlfAsuEnabledFlag( CodingStructure& cs, int ctuIdx, const int compIdx, CABACWriter* CABACEstimator, const double ctuLambda )
 {
   CABACEstimator->codeAlfCtuEnabledFlag( cs, ctuIdx, compIdx );
   return ctuLambda * FRAC_BITS_SCALE * CABACEstimator->getEstFracBits();
 }
 
-double xCodeAlfCtuLumaFilterIdx( CodingStructure& cs, int asuIdx, int ctuIdx, CABACWriter* CABACEstimator, const double ctuLambda )
+double EncAdaptiveLoopFilter::xCodeAlfAsuLumaFilterIdx( CodingStructure& cs, int asuIdx, int ctuIdx, CABACWriter* CABACEstimator, const double ctuLambda )
 {
   CABACEstimator->resetBits();
   CABACEstimator->codeAlfCtuFilterIndex( cs, ctuIdx );
-  return ctuLambda * FRAC_BITS_SCALE * CABACEstimator->getEstFracBits();
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * CABACEstimator->getEstFracBits();
 }
 
-double xCodeAlfCtuAlternative( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, CABACWriter* CABACEstimator, const double ctuLambda )
+double EncAdaptiveLoopFilter::xCodeAlfAsuAlternative( CodingStructure& cs, int asuIdx, int ctuIdx, const int compIdx, AlfParam* alfParam, CABACWriter* CABACEstimator, const double ctuLambda )
 {
   CABACEstimator->codeAlfCtuAlternative( cs, ctuIdx, compIdx, alfParam );
-  return ctuLambda * FRAC_BITS_SCALE * CABACEstimator->getEstFracBits();
+  return m_numCtusInAsu[asuIdx] * ctuLambda * FRAC_BITS_SCALE * CABACEstimator->getEstFracBits();
 }
 
 bool EncAdaptiveLoopFilter::isSkipAlfForFrame( const Picture& pic ) const
@@ -2249,10 +2230,10 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, Chan
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 1;
       double costOn = distUnfilterCtu;
-      costOn += xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
+      costOn += xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, m_CABACEstimator, ctuLambda );
       if( isLuma( channel ) )
       {
-        costOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctuIdx, ctuLambda );
+        costOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctuIdx, m_CABACEstimator, ctuLambda );
       }
 
       ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
@@ -2272,7 +2253,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, Chan
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compID][ctuIdx] = altIdx;
-          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctuIdx, compID, &m_alfParamTemp, m_CABACEstimator, ctuLambda );
           double altDist = 0.;
           altDist += doClip ? m_alfCovariance[compID][asuIdx][0].calcErrorForCoeffs<true >( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor )
                             : m_alfCovariance[compID][asuIdx][0].calcErrorForCoeffs<false>( m_filterClippSet[altIdx], m_filterCoeffSet[altIdx], numCoeff, invFactor );
@@ -2292,7 +2273,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, Chan
       m_CABACEstimator->getCtx() = AlfCtx( ctxTempStart );
       m_CABACEstimator->resetBits();
       m_ctuEnableFlag[compID][ctuIdx] = 0;
-      double costOff = distUnfilterCtu + xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, &m_alfParamTemp, ctuLambda );
+      double costOff = distUnfilterCtu + xCodeAlfAsuEnabledFlag( cs, ctuIdx, compID, m_CABACEstimator, ctuLambda );
 
       uint8_t enable = 0;
       if( costOn < costOff )
@@ -4418,11 +4399,39 @@ void  EncAdaptiveLoopFilter::initDistortionCcalf( int numCtus )
   }
 }
 
-void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWriter* CABACEstimator, CtxCache* ctxCache, int asuIdx )
+void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWriter* CABACEstimator, CtxCache* ctxCache, int ctuIdx )
 {
   if( isSkipAlfForFrame( *cs.picture ) )
   {
     return;
+  }
+
+  int asuIdx = 0;
+  if( m_numCtusInAsuHeight > 1 )
+  {
+    // using ASUs
+    const PreCalcValues& pcv = *cs.pcv;
+    const int xC = (ctuIdx % pcv.widthInCtus) << pcv.maxCUSizeLog2;
+    const int yC = (ctuIdx / pcv.widthInCtus) << pcv.maxCUSizeLog2;
+
+    const int wC = std::min( m_maxCUWidth, m_picWidth - xC );
+    const int hC = std::min( m_maxCUHeight, m_picHeight - yC );
+
+    const int xA = xC & ~(m_maxAsuWidth - 1);
+    const int yA = yC & ~(m_maxAsuHeight - 1);
+    const int wA = std::min( m_maxAsuWidth, m_picWidth - xA );
+    const int hA = std::min( m_maxAsuHeight, m_picHeight - yA );
+
+    // bottom-right CTU in ASU?
+    if(xA + wA != xC + wC || yA + hA != yC + hC)
+    {
+      return;
+    }
+    asuIdx = ( yA / m_maxAsuHeight ) * m_numAsusInWidth + ( xA / m_maxAsuWidth );
+  }
+  else
+  {
+    asuIdx = ctuIdx;
   }
 
   int ctuX, ctuY;
@@ -4467,9 +4476,10 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
       //rate
       CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
       CABACEstimator->resetBits();
-      double rateOn = xCodeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, nullptr, CABACEstimator, ctuLambda);
+      double rateOn = xCodeAlfAsuEnabledFlag(cs, ctbIdx, COMP_Y, CABACEstimator, ctuLambda);
       alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
-      rateOn += xCodeAlfCtuLumaFilterIdx(cs, asuIdx, ctbIdx, CABACEstimator, ctuLambda);
+      rateOn += xCodeAlfAsuLumaFilterIdx(cs, asuIdx, ctbIdx, CABACEstimator, ctuLambda);
+
       //distortion
       double dist = distUnfilterCtb;
 
@@ -4527,7 +4537,7 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
     //rate
     CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
     CABACEstimator->resetBits();
-    double rateCost = xCodeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, nullptr, CABACEstimator, ctuLambda);
+    double rateCost = xCodeAlfAsuEnabledFlag(cs, ctbIdx, COMP_Y, CABACEstimator, ctuLambda);
     //cost
     const double costOff = distUnfilterCtb + rateCost;
     DTRACE(g_trace_ctx, D_MISC, "\t\t\t costOff=%.2f\n", costOff);
@@ -4567,7 +4577,7 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
           CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
           CABACEstimator->resetBits();
           //ctb flag
-          double rateCostOn = xCodeAlfCtuEnabledFlag(cs, ctbIdx, compId, nullptr, CABACEstimator, ctuLambda);
+          double rateCostOn = xCodeAlfAsuEnabledFlag(cs, ctbIdx, compId, CABACEstimator, ctuLambda);
           double dist = MAX_DOUBLE;
           int numAlts = alfParamTemp.numAlternativesChroma;
           ctxTempBest = AlfCtx(CABACEstimator->getCtx());
@@ -4581,7 +4591,7 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
               CABACEstimator->getCtx() = AlfCtx(ctxTempAltStart);
             CABACEstimator->resetBits();
             m_ctuAlternative[compId][ctbIdx] = altIdx;
-            double r_altCost = xCodeAlfCtuAlternative(cs, asuIdx, ctbIdx, compId, &alfParamTemp, CABACEstimator, ctuLambda);
+            double r_altCost = xCodeAlfAsuAlternative(cs, asuIdx, ctbIdx, compId, &alfParamTemp, CABACEstimator, ctuLambda);
 
             //distortion
             for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
@@ -4612,7 +4622,7 @@ void  EncAdaptiveLoopFilter::selectFilterForCTU( CodingStructure& cs, CABACWrite
           //rate
           CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
           CABACEstimator->resetBits();
-          double rateCost = xCodeAlfCtuEnabledFlag(cs, ctbIdx, compId, &alfParamTemp, CABACEstimator, ctuLambda);
+          double rateCost = xCodeAlfAsuEnabledFlag(cs, ctbIdx, compId, CABACEstimator, ctuLambda);
           //cost
           const double costOff = distUnfilterCtu + rateCost;
           DTRACE(g_trace_ctx, D_MISC, "Chroma_%d: \t\t\t costOn =%.2f, costOff =%.2f\n", compId, costOn, costOff );
@@ -4807,9 +4817,9 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             //rate
             m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
             m_CABACEstimator->resetBits();
-            double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
+            double rateOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, m_CABACEstimator, ctuLambda );
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
-            rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, ctuLambda );
+            rateOn += xCodeAlfAsuLumaFilterIdx( cs, asuIdx, ctbIdx, m_CABACEstimator, ctuLambda );
             //distortion
             double dist = distUnfilterCtb;
 
@@ -4880,7 +4890,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
           //rate
           m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
           m_CABACEstimator->resetBits();
-          double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, &m_alfParamTemp, ctuLambda );
+          double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, COMP_Y, m_CABACEstimator, ctuLambda );
           //cost
           const double costOff = distUnfilterCtb + rateCost;
           DTRACE( g_trace_ctx, D_MISC, "\t\t\t costOff=%.2f\n", costOff );
@@ -5063,7 +5073,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
         //ctb flag
-        double rateCostOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
+        double rateCostOn = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, m_CABACEstimator, ctuLambda );
         double dist = MAX_DOUBLE;
         int numAlts = m_alfParamTemp.numAlternativesChroma;
         ctxTempBest = AlfCtx( m_CABACEstimator->getCtx() );
@@ -5077,7 +5087,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_CABACEstimator->getCtx() = AlfCtx( ctxTempAltStart );
           m_CABACEstimator->resetBits();
           m_ctuAlternative[compId][ctbIdx] = altIdx;
-          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
+          double r_altCost = xCodeAlfAsuAlternative( cs, asuIdx, ctbIdx, compId, &m_alfParamTemp, m_CABACEstimator, ctuLambda );
 
           //distortion
           for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
@@ -5109,7 +5119,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         //rate
         m_CABACEstimator->getCtx() = AlfCtx(ctxTempStart);
         m_CABACEstimator->resetBits();
-        double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, &m_alfParamTemp, ctuLambda );
+        double rateCost = xCodeAlfAsuEnabledFlag( cs, ctbIdx, compId, m_CABACEstimator, ctuLambda );
         //cost
         const double costOff = distUnfilterCtu + rateCost;
         DTRACE(g_trace_ctx, D_MISC, "Chroma_%d: \t\t\t costOn =%.2f, costOff =%.2f\n", compId, costOn, costOff );

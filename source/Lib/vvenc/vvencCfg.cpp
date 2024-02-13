@@ -949,6 +949,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_alfUnitSize < 0 )
     c->m_alfUnitSize = c->m_CTUSize;
 
+  if( c->m_ifp && c->m_alfUnitSize != c->m_CTUSize )
+  {
+    msg.log( VVENC_WARNING, "IFP is enabled. For better performance, AlfUnitSize is adjusted to the CTUSize.\n" );
+    c->m_alfUnitSize = c->m_CTUSize;
+  }
+
   // quantization threshold
   if( c->m_quantThresholdVal < 0 )
   {

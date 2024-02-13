@@ -1291,6 +1291,9 @@ namespace DQIntern
       }
 
       m_state_curr.m_gtxFracBitsArray = RateEstimator::gtxFracBits();
+      //memset( m_state_curr.tplAcc, 0, sizeof( m_state_curr.tplAcc ) ); // will be set in updateStates{,EOS} before first access
+      memset( m_state_curr.sum1st, 0, sizeof( m_state_curr.sum1st ) );   // will be accessed in setRiceParam before updateState{,EOS}
+      //memset( m_state_curr.absVal, 0, sizeof( m_state_curr.absVal ) ); // will be set in updateStates{,EOS} before first access
 
       const int numCtx = isLuma( compID ) ? 21 : 11;
       const CoeffFracBits* const cffBits = gtxFracBits();

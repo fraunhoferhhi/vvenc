@@ -3105,8 +3105,6 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
     {
       bcwLoopNum = 1;
     }
-  _CASE( _UNIT_AREA_AT(tempCS->area, 96, 640, 32, 32) && tempCS->slice->poc == 16 )
-    _BREAK;
 
     for (int i = 1; i <= IMV_HPEL; i++)
     {
