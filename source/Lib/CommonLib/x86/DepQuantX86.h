@@ -521,6 +521,8 @@ namespace DQIntern
       state.cffBitsCtxOffset      =  0;
       state.m_goRicePar[stateId]  =  0;
       state.m_goRiceZero[stateId] =  0;
+      state.sbbBits0[stateId]     =  0;
+      state.sbbBits1[stateId]     =  0;
     }
 
     static inline void checkRdCosts( const int stateId, const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decisions& decisions, int idxAZ, int idxB, const StateMem& state )
