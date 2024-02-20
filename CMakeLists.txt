@@ -35,7 +35,7 @@ set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "enable x86 intr
 set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "enable ARM intrinsics" )
 
 include( vvencCompilerSupport )
-check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 "" )
+check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
 
 if( VVENC_PROBLEMATIC_COMPILER )
   set( VVENC_OVERRIDE_COMPILER_CHECK      OFF        CACHE BOOL "Build with known problematic compiler version" )

@@ -150,7 +150,7 @@ void RdCost::initRdCostX86()
   switch (vext){ 
     case AVX512:
     case AVX2:
-#if defined( _MSC_VER ) && _MSC_VER >= 1938
+#if defined( _MSC_VER ) && _MSC_VER >= 1938 && _MSC_VER < 1939
 #else
       _initRdCostX86<AVX2>();
       break;
