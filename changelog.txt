@@ -1,4 +1,11 @@
 /////////////////////////////////////////
+tag 1.11.1-rc1
+
+* libvvenc:
+  - fix performance regression for ARM
+    - using SSE41 code to generate NEON with SIMDe rather than AVX2
+  
+/////////////////////////////////////////
 tag 1.11.0
 
 * libvvenc:
