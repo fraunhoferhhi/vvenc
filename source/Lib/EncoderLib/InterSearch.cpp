@@ -2061,7 +2061,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     Distortion uiBestSad = m_cDistParam.distFunc(m_cDistParam);
     uiBestSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
 
-    Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
+    Mv prevMv[BlkUniMvInfoBuffer::m_uniMvListMaxSize];
 
     for( int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++ )
     {

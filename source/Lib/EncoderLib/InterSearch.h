@@ -193,10 +193,10 @@ struct BlkUniMvInfoBuffer
     m_uniMvListSize = 0;
   }
 
-  static const int m_uniMvListMaxSize = 15;
-  BlkUniMvInfo     m_uniMvList[m_uniMvListMaxSize];
-  int              m_uniMvListIdx;
-  int              m_uniMvListSize;
+  static constexpr int m_uniMvListMaxSize = 15;
+  BlkUniMvInfo         m_uniMvList[m_uniMvListMaxSize];
+  int                  m_uniMvListIdx;
+  int                  m_uniMvListSize;
 };
 
 class EncPicture;
