@@ -304,7 +304,7 @@ int EncApp::encode()
     }
 
     apputils::Stats cStats;
-    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
+    int64_t frameCount =  apputils::VVEncAppCfg::getFrameCount( appCfg.m_inputFileName, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, vvencCfg.m_internChromaFormat, vvencCfg.m_inputBitDepth[0], appCfg.m_packedYUVInput );
     frameCount = std::max<int64_t>( 0, frameCount-appCfg.m_FrameSkip );
     int64_t framesToEncode = (vvencCfg.m_framesToBeEncoded == 0 || vvencCfg.m_framesToBeEncoded >= frameCount) ? frameCount : vvencCfg.m_framesToBeEncoded;
     cStats.init( vvencCfg.m_FrameRate, vvencCfg.m_FrameScale, (int)framesToEncode, vvencCfg.m_verbosity, "vvenc [info]: " );

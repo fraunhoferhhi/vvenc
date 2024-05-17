@@ -149,6 +149,8 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
       if( pic )
       {
         m_gopCfg.fixStartOfLastGop( pic->m_picShared->m_gopEntry );
+        // compute visual activity for start of last GOP
+        xGetVisualActivity( pic, picList );
       }
     }
 
@@ -201,7 +203,7 @@ void PreProcess::xGetPrevPics( const Picture* pic, const PicList& picList, const
   for( auto itr = picList.rbegin(); itr != picList.rend() && prevIdx < NUM_QPA_PREV_FRAMES; itr++ )
   {
     Picture* tp = *itr;
-    if( tp == pic )
+    if( tp->poc >= pic->poc )
       continue;
     if( tp->poc != prevPoc - 1 )
       break;
@@ -259,11 +261,13 @@ Picture* PreProcess::xGetStartOfLastGop( const PicList& picList ) const
 
   // find start of current gop
   Picture* pic = cnList.back();
-  const int lastGopNum = pic->gopEntry->m_gopNum;
+  const int poc0Offset = (m_encCfg->m_poc0idr ? -1 : 0); // place leading poc 0 idr in GOP -1
+  const int lastGopNum = pic->gopEntry->m_gopNum + (pic->gopEntry->m_POC == 0 ? poc0Offset : 0);
   for( auto itr = cnList.rbegin(); itr != cnList.rend(); itr++ )
   {
     Picture* tp = *itr;
-    if( tp->gopEntry->m_gopNum != lastGopNum )
+    const int tpGopNum = tp->gopEntry->m_gopNum + (tp->gopEntry->m_POC == 0 ? poc0Offset : 0);
+    if( tpGopNum != lastGopNum )
     {
       return pic;
     }
@@ -295,11 +299,11 @@ void PreProcess::xLinkPrevQpaBufs( Picture* pic, const PicList& picList ) const
 
 void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) const
 {
-  const bool cappedCRF  = ( m_encCfg->m_RCNumPasses != 2 && m_encCfg->m_RCTargetBitrate == 0 && m_encCfg->m_RCMaxBitrate > 0 && m_encCfg->m_RCMaxBitrate != INT32_MAX );
+  const bool cappedCRF  = ( m_encCfg->m_RCNumPasses != 2 && m_encCfg->m_rateCap );
   uint16_t picVisActTL0 = 0;
   uint16_t picVisActY   = 0;
 
-  if( ( m_doVisAct && !m_doVisActQpa ) || ( cappedCRF && m_encCfg->m_usePerceptQPA && pic->gopEntry->m_temporalId == 0 ) ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
+  if( ( m_doVisAct && !m_doVisActQpa ) || ( cappedCRF && m_encCfg->m_usePerceptQPA && pic->gopEntry->m_isStartOfGop ) ) // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
   {
     // find previous pictures
     const Picture* prevPics[ NUM_QPA_PREV_FRAMES ];

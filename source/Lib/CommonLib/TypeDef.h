@@ -150,6 +150,7 @@ namespace vvenc {
 
 #if defined( TARGET_SIMD_X86 ) && !defined( REAL_TARGET_X86 )
 #  define SIMD_EVERYWHERE_EXTENSION_LEVEL                 SSE41
+#  define SIMD_EVERYWHERE_EXTENSION_LEVEL_ID              X86_SIMD_SSE41
 #endif
 
 // End of SIMD optimizations
@@ -877,6 +878,7 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_isValid;
   bool      m_skipFirstPass;
   SceneType m_scType;
+  int       m_vtl;
 
   void setDefaultGOPEntry()
   {
@@ -892,6 +894,7 @@ typedef struct GOPEntry : vvencGOPEntry
     m_isValid          = false;
     m_skipFirstPass    = false;
     m_scType           = SCT_NONE;
+    m_vtl              = 0;
   }
 
   void copyFromGopCfg( const vvencGOPEntry& cfgEntry )

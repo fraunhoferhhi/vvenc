@@ -41,7 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \ingroup hhivvcdeclibExternalInterfaces
+  \ingroup vvenc
   \file    vvencimpl.cpp
   \brief   This file contains the internal interface of the vvenc SDK.
 */

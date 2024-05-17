@@ -61,6 +61,6 @@ using namespace arm_simd;
 ARM_VEXT read_arm_extension_flags( ARM_VEXT request = arm_simd::UNDEFINED );
 // std::string read_arm_extension_name();
 
-}   // namespace vvdec
+}   // namespace
 
 #endif   // TARGET_SIMD_ARM

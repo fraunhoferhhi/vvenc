@@ -712,6 +712,20 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
       pic->isMeanQPLimited = (encCfg->m_RCTargetBitrate > 0) && isEncPass && (averageAdaptedLumaQP > sliceQP);
     }
+    else if (encCfg->m_rateCap && (pic->gopAdaptedQP > 0) && (averageAdaptedLumaQP < aaQP)) // capped CQF
+    {
+      const int rcQpDiff = aaQP - averageAdaptedLumaQP;
+
+      averageAdaptedLambda = pow (2.0, double (rcQpDiff) / 3.0);
+      for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
+      {
+        pic->ctuQpaLambda[ctuRsAddr] *= averageAdaptedLambda; // scale adapted lambda
+        pic->ctuAdaptedQP[ctuRsAddr] = std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + rcQpDiff);
+      }
+
+      pic->picInitialQP = Clip3 (0, MAX_QP, pic->picInitialQP + rcQpDiff); // used in applyQPAdaptationSubCtu
+      averageAdaptedLumaQP = aaQP;
+    }
     else if ((encCfg->m_RCTargetBitrate == 0) && (3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (averageAdaptedLumaQP + 1 < aaQP))
     {
       const int lrQpDiff = (aaQP - averageAdaptedLumaQP) >> (encCfg->m_QP <= MAX_QP_PERCEPT_QPA ? 2 : 1); // for monotonous rate change at low rates

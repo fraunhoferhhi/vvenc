@@ -61,7 +61,7 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
-/* vvdecLoggingCallback:
+/* vvencLoggingCallback:
    callback function to receive messages of the encoder library
   \param[in]  void* caller contex
   \param[in]  int log level

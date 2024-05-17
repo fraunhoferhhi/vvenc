@@ -932,9 +932,33 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 
         if( pic->gopEntry->m_isStartOfGop && !pic->useMCTF && m_encCfg->m_vvencMCTF.MCTF > 0 && meanRmsAcrossPic > numCtu * 27.0 )
         {
-          // force filter
-          fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
-          bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+          // check application (re-enabling) of MCTF filter for key pictures, in case MCTF has been disabled based on SCC detection
+          bool allNoiseZero = true;
+          for( int i = 0; i < QPA_MAX_NOISE_LEVELS; i++ )
+          {
+            if( pic->m_picShared->m_minNoiseLevels[i] && pic->m_picShared->m_minNoiseLevels[i] < 255 )
+            {
+              allNoiseZero = false;
+              break;
+            }
+          }
+          int numZeroRMSCtus = 0;
+          if( allNoiseZero )
+          {
+            for( int i = 0; i < numCtu; i++ )
+            {
+              if( sumRMS[i] == 0 )
+              {
+                numZeroRMSCtus += 1;
+              }
+            }
+          }
+          const bool doFilter = ( numZeroRMSCtus * 100 <= numCtu * 6 );
+          if( doFilter )
+          {
+            fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
+            bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+          }
         }
       }
       if (m_encCfg->m_forceScc <= 0)

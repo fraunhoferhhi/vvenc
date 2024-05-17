@@ -241,6 +241,8 @@ public:
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
   int                           gopAdaptedQP; // QP offset of GOP (delta relative to base QP)
+  bool                          isSceneCutGOP;
+  bool                          isSceneCutCheckAdjQP;
   bool                          isMeanQPLimited;
   std::mutex                    wppMutex;
   int                           picInitialQP;

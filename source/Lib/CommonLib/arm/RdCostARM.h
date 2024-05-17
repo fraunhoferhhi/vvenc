@@ -51,11 +51,854 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "../RdCost.h"
 
+#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_AVX2
+# define USE_AVX2
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE42
+# define USE_SSE42
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE41
+# define USE_SSE41
+#endif
+
+#ifdef TARGET_SIMD_X86
+# include "../x86/RdCostX86.h"
+#endif
+
 namespace vvenc
 {
 
 #ifdef TARGET_SIMD_ARM
 #if __ARM_ARCH >= 8
+
+//working up to 12-bit
+static uint32_t xCalcHAD16x16_fast_Neon( const Pel *piOrg, const Pel *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
+{
+  int16x8x2_t m1[8], m2[8];
+  int32x4x2_t m3[8], m4[8];
+
+  CHECK( iBitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+
+  //0
+  int16x8_t r0, r1, r2, r3;
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  int16x8_t r4, r5;
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[0].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //1
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[1].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //2
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[2].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //3
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[3].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //4
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[4].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //5
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[5].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //6
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[6].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+  
+  //7
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+  r2 = vld1q_s16( ( piOrg + iStrideOrg ) );
+  r3 = vld1q_s16( ( piCur + iStrideCur ) );
+
+  r0 = vaddq_s16( r0, r2 );
+  r1 = vaddq_s16( r1, r3 );
+
+  r2 = vld1q_s16( ( piOrg + 8 ) );
+  r3 = vld1q_s16( ( piCur + 8 ) );
+  
+  r4 = vld1q_s16( ( piOrg + iStrideOrg + 8 ) );
+  r5 = vld1q_s16( ( piCur + iStrideCur + 8 ) );
+
+  r2 = vaddq_s16( r2, r4 );
+  r3 = vaddq_s16( r3, r5 );
+
+  r0 = vpaddq_s16( r0, r2 );
+  r1 = vpaddq_s16( r1, r3 );
+
+  r0 = vaddq_s16( r0, vdupq_n_s16( 2 ) );
+  r1 = vaddq_s16( r1, vdupq_n_s16( 2 ) );
+  r0 = vshrq_n_s16( r0, 2 );
+  r1 = vshrq_n_s16( r1, 2 );
+
+  m2[7].val[0] = vsubq_s16( r0, r1 ); // 11bit
+  //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+  //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
+  piCur += iStrideCur * 2;
+  piOrg += iStrideOrg * 2;
+
+  //horizontal
+  m1[0].val[0] = vaddq_s16( m2[0].val[0], m2[4].val[0] );
+  m1[1].val[0] = vaddq_s16( m2[1].val[0], m2[5].val[0] );
+  m1[2].val[0] = vaddq_s16( m2[2].val[0], m2[6].val[0] );
+  m1[3].val[0] = vaddq_s16( m2[3].val[0], m2[7].val[0] );
+  m1[4].val[0] = vsubq_s16( m2[0].val[0], m2[4].val[0] );
+  m1[5].val[0] = vsubq_s16( m2[1].val[0], m2[5].val[0] );
+  m1[6].val[0] = vsubq_s16( m2[2].val[0], m2[6].val[0] );
+  m1[7].val[0] = vsubq_s16( m2[3].val[0], m2[7].val[0] ); // 12 bit
+
+  m2[0].val[0] = vaddq_s16( m1[0].val[0], m1[2].val[0] );
+  m2[1].val[0] = vaddq_s16( m1[1].val[0], m1[3].val[0] );
+  m2[2].val[0] = vsubq_s16( m1[0].val[0], m1[2].val[0] );
+  m2[3].val[0] = vsubq_s16( m1[1].val[0], m1[3].val[0] );
+  m2[4].val[0] = vaddq_s16( m1[4].val[0], m1[6].val[0] );
+  m2[5].val[0] = vaddq_s16( m1[5].val[0], m1[7].val[0] );
+  m2[6].val[0] = vsubq_s16( m1[4].val[0], m1[6].val[0] );
+  m2[7].val[0] = vsubq_s16( m1[5].val[0], m1[7].val[0] ); // 13 bit
+
+  m1[0].val[0] = vaddq_s16( m2[0].val[0], m2[1].val[0] );
+  m1[1].val[0] = vsubq_s16( m2[0].val[0], m2[1].val[0] );
+  m1[2].val[0] = vaddq_s16( m2[2].val[0], m2[3].val[0] );
+  m1[3].val[0] = vsubq_s16( m2[2].val[0], m2[3].val[0] );
+  m1[4].val[0] = vaddq_s16( m2[4].val[0], m2[5].val[0] );
+  m1[5].val[0] = vsubq_s16( m2[4].val[0], m2[5].val[0] );
+  m1[6].val[0] = vaddq_s16( m2[6].val[0], m2[7].val[0] );
+  m1[7].val[0] = vsubq_s16( m2[6].val[0], m2[7].val[0] ); // 14 bit
+
+  m2[0].val[0] = vzip1q_s16( m1[0].val[0], m1[1].val[0] );
+  m2[1].val[0] = vzip1q_s16( m1[2].val[0], m1[3].val[0] );
+  m2[2].val[0] = vzip2q_s16( m1[0].val[0], m1[1].val[0] );
+  m2[3].val[0] = vzip2q_s16( m1[2].val[0], m1[3].val[0] );
+  m2[4].val[0] = vzip1q_s16( m1[4].val[0], m1[5].val[0] );
+  m2[5].val[0] = vzip1q_s16( m1[6].val[0], m1[7].val[0] );
+  m2[6].val[0] = vzip2q_s16( m1[4].val[0], m1[5].val[0] );
+  m2[7].val[0] = vzip2q_s16( m1[6].val[0], m1[7].val[0] );
+
+  m1[0].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[0].val[0]) , vreinterpretq_s32_s16(m2[1].val[0]) ) );
+  m1[1].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[0].val[0]) , vreinterpretq_s32_s16(m2[1].val[0]) ) );
+  m1[2].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[2].val[0]) , vreinterpretq_s32_s16(m2[3].val[0]) ) );
+  m1[3].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[2].val[0]) , vreinterpretq_s32_s16(m2[3].val[0]) ) );
+  m1[4].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[4].val[0]) , vreinterpretq_s32_s16(m2[5].val[0]) ) );
+  m1[5].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[4].val[0]) , vreinterpretq_s32_s16(m2[5].val[0]) ) );
+  m1[6].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[6].val[0]) , vreinterpretq_s32_s16(m2[7].val[0]) ) );
+  m1[7].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[6].val[0]) , vreinterpretq_s32_s16(m2[7].val[0]) ) );
+
+  m3[0].val[1] = vmovl_high_s16( m1[0].val[0] );
+  m3[0].val[0] = vmovl_s16( vget_low_s16( m1[0].val[0] ) );
+  m3[1].val[1] = vmovl_high_s16( m1[1].val[0] );
+  m3[1].val[0] = vmovl_s16( vget_low_s16( m1[1].val[0] ) );
+  m3[2].val[1] = vmovl_high_s16( m1[2].val[0] );
+  m3[2].val[0] = vmovl_s16( vget_low_s16( m1[2].val[0] ) );
+  m3[3].val[1] = vmovl_high_s16( m1[3].val[0] );
+  m3[3].val[0] = vmovl_s16( vget_low_s16( m1[3].val[0] ) );
+  m3[4].val[1] = vmovl_high_s16( m1[4].val[0] );
+  m3[4].val[0] = vmovl_s16( vget_low_s16( m1[4].val[0] ) );
+  m3[5].val[1] = vmovl_high_s16( m1[5].val[0] );
+  m3[5].val[0] = vmovl_s16( vget_low_s16( m1[5].val[0] ) );
+  m3[6].val[1] = vmovl_high_s16( m1[6].val[0] );
+  m3[6].val[0] = vmovl_s16( vget_low_s16( m1[6].val[0] ) );
+  m3[7].val[1] = vmovl_high_s16( m1[7].val[0] );
+  m3[7].val[0] = vmovl_s16( vget_low_s16( m1[7].val[0] ) );
+
+  m4[0].val[0] = m3[0].val[0];
+  m4[0].val[1] = m3[4].val[0];
+  
+  m4[1].val[0] = m3[1].val[0];
+  m4[1].val[1] = m3[5].val[0];
+
+  m4[2].val[0] = m3[2].val[0];
+  m4[2].val[1] = m3[6].val[0];
+
+  m4[3].val[0] = m3[3].val[0];
+  m4[3].val[1] = m3[7].val[0];
+
+  m4[4].val[0] = m3[0].val[1];
+  m4[4].val[1] = m3[4].val[1];
+
+  m4[5].val[0] = m3[1].val[1];
+  m4[5].val[1] = m3[5].val[1];
+
+  m4[6].val[0] = m3[2].val[1];
+  m4[6].val[1] = m3[6].val[1];
+
+  m4[7].val[0] = m3[3].val[1];
+  m4[7].val[1] = m3[7].val[1];
+
+  m3[0].val[0] = vaddq_s32( m4[0].val[0], m4[4].val[0] );
+  m3[1].val[0] = vaddq_s32( m4[1].val[0], m4[5].val[0] );
+  m3[2].val[0] = vaddq_s32( m4[2].val[0], m4[6].val[0] );
+  m3[3].val[0] = vaddq_s32( m4[3].val[0], m4[7].val[0] );
+  m3[4].val[0] = vsubq_s32( m4[0].val[0], m4[4].val[0] );
+  m3[5].val[0] = vsubq_s32( m4[1].val[0], m4[5].val[0] );
+  m3[6].val[0] = vsubq_s32( m4[2].val[0], m4[6].val[0] );
+  m3[7].val[0] = vsubq_s32( m4[3].val[0], m4[7].val[0] );
+
+  m4[0].val[0] = vaddq_s32( m3[0].val[0], m3[2].val[0] );
+  m4[1].val[0] = vaddq_s32( m3[1].val[0], m3[3].val[0] );
+  m4[2].val[0] = vsubq_s32( m3[0].val[0], m3[2].val[0] );
+  m4[3].val[0] = vsubq_s32( m3[1].val[0], m3[3].val[0] );
+  m4[4].val[0] = vaddq_s32( m3[4].val[0], m3[6].val[0] );
+  m4[5].val[0] = vaddq_s32( m3[5].val[0], m3[7].val[0] );
+  m4[6].val[0] = vsubq_s32( m3[4].val[0], m3[6].val[0] );
+  m4[7].val[0] = vsubq_s32( m3[5].val[0], m3[7].val[0] );
+
+  m3[0].val[0] = vabsq_s32( vaddq_s32( m4[0].val[0], m4[1].val[0] ) );
+  m3[1].val[0] = vabdq_s32(m4[0].val[0], m4[1].val[0]);
+  m3[2].val[0] = vabsq_s32( vaddq_s32( m4[2].val[0], m4[3].val[0] ) );
+  m3[3].val[0] = vabdq_s32(m4[2].val[0], m4[3].val[0]);
+  m3[4].val[0] = vabsq_s32( vaddq_s32( m4[4].val[0], m4[5].val[0] ) );
+  m3[5].val[0] = vabdq_s32(m4[4].val[0], m4[5].val[0]);
+  m3[6].val[0] = vabsq_s32( vaddq_s32( m4[6].val[0], m4[7].val[0] ) );
+  m3[7].val[0] = vabdq_s32(m4[6].val[0], m4[7].val[0]);
+
+  // --------------------------------------------------------------------------------------------
+  m3[0].val[1] = vaddq_s32( m4[0].val[1], m4[4].val[1] );
+  m3[1].val[1] = vaddq_s32( m4[1].val[1], m4[5].val[1] );
+  m3[2].val[1] = vaddq_s32( m4[2].val[1], m4[6].val[1] );
+  m3[3].val[1] = vaddq_s32( m4[3].val[1], m4[7].val[1] );
+  m3[4].val[1] = vsubq_s32( m4[0].val[1], m4[4].val[1] );
+  m3[5].val[1] = vsubq_s32( m4[1].val[1], m4[5].val[1] );
+  m3[6].val[1] = vsubq_s32( m4[2].val[1], m4[6].val[1] );
+  m3[7].val[1] = vsubq_s32( m4[3].val[1], m4[7].val[1] );
+
+  m4[0].val[1] = vaddq_s32( m3[0].val[1], m3[2].val[1] );
+  m4[1].val[1] = vaddq_s32( m3[1].val[1], m3[3].val[1] );
+  m4[2].val[1] = vsubq_s32( m3[0].val[1], m3[2].val[1] );
+  m4[3].val[1] = vsubq_s32( m3[1].val[1], m3[3].val[1] );
+  m4[4].val[1] = vaddq_s32( m3[4].val[1], m3[6].val[1] );
+  m4[5].val[1] = vaddq_s32( m3[5].val[1], m3[7].val[1] );
+  m4[6].val[1] = vsubq_s32( m3[4].val[1], m3[6].val[1] );
+  m4[7].val[1] = vsubq_s32( m3[5].val[1], m3[7].val[1] );
+
+  m3[0].val[1] = vabsq_s32( vaddq_s32( m4[0].val[1], m4[1].val[1] ) );
+  m3[1].val[1] = vabdq_s32(m4[0].val[1], m4[1].val[1]);
+  m3[2].val[1] = vabsq_s32( vaddq_s32( m4[2].val[1], m4[3].val[1] ) );
+  m3[3].val[1] = vabdq_s32(m4[2].val[1], m4[3].val[1]);
+  m3[4].val[1] = vabsq_s32( vaddq_s32( m4[4].val[1], m4[5].val[1] ) );
+  m3[5].val[1] = vabdq_s32(m4[4].val[1], m4[5].val[1]);
+  m3[6].val[1] = vabsq_s32( vaddq_s32( m4[6].val[1], m4[7].val[1] ) );
+  m3[7].val[1] = vabdq_s32(m4[6].val[1], m4[7].val[1]);
+
+  m4[0].val[0] = m3[0].val[0];
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[0].val[1] );
+  m3[1].val[0] = vaddq_s32( m3[1].val[0], m3[1].val[1] );
+  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[2].val[1] );
+  m3[3].val[0] = vaddq_s32( m3[3].val[0], m3[3].val[1] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[4].val[1] );
+  m3[5].val[0] = vaddq_s32( m3[5].val[0], m3[5].val[1] );
+  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[6].val[1] );
+  m3[7].val[0] = vaddq_s32( m3[7].val[0], m3[7].val[1] );
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[1].val[0] );
+  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[3].val[0] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[5].val[0] );
+  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[7].val[0] );
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[2].val[0] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[6].val[0] );
+  int32x4_t iSum = vaddq_s32( m3[0].val[0], m3[4].val[0] );
+
+  uint32_t sad = ( uint32_t ) vaddvq_s32(iSum);
+  uint32_t absDc = vgetq_lane_s32( m4[0].val[0], 0 );
+  sad -= absDc;
+  sad += absDc >> 2;
+  sad = ( ( sad + 2 ) >> 2 );
+
+  return ( sad << 2 );
+}
+
+static uint32_t xCalcHAD8x8_Neon( const Pel *piOrg, const Pel *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
+{
+  CHECK( iBitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+
+  int16x8x2_t m1[8], m2[8];
+  int32x4x2_t m3[8], m4[8];
+  
+  int16x8_t r0, r1;
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[0].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[1].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[2].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[3].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[4].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[5].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[6].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  r0 = vld1q_s16( piOrg );
+  r1 = vld1q_s16( piCur );
+
+  m2[7].val[0] = vsubq_s16( r0, r1 ); // 11bit
+
+  piCur += iStrideCur;
+  piOrg += iStrideOrg;
+
+  //horizontal
+  m1[0].val[0] = vaddq_s16( m2[0].val[0], m2[4].val[0] );
+  m1[1].val[0] = vaddq_s16( m2[1].val[0], m2[5].val[0] );
+  m1[2].val[0] = vaddq_s16( m2[2].val[0], m2[6].val[0] );
+  m1[3].val[0] = vaddq_s16( m2[3].val[0], m2[7].val[0] );
+  m1[4].val[0] = vsubq_s16( m2[0].val[0], m2[4].val[0] );
+  m1[5].val[0] = vsubq_s16( m2[1].val[0], m2[5].val[0] );
+  m1[6].val[0] = vsubq_s16( m2[2].val[0], m2[6].val[0] );
+  m1[7].val[0] = vsubq_s16( m2[3].val[0], m2[7].val[0] ); // 12 bit
+
+  m2[0].val[0] = vaddq_s16( m1[0].val[0], m1[2].val[0] );
+  m2[1].val[0] = vaddq_s16( m1[1].val[0], m1[3].val[0] );
+  m2[2].val[0] = vsubq_s16( m1[0].val[0], m1[2].val[0] );
+  m2[3].val[0] = vsubq_s16( m1[1].val[0], m1[3].val[0] );
+  m2[4].val[0] = vaddq_s16( m1[4].val[0], m1[6].val[0] );
+  m2[5].val[0] = vaddq_s16( m1[5].val[0], m1[7].val[0] );
+  m2[6].val[0] = vsubq_s16( m1[4].val[0], m1[6].val[0] );
+  m2[7].val[0] = vsubq_s16( m1[5].val[0], m1[7].val[0] ); // 13 bit
+
+  m1[0].val[0] = vaddq_s16( m2[0].val[0], m2[1].val[0] );
+  m1[1].val[0] = vsubq_s16( m2[0].val[0], m2[1].val[0] );
+  m1[2].val[0] = vaddq_s16( m2[2].val[0], m2[3].val[0] );
+  m1[3].val[0] = vsubq_s16( m2[2].val[0], m2[3].val[0] );
+  m1[4].val[0] = vaddq_s16( m2[4].val[0], m2[5].val[0] );
+  m1[5].val[0] = vsubq_s16( m2[4].val[0], m2[5].val[0] );
+  m1[6].val[0] = vaddq_s16( m2[6].val[0], m2[7].val[0] );
+  m1[7].val[0] = vsubq_s16( m2[6].val[0], m2[7].val[0] ); // 14 bit
+
+  m2[0].val[0] = vzip1q_s16( m1[0].val[0], m1[1].val[0] );
+  m2[1].val[0] = vzip1q_s16( m1[2].val[0], m1[3].val[0] );
+  m2[2].val[0] = vzip2q_s16( m1[0].val[0], m1[1].val[0] );
+  m2[3].val[0] = vzip2q_s16( m1[2].val[0], m1[3].val[0] );
+  m2[4].val[0] = vzip1q_s16( m1[4].val[0], m1[5].val[0] );
+  m2[5].val[0] = vzip1q_s16( m1[6].val[0], m1[7].val[0] );
+  m2[6].val[0] = vzip2q_s16( m1[4].val[0], m1[5].val[0] );
+  m2[7].val[0] = vzip2q_s16( m1[6].val[0], m1[7].val[0] );
+
+  m1[0].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[0].val[0]) , vreinterpretq_s32_s16(m2[1].val[0]) ) );
+  m1[1].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[0].val[0]) , vreinterpretq_s32_s16(m2[1].val[0]) ) );
+  m1[2].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[2].val[0]) , vreinterpretq_s32_s16(m2[3].val[0]) ) );
+  m1[3].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[2].val[0]) , vreinterpretq_s32_s16(m2[3].val[0]) ) );
+  m1[4].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[4].val[0]) , vreinterpretq_s32_s16(m2[5].val[0]) ) );
+  m1[5].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[4].val[0]) , vreinterpretq_s32_s16(m2[5].val[0]) ) );
+  m1[6].val[0] = vreinterpretq_s16_s32( vzip1q_s32( vreinterpretq_s32_s16(m2[6].val[0]) , vreinterpretq_s32_s16(m2[7].val[0]) ) );
+  m1[7].val[0] = vreinterpretq_s16_s32( vzip2q_s32( vreinterpretq_s32_s16(m2[6].val[0]) , vreinterpretq_s32_s16(m2[7].val[0]) ) );
+
+  m3[0].val[1] = vmovl_high_s16( m1[0].val[0] );
+  m3[0].val[0] = vmovl_s16( vget_low_s16( m1[0].val[0] ) );
+  m3[1].val[1] = vmovl_high_s16( m1[1].val[0] );
+  m3[1].val[0] = vmovl_s16( vget_low_s16( m1[1].val[0] ) );
+  m3[2].val[1] = vmovl_high_s16( m1[2].val[0] );
+  m3[2].val[0] = vmovl_s16( vget_low_s16( m1[2].val[0] ) );
+  m3[3].val[1] = vmovl_high_s16( m1[3].val[0] );
+  m3[3].val[0] = vmovl_s16( vget_low_s16( m1[3].val[0] ) );
+  m3[4].val[1] = vmovl_high_s16( m1[4].val[0] );
+  m3[4].val[0] = vmovl_s16( vget_low_s16( m1[4].val[0] ) );
+  m3[5].val[1] = vmovl_high_s16( m1[5].val[0] );
+  m3[5].val[0] = vmovl_s16( vget_low_s16( m1[5].val[0] ) );
+  m3[6].val[1] = vmovl_high_s16( m1[6].val[0] );
+  m3[6].val[0] = vmovl_s16( vget_low_s16( m1[6].val[0] ) );
+  m3[7].val[1] = vmovl_high_s16( m1[7].val[0] );
+  m3[7].val[0] = vmovl_s16( vget_low_s16( m1[7].val[0] ) );
+
+  m4[0].val[0] = m3[0].val[0];
+  m4[0].val[1] = m3[4].val[0];
+  
+  m4[1].val[0] = m3[1].val[0];
+  m4[1].val[1] = m3[5].val[0];
+
+  m4[2].val[0] = m3[2].val[0];
+  m4[2].val[1] = m3[6].val[0];
+
+  m4[3].val[0] = m3[3].val[0];
+  m4[3].val[1] = m3[7].val[0];
+
+  m4[4].val[0] = m3[0].val[1];
+  m4[4].val[1] = m3[4].val[1];
+
+  m4[5].val[0] = m3[1].val[1];
+  m4[5].val[1] = m3[5].val[1];
+
+  m4[6].val[0] = m3[2].val[1];
+  m4[6].val[1] = m3[6].val[1];
+
+  m4[7].val[0] = m3[3].val[1];
+  m4[7].val[1] = m3[7].val[1];
+
+  m3[0].val[0] = vaddq_s32( m4[0].val[0], m4[4].val[0] );
+  m3[1].val[0] = vaddq_s32( m4[1].val[0], m4[5].val[0] );
+  m3[2].val[0] = vaddq_s32( m4[2].val[0], m4[6].val[0] );
+  m3[3].val[0] = vaddq_s32( m4[3].val[0], m4[7].val[0] );
+  m3[4].val[0] = vsubq_s32( m4[0].val[0], m4[4].val[0] );
+  m3[5].val[0] = vsubq_s32( m4[1].val[0], m4[5].val[0] );
+  m3[6].val[0] = vsubq_s32( m4[2].val[0], m4[6].val[0] );
+  m3[7].val[0] = vsubq_s32( m4[3].val[0], m4[7].val[0] );
+
+  m4[0].val[0] = vaddq_s32( m3[0].val[0], m3[2].val[0] );
+  m4[1].val[0] = vaddq_s32( m3[1].val[0], m3[3].val[0] );
+  m4[2].val[0] = vsubq_s32( m3[0].val[0], m3[2].val[0] );
+  m4[3].val[0] = vsubq_s32( m3[1].val[0], m3[3].val[0] );
+  m4[4].val[0] = vaddq_s32( m3[4].val[0], m3[6].val[0] );
+  m4[5].val[0] = vaddq_s32( m3[5].val[0], m3[7].val[0] );
+  m4[6].val[0] = vsubq_s32( m3[4].val[0], m3[6].val[0] );
+  m4[7].val[0] = vsubq_s32( m3[5].val[0], m3[7].val[0] );
+
+  m3[0].val[0] = vabsq_s32( vaddq_s32( m4[0].val[0], m4[1].val[0] ) );
+  m3[1].val[0] = vabdq_s32(m4[0].val[0], m4[1].val[0]);
+  m3[2].val[0] = vabsq_s32( vaddq_s32( m4[2].val[0], m4[3].val[0] ) );
+  m3[3].val[0] = vabdq_s32(m4[2].val[0], m4[3].val[0]);
+  m3[4].val[0] = vabsq_s32( vaddq_s32( m4[4].val[0], m4[5].val[0] ) );
+  m3[5].val[0] = vabdq_s32(m4[4].val[0], m4[5].val[0]);
+  m3[6].val[0] = vabsq_s32( vaddq_s32( m4[6].val[0], m4[7].val[0] ) );
+  m3[7].val[0] = vabdq_s32(m4[6].val[0], m4[7].val[0]);
+
+  // --------------------------------------------------------------------------------------------
+  m3[0].val[1] = vaddq_s32( m4[0].val[1], m4[4].val[1] );
+  m3[1].val[1] = vaddq_s32( m4[1].val[1], m4[5].val[1] );
+  m3[2].val[1] = vaddq_s32( m4[2].val[1], m4[6].val[1] );
+  m3[3].val[1] = vaddq_s32( m4[3].val[1], m4[7].val[1] );
+  m3[4].val[1] = vsubq_s32( m4[0].val[1], m4[4].val[1] );
+  m3[5].val[1] = vsubq_s32( m4[1].val[1], m4[5].val[1] );
+  m3[6].val[1] = vsubq_s32( m4[2].val[1], m4[6].val[1] );
+  m3[7].val[1] = vsubq_s32( m4[3].val[1], m4[7].val[1] );
+
+  m4[0].val[1] = vaddq_s32( m3[0].val[1], m3[2].val[1] );
+  m4[1].val[1] = vaddq_s32( m3[1].val[1], m3[3].val[1] );
+  m4[2].val[1] = vsubq_s32( m3[0].val[1], m3[2].val[1] );
+  m4[3].val[1] = vsubq_s32( m3[1].val[1], m3[3].val[1] );
+  m4[4].val[1] = vaddq_s32( m3[4].val[1], m3[6].val[1] );
+  m4[5].val[1] = vaddq_s32( m3[5].val[1], m3[7].val[1] );
+  m4[6].val[1] = vsubq_s32( m3[4].val[1], m3[6].val[1] );
+  m4[7].val[1] = vsubq_s32( m3[5].val[1], m3[7].val[1] );
+
+  m3[0].val[1] = vabsq_s32( vaddq_s32( m4[0].val[1], m4[1].val[1] ) );
+  m3[1].val[1] = vabdq_s32(m4[0].val[1], m4[1].val[1]);
+  m3[2].val[1] = vabsq_s32( vaddq_s32( m4[2].val[1], m4[3].val[1] ) );
+  m3[3].val[1] = vabdq_s32(m4[2].val[1], m4[3].val[1]);
+  m3[4].val[1] = vabsq_s32( vaddq_s32( m4[4].val[1], m4[5].val[1] ) );
+  m3[5].val[1] = vabdq_s32(m4[4].val[1], m4[5].val[1]);
+  m3[6].val[1] = vabsq_s32( vaddq_s32( m4[6].val[1], m4[7].val[1] ) );
+  m3[7].val[1] = vabdq_s32(m4[6].val[1], m4[7].val[1]);
+
+  m4[0].val[0] = m3[0].val[0];
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[0].val[1] );
+  m3[1].val[0] = vaddq_s32( m3[1].val[0], m3[1].val[1] );
+  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[2].val[1] );
+  m3[3].val[0] = vaddq_s32( m3[3].val[0], m3[3].val[1] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[4].val[1] );
+  m3[5].val[0] = vaddq_s32( m3[5].val[0], m3[5].val[1] );
+  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[6].val[1] );
+  m3[7].val[0] = vaddq_s32( m3[7].val[0], m3[7].val[1] );
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[1].val[0] );
+  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[3].val[0] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[5].val[0] );
+  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[7].val[0] );
+
+  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[2].val[0] );
+  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[6].val[0] );
+  int32x4_t iSum = vaddq_s32( m3[0].val[0], m3[4].val[0] );
+
+  uint32_t sad = ( uint32_t ) vaddvq_s32(iSum);
+  uint32_t absDc = vgetq_lane_s32( m4[0].val[0], 0 );
+  sad -= absDc;
+  sad += absDc >> 2;
+  sad = ( ( sad + 2 ) >> 2 );
+
+  return sad;
+}
+
+template<ARM_VEXT vext, bool fastHad>
+Distortion RdCost::xGetHADs_ARMSIMD( const DistParam &rcDtParam )
+{
+  const Pel*  piOrg = rcDtParam.org.buf;
+  const Pel*  piCur = rcDtParam.cur.buf;
+  const int iRows = rcDtParam.org.height;
+  const int iCols = rcDtParam.org.width;
+  const int iStrideCur = rcDtParam.cur.stride;
+  const int iStrideOrg = rcDtParam.org.stride;
+  const int iBitDepth  = rcDtParam.bitDepth;
+
+  int  x, y;
+  Distortion uiSum = 0;
+
+  if( iCols > iRows && ( iCols & 15 ) == 0 && ( iRows & 7 ) == 0 )
+  {
+    for( y = 0; y < iRows; y += 8 )
+    {
+      for( x = 0; x < iCols; x += 16 )
+      {
+#ifdef USE_AVX2
+        uiSum += xCalcHAD16x8_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+#else
+        uiSum += xCalcHAD16x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+#endif
+      }
+      piOrg += 8*iStrideOrg;
+      piCur += 8*iStrideCur;
+    }
+  }
+  else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
+  {
+    for( y = 0; y < iRows; y += 16 )
+    {
+      for( x = 0; x < iCols; x += 8 )
+      {
+#ifdef USE_AVX2
+        uiSum += xCalcHAD8x16_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+#else
+        uiSum += xCalcHAD8x16_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+#endif
+      }
+      piOrg += 16*iStrideOrg;
+      piCur += 16*iStrideCur;
+    }
+  }
+  else if( iCols > iRows && ( iCols & 7 ) == 0 && ( iRows & 3 ) == 0 )
+  {
+    for( y = 0; y < iRows; y += 4 )
+    {
+      for( x = 0; x < iCols; x += 8 )
+      {
+        uiSum += xCalcHAD8x4_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+      }
+      piOrg += 4*iStrideOrg;
+      piCur += 4*iStrideCur;
+    }
+  }
+  else if( iCols < iRows && ( iRows & 7 ) == 0 && ( iCols & 3 ) == 0 )
+  {
+    for( y = 0; y < iRows; y += 8 )
+    {
+      for( x = 0; x < iCols; x += 4 )
+      {
+        uiSum += xCalcHAD4x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+      }
+      piOrg += 8*iStrideOrg;
+      piCur += 8*iStrideCur;
+    }
+  }
+#ifdef USE_AVX2
+  else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
+  {
+    for( y = 0; y < iRows; y += 32 )
+    {
+      for( x = 0; x < iCols; x += 32 )
+      {
+        uiSum += xCalcHAD32x32_fast_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+      }
+      piOrg += 32 * iStrideOrg;
+      piCur += 32 * iStrideCur;
+    }
+  }
+#endif
+  else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
+  {
+    for( y = 0; y < iRows; y += 16 )
+    {
+      for( x = 0; x < iCols; x += 16 )
+      {
+        uiSum += xCalcHAD16x16_fast_Neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+      }
+      piOrg += 16 * iStrideOrg;
+      piCur += 16 * iStrideCur;
+    }
+  }
+  else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
+  {
+    for( y = 0; y<iRows; y += 8 )
+    {
+      {
+        for( x = 0; x < iCols; x += 8 )
+        {
+          uiSum += xCalcHAD8x8_Neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+        }
+      }
+      piOrg += 8*iStrideOrg;
+      piCur += 8*iStrideCur;
+    }
+  }
+  else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
+  {
+    for( y = 0; y < iRows; y += 4 )
+    {
+      for( x = 0; x < iCols; x += 4 )
+      {
+        uiSum += xCalcHAD4x4_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 4*iStrideOrg;
+      piCur += 4*iStrideCur;
+    }
+  }
+  else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
+  {
+    for( y = 0; y < iRows; y += 2 )
+    {
+      for( x = 0; x < iCols; x += 2 )
+      {
+        uiSum += xCalcHADs2x2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 2*iStrideOrg;
+      piCur += 2*iStrideCur;
+    }
+  }
+  else
+  {
+    THROW( "Unsupported size" );
+  }
+
+  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
+}
+
+template<ARM_VEXT vext>
+Distortion RdCost::xGetHAD2SADs_ARMSIMD( const DistParam &rcDtParam )
+{ 
+  Distortion distHad = xGetHADs_ARMSIMD<vext, false>( rcDtParam );
+  Distortion distSad = RdCost::xGetSAD_SIMD<SIMD_EVERYWHERE_EXTENSION_LEVEL>( rcDtParam );
+
+  return std::min( distHad, 2*distSad);
+}
 
 template<ARM_VEXT vext, bool isCalCentrePos>
 void xGetSADX5_16xN_SIMDImp( const DistParam& rcDtParam, Distortion* cost )
@@ -151,6 +994,25 @@ template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()
 {
 	m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD<vext>;
+  m_afpDistortFunc[0][DF_HAD_2SAD ] = RdCost::xGetHAD2SADs_ARMSIMD<vext>;
+
+  m_afpDistortFunc[0][DF_HAD]     = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD2]    = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD4]    = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD8]    = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD16]   = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD32]   = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD64]   = RdCost::xGetHADs_ARMSIMD<vext, false>;
+  m_afpDistortFunc[0][DF_HAD128]  = RdCost::xGetHADs_ARMSIMD<vext, false>;
+
+  m_afpDistortFunc[0][DF_HAD_fast]     = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD2_fast]    = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD4_fast]    = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD8_fast]    = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD16_fast]   = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD32_fast]   = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD64_fast]   = RdCost::xGetHADs_ARMSIMD<vext, true>;
+  m_afpDistortFunc[0][DF_HAD128_fast]  = RdCost::xGetHADs_ARMSIMD<vext, true>;
 }
 
 #else    // !__ARM_ARCH >= 8

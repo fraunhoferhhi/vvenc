@@ -283,8 +283,8 @@ void EncSlice::init( const VVEncCfg& encCfg,
   const unsigned asuHeightInCtus = m_pALF->getAsuHeightInCtus();
   const unsigned numDeriveLines  = encCfg.m_ifpLines ? 
     std::min( ((encCfg.m_ifpLines & (~(asuHeightInCtus - 1))) + asuHeightInCtus), pps.pcv->heightInCtus ) : pps.pcv->heightInCtus;
-  m_alfDeriveLine = numDeriveLines - 1;
   m_alfDeriveCtu  = numDeriveLines * pps.pcv->widthInCtus - 1;
+  m_ccalfDeriveCtu = encCfg.m_ifpLines ? pps.pcv->widthInCtus * std::min((unsigned)encCfg.m_ifpLines + 1, pps.pcv->heightInCtus) - 1: pps.pcv->sizeInCtus - 1;
 }
 
 
@@ -413,7 +413,9 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
 
     if (m_pcEncCfg->m_usePerceptQPA)
     {
-      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[slice->TLayer] + ((qp * (16 + std::min (2u, slice->TLayer))) >> 4) + 0/*TODO +-1?*/);
+      const int tlayer = slice->pic->gopEntry->m_vtl;
+
+      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[tlayer] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
     }
     else if( slice->isIntra() )
     {
@@ -1178,7 +1180,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( ctuRsAddr == deriveFilterCtu )
         {
           // ensure statistics from all previous ctu's have been collected
-          for( int y = 0; y <= encSlice->m_alfDeriveLine; y++ )
+          int numCheckLines = deriveFilterCtu / pcv.widthInCtus + 1;
+          for( int y = 0; y < numCheckLines; y++ )
           {
             for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
             {
@@ -1289,19 +1292,18 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_stat );
 
         // start alf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
-        processStates[ctuRsAddr] = (ctuRsAddr < deriveFilterCtu) ? CCALF_RECONSTRUCT: CCALF_DERIVE_FILTER;
+        processStates[ctuRsAddr] = (ctuRsAddr < encSlice->m_ccalfDeriveCtu) ? CCALF_RECONSTRUCT: CCALF_DERIVE_FILTER;
       }
       break;
 
     case CCALF_DERIVE_FILTER:
       {
         // synchronization dependencies
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = encSlice->m_ccalfDeriveCtu;
         if( ctuRsAddr == deriveFilterCtu )
         {
           // ensure statistics from all previous ctu's have been collected
-          int numCheckLines = syncLines ? std::min(syncLines + 1, pcv.heightInCtus): pcv.heightInCtus;
+          int numCheckLines = deriveFilterCtu / pcv.widthInCtus + 1;
           for( int y = 0; y < numCheckLines; y++ )
           {
             for( int tileCol = 0; tileCol < slice.pps->numTileCols; tileCol++ )
@@ -1328,7 +1330,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         {
           if( ctuRsAddr == deriveFilterCtu )
           {
-            encSlice->m_pALF->deriveCcAlfFilter( *cs.picture, cs, syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus): pcv.sizeInCtus );
+            encSlice->m_pALF->deriveCcAlfFilter( *cs.picture, cs, encSlice->m_ccalfDeriveCtu + 1 );
           }
           else if( syncLines )
           {
@@ -1349,7 +1351,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CCALF_RECONSTRUCT:
       {
         // start ccalf filter derivation either for a sub-set of CTUs (syncLines mode) or for the whole picture (regular mode)
-        const unsigned deriveFilterCtu = syncLines ? pcv.widthInCtus * std::min(syncLines + 1, pcv.heightInCtus) - 1: pcv.sizeInCtus - 1;
+        const unsigned deriveFilterCtu = encSlice->m_ccalfDeriveCtu;
         if( processStates[deriveFilterCtu] < CCALF_RECONSTRUCT )
           return false;
 

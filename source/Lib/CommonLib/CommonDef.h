@@ -678,18 +678,27 @@ static inline int getLog2( int val )
 
 #if ENABLE_SIMD_OPT
 
+//necessary to be able to compare with SIMD_EVERYWHERE_EXTENSION_LEVEL in RdCostArm during compile time.
+#define X86_SIMD_UNDEFINED -1
+#define X86_SIMD_SCALAR 0
+#define X86_SIMD_SSE41 1
+#define X86_SIMD_SSE42 2
+#define X86_SIMD_AVX 3
+#define X86_SIMD_AVX2 4
+#define X86_SIMD_AVX512 5
+
 namespace x86_simd
 {
 #ifdef TARGET_SIMD_X86
   typedef enum
   {
-    UNDEFINED = -1,
-    SCALAR = 0,
-    SSE41,
-    SSE42,
-    AVX,
-    AVX2,
-    AVX512
+    UNDEFINED = X86_SIMD_UNDEFINED,
+    SCALAR = X86_SIMD_SCALAR,
+    SSE41 = X86_SIMD_SSE41,
+    SSE42 = X86_SIMD_SSE42,
+    AVX = X86_SIMD_AVX,
+    AVX2 = X86_SIMD_AVX2,
+    AVX512 = X86_SIMD_AVX512
   } X86_VEXT;
 #endif
 }

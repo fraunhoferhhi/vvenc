@@ -52,6 +52,7 @@ namespace vvenc {
 VVEncCfg::VVEncCfg()
   : m_stageParallelProc( false )
   , m_salienceBasedOpt( true )
+  , m_rateCap ( false )
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
 {
@@ -71,6 +72,7 @@ void VVEncCfg::xInitCfgMembers()
   m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
   m_bimCtuSize        = m_CTUSize;
   m_MaxQT[0] = m_MaxQT[1] = m_MaxQT[2] = m_CTUSize;
+  m_rateCap           = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
 }
 
 }

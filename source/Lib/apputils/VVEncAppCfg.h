@@ -238,6 +238,10 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
   { "yuv420",                    YUV420_8 },
   { "yuv420_10",                 YUV420_10 },
   { "yuv420_10_packed",          YUV420_10_PACKED },
+  { "yuv400",                    YUV400_8 },
+  { "gray",                      YUV400_8 },
+  { "yuv400_10",                 YUV400_10 },
+  { "gray10",                    YUV400_10 },
 };
 
 const std::vector<SVPair<int>> SaoToIntMap =
@@ -580,7 +584,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.addOptions()
     ("input,i",                                         m_inputFileName,                                     "original YUV input file name or '-' for reading from stdin")
     ("size,s",                                          toSourceSize,                                        "specify input resolution (WidthxHeight)")
-    ("format,c",                                        toInputFormatBitdepth,                               "set input format (yuv420, yuv420_10, yuv420_10_packed)")
+    ("format,c",                                        toInputFormatBitdepth,                               "set input format (yuv420, yuv420_10, yuv420_10_packed, yuv400 (gray), yuv400_10 (gray10)")
     ("framerate,r",                                     c->m_FrameRate,                                      "temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000 ")
     ("framescale",                                      c->m_FrameScale,                                     "temporal scale (framerate denominator) e.g. 1, 1001 ")
     ("fps",                                             toFps,                                               "framerate as int or fraction (num/denom) ")
@@ -1163,6 +1167,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
                                                                                                              "no rate cap; use e.g. 3.5M, 3.5Mbps, 3500k, 3500kbps, 3500000bps, 3500000), use suffix 'x' "
                                                                                                              "to specify as a multiple of target bitrate")
     ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
+    ("internal-bitdepth",                               c->m_internalBitDepth[0],                            "internal bitdepth (8, 10)")
+    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding)")
+    ("decodedpicturehash,-dph",                         toHashType,                                          "control generation of decode picture hash SEI messages, (0: off, 1: md5, 2: crc, 3: checksum)")
     ;
   }
 
@@ -1343,7 +1350,7 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
   return cT;
 }
 
-static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned int height, int bitdepth, bool packed = false )
+static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned int height, vvencChromaFormat chromaFormat, int bitdepth, bool packed = false )
 {
   int64_t packetCount = 0;
 
@@ -1362,9 +1369,18 @@ static int64_t getFrameCount( std::string fileName, unsigned int width, unsigned
   fhandle.close();
 
   unsigned int uiBitsPerPx = bitdepth == 8 ? 12 : 24;
+  switch ( chromaFormat )
+  {
+    case VVENC_CHROMA_400: uiBitsPerPx = bitdepth == 8 ?  8 : 16; break;
+    case VVENC_CHROMA_420: uiBitsPerPx = bitdepth == 8 ? 12 : 24; break;
+    case VVENC_CHROMA_422: uiBitsPerPx = bitdepth == 8 ? 16 : 32; break;
+    case VVENC_CHROMA_444: uiBitsPerPx = bitdepth == 8 ? 24 : 48; break;
+    default: break;
+  }
+
   size_t frameSize = (width * height * uiBitsPerPx) >> 3;
 
-  if ( packed && bitdepth == 10 )
+  if ( packed && bitdepth == 10 && chromaFormat == VVENC_CHROMA_420 )
   {
     size_t stride = width * 5 / 4;
     size_t lumaSize = stride * height;
@@ -1418,17 +1434,28 @@ virtual std::string getAppConfigAsString( vvenc_config* c, vvencMsgLevel eMsgLev
     if( eMsgLevel >= VVENC_INFO )
     {
       std::string inputFmt;
-      if( c->m_inputBitDepth[ 0 ] == 8 )
-        inputFmt="yuv420p";
-      else if( c->m_inputBitDepth[ 0 ] == 10 )
-        inputFmt= m_packedYUVInput ? "yuv420p10(packed)" : "yuv420p10";       
+      switch ( c->m_internChromaFormat)
+      {
+        case VVENC_CHROMA_400: inputFmt= "yuv400p"; break;
+        case VVENC_CHROMA_422: inputFmt= "yuv422p"; break;
+        case VVENC_CHROMA_444: inputFmt= "yuv444p"; break;
+        case VVENC_CHROMA_420: 
+        default:
+          inputFmt= "yuv420p"; break;
+      }
+      if( c->m_inputBitDepth[ 0 ] == 10 )
+      {
+        inputFmt.append("10");
+        if ( m_packedYUVInput )
+          inputFmt.append("(packed)");
+      }
 
       std::stringstream frameCountStr;
       std::stringstream framesStr;
 
       if( strcmp( m_inputFileName.c_str(), "-" ) )
       {
-        int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
+        int64_t frameCount = getFrameCount( m_inputFileName, c->m_SourceWidth, c->m_SourceHeight, c->m_internChromaFormat, c->m_inputBitDepth[ 0 ], m_packedYUVInput );
         frameCountStr << frameCount << (frameCount > 1 ? " frames" : " frame");
 
         int64_t framesToEncode = (c->m_framesToBeEncoded == 0 || c->m_framesToBeEncoded >= frameCount) ? frameCount : c->m_framesToBeEncoded;

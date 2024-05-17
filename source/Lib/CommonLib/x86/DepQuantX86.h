@@ -89,7 +89,7 @@ namespace DQIntern
   struct StateMem
   {
     int64_t  rdCost[4];
-    int      remRegBins[4];
+    int16_t  remRegBins[4];
     int32_t  sbbBits0[4];
     int32_t  sbbBits1[4];
 
@@ -317,30 +317,25 @@ namespace DQIntern
         rsc         = _mm_blendv_epi8( rsc, vshuf, vshuf );
         _mm_storeu_si32( curr.refSbbCtxId, rsc );
 
-        vshuf = _mm_cvtepi8_epi32( vshuf );
-        vshuf = _mm_shuffle_epi8( vshuf, _mm_setr_epi8( 0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12 ) );
-        vshuf = _mm_slli_epi32( vshuf, 2 );
+        vshuf = _mm_shuffle_epi8( vshuf, _mm_setr_epi8( 0, 0, 1, 1, 2, 2, 3, 3, -1, -1, -1, -1, -1, -1, -1, -1 ) );
+        vshuf = _mm_slli_epi16( vshuf, 1 );
         vshuf = _mm_add_epi8( vshuf,
-                              _mm_blendv_epi8( _mm_setr_epi8( 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3 ),
+                              _mm_blendv_epi8( _mm_setr_epi8( 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ),
                                                _mm_setzero_si128(),
                                                vshuf ) );
 
-        __m128i rrb = _mm_loadu_si128( ( const __m128i* ) curr.remRegBins );
+        __m128i rrb = _mm_loadu_si64( ( const __m128i* ) curr.remRegBins );
         rrb = _mm_shuffle_epi8( rrb, vshuf );
-        rrb = _mm_sub_epi32( rrb, _mm_blendv_epi8( _mm_set1_epi32( 1 ), _mm_setzero_si128(), vshuf ) );
-        __m128i mlvl = _mm_loadu_si32( l );
-        rrb = _mm_blendv_epi8( rrb, _mm_set1_epi32( curr.initRemRegBins ), vshuf );
-        
-        __m128i mbins = _mm_cvtepi8_epi32( mlvl );
-        __m128i madd  = _mm_cmpeq_epi32( mbins, _mm_set1_epi32( 1 ) );
-        __m128i mmore = _mm_and_si128( _mm_cmpgt_epi32( mbins, _mm_set1_epi32( 1 ) ), _mm_set1_epi32( 3 ) );
-        madd = _mm_sub_epi32( madd, mmore );
-        madd = _mm_blendv_epi8( madd, _mm_setzero_si128(), _mm_cmplt_epi32(rrb, _mm_set1_epi32(4)));
-        rrb  = _mm_add_epi32( rrb, madd );
-        _mm_storeu_si128( ( __m128i* ) curr.remRegBins, rrb );
-        rrb = _mm_cmplt_epi32( rrb, _mm_set1_epi32( 4 ) );
+        rrb = _mm_sub_epi16( rrb, v01 );
+        rrb = _mm_blendv_epi8( rrb, _mm_set1_epi16( curr.initRemRegBins ), vshuf );
+        __m128i mlvl  = _mm_loadu_si32( l );
+        __m128i mbins = _mm_min_epi8 ( mlvl, _mm_set1_epi8( 2 ) );
+        __m128i mlutb = _mm_setr_epi8( 0, 1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
+        rrb = _mm_sub_epi16( rrb, _mm_cvtepi8_epi16( _mm_shuffle_epi8( mlutb, mbins ) ) );
+        _mm_storeu_si64( ( __m128i* ) curr.remRegBins, rrb );
+        rrb = _mm_cmplt_epi16( rrb, _mm_set1_epi16( 4 ) );
 
-        curr.anyRemRegBinsLt4 = !_mm_test_all_zeros( rrb, rrb );
+        curr.anyRemRegBinsLt4 = !!_mm_cvtsi128_si64( rrb );
 
         __m128i lvl1 = _mm_loadu_si32( l );
         __m128i tpl1 = _mm_loadu_si32( t );
@@ -440,34 +435,30 @@ namespace DQIntern
         rsc         = _mm_shuffle_epi8( rsc, vshuf );
         rsc         = _mm_blendv_epi8( rsc, vshuf, vshuf );
         _mm_storeu_si32( curr.refSbbCtxId, rsc );
-        
-        vshuf = _mm_cvtepi8_epi32( vshuf );
-        vshuf = _mm_shuffle_epi8( vshuf, _mm_setr_epi8( 0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12 ) );
-        vshuf = _mm_slli_epi32( vshuf, 2 );
-        vshuf = _mm_add_epi8( vshuf,
-                              _mm_blendv_epi8( _mm_setr_epi8( 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3 ),
-                              _mm_setzero_si128(),
-                              vshuf ) );
-        
-        __m128i rrb = _mm_loadu_si128( ( const __m128i* ) curr.remRegBins );
-        rrb = _mm_shuffle_epi8( rrb, vshuf );
-        rrb = _mm_sub_epi32( rrb, _mm_blendv_epi8( _mm_set1_epi32( 1 ), _mm_setzero_si128(), vshuf ) );
-        __m128i mlvl = _mm_loadu_si32( l );
-        rrb = _mm_blendv_epi8( rrb, _mm_set1_epi32( curr.initRemRegBins ), vshuf );
 
-        __m128i vskip = _mm_cvtepi8_epi32( _mm_loadu_si32( z ) );
-        rrb = _mm_blendv_epi8( rrb, _mm_loadu_si128( ( const __m128i* ) skip.remRegBins ), vskip );
+        vshuf = _mm_shuffle_epi8( vshuf, _mm_setr_epi8( 0, 0, 1, 1, 2, 2, 3, 3, -1, -1, -1, -1, -1, -1, -1, -1 ) );
+        vshuf = _mm_slli_epi16( vshuf, 1 );
+        vshuf = _mm_add_epi8( vshuf,
+                              _mm_blendv_epi8( _mm_setr_epi8( 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 ),
+                                               _mm_setzero_si128(),
+                                               vshuf ) );
+
+        __m128i rrb = _mm_loadu_si64( ( const __m128i* ) curr.remRegBins );
+        rrb = _mm_shuffle_epi8( rrb, vshuf );
+        rrb = _mm_sub_epi16( rrb, _mm_set1_epi16( 1 ) );
+        rrb = _mm_blendv_epi8( rrb, _mm_set1_epi16( curr.initRemRegBins ), vshuf );
+
+        __m128i vskip = _mm_cvtepi8_epi16( _mm_loadu_si32( z ) );
+        rrb = _mm_blendv_epi8( rrb, _mm_loadu_si64( ( const __m128i* ) skip.remRegBins ), vskip );
+
+        __m128i mlvl  = _mm_loadu_si32( l );
+        __m128i mbins = _mm_min_epi8 ( mlvl, _mm_set1_epi8( 2 ) );
+        __m128i mlutb = _mm_setr_epi8( 0, 1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
+        rrb = _mm_sub_epi16( rrb, _mm_cvtepi8_epi16( _mm_shuffle_epi8( mlutb, mbins ) ) );
+        _mm_storeu_si64( ( __m128i* ) curr.remRegBins, rrb );
+        rrb = _mm_cmplt_epi16( rrb, _mm_set1_epi16( 4 ) );
         
-        __m128i mbins = _mm_cvtepi8_epi32( mlvl );
-        __m128i madd  = _mm_cmpeq_epi32( mbins, _mm_set1_epi32( 1 ) );
-        __m128i mmore = _mm_and_si128( _mm_cmpgt_epi32( mbins, _mm_set1_epi32( 1 ) ), _mm_set1_epi32( 3 ) );
-        madd = _mm_sub_epi32( madd, mmore );
-        madd = _mm_blendv_epi8( madd, _mm_setzero_si128(), _mm_cmplt_epi32(rrb, _mm_set1_epi32(4)));
-        rrb  = _mm_add_epi32( rrb, madd );
-        _mm_storeu_si128( ( __m128i* ) curr.remRegBins, rrb );
-        rrb = _mm_cmplt_epi32( rrb, _mm_set1_epi32( 4 ) );
-        
-        curr.anyRemRegBinsLt4 = !_mm_test_all_zeros( rrb, rrb );
+        curr.anyRemRegBinsLt4 = !!_mm_cvtsi128_si64( rrb );
       }
 
       commonCtx.updateAllLvls( scanInfo, curr );

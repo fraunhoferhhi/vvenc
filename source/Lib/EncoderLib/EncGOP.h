@@ -93,6 +93,19 @@ struct FinishTaskParam {
 };
 
 // ====================================================================================================================
+struct RateCapParam {
+  unsigned accumActualBits = 0;
+  unsigned accumTargetBits = 0;
+  unsigned accumGopCounter = 0;
+  double   nonRateCapEstim = 0.0;
+  int      gopAdaptedQPAdj = 0;
+  void reset() 
+  {
+    accumActualBits = 0;
+    accumTargetBits = 0;
+    accumGopCounter = 0;
+  }
+};
 
 class EncGOP : public EncStage
 {
@@ -141,6 +154,7 @@ private:
   int                       m_pocCRA;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;
+  RateCapParam              m_rcap;
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
@@ -149,7 +163,6 @@ private:
   std::list<Picture*>       m_rcUpdateList;
   std::list<Picture*>       m_rcInputReorderList;  // used in RC in IFP lines synchro mode
   std::deque<PicApsGlobal*> m_globalApsList;
-
   std::vector<int>          m_globalCtuQpVector;
   bool                      m_forceSCC;
 
@@ -218,7 +231,9 @@ private:
   void xAttachSliceDataToNalUnit      ( OutputNALUnit& rNalu, const OutputBitstream* pcBitstreamRedirect );
   void xCabacZeroWordPadding          ( const Picture& pic, const Slice* slice, uint32_t binCountsInNalUnits, uint32_t numBytesInVclNalUnits, std::ostringstream &nalUnitData );
 
-  void xAddPSNRStats              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
+  void xUpdateRateCap();
+  void xUpdateRateCapBits             ( const Picture* pic, const uint32_t uibits );
+  void xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
   inline bool xEncodersFinished       () { return ( int ) m_freePicEncoderList.size() >= std::max(1, m_pcEncCfg->m_maxParallelFrames); }

@@ -175,6 +175,8 @@ Picture::Picture()
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
     , gopAdaptedQP      ( 0 )
+    , isSceneCutGOP       ( false )
+    , isSceneCutCheckAdjQP( false )
     , isMeanQPLimited   ( false )
     , picInitialQP      ( -1 )
     , picInitialLambda  ( -1.0 )
@@ -236,6 +238,8 @@ void Picture::reset()
   poc                 = -1;
   TLayer              = std::numeric_limits<uint32_t>::max();
   gopAdaptedQP        = 0;
+  isSceneCutGOP        = false;
+  isSceneCutCheckAdjQP = false;
   actualHeadBits      = 0;
   actualTotalBits     = 0;
   encRCPic            = nullptr;
