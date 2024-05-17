@@ -963,7 +963,14 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
   m_alfCovarianceCcAlf[1] = nullptr;
   m_alfCovarianceFrameCcAlf[0] = nullptr;
   m_alfCovarianceFrameCcAlf[1] = nullptr;
-  m_accumStatCTUWise = false;
+  m_maxAsuWidth        = 0;
+  m_maxAsuHeight       = 0;
+  m_numAsusInWidth     = 0;
+  m_numAsusInHeight    = 0;
+  m_numAsusInPic       = 0;
+  m_numCtusInAsuWidth  = 1;
+  m_numCtusInAsuHeight = 1;
+  m_accumStatCTUWise   = false;
   for( int i = 0; i < MAX_NUM_COMP; i++ )
   {
     m_alfFilterStatEnabled[i] = false;
@@ -1722,7 +1729,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
   // consider using new filter (only)
   alfParam.newFilterFlag[CH_L] = true;
-  alfParam.newFilterFlag[CH_C] = true;
+  alfParam.newFilterFlag[CH_C] = isChromaEnabled(cs.pcv->chrFormat);
   cs.slice->numAps = ( 1 ); // Only new filter for RD cost optimization
 
   const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP;
@@ -1731,7 +1738,10 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   // derive filter (luma)
   alfEncoder( cs, alfParam, CH_L, lambdaChromaWeight, numAsus, numCtus );
   // derive filter (chroma)
-  alfEncoder( cs, alfParam, CH_C, lambdaChromaWeight, numAsus, numCtus );
+  if( isChromaEnabled(cs.pcv->chrFormat) )
+  {
+    alfEncoder( cs, alfParam, CH_C, lambdaChromaWeight, numAsus, numCtus );
+  }
 
   // let alfEncoderCtb decide now
   alfParam.newFilterFlag[CH_L] = false;
@@ -1987,8 +1997,15 @@ void EncAdaptiveLoopFilter::initEncProcess( Slice& slice )
 
   // NOTE: ALF is here enabled per default. However it can be disabled during filter derivation part.
   //       In lines synchronized IFP mode, it cannot be disabled.
-  slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = slice.sps->alfEnabled;
-  slice.ccAlfCbEnabled = slice.ccAlfCrEnabled = slice.sps->ccalfEnabled;
+  if( m_chromaFormat == VVENC_CHROMA_400 )
+  {
+    slice.alfEnabled[COMP_Y] = slice.sps->alfEnabled;
+  }
+  else
+  {
+    slice.alfEnabled[COMP_Y] = slice.alfEnabled[COMP_Cb] = slice.alfEnabled[COMP_Cr] = slice.sps->alfEnabled;
+    slice.ccAlfCbEnabled = slice.ccAlfCrEnabled = slice.sps->ccalfEnabled;
+  }
 
   if( m_encCfg->m_ifpLines )
   {

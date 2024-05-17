@@ -77,6 +77,8 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
     {
       for( int x = 0; x < width; x += 32 )
       {
+        GCC_WARNING_DISABLE_maybe_uninitialized   // when building for aarch64 without LTO gcc complains about xtmp{1,2,3,4}.val[] not being initialized
+
         xtmp1.val[ 0 ][ 0 ] = lut[ src[ x + 0 ] ];
         xtmp1.val[ 1 ][ 0 ] = lut[ src[ x + 1 ] ];
         xtmp1.val[ 2 ][ 0 ] = lut[ src[ x + 2 ] ];
@@ -209,6 +211,8 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
         xtmp4.val[ 1 ][ 7 ] = lut[ src[ x + 3 * srcStride + 29 ] ];
         xtmp4.val[ 2 ][ 7 ] = lut[ src[ x + 3 * srcStride + 30 ] ];
         xtmp4.val[ 3 ][ 7 ] = lut[ src[ x + 3 * srcStride + 31 ] ];
+
+        GCC_WARNING_RESET
 
         // deinterleaved storing
         vst4q_s16( &dst[ x ], xtmp1 );
@@ -388,7 +392,7 @@ void PelBufferOps::_initPelBufOpsARM()
 
 template void PelBufferOps::_initPelBufOpsARM<SIMDARM>();
 
-}   // namespace vvdec
+}   // namespace
 
 #endif   // TARGET_SIMD_ARM
 #endif     // ENABLE_SIMD_OPT_BUFFER

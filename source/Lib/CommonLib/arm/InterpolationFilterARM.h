@@ -191,6 +191,8 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
       vsrcb10 = vld1_s16( &src[ ( j << 3 ) + 6 ] );
       vsrcb11 = vld1_s16( &src[ ( j << 3 ) + 7 ] );
 
+      GCC_WARNING_DISABLE_maybe_uninitialized   // when building for aarch64 without LTO gcc complains about vsum{a,b},vsrc{0,1} not being initialized
+
       vsuma[ 0 ] = vaddvq_s32( vmull_s16( vsrca00, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
       vsuma[ 1 ] = vaddvq_s32( vmull_s16( vsrca01, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
       vsuma[ 2 ] = vaddvq_s32( vmull_s16( vsrca10, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
@@ -215,6 +217,8 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
       vsrc0[ 1 ] = vaddvq_s32( vmull_s16( vsrca01, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
       vsrc0[ 2 ] = vaddvq_s32( vmull_s16( vsrca10, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
       vsrc0[ 3 ] = vaddvq_s32( vmull_s16( vsrca11, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
+
+      GCC_WARNING_RESET
 
       vsuma = vaddq_s32( vsuma, vsrc1 );
       vsumb = vaddq_s32( vsumb, vsrc0 );
@@ -292,4 +296,4 @@ template void InterpolationFilter::_initInterpolationFilterARM<SIMDARM>();
 
 #endif   // #ifdef TARGET_SIMD_ARM
 
-}   // namespace vvdec
+}   // namespace

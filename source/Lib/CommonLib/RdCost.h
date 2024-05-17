@@ -212,8 +212,8 @@ public:
   Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
 	
   static Distortion xGetSAD8          ( const DistParam& pcDtParam );
-  static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvdec )
-  static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos ); // needs to be public for xGetSADX5_16xN_SIMD ( NOTE: they are all public in vvdec )
+  static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvenc )
+  static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos ); // needs to be public for xGetSADX5_16xN_SIMD ( NOTE: they are all public in vvenc )
 	
 private:
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
@@ -269,6 +269,12 @@ private:
 #ifdef TARGET_SIMD_ARM
   template <ARM_VEXT vext>
   static void xGetSADX5_16xN_SIMD   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
+
+  template <ARM_VEXT vext>
+  static Distortion xGetHAD2SADs_ARMSIMD( const DistParam &rcDtParam );
+
+  template <ARM_VEXT vext, bool fastHad>
+  static Distortion xGetHADs_ARMSIMD   ( const DistParam& pcDtParam );
 #endif
 	
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);

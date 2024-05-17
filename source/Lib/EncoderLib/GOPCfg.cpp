@@ -183,6 +183,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     gopEntry.m_sliceType      = 'I';
     gopEntry.m_isStartOfIntra = true;
     gopEntry.m_temporalId     = 0;
+    gopEntry.m_vtl            = 0;
     m_lastIntraPOC            = m_nextPoc;
   }
 
@@ -238,6 +239,7 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   gopEntry.m_isStartOfIntra = true;
   gopEntry.m_isStartOfGop   = true;
   gopEntry.m_temporalId     = 0;
+  gopEntry.m_vtl            = 0;
   m_lastIntraPOC            = gopEntry.m_POC;
 
   // start with first gop list
@@ -259,11 +261,12 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
 void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry )
 {
   gopEntry.m_isStartOfGop = true;
-  if( gopEntry.m_gopNum == 0 && ! gopEntry.m_isStartOfIntra )
+  if( ! m_poc0idr && gopEntry.m_gopNum == 0 && ! gopEntry.m_isStartOfIntra )
   {
     gopEntry.m_isStartOfIntra = true;
     gopEntry.m_sliceType      = 'I';
     gopEntry.m_temporalId     = 0;
+    gopEntry.m_vtl            = 0;
     m_lastIntraPOC            = gopEntry.m_POC;
   }
 }
@@ -573,17 +576,18 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   std::vector<int> pocToGopIdx;
   xCreatePocToGopIdx( gopList, false, pocToGopIdx );
 
-  // STSA, forward B flags, MCTF index
+  // mark first gop entry
+  gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
+
+  // STSA, forward B flags, MCTF index, virtual TLayer
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
+  xSetVTL      ( gopList );
   if( m_firstPassMode == 2 || m_firstPassMode == 4 )
   {
     xSetSkipFirstPass( gopList );
   }
-
-  // mark first gop entry
-  gopList[ pocToGopIdx[ 0 ] ].m_isStartOfGop = true;
 }
 
 void GOPCfg::xGetPrevGopRefs( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const
@@ -849,6 +853,29 @@ void GOPCfg::xSetBckwdOnly( GOPEntryList& gopList ) const
       }
     }
     gopEntry.m_useBckwdOnly = useBckwdOnly;
+  }
+}
+
+void GOPCfg::xSetVTL( GOPEntryList& gopList ) const
+{
+  if( m_picReordering == 0 )
+  {
+    const int vtl = std::min( m_maxGopSize >> 2, 3 );
+    for( auto& gopEntry : gopList )
+    {
+      CHECK( gopEntry.m_temporalId != 0, "unexpected low delay temporal id" );
+      if( !gopEntry.m_isStartOfGop && !gopEntry.m_isStartOfIntra )
+      {
+        gopEntry.m_vtl = vtl;
+      }
+    }
+  }
+  else
+  {
+    for( auto& gopEntry : gopList )
+    {
+      gopEntry.m_vtl = gopEntry.m_temporalId;
+    }
   }
 }
 

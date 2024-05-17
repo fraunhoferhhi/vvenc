@@ -196,11 +196,11 @@ public:
         }
         else
         {
-          sep = p.find("MONO");
+          sep = p.find("CMONO");
           if( sep != std::string::npos )
           {
             chromatype = "400";
-            if( p == "MONO") cfg.m_inputBitDepth[0] = 8;
+            if( p == "CMONO") cfg.m_inputBitDepth[0] = 8;
             else cfg.m_inputBitDepth[0] = atoi( p.substr( sep+5 ).c_str()); // e.g. mono10
           }
           else

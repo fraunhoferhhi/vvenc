@@ -61,4 +61,4 @@ ARM_VEXT read_arm_extension_flags( ARM_VEXT request )
   return ext_flags;
 };
 
-}   // namespace vvdec
+}   // namespace

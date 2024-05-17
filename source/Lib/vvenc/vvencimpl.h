@@ -40,7 +40,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \file    hhivvcencimpl.h
+  \file    vvcencimpl.h
   \brief   This file contains the internal interface of the vvenc SDK.
 */
 
@@ -70,10 +70,11 @@ class AccessUnitList;
 
 /**
   \ingroup VVEncExternalInterfaces
-  The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
-  the given VVCDecoderParameters. After initialization the decoding of the video is performed by using the decoder() method to hand over compressed packets (bitstream chunks) in decoding order
-  and retrieve uncompressed pictures. The decoding can be end by calling flush() that causes the decoder to finish decoding of all pending packets.
-  Finally calling uninit() releases all allocated resources held by the decoder internally.
+  The class VVEncImpl provides the encoder user interface. The simplest way to use the encoder is to call init() to initialize an encoder instance with the
+  the given vvenc_config. After initialization the encoding is performed by using the encode() method to hand over raw yuv pictures in picture order
+  and retrieve compressed packets (bitstream chunks). The encoding can be end by sending vvencYUVBuffer packets that are null.
+  The encode method have be called till pbEncodeDone=true.
+  Finally calling uninit() releases all allocated resources held by the encoder internally.
 */
 class VVEncImpl
 {

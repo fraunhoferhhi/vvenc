@@ -93,7 +93,7 @@ VVENC_NAMESPACE_BEGIN
  * opaque handler for the decoder */
 typedef struct vvencEncoder vvencEncoder;
 
-/* vvdecLoggingCallback:
+/* vvencLoggingCallback:
    callback function to receive messages of the encoder library
 */
 typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
@@ -206,8 +206,8 @@ typedef struct vvencAccessUnit
 */
 VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc( void );
 
-/* vvdec_accessUnit_free:
-   release storage of a vvdecAccessUnit instance.
+/* vvenc_accessUnit_free:
+   release storage of a vvencAccessUnit instance.
    The payload memory is also released if not done yet.
 */
 VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayload );

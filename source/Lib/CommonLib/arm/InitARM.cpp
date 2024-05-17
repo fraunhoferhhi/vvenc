@@ -112,4 +112,4 @@ void RdCost::initRdCostARM()
 
 #endif   // TARGET_SIMD_ARM
 
-}   // namespace vvdec
+}   // namespace

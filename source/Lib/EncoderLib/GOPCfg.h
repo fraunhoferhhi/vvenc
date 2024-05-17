@@ -154,6 +154,7 @@ class GOPCfg
     void xCreatePocToGopIdx  ( const GOPEntryList& gopList, bool bShift, std::vector<int>& pocToGopIdx ) const;
     void xSetSTSA            ( GOPEntryList& gopList, const std::vector<int>& pocToGopIdx ) const;
     void xSetBckwdOnly       ( GOPEntryList& gopList ) const;
+    void xSetVTL             ( GOPEntryList& gopList ) const;
     void xSetDefaultRPL      ( std::vector<GOPEntryList>& defaultLists );
     void xSetDBPConstraints  ( std::vector<GOPEntryList>& defaultLists );
     bool xCheckDBPConstraints( const GOPEntryList& gopList ) const;

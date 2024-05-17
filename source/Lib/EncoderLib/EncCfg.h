@@ -58,6 +58,7 @@ struct VVEncCfg : public vvenc_config
 
   bool m_stageParallelProc;
   bool m_salienceBasedOpt;
+  bool m_rateCap;
   int  m_log2GopSize;
   int  m_maxTLayer;
   int  m_bimCtuSize;
