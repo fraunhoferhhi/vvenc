@@ -459,8 +459,8 @@ typedef struct vvenc_config
 
   bool                m_usePerceptQPA;                                                   // usage of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
 
-  uint32_t            m_numTileCols;                                                     // number of tile columns
-  uint32_t            m_numTileRows;                                                     // number of tile rows
+  int32_t             m_numTileCols;                                                     // number of tile columns
+  int32_t             m_numTileRows;                                                     // number of tile rows
 
   // expert config params
   int                 m_conformanceWindowMode;
@@ -542,7 +542,7 @@ typedef struct vvenc_config
   bool                m_pictureTimingSEIEnabled;
   bool                m_decodingUnitInfoSEIEnabled;
 
-  bool                m_entropyCodingSyncEnabled;
+  int8_t              m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
 
   unsigned            m_CTUSize;
@@ -775,9 +775,12 @@ typedef struct vvenc_config
                                                                                          // -24, i.e. -1.1000 binary, means the maxrate would be set to be the 1.5x of the target bitrate.
                                                                                          // for convenience use VVENC_SET_MAXRATE_FACTOR, e.g. VVENC_SET_MAXRATE_FACTOR(1.5), to set the multiplier
   int8_t              m_forceScc;
-  bool                m_ifp;
+  int8_t              m_ifp;
 
-  int8_t              m_reservedInt8[2];
+  int8_t              m_mtProfile;                                                       // Use a set of multi-threading boosters (0...3), set to -1 for automatic selection based on number of threads (default),
+                                                                                         // or 0 to force only the usage basic picture and CTU parallelism. If set to 3, tiles (resolution dependent),
+                                                                                         // IFP and WPP are all used. For 1 and 2, an optimal selection of tools is done based on resolution and CTU size.
+  int8_t              m_reservedInt8[1];
 
   int                 m_minIntraDist;
   int                 m_reservedInt;

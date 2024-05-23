@@ -65,6 +65,7 @@ VVENC_NAMESPACE_BEGIN
 static bool checkCfgParameter( vvenc_config *cfg );
 static void checkCfgPicPartitioningParameter( vvenc_config *c );
 static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid );
+static void initMultithreading( vvenc_config *c );
 static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
@@ -490,7 +491,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_pictureTimingSEIEnabled                 = false;
   c->m_decodingUnitInfoSEIEnabled              = false;
 
-  c->m_entropyCodingSyncEnabled                = false;
+  c->m_entropyCodingSyncEnabled                = -1;
   c->m_entryPointsPresent                      = true;
 
   c->m_CTUSize                                 = 128;
@@ -664,15 +665,16 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ensureWppBitEqual                       = -1;
   c->m_tileParallelCtuEnc                      = true;
   c->m_ifpLines                                = -1;
-  c->m_ifp                                     = false;
+  c->m_ifp                                     = -1;
+  c->m_mtProfile                               =  0;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
   memset( c->m_tileRowHeight,   0, sizeof(c->m_tileRowHeight) );
   c->m_numExpTileCols                          = 1;
   c->m_numExpTileRows                          = 1;
-  c->m_numTileCols                             = 1;
-  c->m_numTileRows                             = 1;
+  c->m_numTileCols                             = -1;
+  c->m_numTileRows                             = -1;
   c->m_numSlicesInPic                          = 1;
 
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
@@ -692,7 +694,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_leadFrames                              = 0;
   c->m_trailFrames                             = 0;
 
-  c-> m_deblockLastTLayers                     = 0;
+  c->m_deblockLastTLayers                      = 0;
   c->m_addGOP32refPics                         = false;
   c->m_numRefPics                              = 0;
   c->m_numRefPicsSCC                           = -1;
@@ -703,6 +705,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_reservedFlag                            = false;
   c->m_reservedInt                             = 0;
+  memset( c->m_reservedInt8,   0, sizeof(c->m_reservedInt8) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -939,6 +942,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_numThreads = getNumThreadsDefault( c );
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
+
+  initMultithreading( c );
+
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ?      1   : 0   ;
   if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ?      0   : 1   ;
   if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ?      0   : 1   ;
@@ -1280,14 +1286,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_craAPSreset            = true;
     c->m_rprRASLtoolSwitch      = true;
   }
-  
+
   if( c->m_maxPicWidth > 0 && c->m_maxPicHeight > 0 )
   {
     vvenc_confirmParameter( c, !c->m_rprEnabledFlag || !c->m_resChangeInClvsEnabled, "if max picture size is set, both RPR and resChangeInClvsEnabled have to be enabled" );
   }
 
   if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
-  {  
+  {
     int idrPeriod = fps * c->m_IntraPeriodSec;
     if( idrPeriod % c->m_GOPSize != 0 )
     {
@@ -1318,7 +1324,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     c->m_IntraPeriod = idrPeriod;
   }
-  
+
   if( c->m_IntraPeriod == 1 && !c->m_poc0idr )
   {
     c->m_poc0idr = true;
@@ -1335,7 +1341,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
-  
+
   vvenc_confirmParameter( c, !c->m_poc0idr && ( c->m_IntraPeriod == 1 || !c->m_picReordering ), "when POC 0 is not an IDR frame it is only possible for random access, for all intra and low delay encoding POC0IDR must be set!" );
 
   if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
@@ -1385,8 +1391,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_minIntraDist > c->m_IntraPeriod && c->m_sliceTypeAdapt > 0, "STA: Minimal intra distance can not be larger than intra period" );
 
   // set number of lead / trail frames in segment mode
-  const int staFrames  = c->m_sliceTypeAdapt                       ? c->m_GOPSize     : 0;
-  const int mctfFrames = c->m_vvencMCTF.MCTF || c->m_usePerceptQPA ? VVENC_MCTF_RANGE : 0;
+  const int keyFrameDist = c->m_IntraPeriod < 1                      ? c->m_GOPSize     : std::min( c->m_GOPSize, c->m_IntraPeriod );
+  const int staFrames    = c->m_sliceTypeAdapt                       ? keyFrameDist     : 0;
+  const int mctfFrames   = c->m_vvencMCTF.MCTF || c->m_usePerceptQPA ? VVENC_MCTF_RANGE : 0;
   switch( c->m_SegmentMode )
   {
     case VVENC_SEG_FIRST:
@@ -2097,7 +2104,7 @@ static bool checkCfgParameter( vvenc_config *c )
   }
   if( c->m_ifpLines )
   {
-    const int minNumThreadsIfp = getNumThreadsDefault( c ) * 2;
+    const int minNumThreadsIfp = getNumThreadsDefault( c ) * 3 / 2;
     if( c->m_numThreads < minNumThreadsIfp )
     {
       msg.log( VVENC_WARNING, "Using IFP at low number of threads (<%d) does not provide more speedup, consider disabling IFP.\n", minNumThreadsIfp );
@@ -2176,7 +2183,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_fastLocalDualTreeMode < 0 || c->m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
 
-  if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
+  if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 || c->m_tileColumnWidth[0] > 0 || c->m_tileRowHeight[0] > 0 )
   {
     if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
 
@@ -2184,6 +2191,53 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
   return( c->m_confirmFailed );
+}
+
+static void initMultithreading( vvenc_config *c )
+{
+  int mtProfile      = c->m_mtProfile;
+
+  if( mtProfile < 0 )
+  {
+    int numThreads     = c->m_numThreads;
+    int defaultThreads = getNumThreadsDefault( c );
+
+    if( numThreads <= defaultThreads ) mtProfile = 0;
+    else if( 2 * numThreads <= 3 * defaultThreads ) mtProfile = 1;
+    else if( numThreads <= 2 * defaultThreads ) mtProfile = 2;
+    else mtProfile = 3;
+  }
+
+  c->m_mtProfile = mtProfile;
+
+  if( mtProfile == 0 )
+  {
+    if( c->m_entropyCodingSyncEnabled < 0 ) c->m_entropyCodingSyncEnabled = 0;
+    if( c->m_ifp < 0 ) c->m_ifp = 0;
+
+    return;
+  }
+
+  bool isHD   = std::min( c->m_SourceWidth, c->m_SourceHeight ) >= 720;
+  bool isLCTU = c->m_CTUSize == 128;
+  bool isTileDefault = c->m_numTileCols < 0 && c->m_numTileRows < 0 && c->m_tileRowHeight[0] == 0 && c->m_tileColumnWidth[0] == 0;
+
+  if( isLCTU )
+  {
+    if( c->m_entropyCodingSyncEnabled < 0 ) c->m_entropyCodingSyncEnabled = ( !isHD || mtProfile >= 2 ) ? 1 : 0;
+    if( c->m_ifp < 0 ) c->m_ifp = mtProfile == 3 ? 1 : 0;
+  }
+  else
+  {
+    if( c->m_entropyCodingSyncEnabled < 0 ) c->m_entropyCodingSyncEnabled = mtProfile == 3 ? 1 : 0;
+    if( c->m_ifp < 0 ) c->m_ifp =  ( !isHD || mtProfile >= 2 ) ? 1 : 0;
+  }
+  
+  if( isHD && isTileDefault )
+  {
+    c->m_numTileRows = c->m_ifp == 1 ? 1 : 2;
+    c->m_numTileCols = 2;
+  }
 }
 
 static void checkCfgPicPartitioningParameter( vvenc_config *c )
@@ -2405,6 +2459,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_RCMaxBitrate        = 0;                        // maximum instantaneous bitrate in bps
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
+  c->m_mtProfile           = -1;                       // set mtProfile to auto
 
   iRet = vvenc_init_preset( c, preset );
   return iRet;
@@ -3300,7 +3355,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
     }
     css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
-    css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
+    css << "WF:" << (int) c->m_entropyCodingSyncEnabled << " ";
     css << "\n";
   }
 
