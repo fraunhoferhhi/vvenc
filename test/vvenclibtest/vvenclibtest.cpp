@@ -323,6 +323,8 @@ int testLibParameterRanges()
   vvencParams.m_tileRowHeight[0]   = 2;
   testParamList<bool, bool>( "PicPartition",               vvencParams.m_picPartitionFlag,           vvencParams, { 1 }, true );
 
+  vvencParams.m_tileColumnWidth[0] = 0;
+  vvencParams.m_tileRowHeight[0]   = 0;
   fillEncoderParameters( vvencParams, false );
 
   testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { -1, 0, 1 } );
