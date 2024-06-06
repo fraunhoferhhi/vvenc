@@ -1580,11 +1580,17 @@ void EncGOP::xUpdateRateCap()
     auto pic = *it;
     if( pic->isReconstructed )
     {
+      const unsigned uibits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+
       if( !pic->gopEntry->m_isStartOfIntra && pic->gopEntry->m_scType == SCT_NONE )
       {
-        const unsigned uibits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         xUpdateRateCapBits( pic, uibits );
       }
+      else if( pic->gopEntry->m_isStartOfIntra && pic->gopEntry->m_gopNum == 0 && pic->poc < m_pcEncCfg->m_GOPSize && m_rcap.accumTargetBits * (uint32_t) m_pcEncCfg->m_GOPSize < uibits )
+      {
+        m_rcap.accumActualBits += uibits - m_rcap.accumTargetBits * (uint32_t) m_pcEncCfg->m_GOPSize; // capped CQF: compensate for overspending in first I-frame
+      }
+
       it = m_rcUpdateList.erase( it );
     }
     else
@@ -1708,6 +1714,10 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, const PicList& picList )
   const unsigned bFrmBC_final   = bFrmBC * nonKeyPicsFactor;
   const unsigned targetBits     = (unsigned)( (bFrmBC + (intraP >> 1)) / (intraP - 1) );
   m_rcap.accumTargetBits += targetBits;
+  if (keyPic.gopEntry->m_isStartOfIntra && keyPic.gopEntry->m_gopNum == 0 && keyPic.poc < m_pcEncCfg->m_GOPSize && m_rcap.accumTargetBits * (int64_t) intraP < iFrmBC)
+  {
+    m_rcap.accumTargetBits = (iFrmBC + (intraP >> 1)) / intraP;
+  }
   m_rcap.nonRateCapEstim = 1.0;     // changed in case of capping
   m_rcap.gopAdaptedQPAdj = 0;       // changed in first GOP of scene
 
