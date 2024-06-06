@@ -461,6 +461,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
     const int yOffset    = -1;
     const Pel* sourceCol = buf + base + yOffset * buffStride;
     const Pel* origCol   = org;
+    __m256i verror = _mm256_setzero_si256();
 
     for( int x1 = 0; x1 < w; x1 += 16, sourceCol += 16, origCol += 16 )
     {
@@ -531,15 +532,7 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
           xsum = _mm256_sub_epi16( xsum, xorg );
           xsum = _mm256_madd_epi16( xsum, xsum );
 
-          __m128i
-          ysum = _mm_add_epi32( _mm256_castsi256_si128( xsum ), _mm256_extracti128_si256( xsum, 1 ) );
-          xerror = _mm_hadd_epi32( xerror, ysum );
-          error = _mm_cvtsi128_si32( xerror );
-
-          if( error > besterror )
-          {
-            return error;
-          }
+          verror = _mm256_add_epi32( verror, xsum );
         }
         else
         {
@@ -551,7 +544,8 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
     }
 
     GCC_WARNING_RESET
-    
+
+    xerror = _mm_add_epi32( _mm256_castsi256_si128( verror ), _mm256_extracti128_si256( verror , 1 ) );
     xerror = _mm_hadd_epi32( xerror, xerror );
     xerror = _mm_hadd_epi32( xerror, xerror );
     error  = _mm_cvtsi128_si32( xerror );

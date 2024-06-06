@@ -1,4 +1,42 @@
 /////////////////////////////////////////
+tag 1.12.0-rc1
+
+* libvvenc:
+  - added parameters:
+    - vvenc_config::m_mtProfile: defines how aggressively to boost multi-threading (0...3, where 0 is
+      current multi-threading, and 3 contains all WPP, IFP and tile usage, use -1 for auto behavior
+      depending on resolution and the number of threads used)
+  - changed parameters (vvenc_config::):
+    - m_numTileCols and m_numTileRows from uint32_t to int32_t (-1 for auto behavior, see m_mtProfile)
+    - m_ifp and m_entropyCodingSynchEnabled from bool to int8_t (-1 for auto behavior, see m_mtProfile)
+  - enabled capped constant quality factor (CQF) mode
+    - constant quality mode (vvenc_config::m_QP set and ::m_usePerceptQPA enabled) with rate capping
+      enabled with an absolute limit (::m_RCMaxBitrate)
+  - minor (~5%) speedups to faster preset
+  - improvements to low-delay encoding configuration
+  - other minor optimizations, cleanups and bugfixes
+
+* vvencFFapp:
+  - added parameters:
+    - MTProfile: set the multi-threading profile (0: current default - 3: use all MT optimizers, use
+      -1/auto to automatically set depending on resolution and number of threads used)
+  - changed parameters:
+    - WaveFrontSynchro, IFP, Tiles: default value set to -1, with the behavior defined by MTProfile
+      parameter, resolution and number of used threads
+
+* vvencapp:
+  - added parameters:
+    - mtprofile: set the multi-threading profile (0: current default - 3: use all MT optimizers, use
+                 -1/auto to automatically set depending on resolution and number of threads used)
+    - internal-bitdepth: sets internal encoding bitdepth, i.e. the output bitstream bitdepth
+    - refreshtype: specifies the refresh-type used at random access points
+    - decodedpicturehash: enable/disable decoded picture hash (DPH) SEI generation
+  - changed parameters:
+    - ifp, tiles: default value set to -1, with the behavior defined by mtprofile parameter, resolution
+                  and number of used threads
+    - format: now accepts yuv400 and yuv400_10 as parameter for monochrome input
+
+/////////////////////////////////////////
 tag 1.11.1
 
 * libvvenc:
