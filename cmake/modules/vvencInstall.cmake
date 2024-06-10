@@ -17,11 +17,11 @@ macro( install_targets config_ )
            LIBRARY DESTINATION ${LIBRARY_DEST}
            ARCHIVE DESTINATION ${ARCHIVE_DEST} )
   if( VVENC_INSTALL_FULLFEATURE_APP )
-	install( TARGETS             vvencapp vvencFFapp
-	         CONFIGURATIONS      ${config_}
+    install( TARGETS             vvencapp vvencFFapp
+             CONFIGURATIONS      ${config_}
              RUNTIME DESTINATION ${RUNTIME_DEST} )
   else()
-	install( TARGETS             vvencapp
+    install( TARGETS             vvencapp
              CONFIGURATIONS      ${config_}
              RUNTIME DESTINATION ${RUNTIME_DEST} )
   endif()
@@ -68,7 +68,9 @@ install_targets( RelWithDebInfo )
 # install pdb files
 install_lib_pdb( vvenc )
 install_exe_pdb( vvencapp )
-install_exe_pdb( vvencFFapp )
+if( VVENC_INSTALL_FULLFEATURE_APP )
+  install_exe_pdb( vvencFFapp )
+endif()
 
 # configure version file
 configure_file( cmake/install/vvencConfigVersion.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/vvencConfigVersion.cmake @ONLY )
