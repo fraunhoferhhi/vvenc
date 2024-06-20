@@ -1389,6 +1389,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   vvenc_confirmParameter( c, c->m_minIntraDist > 0 && c->m_sliceTypeAdapt == 0,               "STA: Setting a minimal intra distance only works with slice type adaptation enabled" );
   vvenc_confirmParameter( c, c->m_minIntraDist > c->m_IntraPeriod && c->m_sliceTypeAdapt > 0, "STA: Minimal intra distance can not be larger than intra period" );
+  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_RCTargetBitrate > 0,   "Segment concatenation not available, when rate control is enabled" );
+  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && !c->m_RCTargetBitrate && c->m_RCMaxBitrate != INT32_MAX, "Segment concatenation not available, when capped CQF is enabled" );
 
   // set number of lead / trail frames in segment mode
   const int keyFrameDist = c->m_IntraPeriod < 1                      ? c->m_GOPSize     : std::min( c->m_GOPSize, c->m_IntraPeriod );
