@@ -734,7 +734,6 @@ namespace DQIntern
         //{
         //  rdCostZ = decisionA.rdCost;
         //}
-
         __m128i numSig = _mm_loadu_si32( state.numSig );
 
         rdCostZ01 = _mm_add_epi64(  rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
@@ -760,7 +759,6 @@ namespace DQIntern
         rdCostZ01 = _mm_blendv_epi8( rdMax, rdCostZ01, mask02 );
         rdCostZ23 = _mm_blendv_epi8( rdMax, rdCostZ23, mask13 );
       }
-
       // decision 0: either A from 0 (pq0), or B from 1 (pq2), or 0 from 0
       // decision 1: either A from 2 (pq3), or B from 3 (pq1), or 0 from 2
       // decision 2: either A from 1 (pq0), or B from 0 (pq2), or 0 from 1
@@ -774,8 +772,14 @@ namespace DQIntern
       __m128i rdBest23 = rdCostB23;
 
       __m128i valBest = _mm_setr_epi32(                  0,                  0, pqData[2].absLevel, pqData[1].absLevel );
-      __m128i valCand = _mm_setr_epi32( pqData[0].absLevel, pqData[3].absLevel,                  0,                  0 );
 
+#if ENABLE_VALGRIND_CODE
+      // just to avoid strange "unknown instruction"  error
+      __m128i valCand = _mm_setr_epi32( 0, pqData[3].absLevel,                  0,                  0 );
+      valCand =  _mm_insert_epi32 (valCand, pqData[0].absLevel,0);
+#else
+      __m128i valCand = _mm_setr_epi32( pqData[0].absLevel, pqData[3].absLevel,                  0,                  0 );
+#endif
       __m128i idxBest = _mm_setr_epi32( 0, 2, 0, 2 );
       __m128i idxCand = _mm_setr_epi32( 0, 2, 1, 3 );
 
