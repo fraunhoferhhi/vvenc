@@ -198,6 +198,7 @@ typedef enum
   VVENC_DRT_RECOVERY_POINT_SEI = 3,
   VVENC_DRT_IDR2               = 4,             //deprecated
   VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
+  VVENC_DRT_IDR_NO_RADL        = 6,
 }vvencDecodingRefreshType;
 
 typedef enum

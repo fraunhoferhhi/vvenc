@@ -1325,6 +1325,10 @@ vvencNalUnitType EncGOP::xGetNalUnitType( const GOPEntry* _gopEntry ) const
         return VVENC_NAL_UNIT_CODED_SLICE_CRA;
       }
     }
+    else if( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL )
+    {
+      return VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP;
+    }
     else
     {
       return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
@@ -1341,7 +1345,7 @@ vvencNalUnitType EncGOP::xGetNalUnitType( const GOPEntry* _gopEntry ) const
     return VVENC_NAL_UNIT_CODED_SLICE_RASL;
   }
 
-  if( m_lastIDR > 0 && gopEntry.m_POC < m_lastIDR )
+  if( m_lastIDR > 0 && gopEntry.m_POC < m_lastIDR && m_pcEncCfg->m_DecodingRefreshType != VVENC_DRT_IDR_NO_RADL )
   {
     return VVENC_NAL_UNIT_CODED_SLICE_RADL;
   }
@@ -1631,8 +1635,8 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
       }
       else
       {
-        // just pass the input list to processing list
-        procList.splice( procList.end(), m_gopEncListInput );
+      // just pass the input list to processing list
+      procList.splice( procList.end(), m_gopEncListInput );
         m_gopEncListInput.clear();
       }
     }
@@ -1726,8 +1730,8 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
   for (auto picItr = picListBegin; picItr != picList.end(); ++picItr)
   {
     auto pic = (*picItr);
-    if (pic->gopEntry->m_gopNum == gopNum )
-    {  
+    if( pic->gopEntry->m_gopNum == gopNum )
+    {
       if( pic->m_picShared->m_picMotEstError > 0 )
       {
         CHECK( pic->isInitDone, "try to modify GOP qp of picture, which has already been initialized" );
@@ -1833,12 +1837,12 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
 
   // enable QP adjustment after coded Intra in the first GOP or on a scene cut
   // NOTE: on some scene cuts, in case of low motion activity, targetBits equals to zero (QPA)
-  if (m_rcap.accumGopCounter == 0 && m_rcap.accumTargetBits > 0 && !nextKeyPicAfterIDR )
+  if (m_rcap.accumGopCounter == 0 && m_rcap.accumTargetBits > 0 && !nextKeyPicAfterIDR)
   {
     for (auto picItr = picListBegin; picItr != picList.end(); ++picItr)
     {
       auto pic = (*picItr);
-      // just on the next picture in decoding order after start of GOP
+        // just on the next picture in decoding order after start of GOP
       if (pic->gopEntry->m_gopNum == gopNum && !pic->gopEntry->m_isStartOfGop)
       {
         pic->isSceneCutCheckAdjQP = true;
@@ -1929,9 +1933,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   xSelectReferencePictureList( slice );
   int missingPoc;
-  if ( slice->isRplPicMissing( picList, REF_PIC_LIST_0, missingPoc ) || slice->isRplPicMissing( picList, REF_PIC_LIST_1, missingPoc ) )
+  int ipc = ( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? m_pcEncCfg->m_IntraPeriod : 0;
+  if ( slice->isRplPicMissing( picList, REF_PIC_LIST_0, missingPoc, ipc ) || slice->isRplPicMissing( picList, REF_PIC_LIST_1, missingPoc, ipc ) )
   {
-    slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
+    slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1], ipc );
   }
   slice->applyReferencePictureListBasedMarking( picList, slice->rpl[0], slice->rpl[1], 0, *slice->pps, m_pcEncCfg->m_numThreads == 0 );
 

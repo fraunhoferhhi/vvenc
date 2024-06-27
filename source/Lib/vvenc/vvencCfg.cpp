@@ -255,6 +255,7 @@ static inline std::string vvenc_getDecodingRefreshTypeStr(  int type, bool poc0i
     case 3: cType = "RecPointSEI"; break;
     case 4: cType = "IDR2 (deprecated)"; break; //deprecated
     case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
+    case 6: cType = "IDR_NO_RADL"; break;
     default: cType = "unknown"; break;
   }
   if( poc0idr ) cType += " with POC 0 IDR";
@@ -1277,11 +1278,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_rprEnabledFlag == -1 )
   {
-    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
+    c->m_rprEnabledFlag = ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? 2 : 0;
   }
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && !( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ), "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE or VVENC_DRT_IDR_NO_RADL" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -1907,7 +1908,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 6,                "Decoding refresh type must be comprised between 0 and 6 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType == 6 && !c->m_poc0idr,                              "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 

@@ -230,12 +230,14 @@ const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap
   { "rpsei",                 VVENC_DRT_RECOVERY_POINT_SEI },
   { "idr2",                  VVENC_DRT_IDR2 }, //deprecated
   { "cra_cre",               VVENC_DRT_CRA_CRE },
+  { "idr_no_radl",           VVENC_DRT_IDR_NO_RADL },
   { "0",                     VVENC_DRT_NONE },
   { "1",                     VVENC_DRT_CRA },
   { "2",                     VVENC_DRT_IDR },
   { "3",                     VVENC_DRT_RECOVERY_POINT_SEI },
   { "4",                     VVENC_DRT_IDR2 },  //deprecated
   { "5",                     VVENC_DRT_CRA_CRE },
+  { "6",                     VVENC_DRT_IDR_NO_RADL },
 };
 
 const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =

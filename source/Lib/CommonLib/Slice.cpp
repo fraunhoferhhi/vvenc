@@ -952,7 +952,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
 }
 
 // int Slice::checkThatAllRefPicsAreAvailable( const PicList& rcListPic, const ReferencePictureList *pRPL, int rplIdx ) const
-bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const
+bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc, int ip ) const
 {
   if( isIDRorBLA() ) return false; // assume that all pic in the DPB will be flushed anyway so no need to check.
 
@@ -1034,7 +1034,7 @@ bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList,
 
     for( auto& pic : rcListPic )
     {
-      if( ! pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced )
+      if( ! pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced && !refPicIsFutureIDRnoLP( pic->getPOC(), ip ) )
       {
         isAvailable = true;
         break;
@@ -1050,7 +1050,7 @@ bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList,
   return false;
 }
 
-void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
+void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, int ip)
 {
   Picture* picCand;;
   int pocCycle = 0;
@@ -1080,7 +1080,7 @@ void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcList
       picCand = *(iterPic++);
       if( pic->layerId == picCand->layerId && picCand->isReferenced)
       {
-        if (!rplSrc0.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc0.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        if (!rplSrc0.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc0.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP) && !refPicIsFutureIDRnoLP(picCand->poc, ip))
         {
           isAvailable = true;
           break;
@@ -1144,7 +1144,7 @@ void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcList
       picCand = *(iterPic++);
       if( pic->layerId == picCand->layerId && picCand->isReferenced )
       {
-        if (!rplSrc1.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc1.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP))
+        if (!rplSrc1.isLongtermRefPic[ii] && picCand->poc == poc + rplSrc1.refPicIdentifier[ii] && !isPocRestrictedByDRAP(picCand->poc, picCand->precedingDRAP) && !refPicIsFutureIDRnoLP(picCand->poc, ip))
         {
           isAvailable = true;
           break;
@@ -1328,6 +1328,16 @@ bool Slice::isPocRestrictedByDRAP( int poc, bool precedingDRAPInDecodingOrder ) 
     return false;
   }
   return ( isDRAP && poc != associatedIRAP ) || ( latestDRAPPOC != MAX_INT && poc > latestDRAPPOC && (precedingDRAPInDecodingOrder || poc < latestDRAPPOC) );
+}
+
+bool Slice::refPicIsFutureIDRnoLP( int candPoc, int ipc ) const
+{
+  //check if we are not trying to reference a future IDR picture
+  if( ipc != 0 && associatedIRAP + ipc == candPoc )
+  {
+    return true;
+  }
+  return false;
 }
 
 void Slice::setAlfApsIds( const std::vector<int>& ApsIDs)
