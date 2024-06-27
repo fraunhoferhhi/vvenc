@@ -61,6 +61,8 @@ class NoMallocThreadPool;
 //! \ingroup EncoderLib
 //! \{
 
+double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
+
 
 struct MotionVector
 {

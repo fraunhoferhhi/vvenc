@@ -57,6 +57,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Nal.h"
 #include "EncHRD.h"
 #include "EncStage.h"
+#include "SEIFilmGrainAnalyzer.h"
 
 #include <vector>
 #include <list>
@@ -168,6 +169,8 @@ private:
   std::deque<PicApsGlobal*> m_globalApsList;
   std::vector<int>          m_globalCtuQpVector;
   bool                      m_forceSCC;
+
+  FGAnalyzer                m_fgAnalyzer;
 
 public:
   EncGOP( MsgLog& msglog );

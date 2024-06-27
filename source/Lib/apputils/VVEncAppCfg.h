@@ -1160,6 +1160,13 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ;
   }
 
+  {
+    opts.setSubSection("Film grain analysis");
+    opts.addOptions()
+    ("fga",                           c->m_fga,                  "Experimental: Enable film grain analysis and generate FGC SEI message ")
+    ;
+  }
+
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
 

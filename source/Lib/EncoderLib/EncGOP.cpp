@@ -158,6 +158,11 @@ EncGOP::~EncGOP()
   m_freePicEncoderList.clear();
   m_threadPool = nullptr;
 
+  if ( m_pcEncCfg->m_fga )
+  {
+    m_fgAnalyzer.destroy();
+  }
+
   // cleanup parameter sets
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
@@ -186,6 +191,13 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   xInitPPS( pps0, sps0 );
   xInitRPL( sps0 );
   xInitHrdParameters( sps0 );
+
+  if ( encCfg.m_fga )
+  {
+    m_fgAnalyzer.init( m_pcEncCfg->m_SourceWidth, m_pcEncCfg->m_SourceHeight,
+                       m_pcEncCfg->m_internChromaFormat, m_pcEncCfg->m_outputBitDepth,
+                       m_pcEncCfg->m_fg.m_fgcSEICompModelPresent );
+  }
 
   if( !m_pcEncCfg->m_poc0idr )
   {
@@ -591,6 +603,24 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 
   // compress next picture
   picEncoder->compressPicture( *pic, *this );
+
+  if ( m_pcEncCfg->m_fga && m_pcRateCtrl->rcIsFinalPass )
+  {
+    /* It is mctf denoising for film grain analysis. Note:
+     * when mctf is used, it is different from mctf for encoding. */
+    int curFrameNum = pic->getPOC();
+    int gopSize = m_pcEncCfg->m_GOPSize;
+    int prevAnalysedPoc = m_fgAnalyzer.prevAnalysisPoc;
+    if ( ( prevAnalysedPoc == -1 ) || ( abs( curFrameNum - prevAnalysedPoc ) >= gopSize ) )
+    {
+      bool isFiltered = pic->getFilteredOrigBuffer().valid();
+      if ( isFiltered )
+      {
+        m_fgAnalyzer.estimateGrainParameters( pic );
+        m_fgAnalyzer.prevAnalysisPoc = curFrameNum;
+      }
+    }
+  }
 
   // finish picture encoding and cleanup
   if( m_pcEncCfg->m_numThreads > 0 )
@@ -2536,6 +2566,22 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
     SEIAlternativeTransferCharacteristics *seiAlternativeTransferCharacteristics = new SEIAlternativeTransferCharacteristics;
     m_seiEncoder.initSEIAlternativeTransferCharacteristics( seiAlternativeTransferCharacteristics );
     leadingSeiMessages.push_back(seiAlternativeTransferCharacteristics);
+  }
+
+  // film grain SEI
+  if ( m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI )
+  {
+    SeiFgc* sei = new SeiFgc;
+    m_seiEncoder.initSeiFgc( sei );
+    sei->log2ScaleFactor = m_fgAnalyzer.getLog2scaleFactor();
+    for ( int compIdx = 0; compIdx < getNumberValidComponents(pic.chromaFormat); compIdx++ )
+    {
+      if ( sei->compModel[compIdx].presentFlag )
+      {  // higher importance of presentFlag is from cfg file
+        sei->compModel[compIdx] = m_fgAnalyzer.getCompModel( compIdx );
+      }
+    }
+    leadingSeiMessages.push_back( sei );
   }
 
   // mastering display colour volume

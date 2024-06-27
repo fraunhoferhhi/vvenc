@@ -703,9 +703,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_forceScc                                = 0;
 
-  c->m_reservedFlag                            = false;
-  c->m_reservedInt                             = 0;
-  memset( c->m_reservedInt8,   0, sizeof(c->m_reservedInt8) );
+  c->m_fga                                     = false;
+
+  c->m_reservedInt = 0;
+
+  c->m_reservedInt8 = 0;
+
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1695,6 +1698,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
           vvenc_confirmParameter( c, numRefs == 0, "Invalid number of references set in NumRefPics!" );
       }
     }
+  }
+
+  if (c->m_fga)
+  {
+    vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
+    vvenc_confirmParameter( c, c->m_IntraPeriod <=1, "Film grain analysis cannot be enabled when intra period is less than two!");
   }
 
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
@@ -3177,7 +3186,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
-    css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << "\n";
     }
 
   if( eMsgLevel >= VVENC_VERBOSE )

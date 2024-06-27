@@ -56,12 +56,17 @@ VVEncCfg::VVEncCfg()
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
 {
+  m_fg.m_fgcSEIEnabled = false;
+  m_fg.m_fgcSEICompModelPresent[0] = false;
+  m_fg.m_fgcSEICompModelPresent[1] = false;
+  m_fg.m_fgcSEICompModelPresent[2] = false;
 }
 
 VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 {
   *((vvenc_config*)this) = extern_cfg;
   xInitCfgMembers();
+
   return *this;
 }
 
@@ -72,7 +77,31 @@ void VVEncCfg::xInitCfgMembers()
   m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
   m_bimCtuSize        = m_CTUSize;
   m_MaxQT[0] = m_MaxQT[1] = m_MaxQT[2] = m_CTUSize;
-  m_rateCap           = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
+  m_rateCap = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
+
+  if ( this->m_fga )
+  {
+    memset( m_fg.m_fgcSEIIntensityIntervalLowerBound, 0, sizeof(uint8_t) * 3 * VVENC_MAX_NUM_INTENSITIES );
+    memset( m_fg.m_fgcSEIIntensityIntervalUpperBound, 255, sizeof(uint8_t) * 3 * VVENC_MAX_NUM_INTENSITIES );
+    memset( m_fg.m_fgcSEICompModelValue, 0, sizeof(uint32_t) * 3 * VVENC_MAX_NUM_INTENSITIES * VVENC_MAX_NUM_MODEL_VALUES );
+    m_fg.m_fgcSEIEnabled = true;
+    m_fg.m_fgcSEICompModelPresent[0] = true; // FGA is performed only for the luma plane
+    m_fg.m_fgcSEICompModelPresent[1] = true;
+    m_fg.m_fgcSEICompModelPresent[2] = true;
+    m_fg.m_fgcSEICancelFlag = false;
+    m_fg.m_fgcSEIPersistenceFlag = true;
+    m_fg.m_fgcSEIModelID = 0;
+    m_fg.m_fgcSEISepColourDescPresentFlag = false;
+    m_fg.m_fgcSEIBlendingModeID = 0;
+    m_fg.m_fgcSEILog2ScaleFactor = 0;
+    m_fg.m_fgcSEIPerPictureSEI = false;
+    m_fg.m_fgcSEINumIntensityIntervalMinus1[0] = 0;
+    m_fg.m_fgcSEINumIntensityIntervalMinus1[1] = 0;
+    m_fg.m_fgcSEINumIntensityIntervalMinus1[2] = 0;
+    m_fg.m_fgcSEINumModelValuesMinus1[0] = 0;
+    m_fg.m_fgcSEINumModelValuesMinus1[1] = 0;
+    m_fg.m_fgcSEINumModelValuesMinus1[2] = 0;
+  }
 }
 
 }
