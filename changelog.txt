@@ -1,11 +1,5 @@
 /////////////////////////////////////////
-tag 1.12.0-rc2
-
-* libvvenc:
-  - fixed undeterministic behavior in CQF statistics propagation
-
-/////////////////////////////////////////
-tag 1.12.0-rc1
+tag 1.12.0
 
 * libvvenc:
   - added parameters:
