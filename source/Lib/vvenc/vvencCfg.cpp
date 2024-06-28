@@ -703,13 +703,11 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_FirstPassMode                           = 0;
 
   c->m_forceScc                                = 0;
+  c->m_GOPQPA                                  = -1;
 
   c->m_fga                                     = false;
 
-  c->m_reservedInt = 0;
-
-  c->m_reservedInt8 = 0;
-
+  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1498,6 +1496,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
+  if ( c->m_GOPQPA < 0 )
+  {
+    c->m_GOPQPA = c->m_usePerceptQPA ? 0 : 1;
+  }
 
   if( c->m_treatAsSubPic )
   {
@@ -2202,6 +2204,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
+
+  vvenc_confirmParameter(c, c->m_GOPQPA > 0 && c->m_usePerceptQPA, "GOP-wise QPA cannot be enabled if perceptual QPA is enabled");
+  vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
 
   return( c->m_confirmFailed );
 }

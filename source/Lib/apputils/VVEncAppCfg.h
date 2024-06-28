@@ -535,6 +535,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToEnum<int>                toAud                        ( &c->m_AccessUnitDelimiter,         &FlagToIntMap<int> );
   IStreamToEnum<int>                toVui                        ( &c->m_vuiParametersPresent,        &FlagToIntMap<int> );
+  IStreamToEnum<int8_t>             toGOPQPA                     ( &c->m_GOPQPA,                      &FlagToIntMap<int8_t> );
   IStreamToEnum<bool>               toQPA                        ( &c->m_usePerceptQPA,               &QPAToIntMap );
   
 
@@ -872,7 +873,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
     ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-    ;
+    ("GOPQPA",                                          toGOPQPA,                                            "Enable GOP QP-cascade (0: off, 1: on, -1: auto - enable when QPA is disabled)")
+    ; 
 
     opts.setSubSection("Misc. options");
     opts.addOptions()

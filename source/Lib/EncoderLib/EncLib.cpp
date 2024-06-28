@@ -369,6 +369,7 @@ void EncLib::xInitRCCfg()
 
   // preserve some settings
   m_firstPassCfg.m_intraQPOffset   = m_encCfg.m_intraQPOffset;
+  m_firstPassCfg.m_GOPQPA          = m_encCfg.m_GOPQPA;
   if( m_firstPassCfg.m_usePerceptQPA && ( m_firstPassCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_firstPassCfg.m_framesToBeEncoded == 1 ) )
   {
     m_firstPassCfg.m_CTUSize       = m_encCfg.m_CTUSize;
