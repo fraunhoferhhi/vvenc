@@ -1441,7 +1441,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     if( pic->isInitDone )
       continue;
 
-    if( m_pcEncCfg->m_rateCap && pic->gopEntry->m_isStartOfGop )
+    if( (m_pcEncCfg->m_rateCap || m_pcEncCfg->m_GOPQPA) && pic->gopEntry->m_isStartOfGop )
     {
       if( !((pic->gopEntry->m_gopNum != picList.back()->gopEntry->m_gopNum || picList.back()->isFlush) && m_rcUpdateList.empty() ) )
       {
@@ -1769,10 +1769,22 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
       sum += gopMinNoiseLevels[i];
     }
   }
-
+  // adapt GOP's QP offset
   if (num > 0 && sum > 0)
   {
     qpStart += 0.5 * (6.0 * log ((double) sum / (double) num) / log (2.0) - 1.0 - 24.0); // see RateCtrl.cpp
+    if (m_pcEncCfg->m_GOPQPA)
+    {
+      if (((qpStart > 29) && (gopSpVisActLum > 600)) ||
+        ((qpStart > 27) && (gopSpVisActLum > 850)) || (gopSpVisActLum > 1300))
+      {
+        dQP += 1;
+      }
+      if ((qpStart < 24) && (gopSpVisActLum < 400))
+      {
+        dQP -= 1;
+      }
+    }
   }
   qpStart += log (resRatio4K) / log (2.0); // ICIP23 paper
 
@@ -1782,43 +1794,45 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
   }
 
   // derive rate capping parameters
-  // TODO hlm, henkel: adapt GOP's QP offset (capped CQF, adaptive QP cascade)
-  const int bDepth = m_pcEncCfg->m_internalBitDepth[CH_L];
-  const int intraP = Clip3 (m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
-  const int visAct = std::max (uint16_t (gopSpVisActLum >> (12 - bDepth)), keyPic.m_picShared->m_picVisActY); // when vaY=0
-  const double apa = sqrt ((m_pcEncCfg->m_usePerceptQPATempFiltISlice ? 32.0 : 16.0) * double (1 << (2 * bDepth - 10)) / sqrt (resRatio4K)); // average picture activity
-  const int auxOff = (m_pcEncCfg->m_blockImportanceMapping && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0);
-  const int iFrmQP = std::min (MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int (floor (3.0 * log (visAct / apa) / log (2.0) + 0.5)));
-  const int qp32BC = int (16384.0 + 7.21875 * pow ((double) gopSpVisActLum, 4.0/3.0) + 1.46875 * pow ((double) gopSpVisActChr, 4.0/3.0)) * (isHighRes ? 96 : 24); // TODO hlm
-  const int iFrmBC = int (0.5 + qp32BC * pow (2.0, (32.0 - iFrmQP) * 11.0 / 64.0) * pow (resRatio4K, 2.0 / 3.0)); // * HD tuning
-  const int  shift = (gopMotEstError < 32 ? 5 - (gopMotEstError >> 4) : 3);
-  if (keyPic.m_picShared->m_picMotEstError >= 256) gopMotEstError >>= 2; else // avoid 2 much capping at cuts
-  if (gopMotEstError >= 120) /*TODO tune this*/ gopMotEstError >>= 1;
-  const int bFrmBC = int ((4.0 * iFrmBC * (intraP - 1)) / sqrt ((double) std::max (gopSpVisActLum, gopSpVisActChr)) * std::max (int (gopMotEstError * gopMotEstError) >> (bDepth / 2), (keyPic.picVisActTL0 - visAct) >> shift) * pow (2.0, -1.0 * bDepth));
-  const int meanGopSizeInIntraP = intraP / ((intraP + m_pcEncCfg->m_GOPSize - 1) / m_pcEncCfg->m_GOPSize); 
-
-  const double eps              = 1.0 - 1.0 / double (1u << std::min (31u, m_rcap.accumGopCounter));
-  const double nonKeyPicsFactor = (m_rcap.accumTargetBits == 0) ? 1.0 : pow ((double) m_rcap.accumActualBits / ((meanGopSizeInIntraP - 1.0) * m_rcap.accumTargetBits), eps);
-  const unsigned bFrmBC_final   = bFrmBC * nonKeyPicsFactor;
-  const unsigned targetBits     = (unsigned)( (bFrmBC + (intraP >> 1)) / (intraP - 1) );
-  m_rcap.accumTargetBits += targetBits;
-  if (keyPic.gopEntry->m_isStartOfIntra && keyPic.gopEntry->m_gopNum == 0 && keyPic.poc < m_pcEncCfg->m_GOPSize && m_rcap.accumTargetBits * (int64_t) intraP < iFrmBC)
+  if (m_pcEncCfg->m_rateCap)
   {
-    m_rcap.accumTargetBits = (iFrmBC + (intraP >> 1)) / intraP;
-  }
-  m_rcap.nonRateCapEstim = 1.0;     // changed in case of capping
-  m_rcap.gopAdaptedQPAdj = 0;       // changed in first GOP of scene
+    const int bDepth = m_pcEncCfg->m_internalBitDepth[CH_L];
+    const int intraP = Clip3(m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
+    const int visAct = std::max(uint16_t(gopSpVisActLum >> (12 - bDepth)), keyPic.m_picShared->m_picVisActY); // when vaY=0
+    const double apa = sqrt((m_pcEncCfg->m_usePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
+    const int auxOff = (m_pcEncCfg->m_blockImportanceMapping && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
+    const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(3.0 * log(visAct / apa) / log(2.0) + 0.5)));
+    const int qp32BC = int(16384.0 + 7.21875 * pow((double)gopSpVisActLum, 4.0 / 3.0) + 1.46875 * pow((double)gopSpVisActChr, 4.0 / 3.0)) * (isHighRes ? 96 : 24); // TODO hlm
+    const int iFrmBC = int(0.5 + qp32BC * pow(2.0, (32.0 - iFrmQP) * 11.0 / 64.0) * pow(resRatio4K, 2.0 / 3.0)); // * HD tuning
+    const int  shift = (gopMotEstError < 32 ? 5 - (gopMotEstError >> 4) : 3);
+    if (keyPic.m_picShared->m_picMotEstError >= 256) gopMotEstError >>= 2; else // avoid 2 much capping at cuts
+      if (gopMotEstError >= 120) /*TODO tune this*/ gopMotEstError >>= 1;
+    const int bFrmBC = int((4.0 * iFrmBC * (intraP - 1)) / sqrt((double)std::max(gopSpVisActLum, gopSpVisActChr)) * std::max(int(gopMotEstError * gopMotEstError) >> (bDepth / 2), (keyPic.picVisActTL0 - visAct) >> shift) * pow(2.0, -1.0 * bDepth));
+    const int meanGopSizeInIntraP = intraP / ((intraP + m_pcEncCfg->m_GOPSize - 1) / m_pcEncCfg->m_GOPSize);
 
-  const int  gopQP = (iFrmQP + MAX_QP + 1) >> 1;
-  const double fac = double (m_pcEncCfg->m_FrameScale * intraP) / m_pcEncCfg->m_FrameRate;
-  const double mBC = (m_pcEncCfg->m_RCMaxBitrate > 0 && m_pcEncCfg->m_RCMaxBitrate != INT32_MAX ? m_pcEncCfg->m_RCMaxBitrate * fac : 0.0);
+    const double eps = 1.0 - 1.0 / double(1u << std::min(31u, m_rcap.accumGopCounter));
+    const double nonKeyPicsFactor = (m_rcap.accumTargetBits == 0) ? 1.0 : pow((double)m_rcap.accumActualBits / ((meanGopSizeInIntraP - 1.0) * m_rcap.accumTargetBits), eps);
+    const unsigned bFrmBC_final = bFrmBC * nonKeyPicsFactor;
+    const unsigned targetBits = (unsigned)((bFrmBC + (intraP >> 1)) / (intraP - 1));
+    m_rcap.accumTargetBits += targetBits;
+    if (keyPic.gopEntry->m_isStartOfIntra && keyPic.gopEntry->m_gopNum == 0 && keyPic.poc < m_pcEncCfg->m_GOPSize && m_rcap.accumTargetBits * (int64_t)intraP < iFrmBC)
+    {
+      m_rcap.accumTargetBits = (iFrmBC + (intraP >> 1)) / intraP;
+    }
+    m_rcap.nonRateCapEstim = 1.0;     // changed in case of capping
+    m_rcap.gopAdaptedQPAdj = 0;       // changed in first GOP of scene
 
-  if (mBC > 0.0 && iFrmBC + bFrmBC_final > mBC) // max. I-period bit-count exceeded
-  {
-    m_rcap.nonRateCapEstim = double (iFrmBC + bFrmBC_final) / mBC;
-    const double d = std::max (0, gopQP) + (105.0 / 128.0) * sqrt ((double) std::max (1, gopQP)) * log (m_rcap.nonRateCapEstim) / log (2.0);
+    const int  gopQP = (iFrmQP + MAX_QP + 1) >> 1;
+    const double fac = double(m_pcEncCfg->m_FrameScale * intraP) / m_pcEncCfg->m_FrameRate;
+    const double mBC = (m_pcEncCfg->m_RCMaxBitrate > 0 && m_pcEncCfg->m_RCMaxBitrate != INT32_MAX ? m_pcEncCfg->m_RCMaxBitrate * fac : 0.0);
 
-    dQP = Clip3 (0, MAX_QP, int (0.5 + d + 0.5 * std::max (0.0, qpStart - d))) - std::max (0, gopQP);
+    if (mBC > 0.0 && iFrmBC + bFrmBC_final > mBC) // max. I-period bit-count exceeded
+    {
+      m_rcap.nonRateCapEstim = double(iFrmBC + bFrmBC_final) / mBC;
+      const double d = std::max(0, gopQP) + (105.0 / 128.0) * sqrt((double)std::max(1, gopQP)) * log(m_rcap.nonRateCapEstim) / log(2.0);
+
+      dQP += Clip3(0, MAX_QP, int(0.5 + d + 0.5 * std::max(0.0, qpStart - d))) - std::max(0, gopQP);
+    }
   }
 
   // assign dQP to pictures 

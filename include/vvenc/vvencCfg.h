@@ -777,15 +777,13 @@ typedef struct vvenc_config
                                                                                          // for convenience use VVENC_SET_MAXRATE_FACTOR, e.g. VVENC_SET_MAXRATE_FACTOR(1.5), to set the multiplier
   int8_t              m_forceScc;
   int8_t              m_ifp;
-
   int8_t              m_mtProfile;                                                       // Use a set of multi-threading boosters (0...3), set to -1 for automatic selection based on number of threads (default),
                                                                                          // or 0 to force only the usage basic picture and CTU parallelism. If set to 3, tiles (resolution dependent),
                                                                                          // IFP and WPP are all used. For 1 and 2, an optimal selection of tools is done based on resolution and CTU size.
-  
-  int8_t              m_reservedInt8;
-
+  int8_t              m_GOPQPA;
   int                 m_minIntraDist;
-  int                 m_reservedInt;
+
+  int                 m_reservedInt[1];
   double              m_reservedDouble[8];
 
   // internal state variables
