@@ -569,6 +569,7 @@ MCTF::MCTF()
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
 #endif
+
 }
 
 MCTF::~MCTF()

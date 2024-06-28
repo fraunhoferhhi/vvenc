@@ -120,7 +120,7 @@ void SEIWriter::xWriteSEIpayloadData(OutputBitstream &bs, const SEI& sei, HRD &h
     xWriteSEIUserDataRegistered(*static_cast<const SEIUserDataRegistered*>(&sei));
     break;
   case SEI::FILM_GRAIN_CHARACTERISTICS:
-    xWriteSEIFilmGrainCharacteristics(*static_cast<const SEIFilmGrainCharacteristics*>(&sei));
+    xWriteSeiFgc(*static_cast<const SeiFgc*>(&sei));
     break;
   case SEI::CONTENT_LIGHT_LEVEL_INFO:
     xWriteSEIContentLightLevelInfo(*static_cast<const SEIContentLightLevelInfo*>(&sei));
@@ -820,56 +820,56 @@ void SEIWriter::xWriteSEIUserDataRegistered(const SEIUserDataRegistered &sei)
   }
 }
 
-void SEIWriter::xWriteSEIFilmGrainCharacteristics(const SEIFilmGrainCharacteristics &sei)
+void SEIWriter::xWriteSeiFgc(const SeiFgc &sei)
 {
-  WRITE_FLAG(sei.filmGrainCharacteristicsCancelFlag, "fg_characteristics_cancel_flag");
-  if (!sei.filmGrainCharacteristicsCancelFlag)
+  WRITE_FLAG(sei.fgcCancelFlag,                             "fg_characteristics_cancel_flag");
+  if (!sei.fgcCancelFlag)
   {
-    WRITE_CODE(sei.filmGrainModelId, 2, "fg_model_id");
-    WRITE_FLAG(sei.separateColourDescriptionPresent, "separate_colour_description_present_flag");
+    WRITE_CODE(sei.filmGrainModelId, 2,                     "fg_model_id");
+    WRITE_FLAG(sei.separateColourDescriptionPresent,        "fg_separate_colour_description_present_flag");
     if (sei.separateColourDescriptionPresent)
     {
-      WRITE_CODE(sei.filmGrainBitDepthLumaMinus8, 3, "fg_bit_depth_luma_minus8");
-      WRITE_CODE(sei.filmGrainBitDepthChromaMinus8, 3, "fg_bit_depth_chroma_minus8");
-      WRITE_FLAG(sei.filmGrainFullRangeFlag, "fg_full_range_flag");
-      WRITE_CODE(sei.filmGrainColourPrimaries, 8, "fg_colour_primaries");
-      WRITE_CODE(sei.filmGrainTransferCharacteristics, 8, "fg_transfer_characteristics");
-      WRITE_CODE(sei.filmGrainMatrixCoeffs, 8, "fg_matrix_coeffs");
+      WRITE_CODE(sei.filmGrainBitDepthLumaMinus8, 3,        "fg_bit_depth_luma_minus8");
+      WRITE_CODE(sei.filmGrainBitDepthChromaMinus8, 3,      "fg_bit_depth_chroma_minus8");
+      WRITE_FLAG(sei.filmGrainFullRangeFlag,                "fg_full_range_flag");
+      WRITE_CODE(sei.filmGrainColourPrimaries, 8,           "fg_colour_primaries");
+      WRITE_CODE(sei.filmGrainTransferCharacteristics, 8,   "fg_transfer_characteristics");
+      WRITE_CODE(sei.filmGrainMatrixCoeffs, 8,              "fg_matrix_coeffs");
     }
-    WRITE_CODE(sei.blendingModeId, 2, "fg_blending_mode_id");
-    WRITE_CODE(sei.log2ScaleFactor, 4, "fg_log2_scale_factor");
+    WRITE_CODE(sei.blendingModeId, 2,                       "fg_blending_mode_id");
+    WRITE_CODE(sei.log2ScaleFactor, 4,                      "fg_log2_scale_factor");
     for (int c = 0; c<3; c++)
     {
-      const SEIFilmGrainCharacteristics::CompModel &cm = sei.compModel[c];
-      const uint32_t numIntensityIntervals = (uint32_t)cm.intensityValues.size();
+      const SeiFgc::CompModel &cm = sei.compModel[c];
+      const uint32_t numIntensityIntervals = static_cast<uint32_t>(cm.numIntensityIntervals);
       const uint32_t numModelValues = cm.numModelValues;
       WRITE_FLAG(sei.compModel[c].presentFlag && numIntensityIntervals>0 && numModelValues>0, "fg_comp_model_present_flag[c]");
     }
     for (uint32_t c = 0; c<3; c++)
     {
-      const SEIFilmGrainCharacteristics::CompModel &cm = sei.compModel[c];
-      const uint32_t numIntensityIntervals = (uint32_t)cm.intensityValues.size();
+      const SeiFgc::CompModel &cm = sei.compModel[c];
+      const uint32_t numIntensityIntervals = static_cast<uint32_t>(cm.numIntensityIntervals);
       const uint32_t numModelValues = cm.numModelValues;
       if (cm.presentFlag && numIntensityIntervals>0 && numModelValues>0)
       {
-        assert(numIntensityIntervals <= 256);
-        assert(numModelValues <= 256);
-        WRITE_CODE(numIntensityIntervals - 1, 8, "fg_num_intensity_intervals_minus1[c]");
-        WRITE_CODE(numModelValues - 1, 3, "fg_num_model_values_minus1[c]");
+        assert(numIntensityIntervals <= VVENC_MAX_NUM_INTENSITIES);
+        assert(numModelValues <= VVENC_MAX_NUM_INTENSITIES);
+        WRITE_CODE(numIntensityIntervals - 1, 8,            "fg_num_intensity_intervals_minus1[c]");
+        WRITE_CODE(numModelValues - 1, 3,                   "fg_num_model_values_minus1[c]");
         for (uint32_t interval = 0; interval<numIntensityIntervals; interval++)
         {
-          const SEIFilmGrainCharacteristics::CompModelIntensityValues &cmiv = cm.intensityValues[interval];
-          WRITE_CODE(cmiv.intensityIntervalLowerBound, 8, "fg_intensity_interval_lower_bound[c][i]");
-          WRITE_CODE(cmiv.intensityIntervalUpperBound, 8, "fg_intensity_interval_upper_bound[c][i]");
+          const SeiFgc::CompModelIntensityValues &cmiv = cm.intensityValues[interval];
+          WRITE_CODE(cmiv.intensityIntervalLowerBound, 8,   "fg_intensity_interval_lower_bound[c][i]");
+          WRITE_CODE(cmiv.intensityIntervalUpperBound, 8,   "fg_intensity_interval_upper_bound[c][i]");
           assert(cmiv.compModelValue.size() == numModelValues);
           for (uint32_t j = 0; j<cm.numModelValues; j++)
           {
-            WRITE_SVLC(cmiv.compModelValue[j], "fg_comp_model_value[c][i]");
+            WRITE_SVLC(cmiv.compModelValue[j],              "fg_comp_model_value[c][i]");
           }
         }
       }
     } // for c
-    WRITE_FLAG(sei.filmGrainCharacteristicsPersistenceFlag, "fg_characteristics_persistence_flag");
+    WRITE_FLAG(sei.fgcPersistenceFlag, "fg_characteristics_persistence_flag");
   } // cancel flag
 }
 

@@ -255,6 +255,7 @@ static inline std::string vvenc_getDecodingRefreshTypeStr(  int type, bool poc0i
     case 3: cType = "RecPointSEI"; break;
     case 4: cType = "IDR2 (deprecated)"; break; //deprecated
     case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
+    case 6: cType = "IDR_NO_RADL"; break;
     default: cType = "unknown"; break;
   }
   if( poc0idr ) cType += " with POC 0 IDR";
@@ -703,9 +704,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_forceScc                                = 0;
 
-  c->m_reservedFlag                            = false;
-  c->m_reservedInt                             = 0;
-  memset( c->m_reservedInt8,   0, sizeof(c->m_reservedInt8) );
+  c->m_fga                                     = false;
+
+  c->m_reservedInt = 0;
+
+  c->m_reservedInt8 = 0;
+
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1274,11 +1278,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_rprEnabledFlag == -1 )
   {
-    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
+    c->m_rprEnabledFlag = ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? 2 : 0;
   }
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && !( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ), "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE or VVENC_DRT_IDR_NO_RADL" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -1697,6 +1701,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  if (c->m_fga)
+  {
+    vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
+    vvenc_confirmParameter( c, c->m_IntraPeriod <=1, "Film grain analysis cannot be enabled when intra period is less than two!");
+  }
+
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPicsSCC != 0,                         "NumRefPicsSCC cannot be used if explicit GOP configuration is used!" );
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0 && c->m_addGOP32refPics, "NumRefPics and AddGOP32refPics options are mutually exclusive!" );
@@ -1898,7 +1908,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 6,                "Decoding refresh type must be comprised between 0 and 6 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType == 6 && !c->m_poc0idr,                              "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
@@ -3177,7 +3188,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
-    css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << "\n";
     }
 
   if( eMsgLevel >= VVENC_VERBOSE )

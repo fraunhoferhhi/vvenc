@@ -61,6 +61,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "MCTF.h"
 #include "TrQuant_EMT.h"
 #include "QuantRDOQ2.h"
+#include "SEIFilmGrainAnalyzer.h"
 
 #ifdef TARGET_SIMD_X86
 
@@ -394,6 +395,58 @@ void DepQuant::initDepQuantX86()
   }
 }
 
+#endif
+
+#if ENABLE_SIMD_OPT_FGA
+void Canny::initFGACannyX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+      _initFGACannyX86<AVX2>();
+      break;
+    case SSE42:
+    case SSE41:
+      _initFGACannyX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
+void Morph::initFGAMorphX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+      _initFGAMorphX86<AVX2>();
+      break;
+    case SSE42:
+    case SSE41:
+      _initFGAMorphX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
+
+void FGAnalyzer::initFGAnalyzerX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+      _initFGAnalyzerX86<AVX2>();
+      break;
+    case SSE42:
+    case SSE41:
+      _initFGAnalyzerX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
 #endif
 
 } // namespace vvenc

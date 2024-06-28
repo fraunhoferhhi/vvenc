@@ -1298,8 +1298,8 @@ public:
   void                        checkLeadingPictureRestrictions( const PicList& rcListPic ) const;
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps, const bool usingLongTerm = true )  const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
-  bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
-  void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );
+  bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc, int ip ) const;
+  void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, int ip );
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
   void                        resetWpScaling();
@@ -1313,6 +1313,8 @@ public:
   unsigned                    getMinPictureDistance()                           const ;
 
   bool                        isPocRestrictedByDRAP( int poc, bool precedingDRAPInDecodingOrder ) const;
+  bool                        refPicIsFutureIDRnoLP( int candPoc, int ipc ) const;
+
   void                        setAlfApsIds( const std::vector<int>& ApsIDs);
 private:
   Picture*                    xGetLongTermRefPic(const PicList& rcListPic, int poc, bool pocHasMsb);

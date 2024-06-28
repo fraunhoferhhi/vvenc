@@ -240,10 +240,10 @@ int testLibParameterRanges()
   fillEncoderParameters( vvencParams, false );
 
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,6 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,6,7 }, true );
   vvencParams.m_poc0idr = true;
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 5 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4,6 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 5, 6 } );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4,7 }, true );
   vvencParams.m_poc0idr = false;
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 32,35,48,51,64,67,80,83,86,96,99,102 } );

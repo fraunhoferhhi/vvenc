@@ -198,6 +198,7 @@ typedef enum
   VVENC_DRT_RECOVERY_POINT_SEI = 3,
   VVENC_DRT_IDR2               = 4,             //deprecated
   VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
+  VVENC_DRT_IDR_NO_RADL        = 6,
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -759,7 +760,7 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_reservedFlag;
+  bool                m_fga;                                                             // Film grain analysis configuration options, set to 0 to disable (default), or 1 to enable analysis.
   bool                m_poc0idr;
   int8_t              m_ifpLines;
   bool                m_blockImportanceMapping;
@@ -780,7 +781,8 @@ typedef struct vvenc_config
   int8_t              m_mtProfile;                                                       // Use a set of multi-threading boosters (0...3), set to -1 for automatic selection based on number of threads (default),
                                                                                          // or 0 to force only the usage basic picture and CTU parallelism. If set to 3, tiles (resolution dependent),
                                                                                          // IFP and WPP are all used. For 1 and 2, an optimal selection of tools is done based on resolution and CTU size.
-  int8_t              m_reservedInt8[1];
+  
+  int8_t              m_reservedInt8;
 
   int                 m_minIntraDist;
   int                 m_reservedInt;
