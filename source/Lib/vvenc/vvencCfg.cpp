@@ -2204,6 +2204,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
+
+  vvenc_confirmParameter(c, c->m_GOPQPA > 0 && c->m_usePerceptQPA, "GOP-wise QPA cannot be enabled if perceptual QPA is enabled");
   vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
 
   return( c->m_confirmFailed );
