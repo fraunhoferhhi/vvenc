@@ -579,6 +579,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toUseIfp                      ( &c->m_ifp,                         &FlagToIntMap<int8_t> );
+  IStreamToEnum<int8_t>             toChromaLocInfo               ( &c->m_chromaLocInfoPresent,        &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toMtProfile                   ( &c->m_mtProfile,                   &MtAbrevToIntMap );
 
   po::Options opts;
@@ -668,8 +669,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
-    ("mtprofile",                                       toMtProfile,                                         "enable automatic multi-threading setting (enables tiles, IFP and WPP automatically depending on the number of threads)")
-    ("ifp",                                             toUseIfp,                                            "inter-frame parallelization(IFP) (0: off, 1: on, with sync. offset of two CTU lines)")
+    ("mtprofile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
+    ("ifp",                                             toUseIfp,                                            "inter-frame parallelization(IFP) (-1: auto, 0: off, 1: on, with sync. offset of two CTU lines)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding, none, rpsei: Recovery Point SEI,\n"
                                                                                                              "                    idr_no_radl: IDR, without leading pictures, use for DASH)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
@@ -682,7 +683,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Threading, performance");
     opts.addOptions()
     ("Threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
-    ("MTProfile",                                       toMtProfile,                                         "enable automatic multi-threading setting (enables tiles, IFP and WPP automatically depending on the number of threads)")
+    ("MTProfile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower, medium_lowDecEnergy)")
     ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
@@ -720,8 +721,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
-  ("Profile",                                           toProfile,                                           "profile (main_10, main_10_still_picture)")
-  ("Level",                                             toLevel,                                             "level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
+  ("Profile",                                           toProfile,                                           "profile (auto, main_10, main_10_still_picture)")
+  ("Level",                                             toLevel,                                             "level limit (auto, 1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
   ("Tier",                                              toLevelTier,                                         "tier for interpretation of level (main, high)")
   ;
 
@@ -756,9 +757,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Encoder Options");
     opts.addOptions()
     ("internal-bitdepth",                               c->m_internalBitDepth[0],                           "internal bitdepth (8, 10)")
-    ("accessunitdelimiter,-aud",                        toAud,                                              "emit Access Unit Delimiter NALUs  (auto(-1), off(0), on(1); default: auto - only if needed by dependent options)", true)
-    ("vuiparameterspresent,-vui",                       toVui,                                              "emit VUI information (auto(-1), off(0), on(1); default: auto - only if needed by dependent options)", true)
-    ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "emit VUI HRD information (0: off, 1: on; default: 1)")
+    ("accessunitdelimiter,-aud",                        toAud,                                              "emit Access Unit Delimiter NALUs (-1: auto, 0: off, 1: on; default: auto - only if needed by dependent options)", true)
+    ("vuiparameterspresent,-vui",                       toVui,                                              "emit VUI information (-1: auto, 0: off, 1: on; default: auto - only if needed by dependent options)", true)
+    ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "emit VUI HRD information (0: off, 1: on)")
     ("decodedpicturehash,-dph",                         toHashType,                                         "control generation of decode picture hash SEI messages, (0: off, 1: md5, 2: crc, 3: checksum)")
     ;
   }
@@ -888,7 +889,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MSBExtendedBitDepth",                             c->m_MSBExtendedBitDepth[ 0 ],                       "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
     ("MSBExtendedBitDepthC",                            c->m_MSBExtendedBitDepth[ 1 ],                       "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
 
-    ("WaveFrontSynchro",                                toUseWpp,                                            "Enable entropy coding sync (WPP)")
+    ("WaveFrontSynchro",                                toUseWpp,                                            "Enable entropy coding sync (WPP) (-1: auto, 0: off, 1: on)")
     ("EntryPointsPresent",                              c->m_entryPointsPresent,                             "Enable entry points in slice header")
 
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
@@ -1009,9 +1010,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SEIPictureTiming",                                c->m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
     ("SEIDecodingUnitInfo",                             c->m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
     ("EnableDecodingParameterSet",                      c->m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
-    ("AccessUnitDelimiter,-aud",                        toAud,                                               "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)" , true)
-    ("VuiParametersPresent,-vui",                       toVui,                                               "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)", true)
-    ("HrdParametersPresent,-hrd",                       c->m_hrdParametersPresent,                           "Enable generation of hrd_parameters(), (0: off, 1: on; default: 1)")
+    ("AccessUnitDelimiter,-aud",                        toAud,                                               "Enable Access Unit Delimiter NALUs (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)" , true)
+    ("VuiParametersPresent,-vui",                       toVui,                                               "Enable generation of vui_parameters() (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)", true)
+    ("HrdParametersPresent,-hrd",                       c->m_hrdParametersPresent,                           "Enable generation of hrd_parameters() (0: off, 1: on)")
     ("AspectRatioInfoPresent",                          c->m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
     ("AspectRatioIdc",                                  c->m_aspectRatioIdc,                                 "aspect_ratio_idc")
     ("SarWidth",                                        c->m_sarWidth,                                       "horizontal size of the sample aspect ratio")
@@ -1026,10 +1027,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MatrixCoefficients",                              toColorMatrix,                                       "Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
                                                                                                              "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
 
-    ("ChromaLocInfoPresent",                            c->m_chromaLocInfoPresent,                           "Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present")
-    ("ChromaSampleLocTypeTopField",                     c->m_chromaSampleLocTypeTopField,                    "Specifies the location of chroma samples for top field")
-    ("ChromaSampleLocTypeBottomField",                  c->m_chromaSampleLocTypeBottomField,                 "Specifies the location of chroma samples for bottom field")
-    ("ChromaSampleLocType",                             c->m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content")
+    ("ChromaLocInfoPresent",                            toChromaLocInfo,                                     "Signals whether chroma_sample_loc_type is present (-1: auto, 0: off, 1: on)")
+    ("ChromaSampleLocType",                             c->m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content(-1 auto, 0-5 Chroma420LocType)")
     ("OverscanInfoPresent",                             c->m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
@@ -1045,8 +1044,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
                                                                                                              "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
     ;
 
-    opts.setSubSection("Summary options (debugging)");                                                      
-    opts.addOptions()                                                                                       
+    opts.setSubSection("Summary options (debugging)");
+    opts.addOptions()
     ("SummaryOutFilename",                              toSummaryOutFilename,                                "Filename to use for producing summary output file. If empty, do not produce a file.")
     ("SummaryPicFilenameBase",                          toSummaryPicFilenameBase,                            "Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended. If empty, do not produce a file.")
     ("SummaryVerboseness",                              c->m_summaryVerboseness,                             "Specifies the level of the verboseness of the text output")
@@ -1112,7 +1111,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TileParallelCtuEnc",                              c->m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
     ("FppLinesSynchro",                                 toIfpLines,                                          "(deprecated) Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
     ("IFPLines",                                        toIfpLines,                                          "Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
-    ("IFP",                                             toUseIfp,                                            "Inter-Frame Parallelization(IFP) (0: off, 1: on, with default setting of IFPLines)")
+    ("IFP",                                             toUseIfp,                                            "Inter-Frame Parallelization(IFP) (-1: auto, 0: off, 1: on, with default setting of IFPLines)")
     ;
 
     opts.setSubSection("Coding tools");

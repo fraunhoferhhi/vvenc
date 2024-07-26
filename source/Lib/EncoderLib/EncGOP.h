@@ -100,10 +100,8 @@ struct RateCapParam {
   unsigned accumGopCounter = 0;
   double   nonRateCapEstim = 0.0;
   int      gopAdaptedQPAdj = 0;
-  uint16_t prevKeyPicSpVisAct[MAX_NUM_CH] = { 0, 0 };
-  bool     prevKeyPicStored = false;
 
-  void reset() 
+  void reset()
   {
     accumActualBits = 0;
     accumTargetBits = 0;
@@ -211,6 +209,7 @@ private:
   void xSetupPicAps                   ( Picture* pic );
   void xInitPicsInCodingOrder         ( const PicList& picList );
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
+  void xUpdateVAStartOfLastGop        ( Picture& keyPic ) const;
   void xInitGopQpCascade              ( Picture& keyPic, PicList::const_iterator picItr, const PicList& picList );
   void xInitFirstSlice                ( Picture& pic, const PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice );

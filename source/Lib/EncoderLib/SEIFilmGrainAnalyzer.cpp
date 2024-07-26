@@ -165,7 +165,7 @@ void gradient_core ( PelStorage *buff1,
       }
       else
       {
-        theta= ( atan(static_cast<double>( Dy )/(double)static_cast<double>( Dx )) ) ;
+        theta= ( atan( static_cast<double>( Dy )/(double)static_cast<double>( Dx ) ) ) ;
         if ( Dx < 0 )
         {
           if ( Dy >= 0 )
@@ -173,7 +173,7 @@ void gradient_core ( PelStorage *buff1,
           else
             theta -= static_cast<float>( PI );
         }
-        theta=fabs( theta );
+        theta = std::fabs( theta );
         /* Convert actual edge direction to approximate value - quantize directions */
         if (( theta <= pi_8 ) || ( pi_7_8 < theta ))
         {
@@ -1057,7 +1057,7 @@ void FGAnalyzer::combineMasks( ComponentID compId )
   {
     for ( int j = 0; j < height; j++ )
     {
-        m_maskBuf->get( compId ).at( i, j ) = ( m_maskBuf->get( compId ).at( i, j ) | m_maskUpsampled->get( compId ).at( i, j ) );
+      m_maskBuf->get( compId ).at( i, j ) = ( m_maskBuf->get( compId ).at( i, j ) | m_maskUpsampled->get( compId ).at( i, j ) );
     }
   }
 }
@@ -1932,7 +1932,7 @@ bool FGAnalyzer::lloydMax ( double &distortion,
   double tolerance2 = std::numeric_limits<double>::epsilon() * ymax;
   if ( distortion > tolerance2 )
   {
-    rel_distor = abs( distortion - last_distor ) / distortion;
+    rel_distor = std::fabs( distortion - last_distor ) / distortion;
   }
   else
   {
@@ -2040,7 +2040,7 @@ bool FGAnalyzer::lloydMax ( double &distortion,
 
     if ( distortion > tolerance2 )
     {
-      rel_distor = abs( distortion - last_distor ) / distortion;
+      rel_distor = std::fabs( distortion - last_distor ) / distortion;
     }
     else
     {

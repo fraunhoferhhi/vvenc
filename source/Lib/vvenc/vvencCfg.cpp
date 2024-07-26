@@ -630,10 +630,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_colourPrimaries                         = 2;
   c->m_transferCharacteristics                 = 2;
   c->m_matrixCoefficients                      = 2;
-  c->m_chromaLocInfoPresent                    = false;
-  c->m_chromaSampleLocTypeTopField             = 0;
-  c->m_chromaSampleLocTypeBottomField          = 0;
-  c->m_chromaSampleLocType                     = 0;
+  c->m_chromaLocInfoPresent                    = -1;
+  c->m_chromaSampleLocType                     = -1;
   c->m_overscanInfoPresent                     = false;
   c->m_overscanAppropriateFlag                 = false;
   c->m_videoFullRangeFlag                      = false;
@@ -815,12 +813,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
 
   vvenc::MsgLog msg(c->m_msgCtx, c->m_msgFnc);
-#if !IFP_RC_DETERMINISTIC
-  if( c->m_RCTargetBitrate != 0 && c->m_ifp )
-  {
-    msg.log( VVENC_WARNING, "Using RC with IFP. Results are non-deterministic!\n" );
-  }
-#endif
 
   if( c->m_FirstPassMode > 2 && c->m_RCTargetBitrate != 0 )
   {
@@ -897,15 +889,27 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "Unable to infer profile from input!" );
   }
 
+  const vvencLevel maxLevel = vvenc::LevelTierFeatures::getMaxLevel( c->m_profile );
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
     c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
     vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL_AUTO || c->m_level == vvencLevel::VVENC_NUMBER_OF_LEVELS, "Unable to infer level from input!" );
+    if( c->m_level > maxLevel )
+    {
+      msg.log( VVENC_WARNING, "The video dimensions (size/rate) exceed the allowed maximum throughput for the used profile!\n" );
+      c->m_level = maxLevel;
+    }
   }
   else
   {
     const vvencLevel inferedLevel = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
-    vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+    if( c->m_level < inferedLevel )
+    {
+      if( c->m_level == maxLevel )
+        msg.log( VVENC_WARNING, "The level set is too low given the input dimensions (size/rate)!\n" );
+      else
+        vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+    }
   }
 
   {
@@ -1011,7 +1015,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       c->m_vuiParametersPresent  = 1;                                    // enable vui only if not explicitly disabled
     }
-  } 
+  }
 
   if( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 )
   {
@@ -1122,6 +1126,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_transferCharacteristics = 14; // bt2020-10
     c->m_colourPrimaries         = 9;  // bt2020nc
     c->m_matrixCoefficients      = 9;  // bt2020nc
+    c->m_verCollocatedChromaFlag = true; 
   }
   else if( c->m_HdrMode == VVENC_SDR_BT470BG )
   {
@@ -1143,6 +1148,29 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_vuiParametersPresent < 0 )
   {
     c->m_vuiParametersPresent = 0;
+  }
+
+  if( c->m_chromaSampleLocType < 0 )
+  {
+    if( c->m_horCollocatedChromaFlag )
+    {
+      if ( c->m_verCollocatedChromaFlag)
+        c->m_chromaSampleLocType = 2;
+      else
+        c->m_chromaSampleLocType = 0;
+    }
+    else
+    {
+      if ( c->m_verCollocatedChromaFlag)
+        c->m_chromaSampleLocType = 3;
+      else
+        c->m_chromaSampleLocType = 1;
+    }
+  }
+
+  if ( c->m_chromaLocInfoPresent < 0 )
+  {
+    c->m_chromaLocInfoPresent = c->m_verCollocatedChromaFlag ? 1 : 0;
   }
 
   switch ( c->m_conformanceWindowMode)
@@ -2204,6 +2232,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
+  vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
 
   vvenc_confirmParameter(c, c->m_GOPQPA > 0 && c->m_usePerceptQPA, "GOP-wise QPA cannot be enabled if perceptual QPA is enabled");
   vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
