@@ -62,12 +62,10 @@ class PicShared
 public:
   PicShared*       m_prevShared[ NUM_QPA_PREV_FRAMES ];
   GOPEntry         m_gopEntry;
+  PicVisAct        m_picVA;
   bool             m_isSccWeak;
   bool             m_isSccStrong;
   bool             m_forceSCC;
-  uint16_t         m_picVisActTL0;
-  uint16_t         m_picVisActY;
-  uint16_t         m_picSpVisAct[MAX_NUM_CH];
   int              m_picMemorySTA;
   uint16_t         m_picMotEstError;
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
@@ -87,25 +85,23 @@ private:
 
 public:
   PicShared()
-  : m_isSccWeak     ( false )
-  , m_isSccStrong   ( false )
-  , m_forceSCC      ( false )
-  , m_picVisActTL0  ( 0 )
-  , m_picVisActY    ( 0 )
-  , m_picMemorySTA  ( 0 )
-  , m_picMotEstError( 0 )
-  , m_picAuxQpOffset( 0 )
-  , m_cts           ( 0 )
-  , m_maxFrames     ( -1 )
-  , m_poc           ( -1 )
-  , m_refCount      ( -1 )
-  , m_isLead        ( false )
-  , m_isTrail       ( false )
-  , m_ctsValid      ( false )
+  : m_picVA          ()
+  , m_isSccWeak      ( false )
+  , m_isSccStrong    ( false )
+  , m_forceSCC       ( false )
+  , m_picMemorySTA   ( 0 )
+  , m_picMotEstError ( 0 )
+  , m_picAuxQpOffset ( 0 )
+  , m_cts            ( 0 )
+  , m_maxFrames      ( -1 )
+  , m_poc            ( -1 )
+  , m_refCount       ( -1 )
+  , m_isLead         ( false )
+  , m_isTrail        ( false )
+  , m_ctsValid       ( false )
   {
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
-    m_picSpVisAct[CH_L] = m_picSpVisAct[CH_C] = 0;
     m_gopEntry.setDefaultGOPEntry();
   };
 
@@ -137,11 +133,10 @@ public:
 
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
 
+    m_picVA.reset();
     m_isSccWeak    = false;
     m_isSccStrong  = false;
     m_forceSCC     = false;
-    m_picVisActTL0 = 0;
-    m_picVisActY   = 0;
     m_picMemorySTA = 0;
     m_cts          = yuvInBuf->cts;
     m_poc          = poc;
@@ -154,7 +149,6 @@ public:
     m_picAuxQpOffset = 0;
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
-    m_picSpVisAct[CH_L] = m_picSpVisAct[CH_C] = 0;
     m_gopEntry.setDefaultGOPEntry();
   }
 
@@ -163,11 +157,9 @@ public:
     PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ];
     sharePrevBuffers( prevOrigBufs );
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
+    pic->picVA          = m_picVA;
     pic->isSccWeak      = m_isSccWeak;
     pic->isSccStrong    = m_isSccStrong;
-    pic->picVisActTL0   = m_picVisActTL0;
-    pic->picVisActY     = m_picVisActY;
-    pic->picSpVisAct    = m_picSpVisAct[CH_L];
     pic->picMemorySTA   = m_picMemorySTA;
     pic->poc            = m_poc;
     pic->cts            = m_cts;

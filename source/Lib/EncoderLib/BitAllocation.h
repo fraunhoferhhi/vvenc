@@ -53,6 +53,52 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+  // visual activity
+  struct VisAct
+  {
+    VisAct()
+      : hpSpatAct( 0.0 )
+      , hpTempAct( 0.0 )
+      , hpVisAct ( 0.0 )
+      , spatAct  ( 0 )
+      , tempAct  ( 0 )
+      , visAct   ( 0 )
+      , minAct   ( 0 )
+    {
+    }
+
+    double   hpSpatAct;  // spatial high precision
+    double   hpTempAct;  // temporal high precision
+    double   hpVisAct;   // visual activity high precision
+    unsigned spatAct;    // spatial  in 12 bit
+    unsigned tempAct;    // temporal in 12 bit
+    unsigned visAct;     // visual activity 12 bit
+    unsigned minAct;     // minimal activity
+  };
+
+  void calcSpatialVisAct ( const Pel* pSrc,
+                           const int iSrcStride,
+                           const int height,
+                           const int width,
+                           const uint32_t bitDepth,
+                           const bool isUHD,
+                           VisAct& va );
+
+  void calcTemporalVisAct ( const Pel* pSrc,
+                            const int iSrcStride,
+                            const int height,
+                            const int width,
+                            const Pel* pSM1,
+                            const int iSM1Stride,
+                            const Pel* pSM2,
+                            const int iSM2Stride,
+                            uint32_t frameRate,
+                            const uint32_t bitDepth,
+                            const bool isUHD,
+                            VisAct& va );
+
+  void updateVisAct ( VisAct& va, const uint32_t bitDepth );
+
   double filterAndCalculateAverageActivity ( const Pel* pSrc,
                                              const int iSrcStride,
                                              const int height,
@@ -65,7 +111,7 @@ namespace vvenc {
                                              const uint32_t bitDepth,
                                              const bool isUHD,
                                              unsigned* minVisAct,
-                                             unsigned* spVisAct);
+                                             unsigned* spVisAct );
 
   // BitAllocation functions
   namespace BitAllocation

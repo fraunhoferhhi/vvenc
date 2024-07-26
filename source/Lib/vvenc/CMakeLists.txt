@@ -174,4 +174,6 @@ endif()
 set_target_properties( ${LIB_NAME} PROPERTIES
                                    VERSION ${PROJECT_VERSION}
                                    SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+                                   INSTALL_NAME_DIR ${CMAKE_INSTALL_PREFIX}/lib
+                                   MACOSX_RPATH FALSE
                                    FOLDER lib )

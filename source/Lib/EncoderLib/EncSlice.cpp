@@ -349,7 +349,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     const uint32_t startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     const uint32_t boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
-    if ((iQP = BitAllocation::applyQPAdaptationSlice (slice, m_pcEncCfg, iQP, dLambda, &slice->pic->picVisActY, // updates pic->picInitialQP
+    if ((iQP = BitAllocation::applyQPAdaptationSlice (slice, m_pcEncCfg, iQP, dLambda, &slice->pic->picVA.visAct, // updates pic->picInitialQP
                                                       *m_ThreadRsrc[0]->m_encCu.getQpPtr(), m_pcRateCtrl->getIntraPQPAStats(),
                                                       (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
                                                       m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // QP OK?

@@ -81,51 +81,70 @@ static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bit
 #endif
 }
 
-double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
-                                          const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
-                                          uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, unsigned* minVisAct = nullptr, unsigned* spVisAct = nullptr)
+void calcSpatialVisAct ( const Pel* pSrc,
+                         const int iSrcStride,
+                         const int height,
+                         const int width,
+                         const uint32_t bitDepth,
+                         const bool isUHD,
+                         VisAct& va )
 {
-  double spatAct = 0.0, tempAct = 0.0;
-  uint64_t saAct = 0;   // spatial absolute activity sum
-  uint64_t taAct = 0;  // temporal absolute activity sum
-  const Pel* pS0 = pSrc;
+  CHECK( pSrc == nullptr, "no source buffer given to calculate temporal visual activity" );
 
-  if (pSrc == nullptr || iSrcStride <= 0) return 0.0;
-  // force 1st-order delta if only prev. frame available
-  if (pSM2 == nullptr || iSM2Stride <= 0) frameRate = 24;
+  uint64_t saAct;  // spatial absolute activity sum
 
   // skip first row as there may be a black border frame
   pSrc += iSrcStride;
+
   // center rows
   if (isUHD) // high-pass with downsampling
   {
     pSrc += iSrcStride;
+
     saAct = g_pelBufOP.AvgHighPassWithDownsampling (width, height, pSrc, iSrcStride);
 
-    spatAct = double (saAct) / double ((width - 4) * (height - 4));
+    va.hpSpatAct = double (saAct) / double ((width - 4) * (height - 4));
   }
   else // HD high-pass without downsampling
   {
     saAct = g_pelBufOP.AvgHighPass (width, height, pSrc, iSrcStride);
 
-    spatAct = double (saAct) / double ((width - 2) * (height - 2));
+    va.hpSpatAct = double (saAct) / double ((width - 2) * (height - 2));
   }
 
-  if (minVisAct)  // spatial part in 12 bit
-  {
-    *minVisAct = unsigned (0.5 + spatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
-  }
-  if (spVisAct)
-  {
-    *spVisAct = unsigned (0.5 + spatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
-  }
+  // spatial in 12 bit
+  va.spatAct = unsigned (0.5 + va.hpSpatAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1));
+}
+
+void calcTemporalVisAct ( const Pel* pSrc,
+                          const int iSrcStride,
+                          const int height,
+                          const int width,
+                          const Pel* pSM1,
+                          const int iSM1Stride,
+                          const Pel* pSM2,
+                          const int iSM2Stride,
+                          uint32_t frameRate,
+                          const uint32_t bitDepth,
+                          const bool isUHD,
+                          VisAct& va )
+{
+  CHECK( pSrc == nullptr, "no source buffer given to calculate temporal visual activity" );
+  CHECK( pSM1 == nullptr, "no compare buffer given to calculate temporal visual activity" );
+
+  const Pel* pS0 = pSrc;
+  uint64_t taAct;  // temporal absolute activity sum
+
+  // force 1st-order delta if only prev. frame available
+  if (pSM2 == nullptr || iSM2Stride <= 0) frameRate = 24;
 
   // skip first row as there may be a black border frame
-  pSrc = pS0 + iSrcStride;
+  pSrc += iSrcStride;
+
   // center rows
   if (pS0 == pSM1 && frameRate <= 31)
   {
-    taAct = 0;  // bypass high-pass, result will be zero
+    va.hpTempAct = 0; // bypass high-pass, result will be zero
   }
   else if (isUHD)  // downsampled high-pass
   {
@@ -149,7 +168,7 @@ double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride,
       taAct = g_pelBufOP.AvgHighPassWithDownsamplingDiff2nd (width, height, pSrc, pSM1, pSM2, iSrcStride, iSM1Stride, iSM2Stride);
     }
 
-    tempAct = double (taAct) / double ((width - 4) * (height - 4));
+    va.hpTempAct = double (taAct) / double ((width - 4) * (height - 4));
   }
   else // HD high-pass without downsampling
   {
@@ -168,18 +187,58 @@ double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride,
       taAct = g_pelBufOP.HDHighPass2 (width, height, pSrc, pSM1, pSM2, iSrcStride, iSM1Stride, iSM2Stride);
     }
 
-    tempAct = double (taAct) / double ((width - 2) * (height - 2));
+    va.hpTempAct = double (taAct) / double ((width - 2) * (height - 2));
   }
 
-  if (minVisAct)  // minimum part in 12 bit
-  {
-    taAct = uint64_t (0.5 + tempAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1) * (frameRate <= 31 ? 1.15625 : 1.0));
+  // temporal in 12 bit
+  va.tempAct = unsigned (0.5 + va.hpTempAct * double (bitDepth < 12 ? 1 << (12 - bitDepth) : 1) * (frameRate <= 31 ? 1.15625 : 1.0));
+}
 
-    if (*minVisAct > taAct) *minVisAct = (unsigned) taAct;
-  }
-
+void updateVisAct ( VisAct& va, const uint32_t bitDepth )
+{
+  // minimum part in 12 bit
+  va.minAct = std::min( va.tempAct, va.spatAct );
   // lower limit, compensate for high-pass amplification
-  return std::max (double (1 << (bitDepth - 6)), spatAct + 2.0 * tempAct);
+  va.hpVisAct = std::max (double (1 << (bitDepth - 6)), va.hpSpatAct + 2.0 * va.hpTempAct);
+  va.visAct   = ClipBD( uint16_t( 0.5 + va.hpVisAct ), bitDepth );
+}
+
+double filterAndCalculateAverageActivity ( const Pel* pSrc,
+                                           const int iSrcStride,
+                                           const int height,
+                                           const int width,
+                                           const Pel* pSM1,
+                                           const int iSM1Stride,
+                                           const Pel* pSM2,
+                                           const int iSM2Stride,
+                                           uint32_t frameRate,
+                                           const uint32_t bitDepth,
+                                           const bool isUHD,
+                                           unsigned* minVisAct = nullptr,
+                                           unsigned* spVisAct  = nullptr )
+{
+  VisAct va;
+
+  // spatial activity
+  calcSpatialVisAct( pSrc, iSrcStride, height, width, bitDepth, isUHD, va );
+
+  // temporal activity
+  calcTemporalVisAct( pSrc, iSrcStride, height, width, pSM1, iSM1Stride, pSM2, iSM2Stride,
+                     frameRate, bitDepth, isUHD, va );
+
+  // minimum and visual activity
+  updateVisAct( va, bitDepth );
+
+  if( minVisAct )
+  {
+    *minVisAct = va.minAct;
+  }
+  if( spVisAct )
+  {
+    *spVisAct = va.spatAct;
+  }
+
+  return va.hpVisAct;
 }
 
 static double getAveragePictureActivity (const uint32_t picWidth,  const uint32_t picHeight,
@@ -538,7 +597,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       {
         const uint32_t nCtu = ctuBoundingAddr - ctuStartAddr;
 
-        pic->picSpVisAct = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), 12);
+        pic->picVA.spatAct[ CH_L ] = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), 12);
       }
       if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && pic->getOrigBuf (compID).buf != pic->getOrigBufPrev (compID, PREV_FRAME_1).buf && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {

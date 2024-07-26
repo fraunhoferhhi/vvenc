@@ -149,7 +149,14 @@ int VVEncImpl::init( vvenc_config* config )
   { 
     msg.setCallback( config->m_msgCtx, config->m_msgFnc );
   }
-  
+
+  #if !IFP_RC_DETERMINISTIC
+  if( m_cVVEncCfg.m_RCTargetBitrate != 0 && m_cVVEncCfg.m_ifp )
+  {
+    msg.log( VVENC_WARNING, "Using RC with IFP. Results are non-deterministic!\n" );
+  }
+#endif
+
   // initialize the encoder
   m_pEncLib = new EncLib ( msg );
 
