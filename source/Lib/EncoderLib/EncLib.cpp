@@ -365,6 +365,16 @@ void EncLib::xInitRCCfg()
     m_firstPassCfg.m_SourceHeight = ( m_encCfg.m_SourceHeight >> 1 ) & ( ~7 );
     m_firstPassCfg.m_PadSourceWidth  = m_firstPassCfg.m_SourceWidth;
     m_firstPassCfg.m_PadSourceHeight = m_firstPassCfg.m_SourceHeight;
+#if TILES_IFP_2PRC_HOTFIX
+    if( m_firstPassCfg.m_ifp && (m_firstPassCfg.m_numTileCols > 1 || m_firstPassCfg.m_numTileRows > 1) )
+    {
+      // due to sub-sampling, expected different tile configuration in cfg (m_tileRowHeight[], m_tileColumnWidth[])
+      // currently, disable auto tiles for the first pass
+      m_firstPassCfg.m_numTileCols = 1;
+      m_firstPassCfg.m_numTileRows = 1;
+      m_firstPassCfg.m_picPartitionFlag = false;
+    }
+#endif
   }
 
   // preserve some settings
