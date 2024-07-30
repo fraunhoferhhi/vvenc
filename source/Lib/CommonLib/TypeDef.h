@@ -73,7 +73,7 @@ namespace vvenc {
 
 #define IFP_RC_DETERMINISTIC                              0 // Enables Rate Control deterministic behavior (same results) when using IFP
 
-#define TILES_IFP_2PRC_HOTFIX                             1 // Fix tiles and IFP with 2pRC operation, todo: add proper fix, this is more of a dirty hotfix
+#define TILES_IFP_2PRC_HOTFIX                             1 // Fix tiles and IFP with 2pRC operation, TODO: add proper fix, this is more of a dirty hotfix
 
 // ====================================================================================================================
 // General settings
