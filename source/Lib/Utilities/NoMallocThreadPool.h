@@ -58,6 +58,13 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #endif
 
+
+#if __linux
+#  include <pthread.h>
+#  define PTHREAD_WRAPPER 1
+#endif
+
+
 //! \ingroup Utilities
 //! \{
 
@@ -485,13 +492,85 @@ public:
 #endif
 
 private:
+#ifdef PTHREAD_WRAPPER
+  struct PThread
+  {
+    PThread()                            = default;
+    ~PThread()                           = default;
+    PThread( const PThread& )            = delete;
+    PThread& operator=( const PThread& ) = delete;
+    PThread( PThread&& other ) { *this = std::move( other ); };
+    PThread& operator=( PThread&& other )
+    {
+      m_id             = other.m_id;
+      m_joinable       = other.m_joinable;
+      other.m_id       = 0;
+      other.m_joinable = false;
+      return *this;
+    }
+
+    PThread( NoMallocThreadPool* tp, int threadId, const VVEncCfg& encCfg )
+    {
+      struct ThreadArgs
+      {
+        NoMallocThreadPool* tp;
+        int                 threadId;
+        const VVEncCfg&     encCfg;
+      };
+
+      std::unique_ptr<ThreadArgs> args( new ThreadArgs{ tp, threadId, encCfg } );
+
+      static void* ( *threadProc )( void* ) = []( void* p ) -> void*
+      {
+        std::unique_ptr<ThreadArgs> args( static_cast<ThreadArgs*>( p ) );
+
+        args->tp->threadProc( args->threadId, args->encCfg );
+        return nullptr;
+      };
+
+      pthread_attr_t attr;
+      CHECK( pthread_attr_init( &attr ) != 0, "pthread_attr_init() failed" );
+      if( pthread_attr_setstacksize( &attr, 1024 * 1024 ) != 0 )
+      {
+        pthread_attr_destroy( &attr );
+        THROW( "pthread_attr_setstacksize() failed" );
+      }
+
+      m_joinable = 0 == pthread_create( &m_id, &attr, threadProc, args.get() );
+      pthread_attr_destroy( &attr );
+
+      CHECK( !m_joinable, "pthread_create faild" );
+
+      args.release();   // will now be freed by the thread
+    }
+
+    bool joinable() { return m_joinable; }
+
+    void join()
+    {
+      if( m_joinable )
+      {
+        m_joinable = false;
+        pthread_join( m_id, nullptr );
+      }
+    }
+
+  private:
+    pthread_t m_id       = 0;
+    bool      m_joinable = false;
+  };
+#endif   // PTHREAD_WRAPPER
 
   using TaskIterator = ChunkedTaskQueue::Iterator;
 
   // members
   std::string              m_poolName;
   std::atomic_bool         m_exitThreads{ false };
+#ifdef PTHREAD_WRAPPER
+  std::vector<PThread>     m_threads;
+#else
   std::vector<std::thread> m_threads;
+#endif
   ChunkedTaskQueue         m_tasks;
   TaskIterator             m_nextFillSlot = m_tasks.begin();
 #if ADD_TASK_THREAD_SAFE
