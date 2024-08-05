@@ -45,7 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <thread>
+#include <functional>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
@@ -61,7 +61,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if __linux
 #  include <pthread.h>
-#  define PTHREAD_WRAPPER 1
+#  define PTHREAD_WRAPPER   1
+#  define THREAD_STACK_SIZE 1024 * 1024
+#else
+#  include <thread>
 #endif
 
 
@@ -509,39 +512,36 @@ private:
       return *this;
     }
 
-    PThread( NoMallocThreadPool* tp, int threadId, const VVEncCfg& encCfg )
+    template<class TFunc, class... TArgs>
+    PThread( TFunc&& func, TArgs&&... args )
     {
-      struct ThreadArgs
+      using WrappedCall                 = std::function<void()>;
+      std::unique_ptr<WrappedCall> call = std::make_unique<WrappedCall>( std::bind( func, args... ) );
+
+      using PThreadsStartFn    = void* (*) ( void* );
+      PThreadsStartFn threadFn = []( void* p ) -> void*
       {
-        NoMallocThreadPool* tp;
-        int                 threadId;
-        const VVEncCfg&     encCfg;
-      };
+        std::unique_ptr<WrappedCall> call( static_cast<WrappedCall*>( p ) );
 
-      std::unique_ptr<ThreadArgs> args( new ThreadArgs{ tp, threadId, encCfg } );
+        ( *call )();
 
-      static void* ( *threadProc )( void* ) = []( void* p ) -> void*
-      {
-        std::unique_ptr<ThreadArgs> args( static_cast<ThreadArgs*>( p ) );
-
-        args->tp->threadProc( args->threadId, args->encCfg );
         return nullptr;
       };
 
       pthread_attr_t attr;
       CHECK( pthread_attr_init( &attr ) != 0, "pthread_attr_init() failed" );
-      if( pthread_attr_setstacksize( &attr, 1024 * 1024 ) != 0 )
+      if( pthread_attr_setstacksize( &attr, THREAD_STACK_SIZE ) != 0 )
       {
         pthread_attr_destroy( &attr );
         THROW( "pthread_attr_setstacksize() failed" );
       }
 
-      m_joinable = 0 == pthread_create( &m_id, &attr, threadProc, args.get() );
+      m_joinable = 0 == pthread_create( &m_id, &attr, threadFn, call.get() );
       pthread_attr_destroy( &attr );
 
       CHECK( !m_joinable, "pthread_create faild" );
 
-      args.release();   // will now be freed by the thread
+      call.release();   // will now be freed by the thread
     }
 
     bool joinable() { return m_joinable; }
@@ -561,16 +561,18 @@ private:
   };
 #endif   // PTHREAD_WRAPPER
 
+#if PTHREAD_WRAPPER
+  using ThreadImpl = PThread;
+#else
+  using ThreadImpl = std::thread;
+#endif
+
   using TaskIterator = ChunkedTaskQueue::Iterator;
 
   // members
   std::string              m_poolName;
   std::atomic_bool         m_exitThreads{ false };
-#ifdef PTHREAD_WRAPPER
-  std::vector<PThread>     m_threads;
-#else
-  std::vector<std::thread> m_threads;
-#endif
+  std::vector<ThreadImpl>  m_threads;
   ChunkedTaskQueue         m_tasks;
   TaskIterator             m_nextFillSlot = m_tasks.begin();
 #if ADD_TASK_THREAD_SAFE

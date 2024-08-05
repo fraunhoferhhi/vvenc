@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "NoMallocThreadPool.h"
 
+#include <thread>
 
 //! \ingroup Utilities
 //! \{
@@ -64,11 +65,7 @@ NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolN
   int tid = 0;
   for( auto& t: m_threads )
   {
-#if PTHREAD_WRAPPER
-    t = PThread( this, tid++, *encCfg );
-#else
-    t = std::thread( &NoMallocThreadPool::threadProc, this, tid++, *encCfg );
-#endif
+    t = ThreadImpl( &NoMallocThreadPool::threadProc, this, tid++, *encCfg );
   }
 }
 
