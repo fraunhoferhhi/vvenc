@@ -535,6 +535,13 @@ private:
         pthread_attr_destroy( &attr );
         THROW( "pthread_attr_setstacksize() failed" );
       }
+#  ifdef _DEBUG
+      if( pthread_attr_setguardsize( &attr, 1024 * 1024 ) != 0 )   // set stack guard size to 1MB to more reliably deteck stack overflows
+      {
+        pthread_attr_destroy( &attr );
+        THROW( "pthread_attr_setguardsize() failed" );
+      }
+#  endif
 
       m_joinable = 0 == pthread_create( &m_id, &attr, threadFn, call.get() );
       pthread_attr_destroy( &attr );
