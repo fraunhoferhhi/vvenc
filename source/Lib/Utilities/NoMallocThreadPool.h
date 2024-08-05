@@ -45,28 +45,17 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <functional>
+#include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
 #include <chrono>
-#include <iostream>
 #include <array>
 
 #include "CommonLib/CommonDef.h"
 #if ENABLE_TIME_PROFILING_MT_MODE
 #include "CommonLib/TimeProfiler.h"
 #endif
-
-
-#if __linux
-#  include <pthread.h>
-#  define PTHREAD_WRAPPER   1
-#  define THREAD_STACK_SIZE 1024 * 1024
-#else
-#  include <thread>
-#endif
-
 
 //! \ingroup Utilities
 //! \{
@@ -376,7 +365,6 @@ class NoMallocThreadPool
     Iterator grow()
     {
       std::unique_lock<std::mutex> l( m_resizeMutex );  // prevent concurrent growth of the queue. Read access while growing is no problem
-//      std::cerr << __PRETTY_FUNCTION__ << std::endl;
 
       m_lastChunk->m_next = new Chunk( &m_firstChunk );
       m_lastChunk         = m_lastChunk->m_next;
@@ -495,80 +483,31 @@ public:
 #endif
 
 private:
-#ifdef PTHREAD_WRAPPER
+#ifdef HAVE_PTHREADS
   struct PThread
   {
     PThread()                            = default;
     ~PThread()                           = default;
+
     PThread( const PThread& )            = delete;
     PThread& operator=( const PThread& ) = delete;
+
     PThread( PThread&& other ) { *this = std::move( other ); };
-    PThread& operator=( PThread&& other )
-    {
-      m_id             = other.m_id;
-      m_joinable       = other.m_joinable;
-      other.m_id       = 0;
-      other.m_joinable = false;
-      return *this;
-    }
+    PThread& operator=( PThread&& other );
 
     template<class TFunc, class... TArgs>
-    PThread( TFunc&& func, TArgs&&... args )
-    {
-      using WrappedCall                 = std::function<void()>;
-      std::unique_ptr<WrappedCall> call = std::make_unique<WrappedCall>( std::bind( func, args... ) );
-
-      using PThreadsStartFn    = void* (*) ( void* );
-      PThreadsStartFn threadFn = []( void* p ) -> void*
-      {
-        std::unique_ptr<WrappedCall> call( static_cast<WrappedCall*>( p ) );
-
-        ( *call )();
-
-        return nullptr;
-      };
-
-      pthread_attr_t attr;
-      CHECK( pthread_attr_init( &attr ) != 0, "pthread_attr_init() failed" );
-      if( pthread_attr_setstacksize( &attr, THREAD_STACK_SIZE ) != 0 )
-      {
-        pthread_attr_destroy( &attr );
-        THROW( "pthread_attr_setstacksize() failed" );
-      }
-#  ifdef _DEBUG
-      if( pthread_attr_setguardsize( &attr, 1024 * 1024 ) != 0 )   // set stack guard size to 1MB to more reliably deteck stack overflows
-      {
-        pthread_attr_destroy( &attr );
-        THROW( "pthread_attr_setguardsize() failed" );
-      }
-#  endif
-
-      m_joinable = 0 == pthread_create( &m_id, &attr, threadFn, call.get() );
-      pthread_attr_destroy( &attr );
-
-      CHECK( !m_joinable, "pthread_create faild" );
-
-      call.release();   // will now be freed by the thread
-    }
+    PThread( TFunc&& func, TArgs&&... args );
 
     bool joinable() { return m_joinable; }
-
-    void join()
-    {
-      if( m_joinable )
-      {
-        m_joinable = false;
-        pthread_join( m_id, nullptr );
-      }
-    }
+    void join();
 
   private:
     pthread_t m_id       = 0;
     bool      m_joinable = false;
   };
-#endif   // PTHREAD_WRAPPER
+#endif   // HAVE_PTHREADS
 
-#if PTHREAD_WRAPPER
+#if HAVE_PTHREADS
   using ThreadImpl = PThread;
 #else
   using ThreadImpl = std::thread;

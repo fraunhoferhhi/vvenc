@@ -47,7 +47,11 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "NoMallocThreadPool.h"
 
-#include <thread>
+#ifdef HAVE_PTHREADS
+#  include <pthread.h>
+#  define THREAD_MIN_STACK_SIZE 1024 * 1024
+#endif
+
 
 //! \ingroup Utilities
 //! \{
@@ -60,12 +64,15 @@ thread_local std::unique_ptr<TProfiler> ptls;
 
 NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName, const VVEncCfg* encCfg )
   : m_poolName( threadPoolName )
-  , m_threads ( numThreads < 0 ? std::thread::hardware_concurrency() : numThreads )
 {
-  int tid = 0;
-  for( auto& t: m_threads )
+  if( numThreads < 0 )
   {
-    t = ThreadImpl( &NoMallocThreadPool::threadProc, this, tid++, *encCfg );
+    numThreads = std::thread::hardware_concurrency();
+  }
+
+  for( int i = 0; i < numThreads; ++i )
+  {
+    m_threads.emplace_back( &NoMallocThreadPool::threadProc, this, i, *encCfg );
   }
 }
 
@@ -266,6 +273,77 @@ bool NoMallocThreadPool::processTask( int threadId, NoMallocThreadPool::Slot& ta
 
   return true;
 }
+
+#ifdef HAVE_PTHREADS
+
+template<class TFunc, class... TArgs>
+NoMallocThreadPool::PThread::PThread( TFunc&& func, TArgs&&... args )
+{
+  using WrappedCall     = std::function<void()>;
+  std::unique_ptr<WrappedCall> call = std::make_unique<WrappedCall>( std::bind( func, args... ) );
+
+  using PThreadsStartFn = void* (*) ( void* );
+  PThreadsStartFn threadFn = []( void* p ) -> void*
+  {
+    std::unique_ptr<WrappedCall> call( static_cast<WrappedCall*>( p ) );
+
+    ( *call )();
+
+    return nullptr;
+  };
+
+  pthread_attr_t attr;
+  CHECK( pthread_attr_init( &attr ) != 0, "pthread_attr_init() failed" );
+
+  try
+  {
+    size_t currStackSize = 0;
+    int ret = pthread_attr_getstacksize( &attr, &currStackSize );
+    CHECK( ret != 0, "pthread_attr_getstacksize() failed" );
+
+    if( currStackSize < THREAD_MIN_STACK_SIZE )
+    {
+      ret = pthread_attr_setstacksize( &attr, THREAD_MIN_STACK_SIZE );
+      CHECK( ret != 0, "pthread_attr_setstacksize() failed" );
+
+#  ifdef _DEBUG
+      ret = pthread_attr_setguardsize( &attr, 1024 * 1024 );   // set stack guard size to 1MB to more reliably deteck stack overflows
+      CHECK( ret != 0, "pthread_attr_setguardsize() failed" );
+#  endif
+    }
+    m_joinable = 0 == pthread_create( &m_id, &attr, threadFn, call.get() );
+    CHECK( !m_joinable, "pthread_create() faild" );
+
+    call.release();   // will now be freed by the thread
+
+    pthread_attr_destroy( &attr );
+  }
+  catch( ... )
+  {
+    pthread_attr_destroy( &attr );
+    throw;
+  }
+}
+
+NoMallocThreadPool::PThread& NoMallocThreadPool::PThread::operator=( PThread&& other )
+{
+  m_id             = other.m_id;
+  m_joinable       = other.m_joinable;
+  other.m_id       = 0;
+  other.m_joinable = false;
+  return *this;
+}
+
+void NoMallocThreadPool::PThread::join()
+{
+  if( m_joinable )
+  {
+    m_joinable = false;
+    pthread_join( m_id, nullptr );
+  }
+}
+
+#endif   // HAVE_PTHREADS
 
 } // namespace vvenc
 
