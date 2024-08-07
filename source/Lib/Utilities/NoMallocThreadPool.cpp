@@ -293,12 +293,13 @@ NoMallocThreadPool::PThread::PThread( TFunc&& func, TArgs&&... args )
   };
 
   pthread_attr_t attr;
-  CHECK( pthread_attr_init( &attr ) != 0, "pthread_attr_init() failed" );
+  int ret = pthread_attr_init( &attr );
+  CHECK( ret != 0, "pthread_attr_init() failed" );
 
   try
   {
     size_t currStackSize = 0;
-    int ret = pthread_attr_getstacksize( &attr, &currStackSize );
+    ret = pthread_attr_getstacksize( &attr, &currStackSize );
     CHECK( ret != 0, "pthread_attr_getstacksize() failed" );
 
     if( currStackSize < THREAD_MIN_STACK_SIZE )
