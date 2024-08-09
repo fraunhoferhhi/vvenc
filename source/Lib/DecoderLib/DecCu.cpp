@@ -444,23 +444,18 @@ void DecCu::xDecodeInterTexture(CodingUnit &cu)
 
 void DecCu::xDeriveCUMV( CodingUnit &cu )
 {
-  MergeCtx mrgCtx;
-
   if( cu.mergeFlag )
   {
+    MergeCtx mrgCtx;
+
     if (cu.mmvdMergeFlag || cu.mmvdSkip)
     {
       CHECK(cu.ciip == true, "invalid MHIntra");
-      if (cu.cs->sps->SbtMvp)
-      {
-        Size bufSize = g_miScaling.scale(cu.lumaSize());
-        mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-      }
       int   fPosBaseIdx = cu.mmvdMergeIdx / MMVD_MAX_REFINE_NUM;
       CU::getInterMergeCandidates(cu, mrgCtx, 1, fPosBaseIdx + 1);
       CU::getInterMMVDMergeCandidates(cu, mrgCtx, cu.mmvdMergeIdx);
       mrgCtx.setMmvdMergeCandiInfo(cu, cu.mmvdMergeIdx);
-      CU::spanMotionInfo(cu, mrgCtx);
+      CU::spanMotionInfo(cu);
     }
     else
     {
@@ -470,14 +465,13 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
       }
       else
       {
+        AffineMergeCtx affineMergeCtx;
         if (cu.affine)
         {
-          AffineMergeCtx affineMergeCtx;
           if (cu.cs->sps->SbtMvp)
           {
-            Size bufSize          = g_miScaling.scale(cu.lumaSize());
-            mrgCtx.subPuMvpMiBuf  = MotionBuf(m_subPuMiBuf, bufSize);
-            affineMergeCtx.mrgCtx = &mrgCtx;
+            Size bufSize                  = g_miScaling.scale(cu.lumaSize());
+            affineMergeCtx.subPuMvpMiBuf  = MotionBuf(m_subPuMiBuf, bufSize);
           }
           CU::getAffineMergeCand(cu, affineMergeCtx, cu.mergeIdx);
           cu.interDir       = affineMergeCtx.interDirNeighbours[cu.mergeIdx];
@@ -518,7 +512,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
           mrgCtx.setMergeInfo(cu, cu.mergeIdx);
         }
 
-        CU::spanMotionInfo(cu, mrgCtx);
+        CU::spanMotionInfo(cu, &affineMergeCtx);
       }
     }
   } 
@@ -600,7 +594,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         }
       }
     }
-    CU::spanMotionInfo( cu, mrgCtx );
+    CU::spanMotionInfo( cu );
   }
   if (CU::isIBC(cu)) //only check
   {

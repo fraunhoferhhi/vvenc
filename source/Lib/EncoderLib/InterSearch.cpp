@@ -1011,7 +1011,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
 
   uint8_t      BcwIdx          = (cu.cs->slice->isInterB() ? cu.BcwIdx : BCW_DEFAULT);
   bool         enforceBcwPred = false;
-  MergeCtx     mergeCtx;
 
   // Loop over Prediction Units
   uint32_t     puIdx = 0;
@@ -1026,11 +1025,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
 
   m_encOnly = true;
   {
-    if (cu.cs->sps->SbtMvp)
-    {
-      Size bufSize = g_miScaling.scale(cu.lumaSize());
-      mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-    }
     CU::spanMotionInfo( cu );
     Distortion   uiCost[2] = { MAX_DISTORTION, MAX_DISTORTION };
     Distortion   uiCostBi  =   MAX_DISTORTION;
@@ -1790,7 +1784,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       }
     }
 
-    CU::spanMotionInfo( cu, mergeCtx );
+    CU::spanMotionInfo( cu );
 
     m_skipPROF = false;
     m_encOnly  = false;

@@ -1561,14 +1561,11 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     && !(bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8);
 
   AffineMergeCtx affineMergeCtx;
-  MergeCtx mrgCtx;
 
   if (sps.SbtMvp)
   {
     Size bufSize = g_miScaling.scale(tempCS->area.lumaSize());
-    mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-    mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-    affineMergeCtx.mrgCtx = &mrgCtx;
+    affineMergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
   }
 
   m_mergeBestSATDCost = MAX_DOUBLE;
@@ -1724,7 +1721,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           continue;
         }
 
-        CU::spanMotionInfo( cu, mergeCtx );
+        CU::spanMotionInfo( cu );
         cu.mvRefine = true;
         cu.mvdL0SubPu = m_refinedMvdL0[uiMergeCand]; // set an alternative storage for sub mvs
         acMergeTmpBuffer[uiMergeCand] = m_acMergeTmpBuffer[uiMergeCand].getBuf(localUnitArea);
@@ -1916,7 +1913,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             continue;
           }
 
-          CU::spanMotionInfo(cu, mergeCtx);
+          CU::spanMotionInfo(cu);
           cu.mvRefine = true;
           cu.mcControl = (refineStep > 2) || (m_pcEncCfg->m_MMVD > 1) ? 3 : 0;
           CHECK(!cu.mmvdMergeFlag, "MMVD merge should be set");
@@ -1948,7 +1945,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
       if (affineMrgAvail)
       {
-        mmvdCandInserted |=xCheckSATDCostAffineMerge(tempCS, cu, affineMergeCtx, mrgCtx, m_SortedPelUnitBufs, uiNumMrgSATDCand, RdModeList, candCostList, distParam, ctxStartIntraCtx, merge_ctx_size);
+        mmvdCandInserted |= xCheckSATDCostAffineMerge(tempCS, cu, affineMergeCtx, m_SortedPelUnitBufs, uiNumMrgSATDCand, RdModeList, candCostList, distParam, ctxStartIntraCtx, merge_ctx_size);
       }
       // Try to limit number of candidates using SATD-costs
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg >= 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
@@ -2097,7 +2094,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         {
           cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0][0].refIdx;
           cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1][0].refIdx;
-          CU::spanMotionInfo(cu, mrgCtx);
+          CU::spanMotionInfo(cu, &affineMergeCtx);
         }
         else
         {
@@ -2116,7 +2113,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
       if (!RdModeList[uiMrgHADIdx].isAffine)
       {
-        CU::spanMotionInfo( cu, mergeCtx );
+        CU::spanMotionInfo( cu );
       }
 
       if (!cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && (cu.lwidth() + cu.lheight() == 12))
@@ -2264,12 +2261,6 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
 
   MergeCtx   mergeCtx;
   const SPS &sps = *tempCS->sps;
-
-  if (sps.SbtMvp)
-  {
-    Size bufSize           = g_miScaling.scale(tempCS->area.lumaSize());
-    mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-  }
   CodingUnit &cu = tempCS->addCU(tempCS->area, pm.chType);
   pm.setCUData(cu);
   cu.predMode  = MODE_INTER;
@@ -2401,7 +2392,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       }
 
       mergeCtx.setMergeInfo(cu, mergeCand);
-      CU::spanMotionInfo(cu, mergeCtx);
+      CU::spanMotionInfo(cu);
       m_cInterSearch.motionCompensation(cu, mcBuf[mergeCand], REF_PIC_LIST_X); //new
 
       g_pelBufOP.roundGeo( mcBuf[mergeCand].Y().buf, sadBuf[mergeCand].buf, numSamples, rshift, offset, lclpRng);
@@ -2682,12 +2673,6 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
   tempCS->initStructData(encTestMode.qp);
   MergeCtx mergeCtx;
 
-  if (sps.SbtMvp)
-  {
-    Size bufSize = g_miScaling.scale(tempCS->area.lumaSize());
-    mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-  }
-
   {
     // first get merge candidates
     CodingUnit cu(tempCS->area);
@@ -2778,7 +2763,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
         numValidBv--;
         continue;
       }
-      CU::spanMotionInfo(cu, mergeCtx);
+      CU::spanMotionInfo(cu);
       distParam.cur.buf = piRefSrch + refStride * yPred + xPred;
 
       Distortion sad = distParam.distFunc(distParam);
@@ -2853,7 +2838,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
             cu.regularMergeFlag = false;
             cu.geo = false;
             mergeCtx.setMergeInfo(cu, mergeCand);
-            CU::spanMotionInfo(cu, mergeCtx);
+            CU::spanMotionInfo(cu);
 
             assert(mergeCtx.mrgTypeNeighbours[mergeCand] == MRG_TYPE_IBC);
             const bool chroma = !CU::isSepTree(cu);
@@ -3972,7 +3957,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
   xCheckBestMode  (  tempCS, bestCS, partitioner, cachedMode, m_EDO );
 }
 
-bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, const AffineMergeCtx& affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
+bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, const AffineMergeCtx& affineMergeCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
   , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam& distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
 {
   cu.mmvdSkip         = false;
@@ -4039,7 +4024,7 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
     {
       cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 0][0].refIdx;
       cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[( uiAffMergeCand << 1 ) + 1][0].refIdx;
-      CU::spanMotionInfo( cu, mrgCtx );
+      CU::spanMotionInfo( cu, &affineMergeCtx );
     }
     else
     {
