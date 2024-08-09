@@ -160,7 +160,7 @@ namespace CU
   bool     addMergeHMVPCand             (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4);
   void     addAMVPHMVPCand              (const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);
   bool     isBipredRestriction          (const CodingUnit& cu);
-  void     spanMotionInfo               (      CodingUnit& cu, const MergeCtx &mrgCtx = MergeCtx() );
+  void     spanMotionInfo               (      CodingUnit& cu, const AffineMergeCtx *mrgCtx = nullptr );
   void     restrictBiPredMergeCandsOne  (      CodingUnit& cu);
 
   bool     isLMCMode                    (                          unsigned mode);
@@ -176,7 +176,7 @@ namespace CU
   void     xInheritedAffineMv           (const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3]);
   void     fillAffineMvpCand            (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
   bool     addAffineMVPCandUnscaled     (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
-  bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
+  bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, AffineMergeCtx &mrgCtx, const int count);
 
   void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);

@@ -534,7 +534,6 @@ struct MergeCtx
   int           numValidMergeCand;
   bool          hasMergedCandList;
 
-  MotionBuf     subPuMvpMiBuf;
   MvField       mmvdBaseMv        [ MMVD_BASE_MV_NUM ][2];
   bool          mmvdUseAltHpelIf  [ MMVD_BASE_MV_NUM ];
   bool          useAltHpelIf      [ MRG_MAX_NUM_CANDS ];
@@ -551,8 +550,8 @@ struct AffineMergeCtx
   int           numValidMergeCand;
   int           maxNumMergeCand;
 
-  MergeCtx     *mrgCtx;
   MergeType     mergeType[AFFINE_MRG_MAX_NUM_CANDS];
+  MotionBuf     subPuMvpMiBuf;
 };
 
 

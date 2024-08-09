@@ -90,6 +90,39 @@ install( EXPORT vvencTargets-release        NAMESPACE vvenc:: FILE vvencTargets-
 install( EXPORT vvencTargets-debug          NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Debug          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 install( EXPORT vvencTargets-relwithdebinfo NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS RelWithDebInfo DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 
+function( resolve_target_interface_libs TGT OUT_VAR )
+  get_target_property( interface_libs ${TGT} INTERFACE_LINK_LIBRARIES )
+
+  foreach( lib ${interface_libs} )
+    # extract actual target from generator expression
+    if( ${lib} MATCHES  "<LINK_ONLY:\(.*\)>"  )
+      set( lib ${CMAKE_MATCH_1} )
+    endif()
+
+    if( TARGET ${lib} )
+      # if it is a target and not a -llibrary, we need to further resolve it
+      resolve_target_interface_libs( ${lib} lib )
+    endif()
+
+    list( APPEND ret ${lib} )
+  endforeach()
+
+  set( ${OUT_VAR} ${ret} PARENT_SCOPE )
+endfunction()
+
+# create pkg-config file
+set( VVENC_PKG_EXTRA_LIBS ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES} )
+if( VVENC_PKG_EXTRA_LIBS )
+  list( TRANSFORM   VVENC_PKG_EXTRA_LIBS REPLACE "^([^-].*)" "-l\\1" )  # only add a -l, when not already there
+  list( REMOVE_ITEM VVENC_PKG_EXTRA_LIBS "-lc" )
+endif()
+
+resolve_target_interface_libs( vvenc VVENC_PKG_INTERFACE_LIBS )
+if( VVENC_PKG_INTERFACE_LIBS )
+  list( APPEND VVENC_PKG_EXTRA_LIBS ${VVENC_PKG_INTERFACE_LIBS} )
+endif()
+
+list( JOIN VVENC_PKG_EXTRA_LIBS " " VVENC_PKG_EXTRA_LIBS  )
 configure_file( pkgconfig/libvvenc.pc.in ${CMAKE_CURRENT_BINARY_DIR}/pkgconfig/libvvenc.pc @ONLY )
 install( FILES ${CMAKE_CURRENT_BINARY_DIR}/pkgconfig/libvvenc.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig )
 
