@@ -118,7 +118,7 @@ if( VVENC_PKG_EXTRA_LIBS )
     if((IS_ABSOLUTE ${LIB} AND EXISTS ${LIB}) OR (${LIB} MATCHES "^-"))
       list( APPEND EXTRALIBS ${LIB} )
     else()
-       list( APPEND EXTRALIBS "-l${LIB}" )
+      list( APPEND EXTRALIBS "-l${LIB}" )
     endif()
   endforeach()
 
