@@ -307,7 +307,7 @@ NoMallocThreadPool::PThread::PThread( TFunc&& func, TArgs&&... args )
       ret = pthread_attr_setstacksize( &attr, THREAD_MIN_STACK_SIZE );
       CHECK( ret != 0, "pthread_attr_setstacksize() failed" );
 
-#  ifdef _DEBUG
+#  if defined( _DEBUG ) && !defined( __MINGW32__ ) && !defined( __MINGW64__ )
       ret = pthread_attr_setguardsize( &attr, 1024 * 1024 );   // set stack guard size to 1MB to more reliably deteck stack overflows
       CHECK( ret != 0, "pthread_attr_setguardsize() failed" );
 #  endif
