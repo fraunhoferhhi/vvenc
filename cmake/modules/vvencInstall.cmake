@@ -112,8 +112,20 @@ endfunction()
 
 # create pkg-config file
 set( VVENC_PKG_EXTRA_LIBS ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES} )
+
 if( VVENC_PKG_EXTRA_LIBS )
-  list( TRANSFORM   VVENC_PKG_EXTRA_LIBS REPLACE "^([^-].*)" "-l\\1" )  # only add a -l, when not already there
+  foreach( LIB ${VVENC_PKG_EXTRA_LIBS} )
+    if((IS_ABSOLUTE ${LIB} AND EXISTS ${LIB}) OR (${LIB} MATCHES "^-"))
+      list( APPEND EXTRALIBS ${LIB} )
+    else()
+       list( APPEND EXTRALIBS "-l${LIB}" )
+    endif()
+  endforeach()
+
+  if( EXTRALIBS )
+    set(VVENC_PKG_EXTRA_LIBS ${EXTRALIBS})
+  endif()
+
   list( REMOVE_ITEM VVENC_PKG_EXTRA_LIBS "-lc" )
 endif()
 
