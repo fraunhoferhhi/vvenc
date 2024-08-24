@@ -52,6 +52,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <array>
 
+#ifdef HAVE_PTHREADS
+#include <pthread.h>
+#endif
+
 #include "CommonLib/CommonDef.h"
 #if ENABLE_TIME_PROFILING_MT_MODE
 #include "CommonLib/TimeProfiler.h"
