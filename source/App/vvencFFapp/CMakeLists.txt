@@ -2,10 +2,10 @@
 set( EXE_NAME vvencFFapp )
 
 # get source files
-file( GLOB SRC_FILES "*.cpp" )
+file( GLOB SRC_FILES CONFIGURE_DEPENDS "*.cpp" )
 
 # get include files
-file( GLOB INC_FILES "*.h" )
+file( GLOB INC_FILES CONFIGURE_DEPENDS "*.h" )
 
 # get address sanitizer libs for gcc
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
@@ -17,7 +17,7 @@ endif()
 # set resource file for MSVC compilers
 if( MSVC )
   set( RESOURCE_FILE ${EXE_NAME}.rc )
-  file( GLOB NATVIS_FILES "../../VisualStudio/*.natvis" )
+  file( GLOB NATVIS_FILES CONFIGURE_DEPENDS "../../VisualStudio/*.natvis" )
   # extend the stack size on windows to 2MB
   set( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:0x200000" )
 endif()

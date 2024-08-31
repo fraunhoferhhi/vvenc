@@ -12,10 +12,10 @@ else()
 endif()
 
 # get source files
-file( GLOB BASE_SRC_FILES "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" "../DecoderLib/*.cpp" "../EncoderLib/*.cpp" )
+file( GLOB BASE_SRC_FILES CONFIGURE_DEPENDS "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" "../DecoderLib/*.cpp" "../EncoderLib/*.cpp" )
 
 # get include files
-file( GLOB BASE_INC_FILES "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" "../apputils/*.h" )
+file( GLOB BASE_INC_FILES CONFIGURE_DEPENDS "*.h" "../CommonLib/*.h"  "../Utilities/*.h" "../DecoderLib/*.h" "../EncoderLib/*.h" "../apputils/*.h" )
 
 
 if( NOT DEFINED VVENC_ENABLE_X86_SIMD )
@@ -24,33 +24,33 @@ endif()
 
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
-  file( GLOB X86_SRC_FILES "../CommonLib/x86/*.cpp" )
+  file( GLOB X86_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.cpp" )
 
   # get x86 include files
-  file( GLOB X86_INC_FILES "../CommonLib/x86/*.h" )
+  file( GLOB X86_INC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.h" )
 
   # get avx source files
-  file( GLOB AVX_SRC_FILES "../CommonLib/x86/avx/*.cpp" )
+  file( GLOB AVX_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/avx/*.cpp" )
 
   # get avx2 source files
-  file( GLOB AVX2_SRC_FILES "../CommonLib/x86/avx2/*.cpp" )
+  file( GLOB AVX2_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/avx2/*.cpp" )
 
   # get sse4.1 source files
-  file( GLOB SSE41_SRC_FILES "../CommonLib/x86/sse41/*.cpp" )
+  file( GLOB SSE41_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/sse41/*.cpp" )
 
   # get sse4.2 source files
-  file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
+  file( GLOB SSE42_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/sse42/*.cpp" )
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
-  file( GLOB ARM_SRC_FILES      "../CommonLib/arm/*.cpp"      )
-  file( GLOB ARM_INC_FILES      "../CommonLib/arm/*.h"        )
+  file( GLOB ARM_SRC_FILES CONFIGURE_DEPENDS      "../CommonLib/arm/*.cpp"      )
+  file( GLOB ARM_INC_FILES CONFIGURE_DEPENDS      "../CommonLib/arm/*.h"        )
 
-  file( GLOB ARM_NEON_SRC_FILES "../CommonLib/arm/neon/*.cpp" )
+  file( GLOB ARM_NEON_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/neon/*.cpp" )
 endif()
 
 # get public/extern include files
-file( GLOB PUBLIC_INC_FILES  "../../../include/${LIB_NAME}/*.h" )
+file( GLOB PUBLIC_INC_FILES CONFIGURE_DEPENDS  "../../../include/${LIB_NAME}/*.h" )
 
 # get all private include files
 set( PRIVATE_INC_FILES ${BASE_INC_FILES} ${X86_INC_FILES} ${ARM_INC_FILES} )
@@ -61,7 +61,7 @@ set( INC_FILES ${PRIVATE_INC_FILES} ${PUBLIC_INC_FILES}  )
 
 # NATVIS files for Visual Studio
 if( MSVC )
-  file( GLOB NATVIS_FILES "../../VisualStudio/*.natvis" )
+  file( GLOB NATVIS_FILES CONFIGURE_DEPENDS "../../VisualStudio/*.natvis" )
 
   # example: place header files in different folders
   source_group( "Natvis Files" FILES ${NATVIS_FILES} )
