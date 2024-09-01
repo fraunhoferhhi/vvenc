@@ -40,8 +40,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-/** \file     CommonDefX86.cpp
-*/
+/** \file     CommonDefARM.cpp
+ */
 
 #include "CommonDefARM.h"
 
@@ -49,9 +49,53 @@ namespace vvenc
 {
 using namespace arm_simd;
 
+const static std::vector<std::pair<ARM_VEXT, std::string>> vext_names{
+  { UNDEFINED, ""       },
+  { SCALAR,    "SCALAR" },
+  { NEON,      "NEON"   }
+};
+
+const std::string& arm_vext_to_string( ARM_VEXT vext )
+{
+  for( auto& it : vext_names )
+  {
+    if( it.first == vext )
+    {
+      return it.second;
+    }
+  }
+  THROW( "Invalid SIMD extension value " << vext );
+}
+
+ARM_VEXT string_to_arm_vext( const std::string& ext_name )
+{
+  if( ext_name.empty() )
+  {
+    return UNDEFINED;
+  }
+
+  for( auto& it : vext_names )
+  {
+    if( it.second == ext_name )
+    {
+      return it.first;
+    }
+  }
+
+  THROW( "Invalid SIMD Mode string: \"" << ext_name << "\"" );
+}
+
+static ARM_VEXT _get_arm_extensions()
+{
+  // We assume Neon is always supported for relevant Arm processors.
+  // No other extensions supported for now.
+  return NEON;
+}
+
 ARM_VEXT read_arm_extension_flags( ARM_VEXT request )
 {
-  static ARM_VEXT ext_flags = NEON;   // We assume NEON is always supported for relevant ARM processors
+  static ARM_VEXT max_supported = _get_arm_extensions();
+  static ARM_VEXT ext_flags     = max_supported;
 
   if( request != UNDEFINED )
   {
@@ -60,5 +104,10 @@ ARM_VEXT read_arm_extension_flags( ARM_VEXT request )
 
   return ext_flags;
 };
+
+const std::string& read_arm_extension_name()
+{
+  return arm_vext_to_string( read_arm_extension_flags() );
+}
 
 }   // namespace
