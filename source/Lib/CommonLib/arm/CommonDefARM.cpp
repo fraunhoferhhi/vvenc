@@ -45,6 +45,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 
+#if defined( __linux__ )
+#include <sys/auxv.h>  // getauxval
+#endif
+
 namespace vvenc
 {
 using namespace arm_simd;
@@ -52,7 +56,9 @@ using namespace arm_simd;
 const static std::vector<std::pair<ARM_VEXT, std::string>> vext_names{
   { UNDEFINED, ""       },
   { SCALAR,    "SCALAR" },
-  { NEON,      "NEON"   }
+  { NEON,      "NEON"   },
+  { SVE,       "SVE"    },
+  { SVE2,      "SVE2"   },
 };
 
 const std::string& arm_vext_to_string( ARM_VEXT vext )
@@ -85,12 +91,43 @@ ARM_VEXT string_to_arm_vext( const std::string& ext_name )
   THROW( "Invalid SIMD Mode string: \"" << ext_name << "\"" );
 }
 
+#if defined( __linux__ )
+
+// Define hwcap values ourselves: building with an old auxv header where these
+// hwcap values are not defined should not prevent features from being enabled.
+#define AARCH64_HWCAP_SVE ( 1 << 22 )
+#define AARCH64_HWCAP2_SVE2 ( 1 << 1 )
+
 static ARM_VEXT _get_arm_extensions()
 {
   // We assume Neon is always supported for relevant Arm processors.
-  // No other extensions supported for now.
+  ARM_VEXT ext = NEON;
+
+  unsigned long hwcap  = getauxval( AT_HWCAP );
+  unsigned long hwcap2 = getauxval( AT_HWCAP2 );
+
+  if( hwcap & AARCH64_HWCAP_SVE )
+  {
+    ext = SVE;
+    if( hwcap2 & AARCH64_HWCAP2_SVE2 )
+    {
+      ext = SVE2;
+    }
+  }
+
+  return ext;
+}
+
+#else
+
+static ARM_VEXT _get_arm_extensions()
+{
+  // We assume Neon is always supported for relevant Arm processors.
+  // No other extensions supported on non-Linux platforms for now.
   return NEON;
 }
+
+#endif
 
 ARM_VEXT read_arm_extension_flags( ARM_VEXT request )
 {
@@ -99,6 +136,10 @@ ARM_VEXT read_arm_extension_flags( ARM_VEXT request )
 
   if( request != UNDEFINED )
   {
+    if( request > max_supported )
+    {
+      THROW( "requested SIMD level (" << request << ") not supported by current CPU (max " << max_supported << ")." );
+    }
     ext_flags = request;
   }
 

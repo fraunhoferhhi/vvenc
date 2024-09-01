@@ -70,13 +70,9 @@ namespace vvenc
 void InterpolationFilter::initInterpolationFilterARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initInterpolationFilterARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
@@ -85,13 +81,9 @@ void InterpolationFilter::initInterpolationFilterARM()
 void PelBufferOps::initPelBufOpsARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initPelBufOpsARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
@@ -100,13 +92,9 @@ void PelBufferOps::initPelBufOpsARM()
 void RdCost::initRdCostARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initRdCostARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
@@ -115,13 +103,9 @@ void RdCost::initRdCostARM()
 void MCTF::initMCTF_ARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initMCTF_ARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif  // ENABLE_SIMD_OPT_MCTF
