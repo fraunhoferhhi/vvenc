@@ -133,146 +133,186 @@ static void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, con
   }
 }
 
+static int16x8_t simdFilter16xX_N8_half( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+{
+  int16x8_t vsrca00 = vld1q_s16( src + 0 );
+  int16x8_t vsrca01 = vld1q_s16( src + 1 );
+  int16x8_t vsrca10 = vld1q_s16( src + 2 );
+  int16x8_t vsrca11 = vld1q_s16( src + 3 );
+  int16x8_t vsrcb00 = vld1q_s16( src + 4 );
+  int16x8_t vsrcb01 = vld1q_s16( src + 5 );
+  int16x8_t vsrcb10 = vld1q_s16( src + 6 );
+  int16x8_t vsrcb11 = vld1q_s16( src + 7 );
+
+  int32x4_t a0 = vmull_s16( vget_low_s16( vsrca00 ), vget_low_s16( ch ) );
+  int32x4_t a1 = vmull_s16( vget_low_s16( vsrca01 ), vget_low_s16( ch ) );
+  int32x4_t a2 = vmull_s16( vget_low_s16( vsrca10 ), vget_low_s16( ch ) );
+  int32x4_t a3 = vmull_s16( vget_low_s16( vsrca11 ), vget_low_s16( ch ) );
+
+  int32x4_t b0 = vmull_s16( vget_low_s16( vsrcb00 ), vget_low_s16( ch ) );
+  int32x4_t b1 = vmull_s16( vget_low_s16( vsrcb01 ), vget_low_s16( ch ) );
+  int32x4_t b2 = vmull_s16( vget_low_s16( vsrcb10 ), vget_low_s16( ch ) );
+  int32x4_t b3 = vmull_s16( vget_low_s16( vsrcb11 ), vget_low_s16( ch ) );
+
+  a0 = vmlal_s16( a0, vget_high_s16( vsrca00 ), vget_high_s16( ch ) );
+  a1 = vmlal_s16( a1, vget_high_s16( vsrca01 ), vget_high_s16( ch ) );
+  a2 = vmlal_s16( a2, vget_high_s16( vsrca10 ), vget_high_s16( ch ) );
+  a3 = vmlal_s16( a3, vget_high_s16( vsrca11 ), vget_high_s16( ch ) );
+
+  b0 = vmlal_s16( b0, vget_high_s16( vsrcb00 ), vget_high_s16( ch ) );
+  b1 = vmlal_s16( b1, vget_high_s16( vsrcb01 ), vget_high_s16( ch ) );
+  b2 = vmlal_s16( b2, vget_high_s16( vsrcb10 ), vget_high_s16( ch ) );
+  b3 = vmlal_s16( b3, vget_high_s16( vsrcb11 ), vget_high_s16( ch ) );
+
+  int32x4_t vsuma = vpaddq_s32( vpaddq_s32( a0, a1 ), vpaddq_s32( a2, a3 ) );
+  int32x4_t vsumb = vpaddq_s32( vpaddq_s32( b0, b1 ), vpaddq_s32( b2, b3 ) );
+
+  vsuma = vaddq_s32( vsuma, voffset1 );
+  vsumb = vaddq_s32( vsumb, voffset1 );
+
+  vsuma = vshlq_s32( vsuma, invshift1st );
+  vsumb = vshlq_s32( vsumb, invshift1st );
+
+  return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
+}
+
+static int16x8x2_t simdFilter16xX_N8_step( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+{
+  int16x8_t a = simdFilter16xX_N8_half( src + 0, ch, voffset1, invshift1st );
+  int16x8_t b = simdFilter16xX_N8_half( src + 8, ch, voffset1, invshift1st );
+  return ( int16x8x2_t ){ a, b };
+}
+
 template<bool isLast>
 static void simdFilter16xX_N8_neon( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   OFFSET( src, srcStride, -3, -3 );
 
-  int       offset1st, offset2nd;
-  int       headRoom  = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  const int shift1st  = IF_FILTER_PREC - headRoom;
-  int       shift2nd  = IF_FILTER_PREC;
-  int       extHeight = height + 7;
   // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
+  const int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  const int shift1st = IF_FILTER_PREC - headRoom;
+  const int shift2nd = IF_FILTER_PREC + headRoom;
 
-  //  shift1st -= headRoom;
-  offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
-
+  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
+  int offset2nd;
   if( isLast )
   {
-    shift2nd += headRoom;
-    offset2nd = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
   }
   else
   {
     offset2nd = 0;
   }
+
   const int32x4_t voffset1 = vdupq_n_s32( offset1st );
 
   const int16x8_t vibdimin = vdupq_n_s16( clpRng.min() );
   const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
 
-  int64x1x2_t vcoeff0 = vld2_s64( (int64_t*) coeffH );
-  int16x8_t vsum;
-  int32x4_t vsuma, vsumb;
-
-  int32x4_t vsrcv[ 2 ][ 9 ];
+  int16x8_t ch = vld1q_s16( coeffH );
+  int16x8_t cv = vld1q_s16( coeffV );
 
   int32x4_t invshift1st = vdupq_n_s32( -shift1st );
   int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
 
-  for( int row = 0; row < extHeight; row++ )
+  int16x8x2_t vsrcv0 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv1 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv2 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv3 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv4 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv5 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  int16x8x2_t vsrcv6 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+  src += srcStride;
+
+  do
   {
-    int32x4_t vsrc0, vsrc1;
-    int16x4_t vsrca00, vsrca01, vsrca10, vsrca11;
-    int16x4_t vsrcb00, vsrcb01, vsrcb10, vsrcb11;
+    int16x8x2_t vsrcv7 = simdFilter16xX_N8_step( src, ch, voffset1, invshift1st );
+    src += srcStride;
 
-    vsrca00 = vld1_s16( &src[ 0 ] );
-    vsrca01 = vld1_s16( &src[ 1 ] );
-    vsrca10 = vld1_s16( &src[ 2 ] );
-    vsrca11 = vld1_s16( &src[ 3 ] );
+    int32x4_t vsum0 = vdupq_n_s32( offset2nd );
+    int32x4_t vsum1 = vdupq_n_s32( offset2nd );
+    int32x4_t vsum2 = vdupq_n_s32( offset2nd );
+    int32x4_t vsum3 = vdupq_n_s32( offset2nd );
 
-    for( int j = 0; j < 2; j++ )
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv0.val[ 0 ] ), cv, 0 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv0.val[ 0 ] ), cv, 0 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv0.val[ 1 ] ), cv, 0 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv0.val[ 1 ] ), cv, 0 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv1.val[ 0 ] ), cv, 1 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv1.val[ 0 ] ), cv, 1 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv1.val[ 1 ] ), cv, 1 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv1.val[ 1 ] ), cv, 1 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv2.val[ 0 ] ), cv, 2 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv2.val[ 0 ] ), cv, 2 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv2.val[ 1 ] ), cv, 2 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv2.val[ 1 ] ), cv, 2 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv3.val[ 0 ] ), cv, 3 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv3.val[ 0 ] ), cv, 3 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv3.val[ 1 ] ), cv, 3 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv3.val[ 1 ] ), cv, 3 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv4.val[ 0 ] ), cv, 4 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv4.val[ 0 ] ), cv, 4 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv4.val[ 1 ] ), cv, 4 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv4.val[ 1 ] ), cv, 4 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv5.val[ 0 ] ), cv, 5 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv5.val[ 0 ] ), cv, 5 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv5.val[ 1 ] ), cv, 5 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv5.val[ 1 ] ), cv, 5 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv6.val[ 0 ] ), cv, 6 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv6.val[ 0 ] ), cv, 6 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv6.val[ 1 ] ), cv, 6 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv6.val[ 1 ] ), cv, 6 );
+
+    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv7.val[ 0 ] ), cv, 7 );
+    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv7.val[ 0 ] ), cv, 7 );
+    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv7.val[ 1 ] ), cv, 7 );
+    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv7.val[ 1 ] ), cv, 7 );
+
+    int16x8_t vsum01, vsum23;
+    if( isLast ) // clip
     {
-      vsrcb00 = vld1_s16( &src[ ( j << 3 ) + 4 ] );
-      vsrcb01 = vld1_s16( &src[ ( j << 3 ) + 5 ] );
-      vsrcb10 = vld1_s16( &src[ ( j << 3 ) + 6 ] );
-      vsrcb11 = vld1_s16( &src[ ( j << 3 ) + 7 ] );
+      vsum0 = vshlq_s32( vsum0, invshift2nd );
+      vsum1 = vshlq_s32( vsum1, invshift2nd );
+      vsum2 = vshlq_s32( vsum2, invshift2nd );
+      vsum3 = vshlq_s32( vsum3, invshift2nd );
 
-      GCC_WARNING_DISABLE_maybe_uninitialized   // when building for aarch64 without LTO gcc complains about vsum{a,b},vsrc{0,1} not being initialized
+      vsum01 = vcombine_s16( vqmovn_s32( vsum0 ), vqmovn_s32( vsum1 ) );
+      vsum23 = vcombine_s16( vqmovn_s32( vsum2 ), vqmovn_s32( vsum3 ) );
 
-      vsuma[ 0 ] = vaddvq_s32( vmull_s16( vsrca00, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsuma[ 1 ] = vaddvq_s32( vmull_s16( vsrca01, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsuma[ 2 ] = vaddvq_s32( vmull_s16( vsrca10, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsuma[ 3 ] = vaddvq_s32( vmull_s16( vsrca11, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-
-      vsumb[ 0 ] = vaddvq_s32( vmull_s16( vsrcb00, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsumb[ 1 ] = vaddvq_s32( vmull_s16( vsrcb01, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsumb[ 2 ] = vaddvq_s32( vmull_s16( vsrcb10, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-      vsumb[ 3 ] = vaddvq_s32( vmull_s16( vsrcb11, vreinterpret_s16_s64( vcoeff0.val[ 0 ] ) ) );
-
-      vsrc1[ 0 ] = vaddvq_s32( vmull_s16( vsrcb00, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc1[ 1 ] = vaddvq_s32( vmull_s16( vsrcb01, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc1[ 2 ] = vaddvq_s32( vmull_s16( vsrcb10, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc1[ 3 ] = vaddvq_s32( vmull_s16( vsrcb11, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-
-      vsrca00 = vld1_s16( &src[ ( j << 3 ) + 8 ] );
-      vsrca01 = vld1_s16( &src[ ( j << 3 ) + 9 ] );
-      vsrca10 = vld1_s16( &src[ ( j << 3 ) + 10 ] );
-      vsrca11 = vld1_s16( &src[ ( j << 3 ) + 11 ] );
-
-      vsrc0[ 0 ] = vaddvq_s32( vmull_s16( vsrca00, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc0[ 1 ] = vaddvq_s32( vmull_s16( vsrca01, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc0[ 2 ] = vaddvq_s32( vmull_s16( vsrca10, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-      vsrc0[ 3 ] = vaddvq_s32( vmull_s16( vsrca11, vreinterpret_s16_s64( vcoeff0.val[ 1 ] ) ) );
-
-      GCC_WARNING_RESET
-
-      vsuma = vaddq_s32( vsuma, vsrc1 );
-      vsumb = vaddq_s32( vsumb, vsrc0 );
-
-      vsuma = vaddq_s32( vsuma, voffset1 );
-      vsumb = vaddq_s32( vsumb, voffset1 );
-
-      vsuma = vshlq_s32( vsuma, invshift1st );
-      vsumb = vshlq_s32( vsumb, invshift1st );
-
-      vsum = vqmovn_high_s32( vqmovn_s32( vsuma ), vsumb );
-
-      if( row < 7 )
-      {
-        vsrcv[ j ][ row + 1 ] = (int32x4_t) vsum;
-      }
-      else
-      {
-        vsrcv[ j ][ 8 ] = (int32x4_t) vsum;
-        vsuma = vsumb = vdupq_n_s32( offset2nd );
-
-        for( int i = 0; i < 8; i += 2 )
-        {
-          vsrc0               = vsrcv[ j ][ i + 1 ];
-          vsrc1               = vsrcv[ j ][ i + 2 ];
-          int16x4_t vsrc0l    = vget_low_s16( (int16x8_t) vsrc0 );               // 0a 0b 0c 0d
-          int16x4_t vsrc0h    = vget_high_s16( (int16x8_t) vsrc0 );              // 0e 0f 0g 0h
-          int16x4_t vsrc1l    = vget_low_s16( (int16x8_t) vsrc1 );               // 1a 1b 1c 1d
-          int16x4_t vsrc1h    = vget_high_s16( (int16x8_t) vsrc1 );              // 1e 1f 1g 1h
-          vsuma               = vmlal_n_s16( vsuma, vsrc0l, coeffV[ i ] );       // 0a * c0 + offset2nd, 0b * c0 + offset2nd, ...
-          vsuma               = vmlal_n_s16( vsuma, vsrc1l, coeffV[ i + 1 ] );   // 1a * c1 + 0a * c1 + offset2nd, 1b * c1 + 0b * c0 + offset2nd, ...
-          vsumb               = vmlal_n_s16( vsumb, vsrc0h, coeffV[ i ] );
-          vsumb               = vmlal_n_s16( vsumb, vsrc1h, coeffV[ i + 1 ] );
-          vsrcv[ j ][ i ]     = vsrc0;
-          vsrcv[ j ][ i + 1 ] = vsrc1;
-        }
-        vsuma = vshlq_s32( vsuma, invshift2nd );
-        vsumb = vshlq_s32( vsumb, invshift2nd );
-
-        vsum = vqmovn_high_s32( vqmovn_s32( vsuma ), vsumb );
-
-        if( isLast )   // clip
-        {
-          vsum = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum ) );
-        }
-
-        vst1q_s16( &dst[ j << 3 ], vsum );
-
-        dst += j * dstStride;
-      }
+      vsum01 = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum01 ) );
+      vsum23 = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum23 ) );
+    }
+    else
+    {
+      vsum01 = vcombine_s16( vqshrn_n_s32( vsum0, IF_FILTER_PREC ), vqshrn_n_s32( vsum1, IF_FILTER_PREC ) );
+      vsum23 = vcombine_s16( vqshrn_n_s32( vsum2, IF_FILTER_PREC ), vqshrn_n_s32( vsum3, IF_FILTER_PREC ) );
     }
 
-    src += srcStride;
-  }
+    vsrcv0 = vsrcv1;
+    vsrcv1 = vsrcv2;
+    vsrcv2 = vsrcv3;
+    vsrcv3 = vsrcv4;
+    vsrcv4 = vsrcv5;
+    vsrcv5 = vsrcv6;
+    vsrcv6 = vsrcv7;
+
+    vst1q_s16( dst + 0, vsum01 );
+    vst1q_s16( dst + 8, vsum23 );
+    dst += dstStride;
+  } while( --height != 0 );
 }
 
 template<>
