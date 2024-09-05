@@ -118,8 +118,14 @@ void TCoeffOps::initTCoeffOpsARM()
   {
     _initTCoeffOpsARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initTCoeffOpsARM<SVE>();
+  }
+#endif  // TARGET_SIMD_ARM_SVE
 }
-#endif
+#endif  // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_BDOF
 void InterPredInterpolation::initInterPredictionARM()
@@ -135,8 +141,6 @@ void InterPredInterpolation::initInterPredictionARM()
 }
 #endif
 
-
-
-#endif   // TARGET_SIMD_ARM
+#endif  // TARGET_SIMD_ARM
 
 }   // namespace
