@@ -54,25 +54,25 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/version.h"
 #include "CommonLib/CommonDef.h"
-#include "CommonLib/Picture.h"
 #include "CommonLib/Nal.h"
+#include "CommonLib/Picture.h"
 #include "EncoderLib/EncGOP.h"
-
 #include "EncoderLib/EncLib.h"
-#if defined( TARGET_SIMD_X86 )
-#  include "CommonLib/x86/CommonDefX86.h"
-#  if ENABLE_SIMD_TRAFO
-#    include "CommonLib/TrQuant_EMT.h"
-#  endif   // ENABLE_SIMD_TRAFO
-#endif     // TARGET_SIMD_X86
+
+#if ENABLE_SIMD_TRAFO
+#include "CommonLib/TrQuant_EMT.h"
+#endif  // ENABLE_SIMD_TRAFO
 
 #if defined( __linux__ )
-#  include <malloc.h>
+#include <malloc.h>
 #endif
 
+#if defined( TARGET_SIMD_X86 )
+#include "CommonLib/x86/CommonDefX86.h"
+#endif  // defined( TARGET_SIMD_X86 )
 #if defined( TARGET_SIMD_ARM )
-#  include "CommonLib/arm/CommonDefARM.h"
-#endif
+#include "CommonLib/arm/CommonDefARM.h"
+#endif  // defined( TARGET_SIMD_ARM )
 
 #if _DEBUG
 #define HANDLE_EXCEPTION 0
@@ -851,6 +851,9 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
 #if ENABLE_SIMD_TRAFO
 #if defined( TARGET_SIMD_X86 )
     g_tCoeffOps.initTCoeffOpsX86();
+#endif
+#if defined( TARGET_SIMD_ARM )
+    g_tCoeffOps.initTCoeffOpsARM();
 #endif
 #endif  // ENABLE_SIMD_TRAFO
 
