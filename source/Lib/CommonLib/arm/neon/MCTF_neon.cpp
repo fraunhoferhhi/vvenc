@@ -150,10 +150,49 @@ int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, 
   return error;
 }
 
+static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                    const ptrdiff_t buffStride, const int w, int h, const int besterror )
+{
+  CHECK( w % 8 != 0, "Width must be a multiple of eight" );
+
+  int error = 0;
+  do
+  {
+    int32x4_t acc_lo = vdupq_n_s32( 0 );
+    int32x4_t acc_hi = vdupq_n_s32( 0 );
+
+    int x1 = 0;
+    do
+    {
+      int16x8_t o = vld1q_s16( org + x1 );
+      int16x8_t b = vld1q_s16( buf + x1 );
+
+      int16x8_t diff = vabdq_s16( o, b );
+      acc_lo         = vmlal_s16( acc_lo, vget_low_s16( diff ), vget_low_s16( diff ) );
+      acc_hi         = vmlal_s16( acc_hi, vget_high_s16( diff ), vget_high_s16( diff ) );
+
+      x1 += 8;
+    } while( x1 != w );
+
+    int32x4_t diff2_sum = vaddq_s32( acc_lo, acc_hi );
+    error += horizontal_add_s32x4( diff2_sum );
+    if( error > besterror )
+    {
+      return error;
+    }
+
+    org += origStride;
+    buf += buffStride;
+  } while( --h != 0 );
+
+  return error;
+}
+
 template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
+  m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
 }
 
 } // namespace vvenc
