@@ -288,7 +288,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
           int deltaFract = deltaPos & (32 - 1);
 
           const TFilterCoeff      intraSmoothingFilter[4] = {TFilterCoeff(16 - (deltaFract >> 1)), TFilterCoeff(32 - (deltaFract >> 1)), TFilterCoeff(16 + (deltaFract >> 1)), TFilterCoeff(deltaFract >> 1)};
-          const TFilterCoeff *f = useCubicFilter ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
+          const TFilterCoeff *f = InterpolationFilter::getChromaFilterTable(deltaFract);
+          f = useCubicFilter ? f : intraSmoothingFilter;
 
           int refMainIndex   = deltaInt + 1;
           pDst=&pDstBuf[y*dstStride];
@@ -336,7 +337,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
         int deltaFract = deltaPos & (32 - 1);
 
         const TFilterCoeff      intraSmoothingFilter[4] = {TFilterCoeff(16 - (deltaFract >> 1)), TFilterCoeff(32 - (deltaFract >> 1)), TFilterCoeff(16 + (deltaFract >> 1)), TFilterCoeff(deltaFract >> 1)};
-        const TFilterCoeff *f = useCubicFilter ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
+        const TFilterCoeff *f = InterpolationFilter::getChromaFilterTable(deltaFract);
+        f = useCubicFilter ? f : intraSmoothingFilter;
 
         int refMainIndex   = deltaInt + 1;
         pDst=&pDstBuf[y*dstStride];
@@ -391,10 +393,11 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
     {
       int deltaInt   = deltaPos >> 5;
       int deltaFract = deltaPos & (32 - 1);
- 
+
       const TFilterCoeff      intraSmoothingFilter[4] = {TFilterCoeff(16 - (deltaFract >> 1)), TFilterCoeff(32 - (deltaFract >> 1)), TFilterCoeff(16 + (deltaFract >> 1)), TFilterCoeff(deltaFract >> 1)};
-      const TFilterCoeff *f = useCubicFilter ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
-   
+      const TFilterCoeff *f = InterpolationFilter::getChromaFilterTable(deltaFract);
+      f = useCubicFilter ? f : intraSmoothingFilter;
+
       int refMainIndex   = deltaInt + 1;
       pDst=&pDstBuf[y*dstStride];
       __m128i coeff = _mm_loadl_epi64( ( __m128i const * )f);   //load 4 16 bit filter coeffs

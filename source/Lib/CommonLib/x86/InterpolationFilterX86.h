@@ -2102,6 +2102,9 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   else
 #endif
   {
+    // Avoid -Wuninitialized warning on coeffV load when building with GCC-14.
+    GCC_WARNING_DISABLE_uninitialized
+
     ALIGN_DATA( 64, const TFilterCoeff coeffV[10] ) = { 0, 0, 0, _coeffV[3], _coeffV[2], _coeffV[1], _coeffV[0], 0 ,0,0};
 
     __m128i cH    = _mm_loadl_epi64  ( ( const __m128i* ) coeffH );
@@ -2156,6 +2159,7 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
       
       src+=srcStride;
     }
+    GCC_WARNING_RESET
 
     _dst0x = _mm_srai_epi32( _dst0x, shift2nd );
     _dst1x = _mm_srai_epi32( _dst1x, shift2nd );
