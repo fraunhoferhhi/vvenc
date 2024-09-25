@@ -24,7 +24,6 @@ message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH
 # check for arm architecture support
 set( VVENC_ARM_SIMD_DEFAULT FALSE )
 if( ( "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "aarch64\|arm"
-    OR "${CMAKE_CXX_COMPILER}" MATCHES "aarch64\|arm"
     OR "${CMAKE_OSX_ARCHITECTURES}" MATCHES "arm64\|armv" )
     AND NOT "${CMAKE_OSX_ARCHITECTURES}" MATCHES "x86\|x64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
