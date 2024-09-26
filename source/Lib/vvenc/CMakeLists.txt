@@ -79,9 +79,15 @@ include_directories( . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/
 include_directories( SYSTEM ../../../thirdparty )
 
 # set common warning flags
-add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall;-Werror;-Wno-deprecated-register;-Wno-unused-const-variable;-Wno-unknown-attributes>" )
-add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Wall;-Werror;-Wno-unused-function;;-Wno-unused-variable;;-Wno-sign-compare;;-fdiagnostics-show-option;-Wno-ignored-attributes>" )
-add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/W4;/WX;/wd4100;/wd4127;/wd4244;/wd4245;/wd4251;/wd4310;/wd4389;/wd4456;/wd4457;/wd4458;/wd4459;/wd4505;/wd4701;/wd4702;/wd4703;/wd4996>" )
+add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall;-Wno-deprecated-register;-Wno-unused-const-variable;-Wno-unknown-attributes>" )
+add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Wall;-Wno-unused-function;;-Wno-unused-variable;-Wno-sign-compare;-fdiagnostics-show-option;-Wno-ignored-attributes>" )
+add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4100;/wd4127;/wd4244;/wd4245;/wd4251;/wd4310;/wd4389;/wd4456;/wd4457;/wd4458;/wd4459;/wd4505;/wd4701;/wd4702;/wd4703;/wd4996>" )
+									
+if( NOT VVENC_SUPPRESS_WERROR )
+  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
+endif()
 
 # don't export all symbols from shared libraries by default (gcc: -fvisibility=hidden), only those marked as VVENC_DECL
 #  behavior similar to __declspec(dllexport) on windows

@@ -78,6 +78,10 @@ ifneq ($(override-compiler-check),)
 CONFIG_OPTIONS += -DVVENC_OVERRIDE_COMPILER_CHECK=$(override-compiler-check)
 endif
 
+ifneq ($(suppress-werror),)
+CONFIG_OPTIONS += -DVVENC_SUPPRESS_WERROR=$(suppress-werror)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
 NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)

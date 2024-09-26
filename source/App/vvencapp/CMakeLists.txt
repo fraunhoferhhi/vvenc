@@ -26,9 +26,15 @@ set_target_properties( ${EXE_NAME} PROPERTIES DEBUG_POSTFIX          "${CMAKE_DE
 set_target_properties( ${EXE_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "${CMAKE_RELWITHDEBINFO_POSTFIX}" )
 set_target_properties( ${EXE_NAME} PROPERTIES MINSIZEREL_POSTFIX     "${CMAKE_MINSIZEREL_POSTFIX}" )
 
-target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Werror>
-                                            $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -fdiagnostics-show-option>
-                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4244 /wd4251 /wd4996>)
+target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall>
+                                            $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option>
+                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4244 /wd4251 /wd4996>)
+											
+if( NOT VVENC_SUPPRESS_WERROR )
+  target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>
+                                              $<$<CXX_COMPILER_ID:GNU>:-Werror>
+                                              $<$<CXX_COMPILER_ID:MSVC>:/WX>)
+endif()
 
 target_include_directories( ${EXE_NAME} PRIVATE ../../Lib )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
