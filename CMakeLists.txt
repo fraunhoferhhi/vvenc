@@ -27,6 +27,12 @@ if( ( "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "aarch64\|arm"
     OR "${CMAKE_OSX_ARCHITECTURES}" MATCHES "arm64\|armv" )
     AND NOT "${CMAKE_OSX_ARCHITECTURES}" MATCHES "x86\|x64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
+
+  # Avoid non-portable type casting in Arm vector kernels.
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-lax-vector-conversions" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-lax-vector-conversions" )
+  endif()
 endif()
 
 # we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
