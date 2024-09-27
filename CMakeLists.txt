@@ -110,7 +110,7 @@ set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE BOOL   "Enable use of thir
 
 set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
 
-set( VVENC_SUPPRESS_WERROR                  OFF CACHE BOOL   "Suppress treating all compile warnings as errors" )
+set( VVENC_ENABLE_WERROR                    ON  CACHE BOOL   "Treat warnings as errors (-Werror or /WX)" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
@@ -215,6 +215,12 @@ endif()
 
 if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
+endif()
+
+if( VVENC_ENABLE_WERROR )
+  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
 endif()
 
 if( VVENC_ENABLE_X86_SIMD )
