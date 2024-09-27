@@ -32,8 +32,8 @@ set_target_properties( ${EXE_NAME} PROPERTIES MINSIZEREL_POSTFIX     "${CMAKE_MI
 target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall>
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option>
                                             $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4100 /wd4244 /wd4251 /wd4459 /wd4996>)
-											
-if( NOT VVENC_SUPPRESS_WERROR )
+
+if( VVENC_ENABLE_WERROR )
   target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>
                                               $<$<CXX_COMPILER_ID:GNU>:-Werror>
                                               $<$<CXX_COMPILER_ID:MSVC>:/WX>)
