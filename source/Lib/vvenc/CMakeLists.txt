@@ -83,12 +83,6 @@ add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleCla
 add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Wall;-Wno-unused-function;;-Wno-unused-variable;-Wno-sign-compare;-fdiagnostics-show-option;-Wno-ignored-attributes>" )
 add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/W4;/wd4100;/wd4127;/wd4244;/wd4245;/wd4251;/wd4310;/wd4389;/wd4456;/wd4457;/wd4458;/wd4459;/wd4505;/wd4701;/wd4702;/wd4703;/wd4996>" )
 
-if( VVENC_ENABLE_WERROR )
-  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>" )
-  add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
-  add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
-endif()
-
 # don't export all symbols from shared libraries by default (gcc: -fvisibility=hidden), only those marked as VVENC_DECL
 #  behavior similar to __declspec(dllexport) on windows
 set( CMAKE_C_VISIBILITY_PRESET hidden )

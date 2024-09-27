@@ -217,6 +217,12 @@ if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
 endif()
 
+if( VVENC_ENABLE_WERROR )
+  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
+  add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
+endif()
+
 if( VVENC_ENABLE_X86_SIMD )
   if( ( UNIX OR MINGW ) AND VVENC_OPT_TARGET_ARCH )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )

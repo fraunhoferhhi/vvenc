@@ -30,12 +30,6 @@ target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CX
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option>
                                             $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4244 /wd4251 /wd4996>)
 
-if( VVENC_ENABLE_WERROR )
-  target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>
-                                              $<$<CXX_COMPILER_ID:GNU>:-Werror>
-                                              $<$<CXX_COMPILER_ID:MSVC>:/WX>)
-endif()
-
 target_include_directories( ${EXE_NAME} PRIVATE ../../Lib )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
 
