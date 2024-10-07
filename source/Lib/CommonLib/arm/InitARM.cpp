@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/IntraPrediction.h"
 #include "CommonLib/LoopFilter.h"
 #include "CommonLib/Picture.h"
+#include "CommonLib/MCTF.h"
 
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
@@ -109,6 +110,21 @@ void RdCost::initRdCostARM()
   }
 }
 #endif
+
+#if ENABLE_SIMD_OPT_MCTF
+void MCTF::initMCTF_ARM()
+{
+  auto vext = read_arm_extension_flags();
+  switch( vext )
+  {
+  case NEON:
+    _initMCTF_ARM<NEON>();
+    break;
+  default:
+    break;
+  }
+}
+#endif  // ENABLE_SIMD_OPT_MCTF
 
 #endif   // TARGET_SIMD_ARM
 
