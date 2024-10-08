@@ -2,10 +2,10 @@
 set( EXE_NAME vvencapp )
 
 # get source files
-file( GLOB SRC_FILES "*.cpp" )
+file( GLOB SRC_FILES CONFIGURE_DEPENDS "*.cpp" )
 
 # get include files
-file( GLOB INC_FILES "*.h" )
+file( GLOB INC_FILES CONFIGURE_DEPENDS "*.h" )
 
 # get address sanitizer libs for gcc
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
