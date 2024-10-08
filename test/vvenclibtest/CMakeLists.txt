@@ -2,10 +2,10 @@
 set( EXE_NAME vvenclibtest )
 
 # get source files
-file( GLOB SRC_FILES "*.cpp" )
+file( GLOB SRC_FILES CONFIGURE_DEPENDS "*.cpp" )
 
 # get include files
-file( GLOB INC_FILES "*.h" )
+file( GLOB INC_FILES CONFIGURE_DEPENDS "*.h" )
 
 # set resource file for MSVC compilers
 if( MSVC )
