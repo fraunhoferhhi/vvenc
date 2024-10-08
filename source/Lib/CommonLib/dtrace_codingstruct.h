@@ -106,9 +106,12 @@ inline void dtraceModeCost(CodingStructure &cs, double lambda)
   int intraModeC = isIntra ? cs.cus.front()->intraDir[1] : 0;
   if (isIntra && intraModeC == DM_CHROMA_IDX)
     intraModeC = 68;
-  int imvVal = 0;
-  imvVal = cs.cus[0]->imv;
-  DTRACE( g_trace_ctx, D_MODE_COST, "ModeCost: %6lld %3d @(%4d,%4d) [%2dx%2d] %d (qp%d,pm%d,skip%d,mrg%d,fruc%d,obmc%d,ic%d,imv%d,affn%d,%d,%d) tempCS = %lld (%d,%d)\n",
+  int imvVal  = cs.cus[0]->imv;
+  int affVal  = cs.cus[0]->affine;
+  int geoDir  = cs.cus[0]->geo ? cs.cus[0]->geoSplitDir : -1;
+  int geoIdx0 = cs.cus[0]->geo ? cs.cus[0]->geoMergeIdx[0] : 0;
+  int geoIdx1 = cs.cus[0]->geo ? cs.cus[0]->geoMergeIdx[1] : 0;
+  DTRACE( g_trace_ctx, D_MODE_COST, "ModeCost: %6lld %3d @(%4d,%4d) [%2dx%2d] %d (qp%d,pm%d,skip%d,mrg%d,imv%d,affn%d,geo(%d,%d,%d),%d,%d) tempCS = %lld (%d,%d)\n",
     DTRACE_GET_COUNTER( g_trace_ctx, D_MODE_COST ),
     cs.slice->poc,
     cs.area.Y().x, cs.area.Y().y,
@@ -118,11 +121,11 @@ inline void dtraceModeCost(CodingStructure &cs, double lambda)
     cs.cus[0]->predMode,
     cs.cus[0]->skip,
     cs.cus[0]->mergeFlag,
-    0, 0,
     imvVal,
-    0, 0,
-          intraModeL, intraModeC,
-          tempCost, tempBits, tempDist );
+    affVal,
+    geoDir, geoIdx0, geoIdx1,
+    intraModeL, intraModeC,
+    tempCost, tempBits, tempDist );
 }
 
 inline void dtraceBestMode(CodingStructure *&tempCS, CodingStructure *&bestCS, double lambda, bool useEDO)

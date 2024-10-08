@@ -1985,7 +1985,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_Affine < 0 || c->m_Affine > 5,              "Affine out of range [0..5]" );
   vvenc_confirmParameter( c, c->m_MMVD < 0 || c->m_MMVD > 4,                  "MMVD out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_SMVD < 0 || c->m_SMVD > 3,                  "SMVD out of range [0..3]" );
-  vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 3,                  "Geo out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 4,                  "Geo out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_CIIP < 0 || c->m_CIIP > 3,                  "CIIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_SBT  < 0 || c->m_SBT  > 3,                  "SBT out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
@@ -2718,6 +2718,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+      c->m_maxNumMergeCand                 = 5;
+      c->m_maxNumAffineMergeCand           = 3;
 
       // partitioning: CTUSize64 QT44MTT10
       c->m_CTUSize                         = 64;
@@ -2786,6 +2788,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+      c->m_maxNumMergeCand                 = 5;
+      c->m_maxNumAffineMergeCand           = 3;
+      c->m_maxNumGeoCand                   = 3;
 
       // partitioning: CTUSize128 QT44MTT21
       c->m_CTUSize                         = 128;
@@ -2802,7 +2807,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 1;
@@ -2828,7 +2833,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
-      c->m_Geo                             = 3;
+      c->m_Geo                             = 4;
       c->m_AMVRspeed                       = 5;
       c->m_ISP                             = 3;
       c->m_JointCbCrMode                   = 1;
@@ -2868,7 +2873,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
         c->m_bUseSAO                       = true;
         c->m_saoScc                        = true;
         c->m_SbTMVP                        = 0;
-        c->m_useFastMrg                    = 2;
+        c->m_useFastMrg                    = 3;
       }
 
       break;
@@ -2897,7 +2902,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 3;
+      c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
@@ -2924,7 +2929,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
-      c->m_Geo                             = 1;
+      c->m_Geo                             = 2;
       c->m_AMVRspeed                       = 1;
       c->m_ISP                             = 3;
       c->m_JointCbCrMode                   = 1;
@@ -3076,7 +3081,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 1;
-      c->m_Geo                             = 2;
+      c->m_Geo                             = 3;
       c->m_AMVRspeed                       = 3;
       c->m_ISP                             = 2;
       c->m_JointCbCrMode                   = 1;

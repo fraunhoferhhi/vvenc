@@ -208,8 +208,6 @@ private:
   std::vector<double>             scalingVec;
   std::vector<int>                quantVec;
 
-  bool                            isFirstScalingEst             = true;           // Persistent state across function calls
-
   std::vector<int>                vecMean;
   std::vector<int>                vecVar;
 

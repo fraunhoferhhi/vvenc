@@ -25,21 +25,14 @@ endif()
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
   file( GLOB X86_SRC_FILES "../CommonLib/x86/*.cpp" )
-
-  # get x86 include files
   file( GLOB X86_INC_FILES "../CommonLib/x86/*.h" )
 
-  # get avx source files
-  file( GLOB AVX_SRC_FILES "../CommonLib/x86/avx/*.cpp" )
-
-  # get avx2 source files
-  file( GLOB AVX2_SRC_FILES "../CommonLib/x86/avx2/*.cpp" )
-
-  # get sse4.1 source files
   file( GLOB SSE41_SRC_FILES "../CommonLib/x86/sse41/*.cpp" )
-
-  # get sse4.2 source files
   file( GLOB SSE42_SRC_FILES "../CommonLib/x86/sse42/*.cpp" )
+  file( GLOB AVX_SRC_FILES   "../CommonLib/x86/avx/*.cpp" )
+  if( ${VVENC_TARGET_ARCH} STREQUAL "X86" )
+    file( GLOB AVX2_SRC_FILES "../CommonLib/x86/avx2/*.cpp" )
+  endif()
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
@@ -109,7 +102,7 @@ if( VVENC_ENABLE_X86_SIMD )
     set_if_compiler_supports_flag( FLAG_mavx   -mavx    )
     set_if_compiler_supports_flag( FLAG_mavx2  -mavx2   )
 
-    set_property( SOURCE ${X86_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS ${FLAG_mxsave} )
+    set_property( SOURCE ${X86_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mxsave}" )
     set_property( SOURCE ${SSE41_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
     set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse42}" )
     set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx}"   )

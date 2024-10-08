@@ -80,6 +80,7 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
   int offset   = IF_INTERNAL_OFFS;
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
+  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
 
   __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
   __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
@@ -109,14 +110,14 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
         }
         else if( isFirst )
         {
-          vsrc = _mm_slli_epi16( vsrc, headroom );
+          vsrc = _mm_sll_epi16( vsrc, vheadroom );
           vsum = _mm_sub_epi16( vsrc, voffset );
         }
         else
         {
           vsrc = _mm_add_epi16( vsrc, voffset );
           vsrc = _mm_add_epi16( vsrc, voffset_headroom );
-          vsrc = _mm_srai_epi16( vsrc, headroom );
+          vsrc = _mm_sra_epi16( vsrc, vheadroom );
           vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsrc ) );
         }
 #if JEM_UNALIGNED_DST
@@ -141,6 +142,7 @@ static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t 
   int offset   = IF_INTERNAL_OFFS;
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
+  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
   __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
   __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
@@ -169,14 +171,14 @@ static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t 
       }
       else if( isFirst )
       {
-        vsrc = _mm_slli_epi16( vsrc, headroom );
+        vsrc = _mm_sll_epi16( vsrc, vheadroom );
         vsum = _mm_sub_epi16( vsrc, voffset );
       }
       else
       {
         vsrc = _mm_add_epi16( vsrc, voffset );
         vsrc = _mm_add_epi16( vsrc, voffset_headroom );
-        vsrc = _mm_srai_epi16( vsrc, headroom );
+        vsrc = _mm_sra_epi16( vsrc, vheadroom );
         vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsrc ) );
       }
 
@@ -199,6 +201,7 @@ static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStrid
 
   __m256i vinternal_offset = _mm256_set1_epi16( internal_offset );
   __m256i vheadroom_offset = _mm256_set1_epi16( offset );
+  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
 
   __m256i vibdimin = _mm256_set1_epi16( clpRng.min() );
   __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
@@ -229,14 +232,14 @@ static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStrid
         }
         else if( isFirst )
         {
-          vsrc = _mm256_slli_epi16( vsrc, headroom );
+          vsrc = _mm256_sll_epi16( vsrc, vheadroom );
           vsum = _mm256_sub_epi16( vsrc, vinternal_offset );
         }
         else
         {
           vsrc = _mm256_add_epi16( vsrc, vinternal_offset );
           vsrc = _mm256_add_epi16( vsrc, vheadroom_offset );
-          vsrc = _mm256_srai_epi16( vsrc, headroom );
+          vsrc = _mm256_sra_epi16( vsrc, vheadroom );
           vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsrc ) );
         }
 #if JEM_UNALIGNED_DST
@@ -2102,7 +2105,7 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   else
 #endif
   {
-    ALIGN_DATA( 64, const TFilterCoeff coeffV[10] ) = { 0, 0, 0, _coeffV[3], _coeffV[2], _coeffV[1], _coeffV[0], 0 ,0,0};
+    ALIGN_DATA( 64, const TFilterCoeff coeffV[10] ) = { 0, 0, 0, _coeffV[3], _coeffV[2], _coeffV[1], _coeffV[0], 0 ,0, 0};
 
     __m128i cH    = _mm_loadl_epi64  ( ( const __m128i* ) coeffH );
             cH    = _mm_unpacklo_epi64( cH, cH );
@@ -2119,7 +2122,7 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
       _mm_prefetch( ( const char* ) ( src + 2 * srcStride ), _MM_HINT_T0 );
       _mm_prefetch( ( const char* ) ( src + 3 * srcStride ), _MM_HINT_T0 );
 
-      cV = _mm_loadl_epi64      ( ( const __m128i* ) ( coeffV + 7 - row - 1 ) );
+      cV = _mm_loadu_si64       ( coeffV + 7 - row - 1 );
       cV = _mm_cvtepu16_epi32   ( cV );
 
       _src1 = _mm_loadl_epi64   ( ( const __m128i* ) &src[0] );

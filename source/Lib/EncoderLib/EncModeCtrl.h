@@ -67,8 +67,6 @@ enum EncTestModeType
   ETM_MERGE_SKIP,
   ETM_INTER_ME,
   ETM_INTER_IMV,
-  ETM_AFFINE,
-  ETM_MERGE_GEO,
   ETM_INTRA,
   ETM_SPLIT_QT,
   ETM_SPLIT_BT_H,
@@ -143,8 +141,6 @@ inline bool isModeInter( const EncTestMode& encTestmode ) // perhaps remove
   return (   encTestmode.type == ETM_INTER_ME
           || encTestmode.type == ETM_INTER_IMV
           || encTestmode.type == ETM_MERGE_SKIP
-          || encTestmode.type == ETM_AFFINE
-          || encTestmode.type == ETM_MERGE_GEO
          );
 }
 

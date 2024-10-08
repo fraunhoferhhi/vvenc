@@ -133,6 +133,13 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
           xDisableTempDown( pic, picList );
         }
       }
+
+      // disable temporal downsampling in lowest 3 temp. layers
+      // with one-pass RC and QPA; this stabilizes the RC a bit
+      if( m_doTempDown && m_doVisActQpa && pic->gopEntry->m_temporalId <= 2 && m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0 )
+      {
+        xDisableTempDown( pic, picList, 0 /*for faster - TODO: 2 for fast*/ );
+      }
     }
     else if( pic->gopEntry->m_temporalId == 0 )
     {
@@ -458,14 +465,15 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 }
 
 
-void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList )
+void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList, const int thresh /*= INT32_MAX*/ )
 {
   for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
   {
     Picture* tp = *itr;
     if( pic->gopEntry->m_gopNum != tp->gopEntry->m_gopNum )
       break;
-    tp->m_picShared->m_gopEntry.m_skipFirstPass = false;
+    if( tp->gopEntry->m_temporalId <= thresh )
+      tp->m_picShared->m_gopEntry.m_skipFirstPass = false;
   }
 }
 
