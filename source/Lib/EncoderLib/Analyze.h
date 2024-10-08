@@ -333,8 +333,6 @@ public:
 
             if (printHexPsnr)
             {
-              double dPsnr[MAX_NUM_COMP];
-              uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
                 if( getNumPicLossy((ComponentID)i) )
