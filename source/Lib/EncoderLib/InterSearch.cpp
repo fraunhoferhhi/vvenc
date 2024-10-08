@@ -1753,7 +1753,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
         // set hevc me result
         cu.affine = false;
         cu.mergeFlag = bMergeFlag;
-        cu.regularMergeFlag = false;
         cu.mergeIdx = uiMRGIndex;
         cu.interDir = uiInterDir;
         cu.smvdMode = iSymMode;
@@ -4126,10 +4125,10 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
   bool chroma    = cs.pcv->chrFormat != VVENC_CHROMA_400;
-  if (cu.predMode == MODE_IBC)
+  if( cu.predMode == MODE_IBC )
   {
-    luma    = cu.mcControl <= 3;
-    chroma &= (cu.mcControl >> 1) != 1;
+    luma    = !cu.mccNoLuma  ();
+    chroma &= !cu.mccNoChroma();
   }
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );
@@ -4639,7 +4638,6 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
   cu.affine = true;
   cu.mergeFlag = false;
-  cu.regularMergeFlag = false;
   if (BcwIdx != BCW_DEFAULT)
   {
     cu.BcwIdx = BcwIdx;

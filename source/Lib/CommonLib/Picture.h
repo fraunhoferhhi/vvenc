@@ -257,6 +257,7 @@ public:
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
   int                           gopAdaptedQP; // QP offset of GOP (delta relative to base QP)
+  bool                          force2ndOrder; // force 2nd-order high-pass in activity calc.
   bool                          isSceneCutGOP;
   bool                          isSceneCutCheckAdjQP;
   bool                          isMeanQPLimited;

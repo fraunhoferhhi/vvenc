@@ -728,7 +728,7 @@ struct UnitBuf
   bool valid          () const { return bufs.size() != 0; }
 
   void fill                 ( const T& val );
-  void copyFrom             ( const UnitBuf<const T> &other );
+  void copyFrom             ( const UnitBuf<const T> &other, const bool luma = true, const bool chroma = true );
   void reconstruct          ( const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs );
   void copyClip             ( const UnitBuf<const T> &src, const ClpRngs& clpRngs, const bool lumaOnly = false, const bool chromaOnly = false );
   void subtract             ( const UnitBuf<const T>& minuend, const UnitBuf<const T>& subtrahend );
@@ -762,12 +762,17 @@ void UnitBuf<T>::fill( const T &val )
   }
 }
 
+
 template<typename T>
-void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other)
+void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other, const bool luma, const bool chroma)
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
+  CHECK( !luma && !chroma, "At least one channel has to be selected" );
 
-  for( int i = 0; i < bufs.size(); i++)
+  const size_t compStart = luma   ? 0           : 1;
+  const size_t compEnd   = chroma ? bufs.size() : 1;
+
+  for( size_t i = compStart; i < compEnd; i++ )
   {
     if( bufs[ i ].buf != nullptr && other.bufs[ i ].buf != nullptr )
       bufs[i].copyFrom( other.bufs[i] );

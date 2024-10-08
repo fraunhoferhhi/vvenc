@@ -787,7 +787,7 @@ public:
 
 static constexpr size_t DYN_CACHE_CHUNK_SIZE = 512;
 
-template<typename T>
+template<typename T, size_t SIZE = DYN_CACHE_CHUNK_SIZE>
 class dynamic_cache
 {
   std::vector<T*> m_cache;
@@ -822,14 +822,14 @@ public:
     }
     else
     {
-      T* chunk = new T[DYN_CACHE_CHUNK_SIZE];
+      T* chunk = new T[SIZE];
 
       m_cacheChunks.push_back( chunk );
-      m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
+      m_cache.reserve( m_cache.size() + SIZE );
 
-      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      for( ptrdiff_t p = 0; p < SIZE; p++ )
       {
-        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        //m_cache.push_back( &chunk[SIZE - p - 1] );
         m_cache.push_back( &chunk[p] );
       }
 

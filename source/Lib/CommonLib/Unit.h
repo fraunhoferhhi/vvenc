@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Mv.h"
 #include "MotionInfo.h"
 
+#include <array>
 #include <iterator>
 
 //! \ingroup CommonLib
@@ -291,6 +292,8 @@ class  CodingStructure;
 // prediction unit
 // ---------------------------------------------------------------------------
 
+using MergeIdxPair = std::array<int8_t, 2>;
+
 struct IntraPredictionData
 {
   uint8_t  intraDir[MAX_NUM_CH];
@@ -303,17 +306,16 @@ struct InterPredictionData
   InterPredictionData() : mvdL0SubPu(nullptr) {}
 
   bool        mergeFlag;
-  bool        regularMergeFlag;
   bool        ciip;
   bool        mvRefine;
   bool        mmvdMergeFlag;
+  MmvdIdx     mmvdMergeIdx;
   uint8_t     mergeIdx;
   uint8_t     geoSplitDir;
-  uint8_t     geoMergeIdx0;
-  uint8_t     geoMergeIdx1;
+  MergeIdxPair
+              geoMergeIdx;
   uint8_t     interDir;
   uint8_t     mcControl; // mmvd(bio), luma/chroma
-  uint32_t    mmvdMergeIdx;
   MergeType   mergeType;
   Mv*         mvdL0SubPu;
 
@@ -322,6 +324,10 @@ struct InterPredictionData
   Mv          mvd     [NUM_REF_PIC_LIST_01][3];
   Mv          mv      [NUM_REF_PIC_LIST_01][3];
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
+
+  bool mccNoBdof    () const { return ( mcControl  & 1 ) == 1; }
+  bool mccNoChroma  () const { return ( mcControl >> 1 ) == 1; }
+  bool mccNoLuma    () const { return ( mcControl  > 3 ); }
 };
 
 

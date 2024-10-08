@@ -175,6 +175,7 @@ Picture::Picture()
     , isPreAnalysis       ( false )
     , m_picShared         ( nullptr )
     , gopAdaptedQP        ( 0 )
+    , force2ndOrder       ( false )
     , isSceneCutGOP       ( false )
     , isSceneCutCheckAdjQP( false )
     , isMeanQPLimited     ( false )
@@ -236,6 +237,7 @@ void Picture::reset()
   poc                  = -1;
   TLayer               = std::numeric_limits<uint32_t>::max();
   gopAdaptedQP         = 0;
+  force2ndOrder        = false;
   isSceneCutGOP        = false;
   isSceneCutCheckAdjQP = false;
   actualHeadBits       = 0;

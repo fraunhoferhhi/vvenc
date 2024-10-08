@@ -21,11 +21,10 @@ endif()
 set( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
 message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH}" )
 
-# check for arm architecture support
-set( VVENC_ARM_SIMD_DEFAULT FALSE )
-if( ( "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "aarch64\|arm"
-    OR "${CMAKE_OSX_ARCHITECTURES}" MATCHES "arm64\|armv" )
-    AND NOT "${CMAKE_OSX_ARCHITECTURES}" MATCHES "x86\|x64" )
+include( vvencCompilerSupport )
+
+detect_target_architecture( VVENC_TARGET_ARCH )
+if( VVENC_TARGET_ARCH STREQUAL "ARM" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
 
   # Avoid non-portable type casting in Arm vector kernels.
@@ -39,9 +38,7 @@ endif()
 set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "enable x86 intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "enable ARM intrinsics" )
 
-include( vvencCompilerSupport )
 check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
-
 if( VVENC_PROBLEMATIC_COMPILER )
   set( VVENC_OVERRIDE_COMPILER_CHECK      OFF        CACHE BOOL "Build with known problematic compiler version" )
 
@@ -59,7 +56,6 @@ if( VVENC_PROBLEMATIC_COMPILER )
           "Binaries compiled with ${CMAKE_CXX_COMPILER} version ${CMAKE_CXX_COMPILER_VERSION} are known not to behave as intended. "
           "The problematic version range is ${VVENC_PROBLEMATIC_COMPILER_VERSION_RANGE}. Please consider using a different compiler.\n"
           ${VVENC_PROBLEMATIC_COMPILER_MSG_OVERRIDE} )
-
 endif()
 
 # enable sse4.1 build for all source files for gcc and clang
