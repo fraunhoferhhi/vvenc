@@ -219,7 +219,6 @@ public:
               std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
                         reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
                         reinterpret_cast<uint8_t *>(&xPsnr));
-
               info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
             }
             else
@@ -404,8 +403,6 @@ public:
 
             if (printHexPsnr)
             {
-              double dPsnr[MAX_NUM_COMP];
-              uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
                 if( getNumPicLossy((ComponentID)i) )
