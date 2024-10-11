@@ -64,6 +64,7 @@ install( DIRECTORY include/vvenc                        DESTINATION ${CMAKE_INST
 install_targets( Release )
 install_targets( Debug )
 install_targets( RelWithDebInfo )
+install_targets( MinSizeRel )
 
 # install pdb files
 install_lib_pdb( vvenc )
@@ -89,6 +90,7 @@ endif()
 install( EXPORT vvencTargets-release        NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Release        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 install( EXPORT vvencTargets-debug          NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Debug          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 install( EXPORT vvencTargets-relwithdebinfo NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS RelWithDebInfo DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+install( EXPORT vvencTargets-release        NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS MinSizeRel     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
 
 function( resolve_target_interface_libs TGT OUT_VAR )
   get_target_property( interface_libs ${TGT} INTERFACE_LINK_LIBRARIES )
