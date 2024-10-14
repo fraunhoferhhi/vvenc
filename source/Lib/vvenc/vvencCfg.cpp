@@ -236,7 +236,7 @@ static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
   return css.str();
 }
 
-static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
+static inline std::string vvenc_getContentLightLevelStr( int cll[2] )
 {
   std::stringstream css;
 
