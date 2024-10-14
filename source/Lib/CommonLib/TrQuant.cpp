@@ -628,7 +628,6 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   {
     const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
     CHECK(shift < 0, "Negative shift");
-    CHECK((transformWidthIndex < 0), "There is a problem with the width.");
     fastInvTrans[trTypeHor][transformWidthIndex](pCoeff.buf, block, shift + 1, 1, 0, skipWidth, clipMinimum, clipMaximum);
   }
 
