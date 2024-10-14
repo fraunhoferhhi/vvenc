@@ -564,7 +564,7 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
-#if __GNUC__ && __cplusplus
+#if __MINGW32__ && __cplusplus
 typedef char *  va_list;
 #endif
 // global logger message callback function - DEPRECATED - will be removed in next major version
