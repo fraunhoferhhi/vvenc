@@ -563,7 +563,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<int>                toPrefTransferCharacteristics( &c->m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToArr<unsigned int>        toMasteringDisplay            ( &c->m_masteringDisplay[0], 10  );
-  IStreamToArr<unsigned int>        toContentLightLevel           ( &c->m_contentLightLevel[0], 2 );
+  IStreamToArr<int>                 toContentLightLevel           ( &c->m_contentLightLevel[0], 2 );
 
   IStreamToArr<char>                toTraceRule                   ( &c->m_traceRule[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toTraceFile                   ( &c->m_traceFile[0], VVENC_MAX_STRING_LEN  );
