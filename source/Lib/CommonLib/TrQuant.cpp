@@ -490,8 +490,8 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange( toChannelType( compID ) );
   const unsigned bitDepth               = tu.cs->sps->bitDepths[               toChannelType( compID ) ];
   const int      TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
-  const uint32_t transformWidthIndex    = Log2(width ) - 1;  // nLog2WidthMinus1, since transform start from 2-point
-  const uint32_t transformHeightIndex   = Log2(height) - 1;  // nLog2HeightMinus1, since transform start from 2-point
+  const int      transformWidthIndex    = Log2(width ) - 1;  // nLog2WidthMinus1, since transform start from 2-point
+  const int      transformHeightIndex   = Log2(height) - 1;  // nLog2HeightMinus1, since transform start from 2-point
 
   int trTypeHor = DCT2;
   int trTypeVer = DCT2;
@@ -580,8 +580,8 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   const int      TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
   const TCoeff   clipMinimum            = -( 1 << maxLog2TrDynamicRange );
   const TCoeff   clipMaximum            =  ( 1 << maxLog2TrDynamicRange ) - 1;
-  const uint32_t transformWidthIndex    = Log2(width )- 1;                                // nLog2WidthMinus1, since transform start from 2-point
-  const uint32_t transformHeightIndex   = Log2(height) - 1;                                // nLog2HeightMinus1, since transform start from 2-point
+  const int      transformWidthIndex    = Log2(width )- 1;                                // nLog2WidthMinus1, since transform start from 2-point
+  const int      transformHeightIndex   = Log2(height) - 1;                                // nLog2HeightMinus1, since transform start from 2-point
 
 
   int trTypeHor = DCT2;
