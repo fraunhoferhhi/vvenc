@@ -695,7 +695,7 @@ typedef struct vvenc_config
   unsigned int        m_masteringDisplay[10];                                            // mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
                                                                                          // GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
                                                                                          // min/max luminance value in units of 1/10000 candela per square metre
-  unsigned int        m_contentLightLevel[2];                                            // upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  int        m_contentLightLevel[2];                                                     // upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
   int                 m_preferredTransferCharacteristics;                                // Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
 
   bool                m_alf;                                                             // Adaptive Loop Filter
