@@ -564,6 +564,9 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
+#if __GNUC__ && __cplusplus
+typedef char *  va_list;
+#endif
 // global logger message callback function - DEPRECATED - will be removed in next major version
 extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
 extern void * g_msgFncCtx;
