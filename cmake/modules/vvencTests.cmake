@@ -1,6 +1,10 @@
 # enable testing with ctest
 enable_testing()
 
+if( VVENC_LIBRARY_ONLY )
+  message( WARNING "The test suite will not be able to run, when building the vvenc library only (VVENC_LIBRARY_ONLY=ON)" )
+endif()
+
 set( TEST_YUV "${PROJECT_SOURCE_DIR}/test/data/RTn23_80x44p15_f15.yuv" )
 set( TEST_CFG "${PROJECT_SOURCE_DIR}/test/data/RTn23.cfg" )
 set( CFG_DIR  "${PROJECT_SOURCE_DIR}/cfg" )
