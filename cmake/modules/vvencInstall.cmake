@@ -5,7 +5,19 @@ set( RUNTIME_DEST ${CMAKE_INSTALL_BINDIR} )
 set( LIBRARY_DEST ${CMAKE_INSTALL_LIBDIR} )
 set( ARCHIVE_DEST ${CMAKE_INSTALL_LIBDIR} )
 
+if( VVENC_INSTALL_FULLFEATURE_APP AND VVENC_LIBRARY_ONLY )
+  message( FATAL_ERROR "VVENC_INSTALL_FULLFEATURE_APP conflicts with VVENC_LIBRARY_ONLY" )
+endif()
+
 set( VVENC_INST_TARGETS vvenc )
+
+if( NOT VVENC_LIBRARY_ONLY )
+  list( APPEND VVENC_INST_TARGETS vvencapp )
+
+  if( VVENC_INSTALL_FULLFEATURE_APP )
+    list( APPEND VVENC_INST_TARGETS vvencFFapp )
+  endif()
+endif()
 
 # install targets
 macro( install_targets config_ )
@@ -16,15 +28,6 @@ macro( install_targets config_ )
            RUNTIME DESTINATION ${RUNTIME_DEST}
            LIBRARY DESTINATION ${LIBRARY_DEST}
            ARCHIVE DESTINATION ${ARCHIVE_DEST} )
-  if( VVENC_INSTALL_FULLFEATURE_APP )
-    install( TARGETS             vvencapp vvencFFapp
-             CONFIGURATIONS      ${config_}
-             RUNTIME DESTINATION ${RUNTIME_DEST} )
-  else()
-    install( TARGETS             vvencapp
-             CONFIGURATIONS      ${config_}
-             RUNTIME DESTINATION ${RUNTIME_DEST} )
-  endif()
 endmacro( install_targets )
 
 # install pdb file for static and shared libraries
@@ -68,9 +71,11 @@ install_targets( MinSizeRel )
 
 # install pdb files
 install_lib_pdb( vvenc )
-install_exe_pdb( vvencapp )
-if( VVENC_INSTALL_FULLFEATURE_APP )
-  install_exe_pdb( vvencFFapp )
+if( NOT VVENC_LIBRARY_ONLY )
+  install_exe_pdb( vvencapp )
+  if( VVENC_INSTALL_FULLFEATURE_APP )
+    install_exe_pdb( vvencFFapp )
+  endif()
 endif()
 
 # configure version file
