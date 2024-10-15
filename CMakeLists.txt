@@ -103,6 +103,10 @@ endif()
 # enable install target
 set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
 
+set( VVENC_LIBRARY_ONLY                     OFF CACHE BOOL   "Build libvvenc only (no vvencapp,vvencFFapp,vvenclibtest,vvencinterfacetest" )
+
+set( BUILD_SHARED_LIBS                      OFF CACHE BOOL   "Build libvvenc as a shared library" )
+
 # enable postfix
 set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
 
