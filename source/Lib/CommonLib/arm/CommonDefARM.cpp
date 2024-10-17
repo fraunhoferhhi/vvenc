@@ -57,8 +57,12 @@ const static std::vector<std::pair<ARM_VEXT, std::string>> vext_names{
   { UNDEFINED, ""       },
   { SCALAR,    "SCALAR" },
   { NEON,      "NEON"   },
+#if TARGET_SIMD_ARM_SVE
   { SVE,       "SVE"    },
+#endif
+#if TARGET_SIMD_ARM_SVE2
   { SVE2,      "SVE2"   },
+#endif
 };
 
 const std::string& arm_vext_to_string( ARM_VEXT vext )
@@ -103,17 +107,25 @@ static ARM_VEXT _get_arm_extensions()
   // We assume Neon is always supported for relevant Arm processors.
   ARM_VEXT ext = NEON;
 
-  unsigned long hwcap  = getauxval( AT_HWCAP );
+#if TARGET_SIMD_ARM_SVE
+  unsigned long hwcap = getauxval( AT_HWCAP );
+#endif
+#if TARGET_SIMD_ARM_SVE2
   unsigned long hwcap2 = getauxval( AT_HWCAP2 );
+#endif
 
+#if TARGET_SIMD_ARM_SVE
   if( hwcap & AARCH64_HWCAP_SVE )
   {
     ext = SVE;
+#if TARGET_SIMD_ARM_SVE2
     if( hwcap2 & AARCH64_HWCAP2_SVE2 )
     {
       ext = SVE2;
     }
+#endif
   }
+#endif
 
   return ext;
 }
