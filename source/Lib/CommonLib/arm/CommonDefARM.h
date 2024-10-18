@@ -58,8 +58,11 @@ namespace vvenc
 {
 using namespace arm_simd;
 
-ARM_VEXT read_arm_extension_flags( ARM_VEXT request = arm_simd::UNDEFINED );
-// std::string read_arm_extension_name();
+const std::string& arm_vext_to_string( ARM_VEXT vext );
+ARM_VEXT           string_to_arm_vext( const std::string& ext_name );
+
+ARM_VEXT           read_arm_extension_flags( ARM_VEXT request = arm_simd::UNDEFINED );
+const std::string& read_arm_extension_name();
 
 }   // namespace
 

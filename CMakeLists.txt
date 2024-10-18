@@ -35,8 +35,10 @@ if( VVENC_TARGET_ARCH STREQUAL "ARM" )
 endif()
 
 # we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
-set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "enable x86 intrinsics" )
-set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "enable ARM intrinsics" )
+set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "Enable x86 intrinsics" )
+set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "Enable Arm Neon intrinsics" )
+set( VVENC_ENABLE_ARM_SIMD_SVE FALSE                 CACHE BOOL "Enable Arm SVE intrinsics" )
+set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE                CACHE BOOL "Enable Arm SVE2 intrinsics" )
 
 check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
 if( VVENC_PROBLEMATIC_COMPILER )
@@ -72,12 +74,35 @@ if( VVENC_ENABLE_X86_SIMD )
   endif()
 
   message( STATUS "x86 SIMD intrinsics enabled (using SIMDE for non-x86 targets)" )
-  add_compile_definitions( TARGET_SIMD_X86 )
+  add_compile_definitions( TARGET_SIMD_X86=1 )
 endif()
 
-if( VVENC_ENABLE_ARM_SIMD )
-  message( STATUS "ARM SIMD intrinsics enabled" )
-  add_compile_definitions( TARGET_SIMD_ARM )
+if( VVENC_TARGET_ARCH STREQUAL "ARM" )
+  if( VVENC_ENABLE_ARM_SIMD )
+    message( STATUS "Arm Neon intrinsics enabled" )
+    add_compile_definitions( TARGET_SIMD_ARM=1 )
+  else()
+    message( STATUS "Arm Neon intrinsics disabled, disabling Arm SVE/SVE2 intrinsics" )
+    # If Neon is disabled make sure that SVE/SVE2 are also disabled.
+    set( VVENC_ENABLE_ARM_SIMD_SVE FALSE )
+    set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
+  endif()
+
+  if( VVENC_ENABLE_ARM_SIMD_SVE )
+    message( STATUS "Arm SVE intrinsics enabled" )
+    add_compile_definitions( TARGET_SIMD_ARM_SVE=1 )
+  else()
+    message( STATUS "Arm SVE intrinsics disabled, disabling Arm SVE2 intrinsics" )
+    # If SVE is disabled make sure that SVE2 are also disabled.
+    set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
+  endif()
+
+  if( VVENC_ENABLE_ARM_SIMD_SVE2 )
+    message( STATUS "Arm SVE2 intrinsics enabled" )
+    add_compile_definitions( TARGET_SIMD_ARM_SVE2=1 )
+  else()
+    message( STATUS "Arm SVE2 intrinsics disabled" )
+  endif()
 endif()
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )

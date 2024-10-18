@@ -728,12 +728,14 @@ namespace x86_simd
 namespace arm_simd
 {
 #ifdef TARGET_SIMD_ARM
-  typedef enum
-  {
-    UNDEFINED = -1,
-    SCALAR    = 0,
-    NEON,
-  } ARM_VEXT;
+typedef enum
+{
+  UNDEFINED = -1,
+  SCALAR    = 0,
+  NEON,
+  SVE,
+  SVE2,
+} ARM_VEXT;
 #endif   // TARGET_SIMD_ARM
 }   // namespace arm_simd
 

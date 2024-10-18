@@ -79,7 +79,7 @@ const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SC
 #    endif
 #  endif   // !REAL_TARGET_X86
 
-const std::string& vext_to_string( X86_VEXT vext )
+const std::string& x86_vext_to_string( X86_VEXT vext )
 {
   try
   {
@@ -91,7 +91,7 @@ const std::string& vext_to_string( X86_VEXT vext )
   }
 }
 
-X86_VEXT string_to_vext( const std::string& ext_name )
+X86_VEXT string_to_x86_vext( const std::string& ext_name )
 {
   if( ext_name.empty() )
   {
@@ -287,7 +287,7 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
 
 const std::string& read_x86_extension_name()
 {
-  return vext_to_string( read_x86_extension_flags() );
+  return x86_vext_to_string( read_x86_extension_flags() );
 }
 
 }   // namespace vvenc
