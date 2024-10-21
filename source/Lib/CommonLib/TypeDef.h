@@ -73,6 +73,8 @@ namespace vvenc {
 
 #define IFP_RC_DETERMINISTIC                              0 // Enables Rate Control deterministic behavior (same results) when using IFP
 
+#define TILES_IFP_2PRC_HOTFIX                             1 // Fix tiles and IFP with 2pRC operation, TODO: add proper fix, this is more of a dirty hotfix
+
 // ====================================================================================================================
 // General settings
 // ====================================================================================================================
@@ -142,6 +144,7 @@ namespace vvenc {
 #define ENABLE_SIMD_TRAFO                               ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for Transformation
 #define ENABLE_SIMD_OPT_QUANT                           ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for Quantization
 #define ENABLE_SIMD_LOG2                                ( 1 && ENABLE_SIMD_OPT )                            ///< use SIMD intrisic to calculate log2
+#define ENABLE_SIMD_OPT_FGA                             ( 1 && ENABLE_SIMD_OPT )                            ///< use SIMD intrisic for FGA
 
 #if ENABLE_SIMD_OPT_BUFFER
 #define ENABLE_SIMD_OPT_BCW                               1                                                 ///< SIMD optimization for GBi
@@ -784,7 +787,7 @@ public:
 
 static constexpr size_t DYN_CACHE_CHUNK_SIZE = 512;
 
-template<typename T>
+template<typename T, size_t SIZE = DYN_CACHE_CHUNK_SIZE>
 class dynamic_cache
 {
   std::vector<T*> m_cache;
@@ -819,14 +822,14 @@ public:
     }
     else
     {
-      T* chunk = new T[DYN_CACHE_CHUNK_SIZE];
+      T* chunk = new T[SIZE];
 
       m_cacheChunks.push_back( chunk );
-      m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
+      m_cache.reserve( m_cache.size() + SIZE );
 
-      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      for( ptrdiff_t p = 0; p < SIZE; p++ )
       {
-        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        //m_cache.push_back( &chunk[SIZE - p - 1] );
         m_cache.push_back( &chunk[p] );
       }
 

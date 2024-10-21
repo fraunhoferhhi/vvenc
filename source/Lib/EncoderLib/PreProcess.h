@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "EncStage.h"
 #include "GOPCfg.h"
+#include "BitAllocation.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -70,6 +71,7 @@ class PreProcess : public EncStage
     bool            m_doTempDown;
     bool            m_doVisAct;
     bool            m_doVisActQpa;
+    bool            m_cappedCQF;
 
   public:
     PreProcess( MsgLog& _m );
@@ -86,14 +88,15 @@ class PreProcess : public EncStage
   private:
     void     xFreeUnused          ( Picture* pic, const PicList& picList, PicList& doneList, PicList& freeList ) const;
     void     xGetPrevPics         ( const Picture* pic, const PicList& picList, const Picture* prevPics[ NUM_QPA_PREV_FRAMES ] ) const;
-    Picture* xGetPrevTl0Pic       ( const Picture* pic, const PicList& picList ) const;
+    Picture* xGetPrevTL0Pic       ( const Picture* pic, const PicList& picList ) const;
     Picture* xGetStartOfLastGop   ( const PicList& picList ) const;
     void     xLinkPrevQpaBufs     ( Picture* pic, const PicList& picList ) const;
     void     xGetVisualActivity   ( Picture* pic, const PicList& picList ) const;
-    uint16_t xGetPicVisualActivity( Picture* curPic, const Picture* refPic1, const Picture* refPic2, const bool doChroma ) const;
+    void     xGetSpatialActivity  ( Picture* pic, bool doLuma, bool doChroma, VisAct va[ MAX_NUM_CH ] ) const;
+    void     xGetTemporalActivity ( Picture* curPic, const Picture* refPic1, const Picture* refPic2, VisAct& va ) const;
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
-    void     xDisableTempDown     ( Picture* pic, const PicList& picList );
+    void     xDisableTempDown     ( Picture* pic, const PicList& picList, const int thresh = INT32_MAX );
 };
 
 } // namespace vvenc

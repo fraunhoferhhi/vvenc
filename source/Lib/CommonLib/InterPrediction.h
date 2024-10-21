@@ -175,7 +175,7 @@ public:
   void    destroy               ();
 
   // inter
-  bool    motionCompensation    ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList = REF_PIC_LIST_X, PelUnitBuf* predBufDfltWght = NULL );
+  bool    motionCompensation    ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X, PelUnitBuf* predBufDfltWght = NULL );
   void    motionCompensationIBC ( CodingUnit& cu, PelUnitBuf& predBuf );
   void    xSubPuMC              ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X );
   void    motionCompensationGeo ( CodingUnit& cu, PelUnitBuf& predBuf, const MergeCtx& geoMrgCtx );

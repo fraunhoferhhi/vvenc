@@ -259,17 +259,16 @@ void DecCu::xIntraRecQT(CodingUnit &cu, const ChannelType chType)
 }
 
 
-void DecCu::xReconInter(CodingUnit &cu)
+void DecCu::xReconInter( CodingUnit &cu )
 {
   CodingStructure &cs = *cu.cs;
-  // inter prediction
 
   PelUnitBuf predBuf = m_PredBuffer.getCompactBuf( cu ); 
   const ReshapeData& reshapeData = cs.picture->reshapeData;
   if (cu.geo)
   {
     m_pcInterPred->motionCompensationGeo(cu, predBuf, m_geoMrgCtx);
-    CU::spanGeoMotionInfo(cu, m_geoMrgCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
+    CU::spanGeoMotionInfo(cu, m_geoMrgCtx, cu.geoSplitDir, cu.geoMergeIdx[0], cu.geoMergeIdx[1]);
   }
   else
   {
@@ -277,9 +276,10 @@ void DecCu::xReconInter(CodingUnit &cu)
     CHECK(CU::isIBC(cu) && cu.affine, "IBC and Affine cannot be used together");
     CHECK(CU::isIBC(cu) && cu.geo, "IBC and geo cannot be used together");
     CHECK(CU::isIBC(cu) && cu.mmvdMergeFlag, "IBC and MMVD cannot be used together");
-    const bool luma = cu.Y().valid();
-    const bool chroma = isChromaEnabled(cu.chromaFormat) && cu.Cb().valid();
-    if (luma && (chroma || !isChromaEnabled(cu.chromaFormat)))
+    const bool luma   = cu.Y().valid();
+    const bool chroma = isChromaEnabled( cu.chromaFormat ) && cu.Cb().valid();
+
+    if( luma && ( chroma || !isChromaEnabled( cu.chromaFormat ) ) )
     {
       cu.mvRefine = true;
       m_pcInterPred->motionCompensation(cu, predBuf);
@@ -287,20 +287,20 @@ void DecCu::xReconInter(CodingUnit &cu)
     }
     else
     {
-      cu.mcControl = luma ? 0 : 4;
+      cu.mcControl  = luma   ? 0 : 4;
       cu.mcControl |= chroma ? 0 : 2;
       m_pcInterPred->motionCompensationIBC(cu, predBuf);
-      cu.mcControl = 0;
+      cu.mcControl  = 0;
     }
-    if (cu.Y().valid())
+    if( cu.Y().valid() )
     {
-      bool isIbcSmallBlk = CU::isIBC(cu) && (cu.lwidth() * cu.lheight() <= 16);
+      bool isIbcSmallBlk = CU::isIBC( cu ) && ( cu.lwidth() * cu.lheight() <= 16 );
       //CU::saveMotionInHMVP(cu, isIbcSmallBlk);
-      if (!cu.affine && !cu.geo && !isIbcSmallBlk)
+      if( !cu.affine && !cu.geo && !isIbcSmallBlk )
       {
-        const MotionInfo& mi = cu.getMotionInfo();
+        const MotionInfo &mi = cu.getMotionInfo();
         HPMVInfo hMi( mi, ( mi.interDir() == 3 ) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL, CU::isIBC( cu ) );
-        cs.addMiToLut(CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
+        cs.addMiToLut( CU::isIBC( cu ) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi );
       }
     }
 
@@ -444,23 +444,17 @@ void DecCu::xDecodeInterTexture(CodingUnit &cu)
 
 void DecCu::xDeriveCUMV( CodingUnit &cu )
 {
-  MergeCtx mrgCtx;
-
   if( cu.mergeFlag )
   {
+    MergeCtx mrgCtx;
+
     if (cu.mmvdMergeFlag || cu.mmvdSkip)
     {
-      CHECK(cu.ciip == true, "invalid MHIntra");
-      if (cu.cs->sps->SbtMvp)
-      {
-        Size bufSize = g_miScaling.scale(cu.lumaSize());
-        mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-      }
-      int   fPosBaseIdx = cu.mmvdMergeIdx / MMVD_MAX_REFINE_NUM;
-      CU::getInterMergeCandidates(cu, mrgCtx, 1, fPosBaseIdx + 1);
-      CU::getInterMMVDMergeCandidates(cu, mrgCtx, cu.mmvdMergeIdx);
-      mrgCtx.setMmvdMergeCandiInfo(cu, cu.mmvdMergeIdx);
-      CU::spanMotionInfo(cu, mrgCtx);
+      CHECK( cu.ciip, "invalid CIIP" );
+      CU::getInterMergeCandidates    ( cu, mrgCtx, 1,  cu.mmvdMergeIdx.pos.baseIdx + 1 );
+      CU::getInterMMVDMergeCandidates( cu, mrgCtx );
+      mrgCtx.setMmvdMergeCandiInfo   ( cu, cu.mmvdMergeIdx );
+      CU::spanMotionInfo             ( cu );
     }
     else
     {
@@ -470,25 +464,24 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
       }
       else
       {
+        AffineMergeCtx affineMergeCtx;
         if (cu.affine)
         {
-          AffineMergeCtx affineMergeCtx;
           if (cu.cs->sps->SbtMvp)
           {
-            Size bufSize          = g_miScaling.scale(cu.lumaSize());
-            mrgCtx.subPuMvpMiBuf  = MotionBuf(m_subPuMiBuf, bufSize);
-            affineMergeCtx.mrgCtx = &mrgCtx;
+            Size bufSize                  = g_miScaling.scale(cu.lumaSize());
+            affineMergeCtx.subPuMvpMiBuf  = MotionBuf(m_subPuMiBuf, bufSize);
           }
           CU::getAffineMergeCand(cu, affineMergeCtx, cu.mergeIdx);
-          cu.interDir       = affineMergeCtx.interDirNeighbours[cu.mergeIdx];
-          cu.affineType = affineMergeCtx.affineType[cu.mergeIdx];
-          cu.BcwIdx     = affineMergeCtx.BcwIdx[cu.mergeIdx];
-          cu.mergeType      = affineMergeCtx.mergeType[cu.mergeIdx];
+          cu.interDir           =    affineMergeCtx.interDirNeighbours[cu.mergeIdx];
+          cu.affineType         =    affineMergeCtx.affineType        [cu.mergeIdx];
+          cu.BcwIdx             =    affineMergeCtx.BcwIdx            [cu.mergeIdx];
+          cu.mergeType          =    affineMergeCtx.mergeType         [cu.mergeIdx];
 
           if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
           {
-            cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(cu.mergeIdx << 1) + 0][0].refIdx;
-            cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(cu.mergeIdx << 1) + 1][0].refIdx;
+            cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[cu.mergeIdx][0][0].refIdx;
+            cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[cu.mergeIdx][1][0].refIdx;
           }
           else
           {
@@ -496,7 +489,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
             {
               if (cu.cs->slice->numRefIdx[RefPicList(i)] > 0)
               {
-                MvField *mvField = affineMergeCtx.mvFieldNeighbours[(cu.mergeIdx << 1) + i];
+                MvField *mvField = affineMergeCtx.mvFieldNeighbours[cu.mergeIdx][i];
                 cu.mvpIdx[i]     = 0;
                 cu.mvpNum[i]     = 0;
                 cu.mvd[i][0]     = Mv();
@@ -518,7 +511,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
           mrgCtx.setMergeInfo(cu, cu.mergeIdx);
         }
 
-        CU::spanMotionInfo(cu, mrgCtx);
+        CU::spanMotionInfo(cu, &affineMergeCtx);
       }
     }
   } 
@@ -600,7 +593,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         }
       }
     }
-    CU::spanMotionInfo( cu, mrgCtx );
+    CU::spanMotionInfo( cu );
   }
   if (CU::isIBC(cu)) //only check
   {

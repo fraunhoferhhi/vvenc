@@ -149,7 +149,14 @@ int VVEncImpl::init( vvenc_config* config )
   { 
     msg.setCallback( config->m_msgCtx, config->m_msgFnc );
   }
-  
+
+  #if !IFP_RC_DETERMINISTIC
+  if( m_cVVEncCfg.m_RCTargetBitrate != 0 && m_cVVEncCfg.m_ifp )
+  {
+    msg.log( VVENC_WARNING, "Using RC with IFP. Results are non-deterministic!\n" );
+  }
+#endif
+
   // initialize the encoder
   m_pEncLib = new EncLib ( msg );
 
@@ -795,19 +802,37 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
   try
 #  endif   // HANDLE_EXCEPTION
   {
-    X86_VEXT request_ext = string_to_vext( simdReqStr );
+#if defined( REAL_TARGET_ARM )
+    ARM_VEXT arm_ext = string_to_arm_vext( simdReqStr );
+    X86_VEXT x86_ext = arm_ext == arm_simd::UNDEFINED ? x86_simd::UNDEFINED
+                     : arm_ext == arm_simd::SCALAR    ? x86_simd::SCALAR
+                                                      : SIMD_EVERYWHERE_EXTENSION_LEVEL;
     try
     {
-      read_x86_extension_flags( request_ext );
-#if defined( TARGET_SIMD_ARM )
-      read_arm_extension_flags( request_ext == x86_simd::UNDEFINED ? arm_simd::UNDEFINED : request_ext != x86_simd::SCALAR ? arm_simd::NEON : arm_simd::SCALAR );
-#endif
+      read_x86_extension_flags( x86_ext );
+      read_arm_extension_flags( arm_ext );
     }
     catch( Exception& )
     {
-      // not using the actual message from the exception here, because we need to insert the SIMD-level name instead of the enum
-      THROW( "requested SIMD level (" << simdReqStr << ") not supported by current CPU (max " << read_x86_extension_name() << ")." );
+      // Not using the actual message from the exception here, because we need to insert the SIMD-level name instead of
+      // the enum.
+      THROW( "requested SIMD level (" << simdReqStr << ") not supported by current CPU (max "
+                                      << read_arm_extension_name() << ")." );
     }
+#else
+    X86_VEXT request_ext = string_to_x86_vext( simdReqStr );
+    try
+    {
+      read_x86_extension_flags( request_ext );
+    }
+    catch( Exception& )
+    {
+      // Not using the actual message from the exception here, because we need to insert the SIMD-level name instead of
+      // the enum.
+      THROW( "requested SIMD level (" << simdReqStr << ") not supported by current CPU (max "
+                                      << read_x86_extension_name() << ")." );
+    }
+#endif
 
 #if ENABLE_SIMD_OPT_BUFFER
   #if defined( TARGET_SIMD_X86 )
@@ -818,10 +843,14 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
   #endif
 #endif
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.initTCoeffOpsX86();
+    g_tCoeffOps.initTCoeffOpsX86();
 #endif
 
+#if defined( REAL_TARGET_ARM )
+    return read_arm_extension_name().c_str();
+#else
     return read_x86_extension_name().c_str();
+#endif
   }
 #if HANDLE_EXCEPTION
   catch( Exception& e )
@@ -856,13 +885,15 @@ std::string VVEncImpl::getCompileInfoString()
 std::string VVEncImpl::createEncoderInfoStr()
 {
   std::stringstream cssCap;
-#if defined( TARGET_SIMD_X86 )
-  setSIMDExtension( nullptr );   // ensure SIMD-detection is finished
+#if defined( TARGET_SIMD_ARM )
+  setSIMDExtension( nullptr );  // Ensure SIMD-detection is finished
+  cssCap << getCompileInfoString() << "[SIMD=" << read_arm_extension_name() << "]";
+#elif defined( TARGET_SIMD_X86 )
+  setSIMDExtension( nullptr );  // Ensure SIMD-detection is finished
   cssCap << getCompileInfoString() << "[SIMD=" << read_x86_extension_name() <<"]";
-#else   // !TARGET_SIMD_X86
+#else  // !TARGET_SIMD_X86 && !TARGET_SIMD_ARM
   cssCap << getCompileInfoString() << "[SIMD=SCALAR]";
-#endif  // !TARGET_SIMD_X86
-
+#endif
 
   std::string cInfoStr;
   cInfoStr  = "VVenC, the Fraunhofer H.266/VVC Encoder, version " VVENC_VERSION;

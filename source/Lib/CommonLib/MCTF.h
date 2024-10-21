@@ -61,6 +61,8 @@ class NoMallocThreadPool;
 //! \ingroup EncoderLib
 //! \{
 
+double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
+
 
 struct MotionVector
 {
@@ -138,6 +140,12 @@ private:
   void initMCTF_X86();
   template <X86_VEXT vext>
   void _initMCTF_X86();
+#endif
+
+#ifdef TARGET_SIMD_ARM
+  void initMCTF_ARM();
+  template <ARM_VEXT vext>
+  void _initMCTF_ARM();
 #endif
 
   int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );

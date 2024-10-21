@@ -1011,7 +1011,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
 
   uint8_t      BcwIdx          = (cu.cs->slice->isInterB() ? cu.BcwIdx : BCW_DEFAULT);
   bool         enforceBcwPred = false;
-  MergeCtx     mergeCtx;
 
   // Loop over Prediction Units
   uint32_t     puIdx = 0;
@@ -1026,11 +1025,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
 
   m_encOnly = true;
   {
-    if (cu.cs->sps->SbtMvp)
-    {
-      Size bufSize = g_miScaling.scale(cu.lumaSize());
-      mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-    }
     CU::spanMotionInfo( cu );
     Distortion   uiCost[2] = { MAX_DISTORTION, MAX_DISTORTION };
     Distortion   uiCostBi  =   MAX_DISTORTION;
@@ -1759,7 +1753,6 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
         // set hevc me result
         cu.affine = false;
         cu.mergeFlag = bMergeFlag;
-        cu.regularMergeFlag = false;
         cu.mergeIdx = uiMRGIndex;
         cu.interDir = uiInterDir;
         cu.smvdMode = iSymMode;
@@ -1790,7 +1783,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       }
     }
 
-    CU::spanMotionInfo( cu, mergeCtx );
+    CU::spanMotionInfo( cu );
 
     m_skipPROF = false;
     m_encOnly  = false;
@@ -4132,10 +4125,10 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
   bool chroma    = cs.pcv->chrFormat != VVENC_CHROMA_400;
-  if (cu.predMode == MODE_IBC)
+  if( cu.predMode == MODE_IBC )
   {
-    luma    = cu.mcControl <= 3;
-    chroma &= (cu.mcControl >> 1) != 1;
+    luma    = !cu.mccNoLuma  ();
+    chroma &= !cu.mccNoChroma();
   }
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );
@@ -4645,7 +4638,6 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
   cu.affine = true;
   cu.mergeFlag = false;
-  cu.regularMergeFlag = false;
   if (BcwIdx != BCW_DEFAULT)
   {
     cu.BcwIdx = BcwIdx;

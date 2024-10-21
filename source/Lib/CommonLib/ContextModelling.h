@@ -524,35 +524,35 @@ struct MergeCtx
 {
   MergeCtx() : numValidMergeCand( 0 ), hasMergedCandList( false ) { for( unsigned i = 0; i < MRG_MAX_NUM_CANDS; i++ ) mrgTypeNeighbours[i] = MRG_TYPE_DEFAULT_N; }
 
-  void          setMmvdMergeCandiInfo ( CodingUnit& cu, int candIdx) const;
-  void          setMergeInfo          ( CodingUnit& cu, int candIdx) const;
+  void          setMmvdMergeCandiInfo ( CodingUnit& cu, const MmvdIdx candIdx) const;
+  void          setMergeInfo          ( CodingUnit& cu, const int     candIdx) const;
+  void          getMmvdDeltaMv        ( const Slice& slice, const MmvdIdx candIdx, Mv deltaMv[NUM_REF_PIC_LIST_01] ) const;
 
-  MvField       mvFieldNeighbours [ MRG_MAX_NUM_CANDS << 1 ]; // double length for mv of both lists
-  uint8_t       BcwIdx            [ MRG_MAX_NUM_CANDS      ];
-  unsigned char interDirNeighbours[ MRG_MAX_NUM_CANDS      ];
-  MergeType     mrgTypeNeighbours [ MRG_MAX_NUM_CANDS      ];
+  MvField       mvFieldNeighbours [MRG_MAX_NUM_CANDS][NUM_REF_PIC_LIST_01];
+  uint8_t       BcwIdx            [MRG_MAX_NUM_CANDS];
+  unsigned char interDirNeighbours[MRG_MAX_NUM_CANDS];
+  MergeType     mrgTypeNeighbours [MRG_MAX_NUM_CANDS];
   int           numValidMergeCand;
   bool          hasMergedCandList;
 
-  MotionBuf     subPuMvpMiBuf;
-  MvField       mmvdBaseMv        [ MMVD_BASE_MV_NUM ][2];
-  bool          mmvdUseAltHpelIf  [ MMVD_BASE_MV_NUM ];
-  bool          useAltHpelIf      [ MRG_MAX_NUM_CANDS ];
+  MvField       mmvdBaseMv        [MMVD_BASE_MV_NUM][NUM_REF_PIC_LIST_01];
+  bool          mmvdUseAltHpelIf  [MMVD_BASE_MV_NUM];
+  bool          useAltHpelIf      [MRG_MAX_NUM_CANDS];
 };
 
 struct AffineMergeCtx
 {
   AffineMergeCtx() : numValidMergeCand( 0 ) { for ( unsigned i = 0; i < AFFINE_MRG_MAX_NUM_CANDS; i++ ) affineType[i] = AFFINEMODEL_4PARAM; }
 
-  MvField       mvFieldNeighbours[AFFINE_MRG_MAX_NUM_CANDS << 1][3]; // double length for mv of both lists
+  MvField       mvFieldNeighbours [AFFINE_MRG_MAX_NUM_CANDS][NUM_REF_PIC_LIST_01][3];
   unsigned char interDirNeighbours[AFFINE_MRG_MAX_NUM_CANDS];
-  EAffineModel  affineType[AFFINE_MRG_MAX_NUM_CANDS];
-  uint8_t       BcwIdx[AFFINE_MRG_MAX_NUM_CANDS];
+  EAffineModel  affineType        [AFFINE_MRG_MAX_NUM_CANDS];
+  uint8_t       BcwIdx            [AFFINE_MRG_MAX_NUM_CANDS];
   int           numValidMergeCand;
   int           maxNumMergeCand;
 
-  MergeCtx     *mrgCtx;
   MergeType     mergeType[AFFINE_MRG_MAX_NUM_CANDS];
+  MotionBuf     subPuMvpMiBuf;
 };
 
 

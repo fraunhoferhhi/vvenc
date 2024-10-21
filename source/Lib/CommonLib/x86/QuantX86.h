@@ -337,17 +337,20 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
           vdeltaU1 = _mm256_mul_epu32(vdeltaU1,vQuantCoeff);                            // Tmp3,Tmp1
           __m256i vTmpLevel_0 = _mm256_add_epi64(vdeltaU0,vAdd);
           __m256i vTmpLevel_1 = _mm256_add_epi64(vdeltaU1,vAdd);
-          vTmpLevel_0 = _mm256_srli_epi64(vTmpLevel_0,iQBits);                          // Int32 Tmp2,Tmp0
-          vTmpLevel_1 = _mm256_srli_epi64(vTmpLevel_1,iQBits);                          // Int32 Tmp3,Tmp1
+          const __m128i vQBits = _mm_cvtsi32_si128(iQBits)
+          vTmpLevel_0 = _mm256_srl_epi64(vTmpLevel_0,vQBits);                          // Int32 Tmp2,Tmp0
+          vTmpLevel_1 = _mm256_srl_epi64(vTmpLevel_1,vQBits);                          // Int32 Tmp3,Tmp1
 
           if (signHiding)
           {
-            __m256i vBS0 = _mm256_slli_epi64(vTmpLevel_0,iQBits);
-            __m256i vBS1 = _mm256_slli_epi64(vTmpLevel_1,iQBits);
+            __m256i vBS0 = _mm256_sll_epi64(vTmpLevel_0,vQBits);
+            __m256i vBS1 = _mm256_sll_epi64(vTmpLevel_1,vQBits);
+
             vdeltaU0 = _mm256_sub_epi64(vdeltaU0,vBS0);
             vdeltaU1 = _mm256_sub_epi64(vdeltaU1,vBS1);
-            vdeltaU0 = _mm256_srli_epi64(vdeltaU0,qBits8);
-            vdeltaU1 = _mm256_srli_epi64(vdeltaU1,qBits8);
+            const __m128i vQBits8 = _mm_cvtsi32_si128(qBits8)
+            vdeltaU0 = _mm256_srl_epi64(vdeltaU0,vQBits8);
+            vdeltaU1 = _mm256_srl_epi64(vdeltaU1,vQBits8);
             vdeltaU0 = _mm256_and_si256(vdeltaU0,vMask);
             vdeltaU1 = _mm256_and_si256(vdeltaU1,vMask);
             vdeltaU1 = _mm256_slli_epi64(vdeltaU1,32);
@@ -401,16 +404,18 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
           vdeltaU1 = _mm_mul_epu32(vdeltaU1,vQuantCoeff);                           // Tmp3,Tmp1
           __m128i vTmpLevel_0 = _mm_add_epi64(vdeltaU0,vAdd);
           __m128i vTmpLevel_1 = _mm_add_epi64(vdeltaU1,vAdd);
-          vTmpLevel_0 = _mm_srli_epi64(vTmpLevel_0,iQBits);                         // Int32 Tmp2,Tmp0
-          vTmpLevel_1 = _mm_srli_epi64(vTmpLevel_1,iQBits);                         // Int32 Tmp3,Tmp1
+          const __m128i vQBits = _mm_cvtsi32_si128(iQBits);
+          vTmpLevel_0 = _mm_srl_epi64(vTmpLevel_0,vQBits);                         // Int32 Tmp2,Tmp0
+          vTmpLevel_1 = _mm_srl_epi64(vTmpLevel_1,vQBits);                         // Int32 Tmp3,Tmp1
           if (signHiding)
           {
-            __m128i vBS0 = _mm_slli_epi64(vTmpLevel_0,iQBits);
-            __m128i vBS1 = _mm_slli_epi64(vTmpLevel_1,iQBits);
+            __m128i vBS0 = _mm_sll_epi64(vTmpLevel_0,vQBits);
+            __m128i vBS1 = _mm_sll_epi64(vTmpLevel_1,vQBits);
             vdeltaU0 = _mm_sub_epi64(vdeltaU0,vBS0);
             vdeltaU1 = _mm_sub_epi64(vdeltaU1,vBS1);
-            vdeltaU0 = _mm_srli_epi64(vdeltaU0,qBits8);
-            vdeltaU1 = _mm_srli_epi64(vdeltaU1,qBits8);
+            const __m128i vQBits8 = _mm_cvtsi32_si128(qBits8);
+            vdeltaU0 = _mm_srl_epi64(vdeltaU0,vQBits8);
+            vdeltaU1 = _mm_srl_epi64(vdeltaU1,vQBits8);
             vdeltaU0 = _mm_and_si128(vdeltaU0,vMask);
             vdeltaU1 = _mm_and_si128(vdeltaU1,vMask);
             vdeltaU1 = _mm_slli_epi64(vdeltaU1,32);
@@ -460,6 +465,7 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
 template<X86_VEXT vext>
 static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
 {
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
 #if USE_AVX2
   if( vext >= AVX2 && ( numCoeff & 15 ) == 0 )
   {
@@ -476,8 +482,8 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
       __m256i xlvl2 = _mm256_mul_epi32( xcff, xqnt );
               xlvl1 = _mm256_add_epi64( xlvl1, xoff );
               xlvl2 = _mm256_add_epi64( xlvl2, xoff );
-              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
-              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+              xlvl1 = _mm256_srl_epi64( xlvl1, vshift );
+              xlvl2 = _mm256_srl_epi64( xlvl2, vshift );
 
       __m256i xany  = _mm256_or_si256( xlvl1, xlvl2 );
       
@@ -489,8 +495,8 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
               xlvl2 = _mm256_mul_epi32( xcff, xqnt );
               xlvl1 = _mm256_add_epi64( xlvl1, xoff );
               xlvl2 = _mm256_add_epi64( xlvl2, xoff );
-              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
-              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+              xlvl1 = _mm256_srl_epi64( xlvl1, vshift );
+              xlvl2 = _mm256_srl_epi64( xlvl2, vshift );
 
               xany  = _mm256_or_si256( xany, _mm256_or_si256( xlvl1, xlvl2 ) );
 
@@ -516,8 +522,8 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
       __m256i xlvl2 = _mm256_mul_epi32( xcff, xqnt );
               xlvl1 = _mm256_add_epi64( xlvl1, xoff );
               xlvl2 = _mm256_add_epi64( xlvl2, xoff );
-              xlvl1 = _mm256_srli_epi64( xlvl1, shift );
-              xlvl2 = _mm256_srli_epi64( xlvl2, shift );
+              xlvl1 = _mm256_srl_epi64( xlvl1, vshift );
+              xlvl2 = _mm256_srl_epi64( xlvl2, vshift );
 
       __m256i xany  = _mm256_or_si256( xlvl1, xlvl2 );
 
@@ -545,8 +551,8 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
       __m128i xlvl2 = _mm_mul_epi32( xcff, xqnt );
               xlvl1 = _mm_add_epi64( xlvl1, xoff );
               xlvl2 = _mm_add_epi64( xlvl2, xoff );
-              xlvl1 = _mm_srli_epi64( xlvl1, shift );
-              xlvl2 = _mm_srli_epi64( xlvl2, shift );
+              xlvl1 = _mm_srl_epi64( xlvl1, vshift );
+              xlvl2 = _mm_srl_epi64( xlvl2, vshift );
 
       __m128i xany  = _mm_or_si128( xlvl1, xlvl2 );
 

@@ -87,8 +87,8 @@ namespace vvenc
 
 using namespace x86_simd;
 
-const std::string& vext_to_string( X86_VEXT vext );
-X86_VEXT           string_to_vext( const std::string& ext_name );
+const std::string& x86_vext_to_string( X86_VEXT vext );
+X86_VEXT           string_to_x86_vext( const std::string& ext_name );
 
 X86_VEXT           read_x86_extension_flags( X86_VEXT request = x86_simd::UNDEFINED );
 const std::string& read_x86_extension_name();

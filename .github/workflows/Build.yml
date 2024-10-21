@@ -45,6 +45,10 @@ jobs:
               os: ubuntu-22.04
             }
           - {
+              name: "Ubuntu 24.04",
+              os: ubuntu-24.04
+            }
+          - {
               name: "Mac OS Latest x86_64",
               os: macos-latest,
               osx_arch: x86_64

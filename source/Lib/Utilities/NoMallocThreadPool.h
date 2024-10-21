@@ -50,8 +50,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <condition_variable>
 #include <atomic>
 #include <chrono>
-#include <iostream>
 #include <array>
+
+#ifdef HAVE_PTHREADS
+#include <pthread.h>
+#endif
 
 #include "CommonLib/CommonDef.h"
 #if ENABLE_TIME_PROFILING_MT_MODE
@@ -366,7 +369,6 @@ class NoMallocThreadPool
     Iterator grow()
     {
       std::unique_lock<std::mutex> l( m_resizeMutex );  // prevent concurrent growth of the queue. Read access while growing is no problem
-//      std::cerr << __PRETTY_FUNCTION__ << std::endl;
 
       m_lastChunk->m_next = new Chunk( &m_firstChunk );
       m_lastChunk         = m_lastChunk->m_next;
@@ -485,13 +487,42 @@ public:
 #endif
 
 private:
+#ifdef HAVE_PTHREADS
+  struct PThread
+  {
+    PThread()                            = default;
+    ~PThread()                           = default;
+
+    PThread( const PThread& )            = delete;
+    PThread& operator=( const PThread& ) = delete;
+
+    PThread( PThread&& other ) { *this = std::move( other ); };
+    PThread& operator=( PThread&& other );
+
+    template<class TFunc, class... TArgs>
+    PThread( TFunc&& func, TArgs&&... args );
+
+    bool joinable() { return m_joinable; }
+    void join();
+
+  private:
+    pthread_t m_id       = 0;
+    bool      m_joinable = false;
+  };
+#endif   // HAVE_PTHREADS
+
+#if HAVE_PTHREADS
+  using ThreadImpl = PThread;
+#else
+  using ThreadImpl = std::thread;
+#endif
 
   using TaskIterator = ChunkedTaskQueue::Iterator;
 
   // members
   std::string              m_poolName;
   std::atomic_bool         m_exitThreads{ false };
-  std::vector<std::thread> m_threads;
+  std::vector<ThreadImpl>  m_threads;
   ChunkedTaskQueue         m_tasks;
   TaskIterator             m_nextFillSlot = m_tasks.begin();
 #if ADD_TASK_THREAD_SAFE

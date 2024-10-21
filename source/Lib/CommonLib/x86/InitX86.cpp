@@ -61,11 +61,19 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "MCTF.h"
 #include "TrQuant_EMT.h"
 #include "QuantRDOQ2.h"
+#include "SEIFilmGrainAnalyzer.h"
 
 #ifdef TARGET_SIMD_X86
 
 //! \ingroup CommonLib
 //! \{
+
+#  if defined( REAL_TARGET_X86 ) \
+    || ( defined( SIMD_EVERYWHERE_EXTENSION_LEVEL_ID ) && SIMD_EVERYWHERE_EXTENSION_LEVEL_ID >= X86_SIMD_AVX2 )
+#    define ENABLE_AVX2_IMPLEMENTATIONS 1
+#  else
+#    define ENABLE_AVX2_IMPLEMENTATIONS 0
+#  endif
 
 namespace vvenc {
 
@@ -76,8 +84,10 @@ void InterpolationFilter::initInterpolationFilterX86( /*int iBitDepthY, int iBit
   switch (vext){
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initInterpolationFilterX86<AVX2>(/*iBitDepthY, iBitDepthC*/);
     break;
+#endif
   case AVX:
     //_initInterpolationFilterX86<AVX>(/*iBitDepthY, iBitDepthC*/);
     //break;
@@ -103,8 +113,10 @@ void PelBufferOps::initPelBufOpsX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initPelBufOpsX86<AVX2>();
       break;
+#endif
     case AVX:
       //_initPelBufOpsX86<AVX>();
       //break;
@@ -127,8 +139,10 @@ void LoopFilter::initLoopFilterX86()
   {
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initLoopFilterX86<AVX2>();
     break;
+#endif
   case AVX:
     //_initLoopFilterX86<AVX>();
     //break;
@@ -150,10 +164,12 @@ void RdCost::initRdCostX86()
   switch (vext){ 
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
 #if defined( _MSC_VER ) && _MSC_VER >= 1938 && _MSC_VER < 1939
 #else
       _initRdCostX86<AVX2>();
       break;
+#endif
 #endif
     case AVX:
       //_initRdCostX86<AVX>();
@@ -176,8 +192,10 @@ void AdaptiveLoopFilter::initAdaptiveLoopFilterX86()
   {
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initAdaptiveLoopFilterX86<AVX2>();
     break;
+#endif
   case AVX:
     //_initAdaptiveLoopFilterX86<AVX>();
     //break;
@@ -198,8 +216,10 @@ void SampleAdaptiveOffset::initSampleAdaptiveOffsetX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initSampleAdaptiveOffsetX86<AVX2>();
       break;
+#endif
     case AVX:
       //_initSampleAdaptiveOffsetX86<AVX>();
       //break;
@@ -221,8 +241,10 @@ void InterPredInterpolation::initInterPredictionX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initInterPredictionX86<AVX2>();
       break;
+#endif
     case AVX:
       //_initInterPredictionX86<AVX>();
       //break;
@@ -243,8 +265,10 @@ void AffineGradientSearch::initAffineGradientSearchX86()
   switch (vext) {
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initAffineGradientSearchX86<AVX2>();
     break;
+#endif
   case AVX:
     //_initAffineGradientSearchX86<AVX>();
     //break;
@@ -265,8 +289,10 @@ void IntraPrediction::initIntraPredictionX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initIntraPredictionX86<AVX2>();
       break;
+#endif
     case AVX:
       //_initIntraPredictionX86<AVX>();
       //break;
@@ -287,8 +313,10 @@ void MCTF::initMCTF_X86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initMCTF_X86<AVX2 >();
       break;
+#endif
     case AVX:
       //_initMCTF_X86<AVX  >();
       //break;
@@ -311,8 +339,10 @@ void TCoeffOps::initTCoeffOpsX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initTCoeffOpsX86<AVX2 >();
       break;
+#endif
     case AVX:
       //_initTCoeffOpsX86<AVX  >();
       //break;
@@ -334,8 +364,10 @@ void TrQuant::initTrQuantX86()
   {
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initTrQuantX86<AVX2 >();
     break;
+#endif
   case AVX:
     //_initTrQuantX86<AVX  >();
     //break;
@@ -360,8 +392,10 @@ void Quant::initQuantX86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
       _initQuantX86<AVX2>();
       break;
+#endif
     case AVX:
       //_initQuantX86<AVX>();
       //break;
@@ -380,8 +414,10 @@ void DepQuant::initDepQuantX86()
   switch (vext){
   case AVX512:
   case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
     _initDepQuantX86<AVX2>();
     break;
+#endif
   case AVX:
   case SSE42:
     _initDepQuantX86<SSE42>();
@@ -394,6 +430,64 @@ void DepQuant::initDepQuantX86()
   }
 }
 
+#endif
+
+#if ENABLE_SIMD_OPT_FGA
+void Canny::initFGACannyX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initFGACannyX86<AVX2>();
+      break;
+#endif
+    case SSE42:
+    case SSE41:
+      _initFGACannyX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
+void Morph::initFGAMorphX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initFGAMorphX86<AVX2>();
+      break;
+#endif
+    case SSE42:
+    case SSE41:
+      _initFGAMorphX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
+
+void FGAnalyzer::initFGAnalyzerX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initFGAnalyzerX86<AVX2>();
+      break;
+#endif
+    case SSE42:
+    case SSE41:
+      _initFGAnalyzerX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
 #endif
 
 } // namespace vvenc

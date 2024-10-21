@@ -151,7 +151,7 @@ namespace CU
   uint32_t getFinalIntraMode            (const CodingUnit& cu, const ChannelType chType);
   uint32_t getCoLocatedIntraLumaMode    (const CodingUnit& cu);
   void     getInterMergeCandidates      (const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx = -1 );
-  void     getInterMMVDMergeCandidates  (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
+  void     getInterMMVDMergeCandidates  (const CodingUnit& cu, MergeCtx& mrgCtx);
   int      getDistScaleFactor           (const int currPOC, const int currRefPOC, const int colPOC, const int colRefPOC);
   bool     isDiffMER                    (const Position &pos1, const Position &pos2, const unsigned plevel);
   bool     getColocatedMVP              (const CodingUnit& cu, const RefPicList refPicList, const Position& pos, Mv& rcMv, const int refIdx, bool sbFlag = false);
@@ -160,13 +160,13 @@ namespace CU
   bool     addMergeHMVPCand             (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4);
   void     addAMVPHMVPCand              (const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);
   bool     isBipredRestriction          (const CodingUnit& cu);
-  void     spanMotionInfo               (      CodingUnit& cu, const MergeCtx &mrgCtx = MergeCtx() );
+  void     spanMotionInfo               (      CodingUnit& cu, const AffineMergeCtx *mrgCtx = nullptr );
   void     restrictBiPredMergeCandsOne  (      CodingUnit& cu);
 
   bool     isLMCMode                    (                          unsigned mode);
   bool     isLMCModeEnabled             (const CodingUnit& cu, unsigned mode);
   void     getGeoMergeCandidates        (const CodingUnit& cu, MergeCtx &GeoMrgCtx);
-  void     spanGeoMotionInfo            (CodingUnit& cu, MergeCtx &GeoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0, const uint8_t candIdx1);
+  void     spanGeoMotionInfo            (      CodingUnit& cu, const MergeCtx &GeoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0, const uint8_t candIdx1);
   bool     isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu);
   bool     checkDMVRCondition           (const CodingUnit& cu);
   void     getAffineControlPointCand    (const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx);
@@ -176,7 +176,7 @@ namespace CU
   void     xInheritedAffineMv           (const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3]);
   void     fillAffineMvpCand            (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
   bool     addAffineMVPCandUnscaled     (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
-  bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
+  bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, AffineMergeCtx &mrgCtx, const int count);
 
   void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);

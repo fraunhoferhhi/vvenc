@@ -84,7 +84,7 @@ protected:
   void xWriteSEISampleAspectRatioInfo             (const SEISampleAspectRatioInfo &sei);
 
   void xWriteSEIUserDataRegistered(const SEIUserDataRegistered& sei);
-  void xWriteSEIFilmGrainCharacteristics(const SEIFilmGrainCharacteristics& sei);
+  void xWriteSeiFgc(const SeiFgc& sei);
   void xWriteSEIContentLightLevelInfo(const SEIContentLightLevelInfo& sei);
   void xWriteSEIAmbientViewingEnvironment(const SEIAmbientViewingEnvironment& sei);
   void xWriteSEIContentColourVolume(const SEIContentColourVolume &sei);

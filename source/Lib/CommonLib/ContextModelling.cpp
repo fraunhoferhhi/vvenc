@@ -230,206 +230,177 @@ void DeriveCtx::CtxSplit( const Partitioner& partitioner, unsigned& ctxSpl, unsi
 void MergeCtx::setMergeInfo( CodingUnit& cu, int candIdx ) const
 {
   CHECK( candIdx >= numValidMergeCand, "Merge candidate does not exist" );
-  cu.regularMergeFlag           = !(cu.ciip || cu.geo);
   cu.mergeFlag                  = true;
   cu.mmvdMergeFlag              = false;
   cu.interDir                   = interDirNeighbours[candIdx];
   cu.imv                        = (!cu.geo && useAltHpelIf[candIdx]) ? IMV_HPEL : 0;
   cu.mergeIdx                   = candIdx;
   cu.mergeType                  = mrgTypeNeighbours[candIdx];
-  cu.mv     [REF_PIC_LIST_0][0] = mvFieldNeighbours[(candIdx << 1) + 0].mv;
-  cu.mv     [REF_PIC_LIST_1][0] = mvFieldNeighbours[(candIdx << 1) + 1].mv;
+  cu.mv     [REF_PIC_LIST_0][0] = mvFieldNeighbours[candIdx][0].mv;
+  cu.mv     [REF_PIC_LIST_1][0] = mvFieldNeighbours[candIdx][1].mv;
   cu.mvd    [REF_PIC_LIST_0][0] = Mv();
   cu.mvd    [REF_PIC_LIST_1][0] = Mv();
-  cu.refIdx [REF_PIC_LIST_0]    = mvFieldNeighbours[( candIdx << 1 ) + 0].refIdx;
-  cu.refIdx [REF_PIC_LIST_1]    = mvFieldNeighbours[( candIdx << 1 ) + 1].refIdx;
+  cu.refIdx [REF_PIC_LIST_0]    = mvFieldNeighbours[candIdx][0].refIdx;
+  cu.refIdx [REF_PIC_LIST_1]    = mvFieldNeighbours[candIdx][1].refIdx;
   cu.mvpIdx [REF_PIC_LIST_0]    = NOT_VALID;
   cu.mvpIdx [REF_PIC_LIST_1]    = NOT_VALID;
   cu.mvpNum [REF_PIC_LIST_0]    = NOT_VALID;
   cu.mvpNum [REF_PIC_LIST_1]    = NOT_VALID;
   if( CU::isIBC( cu ) )
   {
-    cu.imv  = cu.imv == IMV_HPEL ? 0 : cu.imv;
+    cu.imv                      = cu.imv == IMV_HPEL ? 0 : cu.imv;
   }
-  cu.BcwIdx = ( interDirNeighbours[candIdx] == 3 ) ? BcwIdx[candIdx] : BCW_DEFAULT;
+  cu.BcwIdx                     = interDirNeighbours[candIdx] == 3 ? BcwIdx[candIdx] : BCW_DEFAULT;
+  cu.mcControl                  = 0;
+  cu.mvRefine                   = false;
 
-  CU::restrictBiPredMergeCandsOne(cu);
-  cu.mcControl = 0;
+  CU::restrictBiPredMergeCandsOne( cu );
 }
 
-void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
-{
-  const Slice &slice = *cu.cs->slice;
-  const int mvShift = MV_FRACTIONAL_BITS_DIFF;
-  const int refMvdCands[8] = { 1 << mvShift , 2 << mvShift , 4 << mvShift , 8 << mvShift , 16 << mvShift , 32 << mvShift,  64 << mvShift , 128 << mvShift };
-  int fPosGroup = 0;
-  int fPosBaseIdx = 0;
-  int fPosStep = 0;
-  int tempIdx = 0;
-  int fPosPosition = 0;
-  Mv tempMv[2];
 
-  tempIdx = candIdx;
-  fPosGroup = tempIdx / (MMVD_BASE_MV_NUM * MMVD_MAX_REFINE_NUM);
-  tempIdx = tempIdx - fPosGroup * (MMVD_BASE_MV_NUM * MMVD_MAX_REFINE_NUM);
-  fPosBaseIdx = tempIdx / MMVD_MAX_REFINE_NUM;
-  tempIdx = tempIdx - fPosBaseIdx * (MMVD_MAX_REFINE_NUM);
-  fPosStep = tempIdx / 4;
-  fPosPosition = tempIdx - fPosStep * (4);
-  int offset = refMvdCands[fPosStep];
-  if ( cu.slice->picHeader->disFracMMVD )
+void MergeCtx::getMmvdDeltaMv( const Slice &slice, const MmvdIdx candIdx, Mv deltaMv[ NUM_REF_PIC_LIST_01 ] ) const
+{
+  const int mvdBaseIdx  = candIdx.pos.baseIdx;
+  const int mvdStep     = candIdx.pos.step;
+  const int mvdPosition = candIdx.pos.position;
+
+  int offset = 1 << ( mvdStep + MV_FRACTIONAL_BITS_DIFF );
+  if( slice.picHeader->disFracMMVD )
   {
     offset <<= 2;
-  }
-  const int refList0 = mmvdBaseMv[fPosBaseIdx][0].refIdx;
-  const int refList1 = mmvdBaseMv[fPosBaseIdx][1].refIdx;
+}
+  const int refList0 = mmvdBaseMv[mvdBaseIdx][REF_PIC_LIST_0].refIdx;
+  const int refList1 = mmvdBaseMv[mvdBaseIdx][REF_PIC_LIST_1].refIdx;
 
-  if ((refList0 != -1) && (refList1 != -1))
+  const Mv dMvTable[ 4 ] = { Mv( offset,0 ), Mv( -offset,0 ), Mv( 0, offset ), Mv( 0, -offset ) };
+  if( ( refList0 != -1 ) && ( refList1 != -1 ) )
   {
-    const int poc0 = slice.getRefPOC(REF_PIC_LIST_0, refList0);
-    const int poc1 = slice.getRefPOC(REF_PIC_LIST_1, refList1);
+    const int poc0 = slice.getRefPOC( REF_PIC_LIST_0, refList0 );
+    const int poc1 = slice.getRefPOC( REF_PIC_LIST_1, refList1 );
     const int currPoc = slice.poc;
-    if (fPosPosition == 0)
-    {
-      tempMv[0] = Mv(offset, 0);
-    }
-    else if (fPosPosition == 1)
-    {
-      tempMv[0] = Mv(-offset, 0);
-    }
-    else if (fPosPosition == 2)
-    {
-      tempMv[0] = Mv(0, offset);
-    }
-    else
-    {
-      tempMv[0] = Mv(0, -offset);
-    }
-    if ((poc0 - currPoc) == (poc1 - currPoc))
-    {
-      tempMv[1] = tempMv[0];
-    }
-    else if (abs(poc1 - currPoc) > abs(poc0 - currPoc))
-    {
-      const int scale = CU::getDistScaleFactor(currPoc, poc0, currPoc, poc1);
-      tempMv[1] = tempMv[0];
-      const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
-      const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
-      if (isL0RefLongTerm || isL1RefLongTerm)
-      {
-        if ((poc1 - currPoc)*(poc0 - currPoc) > 0)
-        {
-          tempMv[0] = tempMv[1];
-        }
-        else
-        {
-          tempMv[0].set(-1 * tempMv[1].hor, -1 * tempMv[1].ver);
-        }
-      }
-      else
-      tempMv[0] = tempMv[1].scaleMv(scale);
-    }
-    else
-    {
-      const int scale = CU::getDistScaleFactor(currPoc, poc1, currPoc, poc0);
-      const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
-      const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
-      if (isL0RefLongTerm || isL1RefLongTerm)
-      {
-        if ((poc1 - currPoc)*(poc0 - currPoc) > 0)
-        {
-          tempMv[1] = tempMv[0];
-        }
-        else
-        {
-          tempMv[1].set(-1 * tempMv[0].hor, -1 * tempMv[0].ver);
-        }
-      }
-      else
-      tempMv[1] = tempMv[0].scaleMv(scale);
-    }
 
+    deltaMv[0] = dMvTable[mvdPosition];
+
+    if( ( poc0 - currPoc ) == ( poc1 - currPoc ) )
+    {
+      deltaMv[1] = deltaMv[0];
+    }
+    else if( abs( poc1 - currPoc ) > abs( poc0 - currPoc ) )
+    {
+      const int scale            = CU::getDistScaleFactor( currPoc, poc0, currPoc, poc1 );
+      const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
+      const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
+      deltaMv[1]                 = deltaMv[0];
+
+      if( isL0RefLongTerm || isL1RefLongTerm )
+      {
+        if( ( poc1 - currPoc ) * ( poc0 - currPoc ) > 0 )
+        {
+          deltaMv[0] = deltaMv[1];
+        }
+        else
+        {
+          deltaMv[0].set( -1 * deltaMv[1].hor, -1 * deltaMv[1].ver );
+        }
+      }
+      else
+      {
+        deltaMv[0] = deltaMv[1].scaleMv( scale );
+      }
+    }
+    else
+    {
+      const int scale            = CU::getDistScaleFactor(currPoc, poc1, currPoc, poc0);
+      const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
+      const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
+
+      if( isL0RefLongTerm || isL1RefLongTerm )
+      {
+        if( ( poc1 - currPoc ) * ( poc0 - currPoc ) > 0 )
+        {
+          deltaMv[1] = deltaMv[0];
+        }
+        else
+        {
+          deltaMv[1].set( -1 * deltaMv[0].hor, -1 * deltaMv[0].ver );
+        }
+      }
+      else
+      {
+        deltaMv[1] = deltaMv[0].scaleMv( scale );
+      }
+    }
+  }
+  else if( refList0 != -1 )
+  {
+    deltaMv[0] = dMvTable[mvdPosition];
+  }
+  else if( refList1 != -1 )
+  {
+    deltaMv[1] = dMvTable[mvdPosition];
+  }
+}
+
+void MergeCtx::setMmvdMergeCandiInfo( CodingUnit &cu, const MmvdIdx candIdx ) const
+{
+  Mv tempMv[NUM_REF_PIC_LIST_01];
+
+  getMmvdDeltaMv( *cu.cs->slice, candIdx, tempMv );
+  const int mvdBaseIdx  = candIdx.pos.baseIdx;
+
+  const int refList0 = mmvdBaseMv[mvdBaseIdx][0].refIdx;
+  const int refList1 = mmvdBaseMv[mvdBaseIdx][1].refIdx;
+
+  if( refList0 != NOT_VALID && refList1 != NOT_VALID )
+  {
     cu.interDir = 3;
-    cu.mv[REF_PIC_LIST_0][0]  = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
-    cu.refIdx[REF_PIC_LIST_0] = refList0;
-    cu.mv[REF_PIC_LIST_1][0]  = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
-    cu.refIdx[REF_PIC_LIST_1] = refList1;
+    cu.mv    [REF_PIC_LIST_0][0] = mmvdBaseMv[mvdBaseIdx][0].mv + tempMv[0];
+    cu.refIdx[REF_PIC_LIST_0]    = refList0;
+    cu.mv    [REF_PIC_LIST_1][0] = mmvdBaseMv[mvdBaseIdx][1].mv + tempMv[1];
+    cu.refIdx[REF_PIC_LIST_1]    = refList1;
   }
-  else if (refList0 != -1)
+  else if( refList0 != NOT_VALID )
   {
-    if (fPosPosition == 0)
-    {
-      tempMv[0] = Mv(offset, 0);
-    }
-    else if (fPosPosition == 1)
-    {
-      tempMv[0] = Mv(-offset, 0);
-    }
-    else if (fPosPosition == 2)
-    {
-      tempMv[0] = Mv(0, offset);
-    }
-    else
-    {
-      tempMv[0] = Mv(0, -offset);
-    }
     cu.interDir = 1;
-    cu.mv[REF_PIC_LIST_0][0]  = mmvdBaseMv[fPosBaseIdx][0].mv + tempMv[0];
-    cu.refIdx[REF_PIC_LIST_0] = refList0;
-    cu.mv[REF_PIC_LIST_1][0]  = Mv(0, 0);
-    cu.refIdx[REF_PIC_LIST_1] = -1;
+    cu.mv    [REF_PIC_LIST_0][0] = mmvdBaseMv[mvdBaseIdx][0].mv + tempMv[0];
+    cu.refIdx[REF_PIC_LIST_0]    = refList0;
+    cu.mv    [REF_PIC_LIST_1][0] = Mv(0, 0);
+    cu.refIdx[REF_PIC_LIST_1]    = -1;
   }
-  else if (refList1 != -1)
+  else if( refList1 != NOT_VALID )
   {
-    if (fPosPosition == 0)
-    {
-      tempMv[1] = Mv(offset, 0);
-    }
-    else if (fPosPosition == 1)
-    {
-      tempMv[1] = Mv(-offset, 0);
-    }
-    else if (fPosPosition == 2)
-    {
-      tempMv[1] = Mv(0, offset);
-    }
-    else
-    {
-      tempMv[1] = Mv(0, -offset);
-    }
     cu.interDir = 2;
-    cu.mv[REF_PIC_LIST_0][0]  = Mv(0, 0);
-    cu.refIdx[REF_PIC_LIST_0] = -1;
-    cu.mv[REF_PIC_LIST_1][0]  = mmvdBaseMv[fPosBaseIdx][1].mv + tempMv[1];
-    cu.refIdx[REF_PIC_LIST_1] = refList1;
+    cu.mv    [REF_PIC_LIST_0][0] = Mv(0, 0);
+    cu.refIdx[REF_PIC_LIST_0]    = -1;
+    cu.mv    [REF_PIC_LIST_1][0] = mmvdBaseMv[mvdBaseIdx][1].mv + tempMv[1];
+    cu.refIdx[REF_PIC_LIST_1]    = refList1;
   }
 
-  cu.mmvdMergeFlag          = true;
-  cu.mmvdMergeIdx           = candIdx;
-  cu.mergeFlag              = true;
-  cu.regularMergeFlag       = true;
-  cu.mergeIdx               = candIdx;
-  cu.mergeType              = MRG_TYPE_DEFAULT_N;
+  cu.mmvdMergeFlag    = true;
+  cu.mmvdMergeIdx     = candIdx;
+  cu.mergeFlag        = true;
+  cu.mergeIdx         = candIdx.val;
+  cu.mergeType        = MRG_TYPE_DEFAULT_N;
+
   cu.mvd[REF_PIC_LIST_0][0] = Mv();
   cu.mvd[REF_PIC_LIST_1][0] = Mv();
   cu.mvpIdx[REF_PIC_LIST_0] = NOT_VALID;
   cu.mvpIdx[REF_PIC_LIST_1] = NOT_VALID;
   cu.mvpNum[REF_PIC_LIST_0] = NOT_VALID;
   cu.mvpNum[REF_PIC_LIST_1] = NOT_VALID;
-  cu.imv                    = mmvdUseAltHpelIf[fPosBaseIdx] ? IMV_HPEL : 0;
+  cu.imv                    = mmvdUseAltHpelIf[mvdBaseIdx] ? IMV_HPEL : 0;
 
-  cu.BcwIdx = (interDirNeighbours[fPosBaseIdx] == 3) ? BcwIdx[fPosBaseIdx] : BCW_DEFAULT;
+  cu.BcwIdx                 = interDirNeighbours[mvdBaseIdx] == 3 ? BcwIdx[mvdBaseIdx] : BCW_DEFAULT;
 
-  for (int refList = 0; refList < 2; refList++)
+  for( int refList = 0; refList < 2; refList++ )
   {
-    if (cu.refIdx[refList] >= 0)
+    if( cu.refIdx[refList] >= 0 )
     {
       cu.mv[refList][0].clipToStorageBitDepth();
     }
   }
 
-
-  CU::restrictBiPredMergeCandsOne(cu);
+  CU::restrictBiPredMergeCandsOne( cu );
 }
 
 unsigned DeriveCtx::CtxMipFlag( const CodingUnit& cu ) const

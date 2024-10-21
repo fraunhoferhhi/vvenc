@@ -255,6 +255,7 @@ static inline std::string vvenc_getDecodingRefreshTypeStr(  int type, bool poc0i
     case 3: cType = "RecPointSEI"; break;
     case 4: cType = "IDR2 (deprecated)"; break; //deprecated
     case 5: cType = "CRA_CRE (CRA with constrained encoding for RASL pictures)"; break;
+    case 6: cType = "IDR_NO_RADL"; break;
     default: cType = "unknown"; break;
   }
   if( poc0idr ) cType += " with POC 0 IDR";
@@ -700,10 +701,11 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_FirstPassMode                           = 0;
 
   c->m_forceScc                                = 0;
+  c->m_GOPQPA                                  = -1;
 
-  c->m_reservedFlag                            = false;
-  c->m_reservedInt                             = 0;
-  memset( c->m_reservedInt8,   0, sizeof(c->m_reservedInt8) );
+  c->m_fga                                     = false;
+
+  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -811,12 +813,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
 
   vvenc::MsgLog msg(c->m_msgCtx, c->m_msgFnc);
-#if !IFP_RC_DETERMINISTIC
-  if( c->m_RCTargetBitrate != 0 && c->m_ifp )
-  {
-    msg.log( VVENC_WARNING, "Using RC with IFP. Results are non-deterministic!\n" );
-  }
-#endif
 
   if( c->m_FirstPassMode > 2 && c->m_RCTargetBitrate != 0 )
   {
@@ -893,15 +889,27 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "Unable to infer profile from input!" );
   }
 
+  const vvencLevel maxLevel = vvenc::LevelTierFeatures::getMaxLevel( c->m_profile );
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
     c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
     vvenc_confirmParameter( c, c->m_level == vvencLevel::VVENC_LEVEL_AUTO || c->m_level == vvencLevel::VVENC_NUMBER_OF_LEVELS, "Unable to infer level from input!" );
+    if( c->m_level > maxLevel )
+    {
+      msg.log( VVENC_WARNING, "The video dimensions (size/rate) exceed the allowed maximum throughput for the used profile!\n" );
+      c->m_level = maxLevel;
+    }
   }
   else
   {
     const vvencLevel inferedLevel = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
-    vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+    if( c->m_level < inferedLevel )
+    {
+      if( c->m_level == maxLevel )
+        msg.log( VVENC_WARNING, "The level set is too low given the input dimensions (size/rate)!\n" );
+      else
+        vvenc_confirmParameter( c, c->m_level < inferedLevel, "The level set is too low given the input dimensions (size/rate)!" );
+    }
   }
 
   {
@@ -1007,7 +1015,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       c->m_vuiParametersPresent  = 1;                                    // enable vui only if not explicitly disabled
     }
-  } 
+  }
 
   if( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 )
   {
@@ -1306,11 +1314,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_rprEnabledFlag == -1 )
   {
-    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
+    c->m_rprEnabledFlag = ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? 2 : 0;
   }
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && !( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ), "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE or VVENC_DRT_IDR_NO_RADL" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -1526,6 +1534,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
+  if ( c->m_GOPQPA < 0 )
+  {
+    c->m_GOPQPA = c->m_usePerceptQPA ? 0 : 1;
+  }
 
   if( c->m_treatAsSubPic )
   {
@@ -1729,6 +1741,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  if (c->m_fga)
+  {
+    vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
+    vvenc_confirmParameter( c, c->m_IntraPeriod <=1, "Film grain analysis cannot be enabled when intra period is less than two!");
+  }
+
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0,                         "NumRefPics cannot be used if explicit GOP configuration is used!" );
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPicsSCC != 0,                         "NumRefPicsSCC cannot be used if explicit GOP configuration is used!" );
   vvenc_confirmParameter( c, !autoGop && c->m_numRefPics    != 0 && c->m_addGOP32refPics, "NumRefPics and AddGOP32refPics options are mutually exclusive!" );
@@ -1912,8 +1930,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, (isHDRMode(c->m_HdrMode) && c->m_internalBitDepth[0] < 10 )     ,       "InternalBitDepth must be at least 10 bit for HDR");
   vvenc_confirmParameter( c, (isHDRMode(c->m_HdrMode) && c->m_internChromaFormat != VVENC_CHROMA_420 ) ,"ChromaFormatIDC must be YCbCr 4:2:0 for HDR");
-  vvenc_confirmParameter( c, (c->m_contentLightLevel[0] < 0 || c->m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
-  vvenc_confirmParameter( c, (c->m_contentLightLevel[1] < 0 || c->m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (c->m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (c->m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
 
   {
     bool outOfRGBRange = false;
@@ -1930,7 +1948,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 6,                "Decoding refresh type must be comprised between 0 and 6 included" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType == 6 && !c->m_poc0idr,                              "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
@@ -1976,7 +1995,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_Affine < 0 || c->m_Affine > 5,              "Affine out of range [0..5]" );
   vvenc_confirmParameter( c, c->m_MMVD < 0 || c->m_MMVD > 4,                  "MMVD out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_SMVD < 0 || c->m_SMVD > 3,                  "SMVD out of range [0..3]" );
-  vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 3,                  "Geo out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 4,                  "Geo out of range [0..4]" );
   vvenc_confirmParameter( c, c->m_CIIP < 0 || c->m_CIIP > 3,                  "CIIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_SBT  < 0 || c->m_SBT  > 3,                  "SBT out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
@@ -2223,6 +2242,10 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
+  vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
+
+  vvenc_confirmParameter(c, c->m_GOPQPA > 0 && c->m_usePerceptQPA, "GOP-wise QPA cannot be enabled if perceptual QPA is enabled");
+  vvenc_confirmParameter(c, c->m_GOPQPA < 0, "GOPQPA must be >= 0");
 
   return( c->m_confirmFailed );
 }
@@ -2705,6 +2728,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+      c->m_maxNumMergeCand                 = 5;
+      c->m_maxNumAffineMergeCand           = 3;
 
       // partitioning: CTUSize64 QT44MTT10
       c->m_CTUSize                         = 64;
@@ -2773,6 +2798,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE3;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+      c->m_maxNumMergeCand                 = 5;
+      c->m_maxNumAffineMergeCand           = 3;
+      c->m_maxNumGeoCand                   = 3;
 
       // partitioning: CTUSize128 QT44MTT21
       c->m_CTUSize                         = 128;
@@ -2789,7 +2817,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 2;
+      c->m_useFastMrg                      = 3;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 1;
@@ -2815,7 +2843,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
-      c->m_Geo                             = 3;
+      c->m_Geo                             = 4;
       c->m_AMVRspeed                       = 5;
       c->m_ISP                             = 3;
       c->m_JointCbCrMode                   = 1;
@@ -2855,7 +2883,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
         c->m_bUseSAO                       = true;
         c->m_saoScc                        = true;
         c->m_SbTMVP                        = 0;
-        c->m_useFastMrg                    = 2;
+        c->m_useFastMrg                    = 3;
       }
 
       break;
@@ -2884,7 +2912,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_contentBasedFastQtbt            = true;
       c->m_fastHad                         = false;
       c->m_usePbIntraFast                  = 1;
-      c->m_useFastMrg                      = 3;
+      c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
@@ -2911,7 +2939,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 2;
-      c->m_Geo                             = 1;
+      c->m_Geo                             = 2;
       c->m_AMVRspeed                       = 1;
       c->m_ISP                             = 3;
       c->m_JointCbCrMode                   = 1;
@@ -3063,7 +3091,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DepQuantEnabled                 = 1;
       c->m_DMVR                            = 1;
       c->m_EDO                             = 1;
-      c->m_Geo                             = 2;
+      c->m_Geo                             = 3;
       c->m_AMVRspeed                       = 3;
       c->m_ISP                             = 2;
       c->m_JointCbCrMode                   = 1;
@@ -3209,7 +3237,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
-    css << loglvl << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << "\n";
     }
 
   if( eMsgLevel >= VVENC_VERBOSE )

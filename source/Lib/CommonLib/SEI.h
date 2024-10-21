@@ -552,15 +552,15 @@ public:
   std::vector<uint8_t>  userData;
 };
 
-class SEIFilmGrainCharacteristics : public SEI
+class SeiFgc : public SEI
 {
 public:
   PayloadType payloadType() const { return FILM_GRAIN_CHARACTERISTICS; }
 
-  SEIFilmGrainCharacteristics() {}
-  virtual ~SEIFilmGrainCharacteristics() {}
+  SeiFgc() {}
+  virtual ~SeiFgc() {}
 
-  bool      filmGrainCharacteristicsCancelFlag;
+  bool      fgcCancelFlag;
   uint8_t   filmGrainModelId;
   bool      separateColourDescriptionPresent;
   uint8_t   filmGrainBitDepthLumaMinus8;
@@ -583,11 +583,12 @@ public:
   {
     bool     presentFlag;
     uint8_t  numModelValues;
+    uint8_t  numIntensityIntervals;
     std::vector<CompModelIntensityValues> intensityValues;
   };
 
   CompModel compModel[MAX_NUM_COMP];
-  bool      filmGrainCharacteristicsPersistenceFlag;
+  bool      fgcPersistenceFlag;
 };
 
 class SEIContentLightLevelInfo : public SEI

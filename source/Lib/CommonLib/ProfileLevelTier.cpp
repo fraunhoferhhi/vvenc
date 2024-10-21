@@ -118,6 +118,13 @@ const ProfileFeatures *ProfileFeatures::getProfileFeatures(const vvencProfile p)
   return &validProfiles[i];
 }
 
+vvencLevel LevelTierFeatures::getMaxLevel(vvencProfile profile)
+{
+  const ProfileFeatures* pf = ProfileFeatures::getProfileFeatures( profile );
+  vvencLevel maxLevel = ( pf && pf->canUseLevel15p5 ) ? vvencLevel::VVENC_LEVEL15_5 : vvencLevel::VVENC_LEVEL6_3;
+  return maxLevel;
+}
+
 vvencLevel LevelTierFeatures::getLevelForInput( uint32_t width, uint32_t height, bool tier, int temporalRate, int temporalScale, int bitrate )
 {
   uint64_t samplesPerSec = ((uint64_t)temporalRate*(uint64_t)width*(uint64_t)height)/temporalScale;

@@ -535,6 +535,38 @@ void SEIEncoder::initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL)
   seiCLL->maxPicAverageLightLevel = m_pcEncCfg->m_contentLightLevel[1];
 }
 
+void SEIEncoder::initSeiFgc(SeiFgc* seiFilmGrain)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiFilmGrain != nullptr), "Unspecified error");
+  // Set SEI message parameters read from command line options
+  seiFilmGrain->fgcCancelFlag = m_pcEncCfg->m_fg.m_fgcSEICancelFlag;
+  seiFilmGrain->fgcPersistenceFlag = m_pcEncCfg->m_fg.m_fgcSEIPersistenceFlag;
+  seiFilmGrain->filmGrainModelId = m_pcEncCfg->m_fg.m_fgcSEIModelID;
+  seiFilmGrain->separateColourDescriptionPresent = m_pcEncCfg->m_fg.m_fgcSEISepColourDescPresentFlag;
+  seiFilmGrain->blendingModeId = m_pcEncCfg->m_fg.m_fgcSEIBlendingModeID;
+  seiFilmGrain->log2ScaleFactor = m_pcEncCfg->m_fg.m_fgcSEILog2ScaleFactor;
+  for (int i = 0; i < MAX_NUM_COMP; i++)
+  {
+    seiFilmGrain->compModel[i].presentFlag = m_pcEncCfg->m_fg.m_fgcSEICompModelPresent[i];
+    if (seiFilmGrain->compModel[i].presentFlag)
+    {
+      seiFilmGrain->compModel[i].numModelValues = 1 + m_pcEncCfg->m_fg.m_fgcSEINumModelValuesMinus1[i];
+      seiFilmGrain->compModel[i].numIntensityIntervals = 1 + m_pcEncCfg->m_fg.m_fgcSEINumIntensityIntervalMinus1[i];
+      seiFilmGrain->compModel[i].intensityValues.resize(seiFilmGrain->compModel[i].numIntensityIntervals);
+      for (int j = 0; j < seiFilmGrain->compModel[i].numIntensityIntervals; j++)
+      {
+        seiFilmGrain->compModel[i].intensityValues[j].intensityIntervalLowerBound = m_pcEncCfg->m_fg.m_fgcSEIIntensityIntervalLowerBound[i][j];
+        seiFilmGrain->compModel[i].intensityValues[j].intensityIntervalUpperBound = m_pcEncCfg->m_fg.m_fgcSEIIntensityIntervalUpperBound[i][j];
+        seiFilmGrain->compModel[i].intensityValues[j].compModelValue.resize(seiFilmGrain->compModel[i].numModelValues);
+        for (int k = 0; k < seiFilmGrain->compModel[i].numModelValues; k++)
+        {
+          seiFilmGrain->compModel[i].intensityValues[j].compModelValue[k] = m_pcEncCfg->m_fg.m_fgcSEICompModelValue[i][j][k];
+        }
+      }
+    }
+  }
+}
 
 } // namespace vvenc
 

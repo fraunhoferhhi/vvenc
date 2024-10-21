@@ -349,19 +349,17 @@ void CodingUnit::initPuData()
 
   // inter data
   mergeFlag         = false;
-  regularMergeFlag  = false;
   ciip              = false;
   mvRefine          = false;
   mmvdMergeFlag     = false;
   mergeIdx          = MAX_UCHAR;
   geoSplitDir       = MAX_UCHAR;
-  geoMergeIdx0      = MAX_UCHAR;
-  geoMergeIdx1      = MAX_UCHAR;
+  geoMergeIdx       = { MAX_SCHAR, MAX_SCHAR };
 
   mcControl         = 0;
 
   interDir          = MAX_UCHAR;
-  mmvdMergeIdx      = MAX_UINT;
+  mmvdMergeIdx.val  = MmvdIdx::INVALID;
   mergeType         = MRG_TYPE_DEFAULT_N;
 
   if( mvdL0SubPu )
@@ -400,11 +398,9 @@ CodingUnit& CodingUnit::operator=( const IntraPredictionData& other )
 CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
 {
   mergeFlag         = other.mergeFlag;
-  regularMergeFlag  = other.regularMergeFlag;
   mergeIdx          = other.mergeIdx;
   geoSplitDir       = other.geoSplitDir;
-  geoMergeIdx0      = other.geoMergeIdx0;
-  geoMergeIdx1      = other.geoMergeIdx1;
+  geoMergeIdx       = other.geoMergeIdx;
   mmvdMergeFlag     = other.mmvdMergeFlag;
   mmvdMergeIdx      = other.mmvdMergeIdx;
   interDir          = other.interDir;

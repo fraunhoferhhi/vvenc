@@ -95,6 +95,7 @@ class GOPCfg
     int  m_defaultNumActive[ 2 ];
     int  m_minIntraDist;
     int  m_lastIntraPOC;
+    bool m_adjustNoLPcodingOrder;
 
   public:
     GOPCfg( MsgLog& _m )
@@ -119,6 +120,7 @@ class GOPCfg
       , m_defaultNumActive{ 0, 0 }
       , m_minIntraDist    ( -1 )
       , m_lastIntraPOC    ( -1 )
+      , m_adjustNoLPcodingOrder( false )
     {
     };
 
@@ -164,7 +166,7 @@ class GOPCfg
     int  xGetMaxTid          ( const GOPEntryList& gopList ) const;
     int  xGetMaxRefPics      ( const GOPEntry& gopEntry ) const;
     int  xGetMaxNumReorder   ( const GOPEntry& gopEntry, const GOPEntryList& gopList ) const;
-
+    void xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const;
 };
 
 } // namespace vvenc

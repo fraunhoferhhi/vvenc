@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/IntraPrediction.h"
 #include "CommonLib/LoopFilter.h"
 #include "CommonLib/Picture.h"
+#include "CommonLib/MCTF.h"
 
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
@@ -69,13 +70,9 @@ namespace vvenc
 void InterpolationFilter::initInterpolationFilterARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initInterpolationFilterARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
@@ -84,13 +81,9 @@ void InterpolationFilter::initInterpolationFilterARM()
 void PelBufferOps::initPelBufOpsARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initPelBufOpsARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
@@ -99,16 +92,23 @@ void PelBufferOps::initPelBufOpsARM()
 void RdCost::initRdCostARM()
 {
   auto vext = read_arm_extension_flags();
-  switch( vext )
+  if( vext >= NEON )
   {
-  case NEON:
     _initRdCostARM<NEON>();
-    break;
-  default:
-    break;
   }
 }
 #endif
+
+#if ENABLE_SIMD_OPT_MCTF
+void MCTF::initMCTF_ARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initMCTF_ARM<NEON>();
+  }
+}
+#endif  // ENABLE_SIMD_OPT_MCTF
 
 #endif   // TARGET_SIMD_ARM
 

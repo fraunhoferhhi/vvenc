@@ -2,10 +2,10 @@
 set( EXE_NAME vvencFFapp )
 
 # get source files
-file( GLOB SRC_FILES "*.cpp" )
+file( GLOB SRC_FILES CONFIGURE_DEPENDS "*.cpp" )
 
 # get include files
-file( GLOB INC_FILES "*.h" )
+file( GLOB INC_FILES CONFIGURE_DEPENDS "*.h" )
 
 # get address sanitizer libs for gcc
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
@@ -17,7 +17,7 @@ endif()
 # set resource file for MSVC compilers
 if( MSVC )
   set( RESOURCE_FILE ${EXE_NAME}.rc )
-  file( GLOB NATVIS_FILES "../../VisualStudio/*.natvis" )
+  file( GLOB NATVIS_FILES CONFIGURE_DEPENDS "../../VisualStudio/*.natvis" )
   # extend the stack size on windows to 2MB
   set( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:0x200000" )
 endif()
@@ -28,10 +28,13 @@ set_target_properties( ${EXE_NAME} PROPERTIES RELEASE_POSTFIX        "${CMAKE_RE
 set_target_properties( ${EXE_NAME} PROPERTIES DEBUG_POSTFIX          "${CMAKE_DEBUG_POSTFIX}" )
 set_target_properties( ${EXE_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "${CMAKE_RELWITHDEBINFO_POSTFIX}" )
 set_target_properties( ${EXE_NAME} PROPERTIES MINSIZEREL_POSTFIX     "${CMAKE_MINSIZEREL_POSTFIX}" )
+if( VVENC_LIBRARY_ONLY )
+  set_target_properties( ${EXE_NAME} PROPERTIES EXCLUDE_FROM_ALL TRUE )
+endif()
 
-target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Werror>
-                                            $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -fdiagnostics-show-option>
-                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4100 /wd4244 /wd4251 /wd4459 /wd4996>)
+target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall>
+                                            $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option>
+                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4100 /wd4244 /wd4251 /wd4459 /wd4996>)
 
 target_include_directories( ${EXE_NAME} PRIVATE ../../Lib )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )

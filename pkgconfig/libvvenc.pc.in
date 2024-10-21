@@ -6,5 +6,6 @@ includedir=@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@
 Name: libvvenc
 Description: Fraunhofer Versatile Video Encoder (VVenC)
 Version: @PROJECT_VERSION@
-Libs: -L${libdir} -lvvenc -lstdc++ -lm
+Libs: -L${libdir} -lvvenc
+Libs.private: @VVENC_PKG_EXTRA_LIBS@
 Cflags: -I${includedir}

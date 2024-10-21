@@ -205,22 +205,26 @@ public:
           }
 
           //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-           info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
-                 getNumPic(), cDelim,
-                 getBits() * dScale,
-                 getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
+          info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  ", getNumPic(), cDelim, getBits() * dScale ));
+          info.append( getNumPicLossy(COMP_Y) ? prnt("%8.4lf  ", getPsnr(COMP_Y )  / getNumPicLossy(COMP_Y))  :  prnt(" inf%6s", " " ) );
 
           if (printHexPsnr)
           {
-            double dPsnr;
-            uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
+            if( getNumPicLossy(COMP_Y) )
+            {
+              double dPsnr;
+              uint64_t xPsnr;
+              dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
 
-            std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
-              reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
-              reinterpret_cast<uint8_t *>(&xPsnr));
-
-            info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
+              std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
+                        reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
+                        reinterpret_cast<uint8_t *>(&xPsnr));
+              info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
+            }
+            else
+            {
+              info.append(prnt( " inf%14s", " " ));
+            }
           }
 
           if (printSequenceMSE)
@@ -232,10 +236,8 @@ public:
             info.append(prnt("\n"));
           }
 
-          info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
-                 getNumPic(), cDelim,
-                 getBits() * dScale,
-                 MSEBasedSNR[COMP_Y] ));
+          info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  ", getNumPic(), cDelim, getBits() * dScale));
+          info.append( MSEBasedSNR[COMP_Y] != MAX_DOUBLE  ? prnt("%8.4lf\n"  , MSEBasedSNR[COMP_Y]) :  prnt(" inf%6s\n", " " ) );
         }
         else
         {
@@ -256,22 +258,27 @@ public:
           }
 
           //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-          info.append(prnt("vvenc[info]:\t %8d    %c "          "%12.4lf  "    "%8.4lf",
-                 getNumPic(), cDelim,
-                 getBits() * dScale,
-                 getPsnr(COMP_Y) / getNumPicLossy(COMP_Y) ) );
+          info.append(prnt("vvenc[info]:\t %8d    %c "          "%12.4lf  ", getNumPic(), cDelim, getBits() * dScale));
+          info.append( getNumPicLossy(COMP_Y) ? prnt("%8.4lf  ", getPsnr(COMP_Y )  / getNumPicLossy(COMP_Y))  :  prnt(" inf%6s", " " ) );
 
           if (printHexPsnr)
           {
-            double dPsnr;
-            uint64_t xPsnr;
-            dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
+            if( getNumPicLossy(COMP_Y) )
+            {
+              double dPsnr;
+              uint64_t xPsnr;
+              dPsnr = getPsnr(COMP_Y) / getNumPicLossy(COMP_Y);
 
-            std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
-              reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
-              reinterpret_cast<uint8_t *>(&xPsnr));
+              std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
+                        reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
+                        reinterpret_cast<uint8_t *>(&xPsnr));
 
-            info.append(prnt("   %16" PRIx64 " ", xPsnr));
+              info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
+            }
+            else
+            {
+              info.append(prnt( " inf%14s", " " ));
+            }
           }
 
           if (printSequenceMSE)
@@ -317,27 +324,30 @@ public:
             }
 
             //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-            info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
-                   getNumPic(), cDelim,
-                   getBits() * dScale,
-                   getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
-                   getPsnr(COMP_Cb) / getNumPicLossy(COMP_Cb),
-                   getPsnr(COMP_Cr) / getNumPicLossy(COMP_Cr),
-                   PSNRyuv ));
+            info.append(prnt("vvenc [info]: Average: \t %8d    %c "          "%12.4lf  ",getNumPic(), cDelim, getBits() * dScale ));
+            info.append( getNumPicLossy(COMP_Y) ? prnt("%8.4lf  ", getPsnr(COMP_Y )  / getNumPicLossy(COMP_Y))  :  prnt(" inf%6s", " " ) );
+            info.append( getNumPicLossy(COMP_Cb)? prnt("%8.4lf  ", getPsnr(COMP_Cb ) / getNumPicLossy(COMP_Cb)) :  prnt(" inf%6s", " " ) );
+            info.append( getNumPicLossy(COMP_Cr)? prnt("%8.4lf  ", getPsnr(COMP_Cr ) / getNumPicLossy(COMP_Cr)) :  prnt(" inf%6s", " " ) );
+            info.append( PSNRyuv != MAX_DOUBLE  ? prnt("%8.4lf"  , PSNRyuv)                                     :  prnt(" inf%6s", " " ) );
 
             if (printHexPsnr)
             {
-              double dPsnr[MAX_NUM_COMP];
-              uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
-
-                std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
-                  reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
-                  reinterpret_cast<uint8_t *>(&xPsnr[i]));
+                if( getNumPicLossy((ComponentID)i) )
+                {
+                  double dPsnr = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
+                  uint64_t xPsnr;
+                  std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
+                            reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
+                            reinterpret_cast<uint8_t *>(&xPsnr));
+                  info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
+                }
+                else
+                {
+                  info.append(prnt( " inf%14s", " " ));
+                }
               }
-              info.append(prnt("   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]));
             }
 
             if (printSequenceMSE)
@@ -357,13 +367,11 @@ public:
               info.append(prnt("\n"));
             }
 
-            info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
-                   getNumPic(), cDelim,
-                   getBits() * dScale,
-                   MSEBasedSNR[COMP_Y ],
-                   MSEBasedSNR[COMP_Cb],
-                   MSEBasedSNR[COMP_Cr],
-                   PSNRyuv ));
+            info.append(prnt("vvenc [info]: From MSE:\t %8d    %c "          "%12.4lf  ", getNumPic(), cDelim, getBits() * dScale ));
+            info.append( MSEBasedSNR[COMP_Y]  != MAX_DOUBLE  ? prnt("%8.4lf" , MSEBasedSNR[COMP_Y])  :  prnt(" inf%6s", " " ) );
+            info.append( MSEBasedSNR[COMP_Cb] != MAX_DOUBLE  ? prnt("%8.4lf" , MSEBasedSNR[COMP_Cb]) :  prnt(" inf%6s", " " ) );
+            info.append( MSEBasedSNR[COMP_Cr] != MAX_DOUBLE  ? prnt("%8.4lf" , MSEBasedSNR[COMP_Cr]) :  prnt(" inf%6s", " " ) );
+            info.append( PSNRyuv != MAX_DOUBLE  ? prnt("%8.4lf\n", PSNRyuv)                          :  prnt(" inf%6s\n", " " ) );
           }
           else
           {
@@ -387,28 +395,30 @@ public:
             }
 
             //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
-            info.append(prnt("vvenc [info]:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
-                   getNumPic(), cDelim,
-                   getBits() * dScale,
-                   getPsnr(COMP_Y ) / getNumPicLossy(COMP_Y),
-                   getPsnr(COMP_Cb) / getNumPicLossy(COMP_Cb),
-                   getPsnr(COMP_Cr) / getNumPicLossy(COMP_Cr),
-                   PSNRyuv ));
-
+            info.append(prnt("vvenc [info]:\t %8d    %c "          "%12.4lf  ", getNumPic(), cDelim, getBits() * dScale ));
+            info.append( getNumPicLossy(COMP_Y) ? prnt("%8.4lf  ", getPsnr(COMP_Y )  / getNumPicLossy(COMP_Y))  :  prnt(" inf%6s", " " ) );
+            info.append( getNumPicLossy(COMP_Cb)? prnt("%8.4lf  ", getPsnr(COMP_Cb ) / getNumPicLossy(COMP_Cb)) :  prnt(" inf%6s", " " ) );
+            info.append( getNumPicLossy(COMP_Cr)? prnt("%8.4lf  ", getPsnr(COMP_Cr ) / getNumPicLossy(COMP_Cr)) :  prnt(" inf%6s", " " ) );
+            info.append( PSNRyuv != MAX_DOUBLE  ? prnt("%8.4lf"  , PSNRyuv)                                     :  prnt(" inf%6s", " " ) );
 
             if (printHexPsnr)
             {
-              double dPsnr[MAX_NUM_COMP];
-              uint64_t xPsnr[MAX_NUM_COMP];
               for (int i = 0; i < MAX_NUM_COMP; i++)
               {
-                dPsnr[i] = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
-
-                std::copy(reinterpret_cast<uint8_t *>(&dPsnr[i]),
-                  reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
-                  reinterpret_cast<uint8_t *>(&xPsnr[i]));
+                if( getNumPicLossy((ComponentID)i) )
+                {
+                  double dPsnr = getPsnr((ComponentID)i) / getNumPicLossy((ComponentID)i);
+                  uint64_t xPsnr;
+                  std::copy(reinterpret_cast<uint8_t *>(&dPsnr),
+                            reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
+                            reinterpret_cast<uint8_t *>(&xPsnr));
+                  info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
+                }
+                else
+                {
+                  info.append(prnt( " inf%14s", " " ));
+                }
               }
-              info.append(prnt("   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]));
             }
             if (printSequenceMSE)
             {
@@ -420,7 +430,7 @@ public:
             }
             if (printLosslessPlanes)
             {
-              info.append(prnt("  %10d  "  "%10d  "  "%10d\n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
+              info.append(prnt(" %8d   "  " %8d   "  " %8d  \n", getLosslessFrames(COMP_Y), getLosslessFrames(COMP_Cb), getLosslessFrames(COMP_Cr) ));
             }
             else
             {

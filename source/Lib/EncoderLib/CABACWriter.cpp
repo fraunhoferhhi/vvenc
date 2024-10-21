@@ -1548,16 +1548,17 @@ void CABACWriter::merge_data(const CodingUnit& cu)
     merge_idx(cu);
     return;
   }
-  const bool ciipAvailable = cu.cs->sps->CIIP && !cu.skip && cu.lwidth() < MAX_CU_SIZE && cu.lheight() < MAX_CU_SIZE && cu.lwidth() * cu.lheight() >= 64;
+
+  const bool ciipAvailable = cu.cs->sps->CIIP && !cu.skip && cu.Y().maxDim() < MAX_CU_SIZE && cu.Y().area() >= 64;
   const bool geoAvailable = cu.cs->slice->sps->GEO && cu.cs->slice->isInterB() && cu.cs->sps->maxNumGeoCand > 1
-                                                   && cu.lwidth() >= GEO_MIN_CU_SIZE && cu.lheight() >= GEO_MIN_CU_SIZE
-                                                   && cu.lwidth() <= GEO_MAX_CU_SIZE && cu.lheight() <= GEO_MAX_CU_SIZE
-                                                   && cu.lwidth() < 8 * cu.lheight() && cu.lheight() < 8 * cu.lwidth();
+                                                   && cu.Y().minDim() >= GEO_MIN_CU_SIZE && cu.Y().maxDim() <= GEO_MAX_CU_SIZE
+                                                   && cu.Y().maxDim() < 8 * cu.Y().minDim();
+
   if (geoAvailable || ciipAvailable)
   {
-    m_BinEncoder.encodeBin(cu.regularMergeFlag, Ctx::RegularMergeFlag(cu.skip ? 0 : 1));
+    m_BinEncoder.encodeBin(!cu.geo && !cu.ciip, Ctx::RegularMergeFlag(cu.skip ? 0 : 1));
   }
-  if (cu.regularMergeFlag)
+  if (!cu.geo && !cu.ciip)
   {
     if (cu.cs->sps->MMVD)
     {
@@ -1684,8 +1685,8 @@ void CABACWriter::merge_idx( const CodingUnit& cu )
     if( cu.geo )
     {
       uint8_t splitDir = cu.geoSplitDir;
-      uint8_t candIdx0 = cu.geoMergeIdx0;
-      uint8_t candIdx1 = cu.geoMergeIdx1;
+      uint8_t candIdx0 = cu.geoMergeIdx[0];
+      uint8_t candIdx1 = cu.geoMergeIdx[1];
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_split_dir=%d\n", splitDir );
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_idx0=%d\n", candIdx0 );
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_idx1=%d\n", candIdx1 );
@@ -1738,48 +1739,46 @@ void CABACWriter::merge_idx( const CodingUnit& cu )
 }
 
 
-void CABACWriter::mmvd_merge_idx(const CodingUnit& cu)
+void CABACWriter::mmvd_merge_idx( const CodingUnit &cu )
 {
-  int var0, var1, var2;
-  int mvpIdx = cu.mmvdMergeIdx;
-  var0 = mvpIdx / MMVD_MAX_REFINE_NUM;
-  var1 = (mvpIdx - (var0 * MMVD_MAX_REFINE_NUM)) / 4;
-  var2 = mvpIdx - (var0 * MMVD_MAX_REFINE_NUM) - var1 * 4;
+  const int mvdBaseIdx  = cu.mmvdMergeIdx.pos.baseIdx;
+  const int mvdStep     = cu.mmvdMergeIdx.pos.step;
+  const int mvdPosition = cu.mmvdMergeIdx.pos.position;
 
-  if (cu.cs->sps->maxNumMergeCand > 1)
+  if( cu.cs->sps->maxNumMergeCand > 1 )
   {
-    static_assert(MMVD_BASE_MV_NUM == 2, "");
-    assert(var0 < 2);
-    m_BinEncoder.encodeBin(var0, Ctx::MmvdMergeIdx());
+    static_assert( MMVD_BASE_MV_NUM == 2, "" );
+    CHECK( mvdBaseIdx >= 2, "Invalid mvdBaseIdx" );
+    m_BinEncoder.encodeBin( mvdBaseIdx, Ctx::MmvdMergeIdx() );
   }
-  DTRACE(g_trace_ctx, D_SYNTAX, "base_mvp_idx() base_mvp_idx=%d\n", var0);
+  DTRACE( g_trace_ctx, D_SYNTAX, "base_mvp_idx() base_mvp_idx=%d\n", mvdBaseIdx );
 
   int numCandminus1_step = MMVD_REFINE_STEP - 1;
-  if (numCandminus1_step > 0)
+  if( numCandminus1_step > 0 )
   {
-    if (var1 == 0)
+    if( mvdStep == 0 )
     {
-      m_BinEncoder.encodeBin(0, Ctx::MmvdStepMvpIdx());
+      m_BinEncoder.encodeBin( 0, Ctx::MmvdStepMvpIdx() );
     }
     else
     {
-      m_BinEncoder.encodeBin(1, Ctx::MmvdStepMvpIdx());
-      for (unsigned idx = 1; idx < numCandminus1_step; idx++)
+      m_BinEncoder.encodeBin( 1, Ctx::MmvdStepMvpIdx() );
+      for( unsigned idx = 1; idx < numCandminus1_step; idx++ )
       {
-        m_BinEncoder.encodeBinEP(var1 == idx ? 0 : 1);
-        if (var1 == idx)
+        m_BinEncoder.encodeBinEP( mvdStep == idx ? 0 : 1 );
+        if( mvdStep == idx )
         {
           break;
         }
       }
     }
   }
-  DTRACE(g_trace_ctx, D_SYNTAX, "MmvdStepMvpIdx() MmvdStepMvpIdx=%d\n", var1);
+  DTRACE( g_trace_ctx, D_SYNTAX, "MmvdStepMvpIdx() MmvdStepMvpIdx=%d\n", mvdStep );
 
-  m_BinEncoder.encodeBinsEP(var2, 2);
+  m_BinEncoder.encodeBinsEP( mvdPosition, 2 );
 
-  DTRACE(g_trace_ctx, D_SYNTAX, "pos() pos=%d\n", var2);
-  DTRACE(g_trace_ctx, D_SYNTAX, "mmvd_merge_idx() mmvd_merge_idx=%d\n", cu.mmvdMergeIdx);
+  DTRACE( g_trace_ctx, D_SYNTAX, "pos() pos=%d\n", mvdPosition );
+  DTRACE( g_trace_ctx, D_SYNTAX, "mmvd_merge_idx() mmvd_merge_idx=%d\n", cu.mmvdMergeIdx.val );
 }
 
 

@@ -47,7 +47,28 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvencCfg.h"
 
+#define VVENC_MAX_NUM_INTENSITIES             256
+#define VVENC_MAX_NUM_MODEL_VALUES            6
+
 namespace vvenc {
+
+typedef struct vvencFG
+{
+  bool      m_fgcSEIEnabled;
+  bool      m_fgcSEICancelFlag;
+  bool      m_fgcSEIPersistenceFlag;
+  uint8_t   m_fgcSEIModelID;
+  bool      m_fgcSEISepColourDescPresentFlag;
+  uint8_t   m_fgcSEIBlendingModeID;
+  uint8_t   m_fgcSEILog2ScaleFactor;
+  bool      m_fgcSEICompModelPresent[VVENC_MAX_NUM_COMP];
+  bool      m_fgcSEIPerPictureSEI;
+  uint8_t   m_fgcSEINumModelValuesMinus1[VVENC_MAX_NUM_COMP];
+  uint8_t   m_fgcSEINumIntensityIntervalMinus1[VVENC_MAX_NUM_COMP];
+  uint8_t   m_fgcSEIIntensityIntervalLowerBound[VVENC_MAX_NUM_COMP][VVENC_MAX_NUM_INTENSITIES];
+  uint8_t   m_fgcSEIIntensityIntervalUpperBound[VVENC_MAX_NUM_COMP][VVENC_MAX_NUM_INTENSITIES];
+  uint32_t  m_fgcSEICompModelValue[VVENC_MAX_NUM_COMP][VVENC_MAX_NUM_INTENSITIES][VVENC_MAX_NUM_MODEL_VALUES];
+}vvencFG;
 
 struct VVEncCfg : public vvenc_config
 {
@@ -56,18 +77,24 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
-  bool m_stageParallelProc;
-  bool m_salienceBasedOpt;
-  bool m_rateCap;
-  int  m_log2GopSize;
-  int  m_maxTLayer;
-  int  m_bimCtuSize;
-  unsigned m_MaxQT[3];
+  bool      m_stageParallelProc;
+  bool      m_salienceBasedOpt;
+  bool      m_rateCap;
+  int       m_log2GopSize;
+  int       m_maxTLayer;
+  int       m_bimCtuSize;
+  unsigned  m_MaxQT[3];
+  int       m_maxMergeRdCandNumTotal;
+  int       m_mergeRdCandQuotaRegular;
+  int       m_mergeRdCandQuotaRegularSmallBlk;
+  int       m_mergeRdCandQuotaSubBlk;
+  int       m_mergeRdCandQuotaCiip;
+  int       m_mergeRdCandQuotaGpm;
+  vvencFG   m_fg;
 
 private:
   void xInitCfgMembers();
 };
-
 
 }
 

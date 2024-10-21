@@ -85,6 +85,22 @@ struct StopClock
 };
 
 
+struct PicVisAct
+{
+  PicVisAct()
+    : spatAct       { 0, 0 }
+    , prevTL0spatAct{ 0, 0 }
+    , visAct        ( 0 )
+    , visActTL0     ( 0 )
+  {
+  }
+  void reset() { *this = PicVisAct(); }
+  uint16_t spatAct[MAX_NUM_CH];
+  uint16_t prevTL0spatAct[MAX_NUM_CH];
+  uint16_t visAct;
+  uint16_t visActTL0;
+};
+
 struct Picture;
 
 class BlkStat
@@ -241,6 +257,7 @@ public:
   std::vector<double>           ctuQpaLambda;
   std::vector<int>              ctuAdaptedQP;
   int                           gopAdaptedQP; // QP offset of GOP (delta relative to base QP)
+  bool                          force2ndOrder; // force 2nd-order high-pass in activity calc.
   bool                          isSceneCutGOP;
   bool                          isSceneCutCheckAdjQP;
   bool                          isMeanQPLimited;
@@ -248,9 +265,7 @@ public:
   int                           picInitialQP;
   double                        picInitialLambda;
   int16_t                       picMemorySTA;
-  uint16_t                      picVisActTL0;
-  uint16_t                      picVisActY;
-  uint16_t                      picSpVisAct;
+  PicVisAct                     picVA;
   double                        psnr[MAX_NUM_COMP];
   double                        mse [MAX_NUM_COMP];
 

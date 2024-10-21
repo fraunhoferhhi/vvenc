@@ -85,6 +85,7 @@ public:
   void initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics);
   void initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVolume *seiMDCV);
   void initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL);
+  void initSeiFgc(SeiFgc* sei);
 
 private:
   const VVEncCfg* m_pcEncCfg;
