@@ -1,4 +1,32 @@
 /////////////////////////////////////////
+tag 1.12.1
+
+* libvvenc:
+  - changed parameters (vvenc_config::) for proper VUI signalization:
+    - m_aspectRatioIdc=1 per default (sar 1x1)
+    - m_chromaLocInfoPresent=-1 and m_chromaSampleLocType=-1 per default (auto behavior depending on HDR/SDR mode)
+      m_chromaSampleLocType is auto set, depending on m_horCollocatedChromaFlag and m_verCollocatedChromaFlag
+      m_chromaLocInfoPresent=1 and m_chromaSampleLocType=2 for VVENC_HDR_PQ, VVENC_HDR_PQ_BT2020,
+      VVENC_HDR_HLG, VVENC_HDR_HLG_BT2020, VVENC_SDR_BT2020
+      else m_chromaLocInfoPresent=0 and m_chromaSampleLocType=0
+    - m_aspectRatioInfoPresent flag is auto on, if m_aspectRatioIdc>0 or non-default Sar is given
+    - m_overscanInfoPresent flag is auto on, when m_overscanAppropriateFlag is enabled
+    - m_chromaSampleLocTypeTopField and m_chromaSampleLocTypeBottomField unused now (will be removed in next major release)
+  - VUI defaults changed:
+    - progressiveSourceFlag=1
+    - nonPackedFlag=1
+    - nonProjectedFlag=1
+
+* vvencFFapp:
+  - added parameters:
+    - Sar: specify Sample aspect ratio - ratio of width to height (WidthxHeight)
+  - removed unused parameter: ChromaSampleLocTypeTopField, ChromaSampleLocTypeBottomField
+  - changed parameter section:
+    - cleanup section "VUI and SEI options" into separate sections:
+      "HDR/SDR and Color Options", "SEI and auxiliary options", "VUI options"
+    - "ChromaLocInfoPresent" is now auto behavior "Signals whether chroma_sample_loc_type is present (-1: auto, 0: off, 1: on)")
+
+/////////////////////////////////////////
 tag 1.12.0
 
 * libvvenc:

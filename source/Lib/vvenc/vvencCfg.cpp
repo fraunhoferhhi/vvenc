@@ -622,17 +622,15 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_vuiParametersPresent                    = -1;
   c->m_hrdParametersPresent                    = true;
   c->m_aspectRatioInfoPresent                  = false;
-  c->m_aspectRatioIdc                          = 0;
+  c->m_aspectRatioIdc                          = 1;
   c->m_sarWidth                                = 0;
   c->m_sarHeight                               = 0;
   c->m_colourDescriptionPresent                = false;
   c->m_colourPrimaries                         = 2;
   c->m_transferCharacteristics                 = 2;
   c->m_matrixCoefficients                      = 2;
-  c->m_chromaLocInfoPresent                    = false;
-  c->m_chromaSampleLocTypeTopField             = 0;
-  c->m_chromaSampleLocTypeBottomField          = 0;
-  c->m_chromaSampleLocType                     = 0;
+  c->m_chromaLocInfoPresent                    = -1;
+  c->m_chromaSampleLocType                     = -1;
   c->m_overscanInfoPresent                     = false;
   c->m_overscanAppropriateFlag                 = false;
   c->m_videoFullRangeFlag                      = false;
@@ -1120,6 +1118,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_transferCharacteristics = 14; // bt2020-10
     c->m_colourPrimaries         = 9;  // bt2020nc
     c->m_matrixCoefficients      = 9;  // bt2020nc
+    c->m_verCollocatedChromaFlag = true; 
   }
   else if( c->m_HdrMode == VVENC_SDR_BT470BG )
   {
@@ -1141,6 +1140,39 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_vuiParametersPresent < 0 )
   {
     c->m_vuiParametersPresent = 0;
+  }
+
+  if( !c->m_aspectRatioInfoPresent && ( c->m_aspectRatioIdc > 0 || (c->m_sarWidth > 0 && c->m_sarHeight > 0 )))
+  {
+    c->m_aspectRatioInfoPresent = true;
+  }
+
+  if( !c->m_overscanInfoPresent && c->m_overscanAppropriateFlag)
+  {
+    c->m_overscanInfoPresent = true;
+  }
+
+  if( c->m_chromaSampleLocType < 0 )
+  {
+    if( c->m_horCollocatedChromaFlag )
+    {
+      if ( c->m_verCollocatedChromaFlag)
+        c->m_chromaSampleLocType = 2;
+      else
+        c->m_chromaSampleLocType = 0;
+    }
+    else
+    {
+      if ( c->m_verCollocatedChromaFlag)
+        c->m_chromaSampleLocType = 3;
+      else
+        c->m_chromaSampleLocType = 1;
+    }
+  }
+
+  if ( c->m_chromaLocInfoPresent < 0 )
+  {
+    c->m_chromaLocInfoPresent = c->m_verCollocatedChromaFlag ? 1 : 0;
   }
 
   switch ( c->m_conformanceWindowMode)
