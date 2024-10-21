@@ -1023,7 +1023,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("AccessUnitDelimiter,-aud",                        toAud,                                               "Enable Access Unit Delimiter NALUs (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)" , true)
     ("HrdParametersPresent,-hrd",                       c->m_hrdParametersPresent,                           "Enable generation of hrd_parameters() (0: off, 1: on)")
     ("EnableDecodingParameterSet",                      c->m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
-
+    ;
+      
     opts.setSubSection("VUI options");
     opts.addOptions()
     ("VuiParametersPresent,-vui",                       toVui,                                               "Enable generation of vui_parameters() (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)", true)
