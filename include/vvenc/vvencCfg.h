@@ -682,7 +682,7 @@ typedef struct vvenc_config
   int                 m_colourPrimaries;                                                 // Indicates chromaticity coordinates of the source primaries
   int                 m_transferCharacteristics;                                         // Indicates the opto-electronic transfer characteristics of the source
   int                 m_matrixCoefficients;                                              // Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
-  bool                m_chromaLocInfoPresent;                                            // Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
+  int8_t              m_chromaLocInfoPresent;                                            // Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
   int                 m_chromaSampleLocTypeTopField;                                     // Specifies the location of chroma samples for top field
   int                 m_chromaSampleLocTypeBottomField;                                  // Specifies the location of chroma samples for bottom field
   int                 m_chromaSampleLocType;                                             // Specifies the location of chroma samples for progressive content

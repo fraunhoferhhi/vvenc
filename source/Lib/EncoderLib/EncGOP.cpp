@@ -1016,9 +1016,9 @@ void EncGOP::xInitSPS(SPS &sps) const
     vui.transferCharacteristics       = m_pcEncCfg->m_transferCharacteristics;
     vui.matrixCoefficients            = m_pcEncCfg->m_matrixCoefficients;
     vui.chromaLocInfoPresent          = m_pcEncCfg->m_chromaLocInfoPresent;
-    vui.chromaSampleLocTypeTopField   = m_pcEncCfg->m_chromaSampleLocTypeTopField;
-    vui.chromaSampleLocTypeBottomField= m_pcEncCfg->m_chromaSampleLocTypeBottomField;
     vui.chromaSampleLocType           = m_pcEncCfg->m_chromaSampleLocType;
+    vui.chromaSampleLocTypeTopField   = 0;
+    vui.chromaSampleLocTypeBottomField= 0;
     vui.overscanInfoPresent           = m_pcEncCfg->m_overscanInfoPresent;
     vui.overscanAppropriateFlag       = m_pcEncCfg->m_overscanAppropriateFlag;
     vui.videoFullRangeFlag            = m_pcEncCfg->m_videoFullRangeFlag;
