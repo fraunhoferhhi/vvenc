@@ -612,10 +612,10 @@ struct VUI
   uint32_t   chromaSampleLocType;
 
   VUI()
-    : progressiveSourceFlag         (false)
+    : progressiveSourceFlag         (true)
     , interlacedSourceFlag          (false)
-    , nonPackedFlag                 (false)
-    , nonProjectedFlag              (false)
+    , nonPackedFlag                 (true)
+    , nonProjectedFlag              (true)
     , aspectRatioInfoPresent        (false) //TODO: This initialiser list contains magic numbers
     , aspectRatioConstantFlag       (false)
     , aspectRatioIdc                    (0)

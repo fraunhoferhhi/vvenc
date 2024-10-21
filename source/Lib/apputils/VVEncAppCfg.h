@@ -517,6 +517,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, c, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &c->m_SourceWidth, &c->m_SourceHeight }, true, 'x' );
   IStreamToRefVec<int>              toMaxPicSize                 ( { &c->m_maxPicWidth, &c->m_maxPicHeight }, true, 'x' );
+  IStreamToRefVec<int>              toSarSize                    ( { &c->m_sarWidth, &c->m_sarHeight }, true, 'x' );
   IStreamToRefVec<int>              toFps                        ( { &c->m_FrameRate, &c->m_FrameScale }, false, '/' );
 
   IStreamToEnum<vvencProfile>       toProfile                    ( &c->m_profile,                     &ProfileToEnumMap      );
@@ -726,9 +727,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   ("Tier",                                              toLevelTier,                                         "tier for interpretation of level (main, high)")
   ;
 
+  opts.setSubSection("HDR/SDR and Color Options");
   if( m_easyMode )
   {
-    opts.setSubSection("HDR/SDR and Color Options");
     opts.addOptions()
     ("sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
                                                                                                              "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
@@ -738,13 +739,15 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   }
   else
   {
-    opts.setSubSection("VUI and SEI options");
     opts.addOptions()
     ("Sdr",                                             toSDRMode,                                           "set SDR mode + BT.709, BT.2020, BT.470 color space. "
                                                                                                              "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
     ("Hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+SEI messages for hlg) "
                                                                                                              "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
+
+    opts.setSubSection("SEI and auxiliary options");
+    opts.setSubSection("VUI options");
   }
 
 
@@ -1003,20 +1006,35 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SaoChromaOffsetBitShift",                         c->m_saoOffsetBitShift[ 1 ],                         "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
     ;
 
-    opts.setSubSection("VUI and SEI options");
+    opts.setSubSection("SEI and auxiliary options");
     opts.addOptions()
     ("SEIDecodedPictureHash,-dph",                      toHashType,                                          "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
     ("SEIBufferingPeriod",                              c->m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
     ("SEIPictureTiming",                                c->m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
     ("SEIDecodingUnitInfo",                             c->m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
-    ("EnableDecodingParameterSet",                      c->m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
+    ("MasteringDisplayColourVolume",                    toMasteringDisplay,                                  "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
+                                                                                                             "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
+                                                                                                             "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
+    ("MaxContentLightLevel",                            toContentLightLevel,                                 "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
+                                                                                                             "max. frame average light level, range: 1 <= cll,fall <= 65535'")
+    ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                       "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                                             "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                                                                             "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
     ("AccessUnitDelimiter,-aud",                        toAud,                                               "Enable Access Unit Delimiter NALUs (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)" , true)
-    ("VuiParametersPresent,-vui",                       toVui,                                               "Enable generation of vui_parameters() (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)", true)
     ("HrdParametersPresent,-hrd",                       c->m_hrdParametersPresent,                           "Enable generation of hrd_parameters() (0: off, 1: on)")
+    ("EnableDecodingParameterSet",                      c->m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
+    ;
+      
+    opts.setSubSection("VUI options");
+    opts.addOptions()
+    ("VuiParametersPresent,-vui",                       toVui,                                               "Enable generation of vui_parameters() (-1: auto, 0: off, 1: on; default: auto - enable only if needed by dependent options)", true)
     ("AspectRatioInfoPresent",                          c->m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
-    ("AspectRatioIdc",                                  c->m_aspectRatioIdc,                                 "aspect_ratio_idc")
+    ("AspectRatioIdc",                                  c->m_aspectRatioIdc,                                 "Aspect ratio idc (0-16,255) 0=undef, 1=1:1, 2=12:11, 3=10:11, 4=16:11, 5=40:33, 6=24:11, 7=20:11, 8=32:11, 9=80:33, 10=18:11, 11=15:11, 12=64:33, "
+                                                                                                             "13=160:99, 14=4:3, 15=3:2, 16=2:1")
+    ("Sar",                                             toSarSize,                                           "Sample aspect ratio - ratio of width to height (WidthxHeight)")
     ("SarWidth",                                        c->m_sarWidth,                                       "horizontal size of the sample aspect ratio")
     ("SarHeight",                                       c->m_sarHeight,                                      "vertical size of the sample aspect ratio")
+
     ("ColourDescriptionPresent",                        c->m_colourDescriptionPresent,                       "Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present")
     ("ColourPrimaries",                                 toColorPrimaries,                                    "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                              "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
@@ -1032,16 +1050,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("OverscanInfoPresent",                             c->m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
-
-
-    ("MasteringDisplayColourVolume",                    toMasteringDisplay,                                  "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
-                                                                                                             "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
-                                                                                                             "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
-    ("MaxContentLightLevel",                            toContentLightLevel,                                 "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
-                                                                                                             "max. frame average light level, range: 1 <= cll,fall <= 65535'")
-    ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                       "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
-                                                                                                             "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
-                                                                                                             "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
     ;
 
     opts.setSubSection("Summary options (debugging)");

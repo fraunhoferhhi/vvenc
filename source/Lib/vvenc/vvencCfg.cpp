@@ -623,7 +623,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_vuiParametersPresent                    = -1;
   c->m_hrdParametersPresent                    = true;
   c->m_aspectRatioInfoPresent                  = false;
-  c->m_aspectRatioIdc                          = 0;
+  c->m_aspectRatioIdc                          = 1;
   c->m_sarWidth                                = 0;
   c->m_sarHeight                               = 0;
   c->m_colourDescriptionPresent                = false;
@@ -1148,6 +1148,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_vuiParametersPresent < 0 )
   {
     c->m_vuiParametersPresent = 0;
+  }
+
+  if( !c->m_aspectRatioInfoPresent && ( c->m_aspectRatioIdc > 0 || (c->m_sarWidth > 0 && c->m_sarHeight > 0 )))
+  {
+    c->m_aspectRatioInfoPresent = true;
+  }
+
+  if( !c->m_overscanInfoPresent && c->m_overscanAppropriateFlag)
+  {
+    c->m_overscanInfoPresent = true;
   }
 
   if( c->m_chromaSampleLocType < 0 )
