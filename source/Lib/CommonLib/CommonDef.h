@@ -56,6 +56,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined( __x86_64__ ) || defined( _M_X64 ) || defined( __i386__ ) || defined( __i386 ) || defined( _M_IX86 )
 # define REAL_TARGET_X86 1
 #elif defined( __aarch64__ ) || defined( _M_ARM64 ) || defined( __arm__ ) || defined( _M_ARM )
+# if defined( __aarch64__ ) || defined( _M_ARM64 )
+#  define REAL_TARGET_AARCH64 1
+# endif
 # define REAL_TARGET_ARM 1
 #elif defined( __wasm__ ) || defined( __wasm32__ )
 # define REAL_TARGET_WASM 1
