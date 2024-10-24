@@ -48,6 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 // ====================================================================================================================
 
 #include "MCTF.h"
+#include "sum_neon.h"
 
 #include <arm_neon.h>
 
@@ -75,13 +76,8 @@ static int16x8_t motionErrorLumaFrac_loRes_step( const int16x8_t xf, const Pel* 
   int32x4_t sum3 = vmull_s16( vget_low_s16( xf ), vget_low_s16( row37 ) );
   int32x4_t sum7 = vmull_s16( vget_high_s16( xf ), vget_high_s16( row37 ) );
 
-  int32x4_t sum01 = vpaddq_s32( sum0, sum1 );
-  int32x4_t sum23 = vpaddq_s32( sum2, sum3 );
-  int32x4_t sum45 = vpaddq_s32( sum4, sum5 );
-  int32x4_t sum67 = vpaddq_s32( sum6, sum7 );
-  int32x4_t sum0123 = vpaddq_s32( sum01, sum23 );
-  int32x4_t sum4567 = vpaddq_s32( sum45, sum67 );
-
+  int32x4_t sum0123 = horizontal_add_4d_s32x4( sum0, sum1, sum2, sum3 );
+  int32x4_t sum4567 = horizontal_add_4d_s32x4( sum4, sum5, sum6, sum7 );
   uint16x8_t sum = vcombine_u16( vqrshrun_n_s32( sum0123, 6 ), vqrshrun_n_s32( sum4567, 6 ) );
 
   return vminq_s16( vreinterpretq_s16_u16( sum ), vdupq_n_s16( maxSampleValue ) );
@@ -138,7 +134,7 @@ int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, 
       int32x4_t diff2 = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
       diff2 = vmlal_s16( diff2, vget_high_s16( diff ), vget_high_s16( diff ) );
 
-      error += vaddvq_s32( diff2 );
+      error += horizontal_add_s32x4( diff2 );
       if( error > besterror )
       {
         return error;

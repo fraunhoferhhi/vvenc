@@ -119,7 +119,8 @@ if( VVENC_ENABLE_X86_SIMD )
   endif()
 
   add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${SSE42_SRC_FILES} ${AVX_SRC_FILES} ${AVX2_SRC_FILES} )
-  # disble LTO for the files compiled with special architecture flags
+
+  # Disble LTO for the files compiled with special architecture flags.
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES
                                               INTERPROCEDURAL_OPTIMIZATION                OFF
                                               INTERPROCEDURAL_OPTIMIZATION_RELEASE        OFF
@@ -130,17 +131,9 @@ if( VVENC_ENABLE_X86_SIMD )
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
-  # set needed compile definitions
+  # Set needed compile definitions.
   set_property( SOURCE ${ARM_NEON_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON )
-
   add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_NEON_SRC_FILES} )
-  # NEON is enabled by default for all files, so don't need to disable LTO
-  # set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES
-  #                                             INTERPROCEDURAL_OPTIMIZATION                OFF
-  #                                             INTERPROCEDURAL_OPTIMIZATION_RELEASE        OFF
-  #                                             INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO OFF
-  #                                             INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
-
   set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES FOLDER lib )
 endif()
 
