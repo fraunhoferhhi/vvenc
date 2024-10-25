@@ -48,9 +48,10 @@ POSSIBILITY OF SUCH DAMAGE.
 //  Includes
 //  ====================================================================================================================
 
+#include "../InterpolationFilter.h"
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
-#include "../InterpolationFilter.h"
+#include "sum_neon.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -150,7 +151,7 @@ static int16x4_t filter4xX_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voff
   a2 = vmlal_s16( a2, vget_high_s16( vsrca2 ), vget_high_s16( ch ) );
   a3 = vmlal_s16( a3, vget_high_s16( vsrca3 ), vget_high_s16( ch ) );
 
-  int32x4_t vsuma = vpaddq_s32( vpaddq_s32( a0, a1 ), vpaddq_s32( a2, a3 ) );
+  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
   vsuma           = vaddq_s32( vsuma, voffset1 );
   vsuma           = vshlq_s32( vsuma, invshift1st );
   return vqmovn_s32( vsuma );
@@ -224,14 +225,14 @@ static void simdFilter4xX_N8_neon( const ClpRng& clpRng, Pel const* src, int src
     src += srcStride;
 
     int32x4_t vsum0 = vdupq_n_s32( offset2nd );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv0, cv, 0 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv1, cv, 1 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv2, cv, 2 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv3, cv, 3 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv4, cv, 4 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv5, cv, 5 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv6, cv, 6 );
-    vsum0           = vmlal_laneq_s16( vsum0, vsrcv7, cv, 7 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv0, vget_low_s16( cv ), 0 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv1, vget_low_s16( cv ), 1 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv2, vget_low_s16( cv ), 2 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv3, vget_low_s16( cv ), 3 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv4, vget_high_s16( cv ), 0 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv5, vget_high_s16( cv ), 1 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv6, vget_high_s16( cv ), 2 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv7, vget_high_s16( cv ), 3 );
 
     int16x4_t vsum01;
     if( isLast )  // clip
@@ -313,29 +314,29 @@ static void simdFilter8xX_N8_neon( const ClpRng& clpRng, Pel const* src, int src
     int32x4_t vsum0 = vdupq_n_s32( offset2nd );
     int32x4_t vsum1 = vdupq_n_s32( offset2nd );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv0 ), cv, 0 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv0 ), cv, 0 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv0 ), vget_low_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv0 ), vget_low_s16( cv ), 0 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv1 ), cv, 1 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv1 ), cv, 1 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv1 ), vget_low_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv1 ), vget_low_s16( cv ), 1 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv2 ), cv, 2 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv2 ), cv, 2 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv2 ), vget_low_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv2 ), vget_low_s16( cv ), 2 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv3 ), cv, 3 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv3 ), cv, 3 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv3 ), vget_low_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv3 ), vget_low_s16( cv ), 3 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv4 ), cv, 4 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv4 ), cv, 4 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv4 ), vget_high_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv4 ), vget_high_s16( cv ), 0 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv5 ), cv, 5 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv5 ), cv, 5 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv5 ), vget_high_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv5 ), vget_high_s16( cv ), 1 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv6 ), cv, 6 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv6 ), cv, 6 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv6 ), vget_high_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv6 ), vget_high_s16( cv ), 2 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv7 ), cv, 7 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv7 ), cv, 7 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv7 ), vget_high_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv7 ), vget_high_s16( cv ), 3 );
 
     int16x8_t vsum01;
     if( isLast )  // clip
@@ -422,45 +423,45 @@ static void simdFilter16xX_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
     int32x4_t vsum2 = vdupq_n_s32( offset2nd );
     int32x4_t vsum3 = vdupq_n_s32( offset2nd );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv0.val[ 0 ] ), cv, 0 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv0.val[ 0 ] ), cv, 0 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv0.val[ 1 ] ), cv, 0 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv0.val[ 1 ] ), cv, 0 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv0.val[ 0 ] ), vget_low_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv0.val[ 0 ] ), vget_low_s16( cv ), 0 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv0.val[ 1 ] ), vget_low_s16( cv ), 0 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv0.val[ 1 ] ), vget_low_s16( cv ), 0 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv1.val[ 0 ] ), cv, 1 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv1.val[ 0 ] ), cv, 1 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv1.val[ 1 ] ), cv, 1 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv1.val[ 1 ] ), cv, 1 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv1.val[ 0 ] ), vget_low_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv1.val[ 0 ] ), vget_low_s16( cv ), 1 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv1.val[ 1 ] ), vget_low_s16( cv ), 1 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv1.val[ 1 ] ), vget_low_s16( cv ), 1 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv2.val[ 0 ] ), cv, 2 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv2.val[ 0 ] ), cv, 2 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv2.val[ 1 ] ), cv, 2 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv2.val[ 1 ] ), cv, 2 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv2.val[ 0 ] ), vget_low_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv2.val[ 0 ] ), vget_low_s16( cv ), 2 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv2.val[ 1 ] ), vget_low_s16( cv ), 2 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv2.val[ 1 ] ), vget_low_s16( cv ), 2 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv3.val[ 0 ] ), cv, 3 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv3.val[ 0 ] ), cv, 3 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv3.val[ 1 ] ), cv, 3 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv3.val[ 1 ] ), cv, 3 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv3.val[ 0 ] ), vget_low_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv3.val[ 0 ] ), vget_low_s16( cv ), 3 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv3.val[ 1 ] ), vget_low_s16( cv ), 3 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv3.val[ 1 ] ), vget_low_s16( cv ), 3 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv4.val[ 0 ] ), cv, 4 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv4.val[ 0 ] ), cv, 4 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv4.val[ 1 ] ), cv, 4 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv4.val[ 1 ] ), cv, 4 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv4.val[ 0 ] ), vget_high_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv4.val[ 0 ] ), vget_high_s16( cv ), 0 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv4.val[ 1 ] ), vget_high_s16( cv ), 0 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv4.val[ 1 ] ), vget_high_s16( cv ), 0 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv5.val[ 0 ] ), cv, 5 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv5.val[ 0 ] ), cv, 5 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv5.val[ 1 ] ), cv, 5 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv5.val[ 1 ] ), cv, 5 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv5.val[ 0 ] ), vget_high_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv5.val[ 0 ] ), vget_high_s16( cv ), 1 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv5.val[ 1 ] ), vget_high_s16( cv ), 1 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv5.val[ 1 ] ), vget_high_s16( cv ), 1 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv6.val[ 0 ] ), cv, 6 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv6.val[ 0 ] ), cv, 6 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv6.val[ 1 ] ), cv, 6 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv6.val[ 1 ] ), cv, 6 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv6.val[ 0 ] ), vget_high_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv6.val[ 0 ] ), vget_high_s16( cv ), 2 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv6.val[ 1 ] ), vget_high_s16( cv ), 2 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv6.val[ 1 ] ), vget_high_s16( cv ), 2 );
 
-    vsum0 = vmlal_laneq_s16( vsum0, vget_low_s16( vsrcv7.val[ 0 ] ), cv, 7 );
-    vsum1 = vmlal_laneq_s16( vsum1, vget_high_s16( vsrcv7.val[ 0 ] ), cv, 7 );
-    vsum2 = vmlal_laneq_s16( vsum2, vget_low_s16( vsrcv7.val[ 1 ] ), cv, 7 );
-    vsum3 = vmlal_laneq_s16( vsum3, vget_high_s16( vsrcv7.val[ 1 ] ), cv, 7 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv7.val[ 0 ] ), vget_high_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv7.val[ 0 ] ), vget_high_s16( cv ), 3 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv7.val[ 1 ] ), vget_high_s16( cv ), 3 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv7.val[ 1 ] ), vget_high_s16( cv ), 3 );
 
     int16x8_t vsum01, vsum23;
     if( isLast ) // clip

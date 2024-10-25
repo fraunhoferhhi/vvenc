@@ -24,7 +24,7 @@ message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH
 include( vvencCompilerSupport )
 
 detect_target_architecture( VVENC_TARGET_ARCH )
-if( VVENC_TARGET_ARCH STREQUAL "ARM" )
+if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
 
   # Avoid non-portable type casting in Arm vector kernels.
@@ -77,31 +77,44 @@ if( VVENC_ENABLE_X86_SIMD )
   add_compile_definitions( TARGET_SIMD_X86=1 )
 endif()
 
-if( VVENC_TARGET_ARCH STREQUAL "ARM" )
+if( VVENC_TARGET_ARCH STREQUAL "AARCH64" )
   if( VVENC_ENABLE_ARM_SIMD )
-    message( STATUS "Arm Neon intrinsics enabled" )
+    message( STATUS "AArch64 Neon intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM=1 )
   else()
-    message( STATUS "Arm Neon intrinsics disabled, disabling Arm SVE/SVE2 intrinsics" )
+    message( STATUS "AArch64 Neon intrinsics disabled, disabling AArch64 SVE/SVE2 intrinsics" )
     # If Neon is disabled make sure that SVE/SVE2 are also disabled.
     set( VVENC_ENABLE_ARM_SIMD_SVE FALSE )
     set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
   endif()
 
   if( VVENC_ENABLE_ARM_SIMD_SVE )
-    message( STATUS "Arm SVE intrinsics enabled" )
+    message( STATUS "AArch64 SVE intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM_SVE=1 )
   else()
-    message( STATUS "Arm SVE intrinsics disabled, disabling Arm SVE2 intrinsics" )
+    message( STATUS "AArch64 SVE intrinsics disabled, disabling AArch64 SVE2 intrinsics" )
     # If SVE is disabled make sure that SVE2 are also disabled.
     set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
   endif()
 
   if( VVENC_ENABLE_ARM_SIMD_SVE2 )
-    message( STATUS "Arm SVE2 intrinsics enabled" )
+    message( STATUS "AArch64 SVE2 intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM_SVE2=1 )
   else()
-    message( STATUS "Arm SVE2 intrinsics disabled" )
+    message( STATUS "AArch64 SVE2 intrinsics disabled" )
+  endif()
+endif()
+
+if( VVENC_TARGET_ARCH STREQUAL "ARM" )
+  if( VVENC_ENABLE_ARM_SIMD )
+    message( STATUS "Arm Neon intrinsics enabled" )
+    add_compile_definitions( TARGET_SIMD_ARM=1 )
+
+    # When building for 32-bit Arm platforms with SIMD, unconditionally enable Neon.
+    set_if_compiler_supports_flag( FLAG_mfpu_neon -mfpu=neon )
+    add_compile_options( ${FLAG_mfpu_neon} )
+  else()
+    message( STATUS "Arm Neon intrinsics disabled" )
   endif()
 endif()
 
