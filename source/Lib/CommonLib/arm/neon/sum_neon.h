@@ -66,6 +66,15 @@ static inline int horizontal_add_s32x4( const int32x4_t a )
 #endif
 }
 
+static inline int horizontal_add_long_s16x8( const int16x8_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlvq_s16( a );
+#else
+  return horizontal_add_s32x4( vpaddlq_s16( a ) );
+#endif
+}
+
 static inline int32x4_t horizontal_add_4d_s32x4( const int32x4_t v0, const int32x4_t v1, const int32x4_t v2,
                                                  const int32x4_t v3 )
 {
@@ -80,6 +89,23 @@ static inline int32x4_t horizontal_add_4d_s32x4( const int32x4_t v0, const int32
   res           = vsetq_lane_s32( horizontal_add_s32x4( v2 ), res, 2 );
   res           = vsetq_lane_s32( horizontal_add_s32x4( v3 ), res, 3 );
   return res;
+#endif
+}
+
+static inline int32x4_t horizontal_add_long_4d_s16x8( const int16x8_t v0, const int16x8_t v1, const int16x8_t v2,
+                                                      const int16x8_t v3 )
+{
+  return horizontal_add_4d_s32x4( vpaddlq_s16( v0 ), vpaddlq_s16( v1 ), vpaddlq_s16( v2 ), vpaddlq_s16( v3 ) );
+}
+
+static inline int16x8_t pairwise_add_s16x8( const int16x8_t a, const int16x8_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vpaddq_s16( a, b );
+#else
+  int16x4_t lo = vpadd_s16( vget_low_s16( a ), vget_low_s16( b ) );
+  int16x4_t hi = vpadd_s16( vget_high_s16( a ), vget_high_s16( b ) );
+  return vcombine_s16( lo, hi );
 #endif
 }
 
