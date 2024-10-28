@@ -51,12 +51,14 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "../RdCost.h"
 
-#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_AVX2
-# define USE_AVX2
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE42
-# define USE_SSE42
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE41
-# define USE_SSE41
+#if defined( TARGET_SIMD_X86 )
+#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_AVX2
+#define USE_AVX2
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE42
+#define USE_SSE42
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE41
+#define USE_SSE41
+#endif
 #endif
 
 #ifdef TARGET_SIMD_X86
@@ -66,8 +68,12 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-#ifdef TARGET_SIMD_ARM
-#if __ARM_ARCH >= 8
+#if defined( TARGET_SIMD_ARM )
+#if REAL_TARGET_AARCH64
+
+// The xGetHADs_ARMSIMD functions depend on the SIMDe kernels being enabled
+// during compilation.
+#if defined( TARGET_SIMD_X86 )
 
 //working up to 12-bit
 static uint32_t xCalcHAD16x16_fast_Neon( const Pel *piOrg, const Pel *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
@@ -899,6 +905,7 @@ Distortion RdCost::xGetHAD2SADs_ARMSIMD( const DistParam &rcDtParam )
 
   return std::min( distHad, 2*distSad);
 }
+#endif  // defined( TARGET_SIMD_X86 )
 
 template<ARM_VEXT vext, bool isCalCentrePos>
 void xGetSADX5_16xN_SIMDImp( const DistParam& rcDtParam, Distortion* cost )
@@ -993,7 +1000,9 @@ void RdCost::xGetSADX5_16xN_SIMD(const DistParam& rcDtParam, Distortion* cost, b
 template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()
 {
-	m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD<vext>;
+  m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD<vext>;
+
+#if defined( TARGET_SIMD_X86 )
   m_afpDistortFunc[0][DF_HAD_2SAD ] = RdCost::xGetHAD2SADs_ARMSIMD<vext>;
 
   m_afpDistortFunc[0][DF_HAD]     = RdCost::xGetHADs_ARMSIMD<vext, false>;
@@ -1013,18 +1022,19 @@ void RdCost::_initRdCostARM()
   m_afpDistortFunc[0][DF_HAD32_fast]   = RdCost::xGetHADs_ARMSIMD<vext, true>;
   m_afpDistortFunc[0][DF_HAD64_fast]   = RdCost::xGetHADs_ARMSIMD<vext, true>;
   m_afpDistortFunc[0][DF_HAD128_fast]  = RdCost::xGetHADs_ARMSIMD<vext, true>;
+#endif  // defined( TARGET_SIMD_X86 )
 }
 
-#else    // !__ARM_ARCH >= 8
+#else  // !REAL_TARGET_AARCH64
 
 template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()
 {}
 
-#endif   // !__ARM_ARCH >= 8
+#endif  // REAL_TARGET_AARCH64
 
 template void RdCost::_initRdCostARM<SIMDARM>();
 
-#endif   // TARGET_SIMD_ARM
+#endif  // defined( TARGET_SIMD_ARM )
 
 }   // namespace vvenc
