@@ -375,12 +375,14 @@ if( VVENC_ENABLE_INSTALL )
   endif()
 endif()
 
+set( VVENC_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/source/Lib" )
 
 add_subdirectory( "source/Lib/vvenc" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
 add_subdirectory( "test/vvencinterfacetest" )
+add_subdirectory( "test/vvenc_unit_test" )
 
 include( cmake/modules/vvencTests.cmake )
 
