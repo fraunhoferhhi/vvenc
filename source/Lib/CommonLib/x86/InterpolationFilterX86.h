@@ -1500,12 +1500,12 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     {
       shift  += ( isFirst ) ? 0 : headRoom;
       offset  = 1 << ( shift - 1 );
-      offset += ( isFirst ) ? 0 : IF_INTERNAL_OFFS << IF_FILTER_PREC;
+      offset += ( isFirst ) ? 0 : (IF_INTERNAL_OFFS << IF_FILTER_PREC);
     }
     else
     {
       shift -= ( isFirst ) ? headRoom : 0;
-      offset = ( isFirst ) ? -IF_INTERNAL_OFFS * (1<< shift) : 0;
+      offset = ( isFirst ) ? -(IF_INTERNAL_OFFS << shift) : 0;
     }
   }
   else
@@ -1688,14 +1688,14 @@ void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   {
     shift1st  -= headRoom;
     shift2nd  += headRoom;
-    offset1st  = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st  = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
     shift1st -= headRoom;
-    offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd = 0;
   }
 
@@ -2221,13 +2221,13 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
 
   shift1st -= headRoom;
-  offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+  offset1st = -(IF_INTERNAL_OFFS << shift1st);
 
   if( isLast )
   {
     shift2nd  += headRoom;
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
@@ -2490,13 +2490,13 @@ void simdFilter16xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
 
   shift1st -= headRoom;
-  offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+  offset1st = -(IF_INTERNAL_OFFS << shift1st);
 
   if( isLast )
   {
     shift2nd  += headRoom;
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
@@ -2537,13 +2537,13 @@ void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
 
   shift1st -= headRoom;
-  offset1st = -IF_INTERNAL_OFFS * (1<< shift1st);
+  offset1st = -(IF_INTERNAL_OFFS << shift1st);
 
   if( isLast )
   {
     shift2nd  += headRoom;
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
@@ -2774,13 +2774,13 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
 
   shift1st -= headRoom;
-  offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+  offset1st = -(IF_INTERNAL_OFFS << shift1st);
 
   if( isLast )
   {
     shift2nd  += headRoom;
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
