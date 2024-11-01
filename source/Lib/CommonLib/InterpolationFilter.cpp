@@ -395,12 +395,12 @@ void InterpolationFilter::filter(const ClpRng& clpRng, Pel const *src, int srcSt
     {
       shift += (isFirst) ? 0 : headRoom;
       offset = 1 << (shift - 1);
-      offset += (isFirst) ? 0 : IF_INTERNAL_OFFS << IF_FILTER_PREC;
+      offset += (isFirst) ? 0 : (IF_INTERNAL_OFFS << IF_FILTER_PREC);
     }
     else
     {
       shift -= (isFirst) ? headRoom : 0;
-      offset = (isFirst) ? -IF_INTERNAL_OFFS *(1<<shift) : 0;
+      offset = (isFirst) ? -(IF_INTERNAL_OFFS << shift) : 0;
     }
   }
   else
@@ -784,14 +784,14 @@ void InterpolationFilter::filterXxY_N2( const ClpRng& clpRng, Pel const *src, in
   {
     shift1st  -= headRoom;
     shift2nd  += headRoom;
-    offset1st  = -IF_INTERNAL_OFFS << shift1st;
+    offset1st  = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
     shift1st -= headRoom;
-    offset1st = -IF_INTERNAL_OFFS << shift1st;
+    offset1st = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd = 0;
   }
 
@@ -853,14 +853,14 @@ void InterpolationFilter::filterXxY_N4( const ClpRng& clpRng, const Pel* src, in
   {
     shift1st  -= headRoom;
     shift2nd  += headRoom;
-    offset1st  = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st  = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
     shift1st -= headRoom;
-    offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd = 0;
   }
 
@@ -933,14 +933,14 @@ void InterpolationFilter::filterXxY_N8( const ClpRng& clpRng, const Pel* src, in
   {
     shift1st  -= headRoom;
     shift2nd  += headRoom;
-    offset1st  = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st  = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
   }
   else
   {
     shift1st -= headRoom;
-    offset1st = -IF_INTERNAL_OFFS *(1<< shift1st);
+    offset1st = -(IF_INTERNAL_OFFS << shift1st);
     offset2nd = 0;
   }
 
