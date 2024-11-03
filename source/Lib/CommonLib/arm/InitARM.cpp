@@ -110,6 +110,17 @@ void MCTF::initMCTF_ARM()
 }
 #endif  // ENABLE_SIMD_OPT_MCTF
 
+#if ENABLE_SIMD_TRAFO
+void TCoeffOps::initTCoeffOpsARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initTCoeffOpsARM<NEON>();
+  }
+}
+#endif
+
 #endif   // TARGET_SIMD_ARM
 
 }   // namespace
