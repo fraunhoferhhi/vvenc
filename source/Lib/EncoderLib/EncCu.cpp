@@ -856,27 +856,27 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
-    {
-      // add split modes
-      EncTestMode encTestMode( { ETM_SPLIT_TT_H, ETO_STANDARD, qp, false } );
-      if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
-      {
-        lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
-      }
-    }
+    // if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
+    // {
+    //   // add split modes
+    //   EncTestMode encTestMode( { ETM_SPLIT_TT_H, ETO_STANDARD, qp, false } );
+    //   if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
+    //   {
+    //     lastTestMode = encTestMode;
+    //     xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
+    //   }
+    // }
 
-    if( partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
-    {
-      // add split modes
-      EncTestMode encTestMode( { ETM_SPLIT_TT_V, ETO_STANDARD, qp, false } );
-      if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
-      {
-        lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
-      }
-    }
+    // if( partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
+    // {
+    //   // add split modes
+    //   EncTestMode encTestMode( { ETM_SPLIT_TT_V, ETO_STANDARD, qp, false } );
+    //   if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
+    //   {
+    //     lastTestMode = encTestMode;
+    //     xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
+    //   }
+    // }
 
     if( !cuECtx.qtBeforeBt )
     {
