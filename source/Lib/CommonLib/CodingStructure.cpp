@@ -490,7 +490,23 @@ cTUTraverser CodingStructure::traverseTUs( const UnitArea& unit, const ChannelTy
   return cTUTraverser( firstTU, lastTU );
 }
 
-
+void CodingStructure::printCus()
+{
+  for(size_t i = 0; i < cus.size(); ++i)
+  {
+    std::cout << "cu_d: " << (int)cus[i]->depth\
+      << ", cu_idx: " << cus[i]->idx\
+      << ", qt_d: " << (int)cus[i]->qtDepth\
+      << ", bt_d: " << (int)cus[i]->btDepth\
+      << ", mt_d: " << (int)cus[i]->mtDepth\
+      << ", split: " << (int)cus[i]->split\
+      << ", x: " << cus[i]->lx()\
+      << ", y: " << cus[i]->ly()\
+      << ", w: " << cus[i]->lwidth()\
+      << ", h: " << cus[i]->lheight()\
+      << std::endl;
+  }
+}
 
 LFPBuf CodingStructure::getLoopFilterParamBuf(const DeblockEdgeDir& edgeDir)
 {

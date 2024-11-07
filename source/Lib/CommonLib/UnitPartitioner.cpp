@@ -138,6 +138,7 @@ void Partitioner::setCUData( CodingUnit& cu )
   cu.modeTypeSeries = getModeTypeSeries();
   cu.treeType    = treeType; 
   cu.modeType    = modeType; 
+  cu.split       = currPartLevel().split;
 
 }
 

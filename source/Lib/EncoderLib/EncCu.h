@@ -386,6 +386,8 @@ private:
                                         GeoComboCostList& comboList, MergeBufVector& geoBuffer, CodingUnit& cu );
   // TODO: for now skip that
   //void    checkEarlySkip              ( const CodingStructure* bestCS, const Partitioner &partitioner );
+  bool    checkIfSkipBT(const CodingStructure* bestCS, const Partitioner& partitioner);
+  bool    checkIfSkipQT(const CodingStructure* bestCS, const Partitioner& partitioner);
 };
 
 } // namespace vvenc

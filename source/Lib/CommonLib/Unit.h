@@ -58,6 +58,34 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+enum PartSplit
+{
+  CTU_LEVEL        = 0,
+  CU_QUAD_SPLIT,
+
+  CU_HORZ_SPLIT,
+  CU_VERT_SPLIT,
+  CU_TRIH_SPLIT,
+  CU_TRIV_SPLIT,
+  TU_MAX_TR_SPLIT,
+  TU_NO_ISP,
+  TU_1D_HORZ_SPLIT,
+  TU_1D_VERT_SPLIT,
+  SBT_VER_HALF_POS0_SPLIT,
+  SBT_VER_HALF_POS1_SPLIT,
+  SBT_HOR_HALF_POS0_SPLIT,
+  SBT_HOR_HALF_POS1_SPLIT,
+  SBT_VER_QUAD_POS0_SPLIT,
+  SBT_VER_QUAD_POS1_SPLIT,
+  SBT_HOR_QUAD_POS0_SPLIT,
+  SBT_HOR_QUAD_POS1_SPLIT,
+  NUM_PART_SPLIT,
+  CU_MT_SPLIT             = 1000, ///< dummy element to indicate the MT (multi-type-tree) split
+  CU_BT_SPLIT             = 1001, ///< dummy element to indicate the BT split
+  CU_DONT_SPLIT           = 2000  ///< dummy element to indicate no splitting
+};
+
+
 // ---------------------------------------------------------------------------
 // tools
 // ---------------------------------------------------------------------------
@@ -345,6 +373,7 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   // a triple split would increase the mtDepth by 1, but the qtDepth by 2 in the first and last part and by 1 in the middle part (because of the 1-2-1 split proportions)
   uint8_t           btDepth; // number of applied binary splits, after switching to the mtt (or it's equivalent)
   uint8_t           mtDepth; // the actual number of splits after switching to mtt (equals btDepth if only binary splits are allowed)
+  PartSplit         split;
   int8_t            chromaQpAdj;
   int8_t            qp;
   SplitSeries       splitSeries;
@@ -504,6 +533,7 @@ typedef UnitTraverser<TransformUnit>  TUTraverser;
 
 typedef UnitTraverser<const CodingUnit>     cCUTraverser;
 typedef UnitTraverser<const TransformUnit>  cTUTraverser;
+
 
 } // namespace vvenc
 

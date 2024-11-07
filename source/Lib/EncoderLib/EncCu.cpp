@@ -69,6 +69,18 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+void printPartitioner(const Partitioner& partitioner)
+{
+  std::cout << "partitioner depth: " << partitioner.currDepth
+    << ", qtDepth: " << partitioner.currQtDepth
+    << ", btDepth: " << partitioner.currBtDepth
+    << ", mtDepth: " << partitioner.currMtDepth
+    << ", currIdx: " << partitioner.currPartIdx()
+    << ", split: " << partitioner.currPartLevel().split
+    << ", numParts: " << partitioner.currPartLevel().numParts
+    << std::endl;
+}
+
 const MergeIdxPair EncCu::m_GeoModeTest[GEO_MAX_NUM_CANDS] = { MergeIdxPair{0, 1}, MergeIdxPair{1, 0}, MergeIdxPair{0, 2}, MergeIdxPair{1, 2}, MergeIdxPair{2, 0},
                                                                MergeIdxPair{2, 1}, MergeIdxPair{0, 3}, MergeIdxPair{1, 3}, MergeIdxPair{2, 3}, MergeIdxPair{3, 0},
                                                                MergeIdxPair{3, 1}, MergeIdxPair{3, 2}, MergeIdxPair{0, 4}, MergeIdxPair{1, 4}, MergeIdxPair{2, 4},
@@ -571,6 +583,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
   const bool isBimEnabled = (m_pcEncCfg->m_blockImportanceMapping && !bestCS->picture->m_picShared->m_ctuBimQpOffset.empty());
 
+
+  // if(tempCS->area.lwidth() == 64 && tempCS->area.lheight() == 64)
+  //   printf("CU64x64, pos: %d, %d\n", uiLPelX, uiTPelY);
+  // std::cout << "Enter CU " << tempCS->area.lwidth() << "x" << tempCS->area.lheight() << std::endl;
+
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
   if ((m_pcEncCfg->m_usePerceptQPA || isBimEnabled) && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
@@ -823,37 +840,60 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     //////////////////////////////////////////////////////////////////////////
     // split modes
     EncTestMode lastTestMode;
+    bool skipBt = false;
+    bool skipQt = false;
 
     if( cuECtx.qtBeforeBt )
     {
+      // printf("qtBeforeBt, before qt split, curr depth %d\n", partitioner.currDepth);
+      // bestCS->printCus();
       EncTestMode encTestMode( { ETM_SPLIT_QT, ETO_STANDARD, qp, false } );
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
+      skipBt = checkIfSkipBT(bestCS, partitioner);
+      // printf("qtBeforeBt, after qt split, curr depth %d, curr b_d %d\n", partitioner.currDepth, partitioner.currBtDepth);
+      // bestCS->printCus();
+      // if(skipBt)
+      //   printf("found skipBt condition\n");
     }
 
-    if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
+    if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) && !skipBt)
     {
       // add split modes
+      // printf("before bth split, curr depth %d\n", partitioner.currDepth);
+      // bestCS->printCus();
       EncTestMode encTestMode( { ETM_SPLIT_BT_H, ETO_STANDARD, qp, false } );
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
+      skipQt = skipQt || checkIfSkipQT(bestCS, partitioner);
+      // printf("after bth split, curr depth %d, curr b_d %d\n", partitioner.currDepth, partitioner.currBtDepth);
+      // bestCS->printCus();
+      // if(skipQt)
+      //   printf("found skipQt condition\n");
     }
 
-    if( partitioner.canSplit( CU_VERT_SPLIT, cs ) )
+    if( partitioner.canSplit( CU_VERT_SPLIT, cs ) && !skipBt)
     {
       // add split modes
+      // printf("before btv split, curr depth %d\n", partitioner.currDepth);
+      // bestCS->printCus();
       EncTestMode encTestMode( { ETM_SPLIT_BT_V, ETO_STANDARD, qp, false } );
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
+      skipQt = skipQt || checkIfSkipQT(bestCS, partitioner);
+      // printf("after btv split, curr depth %d, curr b_d %d\n", partitioner.currDepth, partitioner.currBtDepth);
+      // bestCS->printCus();
+      // if(skipQt)
+      //   printf("found skipQt condition\n");
     }
 
     // if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
@@ -878,16 +918,24 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     //   }
     // }
 
-    if( !cuECtx.qtBeforeBt )
+    if( !cuECtx.qtBeforeBt && !skipQt)
     {
+      // printf("not qtBeforeBt, before qt split, curr depth %d\n", partitioner.currDepth);
+      // bestCS->printCus();
       EncTestMode encTestMode( { ETM_SPLIT_QT, ETO_STANDARD, qp, false } );
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
+      // printf("not qtBeforeBt, after qt split, curr depth %d, curr b_d %d\n", partitioner.currDepth, partitioner.currBtDepth);
+      // bestCS->printCus();
     }
   }
+
+  // std::cout << "Exit CU " << tempCS->area.lwidth() << "x" << tempCS->area.lheight() << std::endl;
+  // if(tempCS->area.lwidth() == 64 && tempCS->area.lheight() == 64)
+  //   std::cout << std::endl;
 
   if( bestCS->cus.empty() )
   {
@@ -3964,6 +4012,27 @@ int EncCu::xCheckMMVDCand(MmvdIdx& mmvdMergeCand, int& bestDir, int tempNum, dou
   return 0;
 }
 
+bool EncCu::checkIfSkipBT(const CodingStructure* bestCS, const Partitioner& partitioner)
+{
+  bool flag = false;
+  for(const auto& cu: bestCS->cus)
+    if(cu->depth - partitioner.currDepth > 1){
+      flag = true;
+      break;
+    }
+  return flag;
+}
+
+bool EncCu::checkIfSkipQT(const CodingStructure* bestCS, const Partitioner& partitioner)
+{
+  bool flag = false;
+  for(const auto& cu: bestCS->cus)
+    if(cu->btDepth - partitioner.currBtDepth > 1){
+      flag = true;
+      break;
+    }
+  return flag;
+}
 
 MergeItem::MergeItem()
 {
