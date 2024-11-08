@@ -666,6 +666,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ifpLines                                = -1;
   c->m_ifp                                     = -1;
   c->m_mtProfile                               =  0;
+  c->m_numParallelGOPs                         =  0;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -705,7 +706,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_fga                                     = false;
 
-  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
+  memset( c->m_reservedInt8, 0, sizeof(c->m_reservedInt8) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -2164,6 +2165,19 @@ static bool checkCfgParameter( vvenc_config *c )
     }
   }
 
+  if( c->m_numParallelGOPs )
+  {
+    vvenc_confirmParameter(c, (c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX) || c->m_RCTargetBitrate > 0, "No support for GOP parallel processing in rate control mode" );
+    vvenc_confirmParameter(c, c->m_numThreads == 0, "For GOP parallel processing, NumThreads > 0 is required" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames == 0, "For GOP parallel processing MaxParallelFrames > 0 is required" );
+    vvenc_confirmParameter(c, c->m_ifpLines == 0, "For GOP parallel processing IFP > 0 is required" );
+
+    // GOP parallel profile
+    const int minNumThreadsGOPPP = getNumThreadsDefault( c ) * 2;
+    if( c->m_numThreads < minNumThreadsGOPPP )
+      msg.log( VVENC_WARNING, "Using NumParallelGOPs at low number of threads (<%d) does not provide more speedup, consider disabling NumParallelGOPs.\n", minNumThreadsGOPPP );
+  }
+
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
 
   vvenc_confirmParameter(c, c->m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
@@ -3413,6 +3427,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
     css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
+    css << "NumParallelGOPs:" << c->m_numParallelGOPs << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

@@ -1525,21 +1525,23 @@ void EncGOP::xUpdateRcIfp()
 #endif
 }
 
-inline void getReorderedProcList( std::list<Picture*>& inputList, std::list<Picture*>& procList, const int maxSize, bool isIFP )
+inline bool getReorderedProcList( std::list<Picture*>& inputList, std::list<Picture*>& procList, const int maxSize, bool isIFP, bool restrictToGOP )
 {
   // deliver frames of the same TID (temporal layer) and from the same GOP
   const int procTL = inputList.size() ? inputList.front()->TLayer             : -1;
   const int gopNum = inputList.size() ? inputList.front()->gopEntry->m_gopNum : -1;
+  bool added = false;
   for( auto it = inputList.begin(); it != inputList.end(); )
   {
     auto pic = *it;
-    if( pic->gopEntry->m_gopNum == gopNum
+    if( ( pic->gopEntry->m_gopNum == gopNum || !restrictToGOP )
         && pic->TLayer == procTL
         && ( isIFP ? pic->slices[ 0 ]->checkAllRefPicsAccessible(): pic->slices[ 0 ]->checkAllRefPicsReconstructed() ) )
     {
       pic->isInProcessList = true;
       procList.push_back  ( pic );
       it = inputList.erase( it );
+      added = true;
     }
     else
     {
@@ -1548,6 +1550,7 @@ inline void getReorderedProcList( std::list<Picture*>& inputList, std::list<Pict
     if( (int)procList.size() >= maxSize )
       break;
   }
+  return added;
 }
 
 inline void getProcListForOneGOP( std::list<Picture*>& inputList, std::list<Picture*>& procList )
@@ -1597,7 +1600,7 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
           {
             while( m_rcInputReorderList.size() < maxUpdateListSize && !m_gopEncListInput.empty() )
             {
-              getReorderedProcList( m_gopEncListInput, m_rcInputReorderList, maxUpdateListSize, true );
+              getReorderedProcList( m_gopEncListInput, m_rcInputReorderList, maxUpdateListSize, true, true );
             }
           }
         }
@@ -1609,22 +1612,29 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
       const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer : -1;
       const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
       const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
-      getReorderedProcList( m_gopEncListInput, procList, maxSize, false );
+      getReorderedProcList( m_gopEncListInput, procList, maxSize, false, true );
       std::copy( procList.begin(), procList.end(), std::back_inserter(rcUpdateList) );
     }
   }
   else
   {
     // regular coding mode (non-RC)
+    // in case of IFP, using the reordered list brings an additional speedup
     if( m_pcEncCfg->m_ifpLines )
     {
-      // in case of IFP, using the reordered list brings an additional speedup
-      while( !m_gopEncListInput.empty() )
+      const size_t inputListSize = m_gopEncListInput.size();
+
+      // in case of GOP parallel processing, we do not put all the frames from the current GOP in proc.list.
+      // the reason for this is that we want to add frames from the next GOP as soon as possible.
+      const size_t targetProcListSize = procList.size() + (m_pcEncCfg->m_numParallelGOPs ? m_pcEncCfg->m_maxParallelFrames: inputListSize);
+
+      while( !m_gopEncListInput.empty() && procList.size() < targetProcListSize )
       {
-        size_t inputListSize = m_gopEncListInput.size();
-        getReorderedProcList( m_gopEncListInput, procList, (int)procList.size() + m_pcEncCfg->m_maxParallelFrames, true );
-        CHECK( m_gopEncListInput.size() == inputListSize, "IFP processing list derivation: attempting to run in a deadlock" );
+        if( !getReorderedProcList( m_gopEncListInput, procList, (int)procList.size() + m_pcEncCfg->m_maxParallelFrames, true, !m_pcEncCfg->m_numParallelGOPs ) )
+          break;
       }
+      if( m_gopEncListInput.size() == inputListSize )
+        msg.log( VVENC_WARNING, "Processing list derivation: attempting to run in a deadlock" );
     }
     else
     {

@@ -90,6 +90,7 @@ struct VVEncCfg : public vvenc_config
   int       m_mergeRdCandQuotaSubBlk;
   int       m_mergeRdCandQuotaCiip;
   int       m_mergeRdCandQuotaGpm;
+  bool      m_reuseCuResults;
   vvencFG   m_fg;
 
 private:

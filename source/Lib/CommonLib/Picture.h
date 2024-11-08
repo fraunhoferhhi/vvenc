@@ -173,12 +173,8 @@ struct Picture : public UnitArea
   const CPelUnitBuf getRecoBuf(const UnitArea& unit)                const { return getPicBuf(unit,   PIC_RECONSTRUCTION); }
          PelUnitBuf getRecoBuf()                                          { return getPicBuf(        PIC_RECONSTRUCTION); }
   const CPelUnitBuf getRecoBuf()                                    const { return getPicBuf(        PIC_RECONSTRUCTION); }
-
-  const CPelBuf     getRecoWrapBuf(const ComponentID compID)        const { return getPicBuf(compID, PIC_RECON_WRAP); }
-  const CPelBuf     getRecoWrapBuf(const CompArea& blk)             const { return getPicBuf(blk,    PIC_RECON_WRAP); }
-  const CPelUnitBuf getRecoWrapBuf(const UnitArea& unit)            const { return getPicBuf(unit,   PIC_RECON_WRAP); }
-         PelUnitBuf getRecoWrapBuf()                                      { return getPicBuf(        PIC_RECON_WRAP); }
-  const CPelUnitBuf getRecoWrapBuf()                                const { return getPicBuf(        PIC_RECON_WRAP); }
+         int        getRecoBufStride(const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].stride; }
+  const  Pel*       getRecoBufPtr   (const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].buf; }
 
          PelUnitBuf getSaoBuf()                                           { return getPicBuf(        PIC_SAO_TEMP); }
   const CPelUnitBuf getSaoBuf()                                     const { return getPicBuf(        PIC_SAO_TEMP); }

@@ -1581,7 +1581,6 @@ public:
     , lumaHeight          ( pps.picHeightInLumaSamples )
     , fastDeltaQPCuMaxSize( Clip3<unsigned>( (1 << sps.log2MinCodingBlockSize), sps.CTUSize, 32u) )
     , ISingleTree         ( !sps.dualITree )
-    , wrapArround         ( sps.wrapAroundEnabled )
     , maxMTTDepth         { sps.maxMTTDepth[0], sps.maxMTTDepth[1], sps.maxMTTDepth[2] }
     , minTSize            { 1u << sps.log2MinCodingBlockSize, 1u << sps.log2MinCodingBlockSize, 1u << sps.log2MinCodingBlockSize }
     , maxBtSize           { sps.maxBTSize[0], sps.maxBTSize[1], sps.maxBTSize[2] }
@@ -1607,7 +1606,6 @@ public:
   const unsigned     lumaHeight;
   const unsigned     fastDeltaQPCuMaxSize;
   const bool         ISingleTree;
-  const bool         wrapArround;
 
 private:
   const unsigned     maxMTTDepth[3];

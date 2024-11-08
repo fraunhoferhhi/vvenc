@@ -251,10 +251,10 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
       }
       TCoeff* dstij = dst + j * line + i;
 
-      dstij[ 0 * line ] = shift_and_round( horizontal_add_s32x4( sum00 ), shift );
-      dstij[ 1 * line ] = shift_and_round( horizontal_add_s32x4( sum01 ), shift );
-      dstij[ 2 * line ] = shift_and_round( horizontal_add_s32x4( sum02 ), shift );
-      dstij[ 3 * line ] = shift_and_round( horizontal_add_s32x4( sum03 ), shift );
+      dstij[ 0 * line ] = (TCoeff) shift_and_round( horizontal_add_s32x4( sum00 ), shift );
+      dstij[ 1 * line ] = (TCoeff) shift_and_round( horizontal_add_s32x4( sum01 ), shift );
+      dstij[ 2 * line ] = (TCoeff) shift_and_round( horizontal_add_s32x4( sum02 ), shift );
+      dstij[ 3 * line ] = (TCoeff) shift_and_round( horizontal_add_s32x4( sum03 ), shift );
 
       j += 4;
     } while( j != cutoff );

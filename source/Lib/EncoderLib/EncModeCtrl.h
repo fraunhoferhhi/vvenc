@@ -320,9 +320,10 @@ private:
   XUCache              m_dummyCache;
 
 protected:
-
-  void create   ( const ChromaFormat chFmt );
+  bool                 m_reuseCuResults;
+  void create   ( const bool reuseCuResults, const ChromaFormat chFmt );
   void destroy  ();
+
 public:
   BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_encInfoBuf( nullptr ), m_dmvrMvBuf( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
   ~BestEncInfoCache() {}

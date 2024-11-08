@@ -70,6 +70,17 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
   return *this;
 }
 
+static unsigned getMaxTlVal( unsigned perTlVal )
+{
+  unsigned maxVal = 0;
+  while( perTlVal > 0 )
+  {
+    maxVal    = std::max( maxVal, perTlVal % 10 );
+    perTlVal /= 10;
+  }
+  return maxVal;
+}
+
 void VVEncCfg::xInitCfgMembers()
 {
   m_stageParallelProc = m_numThreads > 0 && m_maxParallelFrames > 0;
@@ -80,6 +91,7 @@ void VVEncCfg::xInitCfgMembers()
     m_MaxQT[1]        = 
     m_MaxQT[2]        = m_CTUSize;
   m_rateCap           = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
+  m_reuseCuResults    = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
 
   m_mergeRdCandQuotaRegular = std::min( NUM_MRG_SATD_CAND, std::max( ( int ) m_maxNumMergeCand - 2, 1 ) );
   //                                        0  1  2  3  4

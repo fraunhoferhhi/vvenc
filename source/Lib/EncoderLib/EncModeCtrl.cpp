@@ -256,8 +256,12 @@ static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, co
   return true;
 }
 
-void BestEncInfoCache::create( const ChromaFormat chFmt )
+void BestEncInfoCache::create( const bool reuseCuResults, const ChromaFormat chFmt )
 {
+  m_reuseCuResults = reuseCuResults;
+
+  if( !m_reuseCuResults ) return;
+
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
@@ -395,6 +399,8 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
 
 void BestEncInfoCache::destroy()
 {
+  if( !m_reuseCuResults ) return;
+
   delete[] m_encInfoBuf;
   m_encInfoBuf = nullptr;
 
@@ -409,6 +415,8 @@ void BestEncInfoCache::destroy()
 
 void BestEncInfoCache::init( const Slice &slice )
 {
+  if( !m_reuseCuResults ) return;
+
   bool isInitialized = m_pcv;
 
   m_pcv = slice.pps->pcv;
@@ -420,6 +428,8 @@ void BestEncInfoCache::init( const Slice &slice )
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner )
 {
+  if( !m_reuseCuResults ) return false;
+
   if( cs.cus.size() != 1 || cs.tus.size() != 1 || partitioner.maxBTD <= 1 )
   {
     return false;
@@ -447,7 +457,7 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& 
 
 bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
 {
-  if( partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
+  if( !m_reuseCuResults || partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
@@ -480,6 +490,8 @@ bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partit
 
 bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, const Partitioner& partitioner ) const
 {
+  if( !m_reuseCuResults ) return false;
+
   unsigned idx1, idx2, idx3, idx4;
   getAreaIdxNew( cs.area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
 
@@ -524,12 +536,12 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 //////////////////////////////////////////////////////////////////////////
 void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
 {
-  m_pcEncCfg  = &encCfg;
-  m_pcRdCost  = pRdCost;
-  comprCUCtx  = nullptr;
+  m_pcEncCfg = &encCfg;
+  m_pcRdCost = pRdCost;
+  comprCUCtx = nullptr;
 
   CacheBlkInfoCtrl::create();
-  BestEncInfoCache::create( encCfg.m_internChromaFormat );
+  BestEncInfoCache::create( m_pcEncCfg->m_reuseCuResults, encCfg.m_internChromaFormat );
 }
 
 void EncModeCtrl::destroy()

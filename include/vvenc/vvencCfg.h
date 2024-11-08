@@ -782,8 +782,9 @@ typedef struct vvenc_config
                                                                                          // IFP and WPP are all used. For 1 and 2, an optimal selection of tools is done based on resolution and CTU size.
   int8_t              m_GOPQPA;
   int                 m_minIntraDist;
+  int8_t              m_numParallelGOPs;
 
-  int                 m_reservedInt[1];
+  int8_t              m_reservedInt8[3];
   double              m_reservedDouble[8];
 
   // internal state variables

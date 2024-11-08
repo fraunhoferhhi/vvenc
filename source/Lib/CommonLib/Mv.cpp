@@ -67,10 +67,6 @@ void roundAffineMv( int& mvx, int& mvy, int nShift )
 
 void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv )
 {
-  if( pcv.wrapArround )
-  {
-    return;
-  }
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = ( pcv.lumaWidth + iOffset - ( int ) pos.x - 1 ) << iMvShift;
@@ -85,10 +81,6 @@ void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCa
 
 void clipMvHor( Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv )
 {
-  if( pcv.wrapArround )
-  {
-    return;
-  }
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = ( pcv.lumaWidth + iOffset - ( int ) pos.x - 1 ) << iMvShift;
@@ -98,10 +90,6 @@ void clipMvHor( Mv& rcMv, const Position& pos, const struct Size& size, const Pr
 
 void clipMv(Mv& rcMv, const Position& pos, const struct Size& size, const PreCalcValues& pcv, const PPS& pps, bool m_clipMvInSubPic)
 {
-  if (pcv.wrapArround)
-  {
-    return;
-  }
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = (pcv.lumaWidth + iOffset - (int)pos.x - 1) << iMvShift;

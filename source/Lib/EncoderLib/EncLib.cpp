@@ -282,6 +282,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   // additional pictures due to structural delay
   m_maxNumPicShared += m_preProcess->getGOPCfg()->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
   m_maxNumPicShared += 3;
+  // increase number of picture buffers for GOP parallel processing
+  m_maxNumPicShared += m_encCfg.m_numParallelGOPs ? (m_encCfg.m_GOPSize + 1) * m_encCfg.m_numParallelGOPs: 0;
 
   if( m_rateCtrl->rcIsFinalPass )
   {

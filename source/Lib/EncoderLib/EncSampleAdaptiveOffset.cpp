@@ -580,12 +580,12 @@ void EncSampleAdaptiveOffset::deriveOffsets(ComponentID compIdx, const int chann
 
       //decide the starting band index
       double minCost = MAX_DOUBLE, cost;
-      for(int band=0; band< NUM_SAO_BO_CLASSES- 4+ 1; band++)
+      for(int band=0; band< NUM_SAO_BO_CLASSES; band++)
       {
-        cost  = costBOClasses[band  ];
-        cost += costBOClasses[band+1];
-        cost += costBOClasses[band+2];
-        cost += costBOClasses[band+3];
+        cost  = costBOClasses[(band  )%NUM_SAO_BO_CLASSES];
+        cost += costBOClasses[(band+1)%NUM_SAO_BO_CLASSES];
+        cost += costBOClasses[(band+2)%NUM_SAO_BO_CLASSES];
+        cost += costBOClasses[(band+3)%NUM_SAO_BO_CLASSES];
 
         if(cost < minCost)
         {
