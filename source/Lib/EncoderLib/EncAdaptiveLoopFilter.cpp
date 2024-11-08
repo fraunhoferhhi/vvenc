@@ -327,8 +327,6 @@ alf_float_t AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const 
   return error * invFactor;
 }
 
-
-
 template<int numCoeff>
 static alf_float_t calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
 {
@@ -347,6 +345,100 @@ static alf_float_t calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const Alf
 
   return error * invFactor;
 }
+
+static alf_float_t calcErrorForCoeffsLin_13( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
+{
+  // calculate in same order as SIMD to avoid rounding errors
+  alf_float_t error = 0;
+  alf_float_t vE1[4],vE5[4],vE9[4];
+  alf_float_t vSum[4][4];
+  alf_float_t verror[4];
+  int i,n;
+  
+  // i= 0,1,2,3
+  for (i=0;i<4;i++)
+  {
+    memset(vE1,0,sizeof(vE1));
+    for (n=i;n<4;n++)
+    {
+      vE1[n]=E[0][0][i][n+1]*coeff[n+1]; 
+    }
+    for (n=0;n<4;n++)
+    {
+      vE5[n]=E[0][0][i][n+5]*coeff[n+5]; 
+      vE9[n]=E[0][0][i][n+9]*coeff[n+9]; 
+      vSum[i][n]=vE1[n]+vE5[n]+vE9[n];
+    }
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[n>>1][(n&1)<<1]+vSum[n>>1][((n&1)<<1)+1];
+    vSum[2][n]=vSum[(n>>1)+2][(n&1)<<1]+vSum[(n>>1)+2][((n&1)<<1)+1];;
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[(n>>1)<<1][(n&1)<<1]+vSum[(n>>1)<<1][((n&1)<<1)+1];
+    vE1[n]=(((E[0][0][n][n] * coeff[n])+(vSum[0][n]*2)) *invFactor) - (y[0][n]*2);
+    verror[n]=vE1[n]* coeff[n];
+  }
+  
+  // i= 4,5,6,7
+  for (i=0;i<4;i++)
+  {  
+    memset(vE5,0,sizeof(vE5));
+    for (int n=i;n<4;n++)
+    {
+      vE5[n]=E[0][0][i+4][n+5]*coeff[n+5]; 
+    }
+    for (int n=0;n<4;n++)
+    {
+      vE9[n]=E[0][0][i+4][n+9]*coeff[n+9]; 
+      vSum[i][n]=vE5[n]+vE9[n];
+    }
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[n>>1][(n&1)<<1]+vSum[n>>1][((n&1)<<1)+1];
+    vSum[2][n]=vSum[(n>>1)+2][(n&1)<<1]+vSum[(n>>1)+2][((n&1)<<1)+1];
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[(n>>1)<<1][(n&1)<<1]+vSum[(n>>1)<<1][((n&1)<<1)+1];
+    vE1[n]=(((E[0][0][n+4][n+4] * coeff[n+4])+(vSum[0][n]*2)) *invFactor) - (y[0][n+4]*2);
+    verror[n]=verror[n] + vE1[n]* coeff[n+4];
+  }
+
+  // i= 8,9,10,11
+  for (i=0;i<4;i++)
+  {  
+    memset(vE9,0,sizeof(vE5));
+    for (int n=i;n<4;n++)
+    {
+      vE9[n]=E[0][0][i+8][n+9]*coeff[n+9]; 
+    }
+    for (int n=0;n<4;n++)
+    {
+      vSum[i][n]=vE9[n];
+    }
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[n>>1][(n&1)<<1]+vSum[n>>1][((n&1)<<1)+1];
+    vSum[2][n]=vSum[(n>>1)+2][(n&1)<<1]+vSum[(n>>1)+2][((n&1)<<1)+1];
+  }
+  for (n=0;n<4;n++)
+  {
+    vSum[0][n]=vSum[(n>>1)<<1][(n&1)<<1]+vSum[(n>>1)<<1][((n&1)<<1)+1];
+    vE1[n]=(((E[0][0][n+8][n+8] * coeff[n+8])+(vSum[0][n]*2)) *invFactor) - (y[0][n+8]*2);
+    verror[n]=verror[n] + vE1[n]* coeff[n+8];
+  }
+  verror[0]=verror[0]+verror[1];
+  verror[2]=verror[2]+verror[3];
+  error=verror[0]+verror[2];
+  error += ( ( E[0][0][12][12] * coeff[12] ) * invFactor - 2 * y[0][12] ) * coeff[12];
+  return error * invFactor;
+}
+
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
 static alf_float_t calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
@@ -729,7 +821,6 @@ alf_float_t AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int 
   THROW( "Unexpected number of coefficients: " << numCoeff );
   return 0.0;
 }
-
 template<>
 alf_float_t AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const
 {
@@ -741,7 +832,7 @@ alf_float_t AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int
       return calcErrorForCoeffsLin_13_SSE( E, y, coeff, invFactor );
     else
 #endif
-      return calcErrorForCoeffsLin<13>( E, y, coeff, invFactor );
+      return calcErrorForCoeffsLin_13( E, y, coeff, invFactor );
   }
 
   THROW( "Unexpected number of coefficients: " << numCoeff );

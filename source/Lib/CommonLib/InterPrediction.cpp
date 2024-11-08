@@ -706,13 +706,10 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
   int shiftHor = MV_FRACTIONAL_BITS_INTERNAL + getComponentScaleX(compID, chFmt);
   int shiftVer = MV_FRACTIONAL_BITS_INTERNAL + getComponentScaleY(compID, chFmt);
 
-  bool  wrapRef = false;
   Mv    mv(_mv);
+
   CHECKD( m_ifpLines && !srcPadBuf && cu.cs->picture != refPic && !CU::isMvInRangeFPP( cu[compID].y, cu[compID].height, mv.ver, m_ifpLines, *cu.cs->pcv, getComponentScaleY(compID, chFmt) ), "xPredInterBlk: CTU line-wise FPP MV restriction failed!\n" );
-  if( !isIBC && cu.cs->pcv->wrapArround )
-  {
-    wrapRef = wrapClipMv( mv, cu.blocks[ 0 ].pos(), cu.blocks[ 0 ].size(), *cu.cs );
-  }
+
   int xFrac = mv.hor & ((1 << shiftHor) - 1);
   int yFrac = mv.ver & ((1 << shiftVer) - 1);
   if (isIBC)
@@ -724,18 +721,21 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
   unsigned width  = dstBuf.width;
   unsigned height = dstBuf.height;
 
-  CPelBuf refBuf;
+  const Pel* refBufPtr;
+  int        refBufStride;
+
   if( srcPadBuf )
   {
-    refBuf.buf    = srcPadBuf;
-    refBuf.stride = srcPadStride;
+    refBufPtr    = srcPadBuf;
+    refBufStride = srcPadStride;
   }
   else
   {
     Position offset = cu.blocks[compID].pos().offset( mv.hor >> shiftHor, mv.ver >> shiftVer );
-    refBuf      = (wrapRef) ? refPic->getRecoWrapBuf( compID ) : refPic->getRecoBuf( compID );
-    refBuf.buf += offset.x;
-    refBuf.buf += offset.y * refBuf.stride;
+    refBufPtr       = refPic->getRecoBufPtr   ( compID );
+    refBufStride    = refPic->getRecoBufStride( compID );
+    refBufPtr      += offset.x;
+    refBufPtr      += offset.y * refBufStride;
   }
 
   if( dmvrWidth )
@@ -760,29 +760,29 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
   }
   bool useAltHpelIf = cu.imv == IMV_HPEL;
 
-  if( yFrac == 0 )
+  if( bilinearMC )
   {
-    m_if.filterHor(compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, xFrac, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
+    m_if.filterN2_2D( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, width, height, xFrac, yFrac, clpRng );
+  }
+  else if( yFrac == 0 )
+  {
+    m_if.filterHor(compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, xFrac, rndRes, chFmt, clpRng, useAltHpelIf, 0);
   }
   else if( xFrac == 0 )
   {
-    m_if.filterVer(compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, true, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-  }
-  else if( bilinearMC )
-  {
-    m_if.filterN2_2D( compID, (Pel*)refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, width, height, xFrac, yFrac, clpRng );
+    m_if.filterVer(compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, true, rndRes, chFmt, clpRng, useAltHpelIf, 0);
   }
   else if( backupWidth == 4 && backupHeight == 4 )
   {
-    m_if.filter4x4( compID, (Pel*)refBuf.buf, refBuf.stride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+    m_if.filter4x4( compID, refBufPtr, refBufStride ,(Pel*)dstBuf.buf, dstBuf.stride, 4, 4, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
   }
   else if( backupWidth == 16 )
   {
-    m_if.filter16x16( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+    m_if.filter16x16( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
   }
   else if( backupWidth == 8 )
   {
-    m_if.filter8x8( compID, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+    m_if.filter8x8( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
   }
   else
   {
@@ -790,8 +790,8 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
 
     PelBuf tmpBuf( m_filteredBlockTmp[0][compID], dmvrWidth ? dmvrWidth : dstBuf.stride, dmvrWidth ? Size( dmvrWidth, dmvrHeight ) : cu.blocks[compID].size() );
 
-    m_if.filterHor(compID, (Pel*)refBuf.buf - ((vFilterSize >> 1) - 1) * refBuf.stride, refBuf.stride, tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
-    m_if.filterVer(compID, (Pel*)tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, bilinearMC, bilinearMC);
+    m_if.filterHor(compID, refBufPtr -  ((vFilterSize >> 1) - 1) * refBufStride,  refBufStride,  tmpBuf.buf, tmpBuf.stride, backupWidth, backupHeight + vFilterSize - 1, xFrac, false, chFmt, clpRng, useAltHpelIf, 0);
+    m_if.filterVer(compID, tmpBuf.buf + ((vFilterSize >> 1) - 1) * tmpBuf.stride, tmpBuf.stride, dstBuf.buf, dstBuf.stride, backupWidth, backupHeight, yFrac, false, rndRes, chFmt, clpRng, useAltHpelIf, 0);
   }
 
   if (bdofApplied && compID == COMP_Y)
@@ -799,7 +799,7 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
     const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
     int xOffset = (xFrac < 8) ? 1 : 0;
     int yOffset = (yFrac < 8) ? 1 : 0;
-    const Pel* refPel = refBuf.buf - yOffset * refBuf.stride - xOffset;
+    const Pel* refPel = refBufPtr - yOffset * refBufStride - xOffset;
     Pel* dstPel = m_filteredBlockTmp[2 + refPicList][compID] + dstBuf.stride + 1;
     for (int w = 0; w < (width - 2 * BDOF_EXTEND_SIZE); w++)
     {
@@ -807,7 +807,7 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
       dstPel[w] = val - (Pel)IF_INTERNAL_OFFS;
     }
 
-    refPel = refBuf.buf + (1 - yOffset)*refBuf.stride - xOffset;
+    refPel = refBufPtr + (1 - yOffset)*refBufStride - xOffset;
     dstPel = m_filteredBlockTmp[2 + refPicList][compID] + 2 * dstBuf.stride + 1;
     for (int h = 0; h < (height - 2 * BDOF_EXTEND_SIZE - 2); h++)
     {
@@ -817,11 +817,11 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
       val = leftShiftU(refPel[width - 3], shift);
       dstPel[width - 3] = val - (Pel)IF_INTERNAL_OFFS;
 
-      refPel += refBuf.stride;
+      refPel += refBufStride;
       dstPel += dstBuf.stride;
     }
 
-    refPel = refBuf.buf + (height - 2 * BDOF_EXTEND_SIZE - 2 + 1 - yOffset)*refBuf.stride - xOffset;
+    refPel = refBufPtr + (height - 2 * BDOF_EXTEND_SIZE - 2 + 1 - yOffset)*refBufStride - xOffset;
     dstPel = m_filteredBlockTmp[2 + refPicList][compID] + (height - 2 * BDOF_EXTEND_SIZE)*dstBuf.stride + 1;
     for (int w = 0; w < (width - 2 * BDOF_EXTEND_SIZE); w++)
     {
@@ -1093,20 +1093,12 @@ void DMVR::xCopyAndPad( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refI
     width  += filtersize - 1;
     height += filtersize - 1;
     cMv    += Mv(-(((filtersize >> 1) - 1) << mvshiftTemp), -(((filtersize >> 1) - 1) << mvshiftTemp));
-    bool wrapRef = false;
 
-    if (cu.cs->sps->wrapAroundEnabled)
-    {
-      wrapRef = wrapClipMv(cMv, cu.lumaPos(), cu.lumaSize(), *cu.cs);
-    }
-    else
-    {
-      clipMv(cMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
-    }
+    clipMv(cMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
 
     /* Pre-fetch similar to HEVC*/
     {
-      CPelBuf refBuf      = wrapRef ? refPic->getRecoWrapBuf(ComponentID(compID)) : refPic->getRecoBuf(ComponentID(compID));
+      CPelBuf refBuf      = refPic->getRecoBuf(ComponentID(compID));
       Position Rec_offset = cu.blocks[compID].pos().offset(cMv.hor >> mvshiftTemp, cMv.ver >> mvshiftTemp);
       const Pel* refBufPtr = refBuf.bufAt(Rec_offset);
 
@@ -1542,7 +1534,6 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
   
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
-  bool      wrapRef = false;
   const bool subblkMVSpreadOverLimit = isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
 
   bool enablePROF = sps.PROF && (!m_skipPROF) && (compID == COMP_Y);
@@ -1683,7 +1674,6 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   }
   // get prediction block by block
   const CPelBuf refBuf     = refPic->getRecoBuf(compID);
-  const CPelBuf refBufWrap; //no support = refPic->getRecoWrapBuf(compID);
 
   const int puX = cu.blocks[compID].x;
   const int puY = cu.blocks[compID].y;
@@ -1713,23 +1703,11 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         iMvScaleTmpVer = tmpMv.ver;
 
         // clip and scale
-        if( cu.cs->sps->wrapAroundEnabled )
+        m_storedMv[h / AFFINE_MIN_BLOCK_SIZE * MVBUFFER_SIZE + w / AFFINE_MIN_BLOCK_SIZE].set(iMvScaleTmpHor, iMvScaleTmpVer);
+        //   if( scalingRatio == SCALE_1X ) 
         {
-          m_storedMv[h / AFFINE_MIN_BLOCK_SIZE * MVBUFFER_SIZE + w / AFFINE_MIN_BLOCK_SIZE].set(iMvScaleTmpHor, iMvScaleTmpVer);
-          Mv tmpMv(iMvScaleTmpHor, iMvScaleTmpVer);
-          wrapRef = wrapClipMv(tmpMv, Position(cu.Y().x + w, cu.Y().y + h), Size(blockWidth, blockHeight), *cu.cs);
-          iMvScaleTmpHor = tmpMv.hor;
-          iMvScaleTmpVer = tmpMv.ver;
-        }
-        else
-        {
-          wrapRef = false;
-          m_storedMv[h / AFFINE_MIN_BLOCK_SIZE * MVBUFFER_SIZE + w / AFFINE_MIN_BLOCK_SIZE].set(iMvScaleTmpHor, iMvScaleTmpVer);
-       //   if( scalingRatio == SCALE_1X ) 
-          {
-            iMvScaleTmpHor = std::min<int>(iHorMax, std::max<int>(iHorMin, iMvScaleTmpHor));
-            iMvScaleTmpVer = std::min<int>(iVerMax, std::max<int>(iVerMin, iMvScaleTmpVer));
-          }
+          iMvScaleTmpHor = std::min<int>(iHorMax, std::max<int>(iHorMin, iMvScaleTmpHor));
+          iMvScaleTmpVer = std::min<int>(iVerMax, std::max<int>(iVerMin, iMvScaleTmpVer));
         }
       }
       else
@@ -1737,19 +1715,10 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         Mv curMv = m_storedMv[((h << iScaleY) / AFFINE_MIN_BLOCK_SIZE) * MVBUFFER_SIZE + ((w << iScaleX) / AFFINE_MIN_BLOCK_SIZE)] +
           m_storedMv[((h << iScaleY) / AFFINE_MIN_BLOCK_SIZE + iScaleY)* MVBUFFER_SIZE + ((w << iScaleX) / AFFINE_MIN_BLOCK_SIZE + iScaleX)];
         roundAffineMv(curMv.hor, curMv.ver, 1);
-        if (cu.cs->sps->wrapAroundEnabled)
-        {
-          wrapRef = wrapClipMv(curMv, Position(cu.Y().x + (w << iScaleX), cu.Y().y + (h << iScaleY)), Size(blockWidth << iScaleX, blockHeight << iScaleY), *cu.cs);
-        }
-        else
-        {
-          wrapRef = false;
-//          if( scalingRatio == SCALE_1X ) 
-          {
-            curMv.hor = std::min<int>(iHorMax, std::max<int>(iHorMin, curMv.hor));
-            curMv.ver = std::min<int>(iVerMax, std::max<int>(iVerMin, curMv.ver));
-          }
-        }
+
+        curMv.hor = std::min<int>(iHorMax, std::max<int>(iHorMin, curMv.hor));
+        curMv.ver = std::min<int>(iVerMax, std::max<int>(iVerMin, curMv.ver));
+
         iMvScaleTmpHor = curMv.hor;
         iMvScaleTmpVer = curMv.ver;
       }
@@ -1779,10 +1748,10 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         yFrac = iMvScaleTmpVer & 31;
       }
 
-      Pel* ref = wrapRef ? ( Pel* ) refBufWrap.buf : ( Pel* ) refBuf.buf;
-      ref     +=   puX + xInt + w;
-      ref     += ( puY + yInt + h ) * ( wrapRef ? refBufWrap.stride : refBuf.stride );
-      Pel* dst = dstBuf.buf + w + h * dstBuf.stride;
+      const Pel* ref = refBuf.buf;
+      ref           +=   puX + xInt + w;
+      ref           += ( puY + yInt + h ) * refBuf.stride;
+      Pel* dst       = dstBuf.buf + w + h * dstBuf.stride;
 
       int refStride = refBuf.stride;
       int dstStride = dstBuf.stride;
@@ -1802,11 +1771,11 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
       }
       else if( !yFrac )
       {
-        m_if.filterHor( compID, ( Pel* ) ref, refStride, dst, dstStride, bw, bh, xFrac, isLast, chFmt, clpRng );
+        m_if.filterHor( compID, ref, refStride, dst, dstStride, bw, bh, xFrac, isLast, chFmt, clpRng );
       }
       else if( xFrac == 0 )
       {
-        m_if.filterVer( compID, ( Pel* ) ref, refStride, dst, dstStride, bw, bh, yFrac, true, isLast, chFmt, clpRng );
+        m_if.filterVer( compID, ref, refStride, dst, dstStride, bw, bh, yFrac, true, isLast, chFmt, clpRng );
       }
       
       if (enablePROF)
@@ -1851,7 +1820,6 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
       }
     }
   }
-
 }
 
 bool InterPredInterpolation::xIsAffineMvInRangeFPP( const CodingUnit &cu, const Mv* _mv, const int ifpLines, const int mvPrecShift )

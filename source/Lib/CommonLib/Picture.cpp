@@ -496,43 +496,6 @@ void Picture::extendPicBorder()
     {
       ::memcpy( pi - (y+1)*p.stride, pi, sizeof(Pel)*(p.width + (xmargin<<1)) );
     }
-
-    // reference picture with horizontal wrapped boundary
-    if (cs->sps->wrapAroundEnabled)
-    {
-      p = m_picBufs[ PIC_RECON_WRAP ].get( compID );
-      p.copyFrom(m_picBufs[ PIC_RECONSTRUCTION ].get( compID ));
-      piTxt = p.bufAt(0,0);
-      pi = piTxt;
-      int xoffset = cs->pps->wrapAroundOffset >> getComponentScaleX( compID, cs->area.chromaFormat );
-      for (int y = 0; y < p.height; y++)
-      {
-        for (int x = 0; x < xmargin; x++ )
-        {
-          if( x < xoffset )
-          {
-            pi[ -x - 1 ] = pi[ -x - 1 + xoffset ];
-            pi[  p.width + x ] = pi[ p.width + x - xoffset ];
-          }
-          else
-          {
-            pi[ -x - 1 ] = pi[ 0 ];
-            pi[  p.width + x ] = pi[ p.width - 1 ];
-          }
-        }
-        pi += p.stride;
-      }
-      pi -= (p.stride + xmargin);
-      for (int y = 0; y < ymargin; y++ )
-      {
-        ::memcpy( pi + (y+1)*p.stride, pi, sizeof(Pel)*(p.width + (xmargin << 1)));
-      }
-      pi -= ((p.height-1) * p.stride);
-      for (int y = 0; y < ymargin; y++ )
-      {
-        ::memcpy( pi - (y+1)*p.stride, pi, sizeof(Pel)*(p.width + (xmargin<<1)) );
-      }
-    }
   }
 
   isBorderExtended = true;
