@@ -543,8 +543,8 @@ struct ClpRng
 struct ClpRngs : public ClpRng
 {
   // bitdepth has to be the same for all channels
-  const ClpRng& operator[] ( const ComponentID compID ) const { return *this; }
-  const ClpRng& operator[] ( const int         compID ) const { return *this; }
+  const ClpRng& operator[] ( const ComponentID /*compID*/ ) const { return *this; }
+  const ClpRng& operator[] ( const int         /*compID*/ ) const { return *this; }
   //const ClpRng& operator[] ( const ComponentID compId ) const { return comp[compId]; }
   //ClpRng comp[MAX_NUM_COMP]; ///< the bit depth as indicated in the SPS
 };
