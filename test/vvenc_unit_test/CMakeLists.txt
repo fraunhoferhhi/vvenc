@@ -1,9 +1,18 @@
+# executable
 set( EXE_NAME vvenc_unit_test )
 
+# get source files
 file( GLOB SRC_FILES CONFIGURE_DEPENDS "*.cpp" )
+# get include files
 file( GLOB INC_FILES CONFIGURE_DEPENDS "*.h" )
 
-add_executable( ${EXE_NAME} ${SRC_FILES} ${INC_FILES} )
+# set resource file for MSVC compilers
+if( MSVC )
+  set( RESOURCE_FILE ${EXE_NAME}.rc )
+endif()
+
+# add executable
+add_executable( ${EXE_NAME} ${SRC_FILES} ${INC_FILES} ${RESOURCE_FILE} )
 set_target_properties( ${EXE_NAME} PROPERTIES RELEASE_POSTFIX        "${CMAKE_RELEASE_POSTFIX}" )
 set_target_properties( ${EXE_NAME} PROPERTIES DEBUG_POSTFIX          "${CMAKE_DEBUG_POSTFIX}" )
 set_target_properties( ${EXE_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "${CMAKE_RELWITHDEBINFO_POSTFIX}" )
@@ -19,9 +28,10 @@ target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CX
 
 target_include_directories( ${EXE_NAME} PRIVATE ${VVENC_LIB_DIR} )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
-
-# Example: place header files in different folders
+# example: place header files in different folders
 source_group( "Header Files"   FILES ${INC_FILES} )
+source_group( "Resource Files" FILES ${RESOURCE_FILE} )
 
-# Set the folder where to place the projects
+
+# set the folder where to place the projects
 set_target_properties( ${EXE_NAME}  PROPERTIES FOLDER test )
