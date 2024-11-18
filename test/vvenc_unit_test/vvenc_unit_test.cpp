@@ -231,7 +231,7 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
 static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdCore_2D trSize=%d\n", trSize );
-  InputGenerator<TCoeff> g{ 16 };
+  InputGenerator<TCoeff> g{ 11 }; // signed 10 bit in both positive/negative, i.e. 11 bit shifted to signed
   TrafoGenerator<TMatrixCoeff> t{ 8 };
   DimensionGenerator rng;
 
