@@ -47,7 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by vvenclibtest.rc
+// Used by vvenc_unit_test.rc
 
 // Next default values for new objects
 //
