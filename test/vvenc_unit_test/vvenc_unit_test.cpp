@@ -97,6 +97,23 @@ private:
   unsigned m_bits;
 };
 
+template<typename T>
+class TrafoGenerator
+{
+public:
+  explicit TrafoGenerator( unsigned bits ) : m_bits( bits )
+  {
+  }
+
+  T operator()() const
+  {
+    return ( rand() & ( ( 1 << m_bits ) - 1 ) ) - ( 1 << m_bits >> 1 );
+  }
+
+private:
+  unsigned m_bits;
+};
+
 class DimensionGenerator
 {
 public:
@@ -108,78 +125,101 @@ public:
   }
 };
 
-template<typename G>
-static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, int idx, int trSize, unsigned lines,
-                                   unsigned reducedLines, unsigned rows, G input_generator )
+template<typename G, typename T>
+static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
+                                   unsigned reducedLines, unsigned cutoff, G input_generator, T trafo_generator )
 {
   CHECK( lines == 0, "Lines must be non-zero" );
   CHECK( reducedLines > lines, "ReducedLines must be less than or equal to lines" );
-  CHECK( rows == 0, "Rows must be non-zero" );
-  CHECK( rows % 4, "Rows must be a multiple of four" );
+  CHECK( cutoff == 0, "Cutoff must be non-zero" );
+  CHECK( cutoff % 4, "Cutoff must be a multiple of four" );
+  CHECK( cutoff > trSize, "Cutoff must not be larger than transformation size" );
 
   std::ostringstream sstm;
-  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows;
+  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " cutoff=" << cutoff;
 
-  std::vector<TMatrixCoeff> it( rows * trSize );
-  std::vector<TCoeff> src( rows * lines );
-  std::vector<TCoeff> dst0( lines * trSize );
-  std::vector<TCoeff> dst1 = dst0;
+  TMatrixCoeff *it   = ( TMatrixCoeff* ) xMalloc( TMatrixCoeff, trSize * trSize );
+  TCoeff       *src  = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
+  TCoeff       *dst0 = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
+  TCoeff       *dst1 = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
 
   // Initialize source buffers.
-  std::generate( it.begin(), it.end(), input_generator );
-  std::generate( src.begin(), src.end(), input_generator );
+  std::generate( it, it + trSize * trSize, trafo_generator );
+  std::generate( src, src + trSize * lines, input_generator );
+  memset( dst0, 0, trSize * lines * sizeof( TCoeff ) );
+  memset( dst1, 0, trSize * lines * sizeof( TCoeff ) );
 
-  ref->fastInvCore[ idx ]( it.data(), src.data(), dst0.data(), lines, reducedLines, rows );
-  opt->fastInvCore[ idx ]( it.data(), src.data(), dst1.data(), lines, reducedLines, rows );
-  return compare_values_2d( sstm.str(), dst0.data(), dst1.data(), reducedLines, trSize );
+  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, cutoff );
+  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, cutoff );
+
+  auto ret = compare_values_2d( sstm.str(), dst0, dst1, trSize, lines );
+
+  xFree( it );
+  xFree( src );
+  xFree( dst0 );
+  xFree( dst1 );
+
+  return ret;
 }
 
-template<typename G>
-static bool check_one_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, int idx, int trSize, unsigned line,
-                                      unsigned reducedLine, unsigned cutoff, unsigned shift, G input_generator )
+template<typename G, typename T>
+static bool check_one_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned line,
+                                      unsigned reducedLine, unsigned cutoff, unsigned shift, G input_generator, T trafo_generator )
 {
   CHECK( line == 0, "Line must be non-zero" );
   CHECK( reducedLine > line, "ReducedLine must be less than or equal to line" );
   CHECK( cutoff == 0, "Cutoff must be non-zero" );
   CHECK( cutoff % 4, "Cutoff must be a multiple of four" );
+  CHECK( cutoff > trSize, "Cutoff must not be larger than transformation size" );
   CHECK( shift == 0, "Shift must be at least one" );
 
   std::ostringstream sstm;
   sstm << "fastFwdCore_2D trSize=" << trSize << " line=" << line << " reducedLine=" << reducedLine
        << " cutoff=" << cutoff << " shift=" << shift;
 
-  std::vector<TMatrixCoeff> tc( trSize * cutoff );
-  std::vector<TCoeff> src( trSize * reducedLine );
-  std::vector<TCoeff> dst0( line * cutoff );
-  std::vector<TCoeff> dst1 = dst0;
+  TMatrixCoeff *tc   = ( TMatrixCoeff* ) xMalloc( TMatrixCoeff, trSize * trSize );
+  TCoeff       *src  = ( TCoeff* )       xMalloc( TCoeff,       trSize * line );
+  TCoeff       *dst0 = ( TCoeff* )       xMalloc( TCoeff,       trSize * line );
+  TCoeff       *dst1 = ( TCoeff* )       xMalloc( TCoeff,       trSize * line );
 
   // Initialize source and destination buffers, make sure that destination
   // buffers match in elements that are not written to by the kernel being
   // tested.
-  std::generate( tc.begin(), tc.end(), input_generator );
-  std::generate( src.begin(), src.end(), input_generator );
+  std::generate( tc,  tc + trSize * trSize, trafo_generator );
+  std::generate( src, src + trSize * line,  input_generator );
+  memset( dst0, 0, trSize * line * sizeof( TCoeff ) );
+  memset( dst1, 0, trSize * line * sizeof( TCoeff ) );
 
-  ref->fastFwdCore_2D[ idx ]( tc.data(), src.data(), dst0.data(), line, reducedLine, cutoff, shift );
-  opt->fastFwdCore_2D[ idx ]( tc.data(), src.data(), dst1.data(), line, reducedLine, cutoff, shift );
+  ref->fastFwdCore_2D[ idx ]( tc, src, dst0, line, reducedLine, cutoff, shift );
+  opt->fastFwdCore_2D[ idx ]( tc, src, dst1, line, reducedLine, cutoff, shift );
+
   // Don't check for over-writes past reducedLine columns here, since the
   // existing x86 implementations would fail.
-  return compare_values_2d( sstm.str(), dst0.data(), dst1.data(), cutoff, reducedLine, line );
+  auto ret = compare_values_2d( sstm.str(), dst0, dst1, trSize, reducedLine, line );
+
+  xFree( tc );
+  xFree( src );
+  xFree( dst0 );
+  xFree( dst1 );
+
+  return ret;
 }
 
-static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, int idx, int trSize )
+static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastInvCore trSize=%d\n", trSize );
   InputGenerator<TCoeff> g{ 10 };
+  TrafoGenerator<TMatrixCoeff> t{ 8 };
   DimensionGenerator rng;
 
   for( unsigned i = 0; i < num_cases; ++i )
   {
     // Clamp lines down to the next multiple of four when generating
     // reducedLines to avoid existing x86 implementations over-writing.
-    unsigned lines        = rng.get( 4, 1024 );
-    unsigned reducedLines = rng.get( 4, lines & ~3U );
-    unsigned rows         = rng.get( 4, 128, 4 );  // Rows must be a non-zero multiple of four.
-    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, g ) )
+    unsigned lines        = 1 << rng.get( 2, 6 );
+    unsigned reducedLines = std::min( 32u, rng.get( 4u, lines, 4 ) );
+    unsigned cutoff       = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
+    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, cutoff, g, t ) )
     {
       return false;
     }
@@ -188,21 +228,22 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
   return true;
 }
 
-static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, int idx, int trSize )
+static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdCore_2D trSize=%d\n", trSize );
   InputGenerator<TCoeff> g{ 10 };
+  TrafoGenerator<TMatrixCoeff> t{ 8 };
   DimensionGenerator rng;
 
   for( unsigned i = 0; i < num_cases; ++i )
   {
     // Clamp line down to the next multiple of four when generating reducedLine
     // to avoid existing x86 implementations over-writing.
-    unsigned line        = rng.get( 1, 1024 );
-    unsigned reducedLine = rng.get( 0, line & ~3U );
-    unsigned cutoff      = rng.get( 4, 1024, 4 );  // Cutoff must be a non-zero multiple of four.
-    unsigned shift       = rng.get( 1, 16 );       // Shift must be at least one to avoid UB.
-    if( !check_one_fastFwdCore_2D( ref, opt, idx, trSize, line, reducedLine, cutoff, shift, g ) )
+    unsigned line        = 1 << rng.get( 2, 6 );
+    unsigned reducedLine = std::min( 32u, rng.get( 4u, line, 4 ) );
+    unsigned cutoff      = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
+    unsigned shift       = rng.get( 1, 16 );          // Shift must be at least one to avoid UB.
+    if( !check_one_fastFwdCore_2D( ref, opt, idx, trSize, line, reducedLine, cutoff, shift, g, t ) )
     {
       return false;
     }
