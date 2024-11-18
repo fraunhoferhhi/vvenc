@@ -90,7 +90,7 @@ public:
 
   T operator()() const
   {
-    return rand() & ( ( 1 << m_bits ) - 1 );
+    return ( rand() & ( ( 1 << m_bits ) - 1 ) ) - ( 1 << m_bits >> 1 );
   }
 
 private:
@@ -208,7 +208,7 @@ static bool check_one_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned i
 static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastInvCore trSize=%d\n", trSize );
-  InputGenerator<TCoeff> g{ 10 };
+  InputGenerator<TCoeff> g{ 16 };
   TrafoGenerator<TMatrixCoeff> t{ 8 };
   DimensionGenerator rng;
 
@@ -231,7 +231,7 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
 static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdCore_2D trSize=%d\n", trSize );
-  InputGenerator<TCoeff> g{ 10 };
+  InputGenerator<TCoeff> g{ 16 };
   TrafoGenerator<TMatrixCoeff> t{ 8 };
   DimensionGenerator rng;
 
