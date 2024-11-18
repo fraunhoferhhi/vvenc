@@ -282,11 +282,14 @@ static bool test_TCoeffOps()
 
 int main()
 {
+  unsigned seed = rand();
+  srand( seed );
+
   bool passed = test_TCoeffOps();
 
   if( !passed )
   {
-    printf( "\nerror: some tests failed!\n\n" );
+    printf( "\nerror: some tests failed for seed=%d!\n\n", seed );
     exit( EXIT_FAILURE );
   }
   printf( "\nsuccess: all tests passed!\n\n" );
