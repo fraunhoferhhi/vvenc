@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stddef.h>
 #include <stdio.h>
 #include <vector>
+#include <time.h>
 
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
@@ -282,14 +283,14 @@ static bool test_TCoeffOps()
 
 int main()
 {
-  unsigned seed = rand();
+  unsigned seed = time( NULL );
   srand( seed );
 
   bool passed = test_TCoeffOps();
 
   if( !passed )
   {
-    printf( "\nerror: some tests failed for seed=%d!\n\n", seed );
+    printf( "\nerror: some tests failed for seed=%u!\n\n", seed );
     exit( EXIT_FAILURE );
   }
   printf( "\nsuccess: all tests passed!\n\n" );
