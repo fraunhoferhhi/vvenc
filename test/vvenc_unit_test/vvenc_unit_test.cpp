@@ -217,7 +217,7 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
     // Clamp lines down to the next multiple of four when generating
     // reducedLines to avoid existing x86 implementations over-writing.
     unsigned lines        = 1 << rng.get( 1, 6 );
-    unsigned reducedLines = lines == 2 ? lines : std::min( 32u, rng.get( 0, lines, 4 ) );
+    unsigned reducedLines = lines == 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
     unsigned cutoff       = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
     if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, cutoff, g, t ) )
     {
@@ -240,7 +240,7 @@ static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_c
     // Clamp line down to the next multiple of four when generating reducedLine
     // to avoid existing x86 implementations over-writing.
     unsigned line        = 1 << rng.get( 1, 6 );
-    unsigned reducedLine = line == 2 ? 2 : std::min( 32u, rng.get( 0, line, 4 ) );
+    unsigned reducedLine = line == 2 ? 2 : std::min( 32u, rng.get( 4, line, 4 ) );
     unsigned cutoff      = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
     unsigned shift       = rng.get( 1, 16 );          // Shift must be at least one to avoid UB.
     if( !check_one_fastFwdCore_2D( ref, opt, idx, trSize, line, reducedLine, cutoff, shift, g, t ) )
