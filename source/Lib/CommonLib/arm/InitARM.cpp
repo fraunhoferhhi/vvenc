@@ -121,6 +121,22 @@ void TCoeffOps::initTCoeffOpsARM()
 }
 #endif
 
+#if ENABLE_SIMD_OPT_BDOF
+void InterPredInterpolation::initInterPredictionARM()
+{
+  auto vext = read_arm_extension_flags();
+  switch (vext){
+    case NEON:
+      _initInterPredictionARM<NEON>();
+      break;
+    default:
+      break;
+  }
+}
+#endif
+
+
+
 #endif   // TARGET_SIMD_ARM
 
 }   // namespace

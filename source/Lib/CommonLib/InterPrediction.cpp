@@ -681,6 +681,10 @@ void InterPredInterpolation::init()
   initInterPredictionX86();
 #endif
 
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
+  initInterPredictionARM();
+#endif
+
   if (m_storedMv == nullptr)
   {
     const int MVBUFFER_SIZE = MAX_CU_SIZE / MIN_PU_SIZE;

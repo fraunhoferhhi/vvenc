@@ -83,15 +83,16 @@ static unsigned getMaxTlVal( unsigned perTlVal )
 
 void VVEncCfg::xInitCfgMembers()
 {
-  m_stageParallelProc = m_numThreads > 0 && m_maxParallelFrames > 0;
-  m_log2GopSize       = floorLog2( m_GOPSize );
-  m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
-  m_bimCtuSize        = m_CTUSize;
-  m_MaxQT[0]          =
-    m_MaxQT[1]        = 
-    m_MaxQT[2]        = m_CTUSize;
-  m_rateCap           = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
-  m_reuseCuResults    = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
+  m_stageParallelProc   = m_numThreads > 0 && m_maxParallelFrames > 0;
+  m_log2GopSize         = floorLog2( m_GOPSize );
+  m_maxTLayer           = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
+  m_bimCtuSize          = m_CTUSize;
+  m_MaxQT[0]            =
+  m_MaxQT[1]            = 
+  m_MaxQT[2]            = m_CTUSize;
+  m_rateCap             = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
+  m_reuseCuResults      = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
+  m_splitCostThrParamId = getMaxTlVal(m_maxMTTDepth);
 
   m_mergeRdCandQuotaRegular = std::min( NUM_MRG_SATD_CAND, std::max( ( int ) m_maxNumMergeCand - 2, 1 ) );
   //                                        0  1  2  3  4

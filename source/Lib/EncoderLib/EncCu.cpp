@@ -75,6 +75,26 @@ const MergeIdxPair EncCu::m_GeoModeTest[GEO_MAX_NUM_CANDS] = { MergeIdxPair{0, 1
                                                                MergeIdxPair{3, 4}, MergeIdxPair{4, 0}, MergeIdxPair{4, 1}, MergeIdxPair{4, 2}, MergeIdxPair{4, 3},
                                                                MergeIdxPair{0, 5}, MergeIdxPair{1, 5}, MergeIdxPair{2, 5}, MergeIdxPair{3, 5}, MergeIdxPair{4, 5},
                                                                MergeIdxPair{5, 0}, MergeIdxPair{5, 1}, MergeIdxPair{5, 2}, MergeIdxPair{5, 3}, MergeIdxPair{5, 4} };
+
+
+// Shape coefSquareCUs (2 x 5 x 2 x 2 x 2): preset (faster and fast + medium) x cusize x nspred x sptype x numcoef
+
+const double EncCu::coefSquareCUs[2][5][2][2][2] = {
+{{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+{{{-1.00000000, -1.00000000, }, {0.06213828, 0.00611228, }, },  {{-1.00000000, -1.00000000, }, {0.06943756, 0.00320762, }, },  },
+{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+{{{-1.00000000, -1.00000000, }, {0.10833051, 0.00053144, }, },  {{-1.00000000, -1.00000000, }, {0.08304352, 0.00142876, }, },  },
+{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+},
+{{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+{{{0.06852235, 0.00388054, }, {0.09236045, 0.00084528, }, },  {{0.06955832, 0.00289679, }, {0.09598522, 0.00096187, }, },  },
+{{{0.07268085, 0.00302796, }, {0.09323753, 0.00050996, }, },  {{0.06123618, 0.00471601, }, {0.09253389, 0.00046826, }, },  },
+{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+},
+};
+
+
 // ====================================================================================================================
 EncCu::EncCu()
   : m_CtxCache          ( nullptr )
@@ -1006,52 +1026,80 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass )
 {
-  const int qp                   = encTestMode.qp;
-  const int oldPrevQp            = tempCS->prevQP[partitioner.chType];
-  const auto oldMotionLut        = tempCS->motionLut;
-  const ReshapeData& reshapeData = tempCS->picture->reshapeData;
+  const int qp                     = encTestMode.qp;
+  const int oldPrevQp              = tempCS->prevQP[partitioner.chType];
+  const auto oldMotionLut          = tempCS->motionLut;
+  const ReshapeData& reshapeData   = tempCS->picture->reshapeData;
+                                   
+  const PartSplit split            = getPartSplit( encTestMode );
+  const ModeType  modeTypeChild    = partitioner.modeType;
 
-  const PartSplit split = getPartSplit( encTestMode );
-  const ModeType modeTypeChild = partitioner.modeType;
-
-  CHECK( split == CU_DONT_SPLIT, "No proper split provided!" );
+  CHECK( !( split == CU_QUAD_SPLIT || split == CU_HORZ_SPLIT || split == CU_VERT_SPLIT
+         || split == CU_TRIH_SPLIT || split == CU_TRIV_SPLIT ), "invalid split type" );
 
   tempCS->initStructData( qp );
 
-  m_CABACEstimator->getCtx() = m_CurrCtx->start;
+  m_CABACEstimator->getCtx()       = m_CurrCtx->start;
 
-  const uint16_t split_ctx_size = Ctx::SplitFlag.size() + Ctx::SplitQtFlag.size() + Ctx::SplitHvFlag.size() + Ctx::Split12Flag.size() + Ctx::ModeConsFlag.size();
-  const TempCtx  ctxSplitFlags( m_CtxCache, SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), m_CABACEstimator->getCtx()));
+  const uint16_t split_ctx_size    = Ctx::SplitFlag.size() + Ctx::SplitQtFlag.size() + Ctx::SplitHvFlag.size() + Ctx::Split12Flag.size() + Ctx::ModeConsFlag.size();
+  const TempCtx  ctxSplitFlags     ( m_CtxCache, SubCtx( CtxSet( Ctx::SplitFlag(), split_ctx_size ), m_CABACEstimator->getCtx() ) );
 
   m_CABACEstimator->resetBits();
-  m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
-  partitioner.modeType = modeTypeParent;
+  m_CABACEstimator->split_cu_mode  ( split, *tempCS, partitioner );
+  partitioner     . modeType       = modeTypeParent;
   m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
-  partitioner.modeType = modeTypeChild;
+  partitioner     . modeType       = modeTypeChild;
 
-  const int64_t splitBits = m_CABACEstimator->getEstFracBits();
+  const int64_t splitBits   = m_CABACEstimator->getEstFracBits();
 
-  int numChild = 3;
-  if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) numChild--;
-  else if( split == CU_QUAD_SPLIT ) numChild++;
+  const bool chromaNotSplit = modeTypeParent == MODE_TYPE_ALL && modeTypeChild == MODE_TYPE_INTRA;
+  const bool isChromaTooBig = isChromaEnabled( tempCS->pps->pcv->chrFormat ) && tempCS->area.Y().maxDim() > tempCS->sps->getMaxTbSize();
+  bool       skipSplitTest  = chromaNotSplit && isChromaTooBig;
 
-  int64_t approxBits = m_pcEncCfg->m_qtbttSpeedUp > 0 ? numChild << SCALE_BITS : 0;
+  if( !skipSplitTest )
+  {
+    double         a = -1, b = -1;
+    const unsigned w       = partitioner.currArea().lwidth();
+    const unsigned h       = partitioner.currArea().lheight();
+    const bool contextCond = w == h && tempCS->slice->sliceType == VVENC_B_SLICE && isLuma( partitioner.chType ) && m_pcEncCfg->m_splitCostThrParamId >= 0 && m_pcEncCfg->m_splitCostThrParamId <= 1;
 
-  const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 )
-                      + ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.01 : 0.0 )
-                      + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
+    if( contextCond )
+    {
+      uint8_t nsPredInd = m_modeCtrl.comprCUCtx->bestNsPredMode.type == ETM_INTRA;
+      uint8_t szInd     = getLog2( w ) - 3;
+      uint8_t splitInd  = split == CU_QUAD_SPLIT ? 1 : 0;
+      a = coefSquareCUs[m_pcEncCfg->m_splitCostThrParamId][szInd][nsPredInd][splitInd][0];
+      b = coefSquareCUs[m_pcEncCfg->m_splitCostThrParamId][szInd][nsPredInd][splitInd][1];
+    }
 
-  const double cost   = m_cRdCost.calcRdCost( uint64_t( splitBits + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
-  
-  const bool chromaNotSplit = modeTypeParent == MODE_TYPE_ALL && modeTypeChild == MODE_TYPE_INTRA ? true : false;
-  const bool isChromaTooBig = isChromaEnabled( tempCS->pps->pcv->chrFormat ) && std::max( tempCS->area.Y().width, tempCS->area.Y().height ) > tempCS->sps->getMaxTbSize();
+    if( a > -1 && b > -1 )
+    {
+      const double bestNsCost    = m_modeCtrl.comprCUCtx->bestCostBeforeSplit == MAX_DOUBLE ? -1 : m_modeCtrl.comprCUCtx->bestCostBeforeSplit;
+      const double factor        = 1.0 + b * exp( a * qp );
+      const double predSplitCost = bestNsCost / factor + splitBits;
+      skipSplitTest              = bestNsCost >= 0 && predSplitCost >= bestNsCost;
+    }
+    else
+    {
+      int numChild = 3;
+      if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) numChild--;
+      else if( split == CU_QUAD_SPLIT ) numChild++;
 
-  if( cost > bestCS->cost + bestCS->costDbOffset // speedup
-      || ( chromaNotSplit && isChromaTooBig ) // TODO: proper fix, for now inhibit chroma TU split that we cannot handle, resulting in missing chroma encoding!
-      )
+      int64_t approxBits = m_pcEncCfg->m_qtbttSpeedUp > 0 ? numChild << SCALE_BITS : 0;
+
+      const double factor     = ( tempCS->currQP[partitioner.chType] > 30                              ? 1.1  : 1.075 ) +
+                                (   m_pcEncCfg->m_qtbttSpeedUp > 0                                     ? 0.01 : 0.0   ) +
+                                ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2  : 0.0   );
+       
+      const double baseCost   = bestCS->cost + bestCS->costDbOffset;
+      const double predCost   = baseCost / factor + splitBits + approxBits;
+      skipSplitTest           = predCost >= baseCost;
+    }
+  }
+
+  if( skipSplitTest )
   {
     m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::SplitFlag(), split_ctx_size ), ctxSplitFlags );
-    // DTRACE( g_trace_ctx, D_TMP, "%d exit split %f %f %f\n", g_trace_ctx->getChannelCounter(D_TMP), cost, bestCS->cost, bestCS->costDbOffset );
     xCheckBestMode( tempCS, bestCS, partitioner, encTestMode );
     return;
   }
@@ -1069,22 +1117,19 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     }
   }
 
-  CHECK(!(split == CU_QUAD_SPLIT || split == CU_HORZ_SPLIT || split == CU_VERT_SPLIT
-    || split == CU_TRIH_SPLIT || split == CU_TRIV_SPLIT), "invalid split type");
-
   partitioner.splitCurrArea( split, *tempCS );
   bool qgEnableChildren = partitioner.currQgEnable(); // QG possible at children level
 
   m_CurrCtx++;
 
   AffineMVInfo tmpMVInfo;
-  bool isAffMVInfoSaved = m_cInterSearch.m_AffineProfList->savePrevAffMVInfo(0, tmpMVInfo );
+  bool isAffMVInfoSaved = m_cInterSearch.m_AffineProfList->savePrevAffMVInfo( 0, tmpMVInfo );
 
   BlkUniMvInfo tmpUniMvInfo;
   bool         isUniMvInfoSaved = false;
-  if (!tempCS->slice->isIntra())
+  if( !tempCS->slice->isIntra() )
   {
-    m_cInterSearch.m_BlkUniMvInfoBuffer->savePrevUniMvInfo(tempCS->area.Y(), tmpUniMvInfo, isUniMvInfoSaved);
+    m_cInterSearch.m_BlkUniMvInfoBuffer->savePrevUniMvInfo( tempCS->area.Y(), tmpUniMvInfo, isUniMvInfoSaved );
   }
 
   DeriveCtx deriveCtx = m_CABACEstimator->getDeriveCtx();
