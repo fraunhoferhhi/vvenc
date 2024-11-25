@@ -274,10 +274,10 @@ void InterPredInterpolation::_initInterPredictionARM()
   xFpBiDirOptFlow     = BiOptFlowCoreARMSIMD<vext>;
 }
 
-#else 
+#else
 
 template<ARM_VEXT vext>
-void TCoeffOps::_initInterPredictionARM()
+void InterPredInterpolation::_initInterPredictionARM()
 {}
 #endif
 

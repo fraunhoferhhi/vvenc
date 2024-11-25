@@ -528,49 +528,48 @@ static void simdInterpolateHorM8_Neon( const int16_t* src, int srcStride, int16_
       vsrc0 = vld1q_s16( ( const int16_t * )&src[col] );
       vsrc1 = vld1q_s16( ( const int16_t * )&src[col + 4] );
 
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[0]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[1]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 6), vdupq_n_s16(coeff[2]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 7), vdupq_n_s16(coeff[3]));
+      vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc0, vsrc0, 0 ) ), vdup_n_s16( coeff[ 0 ] ) );
+      vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc0, vsrc0, 1 ) ), vdup_n_s16( coeff[ 1 ] ) );
+      vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc0, vsrc0, 2 ) ), vdup_n_s16( coeff[ 2 ] ) );
+      vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc0, vsrc0, 3 ) ), vdup_n_s16( coeff[ 3 ] ) );
 
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[0]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[1]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 6), vdupq_n_s16(coeff[2]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 7), vdupq_n_s16(coeff[3]));
+      vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc1, vsrc1, 0 ) ), vdup_n_s16( coeff[ 0 ] ) );
+      vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc1, vsrc1, 1 ) ), vdup_n_s16( coeff[ 1 ] ) );
+      vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc1, vsrc1, 2 ) ), vdup_n_s16( coeff[ 2 ] ) );
+      vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc1, vsrc1, 3 ) ), vdup_n_s16( coeff[ 3 ] ) );
 
+      if( N == 8 )
+      {
+        vsrc0 = vld1q_s16( ( const int16_t* )&src[ col + 8 ] );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 0 ) ), vdup_n_s16( coeff[ 4 ] ) );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 1 ) ), vdup_n_s16( coeff[ 5 ] ) );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 2 ) ), vdup_n_s16( coeff[ 6 ] ) );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 3 ) ), vdup_n_s16( coeff[ 7 ] ) );
 
-    if( N == 8 )
-    {
-      vsrc0 = vld1q_s16( ( const int16_t * )&src[col + 8] );
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[4]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[5]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 6), vdupq_n_s16(coeff[6]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 7), vdupq_n_s16(coeff[7]));
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 0 ) ), vdup_n_s16( coeff[ 4 ] ) );
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 1 ) ), vdup_n_s16( coeff[ 5 ] ) );
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 2 ) ), vdup_n_s16( coeff[ 6 ] ) );
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 3 ) ), vdup_n_s16( coeff[ 7 ] ) );
+      }
+      if( N == 6 )
+      {
+        vsrc0 = vld1q_s16( ( const int16_t* )&src[ col + 8 ] );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 0 ) ), vdup_n_s16( coeff[ 4 ] ) );
+        vsuma = vmlal_s16( vsuma, vget_low_s16( vextq_s16( vsrc1, vsrc1, 1 ) ), vdup_n_s16( coeff[ 5 ] ) );
 
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[4]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[5]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 6), vdupq_n_s16(coeff[6]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 7), vdupq_n_s16(coeff[7]));
-    }
-    if( N == 6 )
-    {
-      vsrc0 = vld1q_s16( ( const int16_t * )&src[col + 8] );
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[4]));
-      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[5]));
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 0 ) ), vdup_n_s16( coeff[ 4 ] ) );
+        vsumb = vmlal_s16( vsumb, vget_low_s16( vextq_s16( vsrc0, vsrc0, 1 ) ), vdup_n_s16( coeff[ 5 ] ) );
+      }
 
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[4]));
-      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[5]));   
-    }
-    
-    vsuma = vshlq_s32( vsuma, vdupq_n_s32(-1*shift) );
-    vsumb = vshlq_s32( vsumb, vdupq_n_s32(-1*shift) );
-    vsum = vcombine_s16(vqmovn_s32(vsuma), vqmovn_s32(vsumb));
+      vsuma = vshlq_s32( vsuma, vdupq_n_s32( -1 * shift ) );
+      vsumb = vshlq_s32( vsumb, vdupq_n_s32( -1 * shift ) );
+      vsum  = vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
 
-    if( shiftBack )
-    { 
-      vsum = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum ) );
-    }
-    vst1q_s16((int16_t*) &dst[col], vsum);
+      if( shiftBack )
+      {
+        vsum = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum ) );
+      }
+      vst1q_s16( ( int16_t* )&dst[ col ], vsum );
     }
     src += srcStride;
     dst += dstStride;
@@ -606,8 +605,8 @@ static void simdInterpolateVerM8_Neon( const int16_t *src, int srcStride, int16_
       {  
         vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[ 0]), vdup_n_s16(coeff[0]));
         vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[ 1]), vdup_n_s16(coeff[1]));
-        vsumb = vmlal_high_s16(vsumb, vsrc[0], vdupq_n_s16(coeff[0]));
-        vsumb = vmlal_high_s16(vsumb, vsrc[1], vdupq_n_s16(coeff[1]));
+        vsumb = vmlal_s16( vsumb, vget_high_s16( vsrc[ 0 ] ), vdup_n_s16( coeff[ 0 ] ) );
+        vsumb = vmlal_s16( vsumb, vget_high_s16( vsrc[ 1 ] ), vdup_n_s16( coeff[ 1 ] ) );
 
         vsrc[0] = vsrc[1];
       }
@@ -617,8 +616,8 @@ static void simdInterpolateVerM8_Neon( const int16_t *src, int srcStride, int16_
         {
           vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[i + 0]), vdup_n_s16(coeff[i + 0]));
           vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[i + 1]), vdup_n_s16(coeff[i + 1]));
-          vsumb = vmlal_high_s16(vsumb, vsrc[i + 0], vdupq_n_s16(coeff[i + 0]));
-          vsumb = vmlal_high_s16(vsumb, vsrc[i + 1], vdupq_n_s16(coeff[i + 1]));
+          vsumb       = vmlal_s16( vsumb, vget_high_s16( vsrc[ i + 0 ] ), vdup_n_s16( coeff[ i + 0 ] ) );
+          vsumb       = vmlal_s16( vsumb, vget_high_s16( vsrc[ i + 1 ] ), vdup_n_s16( coeff[ i + 1 ] ) );
           vsrc[i    ] = vsrc[i + 1];
           vsrc[i + 1] = vsrc[i + 2];
         }
