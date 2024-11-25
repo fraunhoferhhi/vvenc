@@ -69,15 +69,11 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-
-static int32x4_t neon_madd_16 (int16x8_t a, int16x8_t b) {
-
-  int32x4_t sum = vdupq_n_s32(0);   
-  int32x4_t c = vmull_s16(vget_low_s16(a), vget_low_s16(b));
-  int32x4_t d = vmull_high_s16((a), (b)); 
-  sum = vpaddq_s32(c,d);
-
-  return sum;
+static inline int32x4_t neon_madd_16( int16x8_t a, int16x8_t b )
+{
+  int32x4_t c = vmull_s16( vget_low_s16( a ), vget_low_s16( b ) );
+  int32x4_t d = vmull_s16( vget_high_s16( a ), vget_high_s16( b ) );
+  return pairwise_add_s32x4( c, d );
 }
 
 #if defined( TARGET_SIMD_ARM )

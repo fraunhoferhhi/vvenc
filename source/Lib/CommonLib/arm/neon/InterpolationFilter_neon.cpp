@@ -56,17 +56,17 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_AVX2
-# define USE_AVX2
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE42
-# define USE_SSE42
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE41
-# define USE_SSE41
+#if defined( TARGET_SIMD_X86 )
+#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_AVX2
+#define USE_AVX2
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE42
+#define USE_SSE42
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE41
+#define USE_SSE41
 #endif
 
-#ifdef TARGET_SIMD_X86
 # include "../x86/InterpolationFilterX86.h"
-#endif
+#endif  // defined( TARGET_SIMD_X86 )
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCIF
 
@@ -639,6 +639,7 @@ static void simdInterpolateVerM8_Neon( const int16_t *src, int srcStride, int16_
   }
 }
 
+#if defined( TARGET_SIMD_X86 )
 template<int N, bool isVertical, bool isFirst, bool isLast>
 static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff )
 {
@@ -817,7 +818,7 @@ scalar_if:
     dst += dstStride;
   }
 }
-
+#endif  // defined( TARGET_SIMD_X86 )
 
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<NEON>()
@@ -833,6 +834,7 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
 
   m_filterN2_2D = simdInterpolateN2_2D_neon;
 
+#if defined( TARGET_SIMD_X86 )
   m_filterHor[0][0][0] = simdFilterARM<8, false, false, false>;
   m_filterHor[0][0][1] = simdFilterARM<8, false, false, true>;
   m_filterHor[0][1][0] = simdFilterARM<8, false, true, false>;
@@ -862,8 +864,7 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filterVer[3][0][1] = simdFilterARM<6, true, false, true>;
   m_filterVer[3][1][0] = simdFilterARM<6, true, true, false>;
   m_filterVer[3][1][1] = simdFilterARM<6, true, true, true>;
-
-
+#endif  // defined( TARGET_SIMD_X86 )
 }
 
 } // namespace vvenc
