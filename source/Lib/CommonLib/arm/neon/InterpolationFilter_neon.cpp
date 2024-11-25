@@ -56,6 +56,18 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
+#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_AVX2
+# define USE_AVX2
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE42
+# define USE_SSE42
+#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID==X86_SIMD_SSE41
+# define USE_SSE41
+#endif
+
+#ifdef TARGET_SIMD_X86
+# include "../x86/InterpolationFilterX86.h"
+#endif
+
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCIF
 
 namespace vvenc
@@ -497,6 +509,316 @@ static void simdFilter16xX_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
   } while( --height != 0 );
 }
 
+template<int N, bool shiftBack>
+static void simdInterpolateHorM8_Neon( const int16_t* src, int srcStride, int16_t *dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const *coeff )
+{
+
+  int16x8_t vibdimin   = vdupq_n_s16( clpRng.min() );
+  int16x8_t vibdimax   = vdupq_n_s16( clpRng.max() );
+  int32x4_t vsuma, vsumb;
+  int16x8_t vsum, vsrc0, vsrc1;
+
+  for( int row = 0; row < height; row++ )
+  {
+    for( int col = 0; col < width; col+=8 )
+    {
+      vsuma = vdupq_n_s32(offset);
+      vsumb = vdupq_n_s32(offset);
+
+      vsrc0 = vld1q_s16( ( const int16_t * )&src[col] );
+      vsrc1 = vld1q_s16( ( const int16_t * )&src[col + 4] );
+
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[0]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[1]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 6), vdupq_n_s16(coeff[2]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc0, vsrc0, 7), vdupq_n_s16(coeff[3]));
+
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[0]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[1]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 6), vdupq_n_s16(coeff[2]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc1, vsrc1, 7), vdupq_n_s16(coeff[3]));
+
+
+    if( N == 8 )
+    {
+      vsrc0 = vld1q_s16( ( const int16_t * )&src[col + 8] );
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[4]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[5]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 6), vdupq_n_s16(coeff[6]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 7), vdupq_n_s16(coeff[7]));
+
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[4]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[5]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 6), vdupq_n_s16(coeff[6]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 7), vdupq_n_s16(coeff[7]));
+    }
+    if( N == 6 )
+    {
+      vsrc0 = vld1q_s16( ( const int16_t * )&src[col + 8] );
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 4), vdupq_n_s16(coeff[4]));
+      vsuma = vmlal_high_s16(vsuma, vextq_s16(vsrc1, vsrc1, 5), vdupq_n_s16(coeff[5]));
+
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 4), vdupq_n_s16(coeff[4]));
+      vsumb = vmlal_high_s16(vsumb, vextq_s16(vsrc0, vsrc0, 5), vdupq_n_s16(coeff[5]));   
+    }
+    
+    vsuma = vshlq_s32( vsuma, vdupq_n_s32(-1*shift) );
+    vsumb = vshlq_s32( vsumb, vdupq_n_s32(-1*shift) );
+    vsum = vcombine_s16(vqmovn_s32(vsuma), vqmovn_s32(vsumb));
+
+    if( shiftBack )
+    { 
+      vsum = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum ) );
+    }
+    vst1q_s16((int16_t*) &dst[col], vsum);
+    }
+    src += srcStride;
+    dst += dstStride;
+  }
+}
+
+template<int N, bool shiftBack>
+static void simdInterpolateVerM8_Neon( const int16_t *src, int srcStride, int16_t *dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const *coeff )
+{
+  const Pel* srcOrig = src;
+  int16_t *dstOrig = dst;
+
+  int16x8_t vsrc[N+1];
+  int32x4_t voffset = vdupq_n_s32( offset );
+  int16x8_t vibdimin = vdupq_n_s16( clpRng.min() );
+  int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
+  int32x4_t vsuma, vsumb;
+  int16x8_t vsum;
+  vsrc[N] = vdupq_n_s16(0);
+  for( int col = 0; col < width; col += 8 )
+  {
+
+    for( int i = 0; i < N - 1; i++ )
+    {
+      vsrc[i] = vld1q_s16( ( int16_t const * )&src[col + i * srcStride] );
+    }
+
+    for( int row = 0; row < height; row++ )
+    {
+      vsrc[N - 1] = vld1q_s16( ( int16_t const * )&src[col + ( N - 1 ) * srcStride] );
+      vsuma = vsumb = voffset;
+      if(N < 2)
+      {  
+        vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[ 0]), vdup_n_s16(coeff[0]));
+        vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[ 1]), vdup_n_s16(coeff[1]));
+        vsumb = vmlal_high_s16(vsumb, vsrc[0], vdupq_n_s16(coeff[0]));
+        vsumb = vmlal_high_s16(vsumb, vsrc[1], vdupq_n_s16(coeff[1]));
+
+        vsrc[0] = vsrc[1];
+      }
+      else
+      {
+        for( int i = 0; i < N; i += 2 )
+        {
+          vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[i + 0]), vdup_n_s16(coeff[i + 0]));
+          vsuma = vmlal_s16(vsuma, vget_low_s16(vsrc[i + 1]), vdup_n_s16(coeff[i + 1]));
+          vsumb = vmlal_high_s16(vsumb, vsrc[i + 0], vdupq_n_s16(coeff[i + 0]));
+          vsumb = vmlal_high_s16(vsumb, vsrc[i + 1], vdupq_n_s16(coeff[i + 1]));
+          vsrc[i    ] = vsrc[i + 1];
+          vsrc[i + 1] = vsrc[i + 2];
+        }
+      }
+      vsuma = vshlq_s32( vsuma, vdupq_n_s32(-1*shift) );
+      vsumb = vshlq_s32( vsumb, vdupq_n_s32(-1*shift) );
+      vsum = vcombine_s16(vqmovn_s32(vsuma), vqmovn_s32(vsumb));
+      if( shiftBack ) 
+      {
+        vsum = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum ) );
+      }
+      vst1q_s16((int16_t*) &dst[col], vsum);
+      src += srcStride;
+      dst += dstStride;
+    }
+    src = srcOrig;
+    dst = dstOrig;
+  }
+}
+
+template<int N, bool isVertical, bool isFirst, bool isLast>
+static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff )
+{
+  int row, col;
+
+  Pel c[8];
+  c[0] = coeff[0];
+  c[1] = coeff[1];
+  if( N >= 4 )
+  {
+    c[2] = coeff[2];
+    c[3] = coeff[3];
+  }
+  if( N >= 6 )
+  {
+    c[4] = coeff[4];
+    c[5] = coeff[5];
+  }
+  if( N == 8 )
+  {
+    c[6] = coeff[6];
+    c[7] = coeff[7];
+  }
+
+  int cStride = ( isVertical ) ? srcStride : 1;
+  src -= ( N/2 - 1 ) * cStride;
+
+  int offset;
+  int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  int shift    = IF_FILTER_PREC;
+  CHECK( shift < 0, "Negative shift" );
+  
+  if( N != 2 )
+  {
+    if( isLast )
+    {
+      shift  += ( isFirst ) ? 0 : headRoom;
+      offset  = 1 << ( shift - 1 );
+      offset += ( isFirst ) ? 0 : IF_INTERNAL_OFFS << IF_FILTER_PREC;
+    }
+    else
+    {
+      shift -= ( isFirst ) ? headRoom : 0;
+      offset = ( isFirst ) ? -IF_INTERNAL_OFFS * (1<< shift) : 0;
+    }
+  }
+  else
+  {
+    if( isFirst )
+    {
+      shift  = IF_FILTER_PREC_BILINEAR - (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
+      offset = 1 << (shift - 1);
+    }
+    else
+    {
+      shift  = 4;
+      offset = 1 << (shift - 1);
+    }
+  }
+
+  CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
+
+  if( N == 6 )
+  {
+    c[6] = coeff[6];
+    c[7] = coeff[7];
+    int src8tOff = cStride;
+
+    if( !( width & 7 ) )
+    {
+      if( !isVertical )
+      {
+        simdInterpolateHorM8_Neon<6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
+      }
+      else
+      {
+        simdInterpolateVerM8_Neon<6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
+      }
+    }
+
+    else if( !( width & 3 ) )
+    {
+      if( !isVertical )
+      {
+        simdInterpolateHorM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, 8, isLast>( src - src8tOff, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+      }
+      else
+        simdInterpolateVerM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
+    }
+
+    else if( width == 1 && !isVertical )
+    {
+      simdInterpolateHorM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, 8, isLast>( src - src8tOff, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+
+    else if( width == 1 && isVertical )
+    {
+      c[0] = c[1]; c[1] = c[2]; c[2] = c[3]; c[3] = c[4]; c[4] = c[5]; c[5] = coeff[6];
+      goto scalar_if;
+    }
+
+    return;
+  }
+
+  if( !isVertical && N != 2 )
+  {
+    if( ( width & 7 ) == 0 )
+    {
+      simdInterpolateHorM8_Neon<N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+
+    else if( ( width & 3 ) == 0 )
+      simdInterpolateHorM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    else if( ( width & 1 ) == 0 )
+      simdInterpolateHorM2<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    else
+      simdInterpolateHorM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    return;
+  }
+
+  else if( N != 2 )
+  {
+    if( ( width & 7 ) == 0 )
+    {
+      simdInterpolateVerM8_Neon<N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+    else if( ( width & 3 ) == 0 )
+      simdInterpolateVerM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    else if( ( width & 1 ) == 0 )
+      simdInterpolateVerM2<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    else
+      simdInterpolateVerM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    return;
+  }
+  else
+  {
+    THROW( "To be implemented" );
+    return;
+  }
+
+scalar_if:
+  for( row = 0; row < height; row++ )
+  {
+    for( col = 0; col < width; col++ )
+    {
+      int sum;
+
+      sum  = src[col + 0 * cStride] * c[0];
+      sum += src[col + 1 * cStride] * c[1];
+      if( N >= 4 )
+      {
+        sum += src[col + 2 * cStride] * c[2];
+        sum += src[col + 3 * cStride] * c[3];
+      }
+      if( N >= 6 )
+      {
+        sum += src[col + 4 * cStride] * c[4];
+        sum += src[col + 5 * cStride] * c[5];
+      }
+      if( N == 8 )  
+
+      {
+        sum += src[col + 6 * cStride] * c[6];
+        sum += src[col + 7 * cStride] * c[7];
+      }
+
+      Pel val = ( sum + offset ) >> shift;
+      if( isLast )
+      {
+        val = ClipPel( val, clpRng );
+      }
+      dst[col] = val;
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  }
+}
+
+
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<NEON>()
 {
@@ -510,6 +832,38 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filter16x16[ 0 ][ 1 ] = simdFilter16xX_N8_neon<true>;
 
   m_filterN2_2D = simdInterpolateN2_2D_neon;
+
+  m_filterHor[0][0][0] = simdFilterARM<8, false, false, false>;
+  m_filterHor[0][0][1] = simdFilterARM<8, false, false, true>;
+  m_filterHor[0][1][0] = simdFilterARM<8, false, true, false>;
+  m_filterHor[0][1][1] = simdFilterARM<8, false, true, true>;
+  
+  m_filterHor[1][0][0] = simdFilterARM<4, false, false, false>;
+  m_filterHor[1][0][1] = simdFilterARM<4, false, false, true>;
+  m_filterHor[1][1][0] = simdFilterARM<4, false, true, false>;
+  m_filterHor[1][1][1] = simdFilterARM<4, false, true, true>;
+  
+  m_filterHor[3][0][0] = simdFilterARM<6, false, false, false>;
+  m_filterHor[3][0][1] = simdFilterARM<6, false, false, true>;
+  m_filterHor[3][1][0] = simdFilterARM<6, false, true, false>;
+  m_filterHor[3][1][1] = simdFilterARM<6, false, true, true>;
+  
+  m_filterVer[0][0][0] = simdFilterARM<8, true, false, false>;
+  m_filterVer[0][0][1] = simdFilterARM<8, true, false, true>;
+  m_filterVer[0][1][0] = simdFilterARM<8, true, true, false>;
+  m_filterVer[0][1][1] = simdFilterARM<8, true, true, true>;
+  
+  m_filterVer[1][0][0] = simdFilterARM<4, true, false, false>;
+  m_filterVer[1][0][1] = simdFilterARM<4, true, false, true>;
+  m_filterVer[1][1][0] = simdFilterARM<4, true, true, false>;
+  m_filterVer[1][1][1] = simdFilterARM<4, true, true, true>;
+  
+  m_filterVer[3][0][0] = simdFilterARM<6, true, false, false>;
+  m_filterVer[3][0][1] = simdFilterARM<6, true, false, true>;
+  m_filterVer[3][1][0] = simdFilterARM<6, true, true, false>;
+  m_filterVer[3][1][1] = simdFilterARM<6, true, true, true>;
+
+
 }
 
 } // namespace vvenc

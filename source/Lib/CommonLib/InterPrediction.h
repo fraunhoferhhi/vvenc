@@ -98,6 +98,12 @@ protected:
   void _initInterPredictionX86();
 #endif
 
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
+  void initInterPredictionARM();
+  template <ARM_VEXT vext>
+  void _initInterPredictionARM();
+#endif
+
 protected:
   void xWeightedAverage       ( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied, PelUnitBuf *yuvPredTmp = NULL );
   void xPredAffineBlk         ( const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList = REF_PIC_LIST_X);

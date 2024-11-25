@@ -1099,10 +1099,8 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   CodedCUInfo    &relatedCU   = getBlkInfo( partitioner.currArea() );
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
 
-  if (m_pcEncCfg->m_fastTTSplit)
-  {
-    cuECtx.bestCostBeforeSplit = cuECtx.bestCS->cost;
-  }
+  cuECtx.bestNsPredMode       = cuECtx.bestMode;
+  cuECtx.bestCostBeforeSplit  = cuECtx.bestCS->cost;
 
   setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 
@@ -1157,14 +1155,6 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
   else if( encTestmode.type == ETM_SPLIT_BT_V )
   {
     cuECtx.bestCostVertSplit = tempCS->cost;
-  }
-  else if( encTestmode.type == ETM_SPLIT_TT_H )
-  {
-    cuECtx.bestCostTriHorzSplit = tempCS->cost;
-  }
-  else if( encTestmode.type == ETM_SPLIT_TT_V )
-  {
-    cuECtx.bestCostTriVertSplit = tempCS->cost;
   }
   else if( !isModeSplit( encTestmode ) && isModeInter( encTestmode ) && tempCS->cus.size() == 1 )
   {
@@ -1239,12 +1229,6 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
     cuECtx.bestCU   = tempCS->cus[0];
     cuECtx.bestTU   = cuECtx.bestCU->firstTU;
     cuECtx.bestMode = encTestmode;
-
-    if( isModeInter( encTestmode ) )
-    {
-      //Here we take the best cost of both inter modes. We are assuming only the inter modes (and all of them) have come before the intra modes!!!
-      cuECtx.bestInterCost = cuECtx.bestCS->cost;
-    }
 
     return true;
   }

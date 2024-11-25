@@ -282,7 +282,7 @@ static bool test_TCoeffOps()
 
 int main()
 {
-  unsigned seed = time( NULL );
+  unsigned seed = ( unsigned ) time( NULL );
   srand( seed );
 
   bool passed = test_TCoeffOps();

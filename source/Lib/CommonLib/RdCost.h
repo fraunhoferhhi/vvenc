@@ -275,6 +275,12 @@ private:
 
   template <ARM_VEXT vext, bool fastHad>
   static Distortion xGetHADs_ARMSIMD   ( const DistParam& pcDtParam );
+
+  template<ARM_VEXT vext> 
+  static Distortion xGetSADwMask_ARMSIMD(const DistParam &rcDtParam);
+
+  template< int iWidth, ARM_VEXT vext >
+  static Distortion xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam );
 #endif
 	
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
