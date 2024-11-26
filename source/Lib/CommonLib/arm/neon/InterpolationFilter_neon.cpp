@@ -638,7 +638,6 @@ static void simdInterpolateVerM8_Neon( const int16_t *src, int srcStride, int16_
   }
 }
 
-#if defined( TARGET_SIMD_X86 )
 template<int N, bool isVertical, bool isFirst, bool isLast>
 static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff )
 {
@@ -718,7 +717,7 @@ static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, 
         simdInterpolateVerM8_Neon<6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
       }
     }
-
+#if defined( TARGET_SIMD_X86 )
     else if( !( width & 3 ) )
     {
       if( !isVertical )
@@ -728,15 +727,16 @@ static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, 
       else
         simdInterpolateVerM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
     }
-
     else if( width == 1 && !isVertical )
     {
       simdInterpolateHorM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, 8, isLast>( src - src8tOff, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     }
-
     else if( width == 1 && isVertical )
+#else
+    else
+#endif
     {
-      c[0] = c[1]; c[1] = c[2]; c[2] = c[3]; c[3] = c[4]; c[4] = c[5]; c[5] = coeff[6];
+      c[0] = c[1]; c[1] = c[2]; c[2] = c[3]; c[3] = c[4]; c[4] = c[5]; c[5] = c[6];
       goto scalar_if;
     }
 
@@ -749,13 +749,16 @@ static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, 
     {
       simdInterpolateHorM8_Neon<N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     }
-
+#if defined( TARGET_SIMD_X86 )
     else if( ( width & 3 ) == 0 )
       simdInterpolateHorM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     else if( ( width & 1 ) == 0 )
       simdInterpolateHorM2<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     else
       simdInterpolateHorM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+#else
+    else goto scalar_if;
+#endif
     return;
   }
 
@@ -765,12 +768,16 @@ static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, 
     {
       simdInterpolateVerM8_Neon<N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     }
+#if defined( TARGET_SIMD_X86 )
     else if( ( width & 3 ) == 0 )
       simdInterpolateVerM4<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     else if( ( width & 1 ) == 0 )
       simdInterpolateVerM2<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
     else
       simdInterpolateVerM1<SIMD_EVERYWHERE_EXTENSION_LEVEL, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+#else
+    else goto scalar_if;
+#endif
     return;
   }
   else
@@ -817,7 +824,6 @@ scalar_if:
     dst += dstStride;
   }
 }
-#endif  // defined( TARGET_SIMD_X86 )
 
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<NEON>()
@@ -833,7 +839,6 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
 
   m_filterN2_2D = simdInterpolateN2_2D_neon;
 
-#if defined( TARGET_SIMD_X86 )
   m_filterHor[0][0][0] = simdFilterARM<8, false, false, false>;
   m_filterHor[0][0][1] = simdFilterARM<8, false, false, true>;
   m_filterHor[0][1][0] = simdFilterARM<8, false, true, false>;
@@ -863,7 +868,6 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filterVer[3][0][1] = simdFilterARM<6, true, false, true>;
   m_filterVer[3][1][0] = simdFilterARM<6, true, true, false>;
   m_filterVer[3][1][1] = simdFilterARM<6, true, true, true>;
-#endif  // defined( TARGET_SIMD_X86 )
 }
 
 } // namespace vvenc
