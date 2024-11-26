@@ -69,15 +69,11 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-
-static int32x4_t neon_madd_16 (int16x8_t a, int16x8_t b) {
-
-  int32x4_t sum = vdupq_n_s32(0);   
-  int32x4_t c = vmull_s16(vget_low_s16(a), vget_low_s16(b));
-  int32x4_t d = vmull_high_s16((a), (b)); 
-  sum = vpaddq_s32(c,d);
-
-  return sum;
+static inline int32x4_t neon_madd_16( int16x8_t a, int16x8_t b )
+{
+  int32x4_t c = vmull_s16( vget_low_s16( a ), vget_low_s16( b ) );
+  int32x4_t d = vmull_s16( vget_high_s16( a ), vget_high_s16( b ) );
+  return pairwise_add_s32x4( c, d );
 }
 
 #if defined( TARGET_SIMD_ARM )
@@ -1029,11 +1025,13 @@ Distortion RdCost::xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam )
     {
       int16x8_t vsrc1 = vcombine_s16( vld1_s16( ( const int16_t* )pSrc1 ),  vld1_s16( ( const int16_t* )( &pSrc1[iStrideSrc1] ) ) );
       int16x8_t vsrc2 = vcombine_s16( vld1_s16( ( const int16_t* )pSrc2 ),  vld1_s16( ( const int16_t* )( &pSrc2[iStrideSrc2] ) ) );
-      int32x4_t vsum  = vmovl_s16(vget_low_s16( vpaddq_s16( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 )) );
+      int32x4_t vsum =
+        vmovl_s16( vget_low_s16( pairwise_add_s16x8( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 ) ) );
       vsrc1 = vcombine_s16( vld1_s16( ( const int16_t* )( &pSrc1[2 * iStrideSrc1] ) ),  vld1_s16( ( const int16_t* )( &pSrc1[3 * iStrideSrc1] ) ) );
       vsrc2 = vcombine_s16( vld1_s16( ( const int16_t* )( &pSrc2[2 * iStrideSrc2] ) ),  vld1_s16( ( const int16_t* )( &pSrc2[3 * iStrideSrc2] ) ) );
-      vsum  = vaddq_s32( vsum, vmovl_s16(vget_low_s16( vpaddq_s16( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 ) ) ));
-      uiSum = vaddvq_s32(vsum);
+      vsum = vaddq_s32(
+        vsum, vmovl_s16( vget_low_s16( pairwise_add_s16x8( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 ) ) ) );
+      uiSum = horizontal_add_s32x4( vsum );
     }
     else
     {
@@ -1047,7 +1045,7 @@ Distortion RdCost::xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam )
         pSrc1 += iStrideSrc1;
         pSrc2 += iStrideSrc2;
       }
-      uiSum = vaddvq_s32(vsum32);
+      uiSum = horizontal_add_s32x4( vsum32 );
     }
   }
   else
@@ -1081,8 +1079,8 @@ Distortion RdCost::xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam )
       }
 
       int32x4_t vsumtemp = vpaddlq_s16( vsum16);
-      
-      if( earlyExitAllowed ) vsum32 = vpaddq_s32( vsum32, vsumtemp );
+
+      if( earlyExitAllowed ) vsum32 = pairwise_add_s32x4( vsum32, vsumtemp );
       else                   vsum32 = vaddq_s32 ( vsum32, vsumtemp );
 
       pSrc1   += iStrideSrc1;
@@ -1101,16 +1099,28 @@ Distortion RdCost::xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam )
         checkExit--;
       }
     }
-    uiSum = vaddvq_s32(vsum32);
+    uiSum = horizontal_add_s32x4( vsum32 );
   }
 
   uiSum <<= iSubShift;
   return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
 
-template<ARM_VEXT vext> 
-Distortion RdCost::xGetSADwMask_ARMSIMD(const DistParam &rcDtParam)
-{ 
+static inline int16x8_t reverse_vector_s16( int16x8_t x )
+{
+#if REAL_TARGET_AARCH64
+  static const uint8_t shuffle_table[ 16 ] = { 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 };
+  uint8x16_t shuffle_indices               = vld1q_u8( shuffle_table );
+  return vreinterpretq_s16_u8( vqtbl1q_u8( vreinterpretq_u8_s16( x ), shuffle_indices ) );
+#else
+  int16x8_t rev_halves = vrev64q_s16( x );
+  return vcombine_s16( vget_high_s16( rev_halves ), vget_low_s16( rev_halves ) );
+#endif
+}
+
+template<ARM_VEXT vext>
+Distortion RdCost::xGetSADwMask_ARMSIMD( const DistParam& rcDtParam )
+{
   if (rcDtParam.org.width < 4 || rcDtParam.bitDepth > 10 || rcDtParam.applyWeight)
     return RdCost::xGetSADwMask(rcDtParam);
 
@@ -1128,8 +1138,6 @@ Distortion RdCost::xGetSADwMask_ARMSIMD(const DistParam &rcDtParam)
   Distortion sum = 0;
 
   int32x4_t vsum32 = vdupq_n_s32( 0 );
-  static const uint8_t shuffle_table[16] = {14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1};
-  uint8x16_t shuffle_vector = vld1q_u8(shuffle_table);
 
   for (int y = 0; y < rows; y += subStep)
   {
@@ -1140,10 +1148,8 @@ Distortion RdCost::xGetSADwMask_ARMSIMD(const DistParam &rcDtParam)
       int16x8_t vmask;
       if (rcDtParam.stepX == -1)
       {
-        vmask                      = vld1q_s16( ( const int16_t* ) ((&weightMask[x]) - (x << 1) - (8 - 1)));
-        uint8x16_t input_vector = vreinterpretq_u8_s16(vmask);
-        uint8x16_t shuffled_vector = vqtbl1q_u8(input_vector, shuffle_vector);
-        vmask = vreinterpretq_s16_u8(shuffled_vector);
+        vmask = vld1q_s16( ( const int16_t* )( ( &weightMask[ x ] ) - ( x << 1 ) - ( 8 - 1 ) ) );
+        vmask = reverse_vector_s16( vmask );
       }
       else
       {
@@ -1155,11 +1161,10 @@ Distortion RdCost::xGetSADwMask_ARMSIMD(const DistParam &rcDtParam)
     src2 += strideSrc2;
     weightMask += strideMask;
   }
-  sum    = vaddvq_s32(vsum32);
+  sum = horizontal_add_s32x4( vsum32 );
   sum <<= subShift;
   return sum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
-
 
 template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()

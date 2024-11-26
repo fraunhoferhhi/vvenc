@@ -109,6 +109,17 @@ static inline int16x8_t pairwise_add_s16x8( const int16x8_t a, const int16x8_t b
 #endif
 }
 
+static inline int32x4_t pairwise_add_s32x4( const int32x4_t a, const int32x4_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vpaddq_s32( a, b );
+#else
+  int32x2_t lo = vpadd_s32( vget_low_s32( a ), vget_low_s32( b ) );
+  int32x2_t hi = vpadd_s32( vget_high_s32( a ), vget_high_s32( b ) );
+  return vcombine_s32( lo, hi );
+#endif
+}
+
 }  // namespace vvenc
 
 #endif
