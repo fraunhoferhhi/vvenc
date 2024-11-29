@@ -32,9 +32,12 @@ if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
     set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-lax-vector-conversions" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-lax-vector-conversions" )
   endif()
+
+  # Check if SVE/SVE2 flags are supported by the compiler.
+  set_if_compiler_supports_arm_extensions( FLAG_sve FLAG_sve2 )
 endif()
 
-# we enable x86 intrinsics for all target architectures, because they are implemented through simd-everywhere on non-x86
+# We enable x86 intrinsics for all target architectures, because they are implemented through SIMD-everywhere on non-x86.
 set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "Enable x86 intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "Enable Arm Neon intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD_SVE FALSE                 CACHE BOOL "Enable Arm SVE intrinsics" )
@@ -81,27 +84,25 @@ if( VVENC_TARGET_ARCH STREQUAL "AARCH64" )
   if( VVENC_ENABLE_ARM_SIMD )
     message( STATUS "AArch64 Neon intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM=1 )
-  else()
-    message( STATUS "AArch64 Neon intrinsics disabled, disabling AArch64 SVE/SVE2 intrinsics" )
-    # If Neon is disabled make sure that SVE/SVE2 are also disabled.
-    set( VVENC_ENABLE_ARM_SIMD_SVE FALSE )
-    set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
   endif()
 
-  if( VVENC_ENABLE_ARM_SIMD_SVE )
+  # If Neon is disabled or SVE is not supported, make sure that SVE is disabled.
+  if ( NOT VVENC_ENABLE_ARM_SIMD OR NOT FLAG_sve )
+    message( STATUS "Disabling AArch64 SVE/SVE2 intrinsics" )
+    set( VVENC_ENABLE_ARM_SIMD_SVE FALSE )
+  elseif( VVENC_ENABLE_ARM_SIMD_SVE )
     message( STATUS "AArch64 SVE intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM_SVE=1 )
-  else()
-    message( STATUS "AArch64 SVE intrinsics disabled, disabling AArch64 SVE2 intrinsics" )
-    # If SVE is disabled make sure that SVE2 are also disabled.
-    set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
   endif()
 
-  if( VVENC_ENABLE_ARM_SIMD_SVE2 )
+  # If SVE is disabled or SVE2 is not supported, make sure that SVE2 is disabled.
+  if ( NOT VVENC_ENABLE_ARM_SIMD_SVE OR NOT FLAG_sve2 )
+    message( STATUS "Disabling AArch64 SVE2 intrinsics" )
+    # If SVE is disabled make sure that SVE2 are also disabled.
+    set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE )
+  elseif( VVENC_ENABLE_ARM_SIMD_SVE2 )
     message( STATUS "AArch64 SVE2 intrinsics enabled" )
     add_compile_definitions( TARGET_SIMD_ARM_SVE2=1 )
-  else()
-    message( STATUS "AArch64 SVE2 intrinsics disabled" )
   endif()
 endif()
 

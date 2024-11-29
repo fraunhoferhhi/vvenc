@@ -1,5 +1,6 @@
 include( CheckCCompilerFlag )
 include( CheckCSourceCompiles )
+include( CheckCXXSourceCompiles )
 
 function( set_if_compiler_supports_flag output_var flag )
   string( REGEX REPLACE "[-.]" "_" SUPPORTED_flag_var "SUPPORTED${flag}" )
@@ -84,6 +85,71 @@ function( _emscripten_enable_wasm_simd128 )
   endif()
 endfunction()
 
+function( _set_if_compiler_supports_sve_flag output_var sve_flag )
+  set_if_compiler_supports_flag( tmp_var "${sve_flag}" )
+  if( NOT tmp_var )
+    return()
+  endif()
+
+  set( OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS} )
+  set( OLD_CMAKE_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE} )
+  set( CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${sve_flag}" )
+  set( CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY )
+
+  # Check whether the compiler can compile SVE functions that require
+  # backup/restore of SVE registers according to AAPCS.
+  # https://github.com/llvm/llvm-project/issues/80009.
+  set( SVE_COMPILATION_TEST "
+#include <arm_sve.h>
+void other();
+svfloat32_t func(svfloat32_t a) {
+other();
+return a;
+}
+int main() { return 0; }" )
+
+  check_c_source_compiles( "${SVE_COMPILATION_TEST}" SVE_COMPILATION_C_TEST_COMPILED )
+  check_cxx_source_compiles( "${SVE_COMPILATION_TEST}" SVE_COMPILATION_CXX_TEST_COMPILED )
+
+  # Check if arm_neon_sve_bridge.h is available.
+  set( SVE_HEADER_TEST "
+#ifndef __ARM_NEON_SVE_BRIDGE
+#error 1
+#endif
+#include <arm_sve.h>
+#include <arm_neon_sve_bridge.h>
+int main() { return 0; }")
+  check_c_source_compiles( "${SVE_HEADER_TEST}" SVE_HEADER_C_TEST_COMPILED )
+  check_cxx_source_compiles( "${SVE_HEADER_TEST}" SVE_HEADER_CXX_TEST_COMPILED )
+
+  set( CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS} )
+  set( CMAKE_TRY_COMPILE_TARGET_TYPE ${OLD_CMAKE_TRY_COMPILE_TARGET_TYPE} )
+
+  if( SVE_COMPILATION_C_TEST_COMPILED AND SVE_COMPILATION_CXX_TEST_COMPILED AND
+      SVE_HEADER_C_TEST_COMPILED AND SVE_HEADER_CXX_TEST_COMPILED )
+    set( ${output_var} "${tmp_var}" PARENT_SCOPE )
+  endif()
+endfunction()
+
+# Check if the compiler supports the AArch64 SVE and SVE2 extensions, and set
+# variables for flags used to enable them to avoid duplication.
+function( set_if_compiler_supports_arm_extensions output_flag_sve output_flag_sve2 )
+  if( NOT(( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" ) OR
+          ( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" )))
+    return()
+  endif()
+  if( UNIX OR MINGW )
+    # SVE is an optional feature from Armv8.2-A.
+    set( _flag_sve "-march=armv8.2-a+sve" )
+    _set_if_compiler_supports_sve_flag( _sve_supported "${_flag_sve}" )
+    set( ${output_flag_sve} "${_sve_supported}" PARENT_SCOPE )
+
+    # SVE2 is an optional feature from Armv9.0-A.
+    set( _flag_sve2 "-march=armv9-a+sve2" )
+    _set_if_compiler_supports_sve_flag( _sve2_supported "${_flag_sve2}" )
+    set( ${output_flag_sve2} "${_sve2_supported}" PARENT_SCOPE )
+  endif()
+endfunction()
 
 function( check_problematic_compiler output_var compiler_id first_bad_version first_fixed_version )
   if( CMAKE_CXX_COMPILER_ID STREQUAL "${compiler_id}"

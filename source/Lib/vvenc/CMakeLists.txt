@@ -49,6 +49,8 @@ if( VVENC_ENABLE_ARM_SIMD )
   file( GLOB ARM_INC_FILES CONFIGURE_DEPENDS      "../CommonLib/arm/*.h"        )
 
   file( GLOB ARM_NEON_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/neon/*.cpp" )
+  file( GLOB ARM_SVE_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/sve/*.cpp" )
+  file( GLOB ARM_SVE2_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/sve2/*.cpp" )
 endif()
 
 # get public/extern include files
@@ -133,7 +135,36 @@ endif()
 if( VVENC_ENABLE_ARM_SIMD )
   # Set needed compile definitions.
   set_property( SOURCE ${ARM_NEON_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON )
-  add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_NEON_SRC_FILES} )
+
+  if(( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" ) OR ( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" ))
+    # Neon is mandatory in AArch64, so no additional compile flags needed here.
+  else()
+    set_if_compiler_supports_flag( FLAG_mfpu_neon "-mfpu=neon" )
+    set_property( SOURCE ${ARM_NEON_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_mfpu_neon}" )
+  endif()
+  list(APPEND ARM_SRC_FILES ${ARM_NEON_SRC_FILES})
+
+  if( VVENC_ENABLE_ARM_SIMD_SVE )
+    set_property( SOURCE ${ARM_SVE_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON USE_SVE )
+    set_property( SOURCE ${ARM_SVE_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS ${FLAG_sve} )
+    list(APPEND ARM_SRC_FILES ${ARM_SVE_SRC_FILES})
+  endif()
+
+  if( VVENC_ENABLE_ARM_SIMD_SVE2 )
+    set_property( SOURCE ${ARM_SVE2_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON USE_SVE USE_SVE2 )
+    set_property( SOURCE ${ARM_SVE2_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS ${FLAG_sve2} )
+    list(APPEND ARM_SRC_FILES ${ARM_SVE2_SRC_FILES})
+  endif()
+
+  add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_SRC_FILES} )
+
+  # Disable LTO for the files compiled with special architecture flags.
+  set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES
+                                              INTERPROCEDURAL_OPTIMIZATION                OFF
+                                              INTERPROCEDURAL_OPTIMIZATION_RELEASE        OFF
+                                              INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO OFF
+                                              INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
+
   set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES FOLDER lib )
 endif()
 
