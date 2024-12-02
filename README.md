@@ -43,7 +43,7 @@ For multi-configuration projects (e.g. Visual Studio or Xcode) specify `--config
 
 ### How to build using GNU Make?
 
-On top of the CMake build system, convinence Makefile is provided to simplify the build process. To build using GNU Make please run the following:
+On top of the CMake build system, convenience Makefile is provided to simplify the build process. To build using GNU Make please run the following:
 
 ```sh
 make install-release <options>
