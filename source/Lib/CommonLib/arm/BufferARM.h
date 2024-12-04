@@ -325,6 +325,8 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
     {
       for( int x = 0; x < width; x += 8 )
       {
+        GCC_WARNING_DISABLE_maybe_uninitialized
+
         xtmp1 = vsetq_lane_s16( lut[ src[ x + 0 ] ], xtmp1, 0 );
         xtmp1 = vsetq_lane_s16( lut[ src[ x + 1 ] ], xtmp1, 1 );
         xtmp1 = vsetq_lane_s16( lut[ src[ x + 2 ] ], xtmp1, 2 );
@@ -360,6 +362,8 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
         xtmp4 = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 5 ] ], xtmp4, 5 );
         xtmp4 = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 6 ] ], xtmp4, 6 );
         xtmp4 = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 7 ] ], xtmp4, 7 );
+
+        GCC_WARNING_RESET
 
         vst1q_s16( &dst[ x ], xtmp1 );
         vst1q_s16( &dst[ x + 1 * dstStride ], xtmp2 );
