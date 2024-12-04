@@ -49,7 +49,7 @@ if( VVENC_ENABLE_ARM_SIMD )
   file( GLOB ARM_INC_FILES CONFIGURE_DEPENDS      "../CommonLib/arm/*.h"        )
 
   file( GLOB ARM_NEON_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/neon/*.cpp" )
-  file( GLOB ARM_SVE_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/sve/*.cpp" )
+  file( GLOB ARM_SVE_SRC_FILES  CONFIGURE_DEPENDS "../CommonLib/arm/sve/*.cpp" )
   file( GLOB ARM_SVE2_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/arm/sve2/*.cpp" )
 endif()
 
@@ -142,21 +142,21 @@ if( VVENC_ENABLE_ARM_SIMD )
     set_if_compiler_supports_flag( FLAG_mfpu_neon "-mfpu=neon" )
     set_property( SOURCE ${ARM_NEON_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_mfpu_neon}" )
   endif()
-  list(APPEND ARM_SRC_FILES ${ARM_NEON_SRC_FILES})
+  list( APPEND ARM_SIMD_SRC_FILES ${ARM_NEON_SRC_FILES} )
 
   if( VVENC_ENABLE_ARM_SIMD_SVE )
     set_property( SOURCE ${ARM_SVE_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON USE_SVE )
     set_property( SOURCE ${ARM_SVE_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS ${FLAG_sve} )
-    list(APPEND ARM_SRC_FILES ${ARM_SVE_SRC_FILES})
+    list( APPEND ARM_SIMD_SRC_FILES ${ARM_SVE_SRC_FILES} )
   endif()
 
   if( VVENC_ENABLE_ARM_SIMD_SVE2 )
     set_property( SOURCE ${ARM_SVE2_SRC_FILES} APPEND PROPERTY COMPILE_DEFINITIONS USE_NEON USE_SVE USE_SVE2 )
     set_property( SOURCE ${ARM_SVE2_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS ${FLAG_sve2} )
-    list(APPEND ARM_SRC_FILES ${ARM_SVE2_SRC_FILES})
+    list( APPEND ARM_SIMD_SRC_FILES ${ARM_SVE2_SRC_FILES} )
   endif()
 
-  add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_SRC_FILES} )
+  add_library( ${LIB_NAME}_arm_simd OBJECT ${ARM_SIMD_SRC_FILES} )
 
   # Disable LTO for the files compiled with special architecture flags.
   set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES
