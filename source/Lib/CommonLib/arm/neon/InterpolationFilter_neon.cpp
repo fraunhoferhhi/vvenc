@@ -178,9 +178,10 @@ static int16x8_t filter8xX_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voff
 
 static int16x8x2_t filter16xX_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x8_t a = filter8xX_N8_neon( src + 0, ch, voffset1, invshift1st );
-  int16x8_t b = filter8xX_N8_neon( src + 8, ch, voffset1, invshift1st );
-  return ( int16x8x2_t ){ a, b };
+  int16x8x2_t result;
+  result.val[0] = filter8xX_N8_neon( src + 0, ch, voffset1, invshift1st );
+  result.val[1] = filter8xX_N8_neon( src + 8, ch, voffset1, invshift1st );
+  return result; // explicit return since MSVC for arm64 does not support direct return with typecast
 }
 
 template<bool isLast>

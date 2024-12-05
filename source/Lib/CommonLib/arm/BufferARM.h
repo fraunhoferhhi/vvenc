@@ -59,6 +59,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #if ENABLE_SIMD_OPT_BUFFER
 #ifdef TARGET_SIMD_ARM
 
+#if defined( _MSC_VER )
+# pragma warning(disable: 4700) // MSVC equivalent of GCC_WARNING_DISABLE_maybe_uninitialized
+#endif
 namespace vvenc
 {
 
@@ -79,138 +82,138 @@ void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
       {
         GCC_WARNING_DISABLE_maybe_uninitialized   // when building for aarch64 without LTO gcc complains about xtmp{1,2,3,4}.val[] not being initialized
 
-        xtmp1.val[ 0 ][ 0 ] = lut[ src[ x + 0 ] ];
-        xtmp1.val[ 1 ][ 0 ] = lut[ src[ x + 1 ] ];
-        xtmp1.val[ 2 ][ 0 ] = lut[ src[ x + 2 ] ];
-        xtmp1.val[ 3 ][ 0 ] = lut[ src[ x + 3 ] ];
-        xtmp1.val[ 0 ][ 1 ] = lut[ src[ x + 4 ] ];
-        xtmp1.val[ 1 ][ 1 ] = lut[ src[ x + 5 ] ];
-        xtmp1.val[ 2 ][ 1 ] = lut[ src[ x + 6 ] ];
-        xtmp1.val[ 3 ][ 1 ] = lut[ src[ x + 7 ] ];
-        xtmp1.val[ 0 ][ 2 ] = lut[ src[ x + 8 ] ];
-        xtmp1.val[ 1 ][ 2 ] = lut[ src[ x + 9 ] ];
-        xtmp1.val[ 2 ][ 2 ] = lut[ src[ x + 10 ] ];
-        xtmp1.val[ 3 ][ 2 ] = lut[ src[ x + 11 ] ];
-        xtmp1.val[ 0 ][ 3 ] = lut[ src[ x + 12 ] ];
-        xtmp1.val[ 1 ][ 3 ] = lut[ src[ x + 13 ] ];
-        xtmp1.val[ 2 ][ 3 ] = lut[ src[ x + 14 ] ];
-        xtmp1.val[ 3 ][ 3 ] = lut[ src[ x + 15 ] ];
-        xtmp1.val[ 0 ][ 4 ] = lut[ src[ x + 16 ] ];
-        xtmp1.val[ 1 ][ 4 ] = lut[ src[ x + 17 ] ];
-        xtmp1.val[ 2 ][ 4 ] = lut[ src[ x + 18 ] ];
-        xtmp1.val[ 3 ][ 4 ] = lut[ src[ x + 19 ] ];
-        xtmp1.val[ 0 ][ 5 ] = lut[ src[ x + 20 ] ];
-        xtmp1.val[ 1 ][ 5 ] = lut[ src[ x + 21 ] ];
-        xtmp1.val[ 2 ][ 5 ] = lut[ src[ x + 22 ] ];
-        xtmp1.val[ 3 ][ 5 ] = lut[ src[ x + 23 ] ];
-        xtmp1.val[ 0 ][ 6 ] = lut[ src[ x + 24 ] ];
-        xtmp1.val[ 1 ][ 6 ] = lut[ src[ x + 25 ] ];
-        xtmp1.val[ 2 ][ 6 ] = lut[ src[ x + 26 ] ];
-        xtmp1.val[ 3 ][ 6 ] = lut[ src[ x + 27 ] ];
-        xtmp1.val[ 0 ][ 7 ] = lut[ src[ x + 28 ] ];
-        xtmp1.val[ 1 ][ 7 ] = lut[ src[ x + 29 ] ];
-        xtmp1.val[ 2 ][ 7 ] = lut[ src[ x + 30 ] ];
-        xtmp1.val[ 3 ][ 7 ] = lut[ src[ x + 31 ] ];
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 0 ] ], xtmp1.val[ 0 ], 0 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 ] ], xtmp1.val[ 1 ], 0 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 ] ], xtmp1.val[ 2 ], 0 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 ] ], xtmp1.val[ 3 ], 0 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 4 ] ], xtmp1.val[ 0 ], 1 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 5 ] ], xtmp1.val[ 1 ], 1 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 6 ] ], xtmp1.val[ 2 ], 1 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 7 ] ], xtmp1.val[ 3 ], 1 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 8 ] ], xtmp1.val[ 0 ], 2 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 9 ] ], xtmp1.val[ 1 ], 2 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 10 ] ], xtmp1.val[ 2 ], 2 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 11 ] ], xtmp1.val[ 3 ], 2 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 12 ] ], xtmp1.val[ 0 ], 3 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 13 ] ], xtmp1.val[ 1 ], 3 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 14 ] ], xtmp1.val[ 2 ], 3 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 15 ] ], xtmp1.val[ 3 ], 3 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 16 ] ], xtmp1.val[ 0 ], 4 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 17 ] ], xtmp1.val[ 1 ], 4 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 18 ] ], xtmp1.val[ 2 ], 4 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 19 ] ], xtmp1.val[ 3 ], 4 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 20 ] ], xtmp1.val[ 0 ], 5 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 21 ] ], xtmp1.val[ 1 ], 5 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 22 ] ], xtmp1.val[ 2 ], 5 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 23 ] ], xtmp1.val[ 3 ], 5 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 24 ] ], xtmp1.val[ 0 ], 6 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 25 ] ], xtmp1.val[ 1 ], 6 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 26 ] ], xtmp1.val[ 2 ], 6 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 27 ] ], xtmp1.val[ 3 ], 6 );
+        xtmp1.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 28 ] ], xtmp1.val[ 0 ], 7 );
+        xtmp1.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 29 ] ], xtmp1.val[ 1 ], 7 );
+        xtmp1.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 30 ] ], xtmp1.val[ 2 ], 7 );
+        xtmp1.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 31 ] ], xtmp1.val[ 3 ], 7 );
 
-        xtmp2.val[ 0 ][ 0 ] = lut[ src[ x + 1 * srcStride ] ];
-        xtmp2.val[ 1 ][ 0 ] = lut[ src[ x + 1 * srcStride + 1 ] ];
-        xtmp2.val[ 2 ][ 0 ] = lut[ src[ x + 1 * srcStride + 2 ] ];
-        xtmp2.val[ 3 ][ 0 ] = lut[ src[ x + 1 * srcStride + 3 ] ];
-        xtmp2.val[ 0 ][ 1 ] = lut[ src[ x + 1 * srcStride + 4 ] ];
-        xtmp2.val[ 1 ][ 1 ] = lut[ src[ x + 1 * srcStride + 5 ] ];
-        xtmp2.val[ 2 ][ 1 ] = lut[ src[ x + 1 * srcStride + 6 ] ];
-        xtmp2.val[ 3 ][ 1 ] = lut[ src[ x + 1 * srcStride + 7 ] ];
-        xtmp2.val[ 0 ][ 2 ] = lut[ src[ x + 1 * srcStride + 8 ] ];
-        xtmp2.val[ 1 ][ 2 ] = lut[ src[ x + 1 * srcStride + 9 ] ];
-        xtmp2.val[ 2 ][ 2 ] = lut[ src[ x + 1 * srcStride + 10 ] ];
-        xtmp2.val[ 3 ][ 2 ] = lut[ src[ x + 1 * srcStride + 11 ] ];
-        xtmp2.val[ 0 ][ 3 ] = lut[ src[ x + 1 * srcStride + 12 ] ];
-        xtmp2.val[ 1 ][ 3 ] = lut[ src[ x + 1 * srcStride + 13 ] ];
-        xtmp2.val[ 2 ][ 3 ] = lut[ src[ x + 1 * srcStride + 14 ] ];
-        xtmp2.val[ 3 ][ 3 ] = lut[ src[ x + 1 * srcStride + 15 ] ];
-        xtmp2.val[ 0 ][ 4 ] = lut[ src[ x + 1 * srcStride + 16 ] ];
-        xtmp2.val[ 1 ][ 4 ] = lut[ src[ x + 1 * srcStride + 17 ] ];
-        xtmp2.val[ 2 ][ 4 ] = lut[ src[ x + 1 * srcStride + 18 ] ];
-        xtmp2.val[ 3 ][ 4 ] = lut[ src[ x + 1 * srcStride + 19 ] ];
-        xtmp2.val[ 0 ][ 5 ] = lut[ src[ x + 1 * srcStride + 20 ] ];
-        xtmp2.val[ 1 ][ 5 ] = lut[ src[ x + 1 * srcStride + 21 ] ];
-        xtmp2.val[ 2 ][ 5 ] = lut[ src[ x + 1 * srcStride + 22 ] ];
-        xtmp2.val[ 3 ][ 5 ] = lut[ src[ x + 1 * srcStride + 23 ] ];
-        xtmp2.val[ 0 ][ 6 ] = lut[ src[ x + 1 * srcStride + 24 ] ];
-        xtmp2.val[ 1 ][ 6 ] = lut[ src[ x + 1 * srcStride + 25 ] ];
-        xtmp2.val[ 2 ][ 6 ] = lut[ src[ x + 1 * srcStride + 26 ] ];
-        xtmp2.val[ 3 ][ 6 ] = lut[ src[ x + 1 * srcStride + 27 ] ];
-        xtmp2.val[ 0 ][ 7 ] = lut[ src[ x + 1 * srcStride + 28 ] ];
-        xtmp2.val[ 1 ][ 7 ] = lut[ src[ x + 1 * srcStride + 29 ] ];
-        xtmp2.val[ 2 ][ 7 ] = lut[ src[ x + 1 * srcStride + 30 ] ];
-        xtmp2.val[ 3 ][ 7 ] = lut[ src[ x + 1 * srcStride + 31 ] ];
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 0 ] ], xtmp2.val[ 0 ], 0 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 1 ] ], xtmp2.val[ 1 ], 0 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 2 ] ], xtmp2.val[ 2 ], 0 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 3 ] ], xtmp2.val[ 3 ], 0 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 4 ] ], xtmp2.val[ 0 ], 1 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 5 ] ], xtmp2.val[ 1 ], 1 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 6 ] ], xtmp2.val[ 2 ], 1 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 7 ] ], xtmp2.val[ 3 ], 1 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 8 ] ], xtmp2.val[ 0 ], 2 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 9 ] ], xtmp2.val[ 1 ], 2 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 10 ] ], xtmp2.val[ 2 ], 2 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 11 ] ], xtmp2.val[ 3 ], 2 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 12 ] ], xtmp2.val[ 0 ], 3 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 13 ] ], xtmp2.val[ 1 ], 3 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 14 ] ], xtmp2.val[ 2 ], 3 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 15 ] ], xtmp2.val[ 3 ], 3 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 16 ] ], xtmp2.val[ 0 ], 4 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 17 ] ], xtmp2.val[ 1 ], 4 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 18 ] ], xtmp2.val[ 2 ], 4 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 19 ] ], xtmp2.val[ 3 ], 4 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 20 ] ], xtmp2.val[ 0 ], 5 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 21 ] ], xtmp2.val[ 1 ], 5 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 22 ] ], xtmp2.val[ 2 ], 5 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 23 ] ], xtmp2.val[ 3 ], 5 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 24 ] ], xtmp2.val[ 0 ], 6 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 25 ] ], xtmp2.val[ 1 ], 6 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 26 ] ], xtmp2.val[ 2 ], 6 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 27 ] ], xtmp2.val[ 3 ], 6 );
+        xtmp2.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 28 ] ], xtmp2.val[ 0 ], 7 );
+        xtmp2.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 29 ] ], xtmp2.val[ 1 ], 7 );
+        xtmp2.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 30 ] ], xtmp2.val[ 2 ], 7 );
+        xtmp2.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 1 * srcStride + 31 ] ], xtmp2.val[ 3 ], 7 );
 
-        xtmp3.val[ 0 ][ 0 ] = lut[ src[ x + 2 * srcStride + 0 ] ];
-        xtmp3.val[ 1 ][ 0 ] = lut[ src[ x + 2 * srcStride + 1 ] ];
-        xtmp3.val[ 2 ][ 0 ] = lut[ src[ x + 2 * srcStride + 2 ] ];
-        xtmp3.val[ 3 ][ 0 ] = lut[ src[ x + 2 * srcStride + 3 ] ];
-        xtmp3.val[ 0 ][ 1 ] = lut[ src[ x + 2 * srcStride + 4 ] ];
-        xtmp3.val[ 1 ][ 1 ] = lut[ src[ x + 2 * srcStride + 5 ] ];
-        xtmp3.val[ 2 ][ 1 ] = lut[ src[ x + 2 * srcStride + 6 ] ];
-        xtmp3.val[ 3 ][ 1 ] = lut[ src[ x + 2 * srcStride + 7 ] ];
-        xtmp3.val[ 0 ][ 2 ] = lut[ src[ x + 2 * srcStride + 8 ] ];
-        xtmp3.val[ 1 ][ 2 ] = lut[ src[ x + 2 * srcStride + 9 ] ];
-        xtmp3.val[ 2 ][ 2 ] = lut[ src[ x + 2 * srcStride + 10 ] ];
-        xtmp3.val[ 3 ][ 2 ] = lut[ src[ x + 2 * srcStride + 11 ] ];
-        xtmp3.val[ 0 ][ 3 ] = lut[ src[ x + 2 * srcStride + 12 ] ];
-        xtmp3.val[ 1 ][ 3 ] = lut[ src[ x + 2 * srcStride + 13 ] ];
-        xtmp3.val[ 2 ][ 3 ] = lut[ src[ x + 2 * srcStride + 14 ] ];
-        xtmp3.val[ 3 ][ 3 ] = lut[ src[ x + 2 * srcStride + 15 ] ];
-        xtmp3.val[ 0 ][ 4 ] = lut[ src[ x + 2 * srcStride + 16 ] ];
-        xtmp3.val[ 1 ][ 4 ] = lut[ src[ x + 2 * srcStride + 17 ] ];
-        xtmp3.val[ 2 ][ 4 ] = lut[ src[ x + 2 * srcStride + 18 ] ];
-        xtmp3.val[ 3 ][ 4 ] = lut[ src[ x + 2 * srcStride + 19 ] ];
-        xtmp3.val[ 0 ][ 5 ] = lut[ src[ x + 2 * srcStride + 20 ] ];
-        xtmp3.val[ 1 ][ 5 ] = lut[ src[ x + 2 * srcStride + 21 ] ];
-        xtmp3.val[ 2 ][ 5 ] = lut[ src[ x + 2 * srcStride + 22 ] ];
-        xtmp3.val[ 3 ][ 5 ] = lut[ src[ x + 2 * srcStride + 23 ] ];
-        xtmp3.val[ 0 ][ 6 ] = lut[ src[ x + 2 * srcStride + 24 ] ];
-        xtmp3.val[ 1 ][ 6 ] = lut[ src[ x + 2 * srcStride + 25 ] ];
-        xtmp3.val[ 2 ][ 6 ] = lut[ src[ x + 2 * srcStride + 26 ] ];
-        xtmp3.val[ 3 ][ 6 ] = lut[ src[ x + 2 * srcStride + 27 ] ];
-        xtmp3.val[ 0 ][ 7 ] = lut[ src[ x + 2 * srcStride + 28 ] ];
-        xtmp3.val[ 1 ][ 7 ] = lut[ src[ x + 2 * srcStride + 29 ] ];
-        xtmp3.val[ 2 ][ 7 ] = lut[ src[ x + 2 * srcStride + 30 ] ];
-        xtmp3.val[ 3 ][ 7 ] = lut[ src[ x + 2 * srcStride + 31 ] ];
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 0 ] ], xtmp3.val[ 0 ], 0 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 1 ] ], xtmp3.val[ 1 ], 0 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 2 ] ], xtmp3.val[ 2 ], 0 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 3 ] ], xtmp3.val[ 3 ], 0 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 4 ] ], xtmp3.val[ 0 ], 1 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 5 ] ], xtmp3.val[ 1 ], 1 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 6 ] ], xtmp3.val[ 2 ], 1 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 7 ] ], xtmp3.val[ 3 ], 1 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 8 ] ], xtmp3.val[ 0 ], 2 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 9 ] ], xtmp3.val[ 1 ], 2 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 10 ] ], xtmp3.val[ 2 ], 2 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 11 ] ], xtmp3.val[ 3 ], 2 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 12 ] ], xtmp3.val[ 0 ], 3 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 13 ] ], xtmp3.val[ 1 ], 3 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 14 ] ], xtmp3.val[ 2 ], 3 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 15 ] ], xtmp3.val[ 3 ], 3 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 16 ] ], xtmp3.val[ 0 ], 4 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 17 ] ], xtmp3.val[ 1 ], 4 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 18 ] ], xtmp3.val[ 2 ], 4 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 19 ] ], xtmp3.val[ 3 ], 4 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 20 ] ], xtmp3.val[ 0 ], 5 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 21 ] ], xtmp3.val[ 1 ], 5 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 22 ] ], xtmp3.val[ 2 ], 5 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 23 ] ], xtmp3.val[ 3 ], 5 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 24 ] ], xtmp3.val[ 0 ], 6 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 25 ] ], xtmp3.val[ 1 ], 6 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 26 ] ], xtmp3.val[ 2 ], 6 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 27 ] ], xtmp3.val[ 3 ], 6 );
+        xtmp3.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 28 ] ], xtmp3.val[ 0 ], 7 );
+        xtmp3.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 29 ] ], xtmp3.val[ 1 ], 7 );
+        xtmp3.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 30 ] ], xtmp3.val[ 2 ], 7 );
+        xtmp3.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 2 * srcStride + 31 ] ], xtmp3.val[ 3 ], 7 );
 
         // interleaved assign -> there is only interleaved storing/loading
-        xtmp4.val[ 0 ][ 0 ] = lut[ src[ x + 3 * srcStride + 0 ] ];
-        xtmp4.val[ 1 ][ 0 ] = lut[ src[ x + 3 * srcStride + 1 ] ];
-        xtmp4.val[ 2 ][ 0 ] = lut[ src[ x + 3 * srcStride + 2 ] ];
-        xtmp4.val[ 3 ][ 0 ] = lut[ src[ x + 3 * srcStride + 3 ] ];
-        xtmp4.val[ 0 ][ 1 ] = lut[ src[ x + 3 * srcStride + 4 ] ];
-        xtmp4.val[ 1 ][ 1 ] = lut[ src[ x + 3 * srcStride + 5 ] ];
-        xtmp4.val[ 2 ][ 1 ] = lut[ src[ x + 3 * srcStride + 6 ] ];
-        xtmp4.val[ 3 ][ 1 ] = lut[ src[ x + 3 * srcStride + 7 ] ];
-        xtmp4.val[ 0 ][ 2 ] = lut[ src[ x + 3 * srcStride + 8 ] ];
-        xtmp4.val[ 1 ][ 2 ] = lut[ src[ x + 3 * srcStride + 9 ] ];
-        xtmp4.val[ 2 ][ 2 ] = lut[ src[ x + 3 * srcStride + 10 ] ];
-        xtmp4.val[ 3 ][ 2 ] = lut[ src[ x + 3 * srcStride + 11 ] ];
-        xtmp4.val[ 0 ][ 3 ] = lut[ src[ x + 3 * srcStride + 12 ] ];
-        xtmp4.val[ 1 ][ 3 ] = lut[ src[ x + 3 * srcStride + 13 ] ];
-        xtmp4.val[ 2 ][ 3 ] = lut[ src[ x + 3 * srcStride + 14 ] ];
-        xtmp4.val[ 3 ][ 3 ] = lut[ src[ x + 3 * srcStride + 15 ] ];
-        xtmp4.val[ 0 ][ 4 ] = lut[ src[ x + 3 * srcStride + 16 ] ];
-        xtmp4.val[ 1 ][ 4 ] = lut[ src[ x + 3 * srcStride + 17 ] ];
-        xtmp4.val[ 2 ][ 4 ] = lut[ src[ x + 3 * srcStride + 18 ] ];
-        xtmp4.val[ 3 ][ 4 ] = lut[ src[ x + 3 * srcStride + 19 ] ];
-        xtmp4.val[ 0 ][ 5 ] = lut[ src[ x + 3 * srcStride + 20 ] ];
-        xtmp4.val[ 1 ][ 5 ] = lut[ src[ x + 3 * srcStride + 21 ] ];
-        xtmp4.val[ 2 ][ 5 ] = lut[ src[ x + 3 * srcStride + 22 ] ];
-        xtmp4.val[ 3 ][ 5 ] = lut[ src[ x + 3 * srcStride + 23 ] ];
-        xtmp4.val[ 0 ][ 6 ] = lut[ src[ x + 3 * srcStride + 24 ] ];
-        xtmp4.val[ 1 ][ 6 ] = lut[ src[ x + 3 * srcStride + 25 ] ];
-        xtmp4.val[ 2 ][ 6 ] = lut[ src[ x + 3 * srcStride + 26 ] ];
-        xtmp4.val[ 3 ][ 6 ] = lut[ src[ x + 3 * srcStride + 27 ] ];
-        xtmp4.val[ 0 ][ 7 ] = lut[ src[ x + 3 * srcStride + 28 ] ];
-        xtmp4.val[ 1 ][ 7 ] = lut[ src[ x + 3 * srcStride + 29 ] ];
-        xtmp4.val[ 2 ][ 7 ] = lut[ src[ x + 3 * srcStride + 30 ] ];
-        xtmp4.val[ 3 ][ 7 ] = lut[ src[ x + 3 * srcStride + 31 ] ];
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 0 ] ], xtmp4.val[ 0 ], 0 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 1 ] ], xtmp4.val[ 1 ], 0 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 2 ] ], xtmp4.val[ 2 ], 0 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 3 ] ], xtmp4.val[ 3 ], 0 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 4 ] ], xtmp4.val[ 0 ], 1 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 5 ] ], xtmp4.val[ 1 ], 1 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 6 ] ], xtmp4.val[ 2 ], 1 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 7 ] ], xtmp4.val[ 3 ], 1 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 8 ] ], xtmp4.val[ 0 ], 2 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 9 ] ], xtmp4.val[ 1 ], 2 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 10 ] ], xtmp4.val[ 2 ], 2 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 11 ] ], xtmp4.val[ 3 ], 2 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 12 ] ], xtmp4.val[ 0 ], 3 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 13 ] ], xtmp4.val[ 1 ], 3 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 14 ] ], xtmp4.val[ 2 ], 3 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 15 ] ], xtmp4.val[ 3 ], 3 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 16 ] ], xtmp4.val[ 0 ], 4 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 17 ] ], xtmp4.val[ 1 ], 4 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 18 ] ], xtmp4.val[ 2 ], 4 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 19 ] ], xtmp4.val[ 3 ], 4 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 20 ] ], xtmp4.val[ 0 ], 5 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 21 ] ], xtmp4.val[ 1 ], 5 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 22 ] ], xtmp4.val[ 2 ], 5 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 23 ] ], xtmp4.val[ 3 ], 5 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 24 ] ], xtmp4.val[ 0 ], 6 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 25 ] ], xtmp4.val[ 1 ], 6 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 26 ] ], xtmp4.val[ 2 ], 6 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 27 ] ], xtmp4.val[ 3 ], 6 );
+        xtmp4.val[ 0 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 28 ] ], xtmp4.val[ 0 ], 7 );
+        xtmp4.val[ 1 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 29 ] ], xtmp4.val[ 1 ], 7 );
+        xtmp4.val[ 2 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 30 ] ], xtmp4.val[ 2 ], 7 );
+        xtmp4.val[ 3 ] = vsetq_lane_s16( lut[ src[ x + 3 * srcStride + 31 ] ], xtmp4.val[ 3 ], 7 );
 
         GCC_WARNING_RESET
 
@@ -397,6 +400,10 @@ void PelBufferOps::_initPelBufOpsARM()
 template void PelBufferOps::_initPelBufOpsARM<SIMDARM>();
 
 }   // namespace
+
+#if defined( _MSC_VER )
+# pragma warning(default: 4700)
+#endif
 
 #endif   // TARGET_SIMD_ARM
 #endif     // ENABLE_SIMD_OPT_BUFFER

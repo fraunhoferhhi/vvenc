@@ -1496,6 +1496,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
 
+  bool disableF2O = c->m_usePerceptQPATempFiltISlice < -1;
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
     c->m_usePerceptQPATempFiltISlice = 0;
@@ -1513,6 +1514,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       && ( c->m_vvencMCTF.MCTF == 0 || ! c->m_usePerceptQPA ) )
   {
     c->m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
+  }
+  if( disableF2O && c->m_usePerceptQPATempFiltISlice > 0 )
+  {
+    c->m_usePerceptQPATempFiltISlice += 2;
   }
 
   if ( c->m_cuQpDeltaSubdiv < 0)
@@ -2085,8 +2090,10 @@ static bool checkCfgParameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "Configuration warning: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets!\n\n");
   }
 
-  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                       "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 4,                                                       "PerceptQPATempFiltIPic out of range, must be 4 or less" );
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_vvencMCTF.MCTF == 0,                           "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
+  vvenc_confirmParameter(c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_usePerceptQPATempFiltISlice > 0 && c->m_usePerceptQPATempFiltISlice < 3, "Segmentwise encoding requires disabling of force 2nd order filter with PerceptQPATempFiltIPic set to 3 or 4"  );
+  vvenc_confirmParameter(c, ( c->m_leadFrames > 0 || c->m_trailFrames > 0 ) && c->m_usePerceptQPATempFiltISlice > 0 && c->m_usePerceptQPATempFiltISlice < 3, "Segmentwise encoding requires disabling of force 2nd order filter with PerceptQPATempFiltIPic set to 3 or 4"  );
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                           "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
 

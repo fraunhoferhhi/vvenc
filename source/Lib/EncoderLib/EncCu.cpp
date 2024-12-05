@@ -81,8 +81,8 @@ const MergeIdxPair EncCu::m_GeoModeTest[GEO_MAX_NUM_CANDS] = { MergeIdxPair{0, 1
 
 const double EncCu::coefSquareCUs[2][5][2][2][2] = {
 {{{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
-{{{-1.00000000, -1.00000000, }, {0.06213828, 0.00611228, }, },  {{-1.00000000, -1.00000000, }, {0.06943756, 0.00320762, }, },  },
 {{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
+{{{-1.00000000, -1.00000000, }, {0.07848505, 0.00225808, }, },  {{-1.00000000, -1.00000000, }, {0.07509575, 0.00204789, }, },  },
 {{{-1.00000000, -1.00000000, }, {0.10833051, 0.00053144, }, },  {{-1.00000000, -1.00000000, }, {0.08304352, 0.00142876, }, },  },
 {{{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  {{-1.00000000, -1.00000000, }, {-1.00000000, -1.00000000, }, },  },
 },
@@ -603,7 +603,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     {
       if (m_pcEncCfg->m_usePerceptQPA)
       {
-        if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+        if (m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice == 2)
         {
           m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
         }
@@ -622,7 +622,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           tempCS->currQP[partitioner.chType] = tempCS->baseQP =
           bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
 
-          if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+          if (m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice == 2)
           {
             if ((m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) && // last CTU row of non-Intra key-frame
                 (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
@@ -668,7 +668,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
       tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
 
-      if (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)
+      if (m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice == 2)
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
@@ -1748,7 +1748,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
     addGpmCandsToPruningList( gpmMergeCtx, localUnitArea, sqrtLambdaForFirstPass, ctxStart, comboList, geoBuffer, distParam, *cu );
   }
 
-  if(    m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2 && m_uiSadBestForQPA < MAX_DISTORTION && slice.TLayer == 0 // non-Intra key-frame
+  if(    m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice == 2 && m_uiSadBestForQPA < MAX_DISTORTION && slice.TLayer == 0 // non-Intra key-frame
       && m_pcEncCfg->m_salienceBasedOpt
       && m_pcEncCfg->m_usePerceptQPA && partitioner.currQgEnable() && partitioner.currSubdiv == 0 ) // CTU-level luma quantization group
   {

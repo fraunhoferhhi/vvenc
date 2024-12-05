@@ -63,7 +63,7 @@ namespace vvenc
 
 static inline int64_t shift_and_round( int64_t x, int shift )
 {
-  return ( x + ( 1 << ( shift - 1 ) ) ) >> shift;
+  return ( x + ( static_cast<int64_t>(1) << ( shift - 1 ) ) ) >> shift;
 }
 
 template<unsigned trSize>
