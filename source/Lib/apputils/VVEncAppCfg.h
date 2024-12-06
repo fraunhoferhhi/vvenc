@@ -794,6 +794,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, NEON), default: the highest supported extension")
 #elif defined( __wasm__ ) || defined( __wasm32__ )
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, WASM), default: the highest supported extension")
+#elif defined( __loongarch__ )
+    ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, LSX), default: the highest supported extension")
 #else
     ("SIMD",                                            ignoreParams,                                       "SIMD extension to use (SCALAR, SIMDE), default: the highest supported extension")
 #  endif
