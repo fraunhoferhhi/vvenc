@@ -2347,7 +2347,8 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
     }
     else
     {
-      if( m_mergeItemList.getMergeItemInList( m_mergeItemList.size() - 1 )->cost <= mergeItem->cost || ( best2geo[1] && best2geo[1]->cost <= mergeItem->cost ) )
+      if( ( m_mergeItemList.size() > 0 && m_mergeItemList.getMergeItemInList( m_mergeItemList.size() - 1 )->cost <= mergeItem->cost ) ||
+        ( best2geo[1] && best2geo[1]->cost <= mergeItem->cost ) )
       {
         m_mergeItemList    . giveBackMergeItem( mergeItem );
       }
