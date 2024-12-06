@@ -134,6 +134,7 @@ if( VVENC_PKG_EXTRA_LIBS )
   endif()
 
   list( REMOVE_ITEM VVENC_PKG_EXTRA_LIBS "-lc" )
+  list( REMOVE_ITEM VVENC_PKG_EXTRA_LIBS "-lgcc_s" )
 endif()
 
 resolve_target_interface_libs( vvenc VVENC_PKG_INTERFACE_LIBS )
