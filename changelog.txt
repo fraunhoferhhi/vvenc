@@ -1,4 +1,35 @@
 /////////////////////////////////////////
+tag 1.13.0-rc1
+
+* libvvenc:
+  - many ARM SIMD optimizations for both NEON and SVE
+  - added parameters
+    - m_GOPQPA: enableed GOP adaptive QP cascade (default: on if QPA off)
+    - m_numParallelGOPs: allows to encode multiple GOPs at once, improving multi-threading for large number of threads (default: off)
+    - m_fga (experimental): enables film grain analysis and embeds FGS SEI in the encoded bitstreams (default: off)
+  - changed parameters:
+    - m_DecodingRefreshType: added a DASH optimized mode VVENC_DRT_IDR_NO_RADL - starts each intra period with an IDR frame
+                             without leading picture, allowing simple splitting into segments at each IDR.
+  - preset adjustments:
+    - 5% speedup for medium
+    - 2% speedup for slow and slower
+  - memory reduction for medium/fast/faster
+  - bugfixes
+  - cleanups
+
+* vvencFFapp:
+  - added parameters:
+    - GOPQPA: enabled GOP adaptive QP cascade (default: on if QPA off)
+    - NumParallelGOPs: allows to encode multiple GOPs at once (default: off)
+    - FGA: enables the experimental film grain analysis (default: off)
+  - changed parameters:
+    - DecodingRefreshType: now also accepts values "6" and "idr_no_radl" enabling the new DASH optimized IDR only structure.
+
+* vvencapp:
+  - changed parameters:
+    - refreshtype: now also accepts values "6" and "idr_no_radl" enabling the new DASH optimized IDR only structure.
+
+/////////////////////////////////////////
 tag 1.12.1
 
 * libvvenc:
