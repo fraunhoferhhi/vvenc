@@ -77,7 +77,8 @@ static inline void calcBIOSums_Neon(const Pel* srcY0Tmp, const Pel* srcY1Tmp, co
   int16x8_t sumAbsGYTmp    = vdupq_n_s16(0);
   int16x8_t sumDIYTmp      = vdupq_n_s16(0);
   int16x8_t sumSignGyGxTmp = vdupq_n_s16(0);
-  int16x8_t x = {1, 1, 1, 1, 1, 1, 0, 0};
+  int16_t vals[8] = {1, 1, 1, 1, 1, 1, 0, 0};
+  int16x8_t x = vld1q_s16(vals);
 
   for (int y = 0; y < 3; y++)
   {
@@ -93,9 +94,9 @@ static inline void calcBIOSums_Neon(const Pel* srcY0Tmp, const Pel* srcY1Tmp, co
     int16x8_t packTempY     =  vshrq_n_s16( vaddq_s16(loadGradY0, loadGradY1), 1 );
     int16x8_t gX            = vabsq_s16(packTempX);
     int16x8_t gY            = vabsq_s16(packTempY);
-    int16x8_t dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16(vcleq_s16(packTempX, vdupq_n_s16(0))-vcgeq_s16(packTempX,vdupq_n_s16(0))));
-    int16x8_t dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16(vcleq_s16(packTempY, vdupq_n_s16(0))-vcgeq_s16(packTempY,vdupq_n_s16(0))));
-    int16x8_t signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16(vcleq_s16(packTempY, vdupq_n_s16(0))-vcgeq_s16(packTempY,vdupq_n_s16(0))));
+    int16x8_t dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempX, vdupq_n_s16(0)), vcgeq_s16(packTempX,vdupq_n_s16(0)) )));
+    int16x8_t dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
+    int16x8_t signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
     
     sumAbsGXTmp     = vaddq_s16(sumAbsGXTmp, gX);
     sumAbsGYTmp     = vaddq_s16(sumAbsGYTmp, gY);
@@ -124,9 +125,9 @@ static inline void calcBIOSums_Neon(const Pel* srcY0Tmp, const Pel* srcY1Tmp, co
     gX            = vabsq_s16(packTempX);
     gY            = vabsq_s16(packTempY);
     
-    dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16(vcleq_s16(packTempX, vdupq_n_s16(0))-vcgeq_s16(packTempX,vdupq_n_s16(0))));
-    dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16(vcleq_s16(packTempY, vdupq_n_s16(0))-vcgeq_s16(packTempY,vdupq_n_s16(0))));
-    signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16(vcleq_s16(packTempY, vdupq_n_s16(0))-vcgeq_s16(packTempY,vdupq_n_s16(0))));
+    dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempX, vdupq_n_s16(0)), vcgeq_s16(packTempX,vdupq_n_s16(0)) )));
+    dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
+    signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
   
     sumAbsGXTmp     = vaddq_s16(sumAbsGXTmp, gX);
     sumAbsGYTmp     = vaddq_s16(sumAbsGYTmp, gY);

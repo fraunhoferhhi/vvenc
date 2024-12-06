@@ -3250,7 +3250,7 @@ void RdCost::xGetSADX5_8xN_SIMD(const DistParam& rcDtParam, Distortion* cost, bo
 }
 
 template <X86_VEXT vext, bool isCalCentrePos>
-void xGetSADX5_16xN_SIMDImp(const DistParam& rcDtParam, Distortion* cost) {
+void xGetSADX5_16xN_SIMDImp_X86(const DistParam& rcDtParam, Distortion* cost) {
   int i, j;
   const Pel* piOrg = rcDtParam.org.buf;
   const Pel* piCur = rcDtParam.cur.buf - 4;
@@ -3549,16 +3549,16 @@ void xGetSADX5_16xN_SIMDImp(const DistParam& rcDtParam, Distortion* cost) {
 }
 
 template <X86_VEXT vext>
-void RdCost::xGetSADX5_16xN_SIMD(const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos) {
+void RdCost::xGetSADX5_16xN_SIMD_X86(const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos) {
   if( rcDtParam.bitDepth > 10 ){
     RdCost::xGetSAD16X5( rcDtParam, cost, isCalCentrePos );
     return;
   }
   
   if (isCalCentrePos)
-    xGetSADX5_16xN_SIMDImp<vext, true>(rcDtParam, cost);
+    xGetSADX5_16xN_SIMDImp_X86<vext, true>(rcDtParam, cost);
   else
-    xGetSADX5_16xN_SIMDImp<vext, false>(rcDtParam, cost);
+    xGetSADX5_16xN_SIMDImp_X86<vext, false>(rcDtParam, cost);
 }
 
 template <X86_VEXT vext>
@@ -3611,7 +3611,7 @@ void RdCost::_initRdCostX86()
   m_fxdWtdPredPtr = fixWeightedSSE_SIMD <vext>;
 
   m_afpDistortFuncX5[0] = xGetSADX5_8xN_SIMD <vext>;
-  m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD<vext>;
+  m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD_X86<vext>;
 }
 
 template void RdCost::_initRdCostX86<SIMDX86>();

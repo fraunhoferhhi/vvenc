@@ -532,7 +532,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   const uint32_t hpFrameRate  = (pic->force2ndOrder ? 32 : encCfg->m_FrameRate / encCfg->m_FrameScale);
   const int  bitDepth         = slice->sps->bitDepths[CH_L];
   double hpEnerPicNorm        = 1.0 / getAveragePictureActivity (encCfg->m_SourceWidth, encCfg->m_SourceHeight, (encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back()),
-                                                                 (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+                                                                 (encCfg->m_internalUsePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
   const PreCalcValues& pcv    = *pic->cs->pcv;
 
   pic->picInitialQP = sliceQP;  // modified below and used in applyQPAdaptationSubCtu
@@ -600,7 +600,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
         pic->picVA.spatAct[ CH_L ] = ClipBD (uint16_t ((picSpVisAct + (nCtu >> 1)) / nCtu), 12);
       }
-      if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && pic->getOrigBuf (compID).buf != pic->getOrigBufPrev (compID, PREV_FRAME_1).buf && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
+      if (encCfg->m_internalUsePerceptQPATempFiltISlice && slice->isIntra() && pic->getOrigBuf (compID).buf != pic->getOrigBufPrev (compID, PREV_FRAME_1).buf && zeroMinActCTUs * 2 > ctuBoundingAddr - ctuStartAddr)
       {
         hpEnerPicNorm *= sqrt (zeroMinActCTUs * 2.0 / float (ctuBoundingAddr - ctuStartAddr)); // frozen-image mode
       }
@@ -659,7 +659,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
     }
   }
 
-  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())
+  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra())
   {
     const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
     const int offs = (slice->poc / encCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
@@ -700,7 +700,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       const double hpEnerCTU = pic->ctuQpaLambda[ctuRsAddr];
       int adaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEnerCTU * hpEnerPicNorm, isSccStrongRC));
 
-      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
+      if ((encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
       {
         if (rcIsFirstPassOf2) // backup 1st-pass I-frame QP for 2nd rate control pass
         {
@@ -716,7 +716,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && rcIsFirstPassOf2 && (adaptedLumaQP < MAX_QP))
+      if ((encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && rcIsFirstPassOf2 && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
@@ -839,7 +839,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
                                                                    picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, hpFrameRate,
                                                                    bitDepth, isHighResolution);
   const double hpEnerPicNorm  = 1.0 / getAveragePictureActivity (encCfg->m_SourceWidth, encCfg->m_SourceHeight, 0,
-                                                                 (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+                                                                 (encCfg->m_internalUsePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
   int adaptedSubCtuQP = Clip3 (0, MAX_QP, pic->picInitialQP + apprI3Log2 (hpEnerSubCTU * hpEnerPicNorm, isSccStrongRC));
 
   if (isChromaEnabled (pic->chromaFormat) && (adaptedSubCtuQP < MAX_QP))

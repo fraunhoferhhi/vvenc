@@ -265,6 +265,14 @@ test_vc193x:
   tags:
     - vc193x
 
+test_vc193x_arm64:
+  extends: .build_test_msvc_template
+  variables:
+     MSVC_ARCH: arm64
+     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
+  tags:
+    - vc193x-arm
+
 test_macos-x86_64:
    extends: .build_test_macos_template
    variables:

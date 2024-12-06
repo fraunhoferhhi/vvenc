@@ -216,7 +216,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
 
   if (encCfg.m_usePerceptQPA)
   {
-    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) && encCfg.m_salienceBasedOpt ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
+    m_globalCtuQpVector.resize( pps0.useDQP && (encCfg.m_internalUsePerceptQPATempFiltISlice == 2) && encCfg.m_salienceBasedOpt ? pps0.picWidthInCtu * pps0.picHeightInCtu + 1 : 1 );
   }
 
   if( m_pcEncCfg->m_FrameRate && m_pcEncCfg->m_TicksPerSecond > 0 )
@@ -1810,7 +1810,7 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
     const int bDepth = m_pcEncCfg->m_internalBitDepth[CH_L];
     const int intraP = Clip3(m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
     const int visAct = std::max(uint16_t(spVisActTL0[CH_L] >> (12 - bDepth)), keyPic.picVA.visAct); // when vaY=0
-    const double apa = sqrt((m_pcEncCfg->m_usePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
+    const double apa = sqrt((m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
     const int auxOff = (m_pcEncCfg->m_blockImportanceMapping && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
     const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(3.0 * log(visAct / apa) / log(2.0) + 0.5)));
     const int qp32BC = int(16384.0 + 7.21875 * pow((double)spVisActTL0[CH_L], 4.0 / 3.0) + 1.46875 * pow((double)spVisActTL0[CH_C], 4.0 / 3.0)) * (isHighRes ? 96 : 24); // TODO hlm
@@ -1861,6 +1861,10 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
 
   keyPic.gopAdaptedQP = dQP; // TODO: add any additional key-frame offset here
   keyPic.force2ndOrder = f2O;
+  if( m_pcEncCfg->m_disableForce2ndOderFilter )
+  {
+    keyPic.force2ndOrder = false;
+  }
 
   if(m_pcEncCfg->m_rateCap)
   {

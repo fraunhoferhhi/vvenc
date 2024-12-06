@@ -93,6 +93,8 @@ struct VVEncCfg : public vvenc_config
   bool      m_reuseCuResults;
   int       m_splitCostThrParamId;
   vvencFG   m_fg;
+  int       m_internalUsePerceptQPATempFiltISlice;
+  bool      m_disableForce2ndOderFilter;
 
 private:
   void xInitCfgMembers();

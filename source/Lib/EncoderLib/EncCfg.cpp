@@ -129,6 +129,17 @@ void VVEncCfg::xInitCfgMembers()
     m_fg.m_fgcSEINumModelValuesMinus1[1] = 0;
     m_fg.m_fgcSEINumModelValuesMinus1[2] = 0;
   }
+  
+  if( m_usePerceptQPATempFiltISlice > 2 )
+  {
+    m_internalUsePerceptQPATempFiltISlice = m_usePerceptQPATempFiltISlice - 2;
+    m_disableForce2ndOderFilter           = true;
+  }
+  else
+  {
+    m_internalUsePerceptQPATempFiltISlice = m_usePerceptQPATempFiltISlice;
+    m_disableForce2ndOderFilter           = false;
+  }
 }
 
 }
