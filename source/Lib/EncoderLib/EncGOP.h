@@ -149,6 +149,9 @@ private:
   bool                      m_disableLMCSIP;
   int                       m_lastCodingNum;
   int                       m_numPicsCoded;
+  int                       m_numPicsInMissing;
+  int                       m_numPicsOutOffset;
+  uint64_t                  m_lastCts;
   int                       m_pocRecOut;
   int                       m_ticksPerFrameMul4;
   int                       m_lastIDR;

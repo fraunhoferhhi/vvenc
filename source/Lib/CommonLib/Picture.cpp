@@ -172,6 +172,8 @@ Picture::Picture()
     , sliceDataNumBins    ( 0 )
     , cts                 ( 0 )
     , ctsValid            ( false )
+    , picsInMissing       ( 0 )
+    , picOutOffset        ( 0 )
     , isPreAnalysis       ( false )
     , m_picShared         ( nullptr )
     , gopAdaptedQP        ( 0 )
@@ -245,6 +247,11 @@ void Picture::reset()
   encRCPic             = nullptr;
   picApsGlobal         = nullptr;
   refApsGlobal         = nullptr;
+
+  cts                  = 0;
+  ctsValid             = false;
+  picsInMissing        = 0;
+  picOutOffset         = 0;
 
   picVA.reset();
 

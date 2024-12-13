@@ -242,6 +242,8 @@ public:
   int                           sliceDataNumBins;
   uint64_t                      cts;
   bool                          ctsValid;
+  int64_t                       picsInMissing;      // summed up missing frames on input
+  int64_t                       picOutOffset;       // signalization of pic offset to re-calc dts
   bool                          isPreAnalysis;
 
   PicShared*                    m_picShared;
