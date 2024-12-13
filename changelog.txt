@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.13.0-rc1
+tag 1.13.0
 
 * libvvenc:
   - many ARM SIMD optimizations for both NEON and SVE
