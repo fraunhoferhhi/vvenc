@@ -383,6 +383,7 @@ add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
 add_subdirectory( "test/vvencinterfacetest" )
+add_subdirectory( "test/vvencdtstest" )
 
 if( NOT BUILD_SHARED_LIBS )
   add_subdirectory( "test/vvenc_unit_test" )
