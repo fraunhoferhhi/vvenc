@@ -895,7 +895,7 @@ int checkSDKStringApiInvalid()
   return ret;
 }
 
-static int runEncoder( vvenc_config& c, uint64_t framesToEncode ) 
+static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMissingFrames = false ) 
 {
   uint64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate : 1;  // expected cts diff between frames
   uint64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (uint64_t)c.m_TicksPerSecond : (uint64_t)c.m_FrameRate/(uint64_t)c.m_FrameScale;        // start with offset 1sec, to generate  cts/dts > 0
@@ -922,6 +922,8 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
   bool eof       = false;
   bool encodeDone = false;
   uint64_t framesRcvd = 0;
+  uint64_t numMissingFrames = emulateMissingFrames ? 10 : 0;
+
   while( !eof || !encodeDone )
   {
     vvencYUVBuffer* inputPtr = nullptr;
@@ -931,6 +933,11 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + framesRcvd);
       yuvPicture->ctsValid = true;
       framesRcvd++;
+
+      if( emulateMissingFrames && framesRcvd == framesToEncode>>1 )
+      {
+        framesRcvd+=numMissingFrames; // emulate missing pictures
+      }
     }
 
     if( 0 != vvenc_encode( enc, inputPtr, AU, &encodeDone ))
@@ -950,10 +957,11 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       {
         if ( AU->dts <= lastDts ){
           //std::cout << " AU dts " << AU->dts << " <= " << lastDts << " - dts must always increase" << std::endl;
-        }else{
+          goto fail;
+        }else if (!emulateMissingFrames){
           //std::cout << " AU dts " << AU->dts << " but expecting " << lastDts + ctsDiff << " lastDts " << lastDts << std::endl;
+          goto fail;
         }
-        goto fail;
       }
       lastDts = AU->dts;
     }
@@ -964,7 +972,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode )
       goto fail;
     }
 
-    if( framesRcvd >= framesToEncode )
+    if( framesRcvd >= (framesToEncode+numMissingFrames) )
     {
       eof = true;
     }
@@ -1089,6 +1097,31 @@ int checkTimestampsInvalid()
   return 0;
 }
 
+int checkDtsDefault()
+{
+  std::vector <int> tickspersecVec;
+  tickspersecVec.push_back(90000);
+  tickspersecVec.push_back(-1);
+
+  for( auto & tickspersec : tickspersecVec )
+  {
+      vvenc_config c;
+      vvenc_init_default( &c, 176,144, 60, VVENC_RC_OFF, 55, vvencPresetMode::VVENC_FASTER );
+      c.m_internChromaFormat = VVENC_CHROMA_420;
+
+      c.m_FrameRate  = 50;
+      c.m_FrameScale = 1;
+      c.m_TicksPerSecond = tickspersec;
+      uint64_t frames= c.m_FrameRate/c.m_FrameScale * 2;
+
+      if( 0 != runEncoder(c,frames, true) )
+      {
+        return -1;
+      }
+  }
+  return 0;
+}
+
 int testLibCallingOrder()
 {
   testfunc( "callingOrderInvalidUninit",    &callingOrderInvalidUninit,    true  );
@@ -1123,6 +1156,7 @@ int testTimestamps()
 {
   testfunc( "checkTimestampsDefault", &checkTimestampsDefault, false );
   testfunc( "checkTimestampsDefaultInvalid", &checkTimestampsInvalid, true );
+  testfunc( "checkDtsDefault", &checkDtsDefault, false );
 
   return 0;
 }

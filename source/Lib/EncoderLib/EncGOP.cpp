@@ -134,6 +134,9 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_disableLMCSIP      ( false )
   , m_lastCodingNum      ( -1 )
   , m_numPicsCoded       ( 0 )
+  , m_numPicsInMissing   ( 0 )
+  , m_numPicsOutOffset   ( 0 )
+  , m_lastCts            ( 0 )
   , m_pocRecOut          ( 0 )
   , m_ticksPerFrameMul4  ( 0 )
   , m_lastIDR            ( 0 )
@@ -244,6 +247,27 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.startTimer();
 
   pic->TLayer = pic->gopEntry->m_temporalId;
+  if( pic->ctsValid )
+  {
+    if( m_lastCts )
+    {
+      int64_t ticksPerFrame = m_ticksPerFrameMul4/4;
+      int64_t expectedCtsDiff = (m_pcEncCfg->m_TicksPerSecond > 0 ) ? ticksPerFrame : 1;
+      int64_t ctsDiff = pic->cts - m_lastCts;
+
+      if( ctsDiff >= (expectedCtsDiff<<1) || ctsDiff < 0 )
+      {
+        // signalize that frames are missing at that particular picture
+        pic->picOutOffset = (m_pcEncCfg->m_TicksPerSecond > 0 ) ? (ctsDiff - ticksPerFrame)/ticksPerFrame : ctsDiff-1;
+        m_numPicsInMissing += pic->picOutOffset;
+      }
+    }
+    m_lastCts = pic->cts;
+  }
+  if( m_numPicsInMissing )
+  {
+    pic->picsInMissing = m_numPicsInMissing;
+  }
 
   pic->setSccFlags( m_pcEncCfg );
 
@@ -2438,13 +2462,17 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   if( pic.ctsValid )
   {
-    const int64_t iDiffFrames = m_numPicsCoded - pic.poc;
+    const int64_t iDiffFrames = m_numPicsCoded - pic.poc - pic.picsInMissing;
     au.cts      = pic.cts;
     au.ctsValid = pic.ctsValid;
+    if ( pic.picOutOffset )
+    {
+      m_numPicsOutOffset += pic.picOutOffset;
+    }
     if( m_pcEncCfg->m_TicksPerSecond > 0 )
-      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer + m_numPicsOutOffset ) * m_ticksPerFrameMul4 ) / 4 + au.cts;
     else
-      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer )) + au.cts;
+      au.dts      = ( ( iDiffFrames - m_pcEncCfg->m_maxTLayer + m_numPicsOutOffset )) + au.cts;
     au.dtsValid = pic.ctsValid;
   }
 
