@@ -23,6 +23,7 @@
  * Copyright:
  *   2020      Evan Nemerson <evan@nemerson.com>
  *   2020      Christopher Moore <moore@free.fr>
+ *   2023      Chi-Wei Chu <wewe5215@gapp.nthu.edu.tw> (Copyright owned by NTHU pllab)
  */
 
 #if !defined(SIMDE_ARM_NEON_SHLL_N_H)
@@ -49,12 +50,19 @@ simde_vshll_n_s8 (const simde_int8x8_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 8) {
   simde_int16x8_private r_;
   simde_int8x8_private a_ = simde_int8x8_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(int16_t, HEDLEY_STATIC_CAST(int16_t, a_.values[i]) << n);
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vint16m2_t va_wide = __riscv_vwcvt_x_x_v_i16m2 (a_.sv64, 8);
+    vint16m2_t rst = __riscv_vsll_vx_i16m2 (va_wide, n, 8);
+    r_.sv128 =  __riscv_vlmul_trunc_v_i16m2_i16m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_i16x8_load8x8(&a_.values);
+    r_.v128 = wasm_i16x8_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(int16_t, HEDLEY_STATIC_CAST(int16_t, a_.values[i]) << n);
+    }
+  #endif
   return simde_int16x8_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
@@ -71,12 +79,19 @@ simde_vshll_n_s16 (const simde_int16x4_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 16) {
   simde_int32x4_private r_;
   simde_int16x4_private a_ = simde_int16x4_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(int32_t, a_.values[i]) << n;
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vint32m2_t va_wide = __riscv_vwcvt_x_x_v_i32m2 (a_.sv64, 4);
+    vint32m2_t rst = __riscv_vsll_vx_i32m2 (va_wide, n, 4);
+    r_.sv128 =  __riscv_vlmul_trunc_v_i32m2_i32m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_i32x4_load16x4(&a_.values);
+    r_.v128 = wasm_i32x4_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(int32_t, a_.values[i]) << n;
+    }
+  #endif
   return simde_int32x4_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
@@ -93,12 +108,19 @@ simde_vshll_n_s32 (const simde_int32x2_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 32) {
   simde_int64x2_private r_;
   simde_int32x2_private a_ = simde_int32x2_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(int64_t, a_.values[i]) << n;
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vint64m2_t va_wide = __riscv_vwcvt_x_x_v_i64m2 (a_.sv64, 2);
+    vint64m2_t rst = __riscv_vsll_vx_i64m2 (va_wide, n, 2);
+    r_.sv128 =  __riscv_vlmul_trunc_v_i64m2_i64m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_i64x2_load32x2(&a_.values);
+    r_.v128 = wasm_i64x2_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(int64_t, a_.values[i]) << n;
+    }
+  #endif
   return simde_int64x2_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
@@ -115,12 +137,19 @@ simde_vshll_n_u8 (const simde_uint8x8_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 8) {
   simde_uint16x8_private r_;
   simde_uint8x8_private a_ = simde_uint8x8_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(uint16_t, HEDLEY_STATIC_CAST(uint16_t, a_.values[i]) << n);
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vuint16m2_t va_wide = __riscv_vwcvtu_x_x_v_u16m2 (a_.sv64, 8);
+    vuint16m2_t rst = __riscv_vsll_vx_u16m2 (va_wide, n, 8);
+    r_.sv128 =  __riscv_vlmul_trunc_v_u16m2_u16m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_u16x8_load8x8(&a_.values);
+    r_.v128 = wasm_i16x8_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(uint16_t, HEDLEY_STATIC_CAST(uint16_t, a_.values[i]) << n);
+    }
+  #endif
   return simde_uint16x8_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
@@ -137,12 +166,19 @@ simde_vshll_n_u16 (const simde_uint16x4_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 16) {
   simde_uint32x4_private r_;
   simde_uint16x4_private a_ = simde_uint16x4_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(uint32_t, a_.values[i]) << n;
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vuint32m2_t va_wide = __riscv_vwcvtu_x_x_v_u32m2 (a_.sv64, 4);
+    vuint32m2_t rst = __riscv_vsll_vx_u32m2 (va_wide, n, 4);
+    r_.sv128 =  __riscv_vlmul_trunc_v_u32m2_u32m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_u32x4_load16x4(&a_.values);
+    r_.v128 = wasm_i32x4_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(uint32_t, a_.values[i]) << n;
+    }
+  #endif
   return simde_uint32x4_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
@@ -159,12 +195,19 @@ simde_vshll_n_u32 (const simde_uint32x2_t a, const int n)
     SIMDE_REQUIRE_CONSTANT_RANGE(n, 0, 32) {
   simde_uint64x2_private r_;
   simde_uint32x2_private a_ = simde_uint32x2_to_private(a);
-
-  SIMDE_VECTORIZE
-  for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = HEDLEY_STATIC_CAST(uint64_t, a_.values[i]) << n;
-  }
-
+  #if defined(SIMDE_RISCV_V_NATIVE)
+    vuint64m2_t va_wide = __riscv_vwcvtu_x_x_v_u64m2 (a_.sv64, 2);
+    vuint64m2_t rst = __riscv_vsll_vx_u64m2 (va_wide, n, 2);
+    r_.sv128 =  __riscv_vlmul_trunc_v_u64m2_u64m1 (rst);
+  #elif defined(SIMDE_WASM_SIMD128_NATIVE)
+    v128_t tmp = wasm_u64x2_load32x2(&a_.values);
+    r_.v128 = wasm_i64x2_shl(tmp, HEDLEY_STATIC_CAST(uint32_t, n));
+  #else
+    SIMDE_VECTORIZE
+    for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
+      r_.values[i] = HEDLEY_STATIC_CAST(uint64_t, a_.values[i]) << n;
+    }
+  #endif
   return simde_uint64x2_from_private(r_);
 }
 #if defined(SIMDE_ARM_NEON_A32V7_NATIVE)
