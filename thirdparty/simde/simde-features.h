@@ -349,7 +349,7 @@
 #endif
 
 #if !defined(SIMDE_ARM_NEON_A32V8_NATIVE) && !defined(SIMDE_ARM_NEON_A32V8_NO_NATIVE) && !defined(SIMDE_NO_NATIVE)
-  #if defined(SIMDE_ARCH_ARM_NEON) && SIMDE_ARCH_ARM_CHECK(8,0) && (__ARM_NEON_FP & 0x02)
+  #if defined(SIMDE_ARCH_ARM_NEON) && SIMDE_ARCH_ARM_CHECK(8,0) && defined (__ARM_NEON_FP) && (__ARM_NEON_FP & 0x02)
     #define SIMDE_ARM_NEON_A32V8_NATIVE
   #endif
 #endif
@@ -553,7 +553,8 @@
       defined(SIMDE_WASM_SIMD128_NATIVE) || \
       defined(SIMDE_POWER_ALTIVEC_P5_NATIVE) || \
       defined(SIMDE_ZARCH_ZVECTOR_13_NATIVE) || \
-      defined(SIMDE_MIPS_MSA_NATIVE)
+      defined(SIMDE_MIPS_MSA_NATIVE) || \
+      defined(SIMDE_LOONGARCH_LSX_NATIVE)
     #define SIMDE_NATURAL_VECTOR_SIZE (128)
   #elif defined(SIMDE_X86_SSE_NATIVE)
     #define SIMDE_NATURAL_FLOAT_VECTOR_SIZE (128)
