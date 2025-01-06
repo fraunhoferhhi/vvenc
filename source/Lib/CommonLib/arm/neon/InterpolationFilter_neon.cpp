@@ -705,8 +705,10 @@ static void simdFilterARM( const ClpRng& clpRng, Pel const *src, int srcStride, 
   {
     c[6] = coeff[6];
     c[7] = coeff[7];
+#if defined( TARGET_SIMD_X86 )
     int src8tOff = cStride;
-
+#endif
+      
     if( !( width & 7 ) )
     {
       if( !isVertical )
