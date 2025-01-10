@@ -74,6 +74,8 @@ const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SC
 const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "NEON" } };
 #    elif defined( REAL_TARGET_WASM )
 const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "WASM" } };
+#    elif defined( REAL_TARGET_LOONGARCH )
+const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "LSX" } };
 #    else
 const static std::map<X86_VEXT, std::string> vext_names{ { UNDEFINED, "" }, { SCALAR, "SCALAR" }, { SIMD_EVERYWHERE_EXTENSION_LEVEL, "SIMDE" } };
 #    endif

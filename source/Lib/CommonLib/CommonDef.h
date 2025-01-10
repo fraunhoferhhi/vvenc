@@ -62,6 +62,8 @@ POSSIBILITY OF SUCH DAMAGE.
 # define REAL_TARGET_ARM 1
 #elif defined( __wasm__ ) || defined( __wasm32__ )
 # define REAL_TARGET_WASM 1
+#elif defined( __loongarch__ )
+# define REAL_TARGET_LOONGARCH 1
 #endif
 
 #if defined( TARGET_SIMD_X86 )

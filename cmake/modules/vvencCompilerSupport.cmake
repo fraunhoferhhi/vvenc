@@ -210,6 +210,8 @@ function( _append_cpu_type_guess output_list input_str )
     list( APPEND ret "AARCH64" )
   elseif( ${input_lower} MATCHES "arm")
     list( APPEND ret "ARM" )
+  elseif( ${input_lower} MATCHES "loongarch64")
+    list( APPEND ret "LOONGARCH64" )
   endif()
 
   set( ${output_list} ${ret} PARENT_SCOPE )

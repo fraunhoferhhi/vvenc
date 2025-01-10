@@ -37,11 +37,20 @@ if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
   set_if_compiler_supports_arm_extensions( FLAG_sve FLAG_sve2 )
 endif()
 
+if( VVENC_TARGET_ARCH MATCHES "LOONGARCH64" )
+  set( VVENC_LOONGARCH64_SIMD_DEFAULT TRUE )
+
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld")
+  endif()
+endif()
+
 # We enable x86 intrinsics for all target architectures, because they are implemented through SIMD-everywhere on non-x86.
 set( VVENC_ENABLE_X86_SIMD TRUE                      CACHE BOOL "Enable x86 intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "Enable Arm Neon intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD_SVE FALSE                 CACHE BOOL "Enable Arm SVE intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE                CACHE BOOL "Enable Arm SVE2 intrinsics" )
+set( VVENC_ENABLE_LOONGARCH64_SIMD_LSX ${VVENC_LOONGARCH64_SIMD_DEFAULT} CACHE BOOL "Enable LoongArch64 LSX intrinsics" )
 
 check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
 if( VVENC_PROBLEMATIC_COMPILER )
@@ -116,6 +125,17 @@ if( VVENC_TARGET_ARCH STREQUAL "ARM" )
     add_compile_options( ${FLAG_mfpu_neon} )
   else()
     message( STATUS "Arm Neon intrinsics disabled" )
+  endif()
+endif()
+
+if( VVENC_TARGET_ARCH STREQUAL "LOONGARCH64" )
+  if( VVENC_ENABLE_LOONGARCH64_SIMD_LSX )
+    set_if_compiler_supports_flag( FLAG_mlsx -mlsx )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FLAG_mlsx}" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAG_mlsx}" )
+    message( STATUS "LoongArch64 LSX intrinsics enabled" )
+  else()
+    message( STATUS "LoongArch64 LSX intrinsics disabled" )
   endif()
 endif()
 
