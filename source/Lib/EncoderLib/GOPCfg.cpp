@@ -296,8 +296,9 @@ bool GOPCfg::isSTAallowed( int poc ) const
 {
   int intraDistBack    = poc - m_lastIntraPOC;
   int intraDistForward = m_numTillIntra + 1;
-
-  return ( intraDistBack >= m_minIntraDist && intraDistForward >= m_minIntraDist );
+  
+  //if intraDistBack == 0 we have a regular I-Slice and there we need to do the STA analysis as well
+  return ( ( intraDistBack >= m_minIntraDist && intraDistForward >= m_minIntraDist ) || intraDistBack == 0 );
 }
 
 bool GOPCfg::hasNonZeroTemporalId() const
