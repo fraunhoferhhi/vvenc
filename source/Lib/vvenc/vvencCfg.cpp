@@ -3434,7 +3434,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "NumThreads:" << c->m_numThreads << " ";
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
     css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
-    css << "NumParallelGOPs:" << c->m_numParallelGOPs << " ";
+    css << "NumParallelGOPs:" << (int) c->m_numParallelGOPs << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
