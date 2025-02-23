@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
