@@ -139,6 +139,15 @@ if( VVENC_TARGET_ARCH STREQUAL "LOONGARCH64" )
   endif()
 endif()
 
+if( VVENC_ENABLE_ARM_SIMD_SVE )
+  include (CheckSymbolExists)
+
+  check_symbol_exists(elf_aux_info "sys/auxv.h" HAVE_AUXV_ELF_AUX_INFO)
+  if( HAVE_AUXV_ELF_AUX_INFO )
+    add_compile_definitions( HAVE_ELF_AUX_INFO=1 )
+  endif()
+endif()
+
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # set exception handling
   if( MSVC )

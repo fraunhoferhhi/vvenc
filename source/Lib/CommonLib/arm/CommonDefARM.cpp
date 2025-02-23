@@ -45,8 +45,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 
-#if defined( __linux__ )
-#include <sys/auxv.h>  // getauxval
+#if TARGET_SIMD_ARM_SVE
+#if defined( __linux__ ) || HAVE_ELF_AUX_INFO
+#include <sys/auxv.h>  // getauxval / elf_aux_info
+#endif
 #endif
 
 namespace vvenc
@@ -95,7 +97,7 @@ ARM_VEXT string_to_arm_vext( const std::string& ext_name )
   THROW( "Invalid SIMD Mode string: \"" << ext_name << "\"" );
 }
 
-#if defined( __linux__ )
+#if defined( __linux__ ) || HAVE_ELF_AUX_INFO
 
 // Define hwcap values ourselves: building with an old auxv header where these
 // hwcap values are not defined should not prevent features from being enabled.
@@ -108,10 +110,20 @@ static ARM_VEXT _get_arm_extensions()
   ARM_VEXT ext = NEON;
 
 #if TARGET_SIMD_ARM_SVE
+#if HAVE_ELF_AUX_INFO
+  unsigned long hwcap = 0;
+  elf_aux_info( AT_HWCAP, &hwcap, sizeof(hwcap) );
+#else
   unsigned long hwcap = getauxval( AT_HWCAP );
 #endif
+#endif
 #if TARGET_SIMD_ARM_SVE2
+#if HAVE_ELF_AUX_INFO
+  unsigned long hwcap2 = 0;
+  elf_aux_info( AT_HWCAP2, &hwcap2, sizeof(hwcap2) );
+#else
   unsigned long hwcap2 = getauxval( AT_HWCAP2 );
+#endif
 #endif
 
 #if TARGET_SIMD_ARM_SVE
