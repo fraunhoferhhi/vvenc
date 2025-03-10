@@ -761,6 +761,9 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
     rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
     rcAccessUnit.poc             = rcAuList.poc;
     rcAccessUnit.status          = rcAuList.status;
+#if VVENC_USE_UNSTABLE_API
+    rcAccessUnit.userData        = rcAuList.userData;
+#endif
 
     if ( !rcAuList.InfoString.empty() )
     {
