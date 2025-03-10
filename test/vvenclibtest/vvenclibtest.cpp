@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <vector>
 #include <tuple>
+#include <unordered_set>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -924,6 +925,8 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
   uint64_t framesRcvd = 0;
   uint64_t numMissingFrames = emulateMissingFrames ? 10 : 0;
 
+  std::unordered_set<int> opaqueSet;
+
   while( !eof || !encodeDone )
   {
     vvencYUVBuffer* inputPtr = nullptr;
@@ -932,6 +935,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
       inputPtr             = yuvPicture;
       yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + framesRcvd);
       yuvPicture->ctsValid = true;
+      yuvPicture->opaque   = new int(framesRcvd);
       framesRcvd++;
 
       if( emulateMissingFrames && framesRcvd == framesToEncode>>1 )
@@ -964,6 +968,9 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
         }
       }
       lastDts = AU->dts;
+      int* opaque = static_cast<int*>(AU->opaque);
+      opaqueSet.insert( *opaque);
+      delete opaque;
     }
 
     if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
@@ -981,6 +988,12 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
   if( auCount != framesToEncode )
   {
     //std::cout << "expecting " << framesToEncode << " au, but only encoded " << auCount << std::endl;
+    goto fail;
+  }
+
+  if (opaqueSet.size() != framesToEncode)
+  {
+    std::cout << "expecting " << framesToEncode << " unique opaque values, but got " << opaqueSet.size() << std::endl;
     goto fail;
   }
 

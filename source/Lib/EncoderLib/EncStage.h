@@ -82,6 +82,7 @@ private:
   bool             m_isLead;
   bool             m_isTrail;
   bool             m_ctsValid;
+  void*            m_opaque;
 
 public:
   PicShared()
@@ -99,6 +100,7 @@ public:
   , m_isLead         ( false )
   , m_isTrail        ( false )
   , m_ctsValid       ( false )
+  , m_opaque         ( nullptr )
   {
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
@@ -150,6 +152,7 @@ public:
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
     m_gopEntry.setDefaultGOPEntry();
+    m_opaque       = yuvInBuf->opaque;
   }
 
   void shareData( Picture* pic )
@@ -165,6 +168,7 @@ public:
     pic->cts            = m_cts;
     pic->ctsValid       = m_ctsValid;
     pic->gopEntry       = &m_gopEntry;
+    pic->opaque         = m_opaque;
     incUsed();
   }
 

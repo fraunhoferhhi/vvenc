@@ -761,6 +761,7 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
     rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
     rcAccessUnit.poc             = rcAuList.poc;
     rcAccessUnit.status          = rcAuList.status;
+    rcAccessUnit.opaque          = rcAuList.opaque;
 
     if ( !rcAuList.InfoString.empty() )
     {
