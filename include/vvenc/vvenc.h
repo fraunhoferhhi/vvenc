@@ -135,6 +135,7 @@ typedef struct vvencYUVBuffer
   uint64_t      sequenceNumber;        // sequence number of the picture
   uint64_t      cts;                   // composition time stamp in TicksPerSecond
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
+  void*         opaque;                // opaque data to be returned in corresponding access unit
 }vvencYUVBuffer;
 
 /* vvenc_YUVBuffer_alloc:
@@ -196,6 +197,7 @@ typedef struct vvencAccessUnit
   int             status;              // additional info (see Status)
   int             essentialBytes;      // number of bytes in nalus of type SLICE_*, DCI, VPS, SPS, PPS, PREFIX_APS, SUFFIX_APS
   char            infoString[VVENC_MAX_STRING_LEN]; // debug info from inside the encoder
+  void*           opaque;              // opaque data passed in corresponding input YUV buffer
 } vvencAccessUnit;
 
 /* vvenc_accessUnit_alloc:
