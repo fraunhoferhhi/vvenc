@@ -277,12 +277,19 @@ X86_VEXT read_x86_extension_flags( X86_VEXT request )
     if( request > max_supported )
     {
 #ifdef REAL_TARGET_X86
-      THROW( "requested SIMD level (" << request << ") not supported by current CPU (max " << max_supported << ")." );
+      THROW( "requested SIMD level (" << x86_vext_to_string( request ) << ") not supported by current CPU (max " << x86_vext_to_string( max_supported ) << ")." );
 #endif
     }
 
     ext_flags = request;
   }
+
+#ifdef REAL_TARGET_X86
+  if( max_supported < X86_SIMD_SSE41 )
+  {
+    THROW( "maximum SIMD level of current CPU is " << x86_vext_to_string( max_supported ) << " but at least SSE4.1 is required." );
+  }
+#endif
 
   return ext_flags;
 }
