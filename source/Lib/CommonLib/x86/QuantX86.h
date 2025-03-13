@@ -95,7 +95,7 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
     {
       for( int y = 0; y <= maxY; y++)
       {
-        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _mm_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
+        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
         v_level = _mm_and_si128(v_level,vlevmask);
         v_level = _mm_max_epi16 (v_level, v_min);
         v_level = _mm_min_epi16 (v_level, v_max);
@@ -109,7 +109,7 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
         v_level = _mm_max_epi32 (v_level, v_Tmin);
         v_level = _mm_min_epi32 (v_level, v_Tmax);
         if( maxX == 1 )
-          _mm_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
+          _vv_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
         else
           _mm_storeu_si128( (__m128i*)(piCoef + y * width), v_level );
       }
@@ -159,7 +159,7 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
     {
       for( int y = 0; y <= maxY; y++)
       {
-        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _mm_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
+        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
         v_level = _mm_and_si128(v_level,vlevmask);
 
         v_level = _mm_max_epi16 (v_level, v_min);
@@ -175,7 +175,7 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
 
         if( maxX == 1 )
         {
-          _mm_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
+          _vv_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
         }
         else
           _mm_storeu_si128(( __m128i * )(piCoef+y*width ), v_level );
@@ -368,8 +368,8 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
           vTmpLevel_0 = _mm256_sub_epi32(vTmpLevel_0,vTmpLevel_1);
           vTmpLevel_0 = _mm256_min_epi32(vMax, _mm256_max_epi32(vMin,vTmpLevel_0));     // clip to 16 Bit
           vTmpLevel_0 = _mm256_packs_epi32(vTmpLevel_0,vTmpLevel_0);
-          _mm_storel_epi64( ( __m128i * )&piQCoef.buf[uiBlockPos],          _mm256_castsi256_si128  (vTmpLevel_0));
-          _mm_storel_epi64( ( __m128i * )&piQCoef.buf[uiBlockPos + uiWidth],_mm256_extracti128_si256(vTmpLevel_0, 1));
+          _vv_storel_epi64( ( __m128i * )&piQCoef.buf[uiBlockPos],          _mm256_castsi256_si128  (vTmpLevel_0));
+          _vv_storel_epi64( ( __m128i * )&piQCoef.buf[uiBlockPos + uiWidth],_mm256_extracti128_si256(vTmpLevel_0, 1));
         }
       }
 
@@ -432,7 +432,7 @@ static void QuantCoreSIMD(const TransformUnit tu, const ComponentID compID, cons
           vTmpLevel_0 = _mm_sub_epi32(vTmpLevel_0,vTmpLevel_1);
           vTmpLevel_0 = _mm_min_epi32(vMax, _mm_max_epi32(vMin,vTmpLevel_0));       // clip to 16 Bit
           vTmpLevel_0 = _mm_packs_epi32(vTmpLevel_0,vTmpLevel_0);
-          _mm_storel_epi64( ( __m128i * ) &piQCoef.buf[uiBlockPos],vTmpLevel_0);
+          _vv_storel_epi64( ( __m128i * ) &piQCoef.buf[uiBlockPos],vTmpLevel_0);
         }
       }
 

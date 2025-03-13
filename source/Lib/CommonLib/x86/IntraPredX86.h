@@ -165,7 +165,7 @@ void IntraPredAngleChroma_SIMD(int16_t* pDst,const ptrdiff_t dstStride,int16_t* 
       vpred0 = _mm_mullo_epi16(v32minfract, vpred0);
       vpred1 = _mm_mullo_epi16(vfract, vpred1);
       __m128i vpred = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(vpred0, vpred1), voffset), 5);
-      _mm_storel_epi64( ( __m128i * )(pDst ), vpred);
+      _vv_storel_epi64( ( __m128i * )(pDst ), vpred);
       deltaPos += intraPredAngle;
       pDst+=dstStride;
     }
@@ -227,8 +227,8 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
           int refMainIndex   = deltaInt + 1;
           pDst=&pDstBuf[y*dstStride];
-//          __m128i tmp = _mm_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
-          __m128i tmp = _mm_loadl_epi64( ( __m128i const * )f );   //load 4 16 bit filter coeffs
+//          __m128i tmp = _vv_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
+          __m128i tmp = _vv_loadl_epi64( ( __m128i const * )f );   //load 4 16 bit filter coeffs
           tmp = _mm_shuffle_epi32(tmp,0x44);
           __m256i coeff = _mm256_broadcastsi128_si256(tmp);
           for( int x = 0; x < width; x+=16)
@@ -292,7 +292,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
 
           int refMainIndex   = deltaInt + 1;
           pDst=&pDstBuf[y*dstStride];
-//          __m128i tmp = _mm_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
+//          __m128i tmp = _vv_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
           __m128i tmp = _mm_loadu_si64( f );   //load 4 16 bit filter coeffs
           tmp = _mm_shuffle_epi32(tmp,0x44);
           __m256i coeff = _mm256_broadcastsi128_si256(tmp);
@@ -341,7 +341,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
         int refMainIndex   = deltaInt + 1;
         pDst=&pDstBuf[y*dstStride];
         __m128i coeff = _mm_loadu_si64( f );   //load 4 16 bit filter coeffs
-//        __m128i coeff = _mm_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
+//        __m128i coeff = _vv_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
         coeff = _mm_shuffle_epi32(coeff,0x44);
         for( int x = 0; x < width; x+=8)
         {
@@ -398,7 +398,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
       int refMainIndex   = deltaInt + 1;
       pDst=&pDstBuf[y*dstStride];
       __m128i coeff = _mm_loadu_si64( f );   //load 4 16 bit filter coeffs
-//      __m128i coeff = _mm_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
+//      __m128i coeff = _vv_loadl_epi64( ( __m128i const * )&ff[deltaFract<<2] );   //load 4 16 bit filter coeffs
       coeff = _mm_shuffle_epi32(coeff,0x44);
       {
         __m128i src0 = _mm_loadu_si128( ( __m128i const * )&refMain[refMainIndex - 1] );   //load 8 16 bit reference Pels   -1 0 1 2 3 4 5 6
@@ -417,7 +417,7 @@ void IntraPredAngleLumaCore_SIMD(int16_t* pDstBuf,const ptrdiff_t dstStride,int1
         if (useCubicFilter)
           src0 = _mm_min_epi16( vbdmax, _mm_max_epi16( vbdmin, src0 ) );
 
-        _mm_storel_epi64( ( __m128i * )(pDst ), src0);
+        _vv_storel_epi64( ( __m128i * )(pDst ), src0);
 
       }
       deltaPos += intraPredAngle;
@@ -700,7 +700,7 @@ void  IntraPredSampleFilter_SIMD(PelBuf& dstBuf, const CPelBuf& Src)
             if (W>=8)
               _mm_storeu_si128(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
             else if (W==4)
-              _mm_storel_epi64(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
+              _vv_storel_epi64(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
             else if (W==2)
               _mm_storeu_si32(( __m128i * )(pDst+y*dstStride+x),(dstlo8) );
           }
@@ -747,7 +747,7 @@ void  IntraPredSampleFilter_SIMD(PelBuf& dstBuf, const CPelBuf& Src)
           if (W>=8)
             _mm_storeu_si128(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
           else if (W==4)
-            _mm_storel_epi64(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
+            _vv_storel_epi64(( __m128i * )(pDst+y*dstStride+x), (dstlo8) );
           else if (W==2)
             _mm_storeu_si32(( __m128i * )(pDst+y*dstStride+x),(dstlo8) );
         }
@@ -862,7 +862,7 @@ void xPredIntraPlanar_SIMD( PelBuf& pDst, const CPelBuf& pSrc)
       if (width>=8)
         _mm_storeu_si128(( __m128i * )(pred+y*stride+x), (tmpL) );
       else if (width==4)
-        _mm_storel_epi64(( __m128i * )(pred+y*stride+x), (tmpL) );
+        _vv_storel_epi64(( __m128i * )(pred+y*stride+x), (tmpL) );
       else if (width==2)
         _mm_storeu_si32(( __m128i * )(pred+y*stride+x),(tmpL) );
       else
@@ -1072,7 +1072,7 @@ void GetLumaRecPixel420SIMD (const int width,const int height, const Pel* pRecSr
         vdst0 = _mm_packus_epi32 (vdst0,vdst0);   // 16 bit
 
         if (width==4)
-          _mm_storel_epi64(( __m128i * )&pDst0[0], (vdst0) );
+          _vv_storel_epi64(( __m128i * )&pDst0[0], (vdst0) );
         else if (width==2)
           _mm_storeu_si32(( __m128i * )&pDst0[0], (vdst0) );
         else
@@ -1224,7 +1224,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
       if (W==8)
         _mm_storeu_si128( ( __m128i * )(pDsty), xdst );
       else if (W==4)
-        _mm_storel_epi64( ( __m128i * )(pDsty), xdst );
+        _vv_storel_epi64( ( __m128i * )(pDsty), xdst );
       else
       {
         THROW("wrong blocksize");
@@ -1383,7 +1383,7 @@ void IntraHorVerPDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int 
         if (width==8)
            _mm_storeu_si128( ( __m128i * )(pDsty), xdst );
          else if (width==4)
-           _mm_storel_epi64( ( __m128i * )(pDsty), xdst );
+           _vv_storel_epi64( ( __m128i * )(pDsty), xdst );
          else
          {
            _mm_storeu_si32( ( __m128i * )(pDsty), xdst );

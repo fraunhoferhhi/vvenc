@@ -3378,7 +3378,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               __m128 xprodwk[4];
               for( int ii = 0; ii < 4; ii++ )
               {
-                const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                const __m128i xlockx32 = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
 
                 __m128 xlocd  = _mm_cvtepi32_ps( xlockx32 );
                 __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
@@ -3399,7 +3399,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
                   for( int ii = 0; ii < 4; ii++ )
                   {
-                    const __m128i xloclx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
+                    const __m128i xloclx32 = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
                   
                     __m128 xlockd = _mm_cvtepi32_ps( xloclx32 );
                     xacc = _mm_add_ps( xacc, _mm_mul_ps( xprodwk[ii], xlockd ) );
@@ -3420,7 +3420,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
               for( int ii = 0; ii < 4; ii++ )
               {
-                const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal [ii][0] ) );
+                const __m128i yloc32   = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &yLocal [ii][0] ) );
                 
                 __m128 ylocd  = _mm_cvtepi32_ps( yloc32 );
                 __m128 xprdct = _mm_mul_ps( ylocd, xprodwk[ii] );
@@ -3442,7 +3442,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
           for( int ii = 0; ii < 4; ii++ )
           {
-            const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) );
+            const __m128i yloc32   = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) );
               
             __m128 ylocd  = _mm_cvtepi32_ps( yloc32 );
             __m128 xwght  = _mm_loadu_ps   ( &weight[ii][0] );
@@ -3715,7 +3715,7 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
   
     const Pel* rec0 = &rec[0];
 
-    __m128i xrec = _mm_loadl_epi64( ( const __m128i* ) rec );
+    __m128i xrec = _vv_loadl_epi64( ( const __m128i* ) rec );
     __m128i xcur = _mm_slli_epi16( xrec, 1 );
 
     if( transposeIdx == 0 )
@@ -3730,25 +3730,25 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
 
         for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
         {
-          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
-          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+          __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) &rec01[-j] );
 
           xval0 = _mm_add_epi16( xval0, xval1 );
           xval0 = _mm_sub_epi16( xval0, xcur );
 
-          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+          _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
         }
       }
 
       for( int j = -halfFilterLength; j < 0; j++, k++ )
       {
-        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec[ j] );
-        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec[-j] );
+        __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) &rec[ j] );
+        __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) &rec[-j] );
 
         xval0 = _mm_add_epi16( xval0, xval1 );
         xval0 = _mm_sub_epi16( xval0, xcur );
 
-        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
       }
     }
     else if( transposeIdx == 1 )
@@ -3766,13 +3766,13 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
           const Pel *vptr0 = &rec00[off0];
           const Pel *vptr1 = &rec01[off1];
 
-          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
-          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+          __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) vptr1 );
 
           xval0 = _mm_add_epi16( xval0, xval1 );
           xval0 = _mm_sub_epi16( xval0, xcur );
 
-          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+          _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
         }
       }
       for( int i = -halfFilterLength; i < 0; i++, k++ )
@@ -3783,13 +3783,13 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
         const Pel *vptr0 = &rec0[off0];
         const Pel *vptr1 = &rec0[off1];
 
-        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
-        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+        __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) vptr1 );
 
         xval0 = _mm_add_epi16( xval0, xval1 );
         xval0 = _mm_sub_epi16( xval0, xcur );
 
-        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
       }
     }
     else if( transposeIdx == 2 )
@@ -3804,24 +3804,24 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
 
         for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
         {
-          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
-          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+          __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) &rec01[-j] );
 
           xval0 = _mm_add_epi16( xval0, xval1 );
           xval0 = _mm_sub_epi16( xval0, xcur );
 
-          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+          _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
         }
       }
       for( int j = -halfFilterLength; j < 0; j++, k++ )
       {
-        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec0[ j] );
-        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec0[-j] );
+        __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) &rec0[ j] );
+        __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) &rec0[-j] );
 
         xval0 = _mm_add_epi16( xval0, xval1 );
         xval0 = _mm_sub_epi16( xval0, xcur );
 
-        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
       }
     }
     else
@@ -3839,13 +3839,13 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
           const Pel *vptr0 = &rec00[off0];
           const Pel *vptr1 = &rec01[off1];
           
-          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
-          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+          __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) vptr1 );
 
           xval0 = _mm_add_epi16( xval0, xval1 );
           xval0 = _mm_sub_epi16( xval0, xcur );
 
-          _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+          _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
         }
       }
       for( int i = -halfFilterLength; i < 0; i++, k++ )
@@ -3856,17 +3856,17 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
         const Pel *vptr0 = &rec0[off0];
         const Pel *vptr1 = &rec0[off1];
         
-        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
-        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+        __m128i xval0 = _vv_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _vv_loadl_epi64( ( const __m128i* ) vptr1 );
 
         xval0 = _mm_add_epi16( xval0, xval1 );
         xval0 = _mm_sub_epi16( xval0, xcur );
 
-        _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
+        _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xval0 );
       }
     }
 
-    _mm_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xrec );
+    _vv_storel_epi64( ( __m128i* ) &GET_ALF_COVAR( ELocal, 0, k, 0 ), xrec );
   }
   else
 #endif
@@ -4101,7 +4101,7 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
     int k = 0;
 
     const Pel *rec = rec_;
-    const __m128i vcurr = _mm_loadl_epi64( ( const __m128i * ) rec );
+    const __m128i vcurr = _vv_loadl_epi64( ( const __m128i * ) rec );
 
     auto vClipAlf = []( int clip, __m128i v0, __m128i v1 )
     {
@@ -4126,25 +4126,25 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
 
         for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
         {
-          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[ j] );
-          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[-j] );
+          __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec0[ j] );
+          __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec1[-j] );
           vval0 = _mm_sub_epi16( vval0, vcurr );
           vval1 = _mm_sub_epi16( vval1, vcurr );
           for( int b = 0; b < numBins; b++ )
           {
-            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+            _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
           }
         }
       }
       for( int j = -halfFilterLength; j < 0; j++, k++ )
       {
-        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[ j] );
-        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[-j] );
+        __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec[ j] );
+        __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec[-j] );
         vval0 = _mm_sub_epi16( vval0, vcurr );
         vval1 = _mm_sub_epi16( vval1, vcurr );
         for( int b = 0; b < numBins; b++ )
         {
-          _mm_storel_epi64( ( __m128i * ) & GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          _vv_storel_epi64( ( __m128i * ) & GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
         }
       }
     }
@@ -4159,13 +4159,13 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
           const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
           const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
           
-          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[off0] );
-          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[off1] );
+          __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec0[off0] );
+          __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec1[off1] );
           vval0 = _mm_sub_epi16( vval0, vcurr );
           vval1 = _mm_sub_epi16( vval1, vcurr );
           for( int b = 0; b < numBins; b++ )
           {
-            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+            _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
           }
         }
       }
@@ -4174,13 +4174,13 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
         const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
         const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
         
-        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[off0] );
-        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[off1] );
+        __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec[off0] );
+        __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec[off1] );
         vval0 = _mm_sub_epi16( vval0, vcurr );
         vval1 = _mm_sub_epi16( vval1, vcurr );
         for( int b = 0; b < numBins; b++ )
         {
-          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
         }
       }
     }
@@ -4193,25 +4193,25 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
 
         for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
         {
-          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[ j] );
-          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[-j] );
+          __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec0[ j] );
+          __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec1[-j] );
           vval0 = _mm_sub_epi16( vval0, vcurr );
           vval1 = _mm_sub_epi16( vval1, vcurr );
           for( int b = 0; b < numBins; b++ )
           {
-            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+            _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
           }
         }
       }
       for( int j = -halfFilterLength; j < 0; j++, k++ )
       {
-        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) & rec[j] );
-        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) & rec[-j] );
+        __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) & rec[j] );
+        __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) & rec[-j] );
         vval0 = _mm_sub_epi16( vval0, vcurr );
         vval1 = _mm_sub_epi16( vval1, vcurr );
         for( int b = 0; b < numBins; b++ )
         {
-          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
         }
       }
     }
@@ -4226,13 +4226,13 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
           const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
           const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
           
-          __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec0[off0] );
-          __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec1[off1] );
+          __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec0[off0] );
+          __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec1[off1] );
           vval0 = _mm_sub_epi16( vval0, vcurr );
           vval1 = _mm_sub_epi16( vval1, vcurr );
           for( int b = 0; b < numBins; b++ )
           {
-            _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+            _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
           }
         }
       }
@@ -4241,19 +4241,19 @@ void EncAdaptiveLoopFilter::calcCovariance4( Pel* ELocal, const Pel *rec_, const
         const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
         const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
         
-        __m128i vval0 = _mm_loadl_epi64( ( const __m128i * ) &rec[off0] );
-        __m128i vval1 = _mm_loadl_epi64( ( const __m128i * ) &rec[off1] );
+        __m128i vval0 = _vv_loadl_epi64( ( const __m128i * ) &rec[off0] );
+        __m128i vval1 = _vv_loadl_epi64( ( const __m128i * ) &rec[off1] );
         vval0 = _mm_sub_epi16( vval0, vcurr );
         vval1 = _mm_sub_epi16( vval1, vcurr );
         for( int b = 0; b < numBins; b++ )
         {
-          _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
+          _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vClipAlf( clip[b], vval0, vval1 ) );
         }
       }
     }
     for( int b = 0; b < numBins; b++ )
     {
-      _mm_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vcurr );
+      _vv_storel_epi64( ( __m128i * ) &GET_ALF_COVAR( ELocal, b, k, 0 ), vcurr );
     }
   }
   else
@@ -6282,10 +6282,10 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
       {
         for( int ii = 0; ii < 4; ii++ )
         {
-          __m128i vorg = _mm_loadl_epi64( ( const __m128i* ) &orgLine[ii][j] );
-          __m128i vslf = _mm_loadl_epi64( ( const __m128i* ) &slfLine[ii][j] );
+          __m128i vorg = _vv_loadl_epi64( ( const __m128i* ) &orgLine[ii][j] );
+          __m128i vslf = _vv_loadl_epi64( ( const __m128i* ) &slfLine[ii][j] );
           __m128i vylc = _mm_sub_epi16( vorg, vslf );
-          _mm_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
+          _vv_storel_epi64( ( __m128i* ) &yLocal[ii][0], vylc );
         }
         
         const Pel* rec = recLine[0] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) );
@@ -6311,13 +6311,13 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
         v31 = _mm_shuffle_epi8( v3x, vshuf0 );
 
-        _mm_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[0][0], _mm_sub_epi16( v01, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[1][0], _mm_sub_epi16( v10, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[2][0], _mm_sub_epi16( v12, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[3][0], _mm_sub_epi16( v20, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[4][0], _mm_sub_epi16( v21, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[5][0], _mm_sub_epi16( v22, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[6][0], _mm_sub_epi16( v31, v11 ) );
 
         recYM1 += effStride;
         recY0  += effStride;
@@ -6336,13 +6336,13 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v3x = _mm_loadu_si128 ( ( const __m128i* ) &recYP2[+0] );
         v31 = _mm_shuffle_epi8( v3x, vshuf0 );
 
-        _mm_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[0][4], _mm_sub_epi16( v01, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[1][4], _mm_sub_epi16( v10, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[2][4], _mm_sub_epi16( v12, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[3][4], _mm_sub_epi16( v20, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[4][4], _mm_sub_epi16( v21, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[5][4], _mm_sub_epi16( v22, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[6][4], _mm_sub_epi16( v31, v11 ) );
 
         recYM1 += effStride;
         recY0  += effStride;
@@ -6368,13 +6368,13 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
 
-        _mm_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[0][8], _mm_sub_epi16( v01, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[1][8], _mm_sub_epi16( v10, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[2][8], _mm_sub_epi16( v12, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[3][8], _mm_sub_epi16( v20, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[4][8], _mm_sub_epi16( v21, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[5][8], _mm_sub_epi16( v22, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[6][8], _mm_sub_epi16( v31, v11 ) );
 
         recYM1 += effStride;
         recY0  += effStride;
@@ -6400,13 +6400,13 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         v22 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP1[+1] ), vshuf0 );
         v31 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &recYP2[+0] ), vshuf0 );
                                                                                         
-        _mm_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v11 ) );
-        _mm_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[0][12], _mm_sub_epi16( v01, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[1][12], _mm_sub_epi16( v10, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[2][12], _mm_sub_epi16( v12, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[3][12], _mm_sub_epi16( v20, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[4][12], _mm_sub_epi16( v21, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[5][12], _mm_sub_epi16( v22, v11 ) );
+        _vv_storel_epi64( ( __m128i* ) &ELocal[6][12], _mm_sub_epi16( v31, v11 ) );
       }
       else
 #endif
@@ -6438,7 +6438,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
             for( int ii = 0; ii < 4; ii++ )
             {
               __m128 xw = _mm_loadu_ps( &weight[ii][0] );
-              __m128 xk = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
+              __m128 xk = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &ELocal[k][ii << 2] ) ) );
               xk = _mm_mul_ps( xk, xw );
               xprodkw[ii] = xk;
             }
@@ -6449,7 +6449,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
               for (int ii = 0; ii < 4; ii++)
               {
-                __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &ELocal[l][ii << 2] ) ) );
+                __m128 xl = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &ELocal[l][ii << 2] ) ) );
 
                 //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
 
@@ -6467,7 +6467,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
             for (int ii = 0; ii < 4; ii++)
             {
-              __m128 xy = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) ) );
+              __m128 xy = _mm_cvtepi32_ps( _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) ) );
 
               //sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
 

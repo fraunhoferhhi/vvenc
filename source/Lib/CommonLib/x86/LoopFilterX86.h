@@ -182,14 +182,14 @@ static inline void xPelFilterLumaLoopVer( Pel* piSrc, const ptrdiff_t step, cons
 
   __m128i vzr = _mm_setzero_si128();
 
-  _mm_storel_epi64( ( __m128i* ) &piSrc[-4 + 0 * step], _mm_unpacklo_epi64( va01, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[-4 + 1 * step], _mm_unpackhi_epi64( va01, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[-4 + 2 * step], _mm_unpacklo_epi64( va23, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[-4 + 3 * step], _mm_unpackhi_epi64( va23, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[ 0 + 0 * step], _mm_unpacklo_epi64( va45, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[ 0 + 1 * step], _mm_unpackhi_epi64( va45, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[ 0 + 2 * step], _mm_unpacklo_epi64( va67, vzr ) );
-  _mm_storel_epi64( ( __m128i* ) &piSrc[ 0 + 3 * step], _mm_unpackhi_epi64( va67, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[-4 + 0 * step], _mm_unpacklo_epi64( va01, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[-4 + 1 * step], _mm_unpackhi_epi64( va01, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[-4 + 2 * step], _mm_unpacklo_epi64( va23, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[-4 + 3 * step], _mm_unpackhi_epi64( va23, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[ 0 + 0 * step], _mm_unpacklo_epi64( va45, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[ 0 + 1 * step], _mm_unpackhi_epi64( va45, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[ 0 + 2 * step], _mm_unpacklo_epi64( va67, vzr ) );
+  _vv_storel_epi64( ( __m128i* ) &piSrc[ 0 + 3 * step], _mm_unpackhi_epi64( va67, vzr ) );
 }
 
 template<X86_VEXT vext>
@@ -212,7 +212,7 @@ static inline void xPelFilterLumaWeakCore( __m128i &vm1, __m128i &vm2, __m128i &
   vdlt = _mm_packs_epi32( vdlt, _mm_setzero_si128() );
 
   short deltaV[4] = { 0, 0, 0, 0 };
-  _mm_storel_epi64( ( __m128i* ) deltaV, vdlt );
+  _vv_storel_epi64( ( __m128i* ) deltaV, vdlt );
 
   __m128i vmsk = _mm_cmpgt_epi16( _mm_set1_epi16( iThrCut ), _mm_abs_epi16( vdlt ) );
   __m128i vtc  = _mm_set1_epi16( -tc );
@@ -226,7 +226,7 @@ static inline void xPelFilterLumaWeakCore( __m128i &vm1, __m128i &vm2, __m128i &
   vtmp1 = _mm_min_epi16( _mm_max_epi16( vmin, vtmp0 ), vmax );
   vtmp0 = _mm_blendv_epi8( vm3, vtmp1, vmsk );
   vm3   = _mm_unpacklo_epi64( vtmp0, _mm_setzero_si128() );
-  //_mm_storel_epi64( ( __m128i* ) &m3, vtmp0 );
+  //_vv_storel_epi64( ( __m128i* ) &m3, vtmp0 );
 
   if( bFilterSecondP )
   {
@@ -238,14 +238,14 @@ static inline void xPelFilterLumaWeakCore( __m128i &vm1, __m128i &vm2, __m128i &
     vtmp0 = _mm_min_epi16( _mm_max_epi16( vmin, vtmp1 ), vmax );
     vtmp1 = _mm_blendv_epi8( vm2, vtmp0, vmsk );
     vm2   = _mm_unpacklo_epi64( vtmp1, _mm_setzero_si128() );
-    //_mm_storel_epi64( ( __m128i* ) &m2, vtmp1 );
+    //_vv_storel_epi64( ( __m128i* ) &m2, vtmp1 );
   }
 
   vtmp0 = _mm_sub_epi16( vm4, vdlt );
   vtmp1 = _mm_min_epi16( _mm_max_epi16( vmin, vtmp0 ), vmax );
   vtmp0 = _mm_blendv_epi8( vm4, vtmp1, vmsk );
   vm4   = _mm_unpacklo_epi64( vtmp0, _mm_setzero_si128() );
-  //_mm_storel_epi64( ( __m128i* ) &m4, vtmp0 );
+  //_vv_storel_epi64( ( __m128i* ) &m4, vtmp0 );
 
   if( bFilterSecondQ )
   {
@@ -257,7 +257,7 @@ static inline void xPelFilterLumaWeakCore( __m128i &vm1, __m128i &vm2, __m128i &
     vtmp0 = _mm_min_epi16( _mm_max_epi16( vmin, vtmp1 ), vmax );
     vtmp1 = _mm_blendv_epi8( vm5, vtmp0, vmsk );
     vm5   = _mm_unpacklo_epi64( vtmp1, _mm_setzero_si128() );
-    //_mm_storel_epi64( ( __m128i* ) &m5, vtmp1 );
+    //_vv_storel_epi64( ( __m128i* ) &m5, vtmp1 );
   }
 }
 
@@ -319,27 +319,27 @@ static void xPelFilterLumaX86( Pel* piSrc, const ptrdiff_t step, const ptrdiff_t
       va01 = _mm_unpacklo_epi32( va01a23lo, va45a67lo );
       va23 = _mm_unpackhi_epi32( va01a23lo, va45a67lo );
 
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-2 + 0 * step], _mm_unpacklo_epi64( va01, vzr ) );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-2 + 1 * step], _mm_unpackhi_epi64( va01, vzr ) );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-2 + 2 * step], _mm_unpacklo_epi64( va23, vzr ) );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-2 + 3 * step], _mm_unpackhi_epi64( va23, vzr ) );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-2 + 0 * step], _mm_unpacklo_epi64( va01, vzr ) );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-2 + 1 * step], _mm_unpackhi_epi64( va01, vzr ) );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-2 + 2 * step], _mm_unpacklo_epi64( va23, vzr ) );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-2 + 3 * step], _mm_unpackhi_epi64( va23, vzr ) );
     }
     else
     {
-      __m128i vm1 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[-3 * offset] );
-      __m128i vm2 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[-2 * offset] );
-      __m128i vm3 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[-1 * offset] );
-      __m128i vm4 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[ 0 * offset] );
-      __m128i vm5 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[ 1 * offset] );
-      __m128i vm6 = _mm_loadl_epi64( ( const __m128i * ) &piSrc[ 2 * offset] );
+      __m128i vm1 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[-3 * offset] );
+      __m128i vm2 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[-2 * offset] );
+      __m128i vm3 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[-1 * offset] );
+      __m128i vm4 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[ 0 * offset] );
+      __m128i vm5 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[ 1 * offset] );
+      __m128i vm6 = _vv_loadl_epi64( ( const __m128i * ) &piSrc[ 2 * offset] );
 
       xPelFilterLumaWeakCore<vext>( vm1, vm2, vm3, vm4, vm5, vm6,
                                     tc, iThrCut, bFilterSecondP, bFilterSecondQ, clpRng );
 
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-2 * offset], vm2 );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[-1 * offset], vm3 );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[ 0 * offset], vm4 );
-      _mm_storel_epi64( ( __m128i * ) &piSrc[ 1 * offset], vm5 );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-2 * offset], vm2 );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[-1 * offset], vm3 );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[ 0 * offset], vm4 );
+      _vv_storel_epi64( ( __m128i * ) &piSrc[ 1 * offset], vm5 );
     }
   }
 #if USE_AVX2
@@ -430,7 +430,7 @@ static inline void xFilteringPandQX86Hor( Pel* src, ptrdiff_t step, const ptrdif
   {
     __m128i vref1 = _mm_set_epi64x( 0, refPx4 );
     __m128i vref0 = _mm_set_epi64x( 0, refMiddlex4 );
-    __m128i vsrc  = _mm_loadl_epi64( ( const __m128i* ) &srcP[-offset * pos] );
+    __m128i vsrc  = _vv_loadl_epi64( ( const __m128i* ) &srcP[-offset * pos] );
     __m128i vmax  = _mm_set1_epi16( ( tc * tcP[pos] ) >> 1 );
     __m128i vmin  = _mm_sub_epi16( vsrc, vmax );
     vmax          = _mm_add_epi16( vsrc, vmax );
@@ -441,14 +441,14 @@ static inline void xFilteringPandQX86Hor( Pel* src, ptrdiff_t step, const ptrdif
     vtmp          = _mm_srli_epi32( vtmp, 6 );
     vtmp          = _mm_packs_epi32( vtmp, vtmp );
     vtmp          = _mm_min_epi16( _mm_max_epi16( vtmp, vmin ), vmax );
-    _mm_storel_epi64( ( __m128i* ) &srcP[-offset * pos], vtmp );
+    _vv_storel_epi64( ( __m128i* ) &srcP[-offset * pos], vtmp );
   }
 
   for( int pos = 0; pos < numberQSide; pos++ )
   {
     __m128i vref1 = _mm_set_epi64x( 0, refQx4 );
     __m128i vref0 = _mm_set_epi64x( 0, refMiddlex4 );
-    __m128i vsrc  = _mm_loadl_epi64( ( const __m128i* ) &srcQ[offset * pos] );
+    __m128i vsrc  = _vv_loadl_epi64( ( const __m128i* ) &srcQ[offset * pos] );
     __m128i vmax  = _mm_set1_epi16( ( tc * tcQ[pos] ) >> 1 );
     __m128i vmin  = _mm_sub_epi16( vsrc, vmax );
     vmax          = _mm_add_epi16( vsrc, vmax );
@@ -459,7 +459,7 @@ static inline void xFilteringPandQX86Hor( Pel* src, ptrdiff_t step, const ptrdif
     vtmp          = _mm_srli_epi32( vtmp, 6 );
     vtmp          = _mm_packs_epi32( vtmp, vtmp );
     vtmp          = _mm_min_epi16( _mm_max_epi16( vtmp, vmin ), vmax );
-    _mm_storel_epi64( ( __m128i* ) &srcQ[offset * pos], vtmp );
+    _vv_storel_epi64( ( __m128i* ) &srcQ[offset * pos], vtmp );
   }
 }
 
@@ -575,7 +575,7 @@ static inline void xFilteringPandQX86Ver( Pel* src, ptrdiff_t step, const ptrdif
       else
       {
         vtmp = _mm_srli_si128( vtmp, 10 );
-        _mm_storel_epi64( ( __m128i * ) ( srcP - 2 ), vtmp );
+        _vv_storel_epi64( ( __m128i * ) ( srcP - 2 ), vtmp );
       }
       
       // Q-part
@@ -599,7 +599,7 @@ static inline void xFilteringPandQX86Ver( Pel* src, ptrdiff_t step, const ptrdif
       }
       else
       {
-        _mm_storel_epi64( ( __m128i * ) srcQ, vtmp );
+        _vv_storel_epi64( ( __m128i * ) srcQ, vtmp );
       }
     }
     else

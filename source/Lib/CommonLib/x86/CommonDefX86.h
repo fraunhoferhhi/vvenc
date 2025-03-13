@@ -81,7 +81,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #    include <simde/x86/sse4.1.h>
 #  endif
 
-
 namespace vvenc
 {
 
@@ -93,6 +92,14 @@ X86_VEXT           string_to_x86_vext( const std::string& ext_name );
 X86_VEXT           read_x86_extension_flags( X86_VEXT request = x86_simd::UNDEFINED );
 const std::string& read_x86_extension_name();
 
+#if (defined TARGET_SIMD_ARM && !defined REAL_TARGET_AARCH64)
+// _mm_loadl_epi64 / _mm_storel_epi64 could cause memory crash in 32 Bit ARM Architecture 
+#define _vv_loadl_epi64 _mm_loadu_si64
+#define _vv_storel_epi64 _mm_storeu_si64
+#else
+#define _vv_loadl_epi64 _mm_loadl_epi64
+#define _vv_storel_epi64 _mm_storel_epi64
+#endif
 
 #ifdef USE_AVX2
 

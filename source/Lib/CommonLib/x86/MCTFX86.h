@@ -806,12 +806,12 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
 
     for( int y1 = 1; y1 < bsy + 6; y1++, srcRow += origStride )
     {
-      __m128i xsrc1 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[1] );
-      __m128i xsrc2 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[2] );
-      __m128i xsrc3 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[3] );
-      __m128i xsrc4 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[4] );
-      __m128i xsrc5 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[5] );
-      __m128i xsrc6 = _mm_loadl_epi64( ( const __m128i* ) &srcRow[6] );
+      __m128i xsrc1 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[1] );
+      __m128i xsrc2 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[2] );
+      __m128i xsrc3 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[3] );
+      __m128i xsrc4 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[4] );
+      __m128i xsrc5 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[5] );
+      __m128i xsrc6 = _vv_loadl_epi64( ( const __m128i* ) &srcRow[6] );
 
       __m128i
       xsum0 = _mm_set1_epi32( 1 << 5 );
@@ -843,7 +843,7 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
         xsum = _mm_packs_epi32( xsum0, _mm_setzero_si128() );
         xsum = _mm_min_epi16( xmax, _mm_max_epi16( xmin, xsum ) );
 
-        _mm_storel_epi64( ( __m128i* ) dstRow, xsum );
+        _vv_storel_epi64( ( __m128i* ) dstRow, xsum );
         dstRow += buffStride;
       }
       else
@@ -1255,18 +1255,18 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
           const Pel* pixd = pix0 + srcStride;
           const Pel* refd = ref0 + refStride;
 
-          __m128i xpix0 = _mm_loadl_epi64( ( const __m128i* ) pix0 );
-          __m128i xref0 = _mm_loadl_epi64( ( const __m128i* ) ref0 );
-          __m128i xpixr = _mm_loadl_epi64( ( const __m128i* ) pixr );
-          __m128i xrefr = _mm_loadl_epi64( ( const __m128i* ) refr );
+          __m128i xpix0 = _vv_loadl_epi64( ( const __m128i* ) pix0 );
+          __m128i xref0 = _vv_loadl_epi64( ( const __m128i* ) ref0 );
+          __m128i xpixr = _vv_loadl_epi64( ( const __m128i* ) pixr );
+          __m128i xrefr = _vv_loadl_epi64( ( const __m128i* ) refr );
 
           __m128i xdiff = _mm_sub_epi16( xpix0, xref0 );
           xvar = _mm_add_epi32( xvar, _mm_madd_epi16( xdiff, xdiff ) );
 
           if( y1 + 1 != h )
           {
-            __m128i xpixd  = _mm_loadl_epi64( ( const __m128i* ) pixd );
-            __m128i xrefd  = _mm_loadl_epi64( ( const __m128i* ) refd );
+            __m128i xpixd  = _vv_loadl_epi64( ( const __m128i* ) pixd );
+            __m128i xrefd  = _vv_loadl_epi64( ( const __m128i* ) refd );
             __m128i xdiffd = _mm_sub_epi16( xpixd, xrefd );
             xdiffd = _mm_sub_epi16( xdiffd, xdiff );
             xdiffsum = _mm_add_epi32( xdiffsum, _mm_madd_epi16( xdiffd, xdiffd ) );
@@ -1379,7 +1379,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   {
     for( int x = 0; x < w; x += 4 )
     {
-      __m128i vorgi = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( __m128i* ) ( srcPel + srcStride * y + x ) ) );
+      __m128i vorgi = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( __m128i* ) ( srcPel + srcStride * y + x ) ) );
       __m128  vorg  = _mm_cvtepi32_ps( vorgi );
       //const Pel orgVal  = *( srcPel + srcStride * y + x );
       __m128  vtws  = _mm_set1_ps( 1.0f );
@@ -1390,7 +1390,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
       for( int i = 0; i < numRefs; i++ )
       {
         const Pel* pCorrectedPelPtr = correctedPics[i] + y * w + x;
-        __m128i vrefi = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( __m128i* ) pCorrectedPelPtr ) );
+        __m128i vrefi = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( __m128i* ) pCorrectedPelPtr ) );
         //const int    refVal = *pCorrectedPelPtr;
         __m128i vdifi = _mm_sub_epi16( vrefi, vorgi );
         //const int    diff   = refVal - orgVal;
@@ -1437,7 +1437,7 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
       
       vnewi = _mm_packs_epi32( vnewi, vnewi );
       //*( dstPel + srcStride * y + x ) = sampleVal;
-      _mm_storel_epi64( ( __m128i * ) ( dstPel + dstStride * y + x ), vnewi );
+      _vv_storel_epi64( ( __m128i * ) ( dstPel + dstStride * y + x ), vnewi );
     }
   }
 }
