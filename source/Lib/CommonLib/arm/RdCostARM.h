@@ -52,7 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "neon/sum_neon.h"
 #include "../RdCost.h"
 
-#if defined( TARGET_SIMD_X86 )
+#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
 #if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_AVX2
 #define USE_AVX2
 #elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE42
@@ -62,7 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 #endif
 
-#ifdef TARGET_SIMD_X86
+#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
 # include "../x86/RdCostX86.h"
 #endif
 
@@ -76,11 +76,11 @@ static inline int32x4_t neon_madd_16( int16x8_t a, int16x8_t b )
   return pairwise_add_s32x4( c, d );
 }
 
-#if defined( TARGET_SIMD_ARM )
+#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_ARM )
 
 // The xGetHADs_ARMSIMD functions depend on the SIMDe kernels being enabled
 // during compilation.
-#if defined( TARGET_SIMD_X86 )
+#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
 
 //working up to 12-bit
 static uint32_t xCalcHAD16x16_fast_Neon( const Pel *piOrg, const Pel *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )

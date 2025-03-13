@@ -57,6 +57,10 @@ POSSIBILITY OF SUCH DAMAGE.
 //using namespace vvenc;
 namespace vvenc {
 
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_FGA
+using namespace x86_simd;
+#endif
+  
 static constexpr double   PI                     = 3.14159265358979323846;
 static constexpr double   PI_2                   = 3.14159265358979323846 / 2.0;
 static constexpr double   pi_8                   = PI / 8.0;

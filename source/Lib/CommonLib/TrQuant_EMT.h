@@ -52,20 +52,24 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_TRAFO
 using namespace x86_simd;
+#endif
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_TRAFO
 using namespace arm_simd;
+#endif
 
 #if ENABLE_SIMD_TRAFO
 struct TCoeffOps
 {
   TCoeffOps();
 
-#if defined( TARGET_SIMD_X86 )
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_TRAFO
   void initTCoeffOpsX86();
   template<X86_VEXT vext>
   void _initTCoeffOpsX86();
 #endif
-#if defined( TARGET_SIMD_ARM )
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_TRAFO
   void initTCoeffOpsARM();
   template<ARM_VEXT vext>
   void _initTCoeffOpsARM();

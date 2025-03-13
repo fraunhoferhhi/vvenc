@@ -53,7 +53,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_SAO
 using namespace x86_simd;
+#endif
 
 template<typename T> static inline int sgn( T val )
 {
@@ -122,7 +124,7 @@ protected:
   void offsetCTU                (const UnitArea& area, const CPelUnitBuf& src, PelUnitBuf& res, SAOBlkParam& saoblkParam, CodingStructure& cs);
   void xReconstructBlkSAOParams (CodingStructure& cs, SAOBlkParam* saoBlkParams);
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_SAO
   void initSampleAdaptiveOffsetX86();
   template <X86_VEXT vext>
   void _initSampleAdaptiveOffsetX86();

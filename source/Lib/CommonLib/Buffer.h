@@ -66,8 +66,13 @@ struct vvencYUVBuffer;
 
 namespace vvenc {
 
+#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
 using namespace x86_simd;
+#endif
+
+#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_ARM)
 using namespace arm_simd;
+#endif
 
 // ---------------------------------------------------------------------------
 // AreaBuf struct

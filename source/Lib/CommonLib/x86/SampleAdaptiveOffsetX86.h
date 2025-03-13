@@ -48,7 +48,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefX86.h"
 #include "SampleAdaptiveOffset.h"
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_SAO
 
 //! \ingroup CommonLib
 //! \{

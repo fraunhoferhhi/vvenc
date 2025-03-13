@@ -55,8 +55,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if ENABLE_SIMD_OPT_MCIF
 using namespace x86_simd;
 using namespace arm_simd;
+#endif
 
 #define IF_INTERNAL_PREC 14 ///< Number of bits for internal precision
 #define IF_FILTER_PREC    6 ///< Log2 of sum of filter taps
@@ -115,13 +117,13 @@ public:
                            PelUnitBuf &predSrc1);
 
   void initInterpolationFilter( bool enable );
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCIF
   void initInterpolationFilterX86();
   template <X86_VEXT vext>
   void _initInterpolationFilterX86();
 #endif
 	
-#ifdef TARGET_SIMD_ARM
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_MCIF
   void initInterpolationFilterARM();
   template <ARM_VEXT vext>
   void _initInterpolationFilterARM();

@@ -64,7 +64,7 @@ static inline int rightShiftMSB(int numer, int denom)
   return (numer >> shiftIdx);
 }
 
-#ifdef TARGET_SIMD_ARM
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
 #if __ARM_ARCH >= 8
 
 

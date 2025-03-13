@@ -52,7 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Rom.h"
 #include "InterPrediction.h"
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_BDOF
 
 //! \ingroup CommonLib
 //! \{

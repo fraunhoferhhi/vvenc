@@ -57,6 +57,7 @@ POSSIBILITY OF SUCH DAMAGE.
 using namespace vvenc;
 
 #define NUM_CASES 100
+#if ENABLE_SIMD_TRAFO
 
 static bool compare_values_2d( const std::string& context, const TCoeff* ref, const TCoeff* opt, unsigned rows,
                                unsigned cols, unsigned stride = 0 )
@@ -79,7 +80,7 @@ static bool compare_values_2d( const std::string& context, const TCoeff* ref, co
   }
   return true;
 }
-
+#endif
 template<typename T>
 class InputGenerator
 {
@@ -125,6 +126,7 @@ public:
   }
 };
 
+#if ENABLE_SIMD_TRAFO
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
                                    unsigned reducedLines, unsigned cutoff, G input_generator, T trafo_generator )
@@ -161,7 +163,6 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
 
   return ret;
 }
-
 template<typename G, typename T>
 static bool check_one_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned line,
                                       unsigned reducedLine, unsigned cutoff, unsigned shift, G input_generator, T trafo_generator )
@@ -279,12 +280,13 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 4, 64 ) && passed;
   return passed;
 }
+#endif
 
 int main()
 {
   unsigned seed = ( unsigned ) time( NULL );
   srand( seed );
-
+#if ENABLE_SIMD_TRAFO
   bool passed = test_TCoeffOps();
 
   if( !passed )
@@ -292,5 +294,6 @@ int main()
     printf( "\nerror: some tests failed for seed=%u!\n\n", seed );
     exit( EXIT_FAILURE );
   }
+#endif
   printf( "\nsuccess: all tests passed!\n\n" );
 }

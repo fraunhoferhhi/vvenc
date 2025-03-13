@@ -47,7 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDef.h"
 
-#ifdef TARGET_SIMD_ARM
+#if ENABLE_SIMD_OPT && defined(TARGET_SIMD_ARM)
 
 #ifdef USE_NEON
 #define SIMDARM NEON

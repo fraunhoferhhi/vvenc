@@ -51,7 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <math.h>
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
 
 //! \ingroup CommonLib
 //! \{

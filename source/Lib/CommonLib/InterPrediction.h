@@ -56,7 +56,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
 using namespace x86_simd;
+#endif
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
+using namespace arm_simd;
+#endif
 
 // forward declaration
 class Mv;

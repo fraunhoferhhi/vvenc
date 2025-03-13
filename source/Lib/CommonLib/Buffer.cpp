@@ -666,11 +666,11 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
   const Pel* subs = subtrahend.buf;
 
 
+#if ENABLE_SIMD_OPT_BUFFER
   const unsigned destStride =            stride;
   const unsigned minsStride = minuend.   stride;
   const unsigned subsStride = subtrahend.stride;
 
-#if ENABLE_SIMD_OPT_BUFFER
   if( ( width & 7 ) == 0 )
   {
     g_pelBufOP.sub8( mins, minsStride, subs, subsStride, dest, destStride, width, height );
