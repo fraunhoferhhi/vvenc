@@ -118,6 +118,10 @@ if( VVENC_ENABLE_X86_SIMD )
     set_property( SOURCE ${SSE42_SRC_FILES} APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse42}" )
     set_property( SOURCE ${AVX_SRC_FILES}   APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx}"   )
     set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "${FLAG_mavx2}"  )
+    
+    set_source_files_properties( ../EncoderLib/EncAdaptiveLoopFilter.cpp APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
+    set_source_files_properties( ../CommonLib/LoopFilter.cpp APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
+    set_source_files_properties( ../CommonLib/QuantRDOQ2.cpp APPEND PROPERTY COMPILE_FLAGS "${FLAG_msse41}" )
   endif()
 
   add_library( ${LIB_NAME}_x86_simd OBJECT ${SSE41_SRC_FILES} ${SSE42_SRC_FILES} ${AVX_SRC_FILES} ${AVX2_SRC_FILES} )
