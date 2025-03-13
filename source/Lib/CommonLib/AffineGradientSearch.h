@@ -53,7 +53,9 @@ namespace vvenc {
   //! \ingroup CommonLib
   //! \{
 
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
 using namespace x86_simd;
+#endif
 
   class AffineGradientSearch
   {
@@ -70,7 +72,7 @@ using namespace x86_simd;
     AffineGradientSearch();
     ~AffineGradientSearch() {}
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
     void initAffineGradientSearchX86();
     template <X86_VEXT vext>
     void _initAffineGradientSearchX86();

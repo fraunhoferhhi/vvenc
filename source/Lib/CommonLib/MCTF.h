@@ -54,7 +54,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCTF
 using namespace x86_simd;
+#endif
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_MCTF
+using namespace arm_simd;
+#endif
 
 class NoMallocThreadPool;
 
@@ -136,13 +141,13 @@ protected:
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCTF
   void initMCTF_X86();
   template <X86_VEXT vext>
   void _initMCTF_X86();
 #endif
 
-#ifdef TARGET_SIMD_ARM
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_MCTF
   void initMCTF_ARM();
   template <ARM_VEXT vext>
   void _initMCTF_ARM();

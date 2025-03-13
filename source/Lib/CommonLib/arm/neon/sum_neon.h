@@ -103,8 +103,8 @@ static inline int16x8_t pairwise_add_s16x8( const int16x8_t a, const int16x8_t b
 #if REAL_TARGET_AARCH64
   return vpaddq_s16( a, b );
 #else
-  int16x4_t lo = vpadd_s16( vget_low_s16( a ), vget_low_s16( b ) );
-  int16x4_t hi = vpadd_s16( vget_high_s16( a ), vget_high_s16( b ) );
+  int16x4_t lo = vpadd_s16( vget_low_s16( a ), vget_high_s16( a ) );
+  int16x4_t hi = vpadd_s16( vget_low_s16( b ), vget_high_s16( b ) );
   return vcombine_s16( lo, hi );
 #endif
 }
@@ -114,8 +114,8 @@ static inline int32x4_t pairwise_add_s32x4( const int32x4_t a, const int32x4_t b
 #if REAL_TARGET_AARCH64
   return vpaddq_s32( a, b );
 #else
-  int32x2_t lo = vpadd_s32( vget_low_s32( a ), vget_low_s32( b ) );
-  int32x2_t hi = vpadd_s32( vget_high_s32( a ), vget_high_s32( b ) );
+  int32x2_t lo = vpadd_s32( vget_low_s32( a ), vget_high_s32( a ));
+  int32x2_t hi = vpadd_s32( vget_low_s32( b ), vget_high_s32( b ) );
   return vcombine_s32( lo, hi );
 #endif
 }

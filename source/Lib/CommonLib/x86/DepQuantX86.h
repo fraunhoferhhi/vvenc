@@ -41,15 +41,16 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 #include "DepQuant.h"
-#include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
-#ifdef TARGET_SIMD_X86
+
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
+#include "TrQuant.h"
+
 #  include "x86/CommonDefX86.h"
 #  include <simde/x86/sse4.1.h>
 #if defined( USE_SSE41 ) || !defined( REAL_TARGET_X86 )
 #  include <simde/x86/sse4.2.h>
-#endif
 #endif
 
 #include <bitset>
@@ -1515,3 +1516,5 @@ template void DepQuant::_initDepQuantX86<SIMDX86>();
 //! \}
 
 ;
+#endif //ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
+

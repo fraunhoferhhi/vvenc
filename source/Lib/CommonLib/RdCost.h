@@ -56,9 +56,13 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \{
 
 namespace vvenc {
-
+  
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
 using namespace x86_simd;
+#endif
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_DIST
 using namespace arm_simd;
+#endif
 
 class DistParam;
 
@@ -142,13 +146,14 @@ public:
   virtual ~RdCost();
 
   void          create();
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
   void          initRdCostX86();
   template <X86_VEXT vext>
   void          _initRdCostX86();
 #endif
 	
-#ifdef TARGET_SIMD_ARM
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_DIST
+
   void initRdCostARM();
   template<ARM_VEXT vext>
   void _initRdCostARM();
@@ -241,7 +246,8 @@ private:
   template<bool fastHad>
   static Distortion xGetHADs          ( const DistParam& pcDtParam );
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
+
   template<X86_VEXT vext>
   static Distortion xGetSSE_SIMD    ( const DistParam& pcDtParam );
   template<int iWidth, X86_VEXT vext>
@@ -266,7 +272,8 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
-#ifdef TARGET_SIMD_ARM
+#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_DIST
+
   template <ARM_VEXT vext>
   static void xGetSADX5_16xN_SIMD_ARM   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
 

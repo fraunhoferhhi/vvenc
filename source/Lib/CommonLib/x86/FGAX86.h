@@ -50,7 +50,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefX86.h"
 #include "SEIFilmGrainAnalyzer.h"
 
-#ifdef TARGET_SIMD_X86
+
+//#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_FGA
 
 //! \ingroup CommonLib
 //! \{
@@ -957,6 +959,7 @@ int calcMeanSSE ( const Pel* org, const ptrdiff_t origStride, const int w, const
   return avg;
 }
 
+#if ENABLE_SIMD_OPT_FGA
 template<X86_VEXT vext>
 void Canny::_initFGACannyX86()
 {
@@ -975,10 +978,14 @@ template void Morph::_initFGAMorphX86<SIMDX86>();
 template<X86_VEXT vext>
 void FGAnalyzer::_initFGAnalyzerX86()
 {
+#if  ENABLE_SIMD_OPT_MCTF
   calcVar  = calcVarSse<vext>;
   calcMean = calcMeanSSE<vext>;
+#endif
 }
+
 template void FGAnalyzer::_initFGAnalyzerX86<SIMDX86>();
+#endif
 
 } // namespace vvenc
 

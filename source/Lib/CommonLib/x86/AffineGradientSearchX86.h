@@ -54,7 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
 
 namespace vvenc {
 

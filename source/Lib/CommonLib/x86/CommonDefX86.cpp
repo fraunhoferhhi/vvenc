@@ -62,7 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 # endif
 #endif
 
-#ifdef TARGET_SIMD_X86
+#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT
 
 namespace vvenc
 {

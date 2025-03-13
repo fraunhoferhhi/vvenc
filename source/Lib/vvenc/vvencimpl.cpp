@@ -797,6 +797,7 @@ void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
   const std::string simdReqStr( simdId ? simdId : "" );
+#if ENABLE_SIMD_OPT
 #if defined( TARGET_SIMD_X86 ) || defined( TARGET_SIMD_ARM )
 #if HANDLE_EXCEPTION
   try
@@ -838,6 +839,7 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
                                       << read_x86_extension_name() << ")." );
     }
 #endif
+#endif //ENABLE_SIMD_OPT
 
 #if ENABLE_SIMD_OPT_BUFFER
 #if defined( TARGET_SIMD_X86 )
@@ -896,10 +898,10 @@ std::string VVEncImpl::getCompileInfoString()
 std::string VVEncImpl::createEncoderInfoStr()
 {
   std::stringstream cssCap;
-#if defined( TARGET_SIMD_ARM )
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT
   setSIMDExtension( nullptr );  // Ensure SIMD-detection is finished
   cssCap << getCompileInfoString() << "[SIMD=" << read_arm_extension_name() << "]";
-#elif defined( TARGET_SIMD_X86 )
+#elif defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
   setSIMDExtension( nullptr );  // Ensure SIMD-detection is finished
   cssCap << getCompileInfoString() << "[SIMD=" << read_x86_extension_name() <<"]";
 #else  // !TARGET_SIMD_X86 && !TARGET_SIMD_ARM

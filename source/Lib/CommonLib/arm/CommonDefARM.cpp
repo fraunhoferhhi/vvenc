@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
+#if ENABLE_SIMD_OPT && defined(TARGET_SIMD_ARM)
 using namespace arm_simd;
 
 const static std::vector<std::pair<ARM_VEXT, std::string>> vext_names{
@@ -174,5 +175,6 @@ const std::string& read_arm_extension_name()
 {
   return arm_vext_to_string( read_arm_extension_flags() );
 }
+#endif
 
 }   // namespace
