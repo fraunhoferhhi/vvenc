@@ -99,7 +99,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
         {
           __m128i xscale = maxLoopL == 4
                          ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                         : _mm_packs_epi32( _mm_loadl_epi64( ( const __m128i* )srcPtr0 ), _mm_loadl_epi64( ( const __m128i* )srcPtr1 ) );
+                         : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
           xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
 
           if( _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
@@ -166,7 +166,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
         {
           __m128i xscale = maxLoopL == 4
                          ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                         : _mm_packs_epi32( _mm_loadl_epi64( ( const __m128i* )srcPtr0 ), _mm_loadl_epi64( ( const __m128i* )srcPtr1 ) );
+                         : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
           xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
 
           if( _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
@@ -206,7 +206,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
       {
         __m128i xscale = maxLoopL == 4
                         ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                        : _mm_packs_epi32( _mm_loadl_epi64( ( const __m128i* )srcPtr0 ), _mm_loadl_epi64( ( const __m128i* )srcPtr1 ) );
+                        : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
         xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
 
         if( _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
@@ -266,13 +266,13 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
       const TMatrixCoeff*  itPtr0 = &it[  k       * trSize];
       const TMatrixCoeff*  itPtr1 = &it[( k + 1 ) * trSize];
 
-      __m128i vit = _mm_unpacklo_epi16( _mm_loadl_epi64( ( const __m128i * ) itPtr0 ), _mm_loadl_epi64( ( const __m128i * ) itPtr1 ) );
+      __m128i vit = _mm_unpacklo_epi16( _vv_loadl_epi64( ( const __m128i * ) itPtr0 ), _vv_loadl_epi64( ( const __m128i * ) itPtr1 ) );
  
       for( int i = 0; i < reducedLines; i += 4, srcPtr0 += maxLoopL, srcPtr1 += maxLoopL )
       {
         __m128i xscale = maxLoopL == 4
                         ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                        : _mm_packs_epi32( _mm_loadl_epi64( ( const __m128i* )srcPtr0 ), _mm_loadl_epi64( ( const __m128i* )srcPtr1 ) );
+                        : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
         xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
 
         if( _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
@@ -494,13 +494,13 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
           {
             __m128i xtmp = _mm_unpacklo_epi32( xsum00, xsum10 );
 
-            _mm_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
-            _mm_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
+            _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
+            _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
 
             xtmp = _mm_unpackhi_epi32( xsum00, xsum10 );
 
-            _mm_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
-            _mm_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
+            _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
+            _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
           }
 
           itPtr  += ( trSize << 2 );
@@ -592,16 +592,16 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
           vsum10 = _mm_srai_epi32( vsum10, shift );
 
           __m128i xtmp = _mm_unpacklo_epi32( vsum00, vsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
+          _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
+          _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
           
           xtmp = _mm_unpackhi_epi32( vsum00, vsum10 );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
+          _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
-          _mm_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
+          _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += line;
 
           itPtr  += ( trSize << 2 );
         }
@@ -621,7 +621,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
       for( int j = 0; j < cutoff; j++ )
       {
-        __m128i vit   = _mm_loadl_epi64( ( const __m128i* ) itPtr );
+        __m128i vit   = _vv_loadl_epi64( ( const __m128i* ) itPtr );
         __m128i vsrc0 = _mm_load_si128 ( ( const __m128i* ) src );
 
         __m128i vsrc = _mm_packs_epi32( vsrc0, vzero );
@@ -736,7 +736,7 @@ void cpyResi_SSE( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width,
       {
         vdst = _mm_load_si128 ( ( const __m128i * ) &src[col] );
         vdst = _mm_packs_epi32( vdst, vzero );
-        _mm_storel_epi64      ( ( __m128i * ) &dst[col], vdst );
+        _vv_storel_epi64      ( ( __m128i * ) &dst[col], vdst );
       }
 
       src += width;
@@ -779,7 +779,7 @@ void cpyCoeff_SSE( const Pel* src, ptrdiff_t stride, TCoeff* dst, unsigned width
     {
       for( int col = 0; col < width; col += 4 )
       {
-        __m128i vtmp = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i * ) &src[col] ) );
+        __m128i vtmp = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i * ) &src[col] ) );
         _mm_store_si128( ( __m128i * ) &dst[col], vtmp );
       }
 
@@ -830,7 +830,7 @@ void simdInvLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t in
       for( int i = 0; i < zeroOutSize; i += 8, srcPtr += 8, trMatTmp += 8 )
       {
         vsrc = _mm_loadu_si128( ( const __m128i* ) srcPtr );
-        vtr  = _mm_loadl_epi64( ( const __m128i* ) trMatTmp );
+        vtr  = _vv_loadl_epi64( ( const __m128i* ) trMatTmp );
         vtr  = _mm_cvtepi8_epi16( vtr );
         vtmp = _mm_cvtepi16_epi32( vtr );
 

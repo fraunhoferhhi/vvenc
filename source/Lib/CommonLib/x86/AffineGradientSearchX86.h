@@ -95,7 +95,7 @@ namespace vvenc {
       acc         = _mm_sub_epi16( acc, _mm_loadu_si128( ( const __m128i* ) &pPred[( y + 1 ) * predStride + x - 1] ) );
       acc         = _mm_add_epi16( acc, _mm_loadu_si128( ( const __m128i* ) &pPred[( y + 1 ) * predStride + x + 1] ) );
 
-      _mm_storel_epi64( ( __m128i* ) &pDerivate[y * derivateBufStride + x],                         acc );
+      _vv_storel_epi64( ( __m128i* ) &pDerivate[y * derivateBufStride + x],                         acc );
       _mm_storeu_si32 (              &pDerivate[y * derivateBufStride + x + 4], _mm_unpackhi_epi64( acc, acc ) );
 
       pDerivate[y * derivateBufStride]               = pDerivate[y * derivateBufStride + 1];
@@ -143,7 +143,7 @@ namespace vvenc {
       acc         = _mm_add_epi16( acc, _mm_loadu_si128( ( const __m128i* ) &pPred[( y + 1 ) * predStride + x - 1] ) );
       acc         = _mm_add_epi16( acc, _mm_loadu_si128( ( const __m128i* ) &pPred[( y + 1 ) * predStride + x + 1] ) );
 
-      _mm_storel_epi64( ( __m128i* ) &pDerivate[y * derivateBufStride + x],                         acc );
+      _vv_storel_epi64( ( __m128i* ) &pDerivate[y * derivateBufStride + x],                         acc );
       _mm_storeu_si32 (              &pDerivate[y * derivateBufStride + x + 4], _mm_unpackhi_epi64( acc, acc ) );
 
       pDerivate[y * derivateBufStride]               = pDerivate[y * derivateBufStride + 1];
@@ -164,7 +164,7 @@ inter2 = _mm_mul_epi32(x2, y2);                                                 
 inter3 = _mm_mul_epi32(tmp1, tmp3);                                                                            \
 inter2 = _mm_add_epi64(inter0, inter2);                                                                        \
 inter3 = _mm_add_epi64(inter1, inter3);                                                                        \
-inter0 = _mm_loadl_epi64(loadLocation);                                                                        \
+inter0 = _vv_loadl_epi64(loadLocation);                                                                        \
 inter3 = _mm_add_epi64(inter2, inter3);                                                                        \
 inter1 = _mm_srli_si128(inter3, 8);                                                                            \
 inter3 = _mm_add_epi64(inter1, inter3);                                                                        \
@@ -207,16 +207,16 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
         if (b6Param)
         {
           // mmC[0-5] for iC[0-5] of 1st row of pixels
-          mmC[0] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[0][idx1]));
-          mmC[2] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[1][idx1]));
+          mmC[0] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[0][idx1]));
+          mmC[2] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[1][idx1]));
           mmC[1] = _mm_mullo_epi32(mmIndxK, mmC[0]);
           mmC[3] = _mm_mullo_epi32(mmIndxK, mmC[2]);
           mmC[4] = _mm_mullo_epi32(mmIndxJ, mmC[0]);
           mmC[5] = _mm_mullo_epi32(mmIndxJ, mmC[2]);
 
           // mmC[6-11] for iC[0-5] of 2nd row of pixels
-          mmC[6] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[0][idx2]));
-          mmC[8] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[1][idx2]));
+          mmC[6] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[0][idx2]));
+          mmC[8] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[1][idx2]));
           mmC[7] = _mm_mullo_epi32(mmIndxK, mmC[6]);
           mmC[9] = _mm_mullo_epi32(mmIndxK, mmC[8]);
           mmC[10] = _mm_mullo_epi32(mmIndxJ, mmC[6]);
@@ -225,8 +225,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
         else
         {
           // mmC[0-3] for iC[0-3] of 1st row of pixels
-          mmC[0] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[0][idx1]));
-          mmC[2] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[1][idx1]));
+          mmC[0] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[0][idx1]));
+          mmC[2] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[1][idx1]));
           mmC[1] = _mm_mullo_epi32(mmIndxK, mmC[0]);
           mmC[3] = _mm_mullo_epi32(mmIndxJ, mmC[0]);
           mmTmp[0] = _mm_mullo_epi32(mmIndxJ, mmC[2]);
@@ -235,8 +235,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
           mmC[3] = _mm_sub_epi32(mmC[3], mmTmp[1]);
 
           // mmC[4-7] for iC[0-3] of 1st row of pixels
-          mmC[4] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[0][idx2]));
-          mmC[6] = _mm_cvtepi16_epi32(_mm_loadl_epi64((const __m128i*)&ppDerivate[1][idx2]));
+          mmC[4] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[0][idx2]));
+          mmC[6] = _mm_cvtepi16_epi32(_vv_loadl_epi64((const __m128i*)&ppDerivate[1][idx2]));
           mmC[5] = _mm_mullo_epi32(mmIndxK, mmC[4]);
           mmC[7] = _mm_mullo_epi32(mmIndxJ, mmC[4]);
           mmTmp[2] = _mm_mullo_epi32(mmIndxJ, mmC[6]);
@@ -246,8 +246,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
         }
 
         // Residue
-        mmResidue[0] = _mm_loadl_epi64((const __m128i*)&pResidue[idx1]);
-        mmResidue[1] = _mm_loadl_epi64((const __m128i*)&pResidue[idx2]);
+        mmResidue[0] = _vv_loadl_epi64((const __m128i*)&pResidue[idx1]);
+        mmResidue[1] = _vv_loadl_epi64((const __m128i*)&pResidue[idx2]);
         mmResidue[0] = _mm_cvtepi16_epi32(mmResidue[0]);
         mmResidue[1] = _mm_cvtepi16_epi32(mmResidue[1]);
         mmResidue[0] = _mm_slli_epi32(mmResidue[0], 3);
@@ -259,21 +259,21 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
           mmTmp[0] = _mm_srli_si128(mmC[0 + col], 4);
           mmTmp[1] = _mm_srli_si128(mmC[n + col], 4);
           CALC_EQUAL_COEFF_8PXLS(mmC[0 + col], mmC[n + col], mmC[0 + col], mmC[n + col], mmTmp[0], mmTmp[1], mmTmp[0], mmTmp[1], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], (const __m128i*)&pEqualCoeff[col + 1][col]);
-          _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][col], mmIntermediate[3]);
+          _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][col], mmIntermediate[3]);
 
           for (int row = col + 1; row < n; row++)
           {
             mmTmp[2] = _mm_srli_si128(mmC[0 + row], 4);
             mmTmp[3] = _mm_srli_si128(mmC[n + row], 4);
             CALC_EQUAL_COEFF_8PXLS(mmC[0 + col], mmC[n + col], mmC[0 + row], mmC[n + row], mmTmp[0], mmTmp[1], mmTmp[2], mmTmp[3], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], (const __m128i*)&pEqualCoeff[col + 1][row]);
-            _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][row], mmIntermediate[3]);
-            _mm_storel_epi64((__m128i*)&pEqualCoeff[row + 1][col], mmIntermediate[3]);
+            _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][row], mmIntermediate[3]);
+            _vv_storel_epi64((__m128i*)&pEqualCoeff[row + 1][col], mmIntermediate[3]);
           }
 
           mmTmp[2] = _mm_srli_si128(mmResidue[0], 4);
           mmTmp[3] = _mm_srli_si128(mmResidue[1], 4);
           CALC_EQUAL_COEFF_8PXLS(mmC[0 + col], mmC[n + col], mmResidue[0], mmResidue[1], mmTmp[0], mmTmp[1], mmTmp[2], mmTmp[3], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], (const __m128i*)&pEqualCoeff[col + 1][n]);
-          _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][n], mmIntermediate[3]);
+          _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][n], mmIntermediate[3]);
         }
       }
 
@@ -292,7 +292,7 @@ inter2 = _mm256_mul_epi32(x2, y2);                                              
 inter3 = _mm256_mul_epi32(tmp1, tmp3);                                                                             \
 inter2 = _mm256_add_epi64(inter0, inter2);                                                                         \
 inter3 = _mm256_add_epi64(inter1, inter3);                                                                         \
-res    = _mm_loadl_epi64(loadLocation);                                                                            \
+res    = _vv_loadl_epi64(loadLocation);                                                                            \
 inter3 = _mm256_add_epi64(inter2, inter3);                                                                         \
 inter1 = _mm256_srli_si256(inter3, 8);                                                                             \
 inter3 = _mm256_add_epi64(inter1, inter3);                                                                         \
@@ -387,21 +387,21 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
           mmTmp[0] = _mm256_srli_si256(mmC[0 + col], 4);
           mmTmp[1] = _mm256_srli_si256(mmC[n + col], 4);
           CALC_EQUAL_COEFF_8PXLS_AVX2(mmC[0 + col], mmC[n + col], mmC[0 + col], mmC[n + col], mmTmp[0], mmTmp[1], mmTmp[0], mmTmp[1], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], mmRes, (const __m128i*)&pEqualCoeff[col + 1][col]);
-          _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][col], mmRes);
+          _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][col], mmRes);
 
           for (int row = col + 1; row < n; row++)
           {
             mmTmp[2] = _mm256_srli_si256(mmC[0 + row], 4);
             mmTmp[3] = _mm256_srli_si256(mmC[n + row], 4);
             CALC_EQUAL_COEFF_8PXLS_AVX2(mmC[0 + col], mmC[n + col], mmC[0 + row], mmC[n + row], mmTmp[0], mmTmp[1], mmTmp[2], mmTmp[3], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], mmRes, (const __m128i*)&pEqualCoeff[col + 1][row]);
-            _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][row], mmRes);
-            _mm_storel_epi64((__m128i*)&pEqualCoeff[row + 1][col], mmRes);
+            _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][row], mmRes);
+            _vv_storel_epi64((__m128i*)&pEqualCoeff[row + 1][col], mmRes);
           }
 
           mmTmp[2] = _mm256_srli_si256(mmResidue[0], 4);
           mmTmp[3] = _mm256_srli_si256(mmResidue[1], 4);
           CALC_EQUAL_COEFF_8PXLS_AVX2(mmC[0 + col], mmC[n + col], mmResidue[0], mmResidue[1], mmTmp[0], mmTmp[1], mmTmp[2], mmTmp[3], mmIntermediate[0], mmIntermediate[1], mmIntermediate[2], mmIntermediate[3], mmRes, (const __m128i*)&pEqualCoeff[col + 1][n]);
-          _mm_storel_epi64((__m128i*)&pEqualCoeff[col + 1][n], mmRes);
+          _vv_storel_epi64((__m128i*)&pEqualCoeff[col + 1][n], mmRes);
         }
       }
 

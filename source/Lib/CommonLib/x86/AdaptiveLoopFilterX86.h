@@ -451,7 +451,7 @@ void simdFilter5x5Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
         }
         else
         {
-          _mm_storel_epi64((__m128i *) (dst + ii * dstStride + j), accumA);
+          _vv_storel_epi64((__m128i *) (dst + ii * dstStride + j), accumA);
         }
       }
 
@@ -611,7 +611,7 @@ void simdFilter5x5Blk_AVX2( const AlfClassifier *, const PelUnitBuf& recDst, con
         else if(j + 12 <= width)
         {
           _mm_storeu_si128((__m128i *) (dst + ii * dstStride + j    ), _mm256_castsi256_si128(accumA));
-          _mm_storel_epi64((__m128i *) (dst + ii * dstStride + j + 8), _mm256_extracti128_si256(accumA, 1));
+          _vv_storel_epi64((__m128i *) (dst + ii * dstStride + j + 8), _mm256_extracti128_si256(accumA, 1));
         }
         else if(j + 8 <= width)
         {
@@ -619,7 +619,7 @@ void simdFilter5x5Blk_AVX2( const AlfClassifier *, const PelUnitBuf& recDst, con
         }
         else
         {
-          _mm_storel_epi64((__m128i *) (dst + ii * dstStride + j), _mm256_castsi256_si128( accumA ) );
+          _vv_storel_epi64((__m128i *) (dst + ii * dstStride + j), _mm256_castsi256_si128( accumA ) );
         }
       }
     }
@@ -714,7 +714,7 @@ void simdFilter7x7Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
         __m128i rawCoeff0, rawCoeff1;
 
         rawCoeff0 = _mm_loadu_si128((const __m128i *) (filterSet + classIdx * MAX_NUM_ALF_LUMA_COEFF));
-        rawCoeff1 = _mm_loadl_epi64((const __m128i *) (filterSet + classIdx * MAX_NUM_ALF_LUMA_COEFF + 8));
+        rawCoeff1 = _vv_loadl_epi64((const __m128i *) (filterSet + classIdx * MAX_NUM_ALF_LUMA_COEFF + 8));
 
         const __m128i s0 = _mm_loadu_si128((const __m128i *) shuffleTab[transposeIdx][0]);
         const __m128i s1 = _mm_xor_si128(s0, _mm_set1_epi8((char) 0x80));
@@ -735,7 +735,7 @@ void simdFilter7x7Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
         {
           __m128i rawClip0, rawClip1;
           rawClip0 = _mm_loadu_si128((const __m128i *) (fClipSet + classIdx * MAX_NUM_ALF_LUMA_COEFF));
-          rawClip1 = _mm_loadl_epi64((const __m128i *) (fClipSet + classIdx * MAX_NUM_ALF_LUMA_COEFF + 8));
+          rawClip1 = _vv_loadl_epi64((const __m128i *) (fClipSet + classIdx * MAX_NUM_ALF_LUMA_COEFF + 8));
           const __m128i rawClipLo  = _mm_or_si128(_mm_shuffle_epi8(rawClip0, s0), _mm_shuffle_epi8(rawClip1, s1));
           const __m128i rawClipHi  = _mm_or_si128(_mm_shuffle_epi8(rawClip0, s2), _mm_shuffle_epi8(rawClip1, s3));
           params[k][1][0] = _mm_shuffle_epi32( rawClipLo, 0x00 );
@@ -913,7 +913,7 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
         
         __m128i rawCoeff0, rawCoeff1;
           rawCoeff0 = _mm_loadu_si128( ( const __m128i * ) ( coef ) );
-          rawCoeff1 = _mm_loadl_epi64( ( const __m128i * ) ( coef + 8 ) );
+          rawCoeff1 = _vv_loadl_epi64( ( const __m128i * ) ( coef + 8 ) );
         
         const __m128i rawCoeffLo = _mm_or_si128( _mm_shuffle_epi8( rawCoeff0, s0 ), _mm_shuffle_epi8( rawCoeff1, s1 ) );
         const __m128i rawCoeffHi = _mm_or_si128( _mm_shuffle_epi8( rawCoeff0, s2 ), _mm_shuffle_epi8( rawCoeff1, s3 ) );
@@ -928,7 +928,7 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
         {
           const short *clip = fClipSet + classIdx * MAX_NUM_ALF_LUMA_COEFF;
           __m128i rawClip0 = _mm_loadu_si128( ( const __m128i * ) ( clip ) );
-          __m128i rawClip1 = _mm_loadl_epi64( ( const __m128i * ) ( clip + 8 ) );
+          __m128i rawClip1 = _vv_loadl_epi64( ( const __m128i * ) ( clip + 8 ) );
           const __m128i rawClipLo = _mm_or_si128( _mm_shuffle_epi8( rawClip0, s0 ), _mm_shuffle_epi8( rawClip1, s1 ) );
           const __m128i rawClipHi = _mm_or_si128( _mm_shuffle_epi8( rawClip0, s2 ), _mm_shuffle_epi8( rawClip1, s3 ) );
 
@@ -960,7 +960,7 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
         __m128i rawCoeff0, rawCoeff1;
 
           rawCoeff0 = _mm_loadu_si128( ( const __m128i * ) ( coef ) );
-          rawCoeff1 = _mm_loadl_epi64( ( const __m128i * ) ( coef + 8 ) );
+          rawCoeff1 = _vv_loadl_epi64( ( const __m128i * ) ( coef + 8 ) );
         
         const __m128i rawCoeffLo = _mm_or_si128( _mm_shuffle_epi8( rawCoeff0, s0 ), _mm_shuffle_epi8( rawCoeff1, s1 ) );
         const __m128i rawCoeffHi = _mm_or_si128( _mm_shuffle_epi8( rawCoeff0, s2 ), _mm_shuffle_epi8( rawCoeff1, s3 ) );
@@ -977,7 +977,7 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
           const short *clip = fClipSet + classIdx * MAX_NUM_ALF_LUMA_COEFF;
           __m128i rawClip0, rawClip1;
           rawClip0 = _mm_loadu_si128( ( const __m128i * ) ( clip ) );
-          rawClip1 = _mm_loadl_epi64( ( const __m128i * ) ( clip + 8 ) );
+          rawClip1 = _vv_loadl_epi64( ( const __m128i * ) ( clip + 8 ) );
           const __m128i rawClipLo = _mm_or_si128( _mm_shuffle_epi8( rawClip0, s0 ), _mm_shuffle_epi8( rawClip1, s1 ) );
           const __m128i rawClipHi = _mm_or_si128( _mm_shuffle_epi8( rawClip0, s2 ), _mm_shuffle_epi8( rawClip1, s3 ) );
           params[k - 2][1][0] = _mm256_inserti128_si256( params[k - 2][1][0], _mm_shuffle_epi32( rawClipLo, 0x00 ), 1 );
@@ -1104,7 +1104,7 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
         }
         else
         {
-          _mm_storel_epi64((__m128i *) (dst + ii * dstStride + j), _mm256_castsi256_si128( accumA ) );
+          _vv_storel_epi64((__m128i *) (dst + ii * dstStride + j), _mm256_castsi256_si128( accumA ) );
         }
       }
     }
@@ -1235,7 +1235,7 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           xsum      = _mm_packs_epi32( xsum, xsum );
           
           //int16_t vsum[4];
-          //_mm_storel_epi64( ( __m128i* ) vsum, xsum );
+          //_vv_storel_epi64( ( __m128i* ) vsum, xsum );
           //
           //for( int jj = 0; jj < clsSizeX; jj++ )
           //{
@@ -1260,13 +1260,13 @@ void simdFilterBlkCcAlf( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const 
           //  CHECK( vsum[jj] != sum, "" );
           //}
   
-          xin1 = _mm_loadl_epi64( ( const __m128i* ) &srcSelf[0] );
+          xin1 = _vv_loadl_epi64( ( const __m128i* ) &srcSelf[0] );
           xin0 = _mm_add_epi16( xsum, xin1 );
           
           xin0 = _mm_max_epi16( _mm_setzero_si128(), xin0 );
           xin0 = _mm_min_epi16( _mm_set1_epi16( clpRngs[compId].max() ), xin0 );
           
-          _mm_storel_epi64( ( __m128i* ) &srcSelf[0], xin0 );
+          _vv_storel_epi64( ( __m128i* ) &srcSelf[0], xin0 );
         }
       }
 

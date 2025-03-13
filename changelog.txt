@@ -1,4 +1,13 @@
 /////////////////////////////////////////
+tag 1.13.1-rc1
+
+* libvvenc:
+  - fix unaligned load/stores on ARM
+  - fix errors during library loading on old x86 CPUs associated with invalid instructions
+  - necessitate SSE 4.1 support for x86(_64) architectures
+  - fix rate control bug when using slice type adaptation (missing stats reduce accuracy)
+
+/////////////////////////////////////////
 tag 1.13.0
 
 * libvvenc:
