@@ -107,11 +107,13 @@ void gradient_core ( PelStorage *buff1,
     for (int j = 0; j < height; j++)
     {
       int acc = 0;
+      int xOffset = i - convWidthS / 2;
+      int yOffset = j - convHeightS / 2;
       for (int x = 0; x < convWidthS; x++)
       {
         for (int y = 0; y < convHeightS; y++)
         {
-          acc += (buff1->get(compID).at(x - convWidthS / 2 + i, y - convHeightS / 2 + j) * m_gx[x][y]);
+          acc += ( buff1->get(compID).at( x + xOffset, y + yOffset ) * m_gx[x][y] );
         }
       }
       tmpBuf1->Y().at(i, j) = acc;
@@ -526,7 +528,6 @@ int dilation_core ( PelStorage *buff,
                          ++iter,
                          Value );
 
-  return iter;
 }
 
 Morph::Morph()
@@ -1258,8 +1259,8 @@ void FGAnalyzer::estimateScalingFactors ( uint32_t bitDepth,
 void FGAnalyzer::adaptiveSampling ( int bins,
                                     double threshold,
                                     std::vector<int>& significantIndices,
-                                    int startIdx,
-                                    bool isRow )
+                                    bool isRow,
+                                    int startIdx )
 {
   int binSize = DATA_BASE_SIZE / bins;
   for ( int i = 0; i < bins; i++ )
@@ -1318,11 +1319,13 @@ void FGAnalyzer::estimateCutoffFreqAdaptive( ComponentID compId )
   adaptiveSampling ( coarseBins,
                      threshold,
                      significantRows,
-                     true ); // Rows
+                     true,
+                     0 ); // Rows
   adaptiveSampling ( coarseBins,
                      threshold,
                      significantCols,
-                     false );  // Columns
+                     false,
+                     0 );  // Columns
 
   // Iterative Refinement
   for ( int iter = 0; iter < maxIterations; iter++ )
@@ -1333,16 +1336,16 @@ void FGAnalyzer::estimateCutoffFreqAdaptive( ComponentID compId )
       adaptiveSampling ( refineBins,
                          threshold,
                          refinedRows,
-                         row,
-                         true );
+                         true,
+                         row );
     }
     for ( int col : significantCols )
     {
       adaptiveSampling ( refineBins,
                          threshold,
                          refinedCols,
-                         col,
-                         false );
+                         false,
+                         col );
     }
     significantRows = refinedRows;
     significantCols = refinedCols;

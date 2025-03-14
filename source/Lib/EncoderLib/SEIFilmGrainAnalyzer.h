@@ -256,8 +256,8 @@ private:
   void adaptiveSampling ( int bins,
                           double threshold,
                           std::vector<int>& significantIndices,
-                          int startIdx = 0,
-                          bool isRow = true );
+                          bool isRow,
+                          int startIdx );
 
   void estimateCutoffFreqAdaptive ( ComponentID compID );
 
