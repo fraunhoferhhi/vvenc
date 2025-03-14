@@ -193,6 +193,7 @@ VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
   accessUnit->poc             = 0;
   accessUnit->status          = 0;
   accessUnit->essentialBytes  = 0;
+  accessUnit->opaque          = nullptr;
 
   memset( accessUnit->infoString, 0, sizeof( accessUnit->infoString ) );
   accessUnit->infoString[0]   ='\0';
