@@ -58,7 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "FileIOHelper.h"
 
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
-#include "../../../thirdparty/nlohmann_json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 using nlohmann::json;
 #endif
 

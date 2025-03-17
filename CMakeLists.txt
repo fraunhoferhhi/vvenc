@@ -173,7 +173,9 @@ set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable 
 
 set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
 
-set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE BOOL   "Enable use of thirdparty json library" )
+set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE STRING "Enable use of thirdparty json library, pass in SYSTEM to rely on an external nlohmann_json" )
+
+set_property( CACHE VVENC_ENABLE_THIRDPARTY_JSON PROPERTY STRINGS OFF SYSTEM ON )
 
 set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
 
@@ -368,10 +370,20 @@ if( CCACHE_FOUND )
   set_property( GLOBAL PROPERTY RULE_LAUNCH_LINK ccache )
 endif()
 
-
+# handle thirdparty json
 if( VVENC_ENABLE_THIRDPARTY_JSON )
+  string( TOUPPER "${VVENC_ENABLE_THIRDPARTY_JSON}" VVENC_ENABLE_THIRDPARTY_JSON )
+  message( STATUS "VVENC_ENABLE_THIRDPARTY_JSON: ${VVENC_ENABLE_THIRDPARTY_JSON}" )
   set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
+  if ( VVENC_ENABLE_THIRDPARTY_JSON STREQUAL "SYSTEM" )
+    find_package( nlohmann_json REQUIRED ) # Provides nlohmann_json::nlohmann_json
+  elseif( NOT TARGET nlohmann_json::nlohmann_json ) # Implies either ON, TRUE, or 1
+    add_library( nlohmann_json::nlohmann_json INTERFACE IMPORTED )
+    set_target_properties( nlohmann_json::nlohmann_json PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/thirdparty/nlohmann_json/single_include )
+  endif()
+else()
+  message( STATUS "VVENC_ENABLE_THIRDPARTY_JSON is disabled" )
 endif()
 
 # handle rpath correctly

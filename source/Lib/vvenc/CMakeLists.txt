@@ -134,6 +134,10 @@ if( VVENC_ENABLE_X86_SIMD )
                                               INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
 
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES FOLDER lib )
+
+  if( TARGET nlohmann_json::nlohmann_json )
+    target_link_libraries( ${LIB_NAME}_x86_simd PRIVATE nlohmann_json::nlohmann_json )
+  endif()
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
@@ -170,6 +174,10 @@ if( VVENC_ENABLE_ARM_SIMD )
                                               INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL     OFF )
 
   set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES FOLDER lib )
+
+  if( TARGET nlohmann_json::nlohmann_json )
+    target_link_libraries( ${LIB_NAME}_arm_simd PRIVATE nlohmann_json::nlohmann_json )
+  endif()
 endif()
 
 # set resource file for MSVC compilers
@@ -187,11 +195,8 @@ if( CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0 )
   target_compile_options( ${LIB_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU>: -Wno-array-bounds> )
 endif()
 
-
-if( VVENC_ENABLE_THIRDPARTY_JSON )
-  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
-  target_include_directories( ${LIB_NAME} PRIVATE ../../../thirdparty/nlohmann_json/single_include )
+if( TARGET nlohmann_json::nlohmann_json )
+  target_link_libraries( ${LIB_NAME} PRIVATE nlohmann_json::nlohmann_json )
 endif()
 
 if( TARGET INTEL_ITT)

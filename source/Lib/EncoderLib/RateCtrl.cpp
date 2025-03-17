@@ -45,7 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
     \brief    Rate control manager class
 */
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #endif
 
 #include "vvenc/version.h"
