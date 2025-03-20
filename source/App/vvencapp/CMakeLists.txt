@@ -35,6 +35,9 @@ target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CX
 
 target_include_directories( ${EXE_NAME} PRIVATE ../../Lib )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
+if( TARGET nlohmann_json::nlohmann_json )
+  target_link_libraries( ${EXE_NAME} nlohmann_json::nlohmann_json )
+endif()
 
 # example: place header files in different folders
 source_group( "Header Files"   FILES ${INC_FILES} )

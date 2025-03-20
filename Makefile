@@ -50,8 +50,8 @@ ifneq ($(disable-lto),)
 CONFIG_OPTIONS += -DVVENC_ENABLE_LINK_TIME_OPT=OFF
 endif
 
-ifneq ($(disable-json),)
-CONFIG_OPTIONS += -DVVENC_ENABLE_THIRDPARTY_JSON=OFF
+ifneq ($(enable-json),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_THIRDPARTY_JSON=${enable-json}
 endif
 
 ifneq ($(enable-build-type-postfix),)
