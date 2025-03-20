@@ -82,6 +82,7 @@ protected:
   void xWriteSEIGeneralizedCubemapProjection      (const SEIGeneralizedCubemapProjection &sei);
   void xWriteSEISubpictureLevelInfo               (const SEISubpicureLevelInfo &sei);
   void xWriteSEISampleAspectRatioInfo             (const SEISampleAspectRatioInfo &sei);
+  void xWriteSEIAlphaChannelInfo                  (const SEIAlphaChannelInfo &sei);
 
   void xWriteSEIUserDataRegistered(const SEIUserDataRegistered& sei);
   void xWriteSeiFgc(const SeiFgc& sei);

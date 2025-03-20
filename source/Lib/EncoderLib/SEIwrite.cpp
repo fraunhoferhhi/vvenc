@@ -137,6 +137,9 @@ void SEIWriter::xWriteSEIpayloadData(OutputBitstream &bs, const SEI& sei, HRD &h
   case SEI::SAMPLE_ASPECT_RATIO_INFO:
     xWriteSEISampleAspectRatioInfo(*static_cast<const SEISampleAspectRatioInfo*>(&sei));
     break;
+  case SEI::ALPHA_CHANNEL:
+    xWriteSEIAlphaChannelInfo(*static_cast<const SEIAlphaChannelInfo*>(&sei));
+    break;
   default:
     THROW("Trying to write unhandled SEI message");
     break;
@@ -802,6 +805,24 @@ void SEIWriter::xWriteSEISampleAspectRatioInfo(const SEISampleAspectRatioInfo &s
     {
       WRITE_CODE( (uint32_t)sei.sariSarWidth, 16,                           "sari_sar_width");
       WRITE_CODE( (uint32_t)sei.sariSarHeight, 16,                           "sari_sar_height");
+    }
+  }
+}
+
+void SEIWriter::xWriteSEIAlphaChannelInfo(const SEIAlphaChannelInfo &sei)
+{
+  WRITE_FLAG( sei.alphaChannelCancelFlag,                                       "alpha_channel_cancel_flag" );
+  if(!sei.alphaChannelCancelFlag)
+  {
+    WRITE_CODE( sei.alphaChannelUseIdc, 3,                                      "alpha_channel_use_idc" );
+    WRITE_CODE( sei.alphaChannelBitDepthMinus8, 3,                              "alpha_channel_bit_depth_minus8" );
+    WRITE_CODE( sei.alphaTransparentValue, sei.alphaChannelBitDepthMinus8 + 9,  "alpha_channel_transparent_value" );
+    WRITE_CODE( sei.alphaOpaqueValue,sei.alphaChannelBitDepthMinus8 + 9,        "alpha_channel_opaque_value" );
+    WRITE_FLAG( sei.alphaChannelIncrFlag,                                       "alpha_channel_incr_flag" );
+    WRITE_FLAG( sei.alphaChannelClipFlag,                                       "alpha_channel_clip_flag" );
+    if ( sei.alphaChannelIncrFlag)
+    {
+      WRITE_FLAG( sei.alphaChannelClipTypeFlag,                                 "alpha_channel_clip_type_flag" );
     }
   }
 }
