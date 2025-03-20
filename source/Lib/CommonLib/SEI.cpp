@@ -140,6 +140,7 @@ const char *SEI::getSEIMessageString(SEI::PayloadType payloadType)
     case SEI::SAMPLE_ASPECT_RATIO_INFO:             return "Sample aspect ratio information";
     case SEI::SUBPICTURE_LEVEL_INFO:                return "Subpicture level information";
     case SEI::ALPHA_CHANNEL:                        return "Alpha channel information";
+    case SEI::SCALABILITY_DIMENSION_INFO:           return "Scalability dimension information";
     default:                                        return "Unknown";
   }
 }

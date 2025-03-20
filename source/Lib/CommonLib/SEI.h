@@ -86,6 +86,7 @@ public:
     AMBIENT_VIEWING_ENVIRONMENT          = 148,
     CONTENT_COLOUR_VOLUME                = 149,
     ALPHA_CHANNEL                        = 165,
+    SCALABILITY_DIMENSION_INFO           = 208,
   };
 
   SEI() {}
@@ -255,6 +256,30 @@ public:
   bool     alphaChannelIncrFlag;
   bool     alphaChannelClipFlag;
   bool     alphaChannelClipTypeFlag;
+};
+
+class SEIScalabilityDimensionInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SCALABILITY_DIMENSION_INFO; }
+
+  SEIScalabilityDimensionInfo()
+    : sdiMaxLayersMinus1(0)
+    , sdiMultiviewInfoFlag(false)
+    , sdiAuxiliaryInfoFlag(false)
+    , sdiViewIdLenMinus1(0)
+    {}
+  virtual ~SEIScalabilityDimensionInfo() {}
+
+  uint32_t sdiMaxLayersMinus1;
+  bool sdiMultiviewInfoFlag;
+  bool sdiAuxiliaryInfoFlag;
+  u_int32_t sdiViewIdLenMinus1;
+  std::vector<u_int32_t> sdiLayerId;
+  std::vector<u_int32_t> sdiViewIdVal;
+  std::vector<u_int32_t> sdiAuxId;
+  std::vector<u_int32_t> sdiNumAssociatedPrimaryLayersMinus1;
+  std::vector<std::vector<u_int32_t>>  sdiAssociatedPrimaryLayerIdx;
 };
 
 static const uint32_t ISO_IEC_11578_LEN=16;

@@ -83,6 +83,7 @@ protected:
   void xWriteSEISubpictureLevelInfo               (const SEISubpicureLevelInfo &sei);
   void xWriteSEISampleAspectRatioInfo             (const SEISampleAspectRatioInfo &sei);
   void xWriteSEIAlphaChannelInfo                  (const SEIAlphaChannelInfo &sei);
+  void xWriteSEIScalabilityDimensionInfo          (const SEIScalabilityDimensionInfo &sei);
 
   void xWriteSEIUserDataRegistered(const SEIUserDataRegistered& sei);
   void xWriteSeiFgc(const SeiFgc& sei);
