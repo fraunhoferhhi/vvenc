@@ -135,9 +135,9 @@ if( VVENC_ENABLE_X86_SIMD )
 
   set_target_properties( ${LIB_NAME}_x86_simd PROPERTIES FOLDER lib )
 
-  if( TARGET nlohmann_json::nlohmann_json )
-    target_link_libraries( ${LIB_NAME}_x86_simd PRIVATE nlohmann_json::nlohmann_json )
-  endif()
+  target_include_directories( ${LIB_NAME}_x86_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>> )
+  target_compile_options( ${LIB_NAME}_x86_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_OPTIONS>> )
+  target_compile_definitions( ${LIB_NAME}_x86_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_DEFINITIONS>> )
 endif()
 
 if( VVENC_ENABLE_ARM_SIMD )
@@ -175,9 +175,9 @@ if( VVENC_ENABLE_ARM_SIMD )
 
   set_target_properties( ${LIB_NAME}_arm_simd PROPERTIES FOLDER lib )
 
-  if( TARGET nlohmann_json::nlohmann_json )
-    target_link_libraries( ${LIB_NAME}_arm_simd PRIVATE nlohmann_json::nlohmann_json )
-  endif()
+  target_include_directories( ${LIB_NAME}_arm_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>> )
+  target_compile_options( ${LIB_NAME}_arm_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_OPTIONS>> )
+  target_compile_definitions( ${LIB_NAME}_arm_simd PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_DEFINITIONS>> )
 endif()
 
 # set resource file for MSVC compilers
@@ -195,9 +195,9 @@ if( CMAKE_COMPILER_IS_GNUCC AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0 )
   target_compile_options( ${LIB_NAME} PRIVATE $<$<CXX_COMPILER_ID:GNU>: -Wno-array-bounds> )
 endif()
 
-if( TARGET nlohmann_json::nlohmann_json )
-  target_link_libraries( ${LIB_NAME} PRIVATE nlohmann_json::nlohmann_json )
-endif()
+target_include_directories( ${LIB_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>> )
+target_compile_options( ${LIB_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_OPTIONS>> )
+target_compile_definitions( ${LIB_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_DEFINITIONS>> )
 
 if( TARGET INTEL_ITT)
   target_link_libraries( ${LIB_NAME} PRIVATE INTEL_ITT Threads::Threads )
