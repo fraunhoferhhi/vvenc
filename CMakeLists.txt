@@ -389,7 +389,7 @@ if( VVENC_ENABLE_THIRDPARTY_JSON )
     find_package( nlohmann_json REQUIRED ) # Provides nlohmann_json::nlohmann_json
   elseif( NOT TARGET nlohmann_json::nlohmann_json ) # Implies either ON, TRUE, or 1
     add_library( nlohmann_json::nlohmann_json INTERFACE IMPORTED )
-    set_target_properties( nlohmann_json::nlohmann_json PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/thirdparty/nlohmann_json/single_include )
+    target_include_directories( nlohmann_json::nlohmann_json INTERFACE ${PROJECT_SOURCE_DIR}/thirdparty/nlohmann_json/single_include )
   endif()
 else()
   message( STATUS "VVENC_ENABLE_THIRDPARTY_JSON is disabled" )
