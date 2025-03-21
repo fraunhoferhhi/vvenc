@@ -293,6 +293,8 @@ public:
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
   std::vector<std::atomic<int>>*  m_tileColsDone = nullptr;
 
+  void*                         userData;
+
 public:
   Slice*          allocateNewSlice();
   Slice*          swapSliceObject( Slice* p, uint32_t i );

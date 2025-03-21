@@ -181,6 +181,8 @@ set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-f
 
 set( VVENC_ENABLE_WERROR                    ON  CACHE BOOL   "Treat warnings as errors (-Werror or /WX)" )
 
+set( VVENC_ENABLE_UNSTABLE_API              OFF CACHE BOOL   "Enable unstable API" )
+
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
 
@@ -291,6 +293,13 @@ if( VVENC_ENABLE_WERROR )
   add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
   add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
 endif()
+
+set( VVENC_USE_UNSTABLE_API 0 )
+if( VVENC_ENABLE_UNSTABLE_API )
+  set( VVENC_USE_UNSTABLE_API 1 )
+endif()
+
+configure_file( include/vvenc/vvenc.h.in ${CMAKE_BINARY_DIR}/vvenc/vvenc.h @ONLY )
 
 if( VVENC_ENABLE_X86_SIMD )
   if( ( UNIX OR MINGW ) AND VVENC_OPT_TARGET_ARCH )

@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <vector>
 #include <tuple>
+#include <unordered_set>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -924,6 +925,10 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
   uint64_t framesRcvd = 0;
   uint64_t numMissingFrames = emulateMissingFrames ? 10 : 0;
 
+#if VVENC_USE_UNSTABLE_API
+  std::unordered_set<int> userDataSet;
+#endif
+
   while( !eof || !encodeDone )
   {
     vvencYUVBuffer* inputPtr = nullptr;
@@ -932,6 +937,9 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
       inputPtr             = yuvPicture;
       yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * (uint64_t)c.m_TicksPerSecond * (uint64_t)c.m_FrameScale / (uint64_t)c.m_FrameRate)) : (ctsOffset + framesRcvd);
       yuvPicture->ctsValid = true;
+#if VVENC_USE_UNSTABLE_API
+      yuvPicture->userData   = new int(framesRcvd);
+#endif
       framesRcvd++;
 
       if( emulateMissingFrames && framesRcvd == framesToEncode>>1 )
@@ -964,6 +972,11 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
         }
       }
       lastDts = AU->dts;
+#if VVENC_USE_UNSTABLE_API
+      int* userData = static_cast<int*>(AU->userData);
+      userDataSet.insert( *userData);
+      delete userData;
+#endif
     }
 
     if ( auCount > 0 && (!AU || ( AU &&  AU->payloadUsedSize == 0 )) )
@@ -983,6 +996,14 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
     //std::cout << "expecting " << framesToEncode << " au, but only encoded " << auCount << std::endl;
     goto fail;
   }
+
+#if VVENC_USE_UNSTABLE_API
+  if (userDataSet.size() != framesToEncode)
+  {
+    //std::cout << "expecting " << framesToEncode << " unique user data values, but got " << userDataSet.size() << std::endl;
+    goto fail;
+  }
+#endif
 
   vvenc_YUVBuffer_free( yuvPicture, true );
   vvenc_accessUnit_free( AU, true );

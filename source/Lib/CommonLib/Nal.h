@@ -178,6 +178,7 @@ public:
     rap           = false;
     refPic        = false;
     InfoString.clear();
+    userData      = nullptr;
 
     for( AccessUnitList::iterator it = this->begin(); it != this->end(); it++ )
     {
@@ -202,6 +203,7 @@ public:
   bool            rap;                                    ///< random access point flag
   bool            refPic;                                 ///< reference picture
   std::string     InfoString;
+  void*           userData;                               ///< user data passed in corresponding input YUV buffer
 };
 
 
