@@ -1,11 +1,13 @@
 /////////////////////////////////////////
-tag 1.13.1-rc1
+tag 1.13.1
 
 * libvvenc:
-  - fix unaligned load/stores on ARM
   - fix errors during library loading on old x86 CPUs associated with invalid instructions
   - necessitate SSE 4.1 support for x86(_64) architectures
-  - fix rate control bug when using slice type adaptation (missing stats reduce accuracy)
+  - fix rate control bug when using slice type adaptation improving accuracy
+  - fix unaligned load/stores on ARM
+  - allow usage of external nlohmann_json (set VVENC_ENABLE_THIRDPARTY_JSON=SYSTEM in CMake)
+  - added optional unstable api extension allowing passing user data with input frames (off per default, preserving API and ABI compatibility)
 
 /////////////////////////////////////////
 tag 1.13.0
