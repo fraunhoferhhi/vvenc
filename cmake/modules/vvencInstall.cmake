@@ -111,7 +111,9 @@ function( resolve_target_interface_libs TGT OUT_VAR )
       resolve_target_interface_libs( ${lib} lib )
     endif()
 
-    list( APPEND ret ${lib} )
+    if( lib )
+      list( APPEND ret ${lib} )
+    endif()
   endforeach()
 
   set( ${OUT_VAR} ${ret} PARENT_SCOPE )
