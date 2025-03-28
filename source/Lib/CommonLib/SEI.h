@@ -85,6 +85,8 @@ public:
     ALTERNATIVE_TRANSFER_CHARACTERISTICS = 147,
     AMBIENT_VIEWING_ENVIRONMENT          = 148,
     CONTENT_COLOUR_VOLUME                = 149,
+    ALPHA_CHANNEL                        = 165,
+    SCALABILITY_DIMENSION_INFO           = 208,
   };
 
   SEI() {}
@@ -227,6 +229,57 @@ public:
   int                   sariAspectRatioIdc;
   int                   sariSarWidth;
   int                   sariSarHeight;
+};
+
+class SEIAlphaChannelInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return ALPHA_CHANNEL; }
+
+  SEIAlphaChannelInfo()
+    : alphaChannelCancelFlag(false)
+    , alphaChannelUseIdc(0)
+    , alphaChannelBitDepthMinus8(0)
+    , alphaTransparentValue(0)
+    , alphaOpaqueValue(0)
+    , alphaChannelIncrFlag(false)
+    , alphaChannelClipFlag(false)
+    , alphaChannelClipTypeFlag(false)
+    {}
+  virtual ~SEIAlphaChannelInfo() {}
+
+  bool     alphaChannelCancelFlag;
+  uint32_t alphaChannelUseIdc;
+  uint32_t alphaChannelBitDepthMinus8;
+  uint32_t alphaTransparentValue;
+  uint32_t alphaOpaqueValue;
+  bool     alphaChannelIncrFlag;
+  bool     alphaChannelClipFlag;
+  bool     alphaChannelClipTypeFlag;
+};
+
+class SEIScalabilityDimensionInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SCALABILITY_DIMENSION_INFO; }
+
+  SEIScalabilityDimensionInfo()
+    : sdiMaxLayersMinus1(0)
+    , sdiMultiviewInfoFlag(false)
+    , sdiAuxiliaryInfoFlag(false)
+    , sdiViewIdLenMinus1(0)
+    {}
+  virtual ~SEIScalabilityDimensionInfo() {}
+
+  uint32_t sdiMaxLayersMinus1;
+  bool sdiMultiviewInfoFlag;
+  bool sdiAuxiliaryInfoFlag;
+  u_int32_t sdiViewIdLenMinus1;
+  std::vector<u_int32_t> sdiLayerId;
+  std::vector<u_int32_t> sdiViewIdVal;
+  std::vector<u_int32_t> sdiAuxId;
+  std::vector<u_int32_t> sdiNumAssociatedPrimaryLayersMinus1;
+  std::vector<std::vector<u_int32_t>>  sdiAssociatedPrimaryLayerIdx;
 };
 
 static const uint32_t ISO_IEC_11578_LEN=16;

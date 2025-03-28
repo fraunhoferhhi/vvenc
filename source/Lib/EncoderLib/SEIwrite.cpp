@@ -137,6 +137,12 @@ void SEIWriter::xWriteSEIpayloadData(OutputBitstream &bs, const SEI& sei, HRD &h
   case SEI::SAMPLE_ASPECT_RATIO_INFO:
     xWriteSEISampleAspectRatioInfo(*static_cast<const SEISampleAspectRatioInfo*>(&sei));
     break;
+  case SEI::ALPHA_CHANNEL:
+    xWriteSEIAlphaChannelInfo(*static_cast<const SEIAlphaChannelInfo*>(&sei));
+    break;
+  case SEI::SCALABILITY_DIMENSION_INFO:
+    xWriteSEIScalabilityDimensionInfo(*static_cast<const SEIScalabilityDimensionInfo*>(&sei));
+    break;
   default:
     THROW("Trying to write unhandled SEI message");
     break;
@@ -802,6 +808,58 @@ void SEIWriter::xWriteSEISampleAspectRatioInfo(const SEISampleAspectRatioInfo &s
     {
       WRITE_CODE( (uint32_t)sei.sariSarWidth, 16,                           "sari_sar_width");
       WRITE_CODE( (uint32_t)sei.sariSarHeight, 16,                           "sari_sar_height");
+    }
+  }
+}
+
+void SEIWriter::xWriteSEIAlphaChannelInfo(const SEIAlphaChannelInfo &sei)
+{
+  WRITE_FLAG( sei.alphaChannelCancelFlag,                                       "alpha_channel_cancel_flag" );
+  if(!sei.alphaChannelCancelFlag)
+  {
+    WRITE_CODE( sei.alphaChannelUseIdc, 3,                                      "alpha_channel_use_idc" );
+    WRITE_CODE( sei.alphaChannelBitDepthMinus8, 3,                              "alpha_channel_bit_depth_minus8" );
+    WRITE_CODE( sei.alphaTransparentValue, sei.alphaChannelBitDepthMinus8 + 9,  "alpha_channel_transparent_value" );
+    WRITE_CODE( sei.alphaOpaqueValue,sei.alphaChannelBitDepthMinus8 + 9,        "alpha_channel_opaque_value" );
+    WRITE_FLAG( sei.alphaChannelIncrFlag,                                       "alpha_channel_incr_flag" );
+    WRITE_FLAG( sei.alphaChannelClipFlag,                                       "alpha_channel_clip_flag" );
+    if ( sei.alphaChannelIncrFlag)
+    {
+      WRITE_FLAG( sei.alphaChannelClipTypeFlag,                                 "alpha_channel_clip_type_flag" );
+    }
+  }
+}
+
+void SEIWriter::xWriteSEIScalabilityDimensionInfo(const SEIScalabilityDimensionInfo &sei)
+{
+  WRITE_CODE( sei.sdiMaxLayersMinus1, 6,                                "sdi_max_layers_minus1");
+  WRITE_FLAG( sei.sdiMultiviewInfoFlag,                                 "sdi_multiview_info_flag");
+  WRITE_FLAG( sei.sdiAuxiliaryInfoFlag,                                 "sdi_auxiliary_info_flag");
+  if (sei.sdiMultiviewInfoFlag || sei.sdiAuxiliaryInfoFlag)
+  {
+    if (sei.sdiMultiviewInfoFlag)
+    {
+      WRITE_CODE( sei.sdiViewIdLenMinus1, 4,                            "sdi_view_id_len_minus1");
+    }
+    for (unsigned int i=0; i<=sei.sdiMaxLayersMinus1; i++)
+    {
+      WRITE_CODE( sei.sdiLayerId[i], 6,                                 "sdi_layer_id");
+      if (sei.sdiMultiviewInfoFlag)
+      {
+        WRITE_CODE( sei.sdiViewIdVal[i], sei.sdiViewIdLenMinus1+1,      "sdi_view_id_val");
+      }
+      if (sei.sdiAuxiliaryInfoFlag)
+      {
+        WRITE_CODE( sei.sdiAuxId[i], 8,                                 "sdi_aux_id");
+        if (sei.sdiAuxId[i]>0)
+        {
+          WRITE_CODE( sei.sdiNumAssociatedPrimaryLayersMinus1[i], 6,    "sdi_num_associated_primary_layers_minus1");
+          for (unsigned int j=0; j<=sei.sdiNumAssociatedPrimaryLayersMinus1[i]; j++)
+          {
+            WRITE_CODE( sei.sdiAssociatedPrimaryLayerIdx[i][j], 6,      "sdi_associated_primary_layer_idx");
+          }
+        }
+      }
     }
   }
 }
