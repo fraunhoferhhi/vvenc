@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
+#if defined( USE_SSE41 ) || defined( USE_SSE42 ) ||  defined( USE_AVX ) || defined( USE_AVX2 )
 
 #ifdef MISSING_INTRIN_mm_storeu_si16
 static inline void _mm_storeu_si16( void* p, __m128i a )
@@ -132,6 +133,8 @@ static inline int64_t _mm_extract_epi64( __m128i a, int i )
   return x;
 }
 #endif
+
+#endif // defined( USE_SSE41 ) || defined( USE_SSE42 ) ||  defined( USE_AVX ) || defined( USE_AVX2 )
 
 #if defined( USE_AVX ) || defined( USE_AVX2 )
 
