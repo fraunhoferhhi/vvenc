@@ -47,19 +47,31 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <iostream>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <time.h>
 
+#include "CommonLib/MCTF.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
 
 using namespace vvenc;
 
 #define NUM_CASES 100
-#if ENABLE_SIMD_TRAFO
 
-static bool compare_values_2d( const std::string& context, const TCoeff* ref, const TCoeff* opt, unsigned rows,
+template<typename T>
+static inline bool compare_value( const std::string& context, const T ref, const T opt )
+{
+  if( opt != ref )
+  {
+    printf( "failed: %s\n", context.c_str() );
+    printf( "  mismatch:  ref=%d  opt=%d\n", ref, opt );
+  }
+  return opt == ref;
+}
+
+static inline bool compare_values_2d( const std::string& context, const TCoeff* ref, const TCoeff* opt, unsigned rows,
                                unsigned cols, unsigned stride = 0 )
 {
   stride = stride != 0 ? stride : cols;
@@ -80,7 +92,7 @@ static bool compare_values_2d( const std::string& context, const TCoeff* ref, co
   }
   return true;
 }
-#endif
+
 template<typename T>
 class InputGenerator
 {
@@ -163,6 +175,7 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
 
   return ret;
 }
+
 template<typename G, typename T>
 static bool check_one_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned line,
                                       unsigned reducedLine, unsigned cutoff, unsigned shift, G input_generator, T trafo_generator )
@@ -282,18 +295,90 @@ static bool test_TCoeffOps()
 }
 #endif
 
-int main()
+#if ENABLE_SIMD_OPT_MCTF
+template<typename G>
+static bool check_one_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned bufStride, unsigned w,
+                                           unsigned h, unsigned besterror, G input_generator )
+{
+  CHECK( orgStride < w, "OrgStride must be greater than or equal to width" );
+  CHECK( bufStride < w, "BufStride must be greater than or equal to width" );
+  CHECK( w % 8, "Width must be a multiple of eight" );
+  CHECK( h % 8, "Height must be a multiple of eight" );
+
+  std::ostringstream sstm;
+  sstm << "motionErrorLumaInt8 orgStride=" << orgStride << " bufStride=" << bufStride << " w=" << w << " h=" << h
+       << " besterror=" << besterror;
+
+  std::vector<Pel> org( orgStride * h );
+  std::vector<Pel> buf( bufStride * h );
+
+  // Initialize source buffers.
+  std::generate( org.begin(), org.end(), input_generator );
+  std::generate( buf.begin(), buf.end(), input_generator );
+
+  int error_ref = ref->m_motionErrorLumaInt8( org.data(), orgStride, buf.data(), bufStride, w, h, besterror );
+  int error_opt = opt->m_motionErrorLumaInt8( org.data(), orgStride, buf.data(), bufStride, w, h, besterror );
+  return compare_value( sstm.str(), error_ref, error_opt );
+}
+
+static bool check_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing MCTF::motionErrorLumaInt8 w=%d h=%d\n", w, h );
+  InputGenerator<TCoeff> g{ 10 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    unsigned orgStride = rng.get( w, 128 );
+    unsigned bufStride = rng.get( w, 128 );
+    unsigned besterror = INT_MAX;
+    if( !check_one_motionErrorLumaInt8( ref, opt, orgStride, bufStride, w, h, besterror, g ) )
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static bool test_MCTF()
+{
+  MCTF ref{ /*enableOpt=*/false };
+  MCTF opt{ /*enableOpt=*/true };
+
+  unsigned num_cases = NUM_CASES;
+  bool passed        = true;
+
+  for( unsigned w = 8; w <= 64; w += 8 )
+  {
+    for( unsigned h = 8; h <= 64; h += 8 )
+    {
+      passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+  return passed;
+}
+#endif
+
+int main( int argc, char** argv )
 {
   unsigned seed = ( unsigned ) time( NULL );
   srand( seed );
+
+  bool passed = true;
+
 #if ENABLE_SIMD_TRAFO
-  bool passed = test_TCoeffOps();
+  passed = test_TCoeffOps() && passed;
+#endif
+
+#if ENABLE_SIMD_OPT_MCTF
+  passed = test_MCTF() && passed;
+#endif
 
   if( !passed )
   {
     printf( "\nerror: some tests failed for seed=%u!\n\n", seed );
     exit( EXIT_FAILURE );
   }
-#endif
   printf( "\nsuccess: all tests passed!\n\n" );
 }
