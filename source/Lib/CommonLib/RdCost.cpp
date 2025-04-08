@@ -82,7 +82,7 @@ void RdCost::setLambda( double dLambda, const BitDepths &bitDepths )
 
 
 // Initialize Function Pointer by [eDFunc]
-void RdCost::create()
+void RdCost::create( bool enableOpt )
 {
   m_signalType                 = RESHAPE_SIGNAL_NULL;
   m_chromaWeight               = 1.0;
@@ -138,12 +138,15 @@ void RdCost::create()
   m_afpDistortFuncX5[1] = RdCost::xGetSAD16X5;
 
 #if ENABLE_SIMD_OPT_DIST
+  if( enableOpt )
+  {
 #ifdef TARGET_SIMD_X86
-  initRdCostX86();
+    initRdCostX86();
 #endif
 #ifdef TARGET_SIMD_ARM
-  initRdCostARM();
+    initRdCostARM();
 #endif
+  }
 #endif
 
   m_costMode      = VVENC_COST_STANDARD_LOSSY;
