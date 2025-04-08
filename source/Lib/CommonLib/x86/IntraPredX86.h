@@ -112,8 +112,8 @@ void IntraPredAngleChroma_SIMD(int16_t* pDst,const ptrdiff_t dstStride,int16_t* 
           // Do linear filtering
           for (int l=0; l<width; l+=8) {
             refMainIndex        = l+ deltaInt+1;
-            __m128i vpred0 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex]);
-            __m128i vpred1 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex+1]);
+            __m128i vpred0 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex]);
+            __m128i vpred1 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex+1]);
             vpred0 = _mm_mullo_epi16(v32minfract, vpred0);
             vpred1 = _mm_mullo_epi16(vfract, vpred1);
             __m128i vpred = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(vpred0, vpred1), voffset), 5);
@@ -138,8 +138,8 @@ void IntraPredAngleChroma_SIMD(int16_t* pDst,const ptrdiff_t dstStride,int16_t* 
         // Do linear filtering
         for (int l=0; l<width; l+=8) {
           refMainIndex        = l+ deltaInt+1;
-          __m128i vpred0 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex]);
-          __m128i vpred1 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex+1]);
+          __m128i vpred0 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex]);
+          __m128i vpred1 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex+1]);
           vpred0 = _mm_mullo_epi16(v32minfract, vpred0);
           vpred1 = _mm_mullo_epi16(vfract, vpred1);
           __m128i vpred = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(vpred0, vpred1), voffset), 5);
@@ -160,8 +160,8 @@ void IntraPredAngleChroma_SIMD(int16_t* pDst,const ptrdiff_t dstStride,int16_t* 
       __m128i v32minfract = _mm_set1_epi16(32-deltaFract);
       // Do linear filtering
       refMainIndex        = deltaInt+1;
-      __m128i vpred0 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex]);
-      __m128i vpred1 = _mm_lddqu_si128((__m128i*)&pBorder[refMainIndex+1]);
+      __m128i vpred0 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex]);
+      __m128i vpred1 = _mm_loadu_si128((__m128i*)&pBorder[refMainIndex+1]);
       vpred0 = _mm_mullo_epi16(v32minfract, vpred0);
       vpred1 = _mm_mullo_epi16(vfract, vpred1);
       __m128i vpred = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(vpred0, vpred1), voffset), 5);

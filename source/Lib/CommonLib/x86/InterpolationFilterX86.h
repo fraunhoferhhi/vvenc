@@ -97,11 +97,11 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
       {
         if( sizeof( Tsrc )==1 )
         {
-          vsrc = _mm_cvtepu8_epi16( _mm_lddqu_si128( ( __m128i const * )&src[col+i] ) );
+          vsrc = _mm_cvtepu8_epi16( _mm_loadu_si128( ( __m128i const * )&src[col+i] ) );
         }
         else
         {
-          vsrc = _mm_lddqu_si128( ( __m128i const * )&src[col+i] );
+          vsrc = _mm_loadu_si128( ( __m128i const * )&src[col+i] );
         }
 
         if( isFirst == isLast )
@@ -498,7 +498,7 @@ static void simdInterpolateHorM4( const int16_t* src, int srcStride, int16_t *ds
   __m128i voffset = _mm_set1_epi32( offset );
   __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
   __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
-  __m128i vcoeffh = _mm_lddqu_si128( ( __m128i const * )coeff );
+  __m128i vcoeffh = _mm_loadu_si128( ( __m128i const * )coeff );
 
   __m128i vzero, vshufc0, vshufc1;
   __m128i vsum;
@@ -522,8 +522,8 @@ static void simdInterpolateHorM4( const int16_t* src, int srcStride, int16_t *ds
         __m128i vtmp[2];
         for( int i = 0; i < 4; i += 2 )
         {
-          __m128i vsrc0 = _mm_lddqu_si128( ( __m128i const * )&src[col + i] );
-          __m128i vsrc1 = _mm_lddqu_si128( ( __m128i const * )&src[col + i + 1] );
+          __m128i vsrc0 = _mm_loadu_si128( ( __m128i const * )&src[col + i] );
+          __m128i vsrc1 = _mm_loadu_si128( ( __m128i const * )&src[col + i + 1] );
           vsrc0 = _mm_madd_epi16( vsrc0, vcoeffh );
           vsrc1 = _mm_madd_epi16( vsrc1, vcoeffh );
           vtmp[i / 2] = _mm_hadd_epi32( vsrc0, vsrc1 );
@@ -533,7 +533,7 @@ static void simdInterpolateHorM4( const int16_t* src, int srcStride, int16_t *ds
       else
       {
         __m128i vtmp0, vtmp1;
-        __m128i vsrc = _mm_lddqu_si128( ( __m128i const * )&src[col] );
+        __m128i vsrc = _mm_loadu_si128( ( __m128i const * )&src[col] );
         vtmp0 = _mm_shuffle_epi8( vsrc, vshufc0 );
         vtmp1 = _mm_shuffle_epi8( vsrc, vshufc1 );
 
@@ -1149,7 +1149,7 @@ static void simdInterpolateVerM8( const int16_t *src, int srcStride, int16_t *ds
   {
     for( int i = 0; i < N - 1; i++ )
     {
-      vsrc[i] = _mm_lddqu_si128( ( __m128i const * )&src[col + i * srcStride] );
+      vsrc[i] = _mm_loadu_si128( ( __m128i const * )&src[col + i * srcStride] );
     }
 
     for( int row = 0; row < height; row++ )
@@ -1157,7 +1157,7 @@ static void simdInterpolateVerM8( const int16_t *src, int srcStride, int16_t *ds
       cond_mm_prefetch( (const char *) &src[col + ( N + 0 ) * srcStride], _MM_HINT_T0 );
       cond_mm_prefetch( (const char *) &src[col + ( N + 1 ) * srcStride], _MM_HINT_T0 );
 
-      vsrc[N - 1] = _mm_lddqu_si128( ( __m128i const * )&src[col + ( N - 1 ) * srcStride] );
+      vsrc[N - 1] = _mm_loadu_si128( ( __m128i const * )&src[col + ( N - 1 ) * srcStride] );
       vsuma = vsumb = vzero;
       for( int i = 0; i < N; i += 2 )
       {
@@ -3343,8 +3343,8 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
     {
       for (int x = 0; x < width; x += 8)
       {
-        __m128i s0 = _mm_lddqu_si128((__m128i *) (src0 + x));
-        __m128i s1 = _mm_lddqu_si128((__m128i *) (src1 + x));
+        __m128i s0 = _mm_loadu_si128((__m128i *) (src0 + x));
+        __m128i s1 = _mm_loadu_si128((__m128i *) (src1 + x));
         __m128i w0;
         if (compIdx != COMP_Y && cu.chromaFormat != CHROMA_444)
         {
@@ -3353,16 +3353,16 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
           if (g_angle2mirror[angle] == 1)
           {
             w0p0 =
-              _mm_lddqu_si128((__m128i *) (weight - (x << 1) - (8 - 1)));   // first sub-sample the required weights.
-            w0p1 = _mm_lddqu_si128((__m128i *) (weight - (x << 1) - 8 - (8 - 1)));
+              _mm_loadu_si128((__m128i *) (weight - (x << 1) - (8 - 1)));   // first sub-sample the required weights.
+            w0p1 = _mm_loadu_si128((__m128i *) (weight - (x << 1) - 8 - (8 - 1)));
             const __m128i shuffle_mask = _mm_set_epi8(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
             w0p0 = _mm_shuffle_epi8(w0p0, shuffle_mask);
             w0p1 = _mm_shuffle_epi8(w0p1, shuffle_mask);
           }
           else
           {
-            w0p0 = _mm_lddqu_si128((__m128i *) (weight + (x << 1)));   // first sub-sample the required weights.
-            w0p1 = _mm_lddqu_si128((__m128i *) (weight + (x << 1) + 8));
+            w0p0 = _mm_loadu_si128((__m128i *) (weight + (x << 1)));   // first sub-sample the required weights.
+            w0p1 = _mm_loadu_si128((__m128i *) (weight + (x << 1) + 8));
           }
           w0p0 = _mm_mullo_epi16(w0p0, mask);
           w0p1 = _mm_mullo_epi16(w0p1, mask);
@@ -3372,13 +3372,13 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
         {
           if (g_angle2mirror[angle] == 1)
           {
-            w0 = _mm_lddqu_si128((__m128i *) (weight - x - (8 - 1)));
+            w0 = _mm_loadu_si128((__m128i *) (weight - x - (8 - 1)));
             const __m128i shuffle_mask = _mm_set_epi8(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
             w0 = _mm_shuffle_epi8(w0, shuffle_mask);
           }
           else
           {
-            w0 = _mm_lddqu_si128((__m128i *) (weight + x));
+            w0 = _mm_loadu_si128((__m128i *) (weight + x));
           }
         }
         __m128i w1 = _mm_sub_epi16(mmEight, w0);

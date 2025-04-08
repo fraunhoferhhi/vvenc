@@ -1888,9 +1888,9 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
       for (x = 1; x < width-1-6; x += 6)
       {
         sum=0;
-        lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
-        line0  = _mm_lddqu_si128 ((__m128i*) &pSrc [(y)*iSrcStride + x-1]);
-        lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1]);
+        lineM1 = _mm_loadu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
+        line0  = _mm_loadu_si128 ((__m128i*) &pSrc [(y)*iSrcStride + x-1]);
+        lineP1 = _mm_loadu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1]);
 
         tmp1 = _mm_madd_epi16 (line0, scale0);
         tmp2 = _mm_madd_epi16 (lineP1, scale1);
@@ -1917,9 +1917,9 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
 
         sum+=_mm_extract_epi32 (tmp1, 0);
 
-        lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1+2]);
-        line0  = _mm_lddqu_si128((__m128i*) &pSrc [(y)*iSrcStride + x-1+2]);
-        lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1+2]);
+        lineM1 = _mm_loadu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1+2]);
+        line0  = _mm_loadu_si128 ((__m128i*) &pSrc [(y)*iSrcStride + x-1+2]);
+        lineP1 = _mm_loadu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1+2]);
         tmp1 = _mm_madd_epi16 (line0, scale00);
         tmp2 = _mm_madd_epi16 (lineP1, scale11);
         tmp3 = _mm_madd_epi16 (lineM1, scale11);
@@ -1947,6 +1947,7 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
         sum+=_mm_extract_epi32 (tmp1, 0);
         saAct += (uint64_t) sum;
       }
+
       // last collum
       for (; x < width - 1; x++) //
       {
@@ -1974,8 +1975,8 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
     {
       for (x = 1; x < width - 1-8 ; x+=8)  // cnt cols
       {
-        __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-        __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+        __m128i M0 = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+        __m128i M1 = _mm_loadu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
         M1 = _mm_sub_epi16 (M0, M1);
         M1 = _mm_abs_epi16 (M1);
         M1 = _mm_hadd_epi16 (M1, M1);
@@ -1992,8 +1993,8 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
         taAct += (uint64_t)act;
       }
       // last collum
-      __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+      __m128i M0 = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i M1 = _mm_loadu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
 
       M1 = _mm_sub_epi16 (M0, M1);
       M1 = _mm_abs_epi16 (M1);
@@ -2091,9 +2092,9 @@ uint64_t  HDHighPass2_SIMD  (const int width, const int height,const Pel*  pSrc,
     {
       for (x = 1; x < width - 1-8 ; x+=8)  // cnt cols
       {
-        __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-        __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
-        __m128i M2 = _mm_lddqu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
+        __m128i M0 = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+        __m128i M1 = _mm_loadu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+        __m128i M2 = _mm_loadu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
         M1 = _mm_slli_epi16 (M1, 1);
         M1 = _mm_sub_epi16 (M0, M1);
         M1 = _mm_add_epi16 (M1,M2);
@@ -2106,9 +2107,9 @@ uint64_t  HDHighPass2_SIMD  (const int width, const int height,const Pel*  pSrc,
         taAct += (uint64_t)act;
       }
       // last collum
-      __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
-      __m128i M2 = _mm_lddqu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
+      __m128i M0 = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i M1 = _mm_loadu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+      __m128i M2 = _mm_loadu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
       M1 = _mm_slli_epi16 (M1, 1);
       M1 = _mm_sub_epi16 (M0, M1);
       M1 = _mm_add_epi16 (M1,M2);
@@ -2302,12 +2303,12 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
         for (int x = 2; x < width-2; x += 4)
         {
           {
-            lM2 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y-2)*iSrcStride + x-2]);
-            lM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y-1)*iSrcStride + x-2]);
-            l0  = _mm_lddqu_si128 ((__m128i*) &pSrc[ y   *iSrcStride + x-2]);
-            lP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-2]);
-            lP2 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+2)*iSrcStride + x-2]);
-            lP3 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+3)*iSrcStride + x-2]);
+            lM2 = _mm_loadu_si128 ((__m128i*) &pSrc[(y-2)*iSrcStride + x-2]);
+            lM1 = _mm_loadu_si128 ((__m128i*) &pSrc[(y-1)*iSrcStride + x-2]);
+            l0  = _mm_loadu_si128 ((__m128i*) &pSrc[ y   *iSrcStride + x-2]);
+            lP1 = _mm_loadu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-2]);
+            lP2 = _mm_loadu_si128 ((__m128i*) &pSrc[(y+2)*iSrcStride + x-2]);
+            lP3 = _mm_loadu_si128 ((__m128i*) &pSrc[(y+3)*iSrcStride + x-2]);
 
             if ( x < width-2)
             {
@@ -2381,10 +2382,10 @@ uint64_t AvgHighPassWithDownsamplingDiff1st_SIMD (const int width, const int hei
   {
     for (x = 2; x < width-2-10; x += 8)
     {
-      __m128i lineM0u = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i lineM0d = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
-      __m128i lineM1u = _mm_lddqu_si128 ((__m128i*) &pSrcM1[ y   *iSrcM1Stride + x]);
-      __m128i lineM1d = _mm_lddqu_si128 ((__m128i*) &pSrcM1[(y+1)*iSrcM1Stride + x]);
+      __m128i lineM0u = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i lineM0d = _mm_loadu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
+      __m128i lineM1u = _mm_loadu_si128 ((__m128i*) &pSrcM1[ y   *iSrcM1Stride + x]);
+      __m128i lineM1d = _mm_loadu_si128 ((__m128i*) &pSrcM1[(y+1)*iSrcM1Stride + x]);
       __m128i M0 = _mm_add_epi16 (lineM0u, lineM0d);
       __m128i M1 = _mm_add_epi16 (lineM1u, lineM1d);
 
@@ -2405,10 +2406,10 @@ uint64_t AvgHighPassWithDownsamplingDiff1st_SIMD (const int width, const int hei
     }
     // last collum
     {
-      __m128i lineM0u = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i lineM0d = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
-      __m128i lineM1u = _mm_lddqu_si128 ((__m128i*) &pSrcM1[ y   *iSrcM1Stride + x]);
-      __m128i lineM1d = _mm_lddqu_si128 ((__m128i*) &pSrcM1[(y+1)*iSrcM1Stride + x]);
+      __m128i lineM0u = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i lineM0d = _mm_loadu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
+      __m128i lineM1u = _mm_loadu_si128 ((__m128i*) &pSrcM1[ y   *iSrcM1Stride + x]);
+      __m128i lineM1d = _mm_loadu_si128 ((__m128i*) &pSrcM1[(y+1)*iSrcM1Stride + x]);
       __m128i M0 = _mm_add_epi16 (lineM0u, lineM0d);
       __m128i M1 = _mm_add_epi16 (lineM1u, lineM1d);
       M1 = _mm_sub_epi16 (M0, M1); /* abs (sum (o[u0, u1, d0, d1]) - sum (oM1[u0, u1, d0, d1])) */
@@ -2469,12 +2470,12 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
   {
     for (x = 2; x < width-2-10; x += 8)
     {
-      __m128i lineM0u = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i lineM0d = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
-      __m128i lineM1u = _mm_lddqu_si128 ((__m128i*) &pSrcM1[ y   *iSM1Stride + x]);
-      __m128i lineM1d = _mm_lddqu_si128 ((__m128i*) &pSrcM1[(y+1)*iSM1Stride + x]);
-      __m128i lineM2u = _mm_lddqu_si128 ((__m128i*) &pSrcM2[ y   *iSM2Stride + x]);
-      __m128i lineM2d = _mm_lddqu_si128 ((__m128i*) &pSrcM2[(y+1)*iSM2Stride + x]);
+      __m128i lineM0u = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i lineM0d = _mm_loadu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
+      __m128i lineM1u = _mm_loadu_si128 ((__m128i*) &pSrcM1[ y   *iSM1Stride + x]);
+      __m128i lineM1d = _mm_loadu_si128 ((__m128i*) &pSrcM1[(y+1)*iSM1Stride + x]);
+      __m128i lineM2u = _mm_loadu_si128 ((__m128i*) &pSrcM2[ y   *iSM2Stride + x]);
+      __m128i lineM2d = _mm_loadu_si128 ((__m128i*) &pSrcM2[(y+1)*iSM2Stride + x]);
 
       __m128i M0 = _mm_add_epi16 (lineM0u, lineM0d);
       __m128i M1 = _mm_add_epi16 (lineM1u, lineM1d);
@@ -2494,12 +2495,12 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
     }
     // last collum
     {
-      __m128i lineM0u = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
-      __m128i lineM0d = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
-      __m128i lineM1u = _mm_lddqu_si128 ((__m128i*) &pSrcM1[ y   *iSM1Stride + x]);
-      __m128i lineM1d = _mm_lddqu_si128 ((__m128i*) &pSrcM1[(y+1)*iSM1Stride + x]);
-      __m128i lineM2u = _mm_lddqu_si128 ((__m128i*) &pSrcM2[ y   *iSM2Stride + x]);
-      __m128i lineM2d = _mm_lddqu_si128 ((__m128i*) &pSrcM2[(y+1)*iSM2Stride + x]);
+      __m128i lineM0u = _mm_loadu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i lineM0d = _mm_loadu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
+      __m128i lineM1u = _mm_loadu_si128 ((__m128i*) &pSrcM1[ y   *iSM1Stride + x]);
+      __m128i lineM1d = _mm_loadu_si128 ((__m128i*) &pSrcM1[(y+1)*iSM1Stride + x]);
+      __m128i lineM2u = _mm_loadu_si128 ((__m128i*) &pSrcM2[ y   *iSM2Stride + x]);
+      __m128i lineM2d = _mm_loadu_si128 ((__m128i*) &pSrcM2[(y+1)*iSM2Stride + x]);
 
       __m128i M0 = _mm_add_epi16 (lineM0u, lineM0d);
       __m128i M1 = _mm_add_epi16 (lineM1u, lineM1d);

@@ -104,7 +104,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
       for( int iX = 0; iX < iCols; iX += 8 )
       {
         __m128i Src1 = ( sizeof( Torg ) > 1 ) ? ( _mm_loadu_si128 ( ( const __m128i* )( &pSrc1[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc1[iX] ) ), _mm_setzero_si128() ) );
-        __m128i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm_lddqu_si128( ( const __m128i* )( &pSrc2[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc2[iX] ) ), _mm_setzero_si128() ) );
+        __m128i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc2[iX] ) ), _mm_setzero_si128() ) );
         __m128i Diff = _mm_sub_epi16( Src1, Src2 );
         __m128i Res = _mm_madd_epi16( Diff, Diff );
         Sum = _mm_add_epi32( Sum, Res );
@@ -178,8 +178,8 @@ Distortion RdCost::xGetSSE_NxN_SIMD( const DistParam &rcDtParam )
       {
         for( int iX = 0; iX < iWidth; iX+=16 )
         {
-          __m256i Src1 = ( sizeof( Torg ) > 1 ) ? ( _mm256_lddqu_si256( ( __m256i* )( &pSrc1[iX] ) ) ) : ( _mm256_unpacklo_epi8( _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_lddqu_si128( ( __m128i* )( &pSrc1[iX] ) ) ), 0xD8 ), _mm256_setzero_si256() ) );
-          __m256i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm256_lddqu_si256( ( __m256i* )( &pSrc2[iX] ) ) ) : ( _mm256_unpacklo_epi8( _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_lddqu_si128( ( __m128i* )( &pSrc2[iX] ) ) ), 0xD8 ), _mm256_setzero_si256() ) );
+          __m256i Src1 = ( sizeof( Torg ) > 1 ) ? ( _mm256_lddqu_si256( ( __m256i* )( &pSrc1[iX] ) ) ) : ( _mm256_unpacklo_epi8( _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_loadu_si128( ( __m128i* )( &pSrc1[iX] ) ) ), 0xD8 ), _mm256_setzero_si256() ) );
+          __m256i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm256_lddqu_si256( ( __m256i* )( &pSrc2[iX] ) ) ) : ( _mm256_unpacklo_epi8( _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_loadu_si128( ( __m128i* )( &pSrc2[iX] ) ) ), 0xD8 ), _mm256_setzero_si256() ) );
           __m256i Diff = _mm256_sub_epi16( Src1, Src2 );
           __m256i Res = _mm256_madd_epi16( Diff, Diff );
           Sum = _mm256_add_epi32( Sum, Res );
@@ -203,7 +203,7 @@ Distortion RdCost::xGetSSE_NxN_SIMD( const DistParam &rcDtParam )
         for( int iX = 0; iX < iWidth; iX+=8 )
         {
           __m128i Src1 = ( sizeof( Torg ) > 1 ) ? ( _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc1[iX] ) ), _mm_setzero_si128() ) );
-          __m128i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm_lddqu_si128( ( const __m128i* )( &pSrc2[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc2[iX] ) ), _mm_setzero_si128() ) );
+          __m128i Src2 = ( sizeof( Tcur ) > 1 ) ? ( _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX] ) ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )( &pSrc2[iX] ) ), _mm_setzero_si128() ) );
           __m128i Diff = _mm_sub_epi16( Src1, Src2 );
           __m128i Res = _mm_madd_epi16( Diff, Diff );
           Sum = _mm_add_epi32( Sum, Res );
@@ -273,7 +273,7 @@ Distortion RdCost::xGetSAD_SIMD( const DistParam &rcDtParam )
       for( int iX = 0; iX < iCols; iX+=8 )
       {
         __m128i vsrc1 = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) );
-        __m128i vsrc2 = _mm_lddqu_si128( ( const __m128i* )( &pSrc2[iX] ) );
+        __m128i vsrc2 = _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX] ) );
         vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
       }
       __m128i vsumtemp = _mm_add_epi32( _mm_unpacklo_epi16( vsum16, vzero ), _mm_unpackhi_epi16( vsum16, vzero ) );
@@ -661,10 +661,8 @@ static uint32_t xCalcHAD8x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
   for( int k = 0; k < 8; k++ )
   {
     __m128i r0 = ( sizeof( Torg ) > 1 ) ? ( _mm_loadu_si128( ( __m128i* )piOrg ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )piOrg ), _mm_setzero_si128() ) );
-    __m128i r1 = ( sizeof( Tcur ) > 1 ) ? ( _mm_lddqu_si128( ( __m128i* )piCur ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )piCur ), _mm_setzero_si128() ) ); // th  _mm_loadu_si128( (__m128i*)piCur )
+    __m128i r1 = ( sizeof( Tcur ) > 1 ) ? ( _mm_loadu_si128( ( __m128i* )piCur ) ) : ( _mm_unpacklo_epi8( _vv_loadl_epi64( ( const __m128i* )piCur ), _mm_setzero_si128() ) );
     m2[0][k] = _mm_sub_epi16( r0, r1 ); // 11bit
-    //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
-    //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
     piCur += iStrideCur;
     piOrg += iStrideOrg;
   }
@@ -980,7 +978,7 @@ static uint32_t xCalcHAD16x8_SSE( const Torg *piOrg, const Tcur *piCur, const in
     for( int k = 0; k < 8; k++ )
     {
       __m128i r0 = _mm_loadu_si128( (__m128i*) piOrgPtr );
-      __m128i r1 = _mm_lddqu_si128( (__m128i*) piCurPtr );
+      __m128i r1 = _mm_loadu_si128( (__m128i*) piCurPtr );
       m2[k][l][0] = _mm_sub_epi16( r0, r1 );
       m2[k][l][1] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[k][l][0], 8 ) );
       m2[k][l][0] = _mm_cvtepi16_epi32( m2[k][l][0] );
@@ -1186,7 +1184,7 @@ static uint32_t xCalcHAD8x16_SSE( const Torg *piOrg, const Tcur *piCur, const in
   for( int k = 0; k < 16; k++ )
   {
     __m128i r0 =_mm_loadu_si128( (__m128i*)piOrg );
-    __m128i r1 =_mm_lddqu_si128( (__m128i*)piCur );
+    __m128i r1 =_mm_loadu_si128( (__m128i*)piCur );
     m1[0][k] = _mm_sub_epi16( r0, r1 );
     m1[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][k], 8 ) );
     m1[0][k] = _mm_cvtepi16_epi32( m1[0][k] );
@@ -1374,7 +1372,7 @@ static uint32_t xCalcHAD8x4_SSE( const Torg *piOrg, const Tcur *piCur, const int
   for( int k = 0; k < 4; k++ )
   {
     __m128i r0 = (sizeof( Torg ) > 1) ? (_mm_loadu_si128 ( (__m128i*)piOrg )) : (_mm_unpacklo_epi8( _vv_loadl_epi64( (const __m128i*)piOrg ), _mm_setzero_si128() ));
-    __m128i r1 = (sizeof( Tcur ) > 1) ? (_mm_lddqu_si128( (__m128i*)piCur )) : (_mm_unpacklo_epi8( _vv_loadl_epi64( (const __m128i*)piCur ), _mm_setzero_si128() )); // th  _mm_loadu_si128( (__m128i*)piCur )
+    __m128i r1 = (sizeof( Tcur ) > 1) ? (_mm_loadu_si128( (__m128i*)piCur )) : (_mm_unpacklo_epi8( _vv_loadl_epi64( (const __m128i*)piCur ), _mm_setzero_si128() )); // th  _mm_loadu_si128( (__m128i*)piCur )
     m1[k] = _mm_sub_epi16( r0, r1 );
     piCur += iStrideCur;
     piOrg += iStrideOrg;
@@ -2322,8 +2320,8 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
     {
       for( int k = 0; k < 16; k++ )
       {
-        __m256i r0 = _mm256_cvtepi16_epi32( _mm_lddqu_si128( (__m128i*)piOrg ) );
-        __m256i r1 = _mm256_cvtepi16_epi32( _mm_lddqu_si128( (__m128i*)piCur ) );
+        __m256i r0 = _mm256_cvtepi16_epi32( _mm_loadu_si128( (__m128i*)piOrg ) );
+        __m256i r1 = _mm256_cvtepi16_epi32( _mm_loadu_si128( (__m128i*)piCur ) );
         m1[k] = _mm256_sub_epi32( r0, r1 );
         piCur += iStrideCur;
         piOrg += iStrideOrg;
