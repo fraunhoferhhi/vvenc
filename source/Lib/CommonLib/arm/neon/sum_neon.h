@@ -132,6 +132,15 @@ static inline int32x4_t pairwise_add_s32x4( const int32x4_t a, const int32x4_t b
 #endif
 }
 
+static inline int64_t horizontal_add_s64x2( const int64x2_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddvq_s64( a );
+#else
+  return vgetq_lane_s64( a, 0 ) + vgetq_lane_s64( a, 1 );
+#endif
+}
+
 }  // namespace vvenc
 
 #endif
