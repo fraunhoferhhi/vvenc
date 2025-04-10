@@ -131,12 +131,9 @@ void TCoeffOps::initTCoeffOpsARM()
 void InterPredInterpolation::initInterPredictionARM()
 {
   auto vext = read_arm_extension_flags();
-  switch (vext){
-    case NEON:
-      _initInterPredictionARM<NEON>();
-      break;
-    default:
-      break;
+  if( vext >= NEON )
+  {
+    _initInterPredictionARM<NEON>();
   }
 }
 #endif
