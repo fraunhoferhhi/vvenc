@@ -545,7 +545,7 @@ double calcVarCore( const Pel* org, const ptrdiff_t origStride, const int w, con
   return variance / 256.0;
 }
 
-MCTF::MCTF()
+MCTF::MCTF( bool enableOpt )
   : m_encCfg     ( nullptr )
   , m_threadPool ( nullptr )
   , m_isFinalPass( true )
@@ -566,13 +566,15 @@ MCTF::MCTF()
   m_applyBlock              = applyBlockCore;
   m_calcVar                 = calcVarCore;
 
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
-  initMCTF_X86();
+    initMCTF_X86();
 #endif
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCTF
-  initMCTF_ARM();
+    initMCTF_ARM();
 #endif
-
+  }
 }
 
 MCTF::~MCTF()

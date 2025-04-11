@@ -130,7 +130,7 @@ struct Picture;
 class MCTF : public EncStage
 {
 public:
-  MCTF();
+  MCTF( bool enableOpt = true );
   virtual ~MCTF();
 
   void init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool );
@@ -141,18 +141,19 @@ protected:
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCTF
+#if defined(TARGET_SIMD_X86) && ENABLE_SIMD_OPT_MCTF
   void initMCTF_X86();
   template <X86_VEXT vext>
   void _initMCTF_X86();
 #endif
 
-#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_MCTF
+#if defined(TARGET_SIMD_ARM) && ENABLE_SIMD_OPT_MCTF
   void initMCTF_ARM();
   template <ARM_VEXT vext>
   void _initMCTF_ARM();
 #endif
 
+public:
   int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
   int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
 
