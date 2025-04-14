@@ -52,6 +52,8 @@ set( VVENC_ENABLE_ARM_SIMD_SVE FALSE                 CACHE BOOL "Enable Arm SVE 
 set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE                CACHE BOOL "Enable Arm SVE2 intrinsics" )
 set( VVENC_ENABLE_LOONGARCH64_SIMD_LSX ${VVENC_LOONGARCH64_SIMD_DEFAULT} CACHE BOOL "Enable LoongArch64 LSX intrinsics" )
 
+set( VVENC_ENABLE_UNSTABLE_API            OFF        CACHE BOOL "Enable unstable API" )
+
 check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
 if( VVENC_PROBLEMATIC_COMPILER )
   set( VVENC_OVERRIDE_COMPILER_CHECK      OFF        CACHE BOOL "Build with known problematic compiler version" )
@@ -71,6 +73,12 @@ if( VVENC_PROBLEMATIC_COMPILER )
           "The problematic version range is ${VVENC_PROBLEMATIC_COMPILER_VERSION_RANGE}. Please consider using a different compiler.\n"
           ${VVENC_PROBLEMATIC_COMPILER_MSG_OVERRIDE} )
 endif()
+
+set( VVENC_USE_UNSTABLE_API 0 )
+if( VVENC_ENABLE_UNSTABLE_API )
+  set( VVENC_USE_UNSTABLE_API 1 )
+endif()
+configure_file( include/vvenc/vvenc.h.in ${CMAKE_BINARY_DIR}/vvenc/vvenc.h @ONLY )
 
 # enable sse4.1 build for all source files for gcc and clang
 if( VVENC_ENABLE_X86_SIMD )
@@ -180,8 +188,6 @@ set_property( CACHE VVENC_ENABLE_THIRDPARTY_JSON PROPERTY STRINGS OFF SYSTEM ON 
 set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-feature app: vvencFFapp" )
 
 set( VVENC_ENABLE_WERROR                    ON  CACHE BOOL   "Treat warnings as errors (-Werror or /WX)" )
-
-set( VVENC_ENABLE_UNSTABLE_API              OFF CACHE BOOL   "Enable unstable API" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
@@ -293,13 +299,6 @@ if( VVENC_ENABLE_WERROR )
   add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
   add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
 endif()
-
-set( VVENC_USE_UNSTABLE_API 0 )
-if( VVENC_ENABLE_UNSTABLE_API )
-  set( VVENC_USE_UNSTABLE_API 1 )
-endif()
-
-configure_file( include/vvenc/vvenc.h.in ${CMAKE_BINARY_DIR}/vvenc/vvenc.h @ONLY )
 
 if( VVENC_ENABLE_X86_SIMD )
   if( ( UNIX OR MINGW ) AND VVENC_OPT_TARGET_ARCH )
