@@ -135,7 +135,7 @@ typedef struct vvencYUVBuffer
 {
   vvencYUVPlane planes[ 3 ];           // plane buffer for 3 components (yuv)
   uint64_t      sequenceNumber;        // sequence number of the picture
-  uint64_t      cts;                   // composition time stamp in TicksPerSecond
+  int64_t       cts;                   // composition time stamp in TicksPerSecond
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 #if VVENC_USE_UNSTABLE_API
   void*         userData;              // user data to be returned in corresponding access unit
@@ -188,8 +188,8 @@ typedef struct vvencAccessUnit
   int             payloadSize;         // size of the allocated buffer in bytes
   int             payloadUsedSize;     // length of the coded data in bytes
 
-  uint64_t        cts;                 // composition time stamp in TicksPerSecond (see vvenc_config)
-  uint64_t        dts;                 // decoding time stamp in TicksPerSecond (see vvenc_config)
+  int64_t         cts;                 // composition time stamp in TicksPerSecond (see vvenc_config)
+  int64_t         dts;                 // decoding time stamp in TicksPerSecond (see vvenc_config)
   bool            ctsValid;            // composition time stamp valid flag (true: valid, false: CTS not set)
   bool            dtsValid;            // decoding time stamp valid flag (true: valid, false: DTS not set)
   bool            rap;                 // random access point flag (true: AU is random access point, false: sequential access)
