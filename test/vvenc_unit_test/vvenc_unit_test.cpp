@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <time.h>
 
+#include "CommonLib/InterPrediction.h"
 #include "CommonLib/MCTF.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
@@ -71,8 +72,9 @@ static inline bool compare_value( const std::string& context, const T ref, const
   return opt == ref;
 }
 
-static inline bool compare_values_2d( const std::string& context, const TCoeff* ref, const TCoeff* opt, unsigned rows,
-                               unsigned cols, unsigned stride = 0 )
+template<typename T>
+static inline bool compare_values_2d( const std::string& context, const T* ref, const T* opt, unsigned rows,
+                                      unsigned cols, unsigned stride = 0 )
 {
   stride = stride != 0 ? stride : cols;
 
@@ -360,6 +362,98 @@ static bool test_MCTF()
 }
 #endif
 
+#if ENABLE_SIMD_OPT_BDOF
+template<typename G>
+static bool check_one_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
+                                    ptrdiff_t dstStride, int shift, int offset, int limit, ClpRng clpRng, int bitDepth,
+                                    G input_generator )
+{
+  CHECK( width % 8, "Width must be a multiple of eight" );
+  CHECK( height % 8, "Height must be a multiple of eight" );
+
+  std::ostringstream sstm;
+  sstm << "biDirOptFlow width=" << width << " height=" << height << " shift=" << shift << " offset=" << offset
+       << " limit=" << limit;
+
+  int srcStride = width + 2 * BDOF_EXTEND_SIZE + 2;
+  int gradStride = width + 2;
+
+  std::vector<Pel> srcY0( srcStride * ( height + 2 ) );
+  std::vector<Pel> srcY1( srcStride * ( height + 2 ) );
+  std::vector<Pel> gradX0( gradStride * ( height + 2 ) );
+  std::vector<Pel> gradX1( gradStride * ( height + 2 ) );
+  std::vector<Pel> gradY0( gradStride * ( height + 2 ) );
+  std::vector<Pel> gradY1( gradStride * ( height + 2 ) );
+  std::vector<Pel> dstYref( dstStride * height );
+  std::vector<Pel> dstYopt( dstStride * height );
+
+  // Initialize source buffers.
+  std::generate( srcY0.begin(), srcY0.end(), input_generator );
+  std::generate( srcY1.begin(), srcY1.end(), input_generator );
+  std::generate( gradX0.begin(), gradX0.end(), input_generator );
+  std::generate( gradX1.begin(), gradX1.end(), input_generator );
+  std::generate( gradY0.begin(), gradY0.end(), input_generator );
+  std::generate( gradY1.begin(), gradY1.end(), input_generator );
+
+  ref->xFpBiDirOptFlow( srcY0.data(), srcY1.data(), gradX0.data(), gradX1.data(), gradY0.data(), gradY1.data(), width,
+                        height, dstYref.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
+  opt->xFpBiDirOptFlow( srcY0.data(), srcY1.data(), gradX0.data(), gradX1.data(), gradY0.data(), gradY1.data(), width,
+                        height, dstYopt.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
+  return compare_values_2d( sstm.str(), dstYref.data(), dstYopt.data(), height, dstStride );
+}
+
+static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolation* opt, unsigned num_cases, int width,
+                                int height )
+{
+  printf( "Testing InterPred::xFpBiDirOptFlow w=%d h=%d\n", width, height );
+  InputGenerator<Pel> g{ 10 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    // Width is either 8 or 16.
+    // DstStride is a multiple of eight in the range width to 128 inclusive.
+    unsigned dstStride = rng.get( width, 128, 8 );
+
+    for( int bitDepth = 8; bitDepth <= 10; bitDepth += 2 )
+    {
+      const unsigned shift = IF_INTERNAL_PREC + 1 - bitDepth;
+      const int offset = ( 1 << ( shift - 1 ) ) + 2 * IF_INTERNAL_OFFS;
+      const int limit = ( 1 << 4 ) - 1;
+      ClpRng clpRng{ bitDepth };
+
+      if( !check_one_biDirOptFlow( ref, opt, width, height, dstStride, shift, offset, limit, clpRng, bitDepth, g ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+static bool test_InterPred()
+{
+  InterPredInterpolation ref;
+  InterPredInterpolation opt;
+
+  ref.init( /*enableOpt=*/false );
+  opt.init( /*enableOpt=*/true );
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  for( unsigned width = 8; width <= 16; width += 8 )
+  {
+    for( unsigned height = 8; height <= 16; height += 8 )
+    {
+      passed = check_biDirOptFlow( &ref, &opt, num_cases, width, height ) && passed;
+    }
+  }
+  return passed;
+}
+#endif
+
 int main( int argc, char** argv )
 {
   unsigned seed = ( unsigned ) time( NULL );
@@ -370,9 +464,11 @@ int main( int argc, char** argv )
 #if ENABLE_SIMD_TRAFO
   passed = test_TCoeffOps() && passed;
 #endif
-
 #if ENABLE_SIMD_OPT_MCTF
   passed = test_MCTF() && passed;
+#endif
+#if ENABLE_SIMD_OPT_BDOF
+  passed = test_InterPred() && passed;
 #endif
 
   if( !passed )
