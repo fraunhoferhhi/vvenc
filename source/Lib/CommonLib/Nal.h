@@ -192,8 +192,8 @@ public:
     std::list<NALUnitEBSP*>::clear();
   }
 
-  uint64_t        cts;                                   ///< composition time stamp
-  uint64_t        dts;                                   ///< decoding time stamp
+  int64_t         cts;                                   ///< composition time stamp
+  int64_t         dts;                                   ///< decoding time stamp
   uint64_t        poc;                                   ///< picture order count
   vvencSliceType  sliceType;                              ///< slice type (I/P/B) */
   int             temporalLayer;                          ///< temporal layer
