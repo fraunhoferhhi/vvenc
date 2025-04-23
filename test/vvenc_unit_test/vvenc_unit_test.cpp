@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/InterPrediction.h"
+#include "CommonLib/IntraPrediction.h"
 #include "CommonLib/MCTF.h"
 #include "CommonLib/RdCost.h"
 #include "CommonLib/TrQuant_EMT.h"
@@ -72,6 +73,21 @@ static inline bool compare_value( const std::string& context, const T ref, const
               << "  mismatch:  ref=" << ref << "  opt=" << opt << "\n";
   }
   return opt == ref;
+}
+
+template<typename T>
+static inline bool compare_values_1d( const std::string& context, const T* ref, const T* opt, unsigned length )
+{
+  for( unsigned idx = 0; idx < length; ++idx )
+  {
+    if( ref[idx] != opt[idx] )
+    {
+      std::cout << "failed: " << context << "\n"
+                << "  mismatch:  ref[" << idx << "]=" << ref[idx] << "  opt[" << idx << "]=" << opt[idx] << "\n";
+      return false;
+    }
+  }
+  return true;
 }
 
 template<typename T>
@@ -149,6 +165,72 @@ public:
     return ret;
   }
 };
+
+#if ENABLE_SIMD_OPT_INTRAPRED
+static bool check_IntraPredAngleLuma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  static constexpr int bd = 10; // default bit-depth = 10
+  ClpRng clpRng{ bd };
+  DimensionGenerator dim;
+  InputGenerator<Pel> ref_gen{ bd, /*is_signed=*/false }; // unsigned 10-bit
+
+  ptrdiff_t dstStride = MAX_CU_SIZE;
+  static constexpr size_t refMain_size = 2 * MAX_CU_SIZE + 3 + 33 * MAX_REF_LINE_IDX;
+  static constexpr size_t dstBuf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+  std::vector<Pel> refMain( refMain_size );
+  std::vector<Pel> dstBuf_ref( dstBuf_size );
+  std::vector<Pel> dstBuf_opt( dstBuf_size );
+
+  bool passed = true;
+
+  for( bool useCubic : { true, false } )
+  {
+    std::ostringstream sstm_test;
+    sstm_test << "IntraPrediction::IntraPredAngleLuma" << " useCubic=" << std::boolalpha << useCubic;
+    std::cout << "Testing " << sstm_test.str() << '\n';
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      int log2width = dim.get( 2, 6 );
+      int log2height = dim.get( 2, 6 );
+      int width = 1 << log2width;   // min: 4, max: 64
+      int height = 1 << log2height; // min: 4, max: 64
+      int deltaPos = dim.get( 16, 128 );
+      int intraPredAngle = deltaPos;
+
+      std::generate( refMain.begin(), refMain.end(), ref_gen );
+      std::fill( dstBuf_ref.begin(), dstBuf_ref.end(), Pel{} );
+      std::fill( dstBuf_opt.begin(), dstBuf_opt.end(), Pel{} );
+
+      ref->IntraPredAngleLuma( dstBuf_ref.data(), dstStride, refMain.data(), width, height, deltaPos, intraPredAngle,
+                               nullptr, useCubic, clpRng );
+      opt->IntraPredAngleLuma( dstBuf_opt.data(), dstStride, refMain.data(), width, height, deltaPos, intraPredAngle,
+                               nullptr, useCubic, clpRng );
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " width=" << width << " height=" << height << " deltaPos=" << deltaPos
+                   << " intraPredAngle=" << intraPredAngle;
+
+      passed = compare_values_1d( sstm_subtest.str(), dstBuf_ref.data(), dstBuf_opt.data(), dstBuf_size ) && passed;
+    }
+  }
+
+  return passed;
+}
+
+static bool test_IntraPred()
+{
+  IntraPrediction ref{ /*enableOpt=*/false };
+  IntraPrediction opt{ /*enableOpt=*/true };
+
+  unsigned num_cases = NUM_CASES;
+  bool passed        = true;
+
+  passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_INTRAPRED
 
 #if ENABLE_SIMD_TRAFO
 template<typename G, typename T>
@@ -669,6 +751,9 @@ int main( int argc, char** argv )
 
   bool passed = true;
 
+#if ENABLE_SIMD_OPT_INTRAPRED
+  passed = test_IntraPred() && passed;
+#endif
 #if ENABLE_SIMD_TRAFO
   passed = test_TCoeffOps() && passed;
 #endif
