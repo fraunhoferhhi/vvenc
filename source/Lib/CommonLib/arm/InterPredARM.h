@@ -46,241 +46,171 @@ POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
-
 #include "CommonDefARM.h"
-#include "Rom.h"
 #include "InterPrediction.h"
-
-
+#include "Rom.h"
+#include "neon/sum_neon.h"
 
 //! \ingroup CommonLib
 //! \{
 
 namespace vvenc {
 
-static inline int rightShiftMSB(int numer, int denom)
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
+
+static inline int rightShiftMSB( int numer, int denom )
 {
-  int shiftIdx = bit_scan_reverse(denom);
-  return (numer >> shiftIdx);
+  int shiftIdx = bit_scan_reverse( denom );
+  return numer >> shiftIdx;
 }
 
-#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
-#if __ARM_ARCH >= 8
+static inline int16x8_t signum_neon( int16x8_t x )
+{
+  x = vqshlq_n_s16( x, 15 );
+  return vrshrq_n_s16( x, 15 );
+}
 
-
-template< ARM_VEXT vext >
-static inline void calcBIOSums_Neon(const Pel* srcY0Tmp, const Pel* srcY1Tmp, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0, const Pel* gradY1, const int widthG, const int bitDepth, int limit, int &tmpx, int &tmpy)
+static inline void calcBIOSums_neon( const Pel* srcY0Tmp, const Pel* srcY1Tmp, const Pel* gradX0, const Pel* gradX1,
+                                     const Pel* gradY0, const Pel* gradY1, int gradOfs, const int widthG,
+                                     const int bitDepth, int limit, int& tmpx, int& tmpy )
 {
   const int srcStride = widthG + 2;
-  int16x8_t sumAbsGXTmp    = vdupq_n_s16(0);
-  int16x8_t sumDIXTmp      = vdupq_n_s16(0);
-  int16x8_t sumAbsGYTmp    = vdupq_n_s16(0);
-  int16x8_t sumDIYTmp      = vdupq_n_s16(0);
-  int16x8_t sumSignGyGxTmp = vdupq_n_s16(0);
-  int16_t vals[8] = {1, 1, 1, 1, 1, 1, 0, 0};
-  int16x8_t x = vld1q_s16(vals);
+  int16x8_t sumAbsGXTmp = vdupq_n_s16( 0 );
+  int16x8_t sumDIXTmp = vdupq_n_s16( 0 );
+  int16x8_t sumAbsGYTmp = vdupq_n_s16( 0 );
+  int16x8_t sumDIYTmp = vdupq_n_s16( 0 );
+  int16x8_t sumSignGyGxTmp = vdupq_n_s16( 0 );
+  int16_t mask6_arr[8] = { ~0, ~0, ~0, ~0, ~0, ~0, 0, 0 };
+  int16x8_t mask6 = vld1q_s16( mask6_arr );
 
-  for (int y = 0; y < 3; y++)
+  for( int y = 0; y < 6; y++ )
   {
-    int16x8_t shiftSrcY0Tmp = vshrq_n_s16(vld1q_s16((int16_t*)(srcY0Tmp)), 4);
-    int16x8_t shiftSrcY1Tmp = vshrq_n_s16(vld1q_s16((int16_t*)(srcY1Tmp)), 4);
+    int16x8_t shiftSrcY0Tmp = vshrq_n_s16( vld1q_s16( ( int16_t* )( srcY0Tmp ) ), 4 );
+    int16x8_t shiftSrcY1Tmp = vshrq_n_s16( vld1q_s16( ( int16_t* )( srcY1Tmp ) ), 4 );
 
-    int16x8_t loadGradX0    = vld1q_s16((int16_t*)(gradX0));
-    int16x8_t loadGradX1    = vld1q_s16((int16_t*)(gradX1));
-    int16x8_t loadGradY0    = vld1q_s16((int16_t*)(gradY0));
-    int16x8_t loadGradY1    = vld1q_s16((int16_t*)(gradY1));
-    int16x8_t subTemp1      = vsubq_s16(shiftSrcY1Tmp, shiftSrcY0Tmp);
-    int16x8_t packTempX     =  vshrq_n_s16( vaddq_s16(loadGradX0, loadGradX1), 1 );
-    int16x8_t packTempY     =  vshrq_n_s16( vaddq_s16(loadGradY0, loadGradY1), 1 );
-    int16x8_t gX            = vabsq_s16(packTempX);
-    int16x8_t gY            = vabsq_s16(packTempY);
-    int16x8_t dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempX, vdupq_n_s16(0)), vcgeq_s16(packTempX,vdupq_n_s16(0)) )));
-    int16x8_t dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
-    int16x8_t signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
-    
-    sumAbsGXTmp     = vaddq_s16(sumAbsGXTmp, gX);
-    sumAbsGYTmp     = vaddq_s16(sumAbsGYTmp, gY);
-    sumDIXTmp       = vaddq_s16(sumDIXTmp, dIX);
-    sumDIYTmp       = vaddq_s16(sumDIYTmp, dIY);
-    sumSignGyGxTmp  = vaddq_s16(sumSignGyGxTmp, signGY_GX);
+    int16x8_t loadGradX0 = vld1q_s16( ( int16_t* )( gradX0 + gradOfs ) );
+    int16x8_t loadGradX1 = vld1q_s16( ( int16_t* )( gradX1 + gradOfs ) );
+    int16x8_t loadGradY0 = vld1q_s16( ( int16_t* )( gradY0 + gradOfs ) );
+    int16x8_t loadGradY1 = vld1q_s16( ( int16_t* )( gradY1 + gradOfs ) );
+    int16x8_t subTemp1 = vsubq_s16( shiftSrcY1Tmp, shiftSrcY0Tmp );
+    int16x8_t packTempX = vhaddq_s16( loadGradX0, loadGradX1 );
+    int16x8_t packTempY = vhaddq_s16( loadGradY0, loadGradY1 );
+
+    int16x8_t signX = signum_neon( packTempX );
+    int16x8_t signY = signum_neon( packTempY );
+
+    sumAbsGXTmp = vabaq_s16( sumAbsGXTmp, packTempX, vdupq_n_s16( 0 ) );
+    sumAbsGYTmp = vabaq_s16( sumAbsGYTmp, packTempY, vdupq_n_s16( 0 ) );
+    sumDIXTmp = vmlaq_s16( sumDIXTmp, subTemp1, signX );
+    sumDIYTmp = vmlaq_s16( sumDIYTmp, subTemp1, signY );
+    sumSignGyGxTmp = vmlaq_s16( sumSignGyGxTmp, packTempX, signY );
 
     srcY0Tmp += srcStride;
     srcY1Tmp += srcStride;
-    gradX0 += widthG;
-    gradX1 += widthG;
-    gradY0 += widthG;
-    gradY1 += widthG;
-
-    shiftSrcY0Tmp = vshrq_n_s16(vld1q_s16((int16_t*)(srcY0Tmp)), 4);
-    shiftSrcY1Tmp = vshrq_n_s16(vld1q_s16((int16_t*)(srcY1Tmp)), 4);
-
-    loadGradX0    = vld1q_s16((int16_t*)(gradX0));
-    loadGradX1    = vld1q_s16((int16_t*)(gradX1));
-    loadGradY0    = vld1q_s16((int16_t*)(gradY0));
-    loadGradY1    = vld1q_s16((int16_t*)(gradY1));
-    subTemp1      = vsubq_s16(shiftSrcY1Tmp, shiftSrcY0Tmp);
-    packTempX     =  vshrq_n_s16( vaddq_s16(loadGradX0, loadGradX1), 1 );
-    packTempY     =  vshrq_n_s16( vaddq_s16(loadGradY0, loadGradY1), 1 );
-
-    gX            = vabsq_s16(packTempX);
-    gY            = vabsq_s16(packTempY);
-    
-    dIX           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempX, vdupq_n_s16(0)), vcgeq_s16(packTempX,vdupq_n_s16(0)) )));
-    dIY           = vmulq_s16(subTemp1,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
-    signGY_GX     = vmulq_s16(packTempX,vreinterpretq_s16_u16( vsubq_u16( vcleq_s16(packTempY, vdupq_n_s16(0)), vcgeq_s16(packTempY,vdupq_n_s16(0)) )));
-  
-    sumAbsGXTmp     = vaddq_s16(sumAbsGXTmp, gX);
-    sumAbsGYTmp     = vaddq_s16(sumAbsGYTmp, gY);
-    sumDIXTmp       = vaddq_s16(sumDIXTmp, dIX);
-    sumDIYTmp       = vaddq_s16(sumDIYTmp, dIY);
-    sumSignGyGxTmp  = vaddq_s16(sumSignGyGxTmp, signGY_GX);
-
-    srcY0Tmp += srcStride;
-    srcY1Tmp += srcStride;
-    gradX0 += widthG;
-    gradX1 += widthG;
-    gradY0 += widthG;
-    gradY1 += widthG;
+    gradOfs += widthG;
   }
 
-  int sumAbsGX = vaddvq_s16(vmulq_s16( sumAbsGXTmp, x));
-  int sumAbsGY = vaddvq_s16(vmulq_s16( sumAbsGYTmp, x));
-  int sumDIX   = vaddvq_s16(vmulq_s16( sumDIXTmp, x));
-  int sumDIY   = vaddvq_s16(vmulq_s16( sumDIYTmp, x));
-  int sumSignGY_GX  = vaddvq_s16(vmulq_s16( sumSignGyGxTmp, x));
+  int sumAbsGX = horizontal_add_s16x8( vandq_s16( sumAbsGXTmp, mask6 ) );
+  int sumAbsGY = horizontal_add_s16x8( vandq_s16( sumAbsGYTmp, mask6 ) );
+  int sumDIX = horizontal_add_s16x8( vandq_s16( sumDIXTmp, mask6 ) );
+  int sumDIY = horizontal_add_s16x8( vandq_s16( sumDIYTmp, mask6 ) );
+  int sumSignGY_GX = horizontal_add_s16x8( vandq_s16( sumSignGyGxTmp, mask6 ) );
 
   tmpx = sumAbsGX == 0 ? 0 : rightShiftMSB( sumDIX << 2, sumAbsGX );
   tmpx = Clip3( -limit, limit, tmpx );
 
   int mainsGxGy = sumSignGY_GX >> 12;
-  int secsGxGy  = sumSignGY_GX & ( ( 1 << 12 ) - 1 );
-  int tmpData   = tmpx * mainsGxGy;
-  tmpData       = ( ( tmpData << 12 ) + tmpx * secsGxGy ) >> 1;
+  int secsGxGy = sumSignGY_GX & ( ( 1 << 12 ) - 1 );
+  int tmpData = tmpx * mainsGxGy;
+  tmpData = ( ( tmpData << 12 ) + tmpx * secsGxGy ) >> 1;
   tmpy = sumAbsGY == 0 ? 0 : rightShiftMSB( ( ( sumDIY << 2 ) - tmpData ), sumAbsGY );
   tmpy = Clip3( -limit, limit, tmpy );
 }
 
-template<ARM_VEXT vext>
-static inline void addBIOAvg4_Neon(const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride, const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0, const int16_t* gradY1, ptrdiff_t widthG, int tmpx, int tmpy, int shift, int offset, const ClpRng& clpRng)
+static inline void addBIOAvg4_neon( const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride,
+                                    const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0,
+                                    const int16_t* gradY1, int gradOfs, ptrdiff_t widthG, int tmpx, int tmpy, int shift,
+                                    int offset, const ClpRng& clpRng )
 {
-  const ptrdiff_t src0Stride = widthG + 2;
-  const ptrdiff_t src1Stride = widthG + 2;
+  const ptrdiff_t srcStride = widthG + 2;
   const ptrdiff_t gradStride = widthG;
-  int32x4_t mm_offset  = vdupq_n_s32( offset );
-  int16x4_t vibdimin   = vdup_n_s16( clpRng.min() );
-  int16x4_t vibdimax   = vdup_n_s16( clpRng.max() );
+  const int32x4_t voffset = vdupq_n_s32( offset );
+  const uint16x4_t vibdimax = vdup_n_u16( clpRng.max() );
 
-  int16x4_t mm_a;
-  int16x4_t mm_b;
-  int32x4_t mm_sum;
-  int16x4_t mm_sum3;
-
-  for( int y = 0; y < 2; y++)
+  for( int y = 0; y < 4; y++ )
   {
-    mm_sum = vdupq_n_s32(0);
 
-    mm_a   = vsub_s16 ( vld1_s16( (const int16_t *) gradX0 ), vld1_s16( (const int16_t *) gradX1 ) );
-    mm_b   = vsub_s16 ( vld1_s16( (const int16_t *) gradY0 ), vld1_s16( (const int16_t *) gradY1 ) );
+    int16x4_t a = vsub_s16( vld1_s16( ( const int16_t* )( gradX0 + gradOfs ) ),
+                            vld1_s16( ( const int16_t* )( gradX1 + gradOfs ) ) );
+    int16x4_t b = vsub_s16( vld1_s16( ( const int16_t* )( gradY0 + gradOfs ) ),
+                            vld1_s16( ( const int16_t* )( gradY1 + gradOfs ) ) );
 
-    mm_sum   = vmlal_n_s16      (mm_sum, mm_a, tmpx);
-    mm_sum   = vmlal_n_s16      (mm_sum, mm_b, tmpy);
-    mm_sum = vaddq_s32      ( vaddw_s16( mm_sum, vld1_s16( (const int16_t *) ( src0 ) ) ), vaddw_s16( mm_offset, vld1_s16( (const int16_t *) ( src1 ) )) );
-    mm_sum3 = vmin_s16 (vibdimax, vmax_s16(vibdimin, vqmovn_s32(vshlq_s32( mm_sum, vdupq_n_s32(-1*shift) ))));    
+    int16x4_t s0 = vld1_s16( ( const int16_t* )( src0 ) );
+    int16x4_t s1 = vld1_s16( ( const int16_t* )( src1 ) );
+    int32x4_t s01 = vaddl_s16( s0, s1 );
 
-    vst1_s16((int16_t *)dst, mm_sum3);
+    int32x4_t sum = vaddq_s32( voffset, s01 );
+    sum = vmlal_n_s16( sum, a, tmpx );
+    sum = vmlal_n_s16( sum, b, tmpy );
+    int16x4_t sum3 =
+        vreinterpret_s16_u16( vmin_u16( vibdimax, vqmovun_s32( vshlq_s32( sum, vdupq_n_s32( -shift ) ) ) ) );
 
-    dst += dstStride;
-    src0 += src0Stride; 
-    src1 += src1Stride; 
-    gradX0 += gradStride;
-    gradX1 += gradStride;
-    gradY0 += gradStride;
-    gradY1 += gradStride;
-
-    mm_sum = vdupq_n_s32(0);
-
-    mm_a   = vsub_s16 ( vld1_s16( (const int16_t *) gradX0 ), vld1_s16( (const int16_t *) gradX1 ) );
-    mm_b   = vsub_s16 ( vld1_s16( (const int16_t *) gradY0 ), vld1_s16( (const int16_t *) gradY1 ) );
-
-    mm_sum   = vmlal_n_s16      (mm_sum, mm_a, tmpx);
-    mm_sum   = vmlal_n_s16      (mm_sum, mm_b, tmpy);
-    mm_sum = vaddq_s32      ( vaddw_s16( mm_sum, vld1_s16( (const int16_t *) ( src0 ) ) ), vaddw_s16( mm_offset, vld1_s16( (const int16_t *) ( src1 ) )) );
-    mm_sum3 = vmin_s16 (vibdimax, vmax_s16(vibdimin, vqmovn_s32(vshlq_s32( mm_sum, vdupq_n_s32(-1*shift) ))));    
-
-    vst1_s16((int16_t *)dst, mm_sum3);
+    vst1_s16( ( int16_t* )dst, sum3 );
 
     dst += dstStride;
-    src0 += src0Stride; 
-    src1 += src1Stride; 
-    gradX0 += gradStride;
-    gradX1 += gradStride;
-    gradY0 += gradStride;
-    gradY1 += gradStride;
+    src0 += srcStride;
+    src1 += srcStride;
+    gradOfs += gradStride;
   }
 }
 
-template< ARM_VEXT vext>
-void BiOptFlowCoreARMSIMD( const Pel* srcY0,
-                        const Pel* srcY1,
-                        const Pel* gradX0,
-                        const Pel* gradX1,
-                        const Pel* gradY0,
-                        const Pel* gradY1,
-                        const int  width,
-                        const int  height,
-                              Pel* dstY,
-                        const ptrdiff_t dstStride,
-                        const int  shiftNum,
-                        const int  offset,
-                        const int  limit,
-                        const ClpRng& clpRng,
-                        const int bitDepth )
+template<ARM_VEXT vext>
+void BiOptFlowCoreARMSIMD( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0,
+                           const Pel* gradY1, const int width, const int height, Pel* dstY, const ptrdiff_t dstStride,
+                           const int shiftNum, const int offset, const int limit, const ClpRng& clpRng,
+                           const int bitDepth )
 {
-  const int widthG        = width  + 2 * BDOF_EXTEND_SIZE;
-  const int stridePredMC  = widthG + 2;
-        int offsetPos     = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
-  const int xUnit         = ( width  >> 2 );
-  const int yUnit         = ( height >> 2 );
+  const int widthG = width + 2 * BDOF_EXTEND_SIZE;
+  const int stridePredMC = widthG + 2;
+  const int xUnit = width >> 2;
+  const int yUnit = height >> 2;
+  int offsetPos = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
 
-  const Pel* srcY0Temp;
-  const Pel* srcY1Temp;
-        Pel *dstY0;
-  
-  int OffPos;
-  int OffPad = 0;
-
-  for( int yu = 0; yu < yUnit; yu++, srcY0 += ( stridePredMC << 2 ), srcY1 += ( stridePredMC << 2 ), dstY += ( dstStride << 2 ), offsetPos += ( widthG << 2 ) )
+  for( int yu = 0; yu < yUnit; yu++ )
   {
-    srcY0Temp = srcY0;
-    srcY1Temp = srcY1;
-    dstY0     = dstY;
-    
-    OffPos = offsetPos;
-    OffPad = ( ( yu * widthG ) << 2 );
-    for( int xu = 0; xu < xUnit; xu++, srcY0Temp += 4, srcY1Temp += 4, dstY0 += 4, OffPos += 4, OffPad += 4 )
+    const Pel* srcY0Temp = srcY0;
+    const Pel* srcY1Temp = srcY1;
+    Pel* dstY0 = dstY;
+
+    int OffPos = offsetPos;
+    int OffPad = ( yu * widthG ) << 2;
+    for( int xu = 0; xu < xUnit; xu++ )
     {
       int tmpx, tmpy;
+      calcBIOSums_neon( srcY0Temp, srcY1Temp, gradX0, gradX1, gradY0, gradY1, OffPad, widthG, bitDepth, limit, tmpx,
+                        tmpy );
+      addBIOAvg4_neon( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0, gradX1,
+                       gradY0, gradY1, OffPos, widthG, tmpx, tmpy, shiftNum, offset, clpRng );
 
-      calcBIOSums_Neon<vext>( srcY0Temp, srcY1Temp, gradX0 + OffPad, gradX1 + OffPad, gradY0 + OffPad, gradY1 + OffPad, widthG, bitDepth, limit, tmpx, tmpy );
+      srcY0Temp += 4;
+      srcY1Temp += 4;
+      dstY0 += 4;
+      OffPos += 4;
+      OffPad += 4;
+    }
 
-      addBIOAvg4_Neon<vext> ( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0 + OffPos, gradX1 + OffPos, gradY0 + OffPos, gradY1 + OffPos, widthG, tmpx, tmpy, shiftNum, offset, clpRng );
-    }  
-  }  
+    srcY0 += stridePredMC << 2;
+    srcY1 += stridePredMC << 2;
+    dstY += dstStride << 2;
+    offsetPos += widthG << 2;
+  }
 }
-
 
 template<ARM_VEXT vext>
 void InterPredInterpolation::_initInterPredictionARM()
 {
   xFpBiDirOptFlow     = BiOptFlowCoreARMSIMD<vext>;
 }
-
-#else
-
-template<ARM_VEXT vext>
-void InterPredInterpolation::_initInterPredictionARM()
-{}
-#endif
 
 template void InterPredInterpolation::_initInterPredictionARM<SIMDARM>();
 
