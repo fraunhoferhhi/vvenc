@@ -898,8 +898,8 @@ int checkSDKStringApiInvalid()
 
 static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMissingFrames = false ) 
 {
-  int64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate : 1;  // expected cts diff between frames
-  int64_t ctsOffset = (c.m_TicksPerSecond > 0) ? c.m_TicksPerSecond : c.m_FrameRate  / c.m_FrameScale;     // start with offset 1sec, to generate  cts/dts > 0
+  int64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? (int64_t)c.m_TicksPerSecond * (int64_t)c.m_FrameScale / (int64_t)c.m_FrameRate : 1;  // expected cts diff between frames
+  int64_t ctsOffset = (c.m_TicksPerSecond > 0) ? (int64_t)c.m_TicksPerSecond : (int64_t)c.m_FrameRate  / (int64_t)c.m_FrameScale;     // start with offset 1sec, to generate  cts/dts > 0
   //std::cout << "test framerate " << c.m_FrameRate << "/" << c.m_FrameScale << " TicksPerSecond  " << c.m_TicksPerSecond << " ctsDiff " << ctsDiff << " framesToEncode " << framesToEncode  << std::endl;
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )
