@@ -154,7 +154,10 @@ void gradFilterCore(const Pel* pSrc, int srcStride, int width, int height, int g
   }
 }
 
-void calcBDOFSumsCore(const Pel* srcY0Tmp, const Pel* srcY1Tmp, Pel* gradX0, Pel* gradX1, Pel* gradY0, Pel* gradY1, int xu, int yu, const int src0Stride, const int src1Stride, const int widthG, const int bitDepth, int* sumAbsGX, int* sumAbsGY, int* sumDIX, int* sumDIY, int* sumSignGY_GX)
+void calcBDOFSumsCore( const Pel* srcY0Tmp, const Pel* srcY1Tmp, const Pel* gradX0, const Pel* gradX1,
+                       const Pel* gradY0, const Pel* gradY1, int xu, int yu, const int src0Stride, const int src1Stride,
+                       const int widthG, const int bitDepth, int* sumAbsGX, int* sumAbsGY, int* sumDIX, int* sumDIY,
+                       int* sumSignGY_GX )
 {
   int shift4 = 4;
   int shift5 = 1;
@@ -596,6 +599,67 @@ void InterPrediction::xSubPuMC(CodingUnit& cu, PelUnitBuf& predBuf, const RefPic
   cu.affine = isAffine;
 }
 
+static inline int xRightShiftMSB( int numer, int denom )
+{
+  return numer >> floorLog2( denom );
+}
+
+void xFpBiDirOptFlowCore( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0,
+                          const Pel* gradY1, const int width, const int height, Pel* dstY, const ptrdiff_t dstStride,
+                          const int shiftNum, const int offset, const int limit, const ClpRng& clpRng,
+                          const int bitDepth )
+{
+  int xUnit = width >> 2;
+  int yUnit = height >> 2;
+  int widthG = width + 2 * BDOF_EXTEND_SIZE;
+
+  int offsetPos = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
+  int stridePredMC = widthG + 2;
+
+  const int src0Stride = stridePredMC;
+  const int src1Stride = stridePredMC;
+
+  const Pel* srcY0Temp = srcY0;
+  const Pel* srcY1Temp = srcY1;
+
+  for( int yu = 0; yu < yUnit; yu++ )
+  {
+    for( int xu = 0; xu < xUnit; xu++ )
+    {
+      int tmpx = 0, tmpy = 0;
+      int sumAbsGX = 0, sumAbsGY = 0, sumDIX = 0, sumDIY = 0;
+      int sumSignGY_GX = 0;
+
+      const Pel* pGradX0Tmp = gradX0 + ( xu << 2 ) + ( yu << 2 ) * widthG;
+      const Pel* pGradX1Tmp = gradX1 + ( xu << 2 ) + ( yu << 2 ) * widthG;
+      const Pel* pGradY0Tmp = gradY0 + ( xu << 2 ) + ( yu << 2 ) * widthG;
+      const Pel* pGradY1Tmp = gradY1 + ( xu << 2 ) + ( yu << 2 ) * widthG;
+      const Pel* SrcY1Tmp = srcY1 + ( xu << 2 ) + ( yu << 2 ) * src1Stride;
+      const Pel* SrcY0Tmp = srcY0 + ( xu << 2 ) + ( yu << 2 ) * src0Stride;
+
+      calcBDOFSumsCore( SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride,
+                        src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX );
+      tmpx = ( sumAbsGX == 0 ? 0 : xRightShiftMSB( 4 * sumDIX, sumAbsGX ) );
+      tmpx = Clip3( -limit, limit, tmpx );
+
+      const int tmpData = sumSignGY_GX * tmpx >> 1;
+      tmpy = ( sumAbsGY == 0 ? 0 : xRightShiftMSB( ( 4 * sumDIY - tmpData ), sumAbsGY ) );
+      tmpy = Clip3( -limit, limit, tmpy );
+
+      srcY0Temp = srcY0 + ( stridePredMC + 1 ) + ( ( yu * src0Stride + xu ) << 2 );
+      srcY1Temp = srcY1 + ( stridePredMC + 1 ) + ( ( yu * src0Stride + xu ) << 2 );
+      pGradX0Tmp = gradX0 + offsetPos + ( ( yu * widthG + xu ) << 2 );
+      pGradX1Tmp = gradX1 + offsetPos + ( ( yu * widthG + xu ) << 2 );
+      pGradY0Tmp = gradY0 + offsetPos + ( ( yu * widthG + xu ) << 2 );
+      pGradY1Tmp = gradY1 + offsetPos + ( ( yu * widthG + xu ) << 2 );
+
+      Pel* dstY0 = dstY + ( ( yu * dstStride + xu ) << 2 );
+      addBDOFAvgCore( srcY0Temp, src0Stride, srcY1Temp, src1Stride, dstY0, dstStride, pGradX0Tmp, pGradX1Tmp,
+                      pGradY0Tmp, pGradY1Tmp, widthG, ( 1 << 2 ), ( 1 << 2 ), tmpx, tmpy, shiftNum, offset, clpRng );
+    } // xu
+  } // yu
+}
+
 InterPredInterpolation::InterPredInterpolation()
   : m_storedMv(nullptr)
   , m_skipPROF(false)
@@ -639,7 +703,7 @@ void InterPredInterpolation::destroy()
   }
 }
 
-void InterPredInterpolation::init()
+void InterPredInterpolation::init( bool enableOpt )
 {
   for( uint32_t c = 0; c < MAX_NUM_COMP; c++ )
   {
@@ -672,18 +736,21 @@ void InterPredInterpolation::init()
 
   m_if.initInterpolationFilter( true );
 
+  xFpBiDirOptFlow = xFpBiDirOptFlowCore;
   xFpBDOFGradFilter = gradFilterCore;
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;
   xFpPadDmvr        = padDmvrCore;
 
+  if( enableOpt )
+  {
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
-  initInterPredictionX86();
+    initInterPredictionX86();
 #endif
-
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
-  initInterPredictionARM();
+    initInterPredictionARM();
 #endif
+  }
 
   if (m_storedMv == nullptr)
   {
@@ -841,11 +908,6 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
   }
 }
 
-int InterPredInterpolation::xRightShiftMSB( int numer, int denom )
-{
-  return ( numer >> floorLog2( denom ) );
-}
-
 void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
 {
   const int     bitDepth  = clpRng.bd;
@@ -854,7 +916,6 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   const int     width     = yuvDst.width;
   int           heightG   = height + 2 * BDOF_EXTEND_SIZE;
   int           widthG    = width + 2 * BDOF_EXTEND_SIZE;
-  int           offsetPos = widthG*BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
 
   Pel*          gradX0 = m_gradX0;
   Pel*          gradX1 = m_gradX1;
@@ -864,13 +925,9 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   int           stridePredMC = widthG + 2;
   const Pel*    srcY0 = m_filteredBlockTmp[2][COMP_Y] + stridePredMC + 1;
   const Pel*    srcY1 = m_filteredBlockTmp[3][COMP_Y] + stridePredMC + 1;
-  const int     src0Stride = stridePredMC;
-  const int     src1Stride = stridePredMC;
 
   Pel*          dstY = yuvDst.buf;
-  const int     dstStride = yuvDst.stride;
-  const Pel*    srcY0Temp = srcY0;
-  const Pel*    srcY1Temp = srcY1;
+  const int dstStride = yuvDst.stride;
 
   for (int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
   {
@@ -896,53 +953,8 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   const int   offset = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
   const int   limit = (1 << 4) - 1;
 
-  if( xFpBiDirOptFlow )
-  {
-    xFpBiDirOptFlow( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset, limit, clpRng, bitDepth );
-    return;
-  }
-
-  int xUnit = (width >> 2);
-  int yUnit = (height >> 2);
-
-  Pel* dstY0 = dstY;
-  gradX0 = m_gradX0; gradX1 = m_gradX1;
-  gradY0 = m_gradY0; gradY1 = m_gradY1;
-
-  for (int yu = 0; yu < yUnit; yu++)
-  {
-    for (int xu = 0; xu < xUnit; xu++)
-    {
-      int tmpx = 0, tmpy = 0;
-      int sumAbsGX = 0, sumAbsGY = 0, sumDIX = 0, sumDIY = 0;
-      int sumSignGY_GX = 0;
-
-      Pel* pGradX0Tmp = m_gradX0 + (xu << 2) + (yu << 2) * widthG;
-      Pel* pGradX1Tmp = m_gradX1 + (xu << 2) + (yu << 2) * widthG;
-      Pel* pGradY0Tmp = m_gradY0 + (xu << 2) + (yu << 2) * widthG;
-      Pel* pGradY1Tmp = m_gradY1 + (xu << 2) + (yu << 2) * widthG;
-      const Pel* SrcY1Tmp = srcY1 + (xu << 2) + (yu << 2) * src1Stride;
-      const Pel* SrcY0Tmp = srcY0 + (xu << 2) + (yu << 2) * src0Stride;
-
-      calcBDOFSumsCore(SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride, src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX);
-      tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(4 * sumDIX, sumAbsGX));
-      tmpx = Clip3(-limit, limit, tmpx);
-
-      const int tmpData = sumSignGY_GX * tmpx >> 1;
-      tmpy = (sumAbsGY == 0 ? 0 : xRightShiftMSB((4 * sumDIY - tmpData), sumAbsGY));
-      tmpy = Clip3(-limit, limit, tmpy);
-
-      srcY0Temp = srcY0 + (stridePredMC + 1) + ((yu*src0Stride + xu) << 2);
-      srcY1Temp = srcY1 + (stridePredMC + 1) + ((yu*src0Stride + xu) << 2);
-      gradX0 = m_gradX0 + offsetPos + ((yu*widthG + xu) << 2);
-      gradX1 = m_gradX1 + offsetPos + ((yu*widthG + xu) << 2);
-      gradY0 = m_gradY0 + offsetPos + ((yu*widthG + xu) << 2);
-      gradY1 = m_gradY1 + offsetPos + ((yu*widthG + xu) << 2);
-
-      dstY0 = dstY + ((yu*dstStride + xu) << 2);
-      addBDOFAvgCore(srcY0Temp, src0Stride, srcY1Temp, src1Stride, dstY0, dstStride, gradX0, gradX1, gradY0, gradY1, widthG, (1 << 2), (1 << 2), tmpx, tmpy, shiftNum, offset, clpRng);
-    }  // xu
-  }  // yu
+  xFpBiDirOptFlow( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset,
+                   limit, clpRng, bitDepth );
 }
 
 void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied, PelUnitBuf *yuvPredTmp )
