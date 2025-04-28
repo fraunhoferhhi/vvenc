@@ -57,7 +57,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/LoopFilter.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/MCTF.h"
-
+#include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
 
@@ -65,6 +65,17 @@ namespace vvenc
 {
 
 #ifdef TARGET_SIMD_ARM
+
+#if ENABLE_SIMD_OPT_AFFINE_ME
+void AffineGradientSearch::initAffineGradientSearchARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initAffineGradientSearchARM<NEON>();
+  }
+}
+#endif
 
 #if ENABLE_SIMD_OPT_MCIF
 void InterpolationFilter::initInterpolationFilterARM()
