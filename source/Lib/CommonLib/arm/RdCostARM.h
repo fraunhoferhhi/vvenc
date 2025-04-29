@@ -1166,6 +1166,135 @@ Distortion RdCost::xGetSADwMask_ARMSIMD( const DistParam& rcDtParam )
   return sum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
 
+template<int csx>
+Distortion lumaWeightedSSE_neon( const DistParam& rcDtParam, ChromaFormat chmFmt, const uint32_t* lumaWeights )
+{
+  int iRows = rcDtParam.org.height;
+  int iCols = rcDtParam.org.width;
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  const int iStrideCur = rcDtParam.cur.stride;
+  const int iStrideOrg = rcDtParam.org.stride;
+  const Pel* piOrgLuma = rcDtParam.orgLuma->buf;
+  const int iStrideOrgLuma = rcDtParam.orgLuma->stride;
+  const ComponentID compId = rcDtParam.compID;
+
+  CHECK( ( iCols & ( iCols - 1 ) ) != 0, "Width can only be power of two!" );
+
+  const size_t cShiftY = getComponentScaleY( compId, chmFmt );
+  Distortion uiSum = 0;
+
+  if( iCols % 8 == 0 )
+  {
+    int64x2_t acc0 = vdupq_n_s64( 0 );
+    int64x2_t acc1 = vdupq_n_s64( 0 );
+    do
+    {
+      do
+      {
+        int16x8_t org = vld1q_s16( piOrg );  // 14 bit
+        int16x8_t curr = vld1q_s16( piCur ); // 14 bit
+        const uint32_t lweights[8] = { lumaWeights[piOrgLuma[0]],        lumaWeights[piOrgLuma[1 << csx]],
+                                       lumaWeights[piOrgLuma[2 << csx]], lumaWeights[piOrgLuma[3 << csx]],
+                                       lumaWeights[piOrgLuma[4 << csx]], lumaWeights[piOrgLuma[5 << csx]],
+                                       lumaWeights[piOrgLuma[6 << csx]], lumaWeights[piOrgLuma[7 << csx]] };
+
+        int16x8_t diff = vabdq_s16( org, curr );
+        int32x4_t fixedPTweight0 = vreinterpretq_s32_u32( vld1q_u32( lweights + 0 ) ); // 17 bit
+        int32x4_t fixedPTweight1 = vreinterpretq_s32_u32( vld1q_u32( lweights + 4 ) );
+        int16x4_t diff_low = vget_low_s16( diff );
+        int16x4_t diff_high = vget_high_s16( diff );
+        // ( a * ( b * b ) ) >> 16 rewritten as ( ( a * b ) * ( b << 15 ) ) >> 31
+        int32x4_t s0 = vmulq_s32( fixedPTweight0, vmovl_s16( diff_low ) );
+        int32x4_t s1 = vmulq_s32( fixedPTweight1, vmovl_s16( diff_high ) );
+        s0 = vqrdmulhq_s32( s0, vshll_n_s16( diff_low, 15 ) );
+        s1 = vqrdmulhq_s32( s1, vshll_n_s16( diff_high, 15 ) );
+        acc0 = vpadalq_s32( acc0, s0 );
+        acc1 = vpadalq_s32( acc1, s1 );
+
+        piOrg += 8;
+        piCur += 8;
+        piOrgLuma += 8 << csx;
+        iCols -= 8;
+      } while( iCols != 0 );
+
+      iCols = rcDtParam.org.width;
+      piOrg += iStrideOrg - iCols;
+      piCur += iStrideCur - iCols;
+      piOrgLuma += ( iStrideOrgLuma << cShiftY ) - ( iCols << csx );
+    } while( --iRows != 0 );
+
+    acc0 = vaddq_s64( acc0, acc1 );
+    uiSum = ( Distortion )horizontal_add_s64x2( acc0 );
+  }
+  else if( iCols == 4 )
+  {
+    int64x2_t acc = vdupq_n_s64( 0 );
+    do
+    {
+      int16x4_t org = vld1_s16( piOrg );  // 14 bit
+      int16x4_t curr = vld1_s16( piCur ); // 14 bit
+      const uint32_t lweights[4] = { lumaWeights[piOrgLuma[0]], lumaWeights[piOrgLuma[1 << csx]],
+                                     lumaWeights[piOrgLuma[2 << csx]], lumaWeights[piOrgLuma[3 << csx]] };
+
+      int32x4_t diff = vabdl_s16( org, curr );
+      int32x4_t fixedPTweight = vreinterpretq_s32_u32( vld1q_u32( lweights ) ); // 17 bit
+      int32x4_t s = vmulq_s32( fixedPTweight, diff );
+      s = vqrdmulhq_s32( s, vshlq_n_s32( diff, 15 ) );
+      acc = vpadalq_s32( acc, s );
+
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+      piOrgLuma += iStrideOrgLuma << cShiftY;
+    } while( --iRows != 0 );
+
+    uiSum = ( Distortion )horizontal_add_s64x2( acc );
+  }
+  else if( iCols == 2 )
+  {
+    CHECK( iRows % 2, "Height must be a multiple of two" );
+    int64x2_t acc = vdupq_n_s64( 0 );
+    do
+    {
+      int16_t orgData[4] = { piOrg[0], piOrg[1], piOrg[iStrideOrg], piOrg[iStrideOrg + 1] };
+      int16_t currData[4] = { piCur[0], piCur[1], piCur[iStrideOrg], piCur[iStrideOrg + 1] };
+      int16x4_t org = vld1_s16( orgData );   // 14 bit
+      int16x4_t curr = vld1_s16( currData ); // 14 bit
+      const uint32_t lweights[4] = { lumaWeights[piOrgLuma[0]], lumaWeights[piOrgLuma[1 << csx]],
+                                     lumaWeights[piOrgLuma[iStrideOrgLuma << cShiftY]],
+                                     lumaWeights[piOrgLuma[( iStrideOrgLuma << cShiftY ) + ( 1 << csx )]] };
+
+      int32x4_t diff = vabdl_s16( org, curr );
+      int32x4_t fixedPTweight = vreinterpretq_s32_u32( vld1q_u32( lweights ) ); // 17 bit
+      int32x4_t s = vmulq_s32( fixedPTweight, diff );
+      s = vqrdmulhq_s32( s, vshlq_n_s32( diff, 15 ) );
+      acc = vpadalq_s32( acc, s );
+
+      piOrg += iStrideOrg << 1;
+      piCur += iStrideCur << 1;
+      piOrgLuma += ( iStrideOrgLuma << ( cShiftY + 1 ) );
+      iRows -= 2;
+    } while( iRows != 0 );
+
+    uiSum = ( Distortion )horizontal_add_s64x2( acc );
+  }
+  else if( iCols == 1 )
+  {
+    do
+    {
+      const int32_t iTemp = piOrg[0] - piCur[0];
+      const uint32_t lweight = lumaWeights[piOrgLuma[0]];
+      uiSum += ( ( int64_t )lweight * ( iTemp * iTemp ) + ( 1 << 15 ) ) >> 16;
+
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+      piOrgLuma += iStrideOrgLuma << cShiftY;
+    } while( --iRows != 0 );
+  }
+
+  return uiSum;
+}
+
 template<ARM_VEXT vext>
 void RdCost::_initRdCostARM()
 {
@@ -1202,6 +1331,9 @@ void RdCost::_initRdCostARM()
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_ARMSIMD<vext>;
 
 #endif  // defined( TARGET_SIMD_X86 )
+
+  m_wtdPredPtr[0] = lumaWeightedSSE_neon<0>;
+  m_wtdPredPtr[1] = lumaWeightedSSE_neon<1>;
 }
 
 template void RdCost::_initRdCostARM<SIMDARM>();
