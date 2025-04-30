@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/MCTF.h"
+#include "CommonLib/RdCost.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
 
@@ -66,8 +67,8 @@ static inline bool compare_value( const std::string& context, const T ref, const
 {
   if( opt != ref )
   {
-    printf( "failed: %s\n", context.c_str() );
-    printf( "  mismatch:  ref=%d  opt=%d\n", ref, opt );
+    std::cerr << "failed: " << context << "\n"
+              << "  mismatch:  ref=" << ref << "  opt=" << opt << "\n";
   }
   return opt == ref;
 }
@@ -99,17 +100,25 @@ template<typename T>
 class InputGenerator
 {
 public:
-  explicit InputGenerator( unsigned bits ) : m_bits( bits )
+  explicit InputGenerator( unsigned bits, bool is_signed = true ) : m_bits( bits ), m_signed( is_signed )
   {
   }
 
   T operator()() const
   {
-    return ( rand() & ( ( 1 << m_bits ) - 1 ) ) - ( 1 << m_bits >> 1 );
+    if( !m_signed )
+    {
+      return static_cast<T>( rand() & ( ( 1 << m_bits ) - 1 ) );
+    }
+    else
+    {
+      return ( rand() & ( ( 1 << m_bits ) - 1 ) ) - ( 1 << m_bits >> 1 );
+    }
   }
 
 private:
   unsigned m_bits;
+  bool m_signed;
 };
 
 template<typename T>
@@ -454,6 +463,81 @@ static bool test_InterPred()
 }
 #endif
 
+#if ENABLE_SIMD_OPT_DIST
+static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  printf( "Testing RdCost::lumaWeightedSSE %dx%d\n", width, height );
+
+  std::ostringstream sstm;
+  sstm << "lumaWeightedSSE" << " w=" << width << " h=" << height;
+
+  InputGenerator<Pel> g14{ 14 };
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false }; // Index range : 0 - 1023.
+  InputGenerator<uint32_t> g17{ 17, /*is_signed=*/false };
+  DimensionGenerator rng;
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    int stride = rng.get( width, 1024 );
+    std::vector<Pel> orgBuf( stride * height );
+    std::vector<Pel> curBuf( stride * height );
+    std::vector<Pel> orgLumaBuf( stride * height * 2 );
+    std::vector<uint32_t> lumaWeights( 1024 );
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.cur.buf = curBuf.data();
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.cur.stride = stride;
+    dtParam.org.stride = stride;
+    CPelBuf pelBuf;
+    pelBuf.buf = orgLumaBuf.data();
+    pelBuf.stride = stride;
+    dtParam.orgLuma = &pelBuf;
+    dtParam.bitDepth = 10;
+    dtParam.compID = COMP_Y;
+
+    std::generate( orgBuf.begin(), orgBuf.end(), g14 );
+    std::generate( curBuf.begin(), curBuf.end(), g14 );
+    std::generate( orgLumaBuf.begin(), orgLumaBuf.end(), g10 );
+    std::generate( lumaWeights.begin(), lumaWeights.end(), g17 );
+
+    for( unsigned csx = 0; csx < 2; csx++ )
+    {
+      Distortion sum_ref = ref->m_wtdPredPtr[csx]( dtParam, VVENC_CHROMA_420, lumaWeights.data() );
+      Distortion sum_opt = opt->m_wtdPredPtr[csx]( dtParam, VVENC_CHROMA_420, lumaWeights.data() );
+      passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+    }
+  }
+
+  return passed;
+}
+
+static bool test_RdCost()
+{
+  RdCost ref;
+  RdCost opt;
+  ref.create( /*enableOpt=*/false );
+  opt.create( /*enableOpt=*/true );
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+  std::array<int, 8> widths = { 1, 2, 4, 8, 16, 32, 64, 128 };
+  std::array<int, 7> heights = { 2, 4, 8, 16, 32, 64, 128 };
+
+  for( int h : heights )
+  {
+    for( int w : widths )
+    {
+      passed = check_lumaWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_DIST
+
 int main( int argc, char** argv )
 {
   unsigned seed = ( unsigned ) time( NULL );
@@ -469,6 +553,9 @@ int main( int argc, char** argv )
 #endif
 #if ENABLE_SIMD_OPT_BDOF
   passed = test_InterPred() && passed;
+#endif
+#if ENABLE_SIMD_OPT_DIST
+  passed = test_RdCost() && passed;
 #endif
 
   if( !passed )
