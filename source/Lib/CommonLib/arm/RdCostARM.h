@@ -1257,7 +1257,7 @@ Distortion lumaWeightedSSE_neon( const DistParam& rcDtParam, ChromaFormat chmFmt
     do
     {
       int16_t orgData[4] = { piOrg[0], piOrg[1], piOrg[iStrideOrg], piOrg[iStrideOrg + 1] };
-      int16_t currData[4] = { piCur[0], piCur[1], piCur[iStrideOrg], piCur[iStrideOrg + 1] };
+      int16_t currData[4] = { piCur[0], piCur[1], piCur[iStrideCur], piCur[iStrideCur + 1] };
       int16x4_t org = vld1_s16( orgData );   // 14 bit
       int16x4_t curr = vld1_s16( currData ); // 14 bit
       const uint32_t lweights[4] = { lumaWeights[piOrgLuma[0]], lumaWeights[piOrgLuma[1 << csx]],

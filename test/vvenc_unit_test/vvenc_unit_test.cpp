@@ -479,10 +479,12 @@ static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases,
   bool passed = true;
   for( unsigned i = 0; i < num_cases; i++ )
   {
-    int stride = rng.get( width, 1024 );
-    std::vector<Pel> orgBuf( stride * height );
-    std::vector<Pel> curBuf( stride * height );
-    std::vector<Pel> orgLumaBuf( stride * height * 2 );
+    int org_stride = rng.get( width, 1024 );
+    int cur_stride = rng.get( width, 1024 );
+    int luma_stride = rng.get( width, 1024 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( cur_stride * height );
+    std::vector<Pel> orgLumaBuf( luma_stride * height * 2 );
     std::vector<uint32_t> lumaWeights( 1024 );
 
     DistParam dtParam;
@@ -490,11 +492,11 @@ static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases,
     dtParam.cur.buf = curBuf.data();
     dtParam.org.width = width;
     dtParam.org.height = height;
-    dtParam.cur.stride = stride;
-    dtParam.org.stride = stride;
+    dtParam.cur.stride = cur_stride;
+    dtParam.org.stride = org_stride;
     CPelBuf pelBuf;
     pelBuf.buf = orgLumaBuf.data();
-    pelBuf.stride = stride;
+    pelBuf.stride = luma_stride;
     dtParam.orgLuma = &pelBuf;
     dtParam.bitDepth = 10;
     dtParam.compID = COMP_Y;
