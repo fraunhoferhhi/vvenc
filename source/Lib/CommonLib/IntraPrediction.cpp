@@ -282,7 +282,9 @@ void IntraPrediction::init(ChromaFormat chromaFormatIDC, const unsigned bitDepth
 #if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_X86 )
   initIntraPredictionX86();
 #endif
-
+#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_ARM )
+  initIntraPredictionARM();
+#endif
 }
 
 // ====================================================================================================================

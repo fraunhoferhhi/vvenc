@@ -138,6 +138,17 @@ void InterPredInterpolation::initInterPredictionARM()
 }
 #endif
 
+#if ENABLE_SIMD_OPT_INTRAPRED
+void IntraPrediction::initIntraPredictionARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initIntraPredictionARM<NEON>();
+  }
+}
+#endif
+
 #endif  // TARGET_SIMD_ARM
 
 }   // namespace
