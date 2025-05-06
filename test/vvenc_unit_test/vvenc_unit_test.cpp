@@ -391,6 +391,55 @@ static bool test_TCoeffOps()
 
 #if ENABLE_SIMD_OPT_MCTF
 template<typename G>
+static bool check_one_applyPlanarCorrection( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int size,
+                                             int bitDepth, uint16_t motionerror, G input_generator )
+{
+  CHECK( orgStride < size, "OrgStride must be greater than or equal to width" );
+  CHECK( dstStride < size, "DstStride must be greater than or equal to width" );
+
+  std::ostringstream sstm;
+  sstm << "applyPlanarCorrection orgStride=" << orgStride << " dstStride=" << dstStride << " w=" << size
+       << " h=" << size << " motionerror=" << motionerror;
+
+  std::vector<Pel> org( orgStride * size );
+  std::vector<Pel> dst_ref( dstStride * size );
+  std::vector<Pel> dst_opt( dstStride * size );
+
+  // Initialize source buffers.
+  std::generate( org.begin(), org.end(), input_generator );
+  std::generate( dst_ref.begin(), dst_ref.end(), input_generator );
+  dst_opt = dst_ref;
+
+  const ClpRng clpRng{ bitDepth };
+  ref->m_applyPlanarCorrection( org.data(), orgStride, dst_ref.data(), dstStride, size, size, clpRng, motionerror );
+  opt->m_applyPlanarCorrection( org.data(), orgStride, dst_opt.data(), dstStride, size, size, clpRng, motionerror );
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), size, size, dstStride );
+}
+
+static bool check_applyPlanarCorrection( MCTF* ref, MCTF* opt, unsigned num_cases, int size )
+{
+  printf( "Testing MCTF::applyPlanarCorrection w=%d h=%d\n", size, size );
+  InputGenerator<TCoeff> g{ 10, /*is_signed=*/false };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int bitDepth = 8; bitDepth <= 10; bitDepth += 2 )
+    {
+      unsigned orgStride = rng.get( size, 128 );
+      unsigned dstStride = rng.get( size, 128 );
+      uint16_t motionerror = rng.get( 1, 32 );
+      if( !check_one_applyPlanarCorrection( ref, opt, orgStride, dstStride, size, bitDepth, motionerror, g ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+template<typename G>
 static bool check_one_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned bufStride, unsigned w,
                                            unsigned h, unsigned besterror, G input_generator )
 {
@@ -442,6 +491,11 @@ static bool test_MCTF()
 
   unsigned num_cases = NUM_CASES;
   bool passed        = true;
+
+  for( int size = 4; size <= 32; size *= 2 )
+  {
+    passed = check_applyPlanarCorrection( &ref, &opt, num_cases, size ) && passed;
+  }
 
   for( unsigned w = 8; w <= 64; w += 8 )
   {
