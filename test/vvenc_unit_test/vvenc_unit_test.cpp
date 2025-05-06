@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <time.h>
 
+#include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/MCTF.h"
 #include "CommonLib/RdCost.h"
@@ -84,11 +85,11 @@ static inline bool compare_values_2d( const std::string& context, const T* ref, 
     for( unsigned col = 0; col < cols; ++col )
     {
       unsigned idx = row * stride + col;
-      if( ref[ idx ] != opt[ idx ] )
+      if( ref[idx] != opt[idx] )
       {
-        printf( "failed: %s\n", context.c_str() );
-        printf( "  mismatch:  ref[%u*%u+%u]=%d  opt[%u*%u+%u]=%d\n", row, cols, col, ref[ idx ], row, cols, col,
-                opt[ idx ] );
+        std::cout << "failed: " << context << "\n"
+                  << "  mismatch:  ref[" << row << "*" << cols << "+" << col << "]=" << ref[idx]
+                  << "  opt[" << row << "*" << cols << "+" << col << "]=" << opt[idx] << "\n";
         return false;
       }
     }
@@ -538,6 +539,81 @@ static bool test_RdCost()
 }
 #endif // ENABLE_SIMD_OPT_DIST
 
+#if ENABLE_SIMD_OPT_AFFINE_ME
+static bool check_EqualCoeffComputer( AffineGradientSearch* ref, AffineGradientSearch* opt, unsigned num_cases )
+{
+  DimensionGenerator dim;
+  InputGenerator<Pel> inp_gen{ 10 }; // signed 10-bit
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+  std::vector<Pel> residue( buf_size );
+  std::vector<Pel> derivate0( buf_size );
+  std::vector<Pel> derivate1( buf_size );
+  Pel* pDerivate[2] = { derivate0.data(), derivate1.data() };
+
+  static constexpr size_t coeff_size = 7;
+  int64_t i64EqualCoeff_ref[coeff_size][coeff_size];
+  int64_t i64EqualCoeff_opt[coeff_size][coeff_size];
+
+  bool passed = true;
+
+  for( int b6Param : { 0, 1 } )
+  {
+    std::ostringstream sstm_test;
+    sstm_test << "AffineGradientSearch::EqualCoeffComputer" << " b6Param=" << std::boolalpha
+              << static_cast<bool>( b6Param );
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      // Set width and height to multiples of 8.
+      const int width = dim.get( 8, MAX_CU_SIZE, 8 );
+      const int height = dim.get( 8, MAX_CU_SIZE, 8 );
+
+      // Set random strides >= width.
+      const int residueStride = dim.get( width, MAX_CU_SIZE );
+      const int derivateStride = dim.get( width, MAX_CU_SIZE );
+
+      // Generate signed 10-bit random inputs.
+      std::generate( residue.begin(), residue.end(), inp_gen );
+      std::generate( derivate0.begin(), derivate0.end(), inp_gen );
+      std::generate( derivate1.begin(), derivate1.end(), inp_gen );
+
+      // Clear output blocks.
+      std::memset( i64EqualCoeff_ref, 0, sizeof( i64EqualCoeff_ref ) );
+      std::memset( i64EqualCoeff_opt, 0, sizeof( i64EqualCoeff_opt ) );
+
+      ref->m_EqualCoeffComputer[b6Param]( residue.data(), residueStride, pDerivate, derivateStride, width, height,
+                                          i64EqualCoeff_ref );
+      opt->m_EqualCoeffComputer[b6Param]( residue.data(), residueStride, pDerivate, derivateStride, width, height,
+                                          i64EqualCoeff_opt );
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " residueStride=" << residueStride << " derivateStride=" << derivateStride
+                   << " width=" << width << " height=" << height;
+
+      passed = compare_values_2d( sstm_subtest.str(), &i64EqualCoeff_ref[0][0], &i64EqualCoeff_opt[0][0], coeff_size,
+                                  coeff_size ) && passed;
+    }
+  }
+
+  return passed;
+}
+
+static bool test_AffineGradientSearch()
+{
+  AffineGradientSearch ref{ /*enableOpt=*/false };
+  AffineGradientSearch opt{ /*enableOpt=*/true };
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  passed = check_EqualCoeffComputer( &ref, &opt, num_cases ) && passed;
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_AFFINE_ME
+
 int main( int argc, char** argv )
 {
   unsigned seed = ( unsigned ) time( NULL );
@@ -556,6 +632,9 @@ int main( int argc, char** argv )
 #endif
 #if ENABLE_SIMD_OPT_DIST
   passed = test_RdCost() && passed;
+#endif
+#if ENABLE_SIMD_OPT_AFFINE_ME
+  passed = test_AffineGradientSearch() && passed;
 #endif
 
   if( !passed )

@@ -61,7 +61,7 @@ namespace vvenc {
   // Private member functions
   // ====================================================================================================================
 
-  AffineGradientSearch::AffineGradientSearch()
+  AffineGradientSearch::AffineGradientSearch( bool enableOpt )
   {
     m_HorizontalSobelFilter = xHorizontalSobelFilter;
     m_VerticalSobelFilter   = xVerticalSobelFilter;
@@ -69,10 +69,13 @@ namespace vvenc {
     m_EqualCoeffComputer[1] = xEqualCoeffComputer<true>;
 
 #if ENABLE_SIMD_OPT_AFFINE_ME
+    if( enableOpt )
+    {
 #ifdef TARGET_SIMD_X86
-    initAffineGradientSearchX86();
+      initAffineGradientSearchX86();
 #endif
-#endif
+    }
+#endif // ENABLE_SIMD_OPT_AFFINE_ME
   }
 
   void AffineGradientSearch::xHorizontalSobelFilter(Pel* const pPred, const int predStride, Pel *const pDerivate, const int derivateBufStride, const int width, const int height)
