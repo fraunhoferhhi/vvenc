@@ -189,6 +189,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
     static constexpr int n = b6Param ? 6 : 4;
     int idx1 = -2 * derivateBufStride - 4;
     int idx2 = -    derivateBufStride - 4;
+    int resIdx1 = -2 * residueStride - 4;
+    int resIdx2 = -    residueStride - 4;
 
     for (int j = 0; j < height; j += 2)
     {
@@ -197,11 +199,15 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
       mmIndxK = _mm_set1_epi32(-2);
       idx1 += (derivateBufStride << 1);
       idx2 += (derivateBufStride << 1);
+      resIdx1 += (residueStride << 1);
+      resIdx2 += (residueStride << 1);
 
       for (int k = 0; k < width; k += 4)
       {
         idx1 += 4;
         idx2 += 4;
+        resIdx1 += 4;
+        resIdx2 += 4;
         mmIndxK = _mm_add_epi32(mmIndxK, mmFour);
 
         if (b6Param)
@@ -246,8 +252,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
         }
 
         // Residue
-        mmResidue[0] = _vv_loadl_epi64((const __m128i*)&pResidue[idx1]);
-        mmResidue[1] = _vv_loadl_epi64((const __m128i*)&pResidue[idx2]);
+        mmResidue[0] = _vv_loadl_epi64((const __m128i*)&pResidue[resIdx1]);
+        mmResidue[1] = _vv_loadl_epi64((const __m128i*)&pResidue[resIdx2]);
         mmResidue[0] = _mm_cvtepi16_epi32(mmResidue[0]);
         mmResidue[1] = _mm_cvtepi16_epi32(mmResidue[1]);
         mmResidue[0] = _mm_slli_epi32(mmResidue[0], 3);
@@ -279,6 +285,8 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
 
       idx1 -= (width);
       idx2 -= (width);
+      resIdx1 -= (width);
+      resIdx2 -= (width);
     }
   }
 
@@ -318,6 +326,8 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
     static constexpr int n = b6Param ? 6 : 4;
     int idx1 = -2 * derivateBufStride - 8;
     int idx2 = -    derivateBufStride - 8;
+    int resIdx1 = -2 * residueStride - 8;
+    int resIdx2 = -    residueStride - 8;
 
     for (int j = 0; j < height; j += 2)
     {
@@ -326,11 +336,15 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
       mmIndxK = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( -6 ) ), _mm_set1_epi32( -2 ), 1 );
       idx1 += (derivateBufStride << 1);
       idx2 += (derivateBufStride << 1);
+      resIdx1 += (residueStride << 1);
+      resIdx2 += (residueStride << 1);
 
       for (int k = 0; k < width; k += 8)
       {
         idx1 += 8;
         idx2 += 8;
+        resIdx1 += 8;
+        resIdx2 += 8;
         mmIndxK = _mm256_add_epi32(mmIndxK, mmFour);
         mmIndxK = _mm256_add_epi32(mmIndxK, mmFour);
 
@@ -343,7 +357,7 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
           mmC[3] = _mm256_mullo_epi32(mmIndxK, mmC[2]);
           mmC[4] = _mm256_mullo_epi32(mmIndxJ, mmC[0]);
           mmC[5] = _mm256_mullo_epi32(mmIndxJ, mmC[2]);
-        
+
           // mmC[6-11] for iC[0-5] of 2nd row of pixels
           mmC[6] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&ppDerivate[0][idx2]));
           mmC[8] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&ppDerivate[1][idx2]));
@@ -376,8 +390,8 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
         }
 
         // Residue
-        mmResidue[0] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&pResidue[idx1]));
-        mmResidue[1] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&pResidue[idx2]));
+        mmResidue[0] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&pResidue[resIdx1]));
+        mmResidue[1] = _mm256_cvtepi16_epi32(_mm_loadu_si128((const __m128i*)&pResidue[resIdx2]));
         mmResidue[0] = _mm256_slli_epi32(mmResidue[0], 3);
         mmResidue[1] = _mm256_slli_epi32(mmResidue[1], 3);
 
@@ -407,6 +421,8 @@ res    = _mm_add_epi64(res, _mm256_extracti128_si256(inter3, 1));               
 
       idx1 -= (width);
       idx2 -= (width);
+      resIdx1 -= (width);
+      resIdx2 -= (width);
     }
   }
 #endif

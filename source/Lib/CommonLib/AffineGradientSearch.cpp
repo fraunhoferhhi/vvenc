@@ -61,7 +61,7 @@ namespace vvenc {
   // Private member functions
   // ====================================================================================================================
 
-  AffineGradientSearch::AffineGradientSearch()
+  AffineGradientSearch::AffineGradientSearch( bool enableOpt )
   {
     m_HorizontalSobelFilter = xHorizontalSobelFilter;
     m_VerticalSobelFilter   = xVerticalSobelFilter;
@@ -69,10 +69,13 @@ namespace vvenc {
     m_EqualCoeffComputer[1] = xEqualCoeffComputer<true>;
 
 #if ENABLE_SIMD_OPT_AFFINE_ME
+    if( enableOpt )
+    {
 #ifdef TARGET_SIMD_X86
-    initAffineGradientSearchX86();
+      initAffineGradientSearchX86();
 #endif
-#endif
+    }
+#endif // ENABLE_SIMD_OPT_AFFINE_ME
   }
 
   void AffineGradientSearch::xHorizontalSobelFilter(Pel* const pPred, const int predStride, Pel *const pDerivate, const int derivateBufStride, const int width, const int height)
@@ -152,23 +155,24 @@ namespace vvenc {
       {
         int iC[6];
 
-        int idx = j * derivateBufStride + k;
+        int drvIdx = j * derivateBufStride + k;
+        int resIdx = j * residueStride + k;
         int cx = ((k >> 2) << 2) + 2;
         if (!b6Param)
         {
-          iC[0] = ppDerivate[0][idx];
-          iC[1] = cx * ppDerivate[0][idx] + cy * ppDerivate[1][idx];
-          iC[2] = ppDerivate[1][idx];
-          iC[3] = cy * ppDerivate[0][idx] - cx * ppDerivate[1][idx];
+          iC[0] = ppDerivate[0][drvIdx];
+          iC[1] = cx * ppDerivate[0][drvIdx] + cy * ppDerivate[1][drvIdx];
+          iC[2] = ppDerivate[1][drvIdx];
+          iC[3] = cy * ppDerivate[0][drvIdx] - cx * ppDerivate[1][drvIdx];
         }
         else
         {
-          iC[0] = ppDerivate[0][idx];
-          iC[1] = cx * ppDerivate[0][idx];
-          iC[2] = ppDerivate[1][idx];
-          iC[3] = cx * ppDerivate[1][idx];
-          iC[4] = cy * ppDerivate[0][idx];
-          iC[5] = cy * ppDerivate[1][idx];
+          iC[0] = ppDerivate[0][drvIdx];
+          iC[1] = cx * ppDerivate[0][drvIdx];
+          iC[2] = ppDerivate[1][drvIdx];
+          iC[3] = cx * ppDerivate[1][drvIdx];
+          iC[4] = cy * ppDerivate[0][drvIdx];
+          iC[5] = cy * ppDerivate[1][drvIdx];
         }
         for (int col = 0; col < affineParamNum; col++)
         {
@@ -176,7 +180,7 @@ namespace vvenc {
           {
             pEqualCoeff[col + 1][row] += (int64_t)iC[col] * iC[row];
           }
-          pEqualCoeff[col + 1][affineParamNum] += ((int64_t)iC[col] * pResidue[idx]) *(1<< 3);
+          pEqualCoeff[col + 1][affineParamNum] += ((int64_t)iC[col] * pResidue[resIdx]) *(1<< 3);
         }
       }
     }

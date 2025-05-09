@@ -69,7 +69,7 @@ using namespace x86_simd;
     template<bool b6Param>
     static void xEqualCoeffComputer   ( Pel* const pResi, const int resiStride, Pel **const ppDerivate, const int derivateBufStride, const int width, const int height, int64_t(*pEqualCoeff)[7]);
 
-    AffineGradientSearch();
+    AffineGradientSearch( bool enableOpt = true );
     ~AffineGradientSearch() {}
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
