@@ -206,7 +206,7 @@ function( _append_cpu_type_guess output_list input_var )
   set( ret ${${output_list}} )
 
   string( TOLOWER "${input_str}" input_lower )
-  if( ${input_lower} MATCHES "x86\|i386\|x64\|win32\|amd64" )
+  if( ${input_lower} MATCHES "x86\|i.86\|x64\|win32\|amd64" )
     list( APPEND ret "X86" )
   elseif( ${input_lower} MATCHES "aarch64\|arm64")
     list( APPEND ret "AARCH64" )
