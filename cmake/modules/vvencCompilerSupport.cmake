@@ -179,17 +179,17 @@ function( detect_target_architecture output_var )
   elseif( NOT CMAKE_SYSTEM_PROCESSOR STREQUAL CMAKE_HOST_SYSTEM_PROCESSOR )
     message( DEBUG  "sys != host ${CMAKE_SYSTEM_PROCESSOR} STREQUAL ${CMAKE_HOST_SYSTEM_PROCESSOR} " )
     # cross compiling: CMAKE_SYSTEM_PROCESSOR was set explicitly, so we use that as first guess
-    _append_cpu_type_guess( target_arch_list "${CMAKE_SYSTEM_PROCESSOR}" )
+    _append_cpu_type_guess( target_arch_list CMAKE_SYSTEM_PROCESSOR )
   endif()
 
   # build list of architectures in order of probability
-  _append_cpu_type_guess( target_arch_list "${CMAKE_VS_PLATFORM_NAME}" )
-  _append_cpu_type_guess( target_arch_list "${CMAKE_OSX_ARCHITECTURES}" )
-  _append_cpu_type_guess( target_arch_list "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" ) # set by msvc, wen not using msbuild
-  _append_cpu_type_guess( target_arch_list "${CMAKE_ANDROID_ARCH_ABI}" )
-  _append_cpu_type_guess( target_arch_list "${CMAKE_C_LIBRARY_ARCHITECTURE}" )
-  _append_cpu_type_guess( target_arch_list "${CMAKE_SYSTEM_PROCESSOR}" )
-  _append_cpu_type_guess( target_arch_list "${CMAKE_HOST_SYSTEM_PROCESSOR}" )
+  _append_cpu_type_guess( target_arch_list CMAKE_VS_PLATFORM_NAME )
+  _append_cpu_type_guess( target_arch_list CMAKE_OSX_ARCHITECTURES )
+  _append_cpu_type_guess( target_arch_list CMAKE_CXX_COMPILER_ARCHITECTURE_ID ) # set by msvc, wen not using msbuild
+  _append_cpu_type_guess( target_arch_list CMAKE_ANDROID_ARCH_ABI )
+  _append_cpu_type_guess( target_arch_list CMAKE_C_LIBRARY_ARCHITECTURE )
+  _append_cpu_type_guess( target_arch_list CMAKE_SYSTEM_PROCESSOR )
+  _append_cpu_type_guess( target_arch_list CMAKE_HOST_SYSTEM_PROCESSOR )
   list( APPEND target_arch_list "UNKNOWN" ) # no architecture for which we have specific optimizations
   message( DEBUG "target_arch_list: ${target_arch_list}" )
 
@@ -200,7 +200,9 @@ function( detect_target_architecture output_var )
   set( ${output_var} "${detected_arch}" PARENT_SCOPE )
 endfunction()
 
-function( _append_cpu_type_guess output_list input_str )
+function( _append_cpu_type_guess output_list input_var )
+  message( DEBUG "cpu_type_guess: input ${input_var}=${${input_var}}" )
+  set( input_str ${${input_var}} )
   set( ret ${${output_list}} )
 
   string( TOLOWER "${input_str}" input_lower )
