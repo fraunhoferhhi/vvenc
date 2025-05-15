@@ -518,6 +518,45 @@ static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases,
   return passed;
 }
 
+static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  printf( "Testing RdCost::fixWeightedSSE %dx%d\n", width, height );
+
+  std::ostringstream sstm;
+  sstm << "fixWeightedSSE" << " w=" << width << " h=" << height;
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g14{ 14 };
+  InputGenerator<uint32_t> g17{ 17, /*is_signed=*/false };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    int org_stride = rng.get( width, 1024 );
+    int cur_stride = rng.get( width, 1024 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( cur_stride * height );
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.cur.buf = curBuf.data();
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.cur.stride = cur_stride;
+    dtParam.org.stride = org_stride;
+    dtParam.bitDepth = 10;
+
+    std::generate( orgBuf.begin(), orgBuf.end(), g14 );
+    std::generate( curBuf.begin(), curBuf.end(), g14 );
+    uint32_t fixedPTweight = g17();
+
+    Distortion sum_ref = ref->m_fxdWtdPredPtr( dtParam, fixedPTweight );
+    Distortion sum_opt = opt->m_fxdWtdPredPtr( dtParam, fixedPTweight );
+    passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+  return passed;
+}
+
 static bool test_RdCost()
 {
   RdCost ref;
@@ -535,6 +574,13 @@ static bool test_RdCost()
     for( int w : widths )
     {
       passed = check_lumaWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+  for( int h : heights )
+  {
+    for( int w : widths )
+    {
+      passed = check_fixWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
   return passed;

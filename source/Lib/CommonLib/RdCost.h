@@ -114,6 +114,7 @@ public:
 class RdCost
 {
 public:
+  Distortion ( *m_fxdWtdPredPtr )( const DistParam& dp, uint32_t fixedWeight );
   Distortion ( *m_wtdPredPtr[2] )( const DistParam& dp, ChromaFormat chmFmt, const uint32_t* lumaWeights );
 
 private:
@@ -121,7 +122,6 @@ private:
 
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
   FpDistFuncX5            m_afpDistortFuncX5[2]; // [eDFunc]
-  Distortion           ( *m_fxdWtdPredPtr )  ( const DistParam& dp, uint32_t fixedWeight );
   vvencCostMode           m_costMode;
   double                  m_distortionWeight[MAX_NUM_COMP]; // only chroma values are used.
   double                  m_dLambda;
