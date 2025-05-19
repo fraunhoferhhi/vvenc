@@ -248,7 +248,7 @@ void IntraPredAngleChroma_Core(Pel* pDstBuf,const ptrdiff_t dstStride,int16_t* p
 // Constructor / destructor / initialize
 // ====================================================================================================================
 
-IntraPrediction::IntraPrediction()
+IntraPrediction::IntraPrediction( bool enableOpt )
 :  m_pMdlmTemp( nullptr )
 ,  m_currChromaFormat( NUM_CHROMA_FORMAT )
 {
@@ -258,6 +258,18 @@ IntraPrediction::IntraPrediction()
   IntraHorVerPDPC       = IntraHorVerPDPC_Core;
   IntraPredSampleFilter = IntraPredSampleFilter_Core;
   xPredIntraPlanar      = xPredIntraPlanar_Core;
+
+#if ENABLE_SIMD_OPT_INTRAPRED
+  if( enableOpt )
+  {
+#if defined( TARGET_SIMD_X86 )
+    initIntraPredictionX86();
+#endif
+#if defined( TARGET_SIMD_ARM )
+    initIntraPredictionARM();
+#endif
+  }
+#endif // ENABLE_SIMD_OPT_INTRAPRED
 }
 
 IntraPrediction::~IntraPrediction()
@@ -279,12 +291,6 @@ void IntraPrediction::init(ChromaFormat chromaFormatIDC, const unsigned bitDepth
   {
     m_pMdlmTemp = new Pel[(2 * MAX_TB_SIZEY + 1)*(2 * MAX_TB_SIZEY + 1)];//MDLM will use top-above and left-below samples.
   }
-#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_X86 )
-  initIntraPredictionX86();
-#endif
-#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_ARM )
-  initIntraPredictionARM();
-#endif
 }
 
 // ====================================================================================================================
