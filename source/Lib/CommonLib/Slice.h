@@ -59,6 +59,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <list>
 #include <map>
 #include <vector>
+#include <cstdint>
 
 //! \ingroup CommonLib
 //! \{
@@ -431,15 +432,15 @@ struct SubPic
   SubPic()
   : subPicID(0)
   , subPicIdx(0)
-  , numCTUsInSubPic(-1)
+  , numCTUsInSubPic(UINT32_MAX)
   , subPicCtuTopLeftX(0)
   , subPicCtuTopLeftY(0)
-  , subPicWidth(-1)
-  , subPicHeight(-1)
-  , subPicWidthInLumaSample(-1)
-  , subPicHeightInLumaSample(-1)
+  , subPicWidth(UINT32_MAX)
+  , subPicHeight(UINT32_MAX)
+  , subPicWidthInLumaSample(UINT32_MAX)
+  , subPicHeightInLumaSample(UINT32_MAX)
   , firstCtuInSubPic(0)
-  , lastCtuInSubPic(-1)
+  , lastCtuInSubPic(UINT32_MAX)
   , subPicLeft(0)
   , subPicRight(0)
   , subPicTop(0)
@@ -797,8 +798,8 @@ struct SPS
   bool              disableScalingMatrixForLfnstBlks;
 
   SPS();
-  int               getNumRPL( int idx) const { return (int)rplList[idx].size()-1;}
-  int               getMaxLog2TrDynamicRange(ChannelType channelType)                   const { return 15; }
+  int               getNumRPL( int idx)                                                 const { return (int)rplList[idx].size()-1;}
+  int               getMaxLog2TrDynamicRange()                                          const { return 15; }
   uint32_t          getMaxTbSize()                                                      const { return  1 << log2MaxTbSize;                                        }
   bool              getUseImplicitMTS     ()                                            const { return MTS && !MTSIntra; }
 
@@ -945,9 +946,9 @@ public:
   uint32_t               getTileWidth( const int tileIdx ) const                     { return tileColWidth[tileIdx % numTileCols]; }
   uint32_t               getNumTileLineIds() const // number of lines in all the tiles (each tile consisting of indepdent rows
   {
-    int numTileRows = 0;
-    for( int tileIdx = 0; tileIdx < getNumTiles(); tileIdx++ ) numTileRows += getTileHeight( tileIdx );
-    return numTileRows;
+    int countTileRows = 0;
+    for( int tileIdx = 0; tileIdx < getNumTiles(); tileIdx++ ) countTileRows += getTileHeight( tileIdx );
+    return countTileRows;
   }
   uint32_t               getTileLineId( uint32_t ctuX, uint32_t ctuY ) const // unique id for a tile line at the given position
   {
@@ -1095,7 +1096,7 @@ struct PicHeader
     nonRefPic                                     = false;
     gdrPic                                        = 0;
     noOutputOfPriorPics                           = 0;
-    recoveryPocCnt                                = -1;
+    recoveryPocCnt                                = UINT32_MAX;
     noOutputBeforeRecovery                        = false;
     handleCraAsCvsStart                           = false;
     handleGdrAsCvsStart                           = false;

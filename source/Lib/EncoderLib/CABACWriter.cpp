@@ -2788,7 +2788,8 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
     absLevel = cctx.deriveModCoeff(rightPixel, belowPixel, abs(coeff[cctx.blockPos(scanPos)]), cctx.bdpcm()||!cutoffVal);
     if( absLevel >= cutoffVal )
     {
-      int       rice = cctx.templateAbsSumTS( scanPos, coeff );
+      //int       rice = cctx.templateAbsSumTS( scanPos, coeff );
+      int       rice = 1;
       unsigned  rem = scanPos <= lastScanPosPass1 ? (absLevel - cutoffVal) >> 1 : absLevel;
       m_BinEncoder.encodeRemAbsEP( rem, rice, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "ts_rem_val() bin=%d ctx=%d sp=%d\n", rem, rice, scanPos );

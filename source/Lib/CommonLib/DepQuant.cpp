@@ -464,7 +464,7 @@ namespace DQIntern
     const CompArea&   area                  = tu.blocks[ compID ];
     const ChannelType chType                = toChannelType( compID );
     const int         channelBitDepth       = sps.bitDepths[ chType ];
-    const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange( chType );
+    const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );
     const bool    needsSqrt2ScaleAdjustment = TU::needsSqrt2Scale(tu, compID);
     const int         transformShift        = nomTransformShift + (needsSqrt2ScaleAdjustment?-1:0);
@@ -521,7 +521,7 @@ namespace DQIntern
     const SPS&        sps                   = *tu.cs->sps;
     const ChannelType chType                = toChannelType( compID );
     const int         channelBitDepth       = sps.bitDepths[ chType ];
-    const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange( chType );
+    const int         maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
     const TCoeff      minTCoeff             = -( 1 << maxLog2TrDynamicRange );
     const TCoeff      maxTCoeff             =  ( 1 << maxLog2TrDynamicRange ) - 1;
     const int         nomTransformShift     = getTransformShift( channelBitDepth, area.size(), maxLog2TrDynamicRange );

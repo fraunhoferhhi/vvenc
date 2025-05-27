@@ -182,7 +182,7 @@ public:
     m_chromaFormat = chromaFormat;
     if( readLogoFile( fileName, rcOstr ) )
     {
-      rcOstr << "sample json file for logo description:" << std::endl;     
+      rcOstr << "error reading json logo file with logo description:" << std::endl;
       dumpOutput( rcOstr );
       return -1;
     }
@@ -323,15 +323,17 @@ public:
    
   void dumpOutput( std::ostream& rcOstr )
   {
-   #ifdef VVENC_ENABLE_THIRDPARTY_JSON  
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON  
     const json j { m_cLogo }; 
-    rcOstr << j.dump(2) << std::endl;  
-   #endif
+    rcOstr << j.dump(2) << std::endl;
+#else
+    rcOstr << std::endl;
+#endif
   }
   
   int writeLogoFile( std::string fileName, std::ostream& rcOstr )
   {
-  #ifdef VVENC_ENABLE_THIRDPARTY_JSON
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream    logoFHandle;   
     logoFHandle.open( fileName, std::ios::out );
     if ( logoFHandle.fail() )
@@ -346,14 +348,15 @@ public:
     if(  logoFHandle.is_open() )
       logoFHandle.close();
     return 0;
-  #else
+#else
+    rcOstr << "error: cannot write logo overlay file '" << fileName << "'. json not enabled" << std::endl;
     return -1;
-  #endif
+#endif
   }
   
   int readLogoFile( std::string fileName, std::ostream& rcOstr )
   {
-  #ifdef VVENC_ENABLE_THIRDPARTY_JSON
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream    logoFHandle;   
     logoFHandle.open( fileName, std::ios::in );
     if ( logoFHandle.fail() )
@@ -432,9 +435,10 @@ public:
       logoFHandle.close();
 
     return 0;
-  #else
+#else
+    rcOstr << "error: json not enabled - cannot read logo overlay file '" << fileName << "'." << std::endl;
     return -1;
-  #endif    
+#endif
   }
    
   int renderLogo ( const vvencYUVBuffer& yuvDestBuf )

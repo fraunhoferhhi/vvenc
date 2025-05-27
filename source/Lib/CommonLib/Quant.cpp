@@ -302,7 +302,7 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf&
   const int          hgt    = rect.height;
   const CCoeffSigBuf coeffs = tu.getCoeffs(compID);
 
-  const int      maxLog2TrDynamicRange = tu.cs->sps->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const int      maxLog2TrDynamicRange = tu.cs->sps->getMaxLog2TrDynamicRange();
   const TCoeff   inputMinimum          = -(1 << maxLog2TrDynamicRange);
   const TCoeff   inputMaximum          =  (1 << maxLog2TrDynamicRange) - 1;
 
@@ -528,7 +528,7 @@ void Quant::dequant(const TransformUnit& tu,
   const uint32_t  uiHeight              = area.height;
   TCoeff *const   piCoef                = dstCoeff.buf;
   const uint32_t  numSamplesInBlock     = uiWidth * uiHeight;
-  const int       maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const int       maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange();
   const TCoeff    transformMinimum      = -(1 << maxLog2TrDynamicRange);
   const TCoeff    transformMaximum      =  (1 << maxLog2TrDynamicRange) - 1;
   const bool      isTransformSkip       = tu.mtsIdx[compID] == MTS_SKIP;
@@ -744,7 +744,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
         CoeffSigBuf piQCoef = tu.getCoeffs(compID);
 
   const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
   {
     CoeffCodingContext cctx(tu, compID, tu.cs->slice->signDataHidingEnabled);
@@ -844,7 +844,7 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const CCoeffBuf piCoef    = pSrc;
 
   const bool useTransformSkip      = tu.mtsIdx[compID] == MTS_SKIP;
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
   const int scalingListType     = getScalingListType( tu.cu->predMode, compID );
   CHECK( scalingListType >= SCALING_LIST_NUM, "Invalid scaling list" );

@@ -282,7 +282,7 @@ const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 };
 
 
-const std::vector<SVPair<int>> ColorPrimariesToIntMap =
+const std::vector<SVPair<int>> ColourPrimariesToIntMap =
 {
   { "reserved",            0 },
   { "bt709",               1 },
@@ -328,7 +328,7 @@ const std::vector<SVPair<int>> TransferCharacteristicsToIntMap =
   { "12",12 },{ "13",13 },{ "14",14 },{ "15",15 },{ "16",16 },{ "17",17 },{ "18",18 }
 };
 
-const std::vector<SVPair<int>> ColorMatrixToIntMap =
+const std::vector<SVPair<int>> ColourMatrixToIntMap =
 {
   { "gbr",              0 },
   { "bt709",            1 },
@@ -415,6 +415,20 @@ const std::vector<SVPair<int8_t>> MtAbrevToIntMap =
   { "3",         3 }
 };
 
+const std::vector<SVPair<int>> RangeToFullRangeFlagMap =
+{
+  { "unknown",     0 },
+  { "unspecified", 0 },
+  { "limited",     1 },
+  { "mpeg",        1 },
+  { "tv",          1 },
+  { "0",           1 },
+  { "full",        2 },
+  { "jpeg",        2 },
+  { "pc",          2 },
+  { "1",           2 },
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -426,6 +440,8 @@ static void setPresets( VVEncAppCfg* appcfg, vvenc_config* cfg,  int preset );
 static void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int dbcs );
 
 static void setSAO( VVEncAppCfg *appcfg, vvenc_config *cfg, int saoVal );
+
+static void setColourRange( VVEncAppCfg* appcfg, vvenc_config *cfg, int colourRange );
 
 
 // ====================================================================================================================
@@ -526,6 +542,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &c->m_SegmentMode,                 &SegmentToEnumMap      );
   IStreamToEnum<vvencHDRMode>       toSDRMode                    ( &sdrMode,                          &SdrModeToIntMap       );
   IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &hdrMode,                          &HdrModeToIntMap       );
+  IStreamToFunc<int>                toColourRangeMode            ( setColourRange, this, c, &RangeToFullRangeFlagMap, 0 );
 
   IStreamToRefVec<int32_t>          toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
@@ -558,9 +575,9 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   IStreamToArr<int>                 toMCTFFrames                 ( &c->m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES, &c->m_vvencMCTF.numFrames );
   IStreamToArr<double>              toMCTFStrengths              ( &c->m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES, &c->m_vvencMCTF.numStrength );
-  IStreamToEnum<int>                toColorPrimaries             ( &c->m_colourPrimaries,        &ColorPrimariesToIntMap );
+  IStreamToEnum<int>                toColourPrimaries            ( &c->m_colourPrimaries,        &ColourPrimariesToIntMap );
   IStreamToEnum<int>                toTransferCharacteristics    ( &c->m_transferCharacteristics,&TransferCharacteristicsToIntMap );
-  IStreamToEnum<int>                toColorMatrix                ( &c->m_matrixCoefficients,     &ColorMatrixToIntMap );
+  IStreamToEnum<int>                toColourMatrix               ( &c->m_matrixCoefficients,     &ColourMatrixToIntMap );
   IStreamToEnum<int>                toPrefTransferCharacteristics( &c->m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToArr<unsigned int>        toMasteringDisplay            ( &c->m_masteringDisplay[0], 10  );
@@ -632,10 +649,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   opts.addOptions()
   ("FrameSkip,-fs",                                     m_FrameSkip,                                         "number of frames to skip at start of input YUV [off]")
-  ("segment",                                           toSegment,                                           "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
-                                                                                                             " first: first segment           \n"
-                                                                                                             " mid  : all segments between first and last segment\n"
-                                                                                                             " last : last segment")
   ;
 
   if( m_easyMode )
@@ -672,12 +685,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("mtprofile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
-    ("ifp",                                             toUseIfp,                                            "inter-frame parallelization(IFP) (-1: auto, 0: off, 1: on, with sync. offset of two CTU lines)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding, none, rpsei: Recovery Point SEI,\n"
                                                                                                              "                    idr_no_radl: IDR, without leading pictures, use for DASH)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify intra period in seconds instead, see -refreshsec)")
-    ("tiles",                                           toNumTiles,                                          "number of tile columns and rows")
     ;
   }
   else
@@ -736,6 +747,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
                                                                                                              "use: off, sdr|sdr_709, sdr_2020, sdr_470bg")
     ("hdr",                                             toHDRMode,                                           "set HDR mode + BT.709 or BT.2020 color space (+ SEI messages for hlg) "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
+    ("range",                                           toColourRangeMode,                                   "set colour range: unknown, limited | mpeg | tv, full | jpeg | pc")
     ;
   }
   else
@@ -761,6 +773,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.setSubSection("Encoder Options");
     opts.addOptions()
     ("internal-bitdepth",                               c->m_internalBitDepth[0],                           "internal bitdepth (8, 10)")
+    ("ifp",                                             toUseIfp,                                           "inter-frame parallelization(IFP) (-1: auto, 0: off, 1: on, with sync. offset of two CTU lines)")
+    ("tiles",                                           toNumTiles,                                         "number of tile columns and rows")
     ("accessunitdelimiter,-aud",                        toAud,                                              "emit Access Unit Delimiter NALUs (-1: auto, 0: off, 1: on; default: auto - only if needed by dependent options)", true)
     ("vuiparameterspresent,-vui",                       toVui,                                              "emit VUI information (-1: auto, 0: off, 1: on; default: auto - only if needed by dependent options)", true)
     ("hrdparameterspresent,-hrd",                       c->m_hrdParametersPresent,                          "emit VUI HRD information (0: off, 1: on)")
@@ -777,6 +791,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
   opts.setSubSection("Input Options");
   opts.addOptions()
+  ("segment",                                           toSegment,                                         "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+                                                                                                           " first: first segment           \n"
+                                                                                                           " mid  : all segments between first and last segment\n"
+                                                                                                           " last : last segment")
   ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
   ("logofile",                                          m_logoFileName,                                    "set logo overlay filename (json)")
   ;
@@ -1017,9 +1035,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SEIDecodingUnitInfo",                             c->m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
     ("MasteringDisplayColourVolume",                    toMasteringDisplay,                                  "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
                                                                                                              "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
-                                                                                                             "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
+                                                                                                             "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2 "
+                                                                                                             "e.g. for P3D65 1000-nits, where G(x=0.265, y=0.690), B(x=0.150, y=0.060), R(x=0.680, y=0.320), WP(x=0.3127, y=0.3290), L(max=1000, min=0.0001): 13250,34500,7500,3000,34000,16000,15635,16450,10000000,1" )
     ("MaxContentLightLevel",                            toContentLightLevel,                                 "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
-                                                                                                             "max. frame average light level, range: 1 <= cll,fall <= 65535'")
+                                                                                                             "max. frame average light level, range: 1 <= cll,fall <= 65535', e.g. 1000,400")
     ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                       "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                              "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
                                                                                                              "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
@@ -1038,21 +1057,22 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SarWidth",                                        c->m_sarWidth,                                       "horizontal size of the sample aspect ratio")
     ("SarHeight",                                       c->m_sarHeight,                                      "vertical size of the sample aspect ratio")
 
-    ("ColourDescriptionPresent",                        c->m_colourDescriptionPresent,                       "Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present")
-    ("ColourPrimaries",                                 toColorPrimaries,                                    "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+    ("ColourDescriptionPresent",                        c->m_colourDescriptionPresent,                       "Signals whether colour_primaries, transfer_characteristics, matrix_coefficients, full_range_flag are present")
+    ("ColourPrimaries",                                 toColourPrimaries,                                   "Specify colour primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                              "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
 
-    ("TransferCharacteristics",                         toTransferCharacteristics,                           "Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+    ("TransferCharacteristics",                         toTransferCharacteristics,                           "Specify opto-electronic transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                              "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
                                                                                                              "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
-    ("MatrixCoefficients",                              toColorMatrix,                                       "Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
+    ("MatrixCoefficients",                              toColourMatrix,                                      "Specify colour matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
                                                                                                              "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
 
     ("ChromaLocInfoPresent",                            toChromaLocInfo,                                     "Signals whether chroma_sample_loc_type is present (-1: auto, 0: off, 1: on)")
     ("ChromaSampleLocType",                             c->m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content(-1 auto, 0-5 Chroma420LocType)")
     ("OverscanInfoPresent",                             c->m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
-    ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
+    ("VideoFullRange",                                  toColourRangeMode,                                   "Indicates the black level and range of luma and chroma signals")
+    ("Range",                                           toColourRangeMode,                                   "set colour range: unknown, limited | mpeg | tv, full | jpeg | pc")
     ;
 
     opts.setSubSection("Summary options (debugging)");
@@ -1232,6 +1252,62 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     {
       m_showHelp = true;
       rcOstr << fullOpts.str();
+
+      if( m_easyMode )
+      {
+        std::ostringstream additionalStr;
+        additionalStr << std::endl << "#======== string options by option 'additional' ================" << std::endl;
+        additionalStr << "Additional useful options of full feature app can be used with string option 'additional'." << std::endl;
+        additionalStr << "All available options of full feature app and vvencapp can be used in 'additional'." << std::endl;
+        additionalStr << "Options are assigned by '(long)optionname=value'. Concatenate options with ':'" << std::endl;
+        additionalStr << "For instanse set hdr10 bt2020 mode (corresponds to option '--hdr pq_2020')" << std::endl;
+        additionalStr << "vvencapp  --additional ColourPrimaries=bt2020:TransferCharacteristics=smpte2084:MatrixCoefficients=bt2020nc" << std::endl;
+        additionalStr << "'additional' options are always parsed after all other options have been parsed!" << std::endl;
+        additionalStr << "Overview of usefull additional options:" << std::endl;
+        rcOstr << additionalStr.str();
+
+        po::Options unusedOpts;
+        std::ostringstream addOpts;
+        unusedOpts.setSubSection("additional - VUI options");
+        unusedOpts.addOptions()
+        ("AspectRatioIdc",                                  c->m_aspectRatioIdc,           "Aspect ratio idc (0-16,255) 0=undef, 1=1:1, 2=12:11, 3=10:11, 4=16:11, 5=40:33, 6=24:11, 7=20:11, 8=32:11, 9=80:33, 10=18:11, 11=15:11, 12=64:33, 13=160:99, 14=4:3, 15=3:2, 16=2:1 "
+                                                                                           "e.g. --additional AspectRatioIdc=14")
+        ("Sar",                                             toSarSize,                     "Sample aspect ratio - ratio of width to height (WidthxHeight)")
+        ("ColourDescriptionPresent",                        c->m_colourDescriptionPresent, "Signals whether colour_primaries, transfer_characteristics, matrix_coefficients, full_range_flag are present")
+        ("ColourPrimaries",                                 toColourPrimaries,             "Specify colour primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                           "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
+        ("TransferCharacteristics",                         toTransferCharacteristics,     "Specify opto-electronic transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                           "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                                                           "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
+        ("MatrixCoefficients",                              toColourMatrix,                "Specify colour matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
+                                                                                           "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
+        ("ChromaLocInfoPresent",                            toChromaLocInfo,               "Signals whether chroma_sample_loc_type is present (-1: auto, 0: off, 1: on)")
+        ("ChromaSampleLocType",                             c->m_chromaSampleLocType,      "Specifies the location of chroma samples for progressive content(-1 auto, 0-5 Chroma420LocType)")
+        ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,  "Indicates whether conformant decoded pictures are suitable for display using overscan")
+        ;
+
+        unusedOpts.setSubSection("additional - SEI and auxiliary options");
+        unusedOpts.addOptions()
+        ("MasteringDisplayColourVolume",                    toMasteringDisplay,            "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
+                                                                                           "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
+                                                                                           "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2 "
+                                                                                           "e.g. for P3D65 1000-nits, where G(x=0.265, y=0.690), B(x=0.150, y=0.060), R(x=0.680, y=0.320), WP(x=0.3127, y=0.3290), L(max=1000, min=0.0001): "
+                                                                                           "--additional MasteringDisplayColourVolume=13250,34500,7500,3000,34000,16000,15635,16450,10000000,1" )
+        ("MaxContentLightLevel",                            toContentLightLevel,           "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
+                                                                                           "max. frame average light level, range: 1 <= cll,fall <= 65535', e.g. --additional MaxContentLightLevel=1000,400")
+        ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics, "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                           "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                                                           "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67 , e.g. --additional PreferredTransferCharacteristics=arib-std-b67")
+        ;
+       unusedOpts.setSubSection("additional - Slice decision options");
+        unusedOpts.addOptions()
+        ("PicReordering",                                   c->m_picReordering,            "Allow reordering of pictures (0:off, 1:on), should be disabled for low delay requirements")
+        ;
+
+        po::doAdditionalOptList( addOpts, unusedOpts );
+        rcOstr << addOpts.str();
+
+      }
       return 1;
     }
 
@@ -1776,6 +1852,15 @@ static void setSAO( VVEncAppCfg*, vvenc_config *cfg, int saoVal )
   cfg->m_saoScc  = saoVal == 2;
 }
 
+static void setColourRange( VVEncAppCfg*, vvenc_config *cfg, int colourRange )
+{
+  if( colourRange ) // enable vui/colour description if colour range is specified
+  {
+    cfg->m_videoFullRangeFlag = (colourRange == 2) ? true : false;
+    cfg->m_colourDescriptionPresent = true;
+    cfg->m_vuiParametersPresent = true;
+  }
+}
 
 } // namespace
 

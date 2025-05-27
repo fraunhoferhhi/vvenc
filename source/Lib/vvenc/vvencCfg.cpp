@@ -1156,9 +1156,21 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_aspectRatioInfoPresent = true;
   }
 
+  if ( c->m_vuiParametersPresent == 0 )
+  {
+    if( c->m_aspectRatioIdc > 1 ) c->m_vuiParametersPresent = 1;
+    if( c->m_colourPrimaries != 2 || c->m_matrixCoefficients != 2 || c->m_matrixCoefficients != 2 )
+    {
+      c->m_vuiParametersPresent = 1;
+      c->m_colourDescriptionPresent = true;
+    }
+  }
+
+
   if( !c->m_overscanInfoPresent && c->m_overscanAppropriateFlag)
   {
     c->m_overscanInfoPresent = true;
+    c->m_vuiParametersPresent = 1;
   }
 
   if( c->m_chromaSampleLocType < 0 )

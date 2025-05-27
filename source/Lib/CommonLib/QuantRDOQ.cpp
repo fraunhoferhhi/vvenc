@@ -509,12 +509,12 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
 
   const SPS &sps            = *tu.cs->sps;
   const CompArea& rect      = tu.blocks[compID];
-  const uint32_t uiWidth        = rect.width;
-  const uint32_t uiHeight       = rect.height;
+  const uint32_t uiWidth    = rect.width;
+  const uint32_t uiHeight   = rect.height;
   const ChannelType chType  = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
   const bool useIntraSubPartitions = tu.cu->ispMode && isLuma(compID);
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
@@ -1129,7 +1129,7 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
   const ChannelType chType  = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
   const int transformShift = getTransformShift( channelBitDepth, rect.size(), maxLog2TrDynamicRange );
 
@@ -1232,7 +1232,8 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
             uint32_t    cLevel;
       const BinFracBits fracBitsPar = fracBits.getFracBitsArray( cctx.parityCtxIdAbsTS() );
 
-      goRiceParam = cctx.templateAbsSumTS( scanPos, dstCoeff );
+      //goRiceParam = cctx.templateAbsSumTS( scanPos, dstCoeff );
+      goRiceParam = 1;
       unsigned ctxIdSign = cctx.signCtxIdAbsTS(scanPos, dstCoeff, 0);
       const BinFracBits fracBitsSign = fracBits.getFracBitsArray(ctxIdSign);
       const uint8_t     sign         = srcCoeff[ blkPos ] < 0 ? 1 : 0;
@@ -1342,7 +1343,7 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
   const ChannelType chType = toChannelType(compID);
   const int channelBitDepth = sps.bitDepths[chType];
 
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
   const int  dirMode = tu.cu->bdpcmM[toChannelType(compID)];
 
   const int transformShift = getTransformShift(channelBitDepth, rect.size(), maxLog2TrDynamicRange);
@@ -1444,7 +1445,8 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
       uint32_t    cLevel;
       const BinFracBits fracBitsPar = fracBits.getFracBitsArray(cctx.parityCtxIdAbsTS());
 
-      goRiceParam = cctx.templateAbsSumTS(scanPos, dstCoeff);
+      //goRiceParam = cctx.templateAbsSumTS(scanPos, dstCoeff);
+      goRiceParam = 1;
       unsigned ctxIdSign = cctx.signCtxIdAbsTS(scanPos, dstCoeff, dirMode);
       const BinFracBits fracBitsSign = fracBits.getFracBitsArray(ctxIdSign);
       const uint8_t     sign = srcCoeff[blkPos] - predCoeff < 0 ? 1 : 0;

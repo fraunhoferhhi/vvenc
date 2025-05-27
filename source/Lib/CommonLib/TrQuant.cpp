@@ -487,8 +487,8 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_TRAFO );
 
-  const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange( toChannelType( compID ) );
-  const unsigned bitDepth               = tu.cs->sps->bitDepths[               toChannelType( compID ) ];
+  const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange();
+  const unsigned bitDepth               = tu.cs->sps->bitDepths[toChannelType( compID )];
   const int      TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
   const uint32_t transformWidthIndex    = Log2(width ) - 1;  // nLog2WidthMinus1, since transform start from 2-point
   const uint32_t transformHeightIndex   = Log2(height) - 1;  // nLog2HeightMinus1, since transform start from 2-point
@@ -575,8 +575,8 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 
   const int      width                  = pCoeff.width;
   const int      height                 = pCoeff.height;
-  const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange( toChannelType( compID ) );
-  const unsigned bitDepth               = tu.cs->sps->bitDepths[               toChannelType( compID ) ];
+  const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange();
+  const unsigned bitDepth               = tu.cs->sps->bitDepths[toChannelType( compID )];
   const int      TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
   const TCoeff   clipMinimum            = -( 1 << maxLog2TrDynamicRange );
   const TCoeff   clipMaximum            =  ( 1 << maxLog2TrDynamicRange ) - 1;
@@ -787,7 +787,7 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     }
     if (tu.mtsIdx[compID] == MTS_SKIP)
     {
-      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(compID)));
+      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange());
       scaleSAD *= pow(2, trShift);
     }
     trCosts.push_back(TrCost(int(std::min<double>(sumAbs * scaleSAD, std::numeric_limits<int>::max())), pos++));

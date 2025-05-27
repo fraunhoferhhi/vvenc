@@ -386,7 +386,8 @@ void BinEncoder::encodeBin( unsigned bin, unsigned ctxId )
   {
     if( m_Range < 256 )
     {
-      int numBits   = rcProbModel.getRenormBitsRange( m_Range );
+      //int numBits   = rcProbModel.getRenormBitsRange();
+      int numBits   = 1;
       m_bitsLeft   -= numBits;
       m_Low       <<= numBits;
       m_Range     <<= numBits;
