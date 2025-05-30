@@ -847,6 +847,129 @@ static bool test_AffineGradientSearch()
 }
 #endif // ENABLE_SIMD_OPT_AFFINE_ME
 
+#ifdef ENABLE_SIMD_OPT_BUFFER
+static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  static constexpr unsigned bd = 10;
+  ClpRng clpRng{ bd };
+  DimensionGenerator dim;
+  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false }; // unsigned 10-bit
+
+  const unsigned shiftNum = std::max<int>( 2, ( IF_INTERNAL_PREC - bd ) ) + 1;
+  const int      offset   = ( 1 << ( shiftNum - 1 ) ) + 2 * IF_INTERNAL_OFFS;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers.
+  Pel *src0     = ( Pel* ) xMalloc( Pel, buf_size );
+  Pel *src1     = ( Pel* ) xMalloc( Pel, buf_size );
+  Pel *dest_ref = ( Pel* ) xMalloc( Pel, buf_size );
+  Pel *dest_opt = ( Pel* ) xMalloc( Pel, buf_size );
+
+  bool passed = true;
+
+  // Test addAvg with no strides.
+  // Set height and width to powers of two >= 2.
+  for( int height : { 2, 4, 8, 16, 32, 64, 128 } )
+  {
+    for( int width : { 2, 4, 8, 16, 32, 64, 128 } )
+    {
+      std::ostringstream sstm_test;
+      sstm_test << "PelBufferOps::addAvg" << " w=" << width << " h=" << height;
+      std::cout << "Testing " << sstm_test.str() << std::endl;
+
+      for( unsigned n = 0; n < num_cases; n++ )
+      {
+        // Fill input buffers with unsigned 10-bit data from generator.
+        std::generate( src0, src0 + buf_size, inp_gen );
+        std::generate( src1, src1 + buf_size, inp_gen );
+
+        // Clear output blocks.
+        memset( dest_ref, 0, buf_size * sizeof( Pel ) );
+        memset( dest_opt, 0, buf_size * sizeof( Pel ) );
+
+        ref->addAvg( src0, src1, dest_ref, width * height, shiftNum, offset, clpRng );
+        opt->addAvg( src0, src1, dest_opt, width * height, shiftNum, offset, clpRng );
+
+        passed = compare_values_2d( sstm_test.str(), dest_ref, dest_opt, height, width ) && passed;
+      }
+    }
+  }
+
+  // Test addAvg with strides.
+  for( int height : { 4, 8, 16, 24, 32, 64 } )
+  {
+    for( int width : { 4, 8, 12, 16, 20, 24, 32, 40, 48, 64 } )
+    {
+      std::ostringstream sstm_test;
+      sstm_test << "PelBufferOps::addAvg(strided)" << " w=" << width << " h=" << height;
+      std::cout << "Testing " << sstm_test.str() << std::endl;
+
+      for( unsigned n = 0; n < num_cases; n++ )
+      {
+        // Set random strides >= width.
+        const int src0Stride = dim.get( width, MAX_CU_SIZE );
+        const int src1Stride = dim.get( width, MAX_CU_SIZE );
+        const int destStride = dim.get( width, MAX_CU_SIZE );
+
+        // Fill input buffers with unsigned 10-bit data from generator.
+        std::generate( src0, src0 + buf_size, inp_gen );
+        std::generate( src1, src1 + buf_size, inp_gen );
+
+        // Clear output blocks.
+        memset( dest_ref, 0, buf_size * sizeof( Pel ) );
+        memset( dest_opt, 0, buf_size * sizeof( Pel ) );
+
+        if( ( width & 15 ) == 0 )
+        {
+          ref->addAvg16( src0, src0Stride, src1, src1Stride, dest_ref, destStride, width, height, shiftNum, offset, clpRng );
+          opt->addAvg16( src0, src0Stride, src1, src1Stride, dest_opt, destStride, width, height, shiftNum, offset, clpRng );
+        }
+        else if( ( width & 7 ) == 0 )
+        {
+          ref->addAvg8( src0, src0Stride, src1, src1Stride, dest_ref, destStride, width, height, shiftNum, offset, clpRng );
+          opt->addAvg8( src0, src0Stride, src1, src1Stride, dest_opt, destStride, width, height, shiftNum, offset, clpRng );
+        }
+        else if( ( width & 3 ) == 0 )
+        {
+          ref->addAvg4( src0, src0Stride, src1, src1Stride, dest_ref, destStride, width, height, shiftNum, offset, clpRng );
+          opt->addAvg4( src0, src0Stride, src1, src1Stride, dest_opt, destStride, width, height, shiftNum, offset, clpRng );
+        }
+        else // Shouldn't come here.
+        {
+          THROW( "Unsupported size" );
+        }
+
+        std::ostringstream sstm_subtest;
+        sstm_subtest << sstm_test.str() << " src0Stride=" << src0Stride << " src1Stride=" << src1Stride << " destStride=" << destStride;
+
+        passed = compare_values_2d( sstm_subtest.str(), dest_ref, dest_opt, height, width, destStride ) && passed;
+      }
+    }
+  }
+
+  xFree( src0 );
+  xFree( src1 );
+  xFree( dest_ref );
+  xFree( dest_opt );
+
+  return passed;
+}
+
+static bool test_PelBufferOps()
+{
+  PelBufferOps ref{ /*enableOpt=*/false };
+  PelBufferOps opt{ /*enableOpt=*/true };
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  passed = check_addAvg( &ref, &opt, num_cases ) && passed;
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_BUFFER
+
 int main()
 {
   unsigned seed = ( unsigned ) time( NULL );
@@ -871,6 +994,9 @@ int main()
 #endif
 #if ENABLE_SIMD_OPT_AFFINE_ME
   passed = test_AffineGradientSearch() && passed;
+#endif
+#if ENABLE_SIMD_OPT_BUFFER
+  passed = test_PelBufferOps() && passed;
 #endif
 
   if( !passed )

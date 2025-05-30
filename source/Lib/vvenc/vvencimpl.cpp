@@ -842,15 +842,6 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
     }
 # endif  // defined( TARGET_SIMD_X86 )
 
-# if ENABLE_SIMD_OPT_BUFFER
-#  if defined( TARGET_SIMD_X86 )
-    g_pelBufOP.initPelBufOpsX86();
-#  endif
-#  if defined( TARGET_SIMD_ARM )
-    g_pelBufOP.initPelBufOpsARM();
-#  endif
-# endif   // ENABLE_SIMD_OPT_BUFFER
-
 # if ENABLE_SIMD_TRAFO
 #  if defined( TARGET_SIMD_X86 )
     g_tCoeffOps.initTCoeffOpsX86();

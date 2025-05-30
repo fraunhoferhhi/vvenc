@@ -80,7 +80,7 @@ using namespace arm_simd;
 
 struct PelBufferOps
 {
-  PelBufferOps();
+  PelBufferOps( bool enableOpt = true );
 
   bool isInitX86Done;
 
