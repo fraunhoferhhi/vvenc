@@ -63,6 +63,178 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, unsigned rshift, int offset,
+                  const ClpRng& clpRng )
+{
+  CHECK( ( numSamples & ( numSamples - 1 ) ) != 0 || numSamples < 4, "numSamples must be power of two >= 4" );
+  CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
+
+  const int lshift = -static_cast<int>( rshift );
+
+  if( ( numSamples & 15 ) == 0 )
+  {
+    int n = 0;
+    do
+    {
+      uint16x8_t s1_lo = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 0 ) );
+      uint16x8_t s1_hi = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 8 ) );
+      uint16x8_t s2_lo = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 0 ) );
+      uint16x8_t s2_hi = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 8 ) );
+
+      uint16x8_t d_lo = vaddq_u16( s1_lo, s2_lo );
+      d_lo = vaddq_u16( d_lo, vdupq_n_u16( offset ) );
+      d_lo = vshlq_u16( d_lo, vdupq_n_s16( lshift ) );
+      d_lo = vminq_u16( d_lo, vdupq_n_u16( clpRng.max() ) );
+      uint16x8_t d_hi = vaddq_u16( s1_hi, s2_hi );
+      d_hi = vaddq_u16( d_hi, vdupq_n_u16( offset ) );
+      d_hi = vshlq_u16( d_hi, vdupq_n_s16( lshift ) );
+      d_hi = vminq_u16( d_hi, vdupq_n_u16( clpRng.max() ) );
+
+      vst1q_s16( dest + n + 0, vreinterpretq_s16_u16( d_lo ) );
+      vst1q_s16( dest + n + 8, vreinterpretq_s16_u16( d_hi ) );
+
+      n += 16;
+    } while( n != numSamples );
+  }
+  else if( numSamples == 8 )
+  {
+    uint16x8_t s1 = vreinterpretq_u16_s16( vld1q_s16( src0 ) );
+    uint16x8_t s2 = vreinterpretq_u16_s16( vld1q_s16( src1 ) );
+
+    uint16x8_t d = vaddq_u16( s1, s2 );
+    d = vaddq_u16( d, vdupq_n_u16( offset ) );
+    d = vshlq_u16( d, vdupq_n_s16( lshift ) );
+    d = vminq_u16( d, vdupq_n_u16( clpRng.max() ) );
+
+    vst1q_s16( dest, vreinterpretq_s16_u16( d ) );
+  }
+  else // numSamples == 4
+  {
+    uint16x4_t s1 = vreinterpret_u16_s16( vld1_s16( src0 ) );
+    uint16x4_t s2 = vreinterpret_u16_s16( vld1_s16( src1 ) );
+
+    uint16x4_t d = vadd_u16( s1, s2 );
+    d = vadd_u16( d, vdup_n_u16( offset ) );
+    d = vshl_u16( d, vdup_n_s16( lshift ) );
+    d = vmin_u16( d, vdup_n_u16( clpRng.max() ) );
+
+    vst1_s16( dest, vreinterpret_s16_u16( d ) );
+  }
+}
+
+template<int W>
+void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                          int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
+
+template<>
+void addAvg_strided_neon<16>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
+                              int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
+{
+  CHECK( height < 1, "Height must be >= 1" );
+  CHECK( width < 16 || width & 15, "Width must be >= 16 and a multiple of 16" );
+  CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
+
+  const int lshift = -static_cast<int>( rshift );
+
+  do
+  {
+    int w = 0;
+    do
+    {
+      uint16x8_t s1_lo = vreinterpretq_u16_s16( vld1q_s16( src0 + w + 0 ) );
+      uint16x8_t s1_hi = vreinterpretq_u16_s16( vld1q_s16( src0 + w + 8 ) );
+      uint16x8_t s2_lo = vreinterpretq_u16_s16( vld1q_s16( src1 + w + 0 ) );
+      uint16x8_t s2_hi = vreinterpretq_u16_s16( vld1q_s16( src1 + w + 8 ) );
+
+      uint16x8_t d_lo = vaddq_u16( s1_lo, s2_lo );
+      d_lo = vaddq_u16( d_lo, vdupq_n_u16( offset ) );
+      d_lo = vshlq_u16( d_lo, vdupq_n_s16( lshift ) );
+      d_lo = vminq_u16( d_lo, vdupq_n_u16( clpRng.max() ) );
+      uint16x8_t d_hi = vaddq_u16( s1_hi, s2_hi );
+      d_hi = vaddq_u16( d_hi, vdupq_n_u16( offset ) );
+      d_hi = vshlq_u16( d_hi, vdupq_n_s16( lshift ) );
+      d_hi = vminq_u16( d_hi, vdupq_n_u16( clpRng.max() ) );
+
+      vst1q_s16( dest + w + 0, vreinterpretq_s16_u16( d_lo ) );
+      vst1q_s16( dest + w + 8, vreinterpretq_s16_u16( d_hi ) );
+
+      w += 16;
+    } while( w != width );
+
+    src0 += src0Stride;
+    src1 += src1Stride;
+    dest += destStride;
+  } while( --height != 0 );
+}
+
+template<>
+void addAvg_strided_neon<8>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
+                             int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
+{
+  CHECK( height < 1, "Height must be >= 1" );
+  CHECK( width < 8 || width & 7, "Width must be >= 8 and a multiple of 8" );
+  CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
+
+  const int lshift = -static_cast<int>( rshift );
+
+  do
+  {
+    int w = 0;
+    do
+    {
+      uint16x8_t s1 = vreinterpretq_u16_s16( vld1q_s16( src0 + w ) );
+      uint16x8_t s2 = vreinterpretq_u16_s16( vld1q_s16( src1 + w ) );
+
+      uint16x8_t d = vaddq_u16( s1, s2 );
+      d = vaddq_u16( d, vdupq_n_u16( offset ) );
+      d = vshlq_u16( d, vdupq_n_s16( lshift ) );
+      d = vminq_u16( d, vdupq_n_u16( clpRng.max() ) );
+
+      vst1q_s16( dest + w, vreinterpretq_s16_u16( d ) );
+
+      w += 8;
+    } while( w != width );
+
+    src0 += src0Stride;
+    src1 += src1Stride;
+    dest += destStride;
+  } while( --height != 0 );
+}
+
+template<>
+void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest,
+                             int destStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
+{
+  CHECK( height < 1, "Height must be >= 1" );
+  CHECK( width < 4 || width & 3, "Width must be >= 4 and a multiple of 4" );
+  CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
+
+  const int lshift = -static_cast<int>( rshift );
+
+  do
+  {
+    int w = 0;
+    do
+    {
+      uint16x4_t s1 = vreinterpret_u16_s16( vld1_s16( src0 + w ) );
+      uint16x4_t s2 = vreinterpret_u16_s16( vld1_s16( src1 + w ) );
+
+      uint16x4_t d = vadd_u16( s1, s2 );
+      d = vadd_u16( d, vdup_n_u16( offset ) );
+      d = vshl_u16( d, vdup_n_s16( lshift ) );
+      d = vmin_u16( d, vdup_n_u16( clpRng.max() ) );
+
+      vst1_s16( dest + w, vreinterpret_s16_u16( d ) );
+
+      w += 4;
+    } while( w != width );
+
+    src0 += src0Stride;
+    src1 += src1Stride;
+    dest += destStride;
+  } while( --height != 0 );
+}
+
 void applyLut_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width,
                     int height, const Pel* lut )
 {
@@ -392,6 +564,11 @@ void applyLut_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const p
 template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
+  addAvg   = addAvg_neon;
+  addAvg4  = addAvg_strided_neon<4>;
+  addAvg8  = addAvg_strided_neon<8>;
+  addAvg16 = addAvg_strided_neon<16>;
+
   applyLut = applyLut_neon;
 }
 
