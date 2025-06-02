@@ -1039,7 +1039,7 @@ void applyPlanarCorrectionSIMD( const Pel* refPel, const ptrdiff_t refStride, Pe
     __m256i vy = _mm256_set_epi16(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
     __m256i v1 = _mm256_set_epi16(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
     __m256i v0 = _mm256_set_epi16(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-    __m256i v8 = _mm256_set_epi16(8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8);
+    __m256i v16 = _mm256_set_epi16(16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16);
     __m256i v256 = _mm256_set_epi32 (256,256,256,256,256,256,256,256);
 
     __m256i vpelmin   = _mm256_set1_epi16(0);
@@ -1086,7 +1086,7 @@ void applyPlanarCorrectionSIMD( const Pel* refPel, const ptrdiff_t refStride, Pe
         vDst = _mm256_min_epi16( vpelmax, _mm256_max_epi16( vpelmin, vDst ) );
         _mm256_storeu_si256 ((__m256i* ) (dstPel+y*dstStride + x ) ,vDst);
 
-        vx = _mm256_add_epi16(vx,v8);
+        vx = _mm256_add_epi16(vx,v16);
       }
       vy = _mm256_add_epi16(vy,v1);
     }
