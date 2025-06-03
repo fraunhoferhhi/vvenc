@@ -118,8 +118,14 @@ void MCTF::initMCTF_ARM()
   {
     _initMCTF_ARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initMCTF_ARM<SVE>();
+  }
+#endif // TARGET_SIMD_ARM_SVE
 }
-#endif  // ENABLE_SIMD_OPT_MCTF
+#endif // ENABLE_SIMD_OPT_MCTF
 
 #if ENABLE_SIMD_TRAFO
 void TCoeffOps::initTCoeffOpsARM()
