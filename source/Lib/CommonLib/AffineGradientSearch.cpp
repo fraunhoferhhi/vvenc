@@ -74,6 +74,9 @@ namespace vvenc {
 #ifdef TARGET_SIMD_X86
       initAffineGradientSearchX86();
 #endif
+#ifdef TARGET_SIMD_ARM
+      initAffineGradientSearchARM();
+#endif
     }
 #endif // ENABLE_SIMD_OPT_AFFINE_ME
   }

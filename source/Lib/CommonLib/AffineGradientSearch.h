@@ -53,8 +53,12 @@ namespace vvenc {
   //! \ingroup CommonLib
   //! \{
 
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
+#if defined(TARGET_SIMD_X86) && ENABLE_SIMD_OPT_AFFINE_ME
 using namespace x86_simd;
+#endif
+
+#if defined(TARGET_SIMD_ARM) && ENABLE_SIMD_OPT_AFFINE_ME
+using namespace arm_simd;
 #endif
 
   class AffineGradientSearch
@@ -72,14 +76,20 @@ using namespace x86_simd;
     AffineGradientSearch( bool enableOpt = true );
     ~AffineGradientSearch() {}
 
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_AFFINE_ME
+#if defined(TARGET_SIMD_X86) && ENABLE_SIMD_OPT_AFFINE_ME
     void initAffineGradientSearchX86();
     template <X86_VEXT vext>
     void _initAffineGradientSearchX86();
 #endif
+
+#if defined(TARGET_SIMD_ARM) && ENABLE_SIMD_OPT_AFFINE_ME
+    void initAffineGradientSearchARM();
+    template <ARM_VEXT vext>
+    void _initAffineGradientSearchARM();
+#endif
   };
 
-}
+} // namespace vvenc
 
 //! \}
 
