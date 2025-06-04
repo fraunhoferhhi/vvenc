@@ -625,10 +625,6 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   {
     g_pelBufOP.addAvg16(src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, clpRng);
   }
-  else if( width > 2 && height > 2 && width == destStride )
-  {
-    g_pelBufOP.addAvg16(src0, src1Stride<<2, src2, src2Stride<<2, dest, destStride<<2, width<<2, height>>2, shiftNum, offset, clpRng);
-  }
   else if( ( width & 7 ) == 0 )
   {
     g_pelBufOP.addAvg8( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, clpRng );
