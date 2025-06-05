@@ -427,10 +427,10 @@ public:
     return(absCoeffMod);
   }
 
-  unsigned templateAbsSumTS( int scanPos, const TCoeffSig* coeff )
-  {
-    return 1;
-  }
+  //unsigned templateAbsSumTS( int scanPos, const TCoeffSig* coeff )
+  //{
+  //  return 1;
+  //}
 
   int                       regBinLimit;
 

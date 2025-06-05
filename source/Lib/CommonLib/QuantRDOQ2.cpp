@@ -485,7 +485,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   const ChannelType chType  = toChannelType( compID );
   const int channelBitDepth = sps.bitDepths[ chType ];
 
-  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(chType);
+  const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange();
 
   if( compID != COMP_Cr || !tu.cbf[COMP_Cb] )
     xInitLastPosBitsTab( cctx, uiWidth, uiHeight, chType, fracBits );

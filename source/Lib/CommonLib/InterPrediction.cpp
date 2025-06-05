@@ -60,7 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-void addBDOFAvgCore(const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0, const Pel*gradY1, int gradStride, int width, int height, int tmpx, int tmpy, unsigned shift, int offset, const ClpRng& clpRng)
+void addBDOFAvgCore(const Pel* src0, const ptrdiff_t  src0Stride, const Pel* src1, const ptrdiff_t  src1Stride, Pel* dst, const ptrdiff_t dstStride, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0, const Pel*gradY1, const ptrdiff_t  gradStride, int width, int height, int tmpx, int tmpy, unsigned shift, int offset, const ClpRng& clpRng)
 {
   int b = 0;
 
@@ -155,8 +155,8 @@ void gradFilterCore(const Pel* pSrc, int srcStride, int width, int height, int g
 }
 
 void calcBDOFSumsCore( const Pel* srcY0Tmp, const Pel* srcY1Tmp, const Pel* gradX0, const Pel* gradX1,
-                       const Pel* gradY0, const Pel* gradY1, int xu, int yu, const int src0Stride, const int src1Stride,
-                       const int widthG, const int bitDepth, int* sumAbsGX, int* sumAbsGY, int* sumDIX, int* sumDIY,
+                       const Pel* gradY0, const Pel* gradY1, int xu, int yu, const ptrdiff_t src0Stride, const ptrdiff_t src1Stride,
+                       const ptrdiff_t widthG, const int bitDepth, int* sumAbsGX, int* sumAbsGY, int* sumDIX, int* sumDIY,
                        int* sumSignGY_GX )
 {
   int shift4 = 4;
@@ -611,13 +611,13 @@ void xFpBiDirOptFlowCore( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0,
 {
   int xUnit = width >> 2;
   int yUnit = height >> 2;
-  int widthG = width + 2 * BDOF_EXTEND_SIZE;
+  ptrdiff_t widthG = width + 2 * BDOF_EXTEND_SIZE;
 
-  int offsetPos = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
-  int stridePredMC = widthG + 2;
+  ptrdiff_t offsetPos = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
+  ptrdiff_t stridePredMC = widthG + 2;
 
-  const int src0Stride = stridePredMC;
-  const int src1Stride = stridePredMC;
+  const ptrdiff_t  src0Stride = stridePredMC;
+  const ptrdiff_t  src1Stride = stridePredMC;
 
   const Pel* srcY0Temp = srcY0;
   const Pel* srcY1Temp = srcY1;

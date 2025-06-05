@@ -304,7 +304,8 @@ private:
                         m_subPuMvOffset[MRG_MAX_NUM_CANDS];
   Distortion            m_uiSadBestForQPA;
 
-  static const double coefSquareCUs[2][5][2][2][2];
+  static const double coefSquareCUsFasterFastMedium[2][5][2][2][2];
+  static const double coefSquareCUsSlowSlower[2][5][2][5][2][2][2];
 
 public:
   EncCu();

@@ -478,12 +478,32 @@ static void doHelpOpt(std::ostream& out, const Options::Names& entry, unsigned p
   out << " [" << entry.opt->getDefault() << "] ";
 }
 
+/* format text for 'additional' string options for a single option:
+  * using the formatting: "option",
+  */
+ static void doAdditionalOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
+ {
+   pad_short = std::min(pad_short, 8u);
 
-static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
+   out << "   ";
+   out << &(spaces[40 - pad_short]);
+
+   if (!entry.opt_long.empty())
+   {
+     out << entry.opt_long.front();
+   }
+   out << " [" << entry.opt->getDefault() << "] ";
+ }
+
+static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0, bool isAdditionalOpt = false )
 {
   std::ostringstream line(std::ios_base::out);
   line << "  ";
-  doHelpOpt(line, entry, pad_short);
+
+  if ( isAdditionalOpt )
+    doAdditionalOpt(line, entry, pad_short);
+  else
+    doHelpOpt(line, entry, pad_short);
 
   const std::string& opt_desc = entry.opt->opt_desc;
   if (opt_desc.empty())
@@ -703,6 +723,61 @@ inline void doHelp(std::ostream& out, Options& opts, unsigned columns  = 120)
           if( (*itopt)->opt->opt_string == s )  // names are equal
           {
             doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
+            break;
+            }
+        }
+      }
+    }
+  }
+}
+
+/* format the help text */
+inline void doAdditionalOptList(std::ostream& out, Options& opts, unsigned columns  = 80)
+{
+  const unsigned pad_short = 3;
+  /* first pass: work out the longest option name */
+  unsigned max_width = 0;
+  for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+  {
+    std::ostringstream line(std::ios_base::out);
+    doAdditionalOpt(line, **it, pad_short);
+    max_width = std::max(max_width, (unsigned) line.tellp());
+  }
+
+  unsigned opt_width = std::min(max_width+2, 32u + pad_short) + 2;
+  unsigned desc_width = columns - opt_width;
+
+  /* second pass: write out formatted option and help text.
+    *  - align start of help text to start at opt_width
+    *  - if the option text is longer than opt_width, place the help
+    *    text at opt_width on the next line.
+    */
+  if( opts.subSections_list.empty())
+  {
+    for (const auto& opt: opts.opt_list)
+    {
+      doPrintHelpEntry( out, *opt, desc_width, opt_width, pad_short, true );
+    }
+    return;
+  }
+
+  for (const auto& section: opts.subSections_list)
+  {
+    if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+    {
+      out << std::endl << "#======== " << section << " ================" << std::endl;
+    }
+
+    Options::SubSectionNamesListMap::const_iterator itSectionMap = opts.sub_section_namelist_map.find(section);  // get list of options in subsection
+    if (itSectionMap != opts.sub_section_namelist_map.end())
+    {
+      for( auto & s : itSectionMap->second ) // iterate over options in subsections and find/print entry in opts list
+      {
+        for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+        {
+          if( (*itopt)->opt->opt_string == s )  // names are equal
+          {
+            doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short, true );
             break;
             }
         }

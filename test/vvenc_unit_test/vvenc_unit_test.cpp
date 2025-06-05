@@ -208,7 +208,7 @@ public:
 #if ENABLE_SIMD_OPT_INTRAPRED
 static bool check_IntraPredAngleLuma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
 {
-  static constexpr int bd = 10; // default bit-depth = 10
+  static constexpr unsigned int bd = 10; // default bit-depth = 10
   ClpRng clpRng{ bd };
   DimensionGenerator dim;
   InputGenerator<Pel> ref_gen{ bd, /*is_signed=*/false }; // unsigned 10-bit
@@ -584,7 +584,7 @@ static bool check_one_biDirOptFlow( InterPredInterpolation* ref, InterPredInterp
                         height, dstYref.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
   opt->xFpBiDirOptFlow( srcY0.data(), srcY1.data(), gradX0.data(), gradX1.data(), gradY0.data(), gradY1.data(), width,
                         height, dstYopt.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
-  return compare_values_2d( sstm.str(), dstYref.data(), dstYopt.data(), height, dstStride );
+  return compare_values_2d( sstm.str(), dstYref.data(), dstYopt.data(), height, (unsigned) dstStride );
 }
 
 static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolation* opt, unsigned num_cases, int width,
@@ -847,7 +847,7 @@ static bool test_AffineGradientSearch()
 }
 #endif // ENABLE_SIMD_OPT_AFFINE_ME
 
-int main( int argc, char** argv )
+int main()
 {
   unsigned seed = ( unsigned ) time( NULL );
   srand( seed );
