@@ -87,6 +87,15 @@ static inline int64_t horizontal_add_s64x2( const int64x2_t a )
 #endif
 }
 
+static inline uint64_t horizontal_add_u64x2( const uint64x2_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddvq_u64( a );
+#else
+  return vgetq_lane_u64( a, 0 ) + vgetq_lane_u64( a, 1 );
+#endif
+}
+
 static inline int horizontal_add_long_s16x8( const int16x8_t a )
 {
 #if REAL_TARGET_AARCH64
@@ -103,6 +112,16 @@ static inline int64_t horizontal_add_long_s32x4( const int32x4_t a )
 #else
   const int64x2_t b = vpaddlq_s32( a );
   return horizontal_add_s64x2( b );
+#endif
+}
+
+static inline uint64_t horizontal_add_long_u32x4( const uint32x4_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlvq_u32( a );
+#else
+  const uint64x2_t b = vpaddlq_u32( a );
+  return horizontal_add_u64x2( b );
 #endif
 }
 
@@ -159,6 +178,24 @@ static inline int64x2_t pairwise_add_s64x2( const int64x2_t a, const int64x2_t b
   int64x1_t lo = vadd_s64( vget_low_s64( a ), vget_high_s64( a ) );
   int64x1_t hi = vadd_s64( vget_low_s64( b ), vget_high_s64( b ) );
   return vcombine_s64( lo, hi );
+#endif
+}
+
+static inline float32x4_t div_f32x4( const float32x4_t a, const float32x4_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vdivq_f32( a, b );
+#else
+  float num[4], den[4], quo[4];
+  vst1q_f32( num, a );
+  vst1q_f32( den, b );
+
+  quo[0] = num[0] / den[0];
+  quo[1] = num[1] / den[1];
+  quo[2] = num[2] / den[2];
+  quo[3] = num[3] / den[3];
+
+  return vld1q_f32( quo );
 #endif
 }
 

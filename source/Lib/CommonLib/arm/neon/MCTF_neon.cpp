@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "sum_neon.h"
 
 #include <arm_neon.h>
+#include <math.h>
 
 //! \ingroup CommonLib
 //! \{
@@ -281,12 +282,377 @@ void applyPlanarCorrection_neon( const Pel* refPel, const ptrdiff_t refStride, P
   applyPlanarDeblockingCorrection_common( dstPel, dstStride, x1yzm, x2yzm, ySum, w, h, clpRng, motionError );
 }
 
+inline static void fastExp( float32x4_t num1, float32x4_t num2, float32x4_t denom, float32x4_t* x1, float32x4_t* x2 )
+{
+  // Apply fast exp with 10 iterations.
+  float32x4_t x_lo = vmlaq_f32( vdupq_n_f32( 1.0f ), num1, denom );
+  float32x4_t x_hi = vmlaq_f32( vdupq_n_f32( 1.0f ), num2, denom );
+
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+  x_lo = vmulq_f32( x_lo, x_lo );
+  x_hi = vmulq_f32( x_hi, x_hi );
+
+  *x1 = x_lo;
+  *x2 = x_hi;
+}
+
+void applyBlock_neon( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng,
+                      const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts,
+                      double weightScaling, double sigmaSq )
+{
+  const int w = blk.width;
+  const int h = blk.height;
+  const int bx = blk.x;
+  const int by = blk.y;
+
+  CHECK( w < 4, "Width must be greater than or equal to 4!" );
+  CHECK( h % 2 != 0, "Height must be multiple of 2!" );
+
+  const ptrdiff_t srcStride = src.stride;
+  const ptrdiff_t dstStride = dst.stride;
+
+  const Pel* srcPel = src.bufAt( bx, by );
+  Pel* dstPel = dst.bufAt( bx, by );
+
+  const Pel maxSampleValue = clpRng.max();
+
+  int vnoise[2 * VVENC_MCTF_RANGE] = { 0 };
+  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f };
+  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f };
+
+  int minError = INT32_MAX;
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    int64_t variance = 0, diffsum = 0;
+    const ptrdiff_t refStride = w;
+    const Pel* refBuf = correctedPics[i];
+    const Pel* srcBuf = srcPel;
+
+    if( w % 8 == 0 )
+    {
+      int32x4_t variance_acc = vdupq_n_s32( 0 );
+      int32x4_t diffR_acc = vdupq_n_s32( 0 );
+      int32x4_t diffD_acc = vdupq_n_s32( 0 );
+      int16_t ind[] = { 1, 1, 1, 1, 1, 1, 1, 0 };
+      int16x8_t clear_lastlane = vld1q_s16( ind );
+
+      int y1 = h >> 1;
+      do
+      {
+        // One iteration for x1 done outside loop.
+        int16x8_t pix0 = vld1q_s16( srcBuf );             // unsigned 10bit
+        int16x8_t ref0 = vld1q_s16( refBuf );             // unsigned 10bit
+        int16x8_t pix1 = vld1q_s16( srcBuf + srcStride ); // unsigned 10bit
+        int16x8_t ref1 = vld1q_s16( refBuf + refStride ); // unsigned 10bit
+
+        int16x8_t diff0 = vsubq_s16( pix0, ref0 ); // 11bit
+        int16x8_t diff1 = vsubq_s16( pix1, ref1 ); // 11bit
+
+        for( int x1 = 0; x1 < w - 8; x1 += 8 )
+        {
+          int16x8_t pixNext0 = vld1q_s16( srcBuf + 8 );             // unsigned 10bit
+          int16x8_t refNext0 = vld1q_s16( refBuf + 8 );             // unsigned 10bit
+          int16x8_t pixNext1 = vld1q_s16( srcBuf + srcStride + 8 ); // unsigned 10bit
+          int16x8_t refNext1 = vld1q_s16( refBuf + refStride + 8 ); // unsigned 10bit
+
+          int16x8_t diffNext0 = vsubq_s16( pixNext0, refNext0 );
+          int16x8_t diffNext1 = vsubq_s16( pixNext1, refNext1 );
+          int16x8_t diffR0 = vextq_s16( diff0, diffNext0, 1 );
+          int16x8_t diffR1 = vextq_s16( diff1, diffNext1, 1 );
+          int16x8_t diffD0 = vsubq_s16( diff1, diff0 ); // 11bit
+
+          diffR0 = vsubq_s16( diffR0, diff0 ); // 11bit
+          diffR1 = vsubq_s16( diffR1, diff1 ); // 11bit
+
+          variance_acc = vmlal_s16( variance_acc, vget_low_s16( diff0 ), vget_low_s16( diff0 ) ); // 29bit
+          variance_acc = vmlal_s16( variance_acc, vget_high_s16( diff0 ), vget_high_s16( diff0 ) );
+          diffR_acc = vmlal_s16( diffR_acc, vget_low_s16( diffR0 ), vget_low_s16( diffR0 ) ); // 31bit
+          diffR_acc = vmlal_s16( diffR_acc, vget_high_s16( diffR0 ), vget_high_s16( diffR0 ) );
+          diffD_acc = vmlal_s16( diffD_acc, vget_low_s16( diffD0 ), vget_low_s16( diffD0 ) ); // 31bit
+          diffD_acc = vmlal_s16( diffD_acc, vget_high_s16( diffD0 ), vget_high_s16( diffD0 ) );
+
+          variance_acc = vmlal_s16( variance_acc, vget_low_s16( diff1 ), vget_low_s16( diff1 ) ); // 29bit
+          variance_acc = vmlal_s16( variance_acc, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
+          diffR_acc = vmlal_s16( diffR_acc, vget_low_s16( diffR1 ), vget_low_s16( diffR1 ) ); // 31bit
+          diffR_acc = vmlal_s16( diffR_acc, vget_high_s16( diffR1 ), vget_high_s16( diffR1 ) );
+
+          if( y1 != 1 )
+          {
+            int16x8_t pixD1 = vld1q_s16( srcBuf + ( srcStride << 1 ) ); // unsigned 10bit
+            int16x8_t refD1 = vld1q_s16( refBuf + ( refStride << 1 ) ); // unsigned 10bit
+
+            int16x8_t diffD1 = vsubq_s16( pixD1, refD1 );                                       // 11bit
+            diffD1 = vsubq_s16( diffD1, diff1 );                                                // 11bit
+            diffD_acc = vmlal_s16( diffD_acc, vget_low_s16( diffD1 ), vget_low_s16( diffD1 ) ); // 31bit
+            diffD_acc = vmlal_s16( diffD_acc, vget_high_s16( diffD1 ), vget_high_s16( diffD1 ) );
+          }
+
+          diff0 = diffNext0;
+          diff1 = diffNext1;
+          srcBuf += 8;
+          refBuf += 8;
+        }
+
+        // Last iteration of x1.
+        int16x8_t diffR0 = vextq_s16( diff0, vdupq_n_s16( 0 ), 1 );
+        int16x8_t diffR1 = vextq_s16( diff1, vdupq_n_s16( 0 ), 1 );
+        int16x8_t diffD0 = vsubq_s16( diff1, diff0 ); // 11bit
+
+        diffR0 = vmlsq_s16( diffR0, diff0, clear_lastlane ); // 11 bit
+        diffR1 = vmlsq_s16( diffR1, diff1, clear_lastlane );
+
+        variance_acc = vmlal_s16( variance_acc, vget_low_s16( diff0 ), vget_low_s16( diff0 ) ); // 29bit
+        variance_acc = vmlal_s16( variance_acc, vget_high_s16( diff0 ), vget_high_s16( diff0 ) );
+        diffR_acc = vmlal_s16( diffR_acc, vget_low_s16( diffR0 ), vget_low_s16( diffR0 ) ); // 31bit
+        diffR_acc = vmlal_s16( diffR_acc, vget_high_s16( diffR0 ), vget_high_s16( diffR0 ) );
+        diffD_acc = vmlal_s16( diffD_acc, vget_low_s16( diffD0 ), vget_low_s16( diffD0 ) ); // 31bit
+        diffD_acc = vmlal_s16( diffD_acc, vget_high_s16( diffD0 ), vget_high_s16( diffD0 ) );
+
+        variance_acc = vmlal_s16( variance_acc, vget_low_s16( diff1 ), vget_low_s16( diff1 ) ); // 29bit
+        variance_acc = vmlal_s16( variance_acc, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
+        diffR_acc = vmlal_s16( diffR_acc, vget_low_s16( diffR1 ), vget_low_s16( diffR1 ) ); // 31bit
+        diffR_acc = vmlal_s16( diffR_acc, vget_high_s16( diffR1 ), vget_high_s16( diffR1 ) );
+
+        if( y1 != 1 )
+        {
+          int16x8_t pixD1 = vld1q_s16( srcBuf + ( srcStride << 1 ) ); // 10bit unsigned
+          int16x8_t refD1 = vld1q_s16( refBuf + ( refStride << 1 ) ); // 10bit unsigned
+
+          int16x8_t diffD1 = vsubq_s16( pixD1, refD1 );                                       // 11bit
+          diffD1 = vsubq_s16( diffD1, diff1 );                                                // 11bit
+          diffD_acc = vmlal_s16( diffD_acc, vget_low_s16( diffD1 ), vget_low_s16( diffD1 ) ); // 31bit
+          diffD_acc = vmlal_s16( diffD_acc, vget_high_s16( diffD1 ), vget_high_s16( diffD1 ) );
+        }
+
+        refBuf += ( refStride << 1 ) - ( w - 8 );
+        srcBuf += ( srcStride << 1 ) - ( w - 8 );
+      } while( --y1 != 0 );
+
+      variance = horizontal_add_long_s32x4( variance_acc );
+      uint32x4_t vDiffSum =
+          vaddq_u32( vreinterpretq_u32_s32( diffR_acc ), vreinterpretq_u32_s32( diffD_acc ) ); // 32 bit
+      diffsum = ( int64_t )horizontal_add_long_u32x4( vDiffSum );
+    }
+    else
+    {
+      CHECK( w != 4, "Width must be equal to 4!" );
+
+      // Last iteration for y1 done outside loop.
+      int32x4_t variance_acc = vdupq_n_s32( 0 );
+      int32x4_t diffR_acc = vdupq_n_s32( 0 );
+      int32x4_t diffD_acc = vdupq_n_s32( 0 );
+
+      int16x4_t pix = vld1_s16( srcBuf );
+      int16x4_t ref = vld1_s16( refBuf );
+      int16x4_t diff = vsub_s16( pix, ref );
+
+      int16_t ind[] = { 1, 1, 1, 0 };
+      int16x4_t clear_lastlane = vld1_s16( ind );
+
+      int y1 = h - 1;
+      do
+      {
+        int16x4_t pixD = vld1_s16( srcBuf + srcStride );
+        int16x4_t refD = vld1_s16( refBuf + refStride );
+
+        int16x4_t diffNext = vsub_s16( pixD, refD );
+        int16x4_t diffR = vext_s16( diff, vdup_n_s16( 0 ), 1 );
+        diffR = vmls_s16( diffR, diff, clear_lastlane );
+
+        variance_acc = vmlal_s16( variance_acc, diff, diff );
+        diffR_acc = vmlal_s16( diffR_acc, diffR, diffR );
+
+        int16x4_t diffD = vsub_s16( diffNext, diff );
+        diffD_acc = vmlal_s16( diffD_acc, diffD, diffD );
+
+        diff = diffNext;
+        refBuf += refStride;
+        srcBuf += srcStride;
+      } while( --y1 != 0 );
+
+      int16x4_t diffR = vext_s16( diff, vdup_n_s16( 0 ), 1 );
+      diffR = vmls_s16( diffR, diff, clear_lastlane );
+
+      variance_acc = vmlal_s16( variance_acc, diff, diff );
+      diffR_acc = vmlal_s16( diffR_acc, diffR, diffR );
+
+      variance = horizontal_add_long_s32x4( variance_acc );
+      diffsum = horizontal_add_long_s32x4( vaddq_s32( diffR_acc, diffD_acc ) );
+    }
+    variance <<= 2 * ( 10 - clpRng.bd );
+    diffsum <<= 2 * ( 10 - clpRng.bd );
+    const int cntV = w * h;
+    const int cntD = 2 * cntV - w - h;
+    vnoise[i] = ( int )round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
+    minError = std::min( minError, verror[i] );
+  }
+
+  for( int i = 0; i < numRefs; i++ )
+  {
+    const int error = verror[i];
+    const int noise = vnoise[i];
+    float ww = 1, sw = 1;
+    ww *= noise < 25 ? 1.0 : 0.6;
+    sw *= noise < 25 ? 1.0 : 0.8;
+    ww *= error < 50 ? 1.2 : ( error > 100 ? 0.6 : 1.0 );
+    sw *= error < 50 ? 1.0 : 0.8;
+    ww *= ( minError + 1.0 ) / ( error + 1.0 );
+
+    vww[i] = ww * weightScaling * refStrenghts[i];
+    vsw[i] = sw * 2 * sigmaSq;
+    vsw[i] = 1.0f / ( -vsw[i] * 1024 ); // Simplify fastExp calculation by taking reciprocal and negation.
+  }
+
+  if( w % 8 == 0 )
+  {
+    for( int y = 0; y < h; y++ )
+    {
+      for( int x = 0; x < w; x += 8 )
+      {
+        int16x8_t orgVal = vld1q_s16( srcPel + x );
+
+        float32x4_t newVal_lo = vcvtq_f32_s32( vmovl_s16( vget_low_s16( orgVal ) ) );
+        float32x4_t newVal_hi = vcvtq_f32_s32( vmovl_s16( vget_high_s16( orgVal ) ) );
+
+        float32x4_t tws_lo = vdupq_n_f32( 1.0f );
+        float32x4_t tws_hi = vdupq_n_f32( 1.0f );
+
+        int stride = y * w + x;
+
+        for( int i = 0; i < numRefs; i++ )
+        {
+          int16x8_t refVal = vld1q_s16( correctedPics[i] + stride );
+
+          float32x4_t refVal_lo = vcvtq_f32_s32( vmovl_s16( vget_low_s16( refVal ) ) );
+          float32x4_t refVal_hi = vcvtq_f32_s32( vmovl_s16( vget_high_s16( refVal ) ) );
+
+          int16x8_t diff = vsubq_s16( refVal, orgVal );
+
+          int32x4_t diffSq_lo = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
+          int32x4_t diffSq_hi = vmull_s16( vget_high_s16( diff ), vget_high_s16( diff ) );
+
+          float32x4_t num_lo = vcvtq_f32_s32( diffSq_lo );
+          float32x4_t num_hi = vcvtq_f32_s32( diffSq_hi );
+          float32x4_t recip_denom = vdupq_n_f32( vsw[i] ); // Negation already applied to vsw[i].
+
+          float32x4_t x_lo, x_hi;
+          fastExp( num_lo, num_hi, recip_denom, &x_lo, &x_hi );
+
+          float32x4_t vww_val = vdupq_n_f32( vww[i] );
+          float32x4_t weight_lo = vmulq_f32( x_lo, vww_val );
+          float32x4_t weight_hi = vmulq_f32( x_hi, vww_val );
+
+          newVal_lo = vmlaq_f32( newVal_lo, weight_lo, refVal_lo );
+          newVal_hi = vmlaq_f32( newVal_hi, weight_hi, refVal_hi );
+
+          tws_lo = vaddq_f32( tws_lo, weight_lo );
+          tws_hi = vaddq_f32( tws_hi, weight_hi );
+        }
+
+        newVal_lo = div_f32x4( newVal_lo, tws_lo );
+        newVal_hi = div_f32x4( newVal_hi, tws_hi );
+
+        uint16x4_t out_lo = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal_lo, vdupq_n_f32( 0.5f ) ) ) );
+        uint16x4_t out_hi = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal_hi, vdupq_n_f32( 0.5f ) ) ) );
+
+        uint16x8_t result = vcombine_u16( out_lo, out_hi );
+        result = vminq_u16( result, vdupq_n_u16( maxSampleValue ) );
+
+        vst1q_s16( dstPel + x, vreinterpretq_s16_u16( result ) );
+      }
+
+      srcPel += srcStride;
+      dstPel += dstStride;
+    }
+  }
+  else
+  {
+    CHECK( w != 4, "Width must be equal to 4!" );
+
+    for( int y = 0; y < h; y += 2 )
+    {
+      int16x4_t orgVal0 = vld1_s16( srcPel );
+      int16x4_t orgVal1 = vld1_s16( srcPel + srcStride );
+
+      float32x4_t newVal0 = vcvtq_f32_s32( vmovl_s16( orgVal0 ) );
+      float32x4_t newVal1 = vcvtq_f32_s32( vmovl_s16( orgVal1 ) );
+
+      float32x4_t tws0 = vdupq_n_f32( 1.0f );
+      float32x4_t tws1 = vdupq_n_f32( 1.0f );
+
+      int stride = y * w;
+      for( int i = 0; i < numRefs; i++ )
+      {
+        int16x4_t refVal0 = vld1_s16( correctedPics[i] + stride );
+        int16x4_t refVal1 = vld1_s16( correctedPics[i] + stride + w );
+
+        int16x4_t diff0 = vsub_s16( refVal0, orgVal0 );
+        int16x4_t diff1 = vsub_s16( refVal1, orgVal1 );
+
+        int32x4_t diffSq0 = vmull_s16( diff0, diff0 );
+        int32x4_t diffSq1 = vmull_s16( diff1, diff1 );
+
+        float32x4_t recip_denom = vdupq_n_f32( vsw[i] ); // Negation already applied to vsw[i].
+        float32x4_t num_lo = vcvtq_f32_s32( diffSq0 );
+        float32x4_t num_hi = vcvtq_f32_s32( diffSq1 );
+
+        float32x4_t x0, x1;
+        fastExp( num_lo, num_hi, recip_denom, &x0, &x1 );
+
+        float32x4_t vww_val = vdupq_n_f32( vww[i] );
+        float32x4_t weight0 = vmulq_f32( x0, vww_val );
+        float32x4_t weight1 = vmulq_f32( x1, vww_val );
+
+        newVal0 = vmlaq_f32( newVal0, weight0, vcvtq_f32_s32( vmovl_s16( refVal0 ) ) );
+        newVal1 = vmlaq_f32( newVal1, weight1, vcvtq_f32_s32( vmovl_s16( refVal1 ) ) );
+
+        tws0 = vaddq_f32( tws0, weight0 );
+        tws1 = vaddq_f32( tws1, weight1 );
+      }
+
+      newVal0 = div_f32x4( newVal0, tws0 );
+      newVal1 = div_f32x4( newVal1, tws1 );
+
+      uint16x4_t result0 = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal0, vdupq_n_f32( 0.5f ) ) ) );
+      uint16x4_t result1 = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal1, vdupq_n_f32( 0.5f ) ) ) );
+
+      result0 = vmin_u16( result0, vdup_n_u16( maxSampleValue ) );
+      result1 = vmin_u16( result1, vdup_n_u16( maxSampleValue ) );
+
+      vst1_s16( dstPel + 0, vreinterpret_s16_u16( result0 ) );
+      vst1_s16( dstPel + dstStride, vreinterpret_s16_u16( result1 ) );
+
+      srcPel += srcStride << 1;
+      dstPel += dstStride << 1;
+    }
+  }
+}
+
 template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;
+  m_applyBlock              = applyBlock_neon;
 }
 
 } // namespace vvenc
