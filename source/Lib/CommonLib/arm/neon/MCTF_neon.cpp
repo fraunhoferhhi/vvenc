@@ -57,6 +57,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCTF
 
+#include "MCTF_neon.h"
+
 namespace vvenc
 {
 
@@ -188,19 +190,10 @@ static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, 
   return error;
 }
 
-static const int32_t xSzm[6] = { 0, 1, 20, 336, 5440, 87296 };
-
 void applyPlanarCorrection_neon( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride,
                                  const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError )
 {
-  const int32_t blockSize = w * h;
-  const int32_t log2Width = floorLog2( w );
-  const int32_t maxPelVal = clpRng.max();
-  const int32_t mWeight = std::min( 512u, ( uint32_t )motionError * motionError );
-  const int32_t xSum = ( blockSize * ( w - 1 ) ) >> 1;
   int32_t x1yzm = 0, x2yzm = 0, ySum = 0;
-  int32_t b0, b1, b2;
-  int64_t numer, denom;
 
   CHECK( w != h, "Width must be same as height!" );
   CHECK( w < 4, "Width must be greater than or equal to 4!" );
@@ -285,78 +278,7 @@ void applyPlanarCorrection_neon( const Pel* refPel, const ptrdiff_t refStride, P
     x1yzm = horizontal_add_long_s16x8( acc_x ); // Σ(x*z)
   }
 
-  denom = blockSize * xSzm[log2Width]; // Plane-fit parameters, in fixed-point arithmetic.
-  numer = ( int64_t )mWeight * ( ( int64_t )x1yzm * blockSize - xSum * ySum );
-  b1 = int32_t( ( numer < 0 ? numer - ( denom >> 1 ) : numer + ( denom >> 1 ) ) / denom );
-  b1 = b1 < INT16_MIN ? INT16_MIN : b1 > INT16_MAX ? INT16_MAX : b1;
-  numer = ( int64_t )mWeight * ( ( int64_t )x2yzm * blockSize - xSum * ySum );
-  b2 = int32_t( ( numer < 0 ? numer - ( denom >> 1 ) : numer + ( denom >> 1 ) ) / denom );
-  b2 = b2 > INT16_MAX ? INT16_MAX : b2 < INT16_MIN ? INT16_MIN : b2;
-  b0 = ( mWeight * ySum - ( b1 + b2 ) * xSum + ( blockSize >> 1 ) ) >> ( log2Width << 1 );
-
-  if( b0 == 0 && b1 == 0 && b2 == 0 )
-  {
-    return;
-  }
-
-  if( w % 8 == 0 )
-  {
-    Pel* pDst = dstPel;
-    const int32_t idx_off[4] = { 0, 1, 2, 3 };
-    int32x4_t idxVec = vld1q_s32( idx_off );
-    int32x4_t b1x = vmulq_s32( idxVec, vdupq_n_s32( b1 ) ); // {0*b1,1*b1,2*b1,3*b1}
-
-    int32x4_t step4 = vdupq_n_s32( b1 << 2 );
-    int32x4_t step8 = vdupq_n_s32( b1 << 3 );
-
-    for( int32_t y = 0; y < h; y++ )
-    {
-      int32x4_t pc0 = vaddq_s32( vdupq_n_s32( b0 + b2 * y ), b1x ); // Plane corrector for x…x+3.
-      int32x4_t pc1 = vaddq_s32( pc0, step4 );                      // Plane corrector for x+4…x+7.
-      int32_t x = w;
-
-      do
-      {
-        int16x8_t dst = vld1q_s16( pDst );
-        int16x4_t p_lo = vqrshrn_n_s32( pc0, 9 ); // With saturation.
-        int16x4_t p_hi = vqrshrn_n_s32( pc1, 9 );
-        int16x8_t p = vcombine_s16( p_lo, p_hi );
-        int16x8_t z = vqsubq_s16( dst, p ); // With saturation.
-        z = vmaxq_s16( vdupq_n_s16( 0 ), vminq_s16( z, vdupq_n_s16( maxPelVal ) ) );
-        vst1q_s16( pDst, z );
-
-        // Increment the plane corrector by 8 * b1.
-        pc0 = vaddq_s32( pc0, step8 );
-        pc1 = vaddq_s32( pc1, step8 );
-        pDst += 8;
-        x -= 8;
-      } while( x != 0 );
-
-      pDst += dstStride - w;
-    }
-  }
-  else if( w == 4 )
-  {
-    Pel* pDst = dstPel;
-    const int32_t b1_idx[] = { 0, b1, b1 << 1, b1 * 3 };
-    int32x4_t b1x = vld1q_s32( b1_idx );
-    int32x4_t pc = vaddq_s32( b1x, vdupq_n_s32( b0 ) ); // Plane corrector.
-    int32_t y = 4;
-
-    do
-    {
-      // Perform deblocking by adding fitted correction plane.
-      int16x4_t dst = vld1_s16( pDst );
-      int16x4_t p = vqrshrn_n_s32( pc, 9 );
-      int16x4_t z = vqsub_s16( dst, p );
-      z = vmax_s16( vdup_n_s16( 0 ), vmin_s16( z, vdup_n_s16( maxPelVal ) ) );
-      vst1_s16( pDst, z );
-
-      // b0 + b1 * x + b2 * y for next iteration.
-      pc = vaddq_s32( pc, vdupq_n_s32( b2 ) );
-      pDst += dstStride;
-    } while( --y != 0 );
-  }
+  applyPlanarDeblockingCorrection_common( dstPel, dstStride, x1yzm, x2yzm, ySum, w, h, clpRng, motionError );
 }
 
 template<>
