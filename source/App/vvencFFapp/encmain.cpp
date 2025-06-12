@@ -86,11 +86,13 @@ int main(int argc, char* argv[])
   // parse configuration
   if ( ! pcEncApp->parseCfg( argc, argv ) )
   {
+    delete pcEncApp;
     return 1;
   }
 
   if( pcEncApp->isShowVersionHelp() )
   {
+    delete pcEncApp;
     return 0;
   }
 
