@@ -2552,7 +2552,8 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
-  addAvg   = addAvg_SSE<vext>;
+  // #562: addAvg (no stride) SIMD implementations do not handle non-power-of-two sizes.
+  // addAvg   = addAvg_SSE<vext>;
   reco     = recoCore_SSE<vext>;
   copyClip = copyClip_SSE<vext>;
   roundGeo = roundGeo_SSE<vext>;

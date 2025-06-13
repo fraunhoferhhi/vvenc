@@ -859,41 +859,40 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
   const int      offset   = ( 1 << ( shiftNum - 1 ) ) + 2 * IF_INTERNAL_OFFS;
 
   static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+  static constexpr size_t dst_size = MAX_CU_SIZE * MAX_CU_SIZE + 4; // Add four to test out of bounds.
 
   // Use xMalloc to create aligned buffers.
   Pel *src0     = ( Pel* ) xMalloc( Pel, buf_size );
   Pel *src1     = ( Pel* ) xMalloc( Pel, buf_size );
-  Pel *dest_ref = ( Pel* ) xMalloc( Pel, buf_size );
-  Pel *dest_opt = ( Pel* ) xMalloc( Pel, buf_size );
+  Pel *dest_ref = ( Pel* ) xMalloc( Pel, dst_size );
+  Pel *dest_opt = ( Pel* ) xMalloc( Pel, dst_size );
 
   bool passed = true;
 
   // Test addAvg with no strides.
-  // Set height and width to powers of two >= 2.
-  for( int height : { 2, 4, 8, 16, 32, 64, 128 } )
+  std::ostringstream sstm_test;
+  sstm_test << "PelBufferOps::addAvg";
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
   {
-    for( int width : { 2, 4, 8, 16, 32, 64, 128 } )
-    {
-      std::ostringstream sstm_test;
-      sstm_test << "PelBufferOps::addAvg" << " w=" << width << " h=" << height;
-      std::cout << "Testing " << sstm_test.str() << std::endl;
+    // Fill input buffers with unsigned 10-bit data from generator.
+    std::generate( src0, src0 + buf_size, inp_gen );
+    std::generate( src1, src1 + buf_size, inp_gen );
 
-      for( unsigned n = 0; n < num_cases; n++ )
-      {
-        // Fill input buffers with unsigned 10-bit data from generator.
-        std::generate( src0, src0 + buf_size, inp_gen );
-        std::generate( src1, src1 + buf_size, inp_gen );
+    // Clear output blocks.
+    memset( dest_ref, 0, dst_size * sizeof( Pel ) );
+    memset( dest_opt, 0, dst_size * sizeof( Pel ) );
 
-        // Clear output blocks.
-        memset( dest_ref, 0, buf_size * sizeof( Pel ) );
-        memset( dest_opt, 0, buf_size * sizeof( Pel ) );
+    unsigned numSamples = dim.get( 4, buf_size, 4 ); // Multiples of four.
 
-        ref->addAvg( src0, src1, dest_ref, width * height, shiftNum, offset, clpRng );
-        opt->addAvg( src0, src1, dest_opt, width * height, shiftNum, offset, clpRng );
+    ref->addAvg( src0, src1, dest_ref, ( int )numSamples, shiftNum, offset, clpRng );
+    opt->addAvg( src0, src1, dest_opt, ( int )numSamples, shiftNum, offset, clpRng );
 
-        passed = compare_values_2d( sstm_test.str(), dest_ref, dest_opt, height, width ) && passed;
-      }
-    }
+    std::ostringstream sstm_subtest;
+    sstm_subtest << sstm_test.str() << " numSamples=" << numSamples;
+
+    passed = compare_values_1d( sstm_subtest.str(), dest_ref, dest_opt, dst_size ) && passed;
   }
 
   // Test addAvg with strides.
