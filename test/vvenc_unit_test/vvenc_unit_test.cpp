@@ -869,30 +869,26 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
   bool passed = true;
 
   // Test addAvg with no strides.
-  // Set height and width to powers of two >= 2.
-  for( int height : { 2, 4, 8, 16, 32, 64, 128 } )
+  for( int size : { 4, 8, 16, 32, 48, 64, 128, 192 } )
   {
-    for( int width : { 2, 4, 8, 16, 32, 64, 128 } )
+    std::ostringstream sstm_test;
+    sstm_test << "PelBufferOps::addAvg" << " size=" << size;
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
     {
-      std::ostringstream sstm_test;
-      sstm_test << "PelBufferOps::addAvg" << " w=" << width << " h=" << height;
-      std::cout << "Testing " << sstm_test.str() << std::endl;
+      // Fill input buffers with unsigned 10-bit data from generator.
+      std::generate( src0, src0 + buf_size, inp_gen );
+      std::generate( src1, src1 + buf_size, inp_gen );
 
-      for( unsigned n = 0; n < num_cases; n++ )
-      {
-        // Fill input buffers with unsigned 10-bit data from generator.
-        std::generate( src0, src0 + buf_size, inp_gen );
-        std::generate( src1, src1 + buf_size, inp_gen );
+      // Clear output blocks.
+      memset( dest_ref, 0, buf_size * sizeof( Pel ) );
+      memset( dest_opt, 0, buf_size * sizeof( Pel ) );
 
-        // Clear output blocks.
-        memset( dest_ref, 0, buf_size * sizeof( Pel ) );
-        memset( dest_opt, 0, buf_size * sizeof( Pel ) );
+      ref->addAvg( src0, src1, dest_ref, size, shiftNum, offset, clpRng );
+      opt->addAvg( src0, src1, dest_opt, size, shiftNum, offset, clpRng );
 
-        ref->addAvg( src0, src1, dest_ref, width * height, shiftNum, offset, clpRng );
-        opt->addAvg( src0, src1, dest_opt, width * height, shiftNum, offset, clpRng );
-
-        passed = compare_values_2d( sstm_test.str(), dest_ref, dest_opt, height, width ) && passed;
-      }
+      passed = compare_values_1d( sstm_test.str(), dest_ref, dest_opt, buf_size ) && passed;
     }
   }
 
