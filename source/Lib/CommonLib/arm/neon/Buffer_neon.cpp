@@ -66,59 +66,56 @@ namespace vvenc
 void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, unsigned rshift, int offset,
                   const ClpRng& clpRng )
 {
-  CHECK( ( numSamples & ( numSamples - 1 ) ) != 0 || numSamples < 4, "numSamples must be power of two >= 4" );
+  CHECK( numSamples < 4 || numSamples & 3, "numSamples must be >= 4 and a multiple of 4" );
   CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
 
   const int lshift = -static_cast<int>( rshift );
 
-  if( ( numSamples & 15 ) == 0 )
+  int n;
+  for( n = 0; n + 16 <= numSamples; n += 16 )
   {
-    int n = 0;
-    do
-    {
-      uint16x8_t s1_lo = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 0 ) );
-      uint16x8_t s1_hi = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 8 ) );
-      uint16x8_t s2_lo = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 0 ) );
-      uint16x8_t s2_hi = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 8 ) );
+    uint16x8_t s1_lo = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 0 ) );
+    uint16x8_t s1_hi = vreinterpretq_u16_s16( vld1q_s16( src0 + n + 8 ) );
+    uint16x8_t s2_lo = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 0 ) );
+    uint16x8_t s2_hi = vreinterpretq_u16_s16( vld1q_s16( src1 + n + 8 ) );
 
-      uint16x8_t d_lo = vaddq_u16( s1_lo, s2_lo );
-      d_lo = vaddq_u16( d_lo, vdupq_n_u16( offset ) );
-      d_lo = vshlq_u16( d_lo, vdupq_n_s16( lshift ) );
-      d_lo = vminq_u16( d_lo, vdupq_n_u16( clpRng.max() ) );
-      uint16x8_t d_hi = vaddq_u16( s1_hi, s2_hi );
-      d_hi = vaddq_u16( d_hi, vdupq_n_u16( offset ) );
-      d_hi = vshlq_u16( d_hi, vdupq_n_s16( lshift ) );
-      d_hi = vminq_u16( d_hi, vdupq_n_u16( clpRng.max() ) );
+    uint16x8_t d_lo = vaddq_u16( s1_lo, s2_lo );
+    d_lo = vaddq_u16( d_lo, vdupq_n_u16( offset ) );
+    d_lo = vshlq_u16( d_lo, vdupq_n_s16( lshift ) );
+    d_lo = vminq_u16( d_lo, vdupq_n_u16( clpRng.max() ) );
+    uint16x8_t d_hi = vaddq_u16( s1_hi, s2_hi );
+    d_hi = vaddq_u16( d_hi, vdupq_n_u16( offset ) );
+    d_hi = vshlq_u16( d_hi, vdupq_n_s16( lshift ) );
+    d_hi = vminq_u16( d_hi, vdupq_n_u16( clpRng.max() ) );
 
-      vst1q_s16( dest + n + 0, vreinterpretq_s16_u16( d_lo ) );
-      vst1q_s16( dest + n + 8, vreinterpretq_s16_u16( d_hi ) );
-
-      n += 16;
-    } while( n != numSamples );
+    vst1q_s16( dest + n + 0, vreinterpretq_s16_u16( d_lo ) );
+    vst1q_s16( dest + n + 8, vreinterpretq_s16_u16( d_hi ) );
   }
-  else if( numSamples == 8 )
+  if( numSamples & 8 )
   {
-    uint16x8_t s1 = vreinterpretq_u16_s16( vld1q_s16( src0 ) );
-    uint16x8_t s2 = vreinterpretq_u16_s16( vld1q_s16( src1 ) );
+    uint16x8_t s1 = vreinterpretq_u16_s16( vld1q_s16( src0 + n ) );
+    uint16x8_t s2 = vreinterpretq_u16_s16( vld1q_s16( src1 + n ) );
 
     uint16x8_t d = vaddq_u16( s1, s2 );
     d = vaddq_u16( d, vdupq_n_u16( offset ) );
     d = vshlq_u16( d, vdupq_n_s16( lshift ) );
     d = vminq_u16( d, vdupq_n_u16( clpRng.max() ) );
 
-    vst1q_s16( dest, vreinterpretq_s16_u16( d ) );
+    vst1q_s16( dest + n, vreinterpretq_s16_u16( d ) );
+
+    n += 8;
   }
-  else // numSamples == 4
+  if( numSamples & 4 )
   {
-    uint16x4_t s1 = vreinterpret_u16_s16( vld1_s16( src0 ) );
-    uint16x4_t s2 = vreinterpret_u16_s16( vld1_s16( src1 ) );
+    uint16x4_t s1 = vreinterpret_u16_s16( vld1_s16( src0 + n ) );
+    uint16x4_t s2 = vreinterpret_u16_s16( vld1_s16( src1 + n ) );
 
     uint16x4_t d = vadd_u16( s1, s2 );
     d = vadd_u16( d, vdup_n_u16( offset ) );
     d = vshl_u16( d, vdup_n_s16( lshift ) );
     d = vmin_u16( d, vdup_n_u16( clpRng.max() ) );
 
-    vst1_s16( dest, vreinterpret_s16_u16( d ) );
+    vst1_s16( dest + n, vreinterpret_s16_u16( d ) );
   }
 }
 
