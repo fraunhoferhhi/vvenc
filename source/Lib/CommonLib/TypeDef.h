@@ -146,6 +146,12 @@ namespace vvenc {
 #define ENABLE_SIMD_LOG2                                ( 1 && ENABLE_SIMD_OPT )                            ///< use SIMD intrisic to calculate log2
 #define ENABLE_SIMD_OPT_FGA                             ( 1 && ENABLE_SIMD_OPT )                            ///< use SIMD intrisic for FGA
 
+#if defined( __clang__ ) && defined( __ARM_ARCH ) && __ARM_ARCH == 7
+// workaround for clang targeting armv7 (see: https://github.com/fraunhoferhhi/vvenc/issues/560)
+#  undef ENABLE_SIMD_OPT_FGA
+#  define ENABLE_SIMD_OPT_FGA                             0
+#endif
+
 #if ENABLE_SIMD_OPT_BUFFER
 #define ENABLE_SIMD_OPT_BCW                               1                                                 ///< SIMD optimization for GBi
 #endif
