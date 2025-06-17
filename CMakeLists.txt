@@ -295,7 +295,7 @@ if( VVENC_ENABLE_TRACING )
 endif()
 
 if( VVENC_ENABLE_WERROR )
-  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror>" )
+  add_compile_options( "$<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Werror;-Wno-error=#warnings>" )
   add_compile_options( "$<$<CXX_COMPILER_ID:GNU>:-Werror>" )
   add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
 endif()

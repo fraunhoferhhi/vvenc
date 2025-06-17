@@ -148,6 +148,7 @@ namespace vvenc {
 
 #if defined( __clang__ ) && defined( __ARM_ARCH ) && __ARM_ARCH == 7
 // workaround for clang targeting armv7 (see: https://github.com/fraunhoferhhi/vvenc/issues/560)
+#  warning FGA SIMD disabled for Clang targeting ARMv7 to work around a compiler bug
 #  undef ENABLE_SIMD_OPT_FGA
 #  define ENABLE_SIMD_OPT_FGA                             0
 #endif
