@@ -66,7 +66,7 @@ namespace vvenc
 void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, unsigned rshift, int offset,
                   const ClpRng& clpRng )
 {
-  CHECK( ( numSamples & ( numSamples - 1 ) ) != 0 || numSamples < 4, "numSamples must be power of two >= 4" );
+  CHECK( numSamples < 4, "numSamples must be >= 4" );
   CHECK( offset > 16448, "Offset must be <= 16448" ); // Max: (1 << (rshift - 1)) + 2 * (1 << 13), where rshift=7.
 
   const int lshift = -static_cast<int>( rshift );
@@ -108,7 +108,7 @@ void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, u
 
     vst1q_s16( dest, vreinterpretq_s16_u16( d ) );
   }
-  else // numSamples == 4
+  else if( numSamples == 4 )
   {
     uint16x4_t s1 = vreinterpret_u16_s16( vld1_s16( src0 ) );
     uint16x4_t s2 = vreinterpret_u16_s16( vld1_s16( src1 ) );
@@ -119,6 +119,10 @@ void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, u
     d = vmin_u16( d, vdup_n_u16( clpRng.max() ) );
 
     vst1_s16( dest, vreinterpret_s16_u16( d ) );
+  }
+  else
+  {
+    THROW( "Unsupported size. numSamples must be 4 or 8 or a multiple of 16" );
   }
 }
 
