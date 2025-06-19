@@ -104,8 +104,8 @@ static inline bool compare_values_2d( const std::string& context, const T* ref, 
       if( ref[idx] != opt[idx] )
       {
         std::cout << "failed: " << context << "\n"
-                  << "  mismatch:  ref[" << row << "*" << cols << "+" << col << "]=" << ref[idx]
-                  << "  opt[" << row << "*" << cols << "+" << col << "]=" << opt[idx] << "\n";
+                  << "  mismatch:  ref[" << row << "*" << stride << "+" << col << "]=" << ref[idx]
+                  << "  opt[" << row << "*" << stride << "+" << col << "]=" << opt[idx] << "\n";
         return false;
       }
     }
