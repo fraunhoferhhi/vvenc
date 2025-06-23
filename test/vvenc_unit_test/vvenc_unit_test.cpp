@@ -836,7 +836,7 @@ static bool test_AffineGradientSearch()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
-  static constexpr int bd = 10;
+  static constexpr unsigned bd = 10;
   auto random_gen = InputGenerator<Pel>{ bd, /*is_signed=*/true };
   auto minmax_gen = MinMaxGenerator<Pel>{ bd, /*is_signed=*/true };
 
