@@ -276,6 +276,66 @@ static bool test_IntraPred()
 #endif // ENABLE_SIMD_OPT_INTRAPRED
 
 #if ENABLE_SIMD_TRAFO
+static bool check_cpyCoeff( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned W )
+{
+  DimensionGenerator dim;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers for x86.
+  Pel    *src     = ( Pel*    )xMalloc( Pel,    buf_size );
+  TCoeff *dst_ref = ( TCoeff* )xMalloc( TCoeff, buf_size );
+  TCoeff *dst_opt = ( TCoeff* )xMalloc( TCoeff, buf_size );
+
+  bool passed = true;
+
+  InputGenerator<Pel> inp_gen{ 10, /*is_signed=*/false }; // unsigned 10-bit
+
+  std::ostringstream sstm_test;
+  sstm_test << "TCoeffOps::cpyCoeff" << W;
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    unsigned  height    = dim.get( W, MAX_CU_SIZE );
+    unsigned  width     = dim.get( W, MAX_CU_SIZE, W ); // Width must be a multiple of W.
+    ptrdiff_t srcStride = dim.get( width, MAX_CU_SIZE );
+
+    // Fill input buffers with unsigned data.
+    std::generate( src, src + buf_size, inp_gen );
+
+    // Clear output blocks.
+    memset( dst_ref, 0, buf_size * sizeof( TCoeff ) );
+    memset( dst_opt, 0, buf_size * sizeof( TCoeff ) );
+
+    if( W == 4 )
+    {
+      ref->cpyCoeff4( src, srcStride, dst_ref, width, height );
+      opt->cpyCoeff4( src, srcStride, dst_opt, width, height );
+    }
+    else if( W == 8 )
+    {
+      ref->cpyCoeff8( src, srcStride, dst_ref, width, height );
+      opt->cpyCoeff8( src, srcStride, dst_opt, width, height );
+    }
+    else // Shouldn't come here.
+    {
+      THROW( "Unsupported size" );
+    }
+
+    std::ostringstream sstm_subtest;
+    sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " w=" << width << " h=" << height;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, width ) && passed;
+  }
+
+  xFree( src );
+  xFree( dst_ref );
+  xFree( dst_opt );
+
+  return passed;
+}
+
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
                                    unsigned reducedLines, unsigned cutoff, G input_generator, T trafo_generator )
@@ -417,6 +477,9 @@ static bool test_TCoeffOps()
   unsigned num_cases = NUM_CASES;
   bool passed        = true;
 
+  passed = check_cpyCoeff( &ref, &opt, num_cases, 4 ) && passed;
+  passed = check_cpyCoeff( &ref, &opt, num_cases, 8 ) && passed;
+
   passed = check_fastInvCore( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 1, 8 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 2, 16 ) && passed;
@@ -430,7 +493,7 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 4, 64 ) && passed;
   return passed;
 }
-#endif
+#endif // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_MCTF
 
