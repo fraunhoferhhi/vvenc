@@ -23,6 +23,15 @@ message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH
 
 include( vvencCompilerSupport )
 
+# Avoid non-portable fp contractions leading to cross-platform bit-differences.
+if ( VVENC_FPP_CONTRACT_OFF )
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
+      CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off" )
+  endif()
+endif()
+
 detect_target_architecture( VVENC_TARGET_ARCH )
 if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
