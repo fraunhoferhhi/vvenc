@@ -980,6 +980,83 @@ static bool test_PelBufferOps()
 }
 #endif // ENABLE_SIMD_OPT_BUFFER
 
+#if ENABLE_SIMD_OPT_MCIF
+template<unsigned isFirst, unsigned isLast>
+static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases, bool biMCForDMVR )
+{
+  DimensionGenerator dim;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  std::vector<Pel> src( buf_size );
+  std::vector<Pel> dst_ref( buf_size );
+  std::vector<Pel> dst_opt( buf_size );
+
+  bool passed = true;
+
+  // Test unsigned 8-bit and 10-bit.
+  for( unsigned bd : { 8, 10 } )
+  {
+    ClpRng clpRng{ ( int )bd };
+    InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
+
+    std::ostringstream sstm_test;
+    sstm_test << "InterpolationFilter::filterCopy[" << isFirst << "][" << isLast << "]"
+              << " biMCForDMVR=" << std::boolalpha << biMCForDMVR << " bitDepth=" << bd;
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      unsigned height    = dim.get( 1, MAX_CU_SIZE );
+      unsigned width     = dim.get( 1, MAX_CU_SIZE );
+      unsigned srcStride = dim.get( width, MAX_CU_SIZE );
+      unsigned dstStride = dim.get( width, MAX_CU_SIZE );
+
+      // Fill input buffers with unsigned data.
+      std::generate( src.begin(), src.end(), inp_gen );
+
+      // Clear output blocks.
+      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+      ref->m_filterCopy[isFirst][isLast]( clpRng, src.data(), ( int )srcStride, dst_ref.data(), ( int )dstStride,
+                                          ( int )width, ( int )height, biMCForDMVR );
+      opt->m_filterCopy[isFirst][isLast]( clpRng, src.data(), ( int )srcStride, dst_opt.data(), ( int )dstStride,
+                                          ( int )width, ( int )height, biMCForDMVR );
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " w=" << width
+                   << " h=" << height;
+
+      passed =
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+    }
+  }
+
+  return passed;
+}
+
+static bool test_InterpolationFilter()
+{
+  InterpolationFilter ref;
+  InterpolationFilter opt;
+
+  ref.initInterpolationFilter( /*enable=*/false );
+  opt.initInterpolationFilter( /*enable=*/true );
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  passed = check_filterCopy<0, 0>( &ref, &opt, num_cases, false ) && passed;
+  passed = check_filterCopy<0, 1>( &ref, &opt, num_cases, false ) && passed;
+  passed = check_filterCopy<1, 0>( &ref, &opt, num_cases, false ) && passed;
+  passed = check_filterCopy<1, 1>( &ref, &opt, num_cases, false ) && passed;
+  passed = check_filterCopy<1, 0>( &ref, &opt, num_cases, true ) && passed;
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_MCIF
+
 int main()
 {
   unsigned seed = ( unsigned ) time( NULL );
@@ -1007,6 +1084,9 @@ int main()
 #endif
 #if ENABLE_SIMD_OPT_BUFFER
   passed = test_PelBufferOps() && passed;
+#endif
+#if ENABLE_SIMD_OPT_MCIF
+  passed = test_InterpolationFilter() && passed;
 #endif
 
   if( !passed )
