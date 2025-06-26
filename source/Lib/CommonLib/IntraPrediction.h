@@ -57,6 +57,9 @@ namespace vvenc {
 #if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_X86 )
 using namespace x86_simd;
 #endif
+#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_ARM )
+using namespace arm_simd;
+#endif
 
 // ====================================================================================================================
 // Class definition
