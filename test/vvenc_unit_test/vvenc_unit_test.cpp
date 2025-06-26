@@ -59,6 +59,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/RdCost.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
+#include "CommonLib/Unit.h"
+
 
 using namespace vvenc;
 
@@ -90,18 +92,20 @@ static inline bool compare_values_1d( const std::string& context, const T* ref, 
   return true;
 }
 
-template<typename T>
+template<typename T, typename U = T>
 static inline bool compare_values_2d( const std::string& context, const T* ref, const T* opt, unsigned rows,
-                                      unsigned cols, unsigned stride = 0 )
+                                      unsigned cols, unsigned stride = 0, U tolerance = U( 0 ) )
 {
   stride = stride != 0 ? stride : cols;
+
+  auto abs_diff = []( T value1, T value2 ) -> U { return static_cast<U>( std::abs( value1 - value2 ) ); };
 
   for( unsigned row = 0; row < rows; ++row )
   {
     for( unsigned col = 0; col < cols; ++col )
     {
       unsigned idx = row * stride + col;
-      if( ref[idx] != opt[idx] )
+      if( abs_diff( ref[idx], opt[idx] ) > tolerance )
       {
         std::cout << "failed: " << context << "\n"
                   << "  mismatch:  ref[" << row << "*" << stride << "+" << col << "]=" << ref[idx]
@@ -429,6 +433,111 @@ static bool test_TCoeffOps()
 #endif
 
 #if ENABLE_SIMD_OPT_MCTF
+
+#define VVENC_MCTF_RANGE 6
+template<typename G>
+static bool check_one_applyBlock( MCTF* ref, MCTF* opt, unsigned srcStride, unsigned dstStride, int w, int h,
+                                  int bitDepth, int numRefs, G inputGenCorrectedPics )
+{
+  CHECK( srcStride < w, "OrgStride must be greater than or equal to width" );
+  CHECK( dstStride < w, "BufStride must be greater than or equal to width" );
+
+  std::ostringstream sstm;
+  sstm << "applyBlock srcStride=" << srcStride << " dstStride=" << dstStride << " w=" << w << " h=" << h;
+
+  InputGenerator<TCoeff> g10{ 10, /*is_signed=*/false };
+  std::vector<int> verror( 2 * VVENC_MCTF_RANGE ); // 10bit unsigned
+  std::generate( verror.begin(), verror.end(), g10 );
+
+  const double refStrengths[2][VVENC_MCTF_RANGE] = {
+      // abs(POC offset)
+      // 1       2       3       4       5       6
+      { 0.84375, 0.6, 0.4286, 0.3333, 0.2727, 0.2308 }, // RA
+      { 1.12500, 1.0, 0.7143, 0.5556, 0.4545, 0.3846 }  // LD
+  };
+  std::vector<double> refStr( 2 * VVENC_MCTF_RANGE );
+  std::copy( &refStrengths[0][0], &refStrengths[0][0] + 2 * VVENC_MCTF_RANGE, refStr.begin() );
+
+  DimensionGenerator dg;
+  ChromaFormat chromaFormat = dg.get( 0, 1 ) ? VVENC_CHROMA_400 : VVENC_CHROMA_420;
+  ComponentID compID = ( ComponentID )dg.get( 0, 2 ); // 0 to 2
+
+  const CompArea blk( compID, chromaFormat, Area( 0, 0, w, h ) );
+  const ClpRng clpRng{ bitDepth };
+  const std::array<double, 3> overallStrength = { 0.5, 0.666667, 1.5 }; // Values taken from a real encoding.
+  const double weightScaling = overallStrength[dg.get( 0, 2 )] * ( isChroma( compID ) ? 0.55 : 0.4 );
+  const std::array<double, 3> sigmaSqVal = { 900.0, 2275.031250, 4608.0 }; // Values taken from a real encoding.
+  double sigmaSq = sigmaSqVal[dg.get( 0, 2 )];
+
+  std::vector<const Pel*> correctedPics( 2 * VVENC_MCTF_RANGE );
+  std::vector<Pel> correctedPicsBuf( numRefs * w * h );
+  std::generate( correctedPicsBuf.begin(), correctedPicsBuf.end(), inputGenCorrectedPics );
+  for( int i = 0; i < numRefs; i++ )
+  {
+    correctedPics[i] = correctedPicsBuf.data() + ( i * w * h );
+  }
+
+  std::vector<Pel> src_buf( srcStride * h );
+  std::generate( src_buf.begin(), src_buf.end(), g10 );
+
+  std::vector<Pel> dst_buf_ref( dstStride * h );
+  std::vector<Pel> dst_buf_opt( dstStride * h );
+
+  CPelBuf src;
+  PelBuf dst_ref, dst_opt;
+
+  src.buf = src_buf.data();
+  dst_ref.buf = dst_buf_ref.data();
+  dst_opt.buf = dst_buf_opt.data();
+  src.stride = srcStride;
+  dst_ref.stride = dstStride;
+  dst_opt.stride = dstStride;
+
+  ref->m_applyBlock( src, dst_ref, blk, clpRng, correctedPics.data(), numRefs, verror.data(), refStr.data(),
+                     weightScaling, sigmaSq );
+  opt->m_applyBlock( src, dst_opt, blk, clpRng, correctedPics.data(), numRefs, verror.data(), refStr.data(),
+                     weightScaling, sigmaSq );
+
+  // The SIMDe implementation of applyBlock may differ by one bit compared to the reference implementation.
+  // Adjusted tolerance to reflect this.
+  return compare_values_2d( sstm.str(), dst_buf_ref.data(), dst_buf_opt.data(), h, w, dstStride, 1 );
+}
+
+static bool check_applyBlock( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing MCTF::applyBlock w=%d h=%d\n", w, h );
+  InputGenerator<TCoeff> g10{ 10, /*is_signed=*/false };
+  InputGenerator<TCoeff> g2{ 2, /*is_signed=*/false };
+  DimensionGenerator rng;
+
+  for( int bitDepth : { 8, 10 } )
+  {
+    for( int numRefs : { 6, 8 } )
+    {
+      for( unsigned i = 0; i < num_cases; ++i )
+      {
+        unsigned srcStride = rng.get( w, 128 );
+        unsigned dstStride = rng.get( w, 128 );
+
+        if( !check_one_applyBlock( ref, opt, srcStride, dstStride, w, h, bitDepth, numRefs, g10 ) )
+        {
+          return false;
+        }
+      }
+      // Test scenarios with high noise (as corner case) - dst buffer having high variance from src buffer.
+      unsigned srcStride = rng.get( w, 128 );
+      unsigned dstStride = rng.get( w, 128 );
+
+      if( !check_one_applyBlock( ref, opt, srcStride, dstStride, w, h, bitDepth, numRefs, g2 ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 template<typename G>
 static bool check_one_applyPlanarCorrection( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int size,
                                              int bitDepth, uint16_t motionerror, G input_generator )
@@ -529,7 +638,16 @@ static bool test_MCTF()
   MCTF opt{ /*enableOpt=*/true };
 
   unsigned num_cases = NUM_CASES;
-  bool passed        = true;
+  bool passed = true;
+
+  std::vector<unsigned> sizes = { 4, 8, 16, 24, 32, 40, 48, 56, 64 };
+  for( unsigned w : sizes )
+  {
+    for( unsigned h : sizes )
+    {
+      passed = check_applyBlock( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
 
   for( int size = 4; size <= 32; size *= 2 )
   {
