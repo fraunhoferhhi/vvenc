@@ -881,6 +881,72 @@ static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolat
   return true;
 }
 
+template<typename G>
+static bool check_one_gradFilter( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
+                                  ptrdiff_t srcStride, ptrdiff_t gradStride, G input_generator, bool padding )
+{
+  std::ostringstream sstm;
+  sstm << "gradFilter width=" << width << " height=" << height << " padding=" << padding;
+
+  int widthG = width + 2;
+  int heightG = height + 2;
+
+  std::vector<Pel> src( srcStride * heightG );
+  std::vector<Pel> gradX_ref( gradStride * heightG );
+  std::vector<Pel> gradY_ref( gradStride * heightG );
+  std::vector<Pel> gradX_opt( gradStride * heightG );
+  std::vector<Pel> gradY_opt( gradStride * heightG );
+
+  // Initialize source buffer.
+  std::generate( src.begin(), src.end(), input_generator );
+
+  const int bitDepth = 10; // Unused in gradFilter.
+
+  if( padding )
+  {
+    ref->xFpBDOFGradFilter( src.data(), srcStride, widthG, heightG, gradStride, gradX_ref.data(), gradY_ref.data(),
+                            bitDepth );
+    opt->xFpBDOFGradFilter( src.data(), srcStride, widthG, heightG, gradStride, gradX_opt.data(), gradY_opt.data(),
+                            bitDepth );
+  }
+  else
+  {
+    ref->xFpProfGradFilter( src.data(), srcStride, widthG, heightG, gradStride, gradX_ref.data(), gradY_ref.data(),
+                            bitDepth );
+    opt->xFpProfGradFilter( src.data(), srcStride, widthG, heightG, gradStride, gradX_opt.data(), gradY_opt.data(),
+                            bitDepth );
+  }
+
+  bool res_gradX = compare_values_2d( sstm.str(), gradX_ref.data(), gradX_opt.data(), heightG, ( unsigned )gradStride );
+  bool res_gradY = compare_values_2d( sstm.str(), gradY_ref.data(), gradY_opt.data(), heightG, ( unsigned )gradStride );
+
+  return res_gradX && res_gradY;
+}
+
+static bool check_gradFilter( InterPredInterpolation* ref, InterPredInterpolation* opt, unsigned num_cases, int width,
+                              int height )
+{
+  printf( "Testing InterPred::gradFilter w=%d h=%d\n", width, height );
+  InputGenerator<Pel> g{ 14 }; // Signed 14 bit.
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    unsigned srcStride = rng.get( width + 2, 128 );
+    unsigned gradStride = rng.get( width + 2, 128 );
+
+    for( auto padding : { true, false } )
+    {
+      if( !check_one_gradFilter( ref, opt, width, height, srcStride, gradStride, g, padding ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 static bool test_InterPred()
 {
   InterPredInterpolation ref;
@@ -899,6 +965,15 @@ static bool test_InterPred()
       passed = check_biDirOptFlow( &ref, &opt, num_cases, width, height ) && passed;
     }
   }
+
+  for( unsigned w : { 4, 8, 16, 32 } )
+  {
+    for( unsigned h : { 4, 8, 16, 32 } )
+    {
+      passed = check_gradFilter( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
   return passed;
 }
 #endif
