@@ -66,6 +66,43 @@ static inline int64_t shift_and_round( int64_t x, int shift )
   return ( x + ( static_cast<int64_t>(1) << ( shift - 1 ) ) ) >> shift;
 }
 
+template<int W>
+void cpyCoeff_neon( const Pel* src, ptrdiff_t srcStride, TCoeff* dst, unsigned width, unsigned height )
+{
+  static_assert( W == 8 || W == 4, "W can only be 8 or 4" );
+  CHECK( height < 1, "Height must be >= 1" );
+
+  do
+  {
+    unsigned w;
+    for( w = 0; w + 16 <= width; w += 16 )
+    {
+      int16x8_t s_lo = vld1q_s16( src + w + 0 );
+      int16x8_t s_hi = vld1q_s16( src + w + 8 );
+      vst1q_s32( dst + w + 0, vmovl_s16( vget_low_s16( s_lo ) ) );
+      vst1q_s32( dst + w + 4, vmovl_s16( vget_high_s16( s_lo ) ) );
+      vst1q_s32( dst + w + 8, vmovl_s16( vget_low_s16( s_hi ) ) );
+      vst1q_s32( dst + w + 12, vmovl_s16( vget_high_s16( s_hi ) ) );
+    }
+    if( width & 8 )
+    {
+      int16x8_t s = vld1q_s16( src + w );
+      vst1q_s32( dst + w + 0, vmovl_s16( vget_low_s16( s ) ) );
+      vst1q_s32( dst + w + 4, vmovl_s16( vget_high_s16( s ) ) );
+
+      w += 8;
+    }
+    if( W == 4 && width & 4 )
+    {
+      int16x4_t s = vld1_s16( src + w );
+      vst1q_s32( dst + w + 0, vmovl_s16( s ) );
+    }
+
+    src += srcStride;
+    dst += width;
+  } while( --height != 0 );
+}
+
 template<unsigned trSize>
 static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines,
                               unsigned reducedLines, unsigned rows )
@@ -264,6 +301,9 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
 template<>
 void TCoeffOps::_initTCoeffOpsARM<NEON>()
 {
+  cpyCoeff4 = cpyCoeff_neon<4>;
+  cpyCoeff8 = cpyCoeff_neon<8>;
+
   fastInvCore[ 0 ]    = fastInvCore_neon<4>;
   fastInvCore[ 1 ]    = fastInvCore_neon<8>;
   fastInvCore[ 2 ]    = fastInvCore_neon<16>;
