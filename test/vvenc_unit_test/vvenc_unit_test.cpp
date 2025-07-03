@@ -49,7 +49,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <limits.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include "CommonLib/AffineGradientSearch.h"
@@ -345,6 +347,75 @@ static bool check_cpyCoeff( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
   return passed;
 }
 
+static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
+{
+  DimensionGenerator dim;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers for x86.
+  TCoeff *dst_ref = ( TCoeff* )xMalloc( TCoeff, buf_size );
+  TCoeff *dst_opt = ( TCoeff* )xMalloc( TCoeff, buf_size );
+
+  bool passed = true;
+
+  // Use input values up to signed 22-bit based from a real encode.
+  InputGenerator<TCoeff> inp_gen{ 22, /*is_signed=*/true };
+
+  std::ostringstream sstm_test;
+  sstm_test << "TCoeffOps::roundClip";
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    // Set height, width, and stride to powers of two.
+    unsigned log2height = dim.get( 0, 7 );
+    unsigned log2width = dim.get( 2, 7 );
+    unsigned log2stride = dim.get( log2width, 7 );
+    unsigned height = 1 << log2height; // From 1 to 128.
+    unsigned width = 1 << log2width;   // From 4 to 128.
+    unsigned stride = 1 << log2stride; // From width to 128.
+    TCoeff shift = dim.get( 7, 13 );   // Shift range is 7 to 13.
+    TCoeff round = 1 << ( shift - 1 );
+
+    // Fill input buffers with signed data.
+    std::generate( dst_ref, dst_ref + buf_size, inp_gen );
+    std::memcpy( dst_opt, dst_ref, buf_size * sizeof( TCoeff ) );
+
+    std::ostringstream sstm_subtest;
+
+    // Round, shift, and clamp to signed 16-bit.
+    if( width % 8 == 0 )
+    {
+      ref->roundClip8( dst_ref, width, height, stride, INT16_MIN, INT16_MAX, round, shift );
+      opt->roundClip8( dst_opt, width, height, stride, INT16_MIN, INT16_MAX, round, shift );
+
+      sstm_subtest << sstm_test.str() << "8";
+    }
+    else if( width % 4 == 0 )
+    {
+      ref->roundClip4( dst_ref, width, height, stride, INT16_MIN, INT16_MAX, round, shift );
+      opt->roundClip4( dst_opt, width, height, stride, INT16_MIN, INT16_MAX, round, shift );
+
+      sstm_subtest << sstm_test.str() << "4";
+    }
+    else // Shouldn't come here.
+    {
+      THROW( "Unsupported size" );
+    }
+
+    sstm_subtest << " stride=" << stride << " w=" << width << " h=" << height << " round=" << round
+                 << " shift=" << shift;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, stride ) && passed;
+  }
+
+  xFree( dst_ref );
+  xFree( dst_opt );
+
+  return passed;
+}
+
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
                                    unsigned reducedLines, unsigned cutoff, G input_generator, T trafo_generator )
@@ -487,6 +558,7 @@ static bool test_TCoeffOps()
   bool passed        = true;
 
   passed = check_cpyCoeff( &ref, &opt, num_cases ) && passed;
+  passed = check_roundClip( &ref, &opt, num_cases ) && passed;
 
   passed = check_fastInvCore( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 1, 8 ) && passed;
