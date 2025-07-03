@@ -69,13 +69,6 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-static inline int32x4_t neon_madd_16( int16x8_t a, int16x8_t b )
-{
-  int32x4_t c = vmull_s16( vget_low_s16( a ), vget_low_s16( b ) );
-  int32x4_t d = vmull_s16( vget_high_s16( a ), vget_high_s16( b ) );
-  return pairwise_add_s32x4( c, d );
-}
-
 #if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_ARM )
 
 // The xGetHADs_neon functions depend on the SIMDe kernels being enabled
@@ -1119,7 +1112,9 @@ static inline int16x8_t reverse_vector_s16( int16x8_t x )
 Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
 {
   if (rcDtParam.org.width < 4 || rcDtParam.bitDepth > 10 || rcDtParam.applyWeight)
+  {
     return RdCost::xGetSADwMask(rcDtParam);
+  }
 
   const short *src1       = (const short *) rcDtParam.org.buf;
   const short *src2       = (const short *) rcDtParam.cur.buf;
@@ -1127,38 +1122,45 @@ Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
   int          rows       = rcDtParam.org.height;
   int          cols       = rcDtParam.org.width;
   int          subShift   = rcDtParam.subShift;
-  int          subStep    = (1 << subShift);
+  int          subStep    = 1 << subShift;
   const int    strideSrc1 = rcDtParam.org.stride * subStep;
   const int    strideSrc2 = rcDtParam.cur.stride * subStep;
   const int    strideMask = rcDtParam.maskStride * subStep;
 
-  Distortion sum = 0;
+  int32x4_t sum0 = vdupq_n_s32( 0 );
+  int32x4_t sum1 = vdupq_n_s32( 0 );
 
-  int32x4_t vsum32 = vdupq_n_s32( 0 );
-
-  for (int y = 0; y < rows; y += subStep)
+  do
   {
-    for (int x = 0; x < cols; x += 8)
+    int x = 0;
+    do
     {
-      int16x8_t vsrc1  = vld1q_s16( ( const int16_t* )(&src1[x] ) );
-      int16x8_t vsrc2  = vld1q_s16( ( const int16_t* )(&src2[x] ) );
+      int16x8_t vsrc1 = vld1q_s16( src1 + x );
+      int16x8_t vsrc2 = vld1q_s16( src2 + x );
       int16x8_t vmask;
       if (rcDtParam.stepX == -1)
       {
-        vmask = vld1q_s16( ( const int16_t* )( ( &weightMask[ x ] ) - ( x << 1 ) - ( 8 - 1 ) ) );
+        vmask = vld1q_s16( weightMask - x - 7 );
         vmask = reverse_vector_s16( vmask );
       }
       else
       {
-        vmask = vld1q_s16( ( const int16_t* ) (&weightMask[x]));
+        vmask = vld1q_s16( weightMask + x );
       }
-      vsum32 = vaddq_s32(vsum32, neon_madd_16(vmask, vabsq_s16(vsubq_s16(vsrc1, vsrc2))));
-    }
+      int16x8_t diff = vabdq_s16( vsrc1, vsrc2 );
+      sum0 = vmlal_s16( sum0, vget_low_s16( diff ), vget_low_s16( vmask ) );
+      sum1 = vmlal_s16( sum1, vget_high_s16( diff ), vget_high_s16( vmask ) );
+
+      x += 8;
+    } while( x != cols );
+
     src1 += strideSrc1;
     src2 += strideSrc2;
     weightMask += strideMask;
-  }
-  sum = horizontal_add_s32x4( vsum32 );
+    rows -= subStep;
+  } while( rows != 0 );
+
+  Distortion sum = horizontal_add_s32x4( vaddq_s32( sum0, sum1 ) );
   sum <<= subShift;
   return sum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
@@ -1397,6 +1399,8 @@ void RdCost::_initRdCostARM<NEON>()
 {
   m_afpDistortFuncX5[1] = xGetSADX5_16xN_neon;
 
+  m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
+
 #if defined( TARGET_SIMD_X86 )
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
 
@@ -1424,9 +1428,6 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD32  ] = xGetSAD_NxN_neon<32>;
   m_afpDistortFunc[0][DF_SAD64  ] = xGetSAD_NxN_neon<64>;
   m_afpDistortFunc[0][DF_SAD128]  = xGetSAD_NxN_neon<128>;
-
-  m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
-
 #endif  // defined( TARGET_SIMD_X86 )
 
   m_wtdPredPtr[0] = lumaWeightedSSE_neon<0>;
