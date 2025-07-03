@@ -1080,6 +1080,53 @@ static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, 
   return passed;
 }
 
+static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  std::ostringstream sstm;
+  sstm << "RdCost::m_afpDistortFunc[0][DF_SAD_WITH_MASK] " << " w=" << width << " h=" << height;
+  printf( "Testing %s\n", sstm.str().c_str());
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g1{ 1, /*is_signed=*/false }; // Masks are either 0 or 1.
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    int org_stride = rng.get( width, 1024 );
+    int cur_stride = rng.get( width, 1024 );
+    int mask_stride = rng.get( width, 1024 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( cur_stride * height );
+    std::vector<Pel> maskBuf( mask_stride * height );
+    bool negStepX = rng.get( 0, 1 ) != 0;
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.org.stride = org_stride;
+    dtParam.cur.buf = curBuf.data();
+    dtParam.cur.stride = cur_stride;
+    dtParam.mask = maskBuf.data() + (negStepX ? width : 0);
+    dtParam.maskStride = mask_stride;
+    dtParam.maskStride2 = negStepX ? width : -width;
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.bitDepth = 10;
+    dtParam.subShift = rng.get( 0, 1 );
+    dtParam.applyWeight = 0;  // applyWeight appears to be always zero.
+    dtParam.stepX = negStepX ? -1 : 1;
+
+    std::generate( orgBuf.begin(), orgBuf.end(), g10 );
+    std::generate( curBuf.begin(), curBuf.end(), g10 );
+    std::generate( maskBuf.begin(), maskBuf.end(), g1);
+
+    Distortion sum_ref = ref->m_afpDistortFunc[0][DF_SAD_WITH_MASK]( dtParam );
+    Distortion sum_opt = opt->m_afpDistortFunc[0][DF_SAD_WITH_MASK]( dtParam );
+    passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+  return passed;
+}
+
 static bool test_RdCost()
 {
   RdCost ref;
@@ -1097,13 +1144,12 @@ static bool test_RdCost()
     for( int w : widths )
     {
       passed = check_lumaWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
-    }
-  }
-  for( int h : heights )
-  {
-    for( int w : widths )
-    {
       passed = check_fixWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
+
+      if (w >= 8 && h >= 8)
+      {
+        passed = check_SADwMask( &ref, &opt, num_cases, w, h ) && passed;
+      }
     }
   }
   return passed;
