@@ -113,6 +113,12 @@ void RdCost::initRdCostARM()
   {
     _initRdCostARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initRdCostARM<SVE>();
+  }
+#endif // TARGET_SIMD_ARM_SVE
 }
 #endif
 
