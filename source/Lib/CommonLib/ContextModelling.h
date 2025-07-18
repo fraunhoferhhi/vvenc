@@ -109,13 +109,8 @@ public:
   unsigned        maxLastPosY     ()                        const { return m_maxLastPosY; }
   unsigned        lastXCtxId      ( unsigned  posLastX  )   const { return m_CtxSetLastX( m_lastOffsetX + ( posLastX >> m_lastShiftX ) ); }
   unsigned        lastYCtxId      ( unsigned  posLastY  )   const { return m_CtxSetLastY( m_lastOffsetY + ( posLastY >> m_lastShiftY ) ); }
-  int             numCtxBins      ()                        const { return   m_remainingContextBins;      }
-  void            setNumCtxBins   ( int n )                       {          m_remainingContextBins  = n; }
   unsigned        sigGroupCtxId   ( bool ts = false     )   const { return ts ? m_sigGroupCtxIdTS : m_sigGroupCtxId; }
   bool            bdpcm           ()                        const { return m_bdpcm; }
-
-  void            decimateNumCtxBins(int n) { m_remainingContextBins -= n; }
-  void            increaseNumCtxBins(int n) { m_remainingContextBins += n; }
 
   unsigned sigCtxIdAbs( int scanPos, const TCoeffSig* coeff, const int state )
   {
@@ -432,7 +427,7 @@ public:
   //  return 1;
   //}
 
-  int                       regBinLimit;
+  int                       remRegBins;
 
 private:
   // constant
@@ -481,7 +476,6 @@ private:
   CtxSet                    m_tsGtxFlagCtxSet;
   CtxSet                    m_tsLrg1FlagCtxSet;
   CtxSet                    m_tsSignFlagCtxSet;
-  int                       m_remainingContextBins;
   std::bitset<MLS_GRP_NUM>  m_sigCoeffGroupFlag;
   const bool                m_bdpcm;
   CtxTpl*                   m_tplBuf;

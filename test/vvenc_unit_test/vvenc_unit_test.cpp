@@ -1101,7 +1101,7 @@ static bool test_AffineGradientSearch()
   bool passed = true;
 
   static constexpr unsigned bd = 10;
-  auto random_gen = InputGenerator<Pel>{ bd, /*is_signed=*/true };
+  auto random_gen = InputGenerator <Pel>{ bd, /*is_signed=*/true };
   auto minmax_gen = MinMaxGenerator<Pel>{ bd, /*is_signed=*/true };
 
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, random_gen ) && passed;

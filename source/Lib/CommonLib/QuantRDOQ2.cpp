@@ -692,6 +692,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
     cctx.initSubblock( subSetId );
 
+    const int remRegBinsStartCG = remRegBins;
+
     for( ; iScanPosinCG >= 0; iScanPosinCG--, iScanPos-- )
     {
       const uint32_t uiBlkPos = cctx.blockPos( iScanPos );
@@ -1002,6 +1004,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
               cctx.resetSigGroup();
               iCodedCostCG = iUncodedCostCGTmp;
               iCostCoeffGroupSig = iCostCoeffGroupSig0;
+              remRegBins = remRegBinsStartCG;
 
               // reset coeffs to 0 in this block
               for( iScanPosinCG = iCGSize - 1; iScanPosinCG >= 0; iScanPosinCG-- )

@@ -86,6 +86,10 @@ ifneq ($(enable-unstable-api),)
 CONFIG_OPTIONS += -DVVENC_ENABLE_UNSTABLE_API=$(enable-unstable-api)
 endif
 
+ifneq ($(ffp-contract-off),)
+CONFIG_OPTIONS += -DVVENC_FFP_CONTRACT_OFF=$(ffp-contract-off)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
 NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)
