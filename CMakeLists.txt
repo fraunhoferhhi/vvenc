@@ -23,15 +23,6 @@ message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH
 
 include( vvencCompilerSupport )
 
-# Avoid non-portable fp contractions leading to cross-platform bit-differences.
-if ( VVENC_FPP_CONTRACT_OFF )
-  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
-      CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off" )
-    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off" )
-  endif()
-endif()
-
 detect_target_architecture( VVENC_TARGET_ARCH )
 if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
@@ -60,8 +51,18 @@ set( VVENC_ENABLE_ARM_SIMD ${VVENC_ARM_SIMD_DEFAULT} CACHE BOOL "Enable Arm Neon
 set( VVENC_ENABLE_ARM_SIMD_SVE FALSE                 CACHE BOOL "Enable Arm SVE intrinsics" )
 set( VVENC_ENABLE_ARM_SIMD_SVE2 FALSE                CACHE BOOL "Enable Arm SVE2 intrinsics" )
 set( VVENC_ENABLE_LOONGARCH64_SIMD_LSX ${VVENC_LOONGARCH64_SIMD_DEFAULT} CACHE BOOL "Enable LoongArch64 LSX intrinsics" )
+set( VVENC_FFP_CONTRACT_OFF OFF                      CACHE BOOL "Disable floating point expression contraction fFr exact math" )
 
 set( VVENC_ENABLE_UNSTABLE_API            OFF        CACHE BOOL "Enable unstable API" )
+
+# Avoid non-portable fp contractions leading to cross-platform bit-differences.
+if ( VVENC_FFP_CONTRACT_OFF )
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
+      CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off" )
+  endif()
+endif()
 
 check_problematic_compiler( VVENC_PROBLEMATIC_COMPILER "MSVC" 19.38 19.39 )
 if( VVENC_PROBLEMATIC_COMPILER )
