@@ -198,15 +198,12 @@ set( VVENC_INSTALL_FULLFEATURE_APP          OFF CACHE BOOL   "Install the full-f
 
 set( VVENC_ENABLE_WERROR                    ON  CACHE BOOL   "Treat warnings as errors (-Werror or /WX)" )
 
+set( VVENC_USE_ADDRESS_SANITIZER            OFF CACHE BOOL   "Enable or disable address sanitizer" )
+
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-
-  # enable address sanitizer
-  set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
-
   set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
 endif()
-
 
 if( VVENC_ENABLE_BUILD_TYPE_POSTFIX )
   if( BUILD_SHARED_LIBS )
@@ -359,15 +356,22 @@ endif()
 
 # set address sanitizer compiler arguments
 if( VVENC_USE_ADDRESS_SANITIZER )
-   # add compile options
-   add_compile_options( "-fsanitize=address" )
-   add_compile_options( "-fno-omit-frame-pointer" )
-   add_compile_options( "-fsanitize=undefined" )
-   add_compile_options( "-fsanitize=leak" )
-   add_link_options( "-fsanitize=address" )
-   add_link_options( "-fno-omit-frame-pointer" )
-   add_link_options( "-fsanitize=undefined" )
-   add_link_options( "-fsanitize=leak" )
+  if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    message( STATUS "enabled GNU/Clang address sanitizer" )
+     # add compile options
+     add_compile_options( "-fsanitize=address" )
+     add_compile_options( "-fno-omit-frame-pointer" )
+     add_compile_options( "-fsanitize=undefined" )
+     add_compile_options( "-fsanitize=leak" )
+     add_link_options( "-fsanitize=address" )
+     add_link_options( "-fno-omit-frame-pointer" )
+     add_link_options( "-fsanitize=undefined" )
+     add_link_options( "-fsanitize=leak" )
+   elseif(MSVC)  
+     message( STATUS "enabled MSVC address sanitizer" )
+     add_compile_options( "/fsanitize=address" )
+   endif()  
 endif()
 
 # set thread sanitizer compiler arguments

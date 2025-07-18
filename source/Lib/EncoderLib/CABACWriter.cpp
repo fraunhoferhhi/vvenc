@@ -2308,7 +2308,7 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   int       state     = 0;
 
   int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
-  cctx.regBinLimit = (tu.getTbAreaAfterCoefZeroOut(compID) * ctxBinSampleRatio) >> 4;
+  cctx.remRegBins = (tu.getTbAreaAfterCoefZeroOut(compID) * ctxBinSampleRatio) >> 4;
 
   const bool zeroOutCheck  = isLuma( compID ) && tu.cs->sps->MTS && tu.cu->sbtInfo != 0 && tu.blocks[compID].height <= 32 && tu.blocks[compID].width <= 32;
   const bool zeroOutWidth  = tu.blocks[compID].width;
@@ -2545,7 +2545,7 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
   int       remAbsLevel   = -1;
   int       numNonZero    =  0;
   unsigned  signPattern   =  0;
-  int       remRegBins    = cctx.regBinLimit;
+  int       remRegBins    = cctx.remRegBins;
   int       firstPosMode2 = minSubPos - 1;
 
   for( ; nextSigPos >= minSubPos && remRegBins >= 4; nextSigPos-- )
@@ -2602,7 +2602,7 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
     state = ( stateTransTable >> ((state<<2)+((Coeff&1)<<1)) ) & 3;
   }
   firstPosMode2 = nextSigPos;
-  cctx.regBinLimit = remRegBins;
+  cctx.remRegBins = remRegBins;
 
 
   //===== 2nd PASS: Go-rice codes =====
@@ -2661,7 +2661,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
   CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)] );
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
-  cctx.setNumCtxBins(maxCtxBins);
+  cctx.remRegBins = maxCtxBins;
 
   // determine and set last coeff position and sig group flags
   std::bitset<MLS_GRP_NUM> sigGroupFlags;
@@ -2715,7 +2715,7 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
 
   int lastScanPosPass1 = -1;
   int lastScanPosPass2 = -1;
-  for (; nextSigPos <= minSubPos && cctx.numCtxBins() >= 4; nextSigPos++)
+  for (; nextSigPos <= minSubPos && cctx.remRegBins >= 4; nextSigPos++)
   {
     TCoeff    Coeff      = coeff[ cctx.blockPos( nextSigPos ) ];
     unsigned  sigFlag    = ( Coeff != 0 );
@@ -2724,7 +2724,7 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
       const unsigned sigCtxId = cctx.sigCtxIdAbsTS( nextSigPos, coeff );
       m_BinEncoder.encodeBin( sigFlag, sigCtxId );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "ts_sig_bin() bin=%d ctx=%d\n", sigFlag, sigCtxId );
-      cctx.decimateNumCtxBins(1);
+      cctx.remRegBins--;
     }
 
     if( sigFlag )
@@ -2733,7 +2733,7 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
       int sign = Coeff < 0;
       const unsigned signCtxId = cctx.signCtxIdAbsTS(nextSigPos, coeff, cctx.bdpcm());
       m_BinEncoder.encodeBin(sign, signCtxId);
-      cctx.decimateNumCtxBins(1);
+      cctx.remRegBins--;
       numNonZero++;
       cctx.neighTS(rightPixel, belowPixel, nextSigPos, coeff);
       modAbsCoeff = cctx.deriveModCoeff(rightPixel, belowPixel, abs(Coeff), cctx.bdpcm());
@@ -2743,14 +2743,14 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
       const unsigned gt1CtxId = cctx.lrg1CtxIdAbsTS(nextSigPos, coeff, cctx.bdpcm());
       m_BinEncoder.encodeBin(gt1, gt1CtxId);
       DTRACE(g_trace_ctx, D_SYNTAX_RESI, "ts_gt1_flag() bin=%d ctx=%d\n", gt1, gt1CtxId);
-      cctx.decimateNumCtxBins(1);
+      cctx.remRegBins--;
 
       if( gt1 )
       {
         remAbsLevel  -= 1;
         m_BinEncoder.encodeBin( remAbsLevel&1, cctx.parityCtxIdAbsTS() );
         DTRACE( g_trace_ctx, D_SYNTAX_RESI, "ts_par_flag() bin=%d ctx=%d\n", remAbsLevel&1, cctx.parityCtxIdAbsTS() );
-        cctx.decimateNumCtxBins(1);
+        cctx.remRegBins--;
       }
     }
     lastScanPosPass1 = nextSigPos;
@@ -2759,7 +2759,7 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
   int cutoffVal = 2;
   int numGtBins = 4;
 
-  for (int scanPos = firstSigPos; scanPos <= minSubPos && cctx.numCtxBins() >= 4; scanPos++)
+  for (int scanPos = firstSigPos; scanPos <= minSubPos && cctx.remRegBins >= 4; scanPos++)
   {
     unsigned absLevel;
     cctx.neighTS(rightPixel, belowPixel, scanPos, coeff);
@@ -2772,7 +2772,7 @@ void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TC
         unsigned gt2 = (absLevel >= (cutoffVal + 2));
         m_BinEncoder.encodeBin(gt2, cctx.greaterXCtxIdAbsTS(cutoffVal >> 1));
         DTRACE(g_trace_ctx, D_SYNTAX_RESI, "ts_gt%d_flag() bin=%d ctx=%d sp=%d coeff=%d\n", i, gt2, cctx.greaterXCtxIdAbsTS(cutoffVal >> 1), scanPos, std::min<int>(absLevel, cutoffVal + 2));
-        cctx.decimateNumCtxBins(1);
+        cctx.remRegBins--;
       }
       cutoffVal += 2;
     }

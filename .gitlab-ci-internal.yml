@@ -235,43 +235,47 @@ test_ubuntu2204:
    extends: .build_test_template
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
 
-test_vc191x:
+test_vs2017:
    extends: .build_test_msvc_template
    variables:
       MSVC_ARCH: x64
+      # use VS 2017 compilers:
+      CONFIG_OPTIONS: -T v141
    tags:
-      - vc191x
+      - vs2022
 
-test_vc192x:
+test_vs2019:
    extends: .build_test_msvc_template
    variables:
       MSVC_ARCH: x64
+      # use VS 2019 compilers:
+      CONFIG_OPTIONS: -T v142
    tags:
-      - vc192x
+      - vs2022
 
-test_vc193x_Win32:
+test_vs2022_Win32:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: Win32
      CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
-    - vc193x
+    - vs2022
 
-test_vc193x:
+test_vs2022:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: x64
      CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
-    - vc193x
+    - vs2022
 
-test_vc193x_arm64:
+test_vs2022_arm64:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: arm64
      CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
-    - vc193x-arm
+    - vs2022-arm
 
 test_macos-x86_64:
    extends: .build_test_macos_template
