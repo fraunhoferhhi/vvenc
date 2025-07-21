@@ -170,7 +170,7 @@ static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, 
   return vqmovn_s32( vsuma );
 }
 
-static int16x8_t filter8xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+static inline int16x8_t filter_horiz_8x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
   int16x4_t lo = filter_horiz_4x1_N8_neon( src + 0, ch, voffset1, invshift1st );
   int16x4_t hi = filter_horiz_4x1_N8_neon( src + 4, ch, voffset1, invshift1st );
@@ -180,8 +180,8 @@ static int16x8_t filter8xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voff
 static int16x8x2_t filter16xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
   int16x8x2_t result;
-  result.val[0] = filter8xH_N8_neon( src + 0, ch, voffset1, invshift1st );
-  result.val[1] = filter8xH_N8_neon( src + 8, ch, voffset1, invshift1st );
+  result.val[0] = filter_horiz_8x1_N8_neon( src + 0, ch, voffset1, invshift1st );
+  result.val[1] = filter_horiz_8x1_N8_neon( src + 8, ch, voffset1, invshift1st );
   return result; // explicit return since MSVC for arm64 does not support direct return with typecast
 }
 
@@ -268,14 +268,17 @@ void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride,
 }
 
 template<bool isLast>
-static void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride,
-                                   int width, int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                            int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
+  CHECKD( width != 8, "Width must be 8" );
+  CHECKD( height < 4, "Height must be >= 4" );
+  CHECKD( height % 4 != 0, "Height must be a multiple of 4" );
+  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
+
   OFFSET( src, srcStride, -3, -3 );
 
-  // With the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20.
-  const int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
   const int shift1st = IF_FILTER_PREC - headRoom;
   const int shift2nd = IF_FILTER_PREC + headRoom;
 
@@ -291,7 +294,6 @@ static void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
   }
   const int32x4_t voffset1 = vdupq_n_s32( offset1st );
 
-  const int16x8_t vibdimin = vdupq_n_s16( clpRng.min() );
   const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
 
   int16x8_t ch = vld1q_s16( coeffH );
@@ -300,24 +302,24 @@ static void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
   int32x4_t invshift1st = vdupq_n_s32( -shift1st );
   int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
 
-  int16x8_t vsrcv0 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv0 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv1 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv1 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv2 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv2 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv3 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv3 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv4 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv4 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv5 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv5 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8_t vsrcv6 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8_t vsrcv6 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
 
   do
   {
-    int16x8_t vsrcv7 = filter8xH_N8_neon( src, ch, voffset1, invshift1st );
+    int16x8_t vsrcv7 = filter_horiz_8x1_N8_neon( src, ch, voffset1, invshift1st );
     src += srcStride;
 
     int32x4_t vsum0 = vdupq_n_s32( offset2nd );
@@ -348,13 +350,13 @@ static void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
     vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv7 ), vget_high_s16( cv ), 3 );
 
     int16x8_t vsum01;
-    if( isLast )  // clip
+    if( isLast ) // clip
     {
       vsum0 = vshlq_s32( vsum0, invshift2nd );
       vsum1 = vshlq_s32( vsum1, invshift2nd );
 
-      vsum01 = vcombine_s16( vqmovn_s32( vsum0 ), vqmovn_s32( vsum1 ) );
-      vsum01 = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum01 ) );
+      uint16x8_t usum01 = vcombine_u16( vqmovun_s32( vsum0 ), vqmovun_s32( vsum1 ) );
+      vsum01 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum01 ) );
     }
     else
     {
@@ -370,6 +372,7 @@ static void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
     vsrcv6 = vsrcv7;
 
     vst1q_s16( dst, vsum01 );
+
     dst += dstStride;
   } while( --height != 0 );
 }
