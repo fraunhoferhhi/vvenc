@@ -147,7 +147,7 @@ static void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, con
   }
 }
 
-static int16x4_t filter4xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
   int16x8_t vsrca0 = vld1q_s16( src + 0 );
   int16x8_t vsrca1 = vld1q_s16( src + 1 );
@@ -172,8 +172,8 @@ static int16x4_t filter4xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voff
 
 static int16x8_t filter8xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t lo = filter4xH_N8_neon( src + 0, ch, voffset1, invshift1st );
-  int16x4_t hi = filter4xH_N8_neon( src + 4, ch, voffset1, invshift1st );
+  int16x4_t lo = filter_horiz_4x1_N8_neon( src + 0, ch, voffset1, invshift1st );
+  int16x4_t hi = filter_horiz_4x1_N8_neon( src + 4, ch, voffset1, invshift1st );
   return vcombine_s16( lo, hi );
 }
 
@@ -186,14 +186,16 @@ static int16x8x2_t filter16xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t v
 }
 
 template<bool isLast>
-static void simdFilter4xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride,
-                                   int width, int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                            int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
-  OFFSET( src, srcStride, -3, -3 );
+  CHECKD( width != 4, "Width must be 4" );
+  CHECKD( height != 4, "Height must be 4" );
+  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
 
-  // With the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20.
-  const int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  OFFSET( src, srcStride, -3, -2 );
+
+  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
   const int shift1st = IF_FILTER_PREC - headRoom;
   const int shift2nd = IF_FILTER_PREC + headRoom;
 
@@ -209,7 +211,6 @@ static void simdFilter4xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
   }
   const int32x4_t voffset1 = vdupq_n_s32( offset1st );
 
-  const int16x4_t vibdimin = vdup_n_s16( clpRng.min() );
   const int16x4_t vibdimax = vdup_n_s16( clpRng.max() );
 
   int16x8_t ch = vld1q_s16( coeffH );
@@ -218,58 +219,52 @@ static void simdFilter4xH_N8_neon( const ClpRng& clpRng, Pel const* src, int src
   int32x4_t invshift1st = vdupq_n_s32( -shift1st );
   int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
 
-  int16x4_t vsrcv0 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x4_t vsrcv[9];
+  vsrcv[0] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv1 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[1] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv2 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[2] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv3 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[3] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv4 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[4] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv5 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[5] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x4_t vsrcv6 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[6] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
+  vsrcv[7] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[8] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
 
+  int h = 0;
   do
   {
-    int16x4_t vsrcv7 = filter4xH_N8_neon( src, ch, voffset1, invshift1st );
-    src += srcStride;
-
+    // For filter4x4_N6, the 0th and 7th cv coefficients are zeros so remove them.
     int32x4_t vsum0 = vdupq_n_s32( offset2nd );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv0, vget_low_s16( cv ), 0 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv1, vget_low_s16( cv ), 1 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv2, vget_low_s16( cv ), 2 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv3, vget_low_s16( cv ), 3 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv4, vget_high_s16( cv ), 0 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv5, vget_high_s16( cv ), 1 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv6, vget_high_s16( cv ), 2 );
-    vsum0           = vmlal_lane_s16( vsum0, vsrcv7, vget_high_s16( cv ), 3 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 0], vget_low_s16( cv ), 1 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 1], vget_low_s16( cv ), 2 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 2], vget_low_s16( cv ), 3 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 3], vget_high_s16( cv ), 0 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 4], vget_high_s16( cv ), 1 );
+    vsum0           = vmlal_lane_s16( vsum0, vsrcv[h + 5], vget_high_s16( cv ), 2 );
 
     int16x4_t vsum01;
-    if( isLast )  // clip
+    if( isLast ) // clip
     {
-      vsum01 = vqmovn_s32( vshlq_s32( vsum0, invshift2nd ) );
-      vsum01 = vmin_s16( vibdimax, vmax_s16( vibdimin, vsum01 ) );
+      uint16x4_t usum01 = vqmovun_s32( vshlq_s32( vsum0, invshift2nd ) );
+      vsum01 = vmin_s16( vibdimax, vreinterpret_s16_u16( usum01 ) );
     }
     else
     {
       vsum01 = vqshrn_n_s32( vsum0, IF_FILTER_PREC );
     }
 
-    vsrcv0 = vsrcv1;
-    vsrcv1 = vsrcv2;
-    vsrcv2 = vsrcv3;
-    vsrcv3 = vsrcv4;
-    vsrcv4 = vsrcv5;
-    vsrcv5 = vsrcv6;
-    vsrcv6 = vsrcv7;
-
     vst1_s16( dst, vsum01 );
+
     dst += dstStride;
-  } while( --height != 0 );
+  } while( ++h != 4 );
 }
 
 template<bool isLast>
@@ -1618,8 +1613,8 @@ void xWeightedGeoBlk_neon( const ClpRngs& clpRngs, const CodingUnit& cu, const u
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<NEON>()
 {
-  m_filter4x4[0][0] = simdFilter4xH_N8_neon<false>;
-  m_filter4x4[0][1] = simdFilter4xH_N8_neon<true>;
+  m_filter4x4[0][0] = simdFilter4x4_N6_neon<false>;
+  m_filter4x4[0][1] = simdFilter4x4_N6_neon<true>;
   m_filter4x4[1][0] = simdFilter4x4_N4_neon<false>;
   m_filter4x4[1][1] = simdFilter4x4_N4_neon<true>;
 
