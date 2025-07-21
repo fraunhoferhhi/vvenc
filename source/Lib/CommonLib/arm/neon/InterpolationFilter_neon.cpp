@@ -177,7 +177,7 @@ static inline int16x8_t filter_horiz_8x1_N8_neon( Pel const* src, int16x8_t ch, 
   return vcombine_s16( lo, hi );
 }
 
-static int16x8x2_t filter16xH_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+static inline int16x8x2_t filter_horiz_16x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
   int16x8x2_t result;
   result.val[0] = filter_horiz_8x1_N8_neon( src + 0, ch, voffset1, invshift1st );
@@ -378,14 +378,17 @@ void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride,
 }
 
 template<bool isLast>
-static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride,
-                                    int width, int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                             int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
+  CHECKD( width != 16, "Width must be 16" );
+  CHECKD( height < 4, "Height must be >= 4" );
+  CHECKD( height % 4 != 0, "Height must be a multiple of 4" );
+  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
+
   OFFSET( src, srcStride, -3, -3 );
 
-  // With the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20.
-  const int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
   const int shift1st = IF_FILTER_PREC - headRoom;
   const int shift2nd = IF_FILTER_PREC + headRoom;
 
@@ -401,7 +404,6 @@ static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
   }
   const int32x4_t voffset1 = vdupq_n_s32( offset1st );
 
-  const int16x8_t vibdimin = vdupq_n_s16( clpRng.min() );
   const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
 
   int16x8_t ch = vld1q_s16( coeffH );
@@ -410,24 +412,24 @@ static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
   int32x4_t invshift1st = vdupq_n_s32( -shift1st );
   int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
 
-  int16x8x2_t vsrcv0 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv0 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv1 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv1 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv2 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv2 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv3 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv3 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv4 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv4 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv5 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv5 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  int16x8x2_t vsrcv6 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+  int16x8x2_t vsrcv6 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
 
   do
   {
-    int16x8x2_t vsrcv7 = filter16xH_N8_neon( src, ch, voffset1, invshift1st );
+    int16x8x2_t vsrcv7 = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
     src += srcStride;
 
     int32x4_t vsum0 = vdupq_n_s32( offset2nd );
@@ -435,45 +437,45 @@ static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
     int32x4_t vsum2 = vdupq_n_s32( offset2nd );
     int32x4_t vsum3 = vdupq_n_s32( offset2nd );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv0.val[ 0 ] ), vget_low_s16( cv ), 0 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv0.val[ 0 ] ), vget_low_s16( cv ), 0 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv0.val[ 1 ] ), vget_low_s16( cv ), 0 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv0.val[ 1 ] ), vget_low_s16( cv ), 0 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv0.val[0] ), vget_low_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv0.val[0] ), vget_low_s16( cv ), 0 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv0.val[1] ), vget_low_s16( cv ), 0 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv0.val[1] ), vget_low_s16( cv ), 0 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv1.val[ 0 ] ), vget_low_s16( cv ), 1 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv1.val[ 0 ] ), vget_low_s16( cv ), 1 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv1.val[ 1 ] ), vget_low_s16( cv ), 1 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv1.val[ 1 ] ), vget_low_s16( cv ), 1 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv1.val[0] ), vget_low_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv1.val[0] ), vget_low_s16( cv ), 1 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv1.val[1] ), vget_low_s16( cv ), 1 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv1.val[1] ), vget_low_s16( cv ), 1 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv2.val[ 0 ] ), vget_low_s16( cv ), 2 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv2.val[ 0 ] ), vget_low_s16( cv ), 2 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv2.val[ 1 ] ), vget_low_s16( cv ), 2 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv2.val[ 1 ] ), vget_low_s16( cv ), 2 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv2.val[0] ), vget_low_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv2.val[0] ), vget_low_s16( cv ), 2 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv2.val[1] ), vget_low_s16( cv ), 2 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv2.val[1] ), vget_low_s16( cv ), 2 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv3.val[ 0 ] ), vget_low_s16( cv ), 3 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv3.val[ 0 ] ), vget_low_s16( cv ), 3 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv3.val[ 1 ] ), vget_low_s16( cv ), 3 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv3.val[ 1 ] ), vget_low_s16( cv ), 3 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv3.val[0] ), vget_low_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv3.val[0] ), vget_low_s16( cv ), 3 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv3.val[1] ), vget_low_s16( cv ), 3 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv3.val[1] ), vget_low_s16( cv ), 3 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv4.val[ 0 ] ), vget_high_s16( cv ), 0 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv4.val[ 0 ] ), vget_high_s16( cv ), 0 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv4.val[ 1 ] ), vget_high_s16( cv ), 0 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv4.val[ 1 ] ), vget_high_s16( cv ), 0 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv4.val[0] ), vget_high_s16( cv ), 0 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv4.val[0] ), vget_high_s16( cv ), 0 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv4.val[1] ), vget_high_s16( cv ), 0 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv4.val[1] ), vget_high_s16( cv ), 0 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv5.val[ 0 ] ), vget_high_s16( cv ), 1 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv5.val[ 0 ] ), vget_high_s16( cv ), 1 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv5.val[ 1 ] ), vget_high_s16( cv ), 1 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv5.val[ 1 ] ), vget_high_s16( cv ), 1 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv5.val[0] ), vget_high_s16( cv ), 1 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv5.val[0] ), vget_high_s16( cv ), 1 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv5.val[1] ), vget_high_s16( cv ), 1 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv5.val[1] ), vget_high_s16( cv ), 1 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv6.val[ 0 ] ), vget_high_s16( cv ), 2 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv6.val[ 0 ] ), vget_high_s16( cv ), 2 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv6.val[ 1 ] ), vget_high_s16( cv ), 2 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv6.val[ 1 ] ), vget_high_s16( cv ), 2 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv6.val[0] ), vget_high_s16( cv ), 2 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv6.val[0] ), vget_high_s16( cv ), 2 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv6.val[1] ), vget_high_s16( cv ), 2 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv6.val[1] ), vget_high_s16( cv ), 2 );
 
-    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv7.val[ 0 ] ), vget_high_s16( cv ), 3 );
-    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv7.val[ 0 ] ), vget_high_s16( cv ), 3 );
-    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv7.val[ 1 ] ), vget_high_s16( cv ), 3 );
-    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv7.val[ 1 ] ), vget_high_s16( cv ), 3 );
+    vsum0 = vmlal_lane_s16( vsum0, vget_low_s16( vsrcv7.val[0] ), vget_high_s16( cv ), 3 );
+    vsum1 = vmlal_lane_s16( vsum1, vget_high_s16( vsrcv7.val[0] ), vget_high_s16( cv ), 3 );
+    vsum2 = vmlal_lane_s16( vsum2, vget_low_s16( vsrcv7.val[1] ), vget_high_s16( cv ), 3 );
+    vsum3 = vmlal_lane_s16( vsum3, vget_high_s16( vsrcv7.val[1] ), vget_high_s16( cv ), 3 );
 
     int16x8_t vsum01, vsum23;
     if( isLast ) // clip
@@ -483,11 +485,11 @@ static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
       vsum2 = vshlq_s32( vsum2, invshift2nd );
       vsum3 = vshlq_s32( vsum3, invshift2nd );
 
-      vsum01 = vcombine_s16( vqmovn_s32( vsum0 ), vqmovn_s32( vsum1 ) );
-      vsum23 = vcombine_s16( vqmovn_s32( vsum2 ), vqmovn_s32( vsum3 ) );
+      uint16x8_t usum01 = vcombine_u16( vqmovun_s32( vsum0 ), vqmovun_s32( vsum1 ) );
+      uint16x8_t usum23 = vcombine_u16( vqmovun_s32( vsum2 ), vqmovun_s32( vsum3 ) );
 
-      vsum01 = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum01 ) );
-      vsum23 = vminq_s16( vibdimax, vmaxq_s16( vibdimin, vsum23 ) );
+      vsum01 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum01 ) );
+      vsum23 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum23 ) );
     }
     else
     {
@@ -505,6 +507,7 @@ static void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int sr
 
     vst1q_s16( dst + 0, vsum01 );
     vst1q_s16( dst + 8, vsum23 );
+
     dst += dstStride;
   } while( --height != 0 );
 }
