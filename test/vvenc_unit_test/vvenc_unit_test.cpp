@@ -1175,8 +1175,9 @@ static bool test_AffineGradientSearch()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
-  static constexpr unsigned bd = 10;
-  auto random_gen = InputGenerator <Pel>{ bd, /*is_signed=*/true };
+  // Observed up to 13 bit inputs in a real encoding.
+  static constexpr unsigned bd = 13;
+  auto random_gen = InputGenerator<Pel>{ bd, /*is_signed=*/true };
   auto minmax_gen = MinMaxGenerator<Pel>{ bd, /*is_signed=*/true };
 
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, random_gen ) && passed;

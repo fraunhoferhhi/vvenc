@@ -62,6 +62,13 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+static inline int64x2_t vmlal_s32_x2( int64x2_t acc, int32x4_t x, int32x4_t y )
+{
+  acc = vmlal_s32( acc, vget_low_s32( x ), vget_low_s32( y ) );
+  acc = vmlal_s32( acc, vget_high_s32( x ), vget_high_s32( y ) );
+  return acc;
+}
+
 template<bool b6Param>
 void simdEqualCoeffComputer_neon( Pel* const pResidue, const int residueStride, Pel** const ppDerivate,
                                   const int derivateBufStride, const int width, const int height,
@@ -79,162 +86,122 @@ void simdEqualCoeffComputer_neon<false>( Pel* const pResidue, const int residueS
   CHECK( ( height & ( height - 1 ) ) != 0, "Height must be power of two" );
   CHECK( ( width & ( width - 1 ) ) != 0, "Width must be power of two" );
 
-  // Set max inner loop count for accumulating into int32x4.
-  static constexpr int MAX_INT32_LOOP_CNT = 64;
-  const int innerloop_max = std::min( MAX_INT32_LOOP_CNT, height * ( width >> 2 ) );
+  int64x2_t out64_c0_r0 = vdupq_n_s64( 0 );
+  int64x2_t out64_c0_r1 = vdupq_n_s64( 0 );
+  int64x2_t out64_c0_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c0_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r1 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r3 = vdupq_n_s64( 0 );
 
-  int64x2_t out64_c0_r01 = vdupq_n_s64( 0 );
-  int64x2_t out64_c0_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c1_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c2_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c1r1_c3r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c0_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r4 = vdupq_n_s64( 0 );
 
   int h = 0;
-
-  // Right-shift by 1 to fit more bits into the int32x4 accumulator.
-  int cy = ( h + 2 ) >> 1; // Max: (124+2)>>1 = 63
-
-  const int innerloop_height = innerloop_max / ( width >> 2 );
   do
   {
-    int32x4_t out_c0_r0 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r1 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r2 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r3 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r4 = vdupq_n_s32( 0 );
+    // 4x4 row centerpoint.
+    const int cy = ( h & ~3 ) + 2;
 
-    int64x2_t out64_c1_r1 = vdupq_n_s64( 0 );
-    int32x4_t out_c1_r2 = vdupq_n_s32( 0 );
-    int64x2_t out64_c1_r3 = vdupq_n_s64( 0 );
-    int32x4_t out_c1_r4 = vdupq_n_s32( 0 );
+    // Initialize int32x4_t accumulators to zero.
+    int32x4_t out32_c0_r0 = vdupq_n_s32( 0 );
+    int32x4_t out32_c0_r2 = vdupq_n_s32( 0 );
+    int32x4_t out32_c0_r4 = vdupq_n_s32( 0 );
+    int32x4_t out32_c2_r2 = vdupq_n_s32( 0 );
+    int32x4_t out32_c2_r4 = vdupq_n_s32( 0 );
 
-    int32x4_t out_c2_r2 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r3 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r4 = vdupq_n_s32( 0 );
-
-    int64x2_t out64_c3_r3 = vdupq_n_s64( 0 );
-    int32x4_t out_c3_r4 = vdupq_n_s32( 0 );
-
-    int innerloop = innerloop_height;
+    int w = 0;
     do
     {
-      int w = 0;
-      do
-      {
-        const int drvIdx = h * derivateBufStride + w;
-        const int resIdx = h * residueStride + w;
+      const int drvIdx = h * derivateBufStride + w;
+      const int resIdx = h * residueStride + w;
+      const int cx = w + 2;
 
-        // Right-shift by 1 to fit more bits into the int32x4 accumulator.
-        const int cx = ( w + 2 ) >> 1; // Max: (124+2)>>1 = 63
+      int16x4_t iC0h = vld1_s16( &ppDerivate[0][drvIdx] );
+      int16x4_t iC2h = vld1_s16( &ppDerivate[1][drvIdx] );
+      int16x4_t res_h = vld1_s16( &pResidue[resIdx] );
+      int32x4_t res = vmovl_s16( res_h );
 
-        // The max bits are written for each multiply and accumulate to ensure they fit within int16/32/64.
-        int16x4_t iC0_s16 = vld1_s16( &ppDerivate[0][drvIdx] ); // 10bit signed
-        int16x4_t iC2_s16 = vld1_s16( &ppDerivate[1][drvIdx] ); // 10bit signed
-        int32x4_t iC0_s32 = vmovl_s16( iC0_s16 );               // 10bit
-        int32x4_t iC2_s32 = vmovl_s16( iC2_s16 );               // 10bit
-        int32x4_t iC1_s32 = vmull_n_s16( iC0_s16, cx );         // 17bit
-        iC1_s32 = vmlal_n_s16( iC1_s32, iC2_s16, cy );          // 17bit
-        int32x4_t iC3_s32 = vmull_n_s16( iC0_s16, cy );         // 17bit
-        iC3_s32 = vmlsl_n_s16( iC3_s32, iC2_s16, cx );          // 17bit
+      // For iC0 and iC2 multiplied by each other:
+      // 13 bits * 13 bits => 26 bits. Have 32 bits of storage so can
+      // accumulate 1 << 6 = 64 times.
+      // Max number of inner loop iterations is 128/4 = 32, so fine to
+      // accumulate into int32 for these cases.
 
-        out_c0_r0 = vmlal_s16( out_c0_r0, iC0_s16, iC0_s16 ); // 20bit * 64
-        out_c0_r1 = vmlaq_s32( out_c0_r1, iC1_s32, iC0_s32 ); // 26bit * 64
-        out_c0_r2 = vmlal_s16( out_c0_r2, iC2_s16, iC0_s16 ); // 20bit * 64
-        out_c0_r3 = vmlaq_s32( out_c0_r3, iC3_s32, iC0_s32 ); // 26bit * 64
+      int32x4_t iC0 = vmovl_s16( iC0h );
+      int32x4_t iC1 = vmull_n_s16( iC0h, cx );
+      iC1 = vmlal_n_s16( iC1, iC2h, cy );
+      int32x4_t iC2 = vmovl_s16( iC2h );
+      int32x4_t iC3 = vmull_n_s16( iC0h, cy );
+      iC3 = vmlsl_n_s16( iC3, iC2h, cx );
 
-        // Skip compute due to symmetry.
-        // out_c1_r0 = out_c0_r1;
+      out32_c0_r0 = vmlal_s16( out32_c0_r0, iC0h, iC0h );
+      out64_c0_r1 = vmlal_s32_x2( out64_c0_r1, iC1, iC0 );
+      out32_c0_r2 = vmlal_s16( out32_c0_r2, iC2h, iC0h );
+      out64_c0_r3 = vmlal_s32_x2( out64_c0_r3, iC3, iC0 );
+      // Skip compute due to symmetry.
+      // out32_c1_r0 = out32_c0_r1;
+      out64_c1_r1 = vmlal_s32_x2( out64_c1_r1, iC1, iC1 );
+      out64_c1_r2 = vmlal_s32_x2( out64_c1_r2, iC2, iC1 );
+      out64_c1_r3 = vmlal_s32_x2( out64_c1_r3, iC3, iC1 );
+      // Skip compute due to symmetry.
+      // out32_c2_r0 = out32_c0_r2;
+      // out32_c2_r1 = out32_c1_r2;
+      out32_c2_r2 = vmlal_s16( out32_c2_r2, iC2h, iC2h );
+      out64_c2_r3 = vmlal_s32_x2( out64_c2_r3, iC3, iC2 );
+      // Skip compute due to symmetry.
+      // out32_c3_r0 = out32_c0_r3;
+      // out32_c3_r1 = out32_c1_r3;
+      // out32_c3_r2 = out32_c2_r3;
+      out64_c3_r3 = vmlal_s32_x2( out64_c3_r3, iC3, iC3 );
 
-        out64_c1_r1 = vmlal_s32( out64_c1_r1, vget_low_s32( iC1_s32 ), vget_low_s32( iC1_s32 ) );   // 33bit * 128
-        out64_c1_r1 = vmlal_s32( out64_c1_r1, vget_high_s32( iC1_s32 ), vget_high_s32( iC1_s32 ) ); // 33bit * 128
-        out_c1_r2 = vmlaq_s32( out_c1_r2, iC2_s32, iC1_s32 );                                       // 26bit * 64
-        out64_c1_r3 = vmlal_s32( out64_c1_r3, vget_low_s32( iC3_s32 ), vget_low_s32( iC1_s32 ) );   // 33bit * 128
-        out64_c1_r3 = vmlal_s32( out64_c1_r3, vget_high_s32( iC3_s32 ), vget_high_s32( iC1_s32 ) ); // 33bit * 128
+      // Final Row: iC[] x Residue
+      out32_c0_r4 = vmlal_s16( out32_c0_r4, iC0h, res_h );
+      out64_c1_r4 = vmlal_s32_x2( out64_c1_r4, iC1, res );
+      out32_c2_r4 = vmlal_s16( out32_c2_r4, iC2h, res_h );
+      out64_c3_r4 = vmlal_s32_x2( out64_c3_r4, iC3, res );
 
-        // Skip compute due to symmetry.
-        // out_c2_r0 = out_c0_r2;
-        // out_c2_r1 = out_c1_r2;
+      w += 4;
+    } while( w != width );
 
-        out_c2_r2 = vmlal_s16( out_c2_r2, iC2_s16, iC2_s16 ); // 20bit * 64
-        out_c2_r3 = vmlaq_s32( out_c2_r3, iC3_s32, iC2_s32 ); // 26bit * 64
+    // Promote int32x4 to int64x2 after every inner loop.
+    out64_c0_r0 = vpadalq_s32( out64_c0_r0, out32_c0_r0 );
+    out64_c0_r2 = vpadalq_s32( out64_c0_r2, out32_c0_r2 );
+    out64_c2_r2 = vpadalq_s32( out64_c2_r2, out32_c2_r2 );
+    out64_c0_r4 = vpadalq_s32( out64_c0_r4, out32_c0_r4 );
+    out64_c2_r4 = vpadalq_s32( out64_c2_r4, out32_c2_r4 );
+  } while( ++h != height );
 
-        // Skip compute due to symmetry.
-        // out_c3_r0 = out_c0_r3;
-        // out_c3_r1 = out_c1_r3;
-        // out_c3_r2 = out_c2_r3;
-
-        out64_c3_r3 = vmlal_s32( out64_c3_r3, vget_low_s32( iC3_s32 ), vget_low_s32( iC3_s32 ) );   // 33bit * 128
-        out64_c3_r3 = vmlal_s32( out64_c3_r3, vget_high_s32( iC3_s32 ), vget_high_s32( iC3_s32 ) ); // 33bit * 128
-
-        // Final Row: iC[] x Residue
-        int16x4_t res16 = vld1_s16( &pResidue[resIdx] );    // 10bit signed
-        int32x4_t res32 = vmovl_s16( res16 );               // 10bit
-        out_c0_r4 = vmlal_s16( out_c0_r4, iC0_s16, res16 ); // 20bit * 64
-        out_c1_r4 = vmlaq_s32( out_c1_r4, iC1_s32, res32 ); // 26bit * 64
-        out_c2_r4 = vmlal_s16( out_c2_r4, iC2_s16, res16 ); // 20bit * 64
-        out_c3_r4 = vmlaq_s32( out_c3_r4, iC3_s32, res32 ); // 26bit * 64
-
-        w += 4;
-      } while( w != width );
-
-      h++;
-      if( h % 4 == 0 )
-        cy += 2;
-    } while( --innerloop != 0 );
-
-    // Promote int32x4 to int64x2 after every MAX_INT32_LOOP_CNT loops of accumulation.
-    int64x2_t out64_c0_r0 = vpaddlq_s32( out_c0_r0 );
-    int64x2_t out64_c0_r1 = vpaddlq_s32( out_c0_r1 );
-    out64_c0_r01 = vaddq_s64( out64_c0_r01, pairwise_add_s64x2( out64_c0_r0, out64_c0_r1 ) );
-    int64x2_t out64_c0_r2 = vpaddlq_s32( out_c0_r2 );
-    int64x2_t out64_c0_r3 = vpaddlq_s32( out_c0_r3 );
-    out64_c0_r23 = vaddq_s64( out64_c0_r23, pairwise_add_s64x2( out64_c0_r2, out64_c0_r3 ) );
-
-    int64x2_t out64_c1_r2 = vpaddlq_s32( out_c1_r2 );
-    out64_c1_r23 = vaddq_s64( out64_c1_r23, pairwise_add_s64x2( out64_c1_r2, out64_c1_r3 ) );
-
-    int64x2_t out64_c2_r2 = vpaddlq_s32( out_c2_r2 );
-    int64x2_t out64_c2_r3 = vpaddlq_s32( out_c2_r3 );
-    out64_c2_r23 = vaddq_s64( out64_c2_r23, pairwise_add_s64x2( out64_c2_r2, out64_c2_r3 ) );
-
-    out64_c1r1_c3r3 = vaddq_s64( out64_c1r1_c3r3, pairwise_add_s64x2( out64_c1_r1, out64_c3_r3 ) );
-
-    // Promote and store final row accumulate from int32x4 to int64.
-    pEqualCoeff[1][4] += horizontal_add_long_s32x4( out_c0_r4 );
-    pEqualCoeff[2][4] += horizontal_add_long_s32x4( out_c1_r4 );
-    pEqualCoeff[3][4] += horizontal_add_long_s32x4( out_c2_r4 );
-    pEqualCoeff[4][4] += horizontal_add_long_s32x4( out_c3_r4 );
-
-  } while( h != height );
+  int64x2_t out64_c0_r01 = pairwise_add_s64x2( out64_c0_r0, out64_c0_r1 );
+  int64x2_t out64_c0_r23 = pairwise_add_s64x2( out64_c0_r2, out64_c0_r3 );
+  int64x2_t out64_c1_r23 = pairwise_add_s64x2( out64_c1_r2, out64_c1_r3 );
+  int64x2_t out64_c2_r23 = pairwise_add_s64x2( out64_c2_r2, out64_c2_r3 );
+  int64x2_t out64_c1r1_c3r3 = pairwise_add_s64x2( out64_c1_r1, out64_c3_r3 );
 
   // Store all outputs, copy the symmetric ones.
-  // Apply left-shift by 1 or 2 to cancel right-shift on cx and cy.
-  const int64_t shift[3] = { 0, 1, 2 };
-  const int64x2_t vshift0 = vld1q_s64( shift );
-  vst1q_s64( &pEqualCoeff[1][0], vshlq_s64( out64_c0_r01, vshift0 ) );
-  vst1q_s64( &pEqualCoeff[1][2], vshlq_s64( out64_c0_r23, vshift0 ) );
-
+  vst1q_s64( &pEqualCoeff[1][0], out64_c0_r01 );
+  vst1q_s64( &pEqualCoeff[1][2], out64_c0_r23 );
   pEqualCoeff[2][0] = pEqualCoeff[1][1];
-  out64_c1r1_c3r3 = vshlq_n_s64( out64_c1r1_c3r3, 2 );
   pEqualCoeff[2][1] = vgetq_lane_s64( out64_c1r1_c3r3, 0 );
-  const int64x2_t vshift1 = vld1q_s64( shift + 1 );
-  vst1q_s64( &pEqualCoeff[2][2], vshlq_s64( out64_c1_r23, vshift1 ) );
-
+  vst1q_s64( &pEqualCoeff[2][2], out64_c1_r23 );
   pEqualCoeff[3][0] = pEqualCoeff[1][2];
   pEqualCoeff[3][1] = pEqualCoeff[2][2];
-  vst1q_s64( &pEqualCoeff[3][2], vshlq_s64( out64_c2_r23, vshift0 ) );
-
+  vst1q_s64( &pEqualCoeff[3][2], out64_c2_r23 );
   pEqualCoeff[4][0] = pEqualCoeff[1][3];
   pEqualCoeff[4][1] = pEqualCoeff[2][3];
   pEqualCoeff[4][2] = pEqualCoeff[3][3];
   pEqualCoeff[4][3] = vgetq_lane_s64( out64_c1r1_c3r3, 1 );
 
   // Final row: Left-shift by 3.
-  // Apply extra left-shift by 1 to cancel right-shift on cx and cy.
-  pEqualCoeff[1][4] <<= 3;
-  pEqualCoeff[2][4] <<= 4;
-  pEqualCoeff[3][4] <<= 3;
-  pEqualCoeff[4][4] <<= 4;
+  pEqualCoeff[1][4] = horizontal_add_s64x2( out64_c0_r4 ) << 3;
+  pEqualCoeff[2][4] = horizontal_add_s64x2( out64_c1_r4 ) << 3;
+  pEqualCoeff[3][4] = horizontal_add_s64x2( out64_c2_r4 ) << 3;
+  pEqualCoeff[4][4] = horizontal_add_s64x2( out64_c3_r4 ) << 3;
 };
 
 template<>
@@ -249,253 +216,172 @@ void simdEqualCoeffComputer_neon<true>( Pel* const pResidue, const int residueSt
   CHECK( ( height & ( height - 1 ) ) != 0, "Height must be power of two" );
   CHECK( ( width & ( width - 1 ) ) != 0, "Width must be power of two" );
 
-  // Set max inner loop count for accumulating into int32x4.
-  static constexpr int MAX_INT32_LOOP_CNT = 128;
-  const int innerloop_max = std::min( MAX_INT32_LOOP_CNT, height * ( width >> 2 ) );
+  int64x2_t out64_c1_r0 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r1 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r5 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r1 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r5 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r2 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r5 = vdupq_n_s64( 0 );
+  int64x2_t out64_c4_r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c4_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c4_r5 = vdupq_n_s64( 0 );
+  int64x2_t out64_c5_r4 = vdupq_n_s64( 0 );
+  int64x2_t out64_c5_r5 = vdupq_n_s64( 0 );
+  int64x2_t out64_c6_r5 = vdupq_n_s64( 0 );
 
-  int64x2_t out64_c0_r01 = vdupq_n_s64( 0 );
-  int64x2_t out64_c0_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c0_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c1_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c1_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c2_r23 = vdupq_n_s64( 0 );
-  int64x2_t out64_c2_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c3_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c4_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c5_r45 = vdupq_n_s64( 0 );
-  int64x2_t out64_c1r1_c3r3 = vdupq_n_s64( 0 );
+  int64x2_t out64_c1_r6 = vdupq_n_s64( 0 );
+  int64x2_t out64_c2_r6 = vdupq_n_s64( 0 );
+  int64x2_t out64_c3_r6 = vdupq_n_s64( 0 );
+  int64x2_t out64_c4_r6 = vdupq_n_s64( 0 );
+  int64x2_t out64_c5_r6 = vdupq_n_s64( 0 );
+  int64x2_t out64_c6_r6 = vdupq_n_s64( 0 );
 
   int h = 0;
-
-  // Right-shift by 1 to fit more bits into the int32x4 accumulator.
-  int cy = ( h + 2 ) >> 1; // Max: (124+2)>>1 = 63
-
-  const int innerloop_height = innerloop_max / ( width >> 2 );
   do
   {
-    int32x4_t out_c0_r0 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r1 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r2 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r3 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r4 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r5 = vdupq_n_s32( 0 );
-    int32x4_t out_c0_r6 = vdupq_n_s32( 0 );
+    // 4x4 row centerpoint.
+    const int cy = ( h & ~3 ) + 2;
 
-    int64x2_t out64_c1_r1 = vdupq_n_s64( 0 );
-    int32x4_t out_c1_r2 = vdupq_n_s32( 0 );
-    int64x2_t out64_c1_r3 = vdupq_n_s64( 0 );
-    int64x2_t out64_c1_r4 = vdupq_n_s64( 0 );
-    int64x2_t out64_c1_r5 = vdupq_n_s64( 0 );
-    int32x4_t out_c1_r6 = vdupq_n_s32( 0 );
+    int32x4_t out32_c1_r0 = vdupq_n_s32( 0 );
+    int32x4_t out32_c1_r2 = vdupq_n_s32( 0 );
+    int32x4_t out32_c3_r2 = vdupq_n_s32( 0 );
 
-    int32x4_t out_c2_r2 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r3 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r4 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r5 = vdupq_n_s32( 0 );
-    int32x4_t out_c2_r6 = vdupq_n_s32( 0 );
+    int32x4_t out32_c1_r6 = vdupq_n_s32( 0 );
+    int32x4_t out32_c3_r6 = vdupq_n_s32( 0 );
 
-    int64x2_t out64_c3_r3 = vdupq_n_s64( 0 );
-    int64x2_t out64_c3_r4 = vdupq_n_s64( 0 );
-    int64x2_t out64_c3_r5 = vdupq_n_s64( 0 );
-    int32x4_t out_c3_r6 = vdupq_n_s32( 0 );
-
-    int64x2_t out64_c4_r4 = vdupq_n_s64( 0 );
-    int64x2_t out64_c4_r5 = vdupq_n_s64( 0 );
-    int32x4_t out_c4_r6 = vdupq_n_s32( 0 );
-
-    int64x2_t out64_c5_r5 = vdupq_n_s64( 0 );
-    int32x4_t out_c5_r6 = vdupq_n_s32( 0 );
-
-    int innerloop = innerloop_height;
+    int w = 0;
     do
     {
-      int w = 0;
-      do
-      {
-        const int drvIdx = h * derivateBufStride + w;
-        const int resIdx = h * residueStride + w;
+      const int drvIdx = h * derivateBufStride + w;
+      const int resIdx = h * residueStride + w;
+      const int cx = w + 2;
 
-        // Right-shift by 1 to fit more bits into the int32x4 accumulator.
-        const int cx = ( w + 2 ) >> 1; // Max: (124+2)>>1 = 63
+      int16x4_t iC0h = vld1_s16( &ppDerivate[0][drvIdx] );
+      int16x4_t iC2h = vld1_s16( &ppDerivate[1][drvIdx] );
+      int16x4_t res_h = vld1_s16( &pResidue[resIdx] );
+      int32x4_t res = vmovl_s16( res_h );
 
-        // The max bits are written for each multiply and accumulate to ensure they fit within int16/32/64.
-        int16x4_t iC0 = vld1_s16( &ppDerivate[0][drvIdx] ); // 10bit signed
-        int16x4_t iC2 = vld1_s16( &ppDerivate[1][drvIdx] ); // 10bit signed
-        int16x4_t iC1 = vmul_n_s16( iC0, cx );              // 16bit
-        int16x4_t iC3 = vmul_n_s16( iC2, cx );              // 16bit
-        int16x4_t iC4 = vmul_n_s16( iC0, cy );              // 16bit
-        int16x4_t iC5 = vmul_n_s16( iC2, cy );              // 16bit
+      int32x4_t iC0 = vmovl_s16( iC0h );       // 13 bits
+      int32x4_t iC1 = vmull_n_s16( iC0h, cx ); // 13+7 => 20 bits
+      int32x4_t iC2 = vmovl_s16( iC2h );       // 13 bits
+      int32x4_t iC3 = vmull_n_s16( iC2h, cx ); // 13+7 => 20 bits
+      int32x4_t iC4 = vmull_n_s16( iC0h, cy ); // 13+7 => 20 bits
+      int32x4_t iC5 = vmull_n_s16( iC2h, cy ); // 13+7 => 20 bits
 
-        out_c0_r0 = vmlal_s16( out_c0_r0, iC0, iC0 ); // 20bit * 128
-        out_c0_r1 = vmlal_s16( out_c0_r1, iC1, iC0 ); // 25bit * 128
-        out_c0_r2 = vmlal_s16( out_c0_r2, iC2, iC0 ); // 20bit * 128
-        out_c0_r3 = vmlal_s16( out_c0_r3, iC3, iC0 ); // 25bit * 128
-        out_c0_r4 = vmlal_s16( out_c0_r4, iC4, iC0 ); // 25bit * 128
-        out_c0_r5 = vmlal_s16( out_c0_r5, iC5, iC0 ); // 25bit * 128
+      // For iC0 and iC2 multiplied by each other:
+      // 13 bits * 13 bits => 26 bits. Have 32 bits of storage so can
+      // accumulate 1 << 6 = 64 times.
+      // Max number of inner loop iterations is 128/4 = 32, so fine to
+      // accumulate into int32 for these cases.
 
-        // Skip compute due to symmetry.
-        // out_c1_r0 = out_c0_r1;
-        int32x4_t out_c1_r1 = vmull_s16( iC1, iC1 );                        // 31bit
-        out64_c1_r1 = vaddw_s32( out64_c1_r1, vget_low_s32( out_c1_r1 ) );  // 31bit * 256
-        out64_c1_r1 = vaddw_s32( out64_c1_r1, vget_high_s32( out_c1_r1 ) ); // 31bit * 256
-        out_c1_r2 = vmlal_s16( out_c1_r2, iC2, iC1 );                       // 25bit * 128
-        int32x4_t out_c1_r3 = vmull_s16( iC3, iC1 );                        // 31bit
-        out64_c1_r3 = vaddw_s32( out64_c1_r3, vget_low_s32( out_c1_r3 ) );  // 31bit * 256
-        out64_c1_r3 = vaddw_s32( out64_c1_r3, vget_high_s32( out_c1_r3 ) ); // 31bit * 256
-        int32x4_t out_c1_r4 = vmull_s16( iC4, iC1 );                        // 31bit
-        out64_c1_r4 = vaddw_s32( out64_c1_r4, vget_low_s32( out_c1_r4 ) );  // 31bit * 256
-        out64_c1_r4 = vaddw_s32( out64_c1_r4, vget_high_s32( out_c1_r4 ) ); // 31bit * 256
-        int32x4_t out_c1_r5 = vmull_s16( iC5, iC1 );                        // 31bit
-        out64_c1_r5 = vaddw_s32( out64_c1_r5, vget_low_s32( out_c1_r5 ) );  // 31bit * 256
-        out64_c1_r5 = vaddw_s32( out64_c1_r5, vget_high_s32( out_c1_r5 ) ); // 31bit * 256
+      // Row 0-5.
+      out32_c1_r0 = vmlal_s16( out32_c1_r0, iC0h, iC0h );
+      out64_c1_r1 = vmlal_s32_x2( out64_c1_r1, iC1, iC0 );
+      out32_c1_r2 = vmlal_s16( out32_c1_r2, iC2h, iC0h );
+      out64_c1_r3 = vmlal_s32_x2( out64_c1_r3, iC3, iC0 );
+      out64_c1_r4 = vmlal_s32_x2( out64_c1_r4, iC4, iC0 );
+      out64_c1_r5 = vmlal_s32_x2( out64_c1_r5, iC5, iC0 );
+      out64_c2_r1 = vmlal_s32_x2( out64_c2_r1, iC1, iC1 );
+      out64_c2_r2 = vmlal_s32_x2( out64_c2_r2, iC2, iC1 );
+      out64_c2_r3 = vmlal_s32_x2( out64_c2_r3, iC3, iC1 );
+      out64_c2_r4 = vmlal_s32_x2( out64_c2_r4, iC4, iC1 );
+      out64_c2_r5 = vmlal_s32_x2( out64_c2_r5, iC5, iC1 );
+      out32_c3_r2 = vmlal_s16( out32_c3_r2, iC2h, iC2h );
+      out64_c3_r3 = vmlal_s32_x2( out64_c3_r3, iC3, iC2 );
+      out64_c3_r4 = vmlal_s32_x2( out64_c3_r4, iC4, iC2 );
+      out64_c3_r5 = vmlal_s32_x2( out64_c3_r5, iC5, iC2 );
+      out64_c4_r3 = vmlal_s32_x2( out64_c4_r3, iC3, iC3 );
+      out64_c4_r4 = vmlal_s32_x2( out64_c4_r4, iC4, iC3 );
+      out64_c4_r5 = vmlal_s32_x2( out64_c4_r5, iC5, iC3 );
+      out64_c5_r4 = vmlal_s32_x2( out64_c5_r4, iC4, iC4 );
+      out64_c5_r5 = vmlal_s32_x2( out64_c5_r5, iC5, iC4 );
+      out64_c6_r5 = vmlal_s32_x2( out64_c6_r5, iC5, iC5 );
 
-        // Skip compute due to symmetry.
-        // out_c2_r0 = out_c0_r2;
-        // out_c2_r1 = out_c1_r2;
-        out_c2_r2 = vmlal_s16( out_c2_r2, iC2, iC2 ); // 20bit * 128
-        out_c2_r3 = vmlal_s16( out_c2_r3, iC3, iC2 ); // 25bit * 128
-        out_c2_r4 = vmlal_s16( out_c2_r4, iC4, iC2 ); // 25bit * 128
-        out_c2_r5 = vmlal_s16( out_c2_r5, iC5, iC2 ); // 25bit * 128
+      // Final Row
+      out32_c1_r6 = vmlal_s16( out32_c1_r6, iC0h, res_h );
+      out64_c2_r6 = vmlal_s32_x2( out64_c2_r6, iC1, res );
+      out32_c3_r6 = vmlal_s16( out32_c3_r6, iC2h, res_h );
+      out64_c4_r6 = vmlal_s32_x2( out64_c4_r6, iC3, res );
+      out64_c5_r6 = vmlal_s32_x2( out64_c5_r6, iC4, res );
+      out64_c6_r6 = vmlal_s32_x2( out64_c6_r6, iC5, res );
 
-        // Skip compute due to symmetry.
-        // out_c3_r0 = out_c0_r3;
-        // out_c3_r1 = out_c1_r3;
-        // out_c3_r2 = out_c2_r3;
-        int32x4_t out_c3_r3 = vmull_s16( iC3, iC3 );                        // 31bit
-        out64_c3_r3 = vaddw_s32( out64_c3_r3, vget_low_s32( out_c3_r3 ) );  // 31bit * 256
-        out64_c3_r3 = vaddw_s32( out64_c3_r3, vget_high_s32( out_c3_r3 ) ); // 31bit * 256
-        int32x4_t out_c3_r4 = vmull_s16( iC4, iC3 );                        // 31bit
-        out64_c3_r4 = vaddw_s32( out64_c3_r4, vget_low_s32( out_c3_r4 ) );  // 31bit * 256
-        out64_c3_r4 = vaddw_s32( out64_c3_r4, vget_high_s32( out_c3_r4 ) ); // 31bit * 256
-        int32x4_t out_c3_r5 = vmull_s16( iC5, iC3 );                        // 31bit
-        out64_c3_r5 = vaddw_s32( out64_c3_r5, vget_low_s32( out_c3_r5 ) );  // 31bit * 256
-        out64_c3_r5 = vaddw_s32( out64_c3_r5, vget_high_s32( out_c3_r5 ) ); // 31bit * 256
+      w += 4;
+    } while( w != width );
 
-        // Skip compute due to symmetry.
-        // out_c4_r0 = out_c0_r4;
-        // out_c4_r1 = out_c1_r4;
-        // out_c4_r2 = out_c2_r4;
-        // out_c4_r3 = out_c3_r4;
-        int32x4_t out_c4_r4 = vmull_s16( iC4, iC4 );                        // 31bit
-        out64_c4_r4 = vaddw_s32( out64_c4_r4, vget_low_s32( out_c4_r4 ) );  // 31bit * 256
-        out64_c4_r4 = vaddw_s32( out64_c4_r4, vget_high_s32( out_c4_r4 ) ); // 31bit * 256
-        int32x4_t out_c4_r5 = vmull_s16( iC5, iC4 );                        // 31bit
-        out64_c4_r5 = vaddw_s32( out64_c4_r5, vget_low_s32( out_c4_r5 ) );  // 31bit * 256
-        out64_c4_r5 = vaddw_s32( out64_c4_r5, vget_high_s32( out_c4_r5 ) ); // 31bit * 256
+    out64_c1_r0 = vpadalq_s32( out64_c1_r0, out32_c1_r0 );
+    out64_c1_r2 = vpadalq_s32( out64_c1_r2, out32_c1_r2 );
+    out64_c3_r2 = vpadalq_s32( out64_c3_r2, out32_c3_r2 );
+    out64_c1_r6 = vpadalq_s32( out64_c1_r6, out32_c1_r6 );
+    out64_c3_r6 = vpadalq_s32( out64_c3_r6, out32_c3_r6 );
+  } while( ++h != height);
 
-        // Skip compute due to symmetry.
-        // out_c5_r0 = out_c0_r5;
-        // out_c5_r1 = out_c1_r5;
-        // out_c5_r2 = out_c2_r5;
-        // out_c5_r3 = out_c3_r5;
-        // out_c5_r4 = out_c4_r5;
-        int32x4_t out_c5_r5 = vmull_s16( iC5, iC5 );                        // 31bit
-        out64_c5_r5 = vaddw_s32( out64_c5_r5, vget_low_s32( out_c5_r5 ) );  // 31bit * 256
-        out64_c5_r5 = vaddw_s32( out64_c5_r5, vget_high_s32( out_c5_r5 ) ); // 31bit * 256
+  int64x2_t out64_c1_r01 = pairwise_add_s64x2( out64_c1_r0, out64_c1_r1 );
+  int64x2_t out64_c1_r23 = pairwise_add_s64x2( out64_c1_r2, out64_c1_r3 );
+  int64x2_t out64_c1_r45 = pairwise_add_s64x2( out64_c1_r4, out64_c1_r5 );
+  int64_t out64_c2_r01 = horizontal_add_s64x2( out64_c2_r1 );
+  int64x2_t out64_c2_r23 = pairwise_add_s64x2( out64_c2_r2, out64_c2_r3 );
+  int64x2_t out64_c2_r45 = pairwise_add_s64x2( out64_c2_r4, out64_c2_r5 );
+  int64x2_t out64_c3_r23 = pairwise_add_s64x2( out64_c3_r2, out64_c3_r3 );
+  int64x2_t out64_c3_r45 = pairwise_add_s64x2( out64_c3_r4, out64_c3_r5 );
+  int64_t out64_c4_r23 = horizontal_add_s64x2( out64_c4_r3 );
+  int64x2_t out64_c4_r45 = pairwise_add_s64x2( out64_c4_r4, out64_c4_r5 );
+  int64x2_t out64_c5_r45 = pairwise_add_s64x2( out64_c5_r4, out64_c5_r5 );
+  int64_t out64_c6_r45 = horizontal_add_s64x2( out64_c6_r5 );
+  int64x2_t out64_c12_r6 = pairwise_add_s64x2( out64_c1_r6, out64_c2_r6 );
+  int64x2_t out64_c34_r6 = pairwise_add_s64x2( out64_c3_r6, out64_c4_r6 );
+  int64x2_t out64_c56_r6 = pairwise_add_s64x2( out64_c5_r6, out64_c6_r6 );
 
-        // Final Row: iC[] x Residue
-        int16x4_t res = vld1_s16( &pResidue[resIdx] ); // 10bit signed
-        out_c0_r6 = vmlal_s16( out_c0_r6, iC0, res );  // 20bit * 128
-        out_c1_r6 = vmlal_s16( out_c1_r6, iC1, res );  // 25bit * 128
-        out_c2_r6 = vmlal_s16( out_c2_r6, iC2, res );  // 20bit * 128
-        out_c3_r6 = vmlal_s16( out_c3_r6, iC3, res );  // 25bit * 128
-        out_c4_r6 = vmlal_s16( out_c4_r6, iC4, res );  // 25bit * 128
-        out_c5_r6 = vmlal_s16( out_c5_r6, iC5, res );  // 25bit * 128
+  // Store accumulated EqualCoeff.
+  vst1q_s64( &pEqualCoeff[1][0], out64_c1_r01 );
+  vst1q_s64( &pEqualCoeff[1][2], out64_c1_r23 );
+  vst1q_s64( &pEqualCoeff[1][4], out64_c1_r45 );
+  pEqualCoeff[2][1] = out64_c2_r01;
+  vst1q_s64( &pEqualCoeff[2][2], out64_c2_r23 );
+  vst1q_s64( &pEqualCoeff[2][4], out64_c2_r45 );
+  vst1q_s64( &pEqualCoeff[3][2], out64_c3_r23 );
+  vst1q_s64( &pEqualCoeff[3][4], out64_c3_r45 );
+  pEqualCoeff[4][3] = out64_c4_r23;
+  vst1q_s64( &pEqualCoeff[4][4], out64_c4_r45 );
+  vst1q_s64( &pEqualCoeff[5][4], out64_c5_r45 );
+  pEqualCoeff[6][5] = out64_c6_r45;
 
-        w += 4;
-      } while( w != width );
-
-      h++;
-      if( h % 4 == 0 )
-        cy += 2;
-    } while( --innerloop != 0 );
-
-    // Promote int32x4 to int64x2 after every MAX_INT32_LOOP_CNT loops of accumulation.
-    int64x2_t out64_c0_r0 = vpaddlq_s32( out_c0_r0 );
-    int64x2_t out64_c0_r1 = vpaddlq_s32( out_c0_r1 );
-    out64_c0_r01 = vaddq_s64( out64_c0_r01, pairwise_add_s64x2( out64_c0_r0, out64_c0_r1 ) );
-    int64x2_t out64_c0_r2 = vpaddlq_s32( out_c0_r2 );
-    int64x2_t out64_c0_r3 = vpaddlq_s32( out_c0_r3 );
-    out64_c0_r23 = vaddq_s64( out64_c0_r23, pairwise_add_s64x2( out64_c0_r2, out64_c0_r3 ) );
-    int64x2_t out64_c0_r4 = vpaddlq_s32( out_c0_r4 );
-    int64x2_t out64_c0_r5 = vpaddlq_s32( out_c0_r5 );
-    out64_c0_r45 = vaddq_s64( out64_c0_r45, pairwise_add_s64x2( out64_c0_r4, out64_c0_r5 ) );
-
-    int64x2_t out64_c1_r2 = vpaddlq_s32( out_c1_r2 );
-    out64_c1_r23 = vaddq_s64( out64_c1_r23, pairwise_add_s64x2( out64_c1_r2, out64_c1_r3 ) );
-    out64_c1_r45 = vaddq_s64( out64_c1_r45, pairwise_add_s64x2( out64_c1_r4, out64_c1_r5 ) );
-
-    int64x2_t out64_c2_r2 = vpaddlq_s32( out_c2_r2 );
-    int64x2_t out64_c2_r3 = vpaddlq_s32( out_c2_r3 );
-    out64_c2_r23 = vaddq_s64( out64_c2_r23, pairwise_add_s64x2( out64_c2_r2, out64_c2_r3 ) );
-    int64x2_t out64_c2_r4 = vpaddlq_s32( out_c2_r4 );
-    int64x2_t out64_c2_r5 = vpaddlq_s32( out_c2_r5 );
-    out64_c2_r45 = vaddq_s64( out64_c2_r45, pairwise_add_s64x2( out64_c2_r4, out64_c2_r5 ) );
-
-    out64_c1r1_c3r3 = vaddq_s64( out64_c1r1_c3r3, pairwise_add_s64x2( out64_c1_r1, out64_c3_r3 ) );
-    out64_c3_r45 = vaddq_s64( out64_c3_r45, pairwise_add_s64x2( out64_c3_r4, out64_c3_r5 ) );
-
-    out64_c4_r45 = vaddq_s64( out64_c4_r45, pairwise_add_s64x2( out64_c4_r4, out64_c4_r5 ) );
-
-    out64_c5_r45 = vaddq_s64( out64_c5_r45, pairwise_add_s64x2( out64_c4_r5, out64_c5_r5 ) );
-
-    // Promote and store final row accumulate from int32x4 to int64.
-    pEqualCoeff[1][6] += horizontal_add_long_s32x4( out_c0_r6 );
-    pEqualCoeff[2][6] += horizontal_add_long_s32x4( out_c1_r6 );
-    pEqualCoeff[3][6] += horizontal_add_long_s32x4( out_c2_r6 );
-    pEqualCoeff[4][6] += horizontal_add_long_s32x4( out_c3_r6 );
-    pEqualCoeff[5][6] += horizontal_add_long_s32x4( out_c4_r6 );
-    pEqualCoeff[6][6] += horizontal_add_long_s32x4( out_c5_r6 );
-
-  } while( h != height );
-
-  // Store all outputs, copy the symmetric ones.
-  // Apply left-shift by 1 or 2 to cancel right-shift on cx and cy.
-  const int64_t shift[3] = { 0, 1, 2 };
-  const int64x2_t vshift0 = vld1q_s64( shift );
-  vst1q_s64( &pEqualCoeff[1][0], vshlq_s64( out64_c0_r01, vshift0 ) );
-  vst1q_s64( &pEqualCoeff[1][2], vshlq_s64( out64_c0_r23, vshift0 ) );
-  vst1q_s64( &pEqualCoeff[1][4], vshlq_n_s64( out64_c0_r45, 1 ) );
-
+  // Copy symmetric outputs.
   pEqualCoeff[2][0] = pEqualCoeff[1][1];
-  out64_c1r1_c3r3 = vshlq_n_s64( out64_c1r1_c3r3, 2 );
-  pEqualCoeff[2][1] = vgetq_lane_s64( out64_c1r1_c3r3, 0 );
-  const int64x2_t vshift1 = vld1q_s64( shift + 1 );
-  vst1q_s64( &pEqualCoeff[2][2], vshlq_s64( out64_c1_r23, vshift1 ) );
-  vst1q_s64( &pEqualCoeff[2][4], vshlq_n_s64( out64_c1_r45, 2 ) );
-
   pEqualCoeff[3][0] = pEqualCoeff[1][2];
-  pEqualCoeff[3][1] = pEqualCoeff[2][2];
-  vst1q_s64( &pEqualCoeff[3][2], vshlq_s64( out64_c2_r23, vshift0 ) );
-  vst1q_s64( &pEqualCoeff[3][4], vshlq_n_s64( out64_c2_r45, 1 ) );
-
   pEqualCoeff[4][0] = pEqualCoeff[1][3];
-  pEqualCoeff[4][1] = pEqualCoeff[2][3];
-  pEqualCoeff[4][2] = pEqualCoeff[3][3];
-  pEqualCoeff[4][3] = vgetq_lane_s64( out64_c1r1_c3r3, 1 );
-  vst1q_s64( &pEqualCoeff[4][4], vshlq_n_s64( out64_c3_r45, 2 ) );
-
   pEqualCoeff[5][0] = pEqualCoeff[1][4];
-  pEqualCoeff[5][1] = pEqualCoeff[2][4];
-  pEqualCoeff[5][2] = pEqualCoeff[3][4];
-  pEqualCoeff[5][3] = pEqualCoeff[4][4];
-  vst1q_s64( &pEqualCoeff[5][4], vshlq_n_s64( out64_c4_r45, 2 ) );
-
   pEqualCoeff[6][0] = pEqualCoeff[1][5];
+  pEqualCoeff[3][1] = pEqualCoeff[2][2];
+  pEqualCoeff[4][1] = pEqualCoeff[2][3];
+  pEqualCoeff[5][1] = pEqualCoeff[2][4];
   pEqualCoeff[6][1] = pEqualCoeff[2][5];
+  pEqualCoeff[4][2] = pEqualCoeff[3][3];
+  pEqualCoeff[5][2] = pEqualCoeff[3][4];
   pEqualCoeff[6][2] = pEqualCoeff[3][5];
+  pEqualCoeff[5][3] = pEqualCoeff[4][4];
   pEqualCoeff[6][3] = pEqualCoeff[4][5];
-  vst1q_s64( &pEqualCoeff[6][4], vshlq_n_s64( out64_c5_r45, 2 ) );
+  pEqualCoeff[6][4] = pEqualCoeff[5][5];
 
-  // Final row: Left-shift by 3.
-  // Apply extra left-shift by 1 to cancel right-shift on cx and cy.
-  pEqualCoeff[1][6] <<= 3;
-  pEqualCoeff[2][6] <<= 4;
-  pEqualCoeff[3][6] <<= 3;
-  pEqualCoeff[4][6] <<= 4;
-  pEqualCoeff[5][6] <<= 4;
-  pEqualCoeff[6][6] <<= 4;
-};
+  // Hoist << 3 outside into the final accumulate.
+  out64_c12_r6 = vshlq_n_s64( out64_c12_r6, 3 );
+  out64_c34_r6 = vshlq_n_s64( out64_c34_r6, 3 );
+  out64_c56_r6 = vshlq_n_s64( out64_c56_r6, 3 );
+  pEqualCoeff[1][6] = vgetq_lane_s64( out64_c12_r6, 0 );
+  pEqualCoeff[2][6] = vgetq_lane_s64( out64_c12_r6, 1 );
+  pEqualCoeff[3][6] = vgetq_lane_s64( out64_c34_r6, 0 );
+  pEqualCoeff[4][6] = vgetq_lane_s64( out64_c34_r6, 1 );
+  pEqualCoeff[5][6] = vgetq_lane_s64( out64_c56_r6, 0 );
+  pEqualCoeff[6][6] = vgetq_lane_s64( out64_c56_r6, 1 );
+}
 
 template<>
 void AffineGradientSearch::_initAffineGradientSearchARM<NEON>()
