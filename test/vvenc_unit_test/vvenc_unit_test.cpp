@@ -695,6 +695,62 @@ static bool check_applyBlock( MCTF* ref, MCTF* opt, unsigned num_cases, int w, i
 }
 
 template<typename G>
+static bool check_one_applyFrac6Tap_8x( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int w, int h,
+                                        int xFilterIndex, int yFilterIndex, int bitDepth, G input_generator )
+{
+  CHECK( orgStride < w, "OrgStride must be greater than or equal to width" );
+  CHECK( dstStride < w, "DstStride must be greater than or equal to width" );
+
+  std::ostringstream sstm;
+  sstm << "applyFrac6Tap_8x orgStride=" << orgStride << " dstStride=" << dstStride << " w=" << w << " h=" << h;
+
+  const int centreTapOffset = 3;
+  std::vector<Pel> orgBuf( orgStride * ( h + 3 * centreTapOffset ) );
+  std::vector<Pel> dst_ref( dstStride * h );
+  std::vector<Pel> dst_opt( dstStride * h );
+
+  std::generate( orgBuf.begin(), orgBuf.end(), input_generator );
+
+  Pel* org = orgBuf.data() + centreTapOffset * orgStride + centreTapOffset;
+
+  const int16_t* xFilter = MCTF::m_interpolationFilter8[xFilterIndex];
+  const int16_t* yFilter = MCTF::m_interpolationFilter8[yFilterIndex];
+
+  ref->m_applyFrac[0][0]( org, orgStride, dst_ref.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+  opt->m_applyFrac[0][0]( org, orgStride, dst_opt.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h, w, dstStride );
+}
+
+static bool check_applyFrac6Tap_8x( MCTF* ref, MCTF* opt, int w, int h )
+{
+  printf( "Testing MCTF::applyFrac6Tap_8x w=%d h=%d\n", w, h );
+
+  DimensionGenerator rng;
+  constexpr int motionVectorFactor = 16;
+
+  for( unsigned bitDepth : { 8, 10 } )
+  {
+    InputGenerator<TCoeff> g{ bitDepth, /*is_signed=*/false };
+
+    for( int xIndex = 0; xIndex < motionVectorFactor; ++xIndex )
+    {
+      for( int yIndex = 0; yIndex < motionVectorFactor; ++yIndex )
+      {
+        // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
+        unsigned orgStride = rng.get( w, 8192 );
+        unsigned dstStride = rng.get( w, 8192 );
+        if( !check_one_applyFrac6Tap_8x( ref, opt, orgStride, dstStride, w, h, xIndex, yIndex, bitDepth, g ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+template<typename G>
 static bool check_one_applyPlanarCorrection( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int size,
                                              int bitDepth, uint16_t motionerror, G input_generator )
 {
@@ -802,6 +858,14 @@ static bool test_MCTF()
     for( unsigned h : sizes )
     {
       passed = check_applyBlock( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  for( unsigned w : { 8, 16, 32, 64 } )
+  {
+    for( unsigned h : { 8, 16, 32, 64 } )
+    {
+      passed = check_applyFrac6Tap_8x( &ref, &opt, w, h ) && passed;
     }
   }
 
