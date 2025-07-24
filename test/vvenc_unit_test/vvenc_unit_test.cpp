@@ -1321,6 +1321,178 @@ static bool test_PelBufferOps()
 #endif // ENABLE_SIMD_OPT_BUFFER
 
 #if ENABLE_SIMD_OPT_MCIF
+template<bool isLast, unsigned width>
+static bool check_filterXxY_N8( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases )
+{
+  static_assert( width == 4 || width == 8 || width == 16, "Width must be either 4, 8, or 16" );
+
+  DimensionGenerator dim;
+
+  // Max buffer size for src is ( height + 7 ) * srcStride.
+  std::vector<Pel> src( ( MAX_CU_SIZE + 7 ) * ( MAX_CU_SIZE + 7 ) );
+  std::vector<Pel> dst_ref( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> dst_opt( MAX_CU_SIZE * MAX_CU_SIZE );
+
+  bool passed = true;
+
+  // Test 8-bit and 10-bit.
+  for( unsigned bd : { 8, 10 } )
+  {
+    ClpRng clpRng{ ( int )bd };
+
+    InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
+
+    std::ostringstream sstm_test;
+    sstm_test << "InterpolationFilter::filter" << width << "x" << width << "[0][" << isLast << "]"
+              << " bitDepth=" << bd;
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      unsigned height = width == 4 ? 4 : dim.get( 4, MAX_CU_SIZE, 4 );
+      unsigned srcStride = dim.get( width, MAX_CU_SIZE ) + 7; // srcStride >= width + 7
+      unsigned dstStride = dim.get( width, MAX_CU_SIZE );
+
+      const TFilterCoeff *pCoeffH, *pCoeffV;
+      if( width == 4 )
+      {
+        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+        pCoeffH = InterpolationFilter::m_lumaFilter4x4[hCoeff_idx];
+        pCoeffV = InterpolationFilter::m_lumaFilter4x4[vCoeff_idx];
+      }
+      else // Include lumaAltHpelIFilter for other widths.
+      {
+        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+        pCoeffH = hCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1
+                      ? InterpolationFilter::m_lumaAltHpelIFilter
+                      : InterpolationFilter::m_lumaFilter[hCoeff_idx];
+        pCoeffV = vCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1
+                      ? InterpolationFilter::m_lumaAltHpelIFilter
+                      : InterpolationFilter::m_lumaFilter[vCoeff_idx];
+      }
+
+      // Fill input buffers with unsigned data.
+      std::generate( src.begin(), src.end(), inp_gen );
+
+      // Clear output blocks.
+      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+      ptrdiff_t src_offset = 3 * ( 1 + srcStride );
+
+      if( width == 4 )
+      {
+        ref->m_filter4x4[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter4x4[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+      else if( width == 8 )
+      {
+        ref->m_filter8x8[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter8x8[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+      else // width == 16
+      {
+        ref->m_filter16x16[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                       ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter16x16[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                       ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " h=" << height;
+
+      passed =
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+    }
+  }
+
+  return passed;
+}
+
+template<bool isLast, unsigned width>
+static bool check_filterXxY_N4( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases )
+{
+  static_assert( width == 4 || width == 8 || width == 16, "Width must be either 4, 8, or 16" );
+
+  DimensionGenerator dim;
+
+  std::vector<Pel> src( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> dst_ref( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> dst_opt( MAX_CU_SIZE * MAX_CU_SIZE );
+
+  bool passed = true;
+
+  // Test 8-bit and 10-bit.
+  for( unsigned bd : { 8, 10 } )
+  {
+    ClpRng clpRng{ ( int )bd };
+
+    InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
+
+    std::ostringstream sstm_test;
+    sstm_test << "InterpolationFilter::filter" << width << "x" << width << "[1][" << isLast << "]"
+              << " bitDepth=" << bd;
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      unsigned height = width == 4 ? 4 : dim.get( 4, 32, 4 );
+      unsigned srcStride = dim.get( width + 3, MAX_CU_SIZE ); // srcStride >= width + 3
+      unsigned dstStride = dim.get( width, MAX_CU_SIZE );
+
+      unsigned hCoeff_idx = dim.get( 0, CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      unsigned vCoeff_idx = dim.get( 0, CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      const TFilterCoeff* pCoeffH = InterpolationFilter::m_chromaFilter[hCoeff_idx];
+      const TFilterCoeff* pCoeffV = InterpolationFilter::m_chromaFilter[vCoeff_idx];
+
+      // Fill input buffers with unsigned data.
+      std::generate( src.begin(), src.end(), inp_gen );
+
+      // Clear output blocks.
+      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+      ptrdiff_t src_offset = 1 + srcStride;
+
+      if( width == 4 )
+      {
+        ref->m_filter4x4[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter4x4[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+      else if( width == 8 )
+      {
+        ref->m_filter8x8[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter8x8[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                     ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+      else // width == 16
+      {
+        ref->m_filter16x16[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                       ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+        opt->m_filter16x16[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                       ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
+      }
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " h=" << height;
+
+      passed =
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+    }
+  }
+
+  return passed;
+}
+
 template<unsigned isFirst, unsigned isLast>
 static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases, bool biMCForDMVR )
 {
@@ -1386,6 +1558,20 @@ static bool test_InterpolationFilter()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+
+  passed = check_filterXxY_N8<false, 4>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N8<true, 4>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N8<false, 8>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N8<true, 8>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N8<false, 16>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N8<true, 16>( &ref, &opt, num_cases ) && passed;
+
+  passed = check_filterXxY_N4<false, 4>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N4<true, 4>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N4<false, 8>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N4<true, 8>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N4<false, 16>( &ref, &opt, num_cases ) && passed;
+  passed = check_filterXxY_N4<true, 16>( &ref, &opt, num_cases ) && passed;
 
   passed = check_filterCopy<0, 0>( &ref, &opt, num_cases, false ) && passed;
   passed = check_filterCopy<0, 1>( &ref, &opt, num_cases, false ) && passed;
