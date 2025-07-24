@@ -167,11 +167,20 @@ static inline float32x4_t div_f32x4( const float32x4_t a, const float32x4_t b )
 #endif
 }
 
+static inline float32x4_t mla_f32x4( const float32x4_t acc, const float32x4_t a, const float32x4_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vfmaq_f32( acc, a, b );
+#else
+  return vmlaq_f32( acc, a, b );
+#endif
+}
+
 static inline void fastExp( float32x4_t num1, float32x4_t num2, float32x4_t denom, float32x4_t* x1, float32x4_t* x2 )
 {
   // Apply fast exp with 10 iterations.
-  float32x4_t x_lo = vfmaq_f32( vdupq_n_f32( 1.0f ), num1, denom );
-  float32x4_t x_hi = vfmaq_f32( vdupq_n_f32( 1.0f ), num2, denom );
+  float32x4_t x_lo = mla_f32x4( vdupq_n_f32( 1.0f ), num1, denom );
+  float32x4_t x_hi = mla_f32x4( vdupq_n_f32( 1.0f ), num2, denom );
 
   x_lo = vmulq_f32( x_lo, x_lo );
   x_hi = vmulq_f32( x_hi, x_hi );
@@ -279,8 +288,8 @@ static inline void applyBlock_common( const CPelBuf& src, PelBuf& dst, const Com
           float32x4_t weight_lo = vmulq_f32( x_lo, vww_val );
           float32x4_t weight_hi = vmulq_f32( x_hi, vww_val );
 
-          newVal_lo = vfmaq_f32( newVal_lo, weight_lo, refVal_lo );
-          newVal_hi = vfmaq_f32( newVal_hi, weight_hi, refVal_hi );
+          newVal_lo = mla_f32x4( newVal_lo, weight_lo, refVal_lo );
+          newVal_hi = mla_f32x4( newVal_hi, weight_hi, refVal_hi );
 
           temporalWeightSum_lo = vaddq_f32( temporalWeightSum_lo, weight_lo );
           temporalWeightSum_hi = vaddq_f32( temporalWeightSum_hi, weight_hi );
@@ -347,8 +356,8 @@ static inline void applyBlock_common( const CPelBuf& src, PelBuf& dst, const Com
         float32x4_t weight0 = vmulq_f32( x0, vww_val );
         float32x4_t weight1 = vmulq_f32( x1, vww_val );
 
-        newVal0 = vfmaq_f32( newVal0, weight0, vcvtq_f32_s32( vmovl_s16( refVal0 ) ) );
-        newVal1 = vfmaq_f32( newVal1, weight1, vcvtq_f32_s32( vmovl_s16( refVal1 ) ) );
+        newVal0 = mla_f32x4( newVal0, weight0, vcvtq_f32_s32( vmovl_s16( refVal0 ) ) );
+        newVal1 = mla_f32x4( newVal1, weight1, vcvtq_f32_s32( vmovl_s16( refVal1 ) ) );
 
         temporalWeightSum0 = vaddq_f32( temporalWeightSum0, weight0 );
         temporalWeightSum1 = vaddq_f32( temporalWeightSum1, weight1 );
