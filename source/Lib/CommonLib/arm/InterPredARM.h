@@ -206,10 +206,120 @@ void BiOptFlowCoreARMSIMD( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0
   }
 }
 
+template<bool PAD = true>
+void gradFilter_neon( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY,
+                      const int bitDepth )
+{
+  const Pel* srcTmp = pSrc + srcStride + 1;
+  Pel* gradXTmp = gradX + gradStride + 1;
+  Pel* gradYTmp = gradY + gradStride + 1;
+  int widthInside = width - 2 * BDOF_EXTEND_SIZE;
+  int heightInside = height - 2 * BDOF_EXTEND_SIZE;
+  static constexpr int shift = 6;
+
+  CHECK( widthInside < 4, "(Width - 2) must be greater than or equal to 4!" );
+  CHECK( heightInside % 2 != 0, "(Height - 2) must be multiple of 2!" );
+
+  if( widthInside % 8 == 0 )
+  {
+    int y = heightInside;
+    do
+    {
+      int x = widthInside;
+      do
+      {
+        int16x8_t srcRight = vld1q_s16( srcTmp + 1 );
+        int16x8_t srcLeft = vld1q_s16( srcTmp - 1 );
+
+        int16x8_t srcBottom = vld1q_s16( srcTmp + srcStride );
+        int16x8_t srcTop = vld1q_s16( srcTmp - srcStride );
+
+        srcRight = vshrq_n_s16( srcRight, shift );
+        srcLeft = vshrq_n_s16( srcLeft, shift );
+        srcBottom = vshrq_n_s16( srcBottom, shift );
+        srcTop = vshrq_n_s16( srcTop, shift );
+
+        const int16x8_t grad_x = vsubq_s16( srcRight, srcLeft );
+        const int16x8_t grad_y = vsubq_s16( srcBottom, srcTop );
+
+        vst1q_s16( gradXTmp, grad_x );
+        vst1q_s16( gradYTmp, grad_y );
+
+        srcTmp += 8;
+        gradXTmp += 8;
+        gradYTmp += 8;
+        x -= 8;
+      } while( x != 0 );
+
+      gradXTmp += gradStride - widthInside;
+      gradYTmp += gradStride - widthInside;
+      srcTmp += srcStride - widthInside;
+    } while( --y != 0 );
+  }
+  else
+  {
+    CHECK( widthInside != 4, "(Width - 2) must be equal to 4!" );
+    int y = heightInside >> 1;
+
+    int16x8_t srcTop = vcombine_s16( vld1_s16( srcTmp - srcStride ), vld1_s16( srcTmp ) );
+    srcTop = vshrq_n_s16( srcTop, shift );
+
+    do
+    {
+      int16x8_t srcRight = vcombine_s16( vld1_s16( srcTmp + 1 ), vld1_s16( srcTmp + srcStride + 1 ) );
+      int16x8_t srcLeft = vcombine_s16( vld1_s16( srcTmp - 1 ), vld1_s16( srcTmp + srcStride - 1 ) );
+      int16x8_t srcBottom = vcombine_s16( vld1_s16( srcTmp + srcStride ), vld1_s16( srcTmp + ( srcStride << 1 ) ) );
+
+      srcRight = vshrq_n_s16( srcRight, shift );
+      srcLeft = vshrq_n_s16( srcLeft, shift );
+      srcBottom = vshrq_n_s16( srcBottom, shift );
+
+      const int16x8_t grad_x = vsubq_s16( srcRight, srcLeft );
+      const int16x8_t grad_y = vsubq_s16( srcBottom, srcTop );
+
+      vst1_s16( gradXTmp, vget_low_s16( grad_x ) );
+      vst1_s16( gradXTmp + gradStride, vget_high_s16( grad_x ) );
+      vst1_s16( gradYTmp, vget_low_s16( grad_y ) );
+      vst1_s16( gradYTmp + gradStride, vget_high_s16( grad_y ) );
+
+      gradXTmp += gradStride << 1;
+      gradYTmp += gradStride << 1;
+      srcTmp += srcStride << 1;
+      srcTop = srcBottom; // For next iteration.
+    } while( --y != 0 );
+  }
+
+  if( PAD )
+  {
+    gradXTmp = gradX + gradStride + 1;
+    gradYTmp = gradY + gradStride + 1;
+    int y = heightInside;
+    do
+    {
+      gradXTmp[-1] = gradXTmp[0];
+      gradXTmp[widthInside] = gradXTmp[widthInside - 1];
+      gradXTmp += gradStride;
+
+      gradYTmp[-1] = gradYTmp[0];
+      gradYTmp[widthInside] = gradYTmp[widthInside - 1];
+      gradYTmp += gradStride;
+    } while( --y != 0 );
+
+    gradXTmp = gradX + gradStride;
+    gradYTmp = gradY + gradStride;
+    memcpy( gradXTmp - gradStride, gradXTmp, sizeof( Pel ) * width );
+    memcpy( gradXTmp + heightInside * gradStride, gradXTmp + ( heightInside - 1 ) * gradStride, sizeof( Pel ) * width );
+    memcpy( gradYTmp - gradStride, gradYTmp, sizeof( Pel ) * width );
+    memcpy( gradYTmp + heightInside * gradStride, gradYTmp + ( heightInside - 1 ) * gradStride, sizeof( Pel ) * width );
+  }
+}
+
 template<ARM_VEXT vext>
 void InterPredInterpolation::_initInterPredictionARM()
 {
-  xFpBiDirOptFlow     = BiOptFlowCoreARMSIMD<vext>;
+  xFpBiDirOptFlow = BiOptFlowCoreARMSIMD<vext>;
+  xFpBDOFGradFilter = gradFilter_neon;
+  xFpProfGradFilter = gradFilter_neon<false>;
 }
 
 template void InterPredInterpolation::_initInterPredictionARM<SIMDARM>();
