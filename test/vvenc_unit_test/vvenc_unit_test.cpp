@@ -63,8 +63,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
 
+#include "apputils/ParseArg.h"
 
 using namespace vvenc;
+namespace po = apputils::program_options;
 
 #define NUM_CASES 100
 
@@ -1583,10 +1585,42 @@ static bool test_InterpolationFilter()
 }
 #endif // ENABLE_SIMD_OPT_MCIF
 
-int main()
+struct UnitTestArgs
 {
-  unsigned seed = ( unsigned ) time( NULL );
-  srand( seed );
+  bool show_help = false;
+  int seed;
+};
+
+UnitTestArgs parse_args( int argc, char* argv[] )
+{
+  UnitTestArgs args;
+  args.seed = ( unsigned )time( NULL );
+
+  po::Options opts;
+  opts.addOptions()
+    ( "help,h", args.show_help, "Show help", true )
+    ( "seed", args.seed, "Set random seed for running tests" );
+
+  po::SilentReporter err;
+  const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, ( const char** )argv, err );
+
+  if( args.show_help )
+  {
+    std::ostringstream help_sstm;
+    po::doHelp( help_sstm, opts );
+    std::cout << help_sstm.str() << "\n";
+    exit( EXIT_SUCCESS );
+  }
+
+  return args;
+}
+
+int main( int argc, char* argv[] )
+{
+  UnitTestArgs args = parse_args( argc, argv );
+
+  srand( args.seed );
+  std::cout << "Running unit tests with seed=" << args.seed << ".\n\n";
 
   bool passed = true;
 
@@ -1617,7 +1651,7 @@ int main()
 
   if( !passed )
   {
-    printf( "\nerror: some tests failed for seed=%u!\n\n", seed );
+    printf( "\nerror: some tests failed for seed=%u!\n\n", args.seed );
     exit( EXIT_FAILURE );
   }
   printf( "\nsuccess: all tests passed!\n\n" );
