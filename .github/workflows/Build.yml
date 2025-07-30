@@ -18,21 +18,18 @@ jobs:
           - {
               name: "Windows MSVC 64 Bit",
               os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
               generators: "Visual Studio 17 2022",
               msvc_arch: x64
             }
           - {
               name: "Windows MSVC 32 Bit",
               os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars32.bat",
               generators: "Visual Studio 17 2022",
               msvc_arch: Win32
             }
           - {
               name: "Windows MSVC arm64",
               os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
               generators: "Visual Studio 17 2022",
               msvc_arch: arm64,
             }
