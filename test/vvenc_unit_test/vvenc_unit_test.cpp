@@ -885,7 +885,7 @@ static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolat
 
 template<typename G>
 static bool check_one_gradFilter( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
-                                  ptrdiff_t srcStride, ptrdiff_t gradStride, G input_generator, bool padding )
+                                  int srcStride, int gradStride, G input_generator, bool padding )
 {
   std::ostringstream sstm;
   sstm << "gradFilter width=" << width << " height=" << height << " padding=" << padding;
@@ -1602,7 +1602,7 @@ UnitTestArgs parse_args( int argc, char* argv[] )
     ( "seed", args.seed, "Set random seed for running tests" );
 
   po::SilentReporter err;
-  const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, ( const char** )argv, err );
+  po::scanArgv( opts, argc, ( const char** )argv, err );
 
   if( args.show_help )
   {

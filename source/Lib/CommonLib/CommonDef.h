@@ -79,6 +79,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #pragma warning( disable : 4018 )
 // disable bool coercion "performance warning"
 #pragma warning( disable : 4800 )
+// disable "conditional expression is constant" warning (cannot do `if constexpr` in C++14)
+#pragma warning( disable : 4127 )
 #endif // _MSC_VER > 1000
 
 #define __IN_COMMONDEF_H__
