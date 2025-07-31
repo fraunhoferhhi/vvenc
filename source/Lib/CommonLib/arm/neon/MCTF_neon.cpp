@@ -282,37 +282,6 @@ void applyPlanarCorrection_neon( const Pel* refPel, const ptrdiff_t refStride, P
   applyPlanarDeblockingCorrection_common( dstPel, dstStride, x1yzm, x2yzm, ySum, w, h, clpRng, motionError );
 }
 
-inline static void fastExp( float32x4_t num1, float32x4_t num2, float32x4_t denom, float32x4_t* x1, float32x4_t* x2 )
-{
-  // Apply fast exp with 10 iterations.
-  float32x4_t x_lo = vfmaq_f32( vdupq_n_f32( 1.0f ), num1, denom );
-  float32x4_t x_hi = vfmaq_f32( vdupq_n_f32( 1.0f ), num2, denom );
-
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-  x_lo = vmulq_f32( x_lo, x_lo );
-  x_hi = vmulq_f32( x_hi, x_hi );
-
-  *x1 = x_lo;
-  *x2 = x_hi;
-}
-
 void applyBlock_neon( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng,
                       const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts,
                       double weightScaling, double sigmaSq )
@@ -326,16 +295,9 @@ void applyBlock_neon( const CPelBuf& src, PelBuf& dst, const CompArea& blk, cons
   CHECK( h % 2 != 0, "Height must be multiple of 2!" );
 
   const ptrdiff_t srcStride = src.stride;
-  const ptrdiff_t dstStride = dst.stride;
-
   const Pel* srcPel = src.bufAt( bx, by );
-  Pel* dstPel = dst.bufAt( bx, by );
-
-  const Pel maxSampleValue = clpRng.max();
 
   int vnoise[2 * VVENC_MCTF_RANGE] = { 0 };
-  float vsw[2 * VVENC_MCTF_RANGE] = { 0.0f };
-  float vww[2 * VVENC_MCTF_RANGE] = { 0.0f };
 
   int minError = INT32_MAX;
 
@@ -505,145 +467,8 @@ void applyBlock_neon( const CPelBuf& src, PelBuf& dst, const CompArea& blk, cons
     minError = std::min( minError, verror[i] );
   }
 
-  for( int i = 0; i < numRefs; i++ )
-  {
-    const int error = verror[i];
-    const int noise = vnoise[i];
-    float ww = 1, sw = 1;
-    ww *= noise < 25 ? 1.0 : 0.6;
-    sw *= noise < 25 ? 1.0 : 0.8;
-    ww *= error < 50 ? 1.2 : ( error > 100 ? 0.6 : 1.0 );
-    sw *= error < 50 ? 1.0 : 0.8;
-    ww *= ( minError + 1.0 ) / ( error + 1.0 );
-
-    vww[i] = ww * weightScaling * refStrenghts[i];
-    vsw[i] = sw * 2 * sigmaSq;
-    vsw[i] = 1.0f / ( -vsw[i] * 1024 ); // Simplify fastExp calculation by taking reciprocal and negation.
-  }
-
-  if( w % 8 == 0 )
-  {
-    for( int y = 0; y < h; y++ )
-    {
-      for( int x = 0; x < w; x += 8 )
-      {
-        int16x8_t orgVal = vld1q_s16( srcPel + x );
-
-        float32x4_t newVal_lo = vcvtq_f32_s32( vmovl_s16( vget_low_s16( orgVal ) ) );
-        float32x4_t newVal_hi = vcvtq_f32_s32( vmovl_s16( vget_high_s16( orgVal ) ) );
-
-        float32x4_t tws_lo = vdupq_n_f32( 1.0f );
-        float32x4_t tws_hi = vdupq_n_f32( 1.0f );
-
-        int stride = y * w + x;
-
-        for( int i = 0; i < numRefs; i++ )
-        {
-          int16x8_t refVal = vld1q_s16( correctedPics[i] + stride );
-
-          float32x4_t refVal_lo = vcvtq_f32_s32( vmovl_s16( vget_low_s16( refVal ) ) );
-          float32x4_t refVal_hi = vcvtq_f32_s32( vmovl_s16( vget_high_s16( refVal ) ) );
-
-          int16x8_t diff = vsubq_s16( refVal, orgVal );
-
-          int32x4_t diffSq_lo = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
-          int32x4_t diffSq_hi = vmull_s16( vget_high_s16( diff ), vget_high_s16( diff ) );
-
-          float32x4_t num_lo = vcvtq_f32_s32( diffSq_lo );
-          float32x4_t num_hi = vcvtq_f32_s32( diffSq_hi );
-          float32x4_t recip_denom = vdupq_n_f32( vsw[i] ); // Negation already applied to vsw[i].
-
-          float32x4_t x_lo, x_hi;
-          fastExp( num_lo, num_hi, recip_denom, &x_lo, &x_hi );
-
-          float32x4_t vww_val = vdupq_n_f32( vww[i] );
-          float32x4_t weight_lo = vmulq_f32( x_lo, vww_val );
-          float32x4_t weight_hi = vmulq_f32( x_hi, vww_val );
-
-          newVal_lo = vfmaq_f32( newVal_lo, weight_lo, refVal_lo );
-          newVal_hi = vfmaq_f32( newVal_hi, weight_hi, refVal_hi );
-
-          tws_lo = vaddq_f32( tws_lo, weight_lo );
-          tws_hi = vaddq_f32( tws_hi, weight_hi );
-        }
-
-        newVal_lo = div_f32x4( newVal_lo, tws_lo );
-        newVal_hi = div_f32x4( newVal_hi, tws_hi );
-
-        uint16x4_t out_lo = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal_lo, vdupq_n_f32( 0.5f ) ) ) );
-        uint16x4_t out_hi = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal_hi, vdupq_n_f32( 0.5f ) ) ) );
-
-        uint16x8_t result = vcombine_u16( out_lo, out_hi );
-        result = vminq_u16( result, vdupq_n_u16( maxSampleValue ) );
-
-        vst1q_s16( dstPel + x, vreinterpretq_s16_u16( result ) );
-      }
-
-      srcPel += srcStride;
-      dstPel += dstStride;
-    }
-  }
-  else
-  {
-    CHECK( w != 4, "Width must be equal to 4!" );
-
-    for( int y = 0; y < h; y += 2 )
-    {
-      int16x4_t orgVal0 = vld1_s16( srcPel );
-      int16x4_t orgVal1 = vld1_s16( srcPel + srcStride );
-
-      float32x4_t newVal0 = vcvtq_f32_s32( vmovl_s16( orgVal0 ) );
-      float32x4_t newVal1 = vcvtq_f32_s32( vmovl_s16( orgVal1 ) );
-
-      float32x4_t tws0 = vdupq_n_f32( 1.0f );
-      float32x4_t tws1 = vdupq_n_f32( 1.0f );
-
-      int stride = y * w;
-      for( int i = 0; i < numRefs; i++ )
-      {
-        int16x4_t refVal0 = vld1_s16( correctedPics[i] + stride );
-        int16x4_t refVal1 = vld1_s16( correctedPics[i] + stride + w );
-
-        int16x4_t diff0 = vsub_s16( refVal0, orgVal0 );
-        int16x4_t diff1 = vsub_s16( refVal1, orgVal1 );
-
-        int32x4_t diffSq0 = vmull_s16( diff0, diff0 );
-        int32x4_t diffSq1 = vmull_s16( diff1, diff1 );
-
-        float32x4_t recip_denom = vdupq_n_f32( vsw[i] ); // Negation already applied to vsw[i].
-        float32x4_t num_lo = vcvtq_f32_s32( diffSq0 );
-        float32x4_t num_hi = vcvtq_f32_s32( diffSq1 );
-
-        float32x4_t x0, x1;
-        fastExp( num_lo, num_hi, recip_denom, &x0, &x1 );
-
-        float32x4_t vww_val = vdupq_n_f32( vww[i] );
-        float32x4_t weight0 = vmulq_f32( x0, vww_val );
-        float32x4_t weight1 = vmulq_f32( x1, vww_val );
-
-        newVal0 = vfmaq_f32( newVal0, weight0, vcvtq_f32_s32( vmovl_s16( refVal0 ) ) );
-        newVal1 = vfmaq_f32( newVal1, weight1, vcvtq_f32_s32( vmovl_s16( refVal1 ) ) );
-
-        tws0 = vaddq_f32( tws0, weight0 );
-        tws1 = vaddq_f32( tws1, weight1 );
-      }
-
-      newVal0 = div_f32x4( newVal0, tws0 );
-      newVal1 = div_f32x4( newVal1, tws1 );
-
-      uint16x4_t result0 = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal0, vdupq_n_f32( 0.5f ) ) ) );
-      uint16x4_t result1 = vqmovn_u32( vcvtq_u32_f32( vaddq_f32( newVal1, vdupq_n_f32( 0.5f ) ) ) );
-
-      result0 = vmin_u16( result0, vdup_n_u16( maxSampleValue ) );
-      result1 = vmin_u16( result1, vdup_n_u16( maxSampleValue ) );
-
-      vst1_s16( dstPel + 0, vreinterpret_s16_u16( result0 ) );
-      vst1_s16( dstPel + dstStride, vreinterpret_s16_u16( result1 ) );
-
-      srcPel += srcStride << 1;
-      dstPel += dstStride << 1;
-    }
-  }
+  applyBlock_common( src, dst, blk, clpRng, correctedPics, numRefs, verror, vnoise, refStrenghts, minError,
+                     weightScaling, sigmaSq );
 }
 
 template<>

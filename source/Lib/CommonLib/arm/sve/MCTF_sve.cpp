@@ -52,6 +52,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "MCTF.h"
 
+#include <math.h>
+
 //! \ingroup CommonLib
 //! \{
 
@@ -151,10 +153,208 @@ void applyPlanarCorrection_sve( const Pel* refPel, const ptrdiff_t refStride, Pe
   applyPlanarDeblockingCorrection_common( dstPel, dstStride, x1yzm, x2yzm, ySum, w, h, clpRng, motionError );
 }
 
+void applyBlock_sve( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng,
+                     const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts,
+                     double weightScaling, double sigmaSq )
+{
+  const int w = blk.width;
+  const int h = blk.height;
+  const int bx = blk.x;
+  const int by = blk.y;
+
+  CHECKD( w < 4, "Width must be greater than or equal to 4!" );
+  CHECKD( h % 2 != 0, "Height must be multiple of 2!" );
+
+  const ptrdiff_t srcStride = src.stride;
+  const Pel* srcPel = src.bufAt( bx, by );
+
+  int vnoise[2 * VVENC_MCTF_RANGE] = { 0 };
+
+  int minError = INT32_MAX;
+
+  int i = numRefs - 1;
+  do
+  {
+    int64_t variance = 0, diffsum = 0;
+    const ptrdiff_t refStride = w;
+    const Pel* refBuf = correctedPics[i];
+    const Pel* srcBuf = srcPel;
+
+    if( w % 8 == 0 )
+    {
+      int64x2_t variance_acc = vdupq_n_s64( 0 );
+      int64x2_t diffR_acc = vdupq_n_s64( 0 );
+      int64x2_t diffD_acc = vdupq_n_s64( 0 );
+      const int16_t ind[] = { 1, 1, 1, 1, 1, 1, 1, 0 };
+      const int16x8_t clear_lastlane = vld1q_s16( ind );
+
+      int y = h >> 1;
+
+      do
+      {
+        // One iteration for x done outside loop.
+        for( int x = 0; x < w - 8; x += 8 )
+        {
+          int16x8_t pix0 = vld1q_s16( srcBuf );         // unsigned 10bit
+          int16x8_t ref0 = vld1q_s16( refBuf );         // unsigned 10bit
+          int16x8_t pixNext0 = vld1q_s16( srcBuf + 8 ); // unsigned 10bit
+          int16x8_t refNext0 = vld1q_s16( refBuf + 8 ); // unsigned 10bit
+          int16x8_t diff0 = vsubq_s16( pix0, ref0 );    // 11bit
+          int16x8_t diffNext0 = vsubq_s16( pixNext0, refNext0 );
+
+          int16x8_t pix1 = vld1q_s16( srcBuf + srcStride );         // unsigned 10bit
+          int16x8_t ref1 = vld1q_s16( refBuf + refStride );         // unsigned 10bit
+          int16x8_t pixNext1 = vld1q_s16( srcBuf + srcStride + 8 ); // unsigned 10bit
+          int16x8_t refNext1 = vld1q_s16( refBuf + refStride + 8 ); // unsigned 10bit
+          int16x8_t diff1 = vsubq_s16( pix1, ref1 );                // 11bit
+          int16x8_t diffNext1 = vsubq_s16( pixNext1, refNext1 );
+
+          int16x8_t diffR0 = vextq_s16( diff0, diffNext0, 1 );
+          int16x8_t diffR1 = vextq_s16( diff1, diffNext1, 1 );
+          int16x8_t diffD0 = vsubq_s16( diff1, diff0 ); // 11bit
+
+          diffR0 = vsubq_s16( diffR0, diff0 ); // 11bit
+          diffR1 = vsubq_s16( diffR1, diff1 ); // 11bit
+
+          variance_acc = vvenc_sdotq_s16( variance_acc, diff0, diff0 ); // 29bit
+          diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR0, diffR0 );     // 31bit
+          diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD0, diffD0 );     // 31bit
+
+          variance_acc = vvenc_sdotq_s16( variance_acc, diff1, diff1 ); // 29bit
+          diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR1, diffR1 );     // 31bit
+
+          if( y != 1 )
+          {
+            int16x8_t pixD1 = vld1q_s16( srcBuf + 2 * srcStride ); // unsigned 10bit
+            int16x8_t refD1 = vld1q_s16( refBuf + 2 * refStride ); // unsigned 10bit
+
+            int16x8_t diffD1 = vsubq_s16( pixD1, refD1 );             // 11bit
+            diffD1 = vsubq_s16( diffD1, diff1 );                      // 11bit
+            diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD1, diffD1 ); // 31bit
+          }
+
+          srcBuf += 8;
+          refBuf += 8;
+        }
+
+        // Last iteration of x.
+        int16x8_t pix0 = vld1q_s16( srcBuf );             // unsigned 10bit
+        int16x8_t ref0 = vld1q_s16( refBuf );             // unsigned 10bit
+        int16x8_t pix1 = vld1q_s16( srcBuf + srcStride ); // unsigned 10bit
+        int16x8_t ref1 = vld1q_s16( refBuf + refStride ); // unsigned 10bit
+        int16x8_t diff0 = vsubq_s16( pix0, ref0 );        // 11bit
+        int16x8_t diff1 = vsubq_s16( pix1, ref1 );        // 11bit
+
+        int16x8_t diffR0 = vextq_s16( diff0, vdupq_n_s16( 0 ), 1 );
+        int16x8_t diffR1 = vextq_s16( diff1, vdupq_n_s16( 0 ), 1 );
+        int16x8_t diffD0 = vsubq_s16( diff1, diff0 ); // 11bit
+
+        diffR0 = vmlsq_s16( diffR0, diff0, clear_lastlane ); // 11 bit
+        diffR1 = vmlsq_s16( diffR1, diff1, clear_lastlane );
+
+        variance_acc = vvenc_sdotq_s16( variance_acc, diff0, diff0 ); // 29bit
+        diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR0, diffR0 );     // 31bit
+        diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD0, diffD0 );     // 31bit
+
+        variance_acc = vvenc_sdotq_s16( variance_acc, diff1, diff1 ); // 29bit
+        diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR1, diffR1 );     // 31bit
+
+        if( y != 1 )
+        {
+          int16x8_t pixD1 = vld1q_s16( srcBuf + 2 * srcStride ); // 10bit unsigned
+          int16x8_t refD1 = vld1q_s16( refBuf + 2 * refStride ); // 10bit unsigned
+
+          int16x8_t diffD1 = vsubq_s16( pixD1, refD1 );             // 11bit
+          diffD1 = vsubq_s16( diffD1, diff1 );                      // 11bit
+          diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD1, diffD1 ); // 31bit
+        }
+
+        refBuf += 2 * refStride - ( w - 8 );
+        srcBuf += 2 * srcStride - ( w - 8 );
+      } while( --y != 0 );
+
+      variance = vaddvq_s64( variance_acc );
+      diffsum = vaddvq_s64( vaddq_s64( diffR_acc, diffD_acc ) );
+    }
+    else
+    {
+      CHECKD( w != 4, "Width must be equal to 4!" );
+
+      int64x2_t variance_acc = vdupq_n_s64( 0 );
+      int64x2_t diffR_acc = vdupq_n_s64( 0 );
+      int64x2_t diffD_acc = vdupq_n_s64( 0 );
+
+      // -1 for selecting a lane.
+      const int16_t mask[] = { -1, -1, -1, 0, -1, -1, -1, 0 };
+      const int16x8_t mask_lanes = vld1q_s16( mask );
+
+      int16x4_t pixD = vld1_s16( srcBuf );
+      int16x4_t refD = vld1_s16( refBuf );
+
+      for( int y = 0; y < h - 2; y += 2 )
+      {
+        int16x8_t pix = vcombine_s16( pixD, vld1_s16( srcBuf + srcStride ) );
+        int16x8_t ref = vcombine_s16( refD, vld1_s16( refBuf + refStride ) );
+
+        int16x8_t diff = vsubq_s16( pix, ref );
+        int16x8_t diffR = vextq_s16( diff, vdupq_n_s16( 0 ), 1 );
+        diffR = vsubq_s16( diffR, diff );
+        diffR = vandq_s16( diffR, mask_lanes );
+
+        // pixD and refD used for next iteration too.
+        pixD = vld1_s16( srcBuf + 2 * srcStride );
+        refD = vld1_s16( refBuf + 2 * refStride );
+
+        variance_acc = vvenc_sdotq_s16( variance_acc, diff, diff );
+        diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR, diffR );
+
+        int16x4_t tmp_diffD = vsub_s16( pixD, refD );
+        int16x8_t diffD = vcombine_s16( vget_high_s16( diff ), tmp_diffD );
+        diffD = vsubq_s16( diffD, diff );
+        diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD, diffD );
+
+        refBuf += 2 * refStride;
+        srcBuf += 2 * srcStride;
+      }
+
+      // Last iteration for y done outside loop.
+      int16x8_t pix = vcombine_s16( pixD, vld1_s16( srcBuf + srcStride ) );
+      int16x8_t ref = vcombine_s16( refD, vld1_s16( refBuf + refStride ) );
+      int16x8_t diff = vsubq_s16( pix, ref );
+
+      int16x8_t diffR = vextq_s16( diff, vdupq_n_s16( 0 ), 1 );
+      diffR = vsubq_s16( diffR, diff );
+      diffR = vandq_s16( diffR, mask_lanes );
+
+      variance_acc = vvenc_sdotq_s16( variance_acc, diff, diff );
+      diffR_acc = vvenc_sdotq_s16( diffR_acc, diffR, diffR );
+
+      // Low four lanes of diffD will be cleared after sub.
+      int16x8_t diffD = vcombine_s16( vget_high_s16( diff ), vget_high_s16( diff ) );
+      diffD = vsubq_s16( diffD, diff );
+      diffD_acc = vvenc_sdotq_s16( diffD_acc, diffD, diffD );
+
+      variance = vaddvq_s64( variance_acc );
+      diffsum = vaddvq_s64( vaddq_s64( diffR_acc, diffD_acc ) );
+    }
+
+    variance <<= 2 * ( 10 - clpRng.bd );
+    diffsum <<= 2 * ( 10 - clpRng.bd );
+    const int cntV = w * h;
+    const int cntD = 2 * cntV - w - h;
+    vnoise[i] = ( int )round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
+    minError = std::min( minError, verror[i] );
+  } while( i-- != 0 );
+
+  applyBlock_common( src, dst, blk, clpRng, correctedPics, numRefs, verror, vnoise, refStrenghts, minError,
+                     weightScaling, sigmaSq );
+}
+
 template<>
 void MCTF::_initMCTF_ARM<SVE>()
 {
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
+  m_applyBlock = applyBlock_sve;
 }
 
 } // namespace vvenc
