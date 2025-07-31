@@ -211,6 +211,13 @@ public:
     ret -= ret % mod;
     return ret;
   }
+
+  template<typename T>
+  T getOneOf( const std::vector<T>& values ) const
+  {
+    CHECK( values.empty(), "getOneOf: values vector must not be empty" );
+    return values[rand() % values.size()];
+  }
 };
 
 #if ENABLE_SIMD_OPT_INTRAPRED
@@ -1550,6 +1557,112 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
   return passed;
 }
 
+template<typename G>
+static bool check_one_xWeightedGeoBlk( InterpolationFilter* ref, InterpolationFilter* opt, int src0Stride,
+                                       int src1Stride, int dstStride, int width, int height, int bitDepth,
+                                       G input_generator )
+{
+  CHECK( src0Stride < width, "Src0tride must be greater than or equal to width" );
+  CHECK( src1Stride < width, "Src1tride must be greater than or equal to width" );
+  CHECK( dstStride < width, "DstStride must be greater than or equal to width" );
+
+  std::ostringstream sstm;
+  sstm << "xWeightedGeoBlk src0Stride=" << src0Stride << "src1Stride=" << src1Stride << " dstStride=" << dstStride
+       << " w=" << width << " h=" << height;
+
+  std::vector<Pel> src0( src0Stride * height );
+  std::vector<Pel> src1( src1Stride * height );
+  std::vector<Pel> dst_ref( dstStride * height );
+  std::vector<Pel> dst_opt( dstStride * height );
+
+  // Initialize source buffers.
+  std::generate( src0.begin(), src0.end(), input_generator );
+  std::generate( src1.begin(), src1.end(), input_generator );
+
+  DimensionGenerator rng;
+
+  auto allChromaLuma = { VVENC_CHROMA_400, VVENC_CHROMA_420, VVENC_CHROMA_422, VVENC_CHROMA_444 };
+  auto halfResolutionChroma = { VVENC_CHROMA_420, VVENC_CHROMA_422 };
+  auto fullResolutionChromaLuma = { VVENC_CHROMA_400, VVENC_CHROMA_444 };
+
+  // Smallest luma block used is 8 pixels and if width is 4, it will occur to chroma only.
+  ChromaFormat chromaFormat =
+      width == 4 ? rng.getOneOf<ChromaFormat>( halfResolutionChroma ) : rng.getOneOf<ChromaFormat>( allChromaLuma );
+  // 422 or 444, height must be >= 8 (else out of bound access at geo offset table).
+  chromaFormat = height == 4 ? VVENC_CHROMA_420 : chromaFormat;
+  // Limit luma width/height in range 64 (else out of bound access at geo offset table).
+  chromaFormat = width == 64 || height == 64 ? rng.getOneOf<ChromaFormat>( fullResolutionChromaLuma ) : chromaFormat;
+
+  auto compLuma = { COMP_Y };
+  auto compChroma = { COMP_Cb, COMP_Cr };
+  // Only luma plane exists for 400.
+  ComponentID compIdx = chromaFormat == VVENC_CHROMA_400 ? rng.getOneOf<ComponentID>( compLuma )
+                                                         : rng.getOneOf<ComponentID>( compChroma );
+
+  // VVENC_CHROMA_420 : Chroma at half resolution in both directions.
+  // VVENC_CHROMA_422 : Chroma at half horizontal resolution, full vertical resolution.
+  SizeType luma_width = chromaFormat == VVENC_CHROMA_420 || chromaFormat == VVENC_CHROMA_422 ? width * 2 : width;
+  SizeType luma_height = chromaFormat == VVENC_CHROMA_420 ? height * 2 : height;
+
+  CHECK( luma_width > 64, "luma_width out of bounds for geo weight offset tables" );
+  CHECK( luma_height > 64, "luma_height out of bounds for geo weight offset tables" );
+  CHECK( luma_width < 8, "luma_width out of bounds for geo weight offset tables" );
+  CHECK( luma_height < 8, "luma_height out of bounds for geo weight offset tables" );
+
+  const UnitArea localUnitArea{ chromaFormat, Area( 0, 0, luma_width, luma_height ) };
+  const CodingUnit cu{ localUnitArea };
+
+  const uint8_t splitDir = rng.get( 0, GEO_NUM_PARTITION_MODE - 1 );
+
+  ClpRngs clpRng;
+  clpRng.bd = bitDepth;
+
+  Size sz{ luma_width, luma_height }; // Unused in weightedGeoBlk.
+  AreaBuf<Pel> areaBufDst_ref{ dst_ref.data(), dstStride, sz };
+  AreaBuf<Pel> areaBufDst_opt{ dst_opt.data(), dstStride, sz };
+  AreaBuf<Pel> areaBufSrc0{ src0.data(), src0Stride, sz };
+  AreaBuf<Pel> areaBufSrc1{ src1.data(), src1Stride, sz };
+
+  // Give all three planes same buffer, as only one of them is active in weightedGeoBlk.
+  PelUnitBuf dstUnitBuf_opt{
+      chromaFormat,
+      areaBufDst_opt, // COMP_Y
+      areaBufDst_opt, // COMP_Cb
+      areaBufDst_opt  // COMP_Cr
+  };
+  PelUnitBuf dstUnitBuf_ref{ chromaFormat, areaBufDst_ref, areaBufDst_ref, areaBufDst_ref };
+  PelUnitBuf src0UnitBuf{ chromaFormat, areaBufSrc0, areaBufSrc0, areaBufSrc0 };
+  PelUnitBuf src1UnitBuf{ chromaFormat, areaBufSrc1, areaBufSrc1, areaBufSrc1 };
+
+  ref->m_weightedGeoBlk( clpRng, cu, width, height, compIdx, splitDir, dstUnitBuf_ref, src0UnitBuf, src1UnitBuf );
+  opt->m_weightedGeoBlk( clpRng, cu, width, height, compIdx, splitDir, dstUnitBuf_opt, src0UnitBuf, src1UnitBuf );
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride );
+}
+
+static bool check_xWeightedGeoBlk( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases, int width,
+                                   int height )
+{
+  printf( "Testing InterpolationFilter::xWeightedGeoBlk w=%d h=%d\n", width, height );
+  InputGenerator<TCoeff> g{ 14 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int bitDepth : { 8, 10 } )
+    {
+      unsigned src0Stride = rng.get( width, 128 );
+      unsigned src1Stride = rng.get( width, 128 );
+      unsigned dstStride = rng.get( width, 128 );
+      if( !check_one_xWeightedGeoBlk( ref, opt, src0Stride, src1Stride, dstStride, width, height, bitDepth, g ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 static bool test_InterpolationFilter()
 {
   InterpolationFilter ref;
@@ -1560,6 +1673,18 @@ static bool test_InterpolationFilter()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+  for( int height : { 4, 8, 16, 32, 64 } )
+  {
+    for( int width : { 4, 8, 16, 32, 64 } )
+    {
+      // Skip invalid 4×64 and 64×4 cases.
+      if( ( width == 4 && height == 64 ) || ( width == 64 && height == 4 ) )
+      {
+        continue;
+      }
+      passed = check_xWeightedGeoBlk( &ref, &opt, num_cases, width, height ) && passed;
+    }
+  }
 
   passed = check_filterXxY_N8<false, 4>( &ref, &opt, num_cases ) && passed;
   passed = check_filterXxY_N8<true, 4>( &ref, &opt, num_cases ) && passed;
