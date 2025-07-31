@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "../InterpolationFilter.h"
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "reverse_neon.h"
 #include "sum_neon.h"
 
 //! \ingroup CommonLib
@@ -1026,6 +1027,183 @@ void simdFilterCopy_neon( const ClpRng& clpRng, const Pel* src, int srcStride, P
   }
 }
 
+void xWeightedGeoBlk_neon( const ClpRngs& clpRngs, const CodingUnit& cu, const uint32_t width, const uint32_t height,
+                           const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf& predDst, PelUnitBuf& predSrc0,
+                           PelUnitBuf& predSrc1 )
+{
+  Pel* dst = predDst.get( compIdx ).buf;
+  Pel* src0 = predSrc0.get( compIdx ).buf;
+  Pel* src1 = predSrc1.get( compIdx ).buf;
+  int32_t strideDst = predDst.get( compIdx ).stride;
+  int32_t strideSrc0 = predSrc0.get( compIdx ).stride;
+  int32_t strideSrc1 = predSrc1.get( compIdx ).stride;
+
+  const int32_t log2WeightBase = 3;
+  const int32_t clipbd = clpRngs[compIdx].bd;
+  const int32_t shiftWeighted = IF_INTERNAL_PREC - clipbd + log2WeightBase;
+  const int32_t offsetWeighted = ( 1 << ( shiftWeighted - 1 ) ) + ( IF_INTERNAL_OFFS << log2WeightBase );
+
+  int16_t angle = g_GeoParams[splitDir][0];
+  int16_t wIdx = floorLog2( cu.lwidth() ) - GEO_MIN_CU_LOG2;
+  int16_t hIdx = floorLog2( cu.lheight() ) - GEO_MIN_CU_LOG2;
+  int16_t stepY;
+  int16_t* weight;
+
+  CHECKD( IF_INTERNAL_PREC - clipbd < 2, "Bit depth headroom must be at least 2!" );
+
+  if( g_angle2mirror[angle] == 2 )
+  {
+    stepY = -GEO_WEIGHT_MASK_SIZE;
+    weight = &g_globalGeoWeights[g_angle2mask[angle]]
+                                [( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][1] ) *
+                                     GEO_WEIGHT_MASK_SIZE +
+                                 g_weightOffset[hIdx][wIdx][splitDir][0]];
+  }
+  else if( g_angle2mirror[angle] == 1 )
+  {
+    stepY = GEO_WEIGHT_MASK_SIZE;
+    weight = &g_globalGeoWeights[g_angle2mask[angle]]
+                                [g_weightOffset[hIdx][wIdx][splitDir][1] * GEO_WEIGHT_MASK_SIZE +
+                                 ( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][0] )];
+  }
+  else
+  {
+    stepY = GEO_WEIGHT_MASK_SIZE;
+    weight = &g_globalGeoWeights[g_angle2mask[angle]][g_weightOffset[hIdx][wIdx][splitDir][1] * GEO_WEIGHT_MASK_SIZE +
+                                                      g_weightOffset[hIdx][wIdx][splitDir][0]];
+  }
+
+  if( compIdx != COMP_Y && cu.chromaFormat == CHROMA_420 )
+  {
+    stepY <<= 1; // Chroma at half vertical resolution.
+  }
+
+  if( width == 4 )
+  {
+    CHECKD( compIdx == COMP_Y, "Wwidth == 4 will only occur with half-resolution chroma!" );
+    CHECKD( cu.chromaFormat == CHROMA_444, "Width == 4 will only occur with half-resolution chroma!" );
+    CHECKD( height % 2 != 0, "Height must be multiple of 2!" );
+
+    const int16x4_t bdMax = vdup_n_s16( clpRngs[compIdx].max() );
+    const int32x4_t invShift = vdupq_n_s32( -shiftWeighted );
+
+    int y = height >> 1;
+
+    do
+    {
+      int16x4_t w0, w2;
+      // Extract every alternate weight positions for the four chroma pixels.
+      if( g_angle2mirror[angle] == 1 )
+      {
+        // Decrement weight stepX by 2 - Load alternate weight positions and revese.
+        const int16_t* wptr = weight - 7;
+        w0 = load_deinterleave_reverse_s16x4( wptr );
+        w2 = load_deinterleave_reverse_s16x4( wptr + stepY );
+      }
+      else
+      {
+        // Increment weight stepX by 2 - Load alternate weight positions.
+        w0 = vld2_s16( weight ).val[0];
+        w2 = vld2_s16( weight + stepY ).val[0];
+      }
+
+      int16x4_t s0 = vld1_s16( src0 );
+      int16x4_t s2 = vld1_s16( src0 + strideSrc0 );
+
+      int16x4_t s1 = vld1_s16( src1 );
+      int16x4_t s3 = vld1_s16( src1 + strideSrc1 );
+
+      int16x4_t w1 = vsub_s16( vdup_n_s16( 8 ), w0 );
+      int16x4_t w3 = vsub_s16( vdup_n_s16( 8 ), w2 );
+
+      int32x4_t sum0 = vdupq_n_s32( offsetWeighted );
+      int32x4_t sum1 = vdupq_n_s32( offsetWeighted );
+      sum0 = vmlal_s16( sum0, w0, s0 );
+      sum1 = vmlal_s16( sum1, w2, s2 );
+      sum0 = vmlal_s16( sum0, w1, s1 );
+      sum1 = vmlal_s16( sum1, w3, s3 );
+
+      int16x4_t pix0 = vreinterpret_s16_u16( vqmovun_s32( vshlq_s32( sum0, invShift ) ) );
+      int16x4_t pix1 = vreinterpret_s16_u16( vqmovun_s32( vshlq_s32( sum1, invShift ) ) );
+      pix0 = vmin_s16( bdMax, pix0 );
+      pix1 = vmin_s16( bdMax, pix1 );
+      vst1_s16( dst, pix0 );
+      vst1_s16( dst + strideDst, pix1 );
+
+      src0 += 2 * strideSrc0;
+      src1 += 2 * strideSrc1;
+      dst += 2 * strideDst;
+      weight += 2 * stepY;
+    } while( --y != 0 );
+  }
+  else
+  {
+    const int16x8_t bdMax = vdupq_n_s16( clpRngs[compIdx].max() );
+    const int32x4_t invShift = vdupq_n_s32( -shiftWeighted );
+    int y = height;
+
+    do
+    {
+      int x = width - 8;
+      do
+      {
+        int16x8_t w0;
+        if( compIdx != COMP_Y && cu.chromaFormat != CHROMA_444 )
+        {
+          // Cb or Cr in either 420 or 422.
+          // Extract every alternate weight positions for the four chroma pixels.
+          if( g_angle2mirror[angle] == 1 )
+          {
+            const int16_t* wptr = weight - ( 2 * x ) - 15;
+            w0 = load_deinterleave_reverse_s16x8( wptr );
+          }
+          else
+          {
+            w0 = vld2q_s16( weight + 2 * x ).val[0];
+          }
+        }
+        else
+        {
+          // Luma or full resolution chroma.
+          if( g_angle2mirror[angle] == 1 )
+          {
+            w0 = reverse_vector_s16x8( vld1q_s16( weight - x - 7 ) );
+          }
+          else
+          {
+            w0 = vld1q_s16( weight + x );
+          }
+        }
+
+        int16x8_t s0 = vld1q_s16( src0 + x );
+        int16x8_t s1 = vld1q_s16( src1 + x );
+        int16x8_t w1 = vsubq_s16( vdupq_n_s16( 8 ), w0 );
+
+        int32x4_t sum0 = vdupq_n_s32( offsetWeighted );
+        int32x4_t sum1 = vdupq_n_s32( offsetWeighted );
+        sum0 = vmlal_s16( sum0, vget_low_s16( w0 ), vget_low_s16( s0 ) );
+        sum1 = vmlal_s16( sum1, vget_high_s16( w0 ), vget_high_s16( s0 ) );
+        sum0 = vmlal_s16( sum0, vget_low_s16( w1 ), vget_low_s16( s1 ) );
+        sum1 = vmlal_s16( sum1, vget_high_s16( w1 ), vget_high_s16( s1 ) );
+
+        uint16x4_t pix0 = vqmovun_s32( vshlq_s32( sum0, invShift ) );
+        uint16x4_t pix1 = vqmovun_s32( vshlq_s32( sum1, invShift ) );
+        int16x8_t pix = vreinterpretq_s16_u16( vcombine_u16( pix0, pix1 ) );
+
+        pix = vminq_s16( bdMax, pix );
+        vst1q_s16( dst + x, pix );
+
+        x -= 8;
+      } while( x >= 0 );
+
+      dst += strideDst;
+      src0 += strideSrc0;
+      src1 += strideSrc1;
+      weight += stepY;
+    } while( --y != 0 );
+  }
+}
+
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<NEON>()
 {
@@ -1074,6 +1252,8 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filterCopy[0][1] = simdFilterCopy_neon<false, true>;
   m_filterCopy[1][0] = simdFilterCopy_neon<true, false>;
   m_filterCopy[1][1] = simdFilterCopy_neon<true, true>;
+
+  m_weightedGeoBlk = xWeightedGeoBlk_neon;
 }
 
 } // namespace vvenc
