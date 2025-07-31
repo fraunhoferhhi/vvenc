@@ -257,7 +257,6 @@ test_vs2022_Win32:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: Win32
-     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
     - vs2022
 
@@ -265,7 +264,6 @@ test_vs2022:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: x64
-     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
     - vs2022
 
@@ -273,7 +271,6 @@ test_vs2022_arm64:
   extends: .build_test_msvc_template
   variables:
      MSVC_ARCH: arm64
-     CONFIG_OPTIONS: "-DVVENC_OVERRIDE_COMPILER_CHECK=1"
   tags:
     - vs2022-arm
 
