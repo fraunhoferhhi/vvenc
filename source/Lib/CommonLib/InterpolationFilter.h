@@ -89,11 +89,11 @@ public:
   void filterVer        (const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, bool isFirst, bool isLast, TFilterCoeff const *coeff);
 
   template<bool isLast, int w>
-  static void filterXxY_N2     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
+  static void filterWxH_N2     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
   template<bool isLast, int w>
-  static void filterXxY_N4     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
+  static void filterWxH_N4     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
   template<bool isLast, int w>
-  static void filterXxY_N8     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
+  static void filterWxH_N8     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
 
   static void scalarFilterN2_2D(const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *ch,     TFilterCoeff const *cv);
 
@@ -109,10 +109,10 @@ public:
   void( *m_filterN2_2D        )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *ch, TFilterCoeff const *cv );
   void( *m_filterHor[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff);
   void( *m_filterVer[4][2][2] )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff);
-  void( *m_filterCopy[2][2] )  ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, bool biMCForDMVR);
-  void( *m_filter4x4  [2][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
-  void( *m_filter8x8  [3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
-  void( *m_filter16x16[3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
+  void( *m_filterCopy[2][2]   )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, bool biMCForDMVR);
+  void( *m_filter4x4 [2][2]   )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
+  void( *m_filter8xH [3][2]   )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
+  void( *m_filter16xH[3][2]   )( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
   void (*m_weightedGeoBlk)(const ClpRngs &clpRngs, const CodingUnit& cu, const uint32_t width, const uint32_t height,
                            const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf &predDst, PelUnitBuf &predSrc0,
                            PelUnitBuf &predSrc1);
@@ -132,8 +132,8 @@ public:
 
   void filterN2_2D(const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,                                        const ClpRng& clpRng);
   void filter4x4  (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
-  void filter8x8  (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
-  void filter16x16(const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
+  void filter8xH  (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
+  void filter16xH (const ComponentID compID, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, int fracX, int fracY,   bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0);
   void filterHor  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac,               bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0, int reduceTap = 0);
   void filterVer  (const ComponentID compID, Pel const* src, int srcStride, Pel* dst, int dstStride, int width, int height, int frac, bool isFirst, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng, bool useAltHpelIf = false, int nFilterIdx = 0, int reduceTap = 0);
 
