@@ -181,24 +181,6 @@ static inline int64x2_t pairwise_add_s64x2( const int64x2_t a, const int64x2_t b
 #endif
 }
 
-static inline float32x4_t div_f32x4( const float32x4_t a, const float32x4_t b )
-{
-#if REAL_TARGET_AARCH64
-  return vdivq_f32( a, b );
-#else
-  float num[4], den[4], quo[4];
-  vst1q_f32( num, a );
-  vst1q_f32( den, b );
-
-  quo[0] = num[0] / den[0];
-  quo[1] = num[1] / den[1];
-  quo[2] = num[2] / den[2];
-  quo[3] = num[3] / den[3];
-
-  return vld1q_f32( quo );
-#endif
-}
-
 } // namespace vvenc
 
 #endif
