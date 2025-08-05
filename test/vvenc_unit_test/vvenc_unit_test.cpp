@@ -1331,7 +1331,7 @@ static bool test_PelBufferOps()
 
 #if ENABLE_SIMD_OPT_MCIF
 template<bool isLast, unsigned width>
-static bool check_filterXxY_N8( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases )
+static bool check_filterWxH_N8( InterpolationFilter* ref, InterpolationFilter* opt, unsigned height, unsigned num_cases )
 {
   static_assert( width == 4 || width == 8 || width == 16, "Width must be either 4, 8, or 16" );
 
@@ -1352,13 +1352,12 @@ static bool check_filterXxY_N8( InterpolationFilter* ref, InterpolationFilter* o
     InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
 
     std::ostringstream sstm_test;
-    sstm_test << "InterpolationFilter::filter" << width << "x" << width << "[0][" << isLast << "]"
+    sstm_test << "InterpolationFilter::filter" << width << "x" << height << "[0][" << isLast << "]"
               << " bitDepth=" << bd;
     std::cout << "Testing " << sstm_test.str() << std::endl;
 
     for( unsigned n = 0; n < num_cases; n++ )
     {
-      unsigned height = width == 4 ? 4 : dim.get( 4, MAX_CU_SIZE, 4 );
       unsigned srcStride = dim.get( width, MAX_CU_SIZE ) + 7; // srcStride >= width + 7
       unsigned dstStride = dim.get( width, MAX_CU_SIZE );
 
@@ -1400,21 +1399,21 @@ static bool check_filterXxY_N8( InterpolationFilter* ref, InterpolationFilter* o
       }
       else if( width == 8 )
       {
-        ref->m_filter8x8[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+        ref->m_filter8xH[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
                                      ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
-        opt->m_filter8x8[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+        opt->m_filter8xH[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
                                      ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
       }
       else // width == 16
       {
-        ref->m_filter16x16[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+        ref->m_filter16xH[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
                                        ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
-        opt->m_filter16x16[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+        opt->m_filter16xH[0][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
                                        ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
       }
 
       std::ostringstream sstm_subtest;
-      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " h=" << height;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride;
 
       passed =
           compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
@@ -1425,7 +1424,7 @@ static bool check_filterXxY_N8( InterpolationFilter* ref, InterpolationFilter* o
 }
 
 template<bool isLast, unsigned width>
-static bool check_filterXxY_N4( InterpolationFilter* ref, InterpolationFilter* opt, unsigned num_cases )
+static bool check_filterWxH_N4( InterpolationFilter* ref, InterpolationFilter* opt, unsigned height, unsigned num_cases )
 {
   static_assert( width == 4 || width == 8 || width == 16, "Width must be either 4, 8, or 16" );
 
@@ -1445,13 +1444,12 @@ static bool check_filterXxY_N4( InterpolationFilter* ref, InterpolationFilter* o
     InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
 
     std::ostringstream sstm_test;
-    sstm_test << "InterpolationFilter::filter" << width << "x" << width << "[1][" << isLast << "]"
+    sstm_test << "InterpolationFilter::filter" << width << "x" << height << "[1][" << isLast << "]"
               << " bitDepth=" << bd;
     std::cout << "Testing " << sstm_test.str() << std::endl;
 
     for( unsigned n = 0; n < num_cases; n++ )
     {
-      unsigned height = width == 4 ? 4 : dim.get( 4, 32, 4 );
       unsigned srcStride = dim.get( width + 3, MAX_CU_SIZE ); // srcStride >= width + 3
       unsigned dstStride = dim.get( width, MAX_CU_SIZE );
 
@@ -1478,21 +1476,21 @@ static bool check_filterXxY_N4( InterpolationFilter* ref, InterpolationFilter* o
       }
       else if( width == 8 )
       {
-        ref->m_filter8x8[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+        ref->m_filter8xH[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
                                      ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
-        opt->m_filter8x8[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+        opt->m_filter8xH[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
                                      ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
       }
       else // width == 16
       {
-        ref->m_filter16x16[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+        ref->m_filter16xH[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
                                        ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
-        opt->m_filter16x16[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+        opt->m_filter16xH[1][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
                                        ( int )dstStride, ( int )width, ( int )height, pCoeffH, pCoeffV );
       }
 
       std::ostringstream sstm_subtest;
-      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " h=" << height;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride;
 
       passed =
           compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
@@ -1686,19 +1684,27 @@ static bool test_InterpolationFilter()
     }
   }
 
-  passed = check_filterXxY_N8<false, 4>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N8<true, 4>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N8<false, 8>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N8<true, 8>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N8<false, 16>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N8<true, 16>( &ref, &opt, num_cases ) && passed;
+  // The width = 4 case is only called with height = 4.
+  passed = check_filterWxH_N8<false, 4>( &ref, &opt, 4, num_cases ) && passed;
+  passed = check_filterWxH_N8<true, 4>( &ref, &opt, 4, num_cases ) && passed;
+  for( unsigned height : { 4, 8, 16, 32, 64, 128 } )
+  {
+    passed = check_filterWxH_N8<false, 8>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N8<true, 8>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N8<false, 16>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N8<true, 16>( &ref, &opt, height, num_cases ) && passed;
+  }
 
-  passed = check_filterXxY_N4<false, 4>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N4<true, 4>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N4<false, 8>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N4<true, 8>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N4<false, 16>( &ref, &opt, num_cases ) && passed;
-  passed = check_filterXxY_N4<true, 16>( &ref, &opt, num_cases ) && passed;
+  // The width = 4 case is only called with height = 4.
+  passed = check_filterWxH_N4<false, 4>( &ref, &opt, 4, num_cases ) && passed;
+  passed = check_filterWxH_N4<true, 4>( &ref, &opt, 4, num_cases ) && passed;
+  for( unsigned height : { 2, 4, 8, 16, 32 } )
+  {
+    passed = check_filterWxH_N4<false, 8>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N4<true, 8>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N4<false, 16>( &ref, &opt, height, num_cases ) && passed;
+    passed = check_filterWxH_N4<true, 16>( &ref, &opt, height, num_cases ) && passed;
+  }
 
   passed = check_filterCopy<0, 0>( &ref, &opt, num_cases, false ) && passed;
   passed = check_filterCopy<0, 1>( &ref, &opt, num_cases, false ) && passed;

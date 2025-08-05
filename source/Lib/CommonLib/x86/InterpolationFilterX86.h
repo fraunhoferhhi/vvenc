@@ -2206,7 +2206,7 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=3;
   src-=3*srcStride;
@@ -2476,7 +2476,7 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter16xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter16xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=1;
   src-=srcStride;
@@ -2523,7 +2523,7 @@ void simdFilter16xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter8xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=3;
   src-=3*srcStride;
@@ -2760,7 +2760,7 @@ void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter8xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=1;
   src-=srcStride;
@@ -3459,16 +3459,16 @@ void InterpolationFilter::_initInterpolationFilterX86()
   m_filter4x4[1][0]    = simdFilter4x4_N4<vext, false>;
   m_filter4x4[1][1]    = simdFilter4x4_N4<vext, true>;
   
-  m_filter8x8[0][0]    = simdFilter8xX_N8<vext, false>;
-  m_filter8x8[0][1]    = simdFilter8xX_N8<vext, true>;
-  m_filter8x8[1][0]    = simdFilter8xX_N4<vext, false>;
-  m_filter8x8[1][1]    = simdFilter8xX_N4<vext, true>;
+  m_filter8xH[0][0]    = simdFilter8xH_N8<vext, false>;
+  m_filter8xH[0][1]    = simdFilter8xH_N8<vext, true>;
+  m_filter8xH[1][0]    = simdFilter8xH_N4<vext, false>;
+  m_filter8xH[1][1]    = simdFilter8xH_N4<vext, true>;
 
-  m_filter16x16[0][0]  = simdFilter16xX_N8<vext, false>;
-  m_filter16x16[0][1]  = simdFilter16xX_N8<vext, true>;
+  m_filter16xH[0][0]  = simdFilter16xH_N8<vext, false>;
+  m_filter16xH[0][1]  = simdFilter16xH_N8<vext, true>;
 
-  m_filter16x16[1][0]  = simdFilter16xX_N4<vext, false>;
-  m_filter16x16[1][1]  = simdFilter16xX_N4<vext, true>;
+  m_filter16xH[1][0]  = simdFilter16xH_N4<vext, false>;
+  m_filter16xH[1][1]  = simdFilter16xH_N4<vext, true>;
 
   m_filterN2_2D        = simdInterpolateN2_2D<vext>;
 

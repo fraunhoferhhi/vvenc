@@ -849,11 +849,11 @@ void InterPredInterpolation::xPredInterBlk( const ComponentID compID, const Codi
   }
   else if( backupWidth == 16 )
   {
-    m_if.filter16x16( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+    m_if.filter16xH( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 16, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
   }
   else if( backupWidth == 8 )
   {
-    m_if.filter8x8( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
+    m_if.filter8xH( compID, refBufPtr, refBufStride, dstBuf.buf, dstBuf.stride, 8, backupHeight, xFrac, yFrac, rndRes, chFmt, clpRng, useAltHpelIf );
   }
   else
   {
