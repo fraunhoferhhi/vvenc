@@ -835,6 +835,314 @@ void applyFrac6Tap_8x_neon( const Pel* org, const ptrdiff_t origStride, Pel* dst
   func( org, origStride, dst, dstStride, w, h, xFilter, yFilter, bitDepth );
 }
 
+static inline void applyFrac6Tap_4x_copy_neon( const Pel* org, const ptrdiff_t origStride, Pel* dst,
+                                               const ptrdiff_t dstStride, int w, int h )
+{
+  CHECKD( w != 4, "w must be 4!" );
+  CHECKD( h % 4 != 0, "Height must be multiple of 4!" );
+
+  h >>= 2;
+
+  do
+  {
+    const int16x4_t src0 = vld1_s16( org + 0 * origStride );
+    const int16x4_t src1 = vld1_s16( org + 1 * origStride );
+    const int16x4_t src2 = vld1_s16( org + 2 * origStride );
+    const int16x4_t src3 = vld1_s16( org + 3 * origStride );
+    vst1_s16( dst + 0 * dstStride, src0 );
+    vst1_s16( dst + 1 * dstStride, src1 );
+    vst1_s16( dst + 2 * dstStride, src2 );
+    vst1_s16( dst + 3 * dstStride, src3 );
+
+    org += 4 * origStride;
+    dst += 4 * dstStride;
+  } while( --h != 0 );
+}
+
+template<FilterDirection direction, FilterCoeffType Type>
+static inline int16x4_t applyFrac6Tap_4x_filter1D_neon( const int16x4_t* src, const int16x8_t filterVal )
+{
+  // Filter weight is 64.
+  constexpr int filterBits = 6;
+
+  int16x4_t acc_s16 = vdup_n_s16( 0 );
+  int32x4_t acc_s32;
+
+  // Accumulate outer taps (1, 2, 5, 6) in 16-bit, and central taps (3, 4) in 32-bit precision.
+  if( Type == FilterCoeffType::FullSymmetric )
+  {
+    const int16x4_t sum05 = vadd_s16( src[0], src[5] );
+    const int16x4_t sum14 = vadd_s16( src[1], src[4] );
+    const int16x4_t sum23 = vadd_s16( src[2], src[3] );
+    int16x4_t acc_s16 = vmul_lane_s16( sum05, vget_low_s16( filterVal ), 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, sum14, vget_low_s16( filterVal ), 2 );
+    acc_s32 = vmovl_s16( acc_s16 );
+    acc_s32 = vmlal_lane_s16( acc_s32, sum23, vget_low_s16( filterVal ), 3 );
+
+    if( direction == FilterDirection::Horizontal )
+    {
+      return vqrshrn_n_s32( acc_s32, filterBits );
+    }
+    else // Vertical.
+    {
+      return vreinterpret_s16_u16( vqrshrun_n_s32( acc_s32, filterBits ) );
+    }
+  }
+  else if( Type == FilterCoeffType::AddLeft )
+  {
+    acc_s16 = vmla_lane_s16( src[0], src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+  }
+  else if( Type == FilterCoeffType::AddRight )
+  {
+    acc_s16 = vmla_lane_s16( src[5], src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+  }
+  else if( Type == FilterCoeffType::AddSymmetric )
+  {
+    acc_s16 = vadd_s16( src[0], src[5] );
+    acc_s16 = vmla_lane_s16( acc_s16, src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+  }
+  else if( Type == FilterCoeffType::ShiftLeft )
+  {
+    acc_s16 = vshl_n_s16( src[0], 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[5], vget_high_s16( filterVal ), 2 );
+  }
+  else if( Type == FilterCoeffType::ShiftRight )
+  {
+    acc_s16 = vshl_n_s16( src[5], 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[0], vget_low_s16( filterVal ), 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+  }
+  else if( Type == FilterCoeffType::MultiplySymmetric )
+  {
+    int16x4_t sum05 = vadd_s16( src[0], src[5] );
+    acc_s16 = vmul_lane_s16( sum05, vget_low_s16( filterVal ), 1 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[1], vget_low_s16( filterVal ), 2 );
+    acc_s16 = vmla_lane_s16( acc_s16, src[4], vget_high_s16( filterVal ), 1 );
+  }
+
+  acc_s32 = vmovl_s16( acc_s16 );
+  acc_s32 = vmlal_lane_s16( acc_s32, src[2], vget_low_s16( filterVal ), 3 );
+  acc_s32 = vmlal_lane_s16( acc_s32, src[3], vget_high_s16( filterVal ), 0 );
+
+  if( direction == FilterDirection::Horizontal )
+  {
+    return vqrshrn_n_s32( acc_s32, filterBits );
+  }
+  else // Vertical.
+  {
+    return vreinterpret_s16_u16( vqrshrun_n_s32( acc_s32, filterBits ) );
+  }
+}
+
+template<FilterCoeffType xType, FilterCoeffType yType>
+static inline void applyFrac6Tap_4x_filter2D_neon( const Pel* org, const ptrdiff_t origStride, Pel* dst,
+                                                   const ptrdiff_t dstStride, int w, int h, const int16_t* xFilter,
+                                                   const int16_t* yFilter, const int bitDepth )
+{
+  CHECKD( w != 4, "w must be 4!" );
+  CHECKD( h % 4 != 0, "Height must be multiple of 4!" );
+
+  constexpr int numFilterTaps = 6;
+  const int maxValue = ( 1 << bitDepth ) - 1;
+
+  int16x4_t v_src[numFilterTaps + 3]; // Extra 3 elements needed because the height loop is unrolled 4 times.
+  int16x4_t h_src[numFilterTaps];
+
+  const Pel* sourceRow = org - ( numFilterTaps / 2 - 1 ) * origStride - ( numFilterTaps / 2 - 1 );
+
+  const int16x8_t xFilterVal = vld1q_s16( xFilter );
+  const int16x8_t yFilterVal = vld1q_s16( yFilter );
+
+  if( xType == FilterCoeffType::NoOp )
+  {
+    if( yType != FilterCoeffType::NoOp )
+    {
+      v_src[0] = vld1_s16( sourceRow + 0 * origStride + 2 );
+      v_src[1] = vld1_s16( sourceRow + 1 * origStride + 2 );
+    }
+    v_src[2] = vld1_s16( sourceRow + 2 * origStride + 2 );
+    v_src[3] = vld1_s16( sourceRow + 3 * origStride + 2 );
+    v_src[4] = vld1_s16( sourceRow + 4 * origStride + 2 );
+  }
+  else
+  {
+    if( yType != FilterCoeffType::NoOp )
+    {
+      load_s16x4x6( sourceRow + 0 * origStride, 1, h_src );
+      v_src[0] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+      load_s16x4x6( sourceRow + 1 * origStride, 1, h_src );
+      v_src[1] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+    }
+    load_s16x4x6( sourceRow + 2 * origStride, 1, h_src );
+    v_src[2] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+    load_s16x4x6( sourceRow + 3 * origStride, 1, h_src );
+    v_src[3] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+    load_s16x4x6( sourceRow + 4 * origStride, 1, h_src );
+    v_src[4] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+  }
+
+  const Pel* sourceCol = sourceRow + 5 * origStride;
+  Pel* dstCol = dst;
+
+  h >>= 2;
+
+  do
+  {
+    if( xType == FilterCoeffType::NoOp )
+    {
+      v_src[5] = vld1_s16( sourceCol + 0 * origStride + 2 );
+      v_src[6] = vld1_s16( sourceCol + 1 * origStride + 2 );
+      v_src[7] = vld1_s16( sourceCol + 2 * origStride + 2 );
+      v_src[8] = vld1_s16( sourceCol + 3 * origStride + 2 );
+    }
+    else
+    {
+      load_s16x4x6( sourceCol + 0 * origStride, 1, h_src );
+      v_src[5] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+      load_s16x4x6( sourceCol + 1 * origStride, 1, h_src );
+      v_src[6] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+      load_s16x4x6( sourceCol + 2 * origStride, 1, h_src );
+      v_src[7] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+      load_s16x4x6( sourceCol + 3 * origStride, 1, h_src );
+      v_src[8] = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Horizontal, xType>( h_src, xFilterVal );
+    }
+
+    int16x4_t dstSum0, dstSum1, dstSum2, dstSum3;
+    if( yType == FilterCoeffType::NoOp )
+    {
+      dstSum0 = vmax_s16( v_src[2], vdup_n_s16( 0 ) );
+      dstSum1 = vmax_s16( v_src[3], vdup_n_s16( 0 ) );
+      dstSum2 = vmax_s16( v_src[4], vdup_n_s16( 0 ) );
+      dstSum3 = vmax_s16( v_src[5], vdup_n_s16( 0 ) );
+    }
+    else
+    {
+      dstSum0 = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Vertical, yType>( &v_src[0], yFilterVal );
+      dstSum1 = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Vertical, yType>( &v_src[1], yFilterVal );
+      dstSum2 = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Vertical, yType>( &v_src[2], yFilterVal );
+      dstSum3 = applyFrac6Tap_4x_filter1D_neon<FilterDirection::Vertical, yType>( &v_src[3], yFilterVal );
+    }
+    dstSum0 = vmin_s16( dstSum0, vdup_n_s16( maxValue ) );
+    dstSum1 = vmin_s16( dstSum1, vdup_n_s16( maxValue ) );
+    dstSum2 = vmin_s16( dstSum2, vdup_n_s16( maxValue ) );
+    dstSum3 = vmin_s16( dstSum3, vdup_n_s16( maxValue ) );
+
+    vst1_s16( dstCol + 0 * dstStride, dstSum0 );
+    vst1_s16( dstCol + 1 * dstStride, dstSum1 );
+    vst1_s16( dstCol + 2 * dstStride, dstSum2 );
+    vst1_s16( dstCol + 3 * dstStride, dstSum3 );
+
+    if( yType != FilterCoeffType::NoOp )
+    {
+      v_src[0] = v_src[4];
+      v_src[1] = v_src[5];
+    }
+    v_src[2] = v_src[6];
+    v_src[3] = v_src[7];
+    v_src[4] = v_src[8];
+
+    dstCol += 4 * dstStride;
+    sourceCol += 4 * origStride;
+  } while( --h != 0 );
+}
+
+template<FilterCoeffType xType>
+static inline ApplyFrac6TapFunc applyFrac6Tap_4x_getYEntry( FilterCoeffType yType )
+{
+  switch( yType )
+  {
+  case FilterCoeffType::NoOp:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::NoOp>;
+  case FilterCoeffType::FullSymmetric:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::FullSymmetric>;
+  case FilterCoeffType::AddLeft:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::AddLeft>;
+  case FilterCoeffType::AddRight:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::AddRight>;
+  case FilterCoeffType::AddSymmetric:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::AddSymmetric>;
+  case FilterCoeffType::ShiftLeft:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::ShiftLeft>;
+  case FilterCoeffType::ShiftRight:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::ShiftRight>;
+  case FilterCoeffType::MultiplySymmetric:
+    return &applyFrac6Tap_4x_filter2D_neon<xType, FilterCoeffType::MultiplySymmetric>;
+  }
+
+  CHECK( true, "Invalid filter coefficients!" );
+  return nullptr;
+}
+
+void applyFrac6Tap_4x_neon( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride,
+                            const int w, const int h, const int16_t* xFilter, const int16_t* yFilter,
+                            const int bitDepth )
+{
+  CHECKD( w % 4 != 0, "Width must be multiple of 4!" );
+  CHECKD( h % 4 != 0, "Height must be multiple of 4!" );
+
+  int width8x = ( w / 8 ) * 8;
+  if( width8x > 0 )
+  {
+    applyFrac6Tap_8x_neon( org, origStride, dst, dstStride, width8x, h, xFilter, yFilter, bitDepth );
+  }
+
+  int tailWidth = w - width8x;
+  if( tailWidth > 0 )
+  {
+    org += width8x;
+    dst += width8x;
+
+    const FilterCoeffType xType = selectFilterType( xFilter );
+    const FilterCoeffType yType = selectFilterType( yFilter );
+
+    if( xType == FilterCoeffType::NoOp && yType == FilterCoeffType::NoOp )
+    {
+      applyFrac6Tap_4x_copy_neon( org, origStride, dst, dstStride, w, h );
+      return;
+    }
+
+    ApplyFrac6TapFunc func{ nullptr };
+
+    switch( xType )
+    {
+    case FilterCoeffType::NoOp:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::NoOp>( yType );
+      break;
+    case FilterCoeffType::FullSymmetric:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::FullSymmetric>( yType );
+      break;
+    case FilterCoeffType::AddLeft:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::AddLeft>( yType );
+      break;
+    case FilterCoeffType::AddRight:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::AddRight>( yType );
+      break;
+    case FilterCoeffType::AddSymmetric:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::AddSymmetric>( yType );
+      break;
+    case FilterCoeffType::ShiftLeft:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::ShiftLeft>( yType );
+      break;
+    case FilterCoeffType::ShiftRight:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::ShiftRight>( yType );
+      break;
+    case FilterCoeffType::MultiplySymmetric:
+      func = applyFrac6Tap_4x_getYEntry<FilterCoeffType::MultiplySymmetric>( yType );
+      break;
+    }
+
+    CHECKD( func == nullptr, "Invalid filter type!" );
+
+    func( org, origStride, dst, dstStride, w, h, xFilter, yFilter, bitDepth );
+  }
+}
+
 template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
@@ -843,6 +1151,7 @@ void MCTF::_initMCTF_ARM<NEON>()
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;
   m_applyBlock              = applyBlock_neon;
   m_applyFrac[0][0]         = applyFrac6Tap_8x_neon;
+  m_applyFrac[1][0]         = applyFrac6Tap_4x_neon;
 }
 
 } // namespace vvenc

@@ -55,6 +55,21 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+static inline void load_s16x4x6( const int16_t* src, const ptrdiff_t p, int16x4_t s[6] )
+{
+  s[0] = vld1_s16( src );
+  src += p;
+  s[1] = vld1_s16( src);
+  src += p;
+  s[2] = vld1_s16( src );
+  src += p;
+  s[3] = vld1_s16( src );
+  src += p;
+  s[4] = vld1_s16( src );
+  src += p;
+  s[5] = vld1_s16( src );
+}
+
 static inline void load_s16_16x8x6( const int16_t* src, const ptrdiff_t p, int16x8_t s[6] )
 {
   s[0] = vld1q_s16( src );
