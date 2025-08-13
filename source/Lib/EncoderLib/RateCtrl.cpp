@@ -660,7 +660,7 @@ void RateCtrl::adjustStatsDownsample()
       auto& stat = *itrv;
       if (stat.spVisAct != 0)
       {
-        sumVar += (abs(stat.spVisAct - meanValue) * abs(stat.spVisAct - meanValue));
+        sumVar += (std::abs(stat.spVisAct - meanValue) * std::abs(stat.spVisAct - meanValue));
         numVar++;
       }
     }
@@ -701,7 +701,7 @@ void RateCtrl::adjustStatsDownsample()
         doChangeBits = false;
         if (stat.gopNum != 0)
         {
-          const int64_t var_cur = abs(statValue - meanValue);
+          const int64_t var_cur = std::abs(statValue - meanValue);
           if (var_cur > (sumVar << 1))
           {
             doChangeBits = true;
