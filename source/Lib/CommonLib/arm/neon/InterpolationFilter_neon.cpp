@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "../InterpolationFilter.h"
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "Rom.h"
 #include "reverse_neon.h"
 #include "sum_neon.h"
 
