@@ -148,6 +148,7 @@ public:
   virtual ~RdCost();
 
   void          create( bool enableOpt = true );
+
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_DIST
   void          initRdCostX86();
   template <X86_VEXT vext>
@@ -155,7 +156,6 @@ public:
 #endif
 
 #if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_DIST
-
   void initRdCostARM();
   template<ARM_VEXT vext>
   void _initRdCostARM();
@@ -221,8 +221,7 @@ public:
   static Distortion xGetSAD8          ( const DistParam& pcDtParam );
   static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvenc )
   static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos ); // needs to be public for xGetSADX5_16xN_SIMD ( NOTE: they are all public in vvenc )
-	
-private:
+
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
 
   static Distortion xGetSSE           ( const DistParam& pcDtParam );
@@ -274,26 +273,7 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
-#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_OPT_DIST
-
-  template <ARM_VEXT vext>
-  static void xGetSADX5_16xN_SIMD_ARM   ( const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos );
-
-  template <ARM_VEXT vext>
-  static Distortion xGetHAD2SADs_ARMSIMD( const DistParam &rcDtParam );
-
-  template <ARM_VEXT vext, bool fastHad>
-  static Distortion xGetHADs_ARMSIMD   ( const DistParam& pcDtParam );
-
-  template<ARM_VEXT vext> 
-  static Distortion xGetSADwMask_ARMSIMD(const DistParam &rcDtParam);
-
-  template< int iWidth, ARM_VEXT vext >
-  static Distortion xGetSAD_NxN_ARMSIMD( const DistParam &rcDtParam );
-#endif
-	
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
-public:
 
   Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma = NULL );
 
