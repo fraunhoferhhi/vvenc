@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
 #include <time.h>
 
 #include "CommonLib/AffineGradientSearch.h"
@@ -1716,11 +1717,62 @@ static bool test_InterpolationFilter()
 }
 #endif // ENABLE_SIMD_OPT_MCIF
 
+struct UnitTestEntry
+{
+  std::string name;
+  bool ( *fn )();
+};
+
+static const UnitTestEntry test_suites[] = {
+#if ENABLE_SIMD_OPT_INTRAPRED
+    { "IntraPred", test_IntraPred },
+#endif
+#if ENABLE_SIMD_TRAFO
+    { "TCoeffOps", test_TCoeffOps },
+#endif
+#if ENABLE_SIMD_OPT_MCTF
+    { "MCTF", test_MCTF },
+#endif
+#if ENABLE_SIMD_OPT_BDOF
+    { "InterPred", test_InterPred },
+#endif
+#if ENABLE_SIMD_OPT_DIST
+    { "RdCost", test_RdCost },
+#endif
+#if ENABLE_SIMD_OPT_AFFINE_ME
+    { "AffineGradientSearch", test_AffineGradientSearch },
+#endif
+#if ENABLE_SIMD_OPT_BUFFER
+    { "PelBufferOps", test_PelBufferOps },
+#endif
+#if ENABLE_SIMD_OPT_MCIF
+    { "InterpolationFilter", test_InterpolationFilter },
+#endif
+};
+
 struct UnitTestArgs
 {
   bool show_help = false;
   int seed;
+  std::string testcase;
 };
+
+static inline std::string get_testcase_help_text()
+{
+  std::ostringstream sstm;
+  sstm << "Run a single test suite. One of: ";
+  bool first = true;
+  for( const auto& entry : test_suites )
+  {
+    if( !first )
+    {
+      sstm << ", ";
+    }
+    first = false;
+    sstm << entry.name;
+  }
+  return sstm.str();
+}
 
 UnitTestArgs parse_args( int argc, char* argv[] )
 {
@@ -1730,7 +1782,8 @@ UnitTestArgs parse_args( int argc, char* argv[] )
   po::Options opts;
   opts.addOptions()
     ( "help,h", args.show_help, "Show help", true )
-    ( "seed", args.seed, "Set random seed for running tests" );
+    ( "seed", args.seed, "Set random seed for running tests" )
+    ( "testcase,t", args.testcase, get_testcase_help_text(), false );
 
   po::SilentReporter err;
   po::scanArgv( opts, argc, ( const char** )argv, err );
@@ -1755,30 +1808,14 @@ int main( int argc, char* argv[] )
 
   bool passed = true;
 
-#if ENABLE_SIMD_OPT_INTRAPRED
-  passed = test_IntraPred() && passed;
-#endif
-#if ENABLE_SIMD_TRAFO
-  passed = test_TCoeffOps() && passed;
-#endif
-#if ENABLE_SIMD_OPT_MCTF
-  passed = test_MCTF() && passed;
-#endif
-#if ENABLE_SIMD_OPT_BDOF
-  passed = test_InterPred() && passed;
-#endif
-#if ENABLE_SIMD_OPT_DIST
-  passed = test_RdCost() && passed;
-#endif
-#if ENABLE_SIMD_OPT_AFFINE_ME
-  passed = test_AffineGradientSearch() && passed;
-#endif
-#if ENABLE_SIMD_OPT_BUFFER
-  passed = test_PelBufferOps() && passed;
-#endif
-#if ENABLE_SIMD_OPT_MCIF
-  passed = test_InterpolationFilter() && passed;
-#endif
+  for( const auto& entry : test_suites )
+  {
+    if( args.testcase == "" || args.testcase == entry.name )
+    {
+      std::cout << "Running test suite: " << entry.name << "\n";
+      passed = entry.fn() && passed;
+    }
+  }
 
   if( !passed )
   {
