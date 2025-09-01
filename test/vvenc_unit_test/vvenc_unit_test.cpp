@@ -694,18 +694,20 @@ static bool check_applyBlock( MCTF* ref, MCTF* opt, unsigned num_cases, int w, i
   return true;
 }
 
-template<typename G>
-static bool check_one_applyFrac6Tap( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int w, int h,
-                                     int xFilterIndex, int yFilterIndex, int bitDepth, G input_generator,
-                                     int channelIndex )
+template<ChannelType Ch, int NumTaps, typename G>
+static bool check_one_applyFrac( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int w, int h,
+                                 int xFilterIndex, int yFilterIndex, int bitDepth, G input_generator )
 {
   CHECK( orgStride < w, "OrgStride must be greater than or equal to width" );
   CHECK( dstStride < w, "DstStride must be greater than or equal to width" );
 
   std::ostringstream sstm;
-  sstm << "applyFrac6Tap_8x orgStride=" << orgStride << " dstStride=" << dstStride << " w=" << w << " h=" << h;
+  sstm << "applyFrac" << NumTaps << "Tap_" << ( Ch == CH_L ? 8 : 4 ) << "x"
+       << " orgStride=" << orgStride << " dstStride=" << dstStride << " w=" << w << " h=" << h;
 
+  const int channelIndex = static_cast<int>( Ch ); // Chroma or Luma.
   const int centreTapOffset = 3;
+
   std::vector<Pel> orgBuf( orgStride * ( h + 3 * centreTapOffset ) );
   std::vector<Pel> dst_ref( dstStride * h );
   std::vector<Pel> dst_opt( dstStride * h );
@@ -714,22 +716,33 @@ static bool check_one_applyFrac6Tap( MCTF* ref, MCTF* opt, unsigned orgStride, u
 
   Pel* org = orgBuf.data() + centreTapOffset * orgStride + centreTapOffset;
 
-  const int16_t* xFilter = MCTF::m_interpolationFilter8[xFilterIndex];
-  const int16_t* yFilter = MCTF::m_interpolationFilter8[yFilterIndex];
+  if( NumTaps == 4 )
+  {
+    const int16_t* xFilter = MCTF::m_interpolationFilter4[xFilterIndex];
+    const int16_t* yFilter = MCTF::m_interpolationFilter4[yFilterIndex];
 
-  ref->m_applyFrac[channelIndex][0]( org, orgStride, dst_ref.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
-  opt->m_applyFrac[channelIndex][0]( org, orgStride, dst_opt.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+    ref->m_applyFrac[channelIndex][1]( org, orgStride, dst_ref.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+    opt->m_applyFrac[channelIndex][1]( org, orgStride, dst_opt.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+  }
+  else
+  {
+    const int16_t* xFilter = MCTF::m_interpolationFilter8[xFilterIndex];
+    const int16_t* yFilter = MCTF::m_interpolationFilter8[yFilterIndex];
+
+    ref->m_applyFrac[channelIndex][0]( org, orgStride, dst_ref.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+    opt->m_applyFrac[channelIndex][0]( org, orgStride, dst_opt.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
+  }
+
   return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h, w, dstStride );
 }
 
-template<bool Is8x>
-static bool check_applyFrac6Tap( MCTF* ref, MCTF* opt, int w, int h )
+template<ChannelType Ch, int NumTaps>
+static bool check_applyFrac( MCTF* ref, MCTF* opt, int w, int h )
 {
-  printf( "Testing MCTF::applyFrac6Tap_%dx w=%d h=%d\n", Is8x ? 8 : 4, w, h );
+  printf( "Testing MCTF::applyFrac%dTap_%dx w=%d h=%d\n", NumTaps, Ch == CH_L ? 8 : 4, w, h );
 
   DimensionGenerator rng;
   constexpr int motionVectorFactor = 16;
-  constexpr int channelIndex = Is8x ? 0 : 1;
 
   for( unsigned bitDepth : { 8, 10 } )
   {
@@ -742,8 +755,7 @@ static bool check_applyFrac6Tap( MCTF* ref, MCTF* opt, int w, int h )
         // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
         unsigned orgStride = rng.get( w, 8192 );
         unsigned dstStride = rng.get( w, 8192 );
-        if( !check_one_applyFrac6Tap( ref, opt, orgStride, dstStride, w, h, xIndex, yIndex, bitDepth, g,
-                                      channelIndex ) )
+        if( !check_one_applyFrac<Ch, NumTaps>( ref, opt, orgStride, dstStride, w, h, xIndex, yIndex, bitDepth, g ) )
         {
           return false;
         }
@@ -869,17 +881,18 @@ static bool test_MCTF()
   {
     for( unsigned h : sizes )
     {
+      // applyFrac4Tap_4x testing.
+      passed = check_applyFrac<CH_C, /*NumTaps=*/4>( &ref, &opt, w, h ) && passed;
       // applyFrac6Tap_4x testing.
-      passed = check_applyFrac6Tap<false>( &ref, &opt, w, h ) && passed;
-    }
-  }
+      passed = check_applyFrac<CH_C, /*NumTaps=*/6>( &ref, &opt, w, h ) && passed;
 
-  for( unsigned w : { 8, 16, 32, 64 } )
-  {
-    for( unsigned h : { 8, 16, 32, 64 } )
-    {
-      // applyFrac6Tap_8x testing.
-      passed = check_applyFrac6Tap<true>( &ref, &opt, w, h ) && passed;
+      if( w >= 8 && h >= 8 )
+      {
+        // applyFrac4Tap_8x testing.
+        passed = check_applyFrac<CH_L, /*NumTaps=*/4>( &ref, &opt, w, h ) && passed;
+        // applyFrac6Tap_8x testing.
+        passed = check_applyFrac<CH_L, /*NumTaps=*/6>( &ref, &opt, w, h ) && passed;
+      }
     }
   }
 
