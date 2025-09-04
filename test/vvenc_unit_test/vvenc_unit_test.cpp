@@ -1552,6 +1552,91 @@ static bool test_PelBufferOps()
 #endif // ENABLE_SIMD_OPT_BUFFER
 
 #if ENABLE_SIMD_OPT_MCIF
+template<int N, bool isVertical, bool isFirst, bool isLast>
+static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, unsigned width, unsigned height )
+{
+  static_assert( N == 2 || N == 4 || N == 6 || N == 8, "Supported taps: 2/4/6/8" );
+
+  std::string str_VerHor = isVertical ? "Ver" : "Hor";
+
+  static constexpr unsigned bd = 10; // default bit-depth
+  ClpRng clpRng{ ( int )bd };
+  DimensionGenerator dim;
+  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
+
+  // Max buffer size is ( height + 8 ) * srcStride.
+  static constexpr unsigned BUF_SIZE = ( MAX_CU_SIZE + 8 ) * ( MAX_CU_SIZE + 8 );
+  std::vector<Pel> src( BUF_SIZE );
+  std::vector<Pel> dst_ref( BUF_SIZE );
+  std::vector<Pel> dst_opt( BUF_SIZE );
+
+  std::ostringstream sstm_test;
+  sstm_test << "InterpolationFilter::filter" << str_VerHor << "_N" << N << "[" << isFirst << "][" << isLast << "]"
+            << " width=" << width << " height=" << height;
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  unsigned srcStride = dim.get( width, MAX_CU_SIZE + 8 );
+  unsigned dstStride = dim.get( width, MAX_CU_SIZE + 8 );
+
+  // Fill input buffers with unsigned data.
+  std::generate( src.begin(), src.end(), inp_gen );
+
+  // Clear output blocks.
+  std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+  std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+  int cStride = isVertical ? srcStride : 1;
+  ptrdiff_t src_offset = ( N / 2 - 1 ) * cStride;
+
+  unsigned frac, tapIdx;
+  const TFilterCoeff* pCoeff;
+
+  if( N == 8 )
+  {
+    tapIdx = 0;
+    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+    pCoeff = InterpolationFilter::m_lumaFilter[frac];
+  }
+  else if( N == 6 )
+  {
+    tapIdx = 3;
+    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+    pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
+  }
+  else if( N == 4 )
+  {
+    tapIdx = 1;
+    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+    pCoeff = InterpolationFilter::m_chromaFilter[frac << 1];
+  }
+  else // N == 2
+  {
+    tapIdx = 2;
+    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
+    pCoeff = InterpolationFilter::m_bilinearFilterPrec4[frac];
+  }
+
+  if( isVertical )
+  {
+    ref->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
+    opt->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
+  }
+  else // Horizontal
+  {
+    ref->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
+    opt->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
+  }
+
+  std::ostringstream sstm_subtest;
+  sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " frac=" << frac;
+
+  return compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride );
+}
+
 template<bool isLast, unsigned width>
 static bool check_filterWxH_N8( InterpolationFilter* ref, InterpolationFilter* opt, unsigned height, unsigned num_cases )
 {
@@ -1893,6 +1978,7 @@ static bool test_InterpolationFilter()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+
   for( int height : { 4, 8, 16, 32, 64 } )
   {
     for( int width : { 4, 8, 16, 32, 64 } )
@@ -1903,6 +1989,49 @@ static bool test_InterpolationFilter()
         continue;
       }
       passed = check_xWeightedGeoBlk( &ref, &opt, num_cases, width, height ) && passed;
+    }
+  }
+
+  for( unsigned height : { 1, 4, 8, 16, 32, 64, 128 } )
+  {
+    for( unsigned width : { 1, 4, 8, 16, 32, 64, 128 } )
+    {
+      // Luma 6-tap
+      passed = check_filter<6, 0, 1, 0>( &ref, &opt, width, height + 5 ) && passed; // height + N - 1
+      passed = check_filter<6, 0, 1, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<6, 1, 0, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<6, 1, 0, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<6, 1, 1, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<6, 1, 1, 1>( &ref, &opt, width, height ) && passed;
+      // Luma 8-tap
+      passed = check_filter<8, 0, 1, 0>( &ref, &opt, width, height + 7 ) && passed; // height + N - 1
+      passed = check_filter<8, 0, 1, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<8, 1, 0, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<8, 1, 0, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<8, 1, 1, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<8, 1, 1, 1>( &ref, &opt, width, height ) && passed;
+    }
+  }
+  for( unsigned height : { 1, 2, 4, 8, 16, 32, 64, 128 } )
+  {
+    for( unsigned width : { 1, 2, 4, 8, 12, 16, 20, 24, 32, 64, 128 } )
+    {
+      // Chroma 4-tap
+      passed = check_filter<4, 0, 1, 0>( &ref, &opt, width, height + 3 ) && passed; // height + N - 1
+      passed = check_filter<4, 0, 1, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<4, 1, 0, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<4, 1, 0, 1>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<4, 1, 1, 0>( &ref, &opt, width, height ) && passed;
+      passed = check_filter<4, 1, 1, 1>( &ref, &opt, width, height ) && passed;
+    }
+  }
+  for( unsigned height : { 8, 16, 32, 64, 128 } )
+  {
+    for( unsigned width : { 8, 16, 32, 64, 128 } )
+    {
+      // Bilinear 2-tap: height and width are padded by four.
+      passed = check_filter<2, 0, 1, 0>( &ref, &opt, width + 4, height + 4 ) && passed;
+      passed = check_filter<2, 1, 1, 0>( &ref, &opt, width + 4, height + 4 ) && passed;
     }
   }
 
