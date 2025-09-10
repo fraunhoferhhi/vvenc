@@ -154,6 +154,9 @@ private:
 #endif
 
 public:
+  static const int16_t m_interpolationFilter4[16][4];
+  static const int16_t m_interpolationFilter8[16][8];
+
   int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
   int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
 
@@ -172,8 +175,6 @@ private:
   static const int      m_range;
   static const int      m_motionVectorFactor;
   static const int      m_padding;
-  static const int16_t  m_interpolationFilter4[16][4];
-  static const int16_t  m_interpolationFilter8[16][8];
   static const double   m_refStrengths[2][6];
   static const int      m_cuTreeThresh[4];
   static const double   m_cuTreeCenter;
