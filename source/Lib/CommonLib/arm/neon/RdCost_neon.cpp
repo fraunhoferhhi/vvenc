@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/RdCost.h"
+#include "reverse_neon.h"
 #include "sum_neon.h"
 
 #if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
@@ -1097,18 +1098,6 @@ Distortion xGetSAD_NxN_neon( const DistParam &rcDtParam )
   return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
 
-static inline int16x8_t reverse_vector_s16( int16x8_t x )
-{
-#if REAL_TARGET_AARCH64
-  static const uint8_t shuffle_table[ 16 ] = { 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 };
-  uint8x16_t shuffle_indices               = vld1q_u8( shuffle_table );
-  return vreinterpretq_s16_u8( vqtbl1q_u8( vreinterpretq_u8_s16( x ), shuffle_indices ) );
-#else
-  int16x8_t rev_halves = vrev64q_s16( x );
-  return vcombine_s16( vget_high_s16( rev_halves ), vget_low_s16( rev_halves ) );
-#endif
-}
-
 Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
 {
   if (rcDtParam.org.width < 4 || rcDtParam.bitDepth > 10 || rcDtParam.applyWeight)
@@ -1141,7 +1130,7 @@ Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
       if (rcDtParam.stepX == -1)
       {
         vmask = vld1q_s16( weightMask - x - 7 );
-        vmask = reverse_vector_s16( vmask );
+        vmask = reverse_vector_s16x8( vmask );
       }
       else
       {
