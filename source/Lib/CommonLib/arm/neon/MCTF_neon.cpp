@@ -64,92 +64,247 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-static int16x8_t motionErrorLumaFrac_loRes_step( const int16x8_t xf, const Pel* rowStart, const Pel maxSampleValue )
+enum class FilterCoeffType4
 {
-  int16x8_t row04 = vld1q_s16( rowStart + 0 );
-  int16x8_t row15 = vld1q_s16( rowStart + 1 );
-  int16x8_t row26 = vld1q_s16( rowStart + 2 );
-  int16x8_t row37 = vld1q_s16( rowStart + 3 );
+  SkewLeft = 1,  // coeff[3]==0.
+  SkewRight,     // coeff[0]==0.
+  FullSymmetric, // coeff[0]==coeff[3], coeff[1]==coeff[2].
+  Generic        // Other generic cases.
+};
 
-  int32x4_t sum0 = vmull_s16( vget_low_s16( xf ), vget_low_s16( row04 ) );
-  int32x4_t sum4 = vmull_s16( vget_high_s16( xf ), vget_high_s16( row04 ) );
-  int32x4_t sum1 = vmull_s16( vget_low_s16( xf ), vget_low_s16( row15 ) );
-  int32x4_t sum5 = vmull_s16( vget_high_s16( xf ), vget_high_s16( row15 ) );
-  int32x4_t sum2 = vmull_s16( vget_low_s16( xf ), vget_low_s16( row26 ) );
-  int32x4_t sum6 = vmull_s16( vget_high_s16( xf ), vget_high_s16( row26 ) );
-  int32x4_t sum3 = vmull_s16( vget_low_s16( xf ), vget_low_s16( row37 ) );
-  int32x4_t sum7 = vmull_s16( vget_high_s16( xf ), vget_high_s16( row37 ) );
+static inline auto selectFilterType4( const int16_t* coeff )
+{
+  auto coeffPtr = reinterpret_cast<const int16_t ( * )[4]>( coeff );
+  auto idx = coeffPtr - MCTF::m_interpolationFilter4;
 
-  int32x4_t sum0123 = horizontal_add_4d_s32x4( sum0, sum1, sum2, sum3 );
-  int32x4_t sum4567 = horizontal_add_4d_s32x4( sum4, sum5, sum6, sum7 );
-  uint16x8_t sum = vcombine_u16( vqrshrun_n_s32( sum0123, 6 ), vqrshrun_n_s32( sum4567, 6 ) );
+  switch( idx )
+  {
+  case 1:
+    return FilterCoeffType4::SkewLeft;
+  case 8:
+    return FilterCoeffType4::FullSymmetric;
+  case 15:
+    return FilterCoeffType4::SkewRight;
+  default:
+    return FilterCoeffType4::Generic;
+  }
+}
 
-  return vminq_s16( vreinterpretq_s16_u16( sum ), vdupq_n_s16( maxSampleValue ) );
+template<FilterCoeffType4 Type>
+static inline int16x8_t motionErrorLumaFrac_loRes1D_neon( const int16x8_t* src, const int16x4_t filter,
+                                                          const Pel maxSampleValue )
+{
+  constexpr int filterBits = 6 - 1; // Filter weight is 64 >> 1.
+  switch( Type )
+  {
+  case FilterCoeffType4::SkewLeft:
+  {
+    //{ -2, 62,  4,  0 }
+    // => -2s0 + 62s1 + 4s2
+    // => -2s0 + 64s1 - 2s1 + 4s2
+    // => 2( 32s1 + 2s2 - ( s0 + s1 ) )
+    int16x8_t sum01 = vaddq_s16( src[0], src[1] ); // Input is 10-bit.
+    int16x8_t diff2_01 = vsubq_s16( vshlq_n_s16( src[2], 1 ), sum01 );
+    int16x8_t sum = vhaddq_s16( diff2_01, vshlq_n_s16( src[1], 5 ) ); // 16-bit.
+
+    sum = vmaxq_s16( vrshrq_n_s16( sum, filterBits - 1 ), vdupq_n_s16( 0 ) );
+    return vminq_s16( sum, vdupq_n_s16( maxSampleValue ) );
+  }
+  break;
+  case FilterCoeffType4::SkewRight:
+  {
+    //{  0,  4, 62, -2 }
+    // => 4s1 + 62s2 - 2s3
+    // => 4s1 + 64s2 - 2s2 - 2s3
+    // => 4s1 + 64s2 -2( s2 + s3 )
+    // => 2( 2s1 + 32s2 - ( s2 + s3 ))
+    int16x8_t sum23 = vaddq_s16( src[2], src[3] ); // Input is 10-bit.
+    int16x8_t diff1_23 = vsubq_s16( vshlq_n_s16( src[1], 1 ), sum23 );
+    int16x8_t sum = vhaddq_s16( diff1_23, vshlq_n_s16( src[2], 5 ) ); // 16-bit.
+
+    sum = vmaxq_s16( vrshrq_n_s16( sum, filterBits - 1 ), vdupq_n_s16( 0 ) );
+    return vminq_s16( sum, vdupq_n_s16( maxSampleValue ) );
+  }
+  break;
+  case FilterCoeffType4::FullSymmetric:
+  {
+    //{ -4, 36, 36, -4 }
+    // => -4s0 + 36s1 + 36s2 - 4s3
+    // => -4s0 + 32s1 + 4s1 + 32s2 + 4s2 - 4s3
+    // => 4( s1 + s2 - s0 - s3 ) + 32( s1 + s2 )
+    // => 4( ( s1 + s2 ) - ( s0 + s3 ) + 8( s1 + s2 ) )
+    int16x8_t sum03 = vaddq_s16( src[0], src[3] ); // Input is 10-bit.
+    int16x8_t sum12 = vaddq_s16( src[1], src[2] );
+    int16x8_t diff12_03 = vsubq_s16( sum12, sum03 );
+    int16x8_t sum = vhaddq_s16( diff12_03, vshlq_n_s16( sum12, 3 ) ); // 16-bit.
+
+    sum = vmaxq_s16( vrshrq_n_s16( sum, filterBits - 2 ), vdupq_n_s16( 0 ) );
+    return vminq_s16( sum, vdupq_n_s16( maxSampleValue ) );
+  }
+  break;
+  case FilterCoeffType4::Generic:
+  default:
+  {
+    int16x8_t sum01 = vmulq_lane_s16( src[0], filter, 0 );
+    sum01 = vmlaq_lane_s16( sum01, src[1], filter, 1 );
+    int16x8_t sum23 = vmulq_lane_s16( src[2], filter, 2 );
+    sum23 = vmlaq_lane_s16( sum23, src[3], filter, 3 );
+
+    int16x8_t sum = vhaddq_s16( sum01, sum23 );
+
+    sum = vmaxq_s16( vrshrq_n_s16( sum, filterBits - 1 ), vdupq_n_s16( 0 ) );
+    return vminq_s16( sum, vdupq_n_s16( maxSampleValue ) );
+  }
+  break;
+  }
+}
+
+template<FilterCoeffType4 xType, FilterCoeffType4 yType>
+static inline int motionErrorLumaFrac_loRes2D_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                                    const ptrdiff_t buffStride, int w, int h, const int16_t* xFilter,
+                                                    const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+
+  CHECKD( w % 8 != 0, "Width must be multiple of 8!" );
+  CHECKD( h % 4 != 0, "Height must be multiple of 4!" );
+
+  const int16x4_t xf = vrshr_n_s16( vld1_s16( xFilter ), 1 );
+  const int16x4_t yf = vrshr_n_s16( vld1_s16( yFilter ), 1 );
+
+  constexpr int numFilterTaps = 4;
+  int16x8_t h_src[numFilterTaps];
+  int16x8_t v_src[numFilterTaps + 3]; // 3 extra elements are needed because the height loop is unrolled 4 times.
+
+  int error = 0;
+
+  do
+  {
+    load_s16_16x8x4( buf - 1 * buffStride - 1, 1, h_src );
+    v_src[0] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    load_s16_16x8x4( buf + 0 * buffStride - 1, 1, h_src );
+    v_src[1] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    load_s16_16x8x4( buf + 1 * buffStride - 1, 1, h_src );
+    v_src[2] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    const Pel* rowStart = buf + 2 * buffStride - 1;
+    const Pel* origRow = org;
+
+    int32x4_t diffSq0 = vdupq_n_s32( 0 );
+    int32x4_t diffSq1 = vdupq_n_s32( 0 );
+
+    int y = h;
+    do
+    {
+      load_s16_16x8x4( rowStart + 0 * buffStride, 1, h_src );
+      v_src[3] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 1 * buffStride, 1, h_src );
+      v_src[4] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 2 * buffStride, 1, h_src );
+      v_src[5] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 3 * buffStride, 1, h_src );
+      v_src[6] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      int16x8_t ysum0 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[0], yf, maxSampleValue );
+      int16x8_t ysum1 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[1], yf, maxSampleValue );
+      int16x8_t ysum2 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[2], yf, maxSampleValue );
+      int16x8_t ysum3 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[3], yf, maxSampleValue );
+
+      int16x8_t orig0 = vld1q_s16( origRow + 0 * origStride );
+      int16x8_t orig1 = vld1q_s16( origRow + 1 * origStride );
+      int16x8_t orig2 = vld1q_s16( origRow + 2 * origStride );
+      int16x8_t orig3 = vld1q_s16( origRow + 3 * origStride );
+
+      int16x8_t diff0 = vabdq_s16( ysum0, orig0 );
+      int16x8_t diff1 = vabdq_s16( ysum1, orig1 );
+      int16x8_t diff2 = vabdq_s16( ysum2, orig2 );
+      int16x8_t diff3 = vabdq_s16( ysum3, orig3 );
+
+      diffSq0 = vmlal_s16( diffSq0, vget_low_s16( diff0 ), vget_low_s16( diff0 ) );
+      diffSq0 = vmlal_s16( diffSq0, vget_high_s16( diff0 ), vget_high_s16( diff0 ) );
+      diffSq0 = vmlal_s16( diffSq0, vget_low_s16( diff1 ), vget_low_s16( diff1 ) );
+      diffSq0 = vmlal_s16( diffSq0, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
+
+      diffSq1 = vmlal_s16( diffSq1, vget_low_s16( diff2 ), vget_low_s16( diff2 ) );
+      diffSq1 = vmlal_s16( diffSq1, vget_high_s16( diff2 ), vget_high_s16( diff2 ) );
+      diffSq1 = vmlal_s16( diffSq1, vget_low_s16( diff3 ), vget_low_s16( diff3 ) );
+      diffSq1 = vmlal_s16( diffSq1, vget_high_s16( diff3 ), vget_high_s16( diff3 ) );
+
+      v_src[0] = v_src[4];
+      v_src[1] = v_src[5];
+      v_src[2] = v_src[6];
+
+      rowStart += 4 * buffStride;
+      origRow += 4 * origStride;
+      y -= 4;
+    } while( y != 0 );
+
+    int32x4_t diffSq = vaddq_s32( diffSq0, diffSq1 );
+    error += horizontal_add_s32x4( diffSq );
+    if( error > besterror )
+    {
+      return error;
+    }
+
+    buf += 8;
+    org += 8;
+    w -= 8;
+  } while( w != 0 );
+
+  return error;
+}
+
+template<FilterCoeffType4 xType>
+static inline auto get_motionErrorLumaFrac2D( FilterCoeffType4 type )
+{
+  switch( type )
+  {
+  case FilterCoeffType4::SkewLeft:
+    return &motionErrorLumaFrac_loRes2D_neon<xType, FilterCoeffType4::SkewLeft>;
+  case FilterCoeffType4::SkewRight:
+    return &motionErrorLumaFrac_loRes2D_neon<xType, FilterCoeffType4::SkewRight>;
+  case FilterCoeffType4::FullSymmetric:
+    return &motionErrorLumaFrac_loRes2D_neon<xType, FilterCoeffType4::FullSymmetric>;
+  case FilterCoeffType4::Generic:
+  default:
+    return &motionErrorLumaFrac_loRes2D_neon<xType, FilterCoeffType4::Generic>;
+  }
 }
 
 int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                     const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter,
                                     const int16_t* yFilter, const int bitDepth, const int besterror )
 {
-  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+  const FilterCoeffType4 xType = selectFilterType4( xFilter );
+  const FilterCoeffType4 yType = selectFilterType4( yFilter );
 
-  CHECK( w & 7, "SIMD blockSize needs to be a multiple of 8" );
+  using motionErrorLumaFrac_loResFunc = int ( * )( const Pel*, const ptrdiff_t, const Pel*, const ptrdiff_t, const int,
+                                                   const int, const int16_t*, const int16_t*, const int, const int );
+  motionErrorLumaFrac_loResFunc func;
 
-  const int16x8_t xf = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* )xFilter ) );
-  const int16x4_t yf = vld1_s16( yFilter );
-
-  int error = 0;
-  int x = 0;
-  do
+  switch( xType )
   {
-    const Pel* rowStart0 = buf + -1 * buffStride + x - 1;
-    int16x8_t xsum0 = motionErrorLumaFrac_loRes_step( xf, rowStart0, maxSampleValue );
+  case FilterCoeffType4::SkewLeft:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::SkewLeft>( yType );
+    break;
+  case FilterCoeffType4::SkewRight:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::SkewRight>( yType );
+    break;
+  case FilterCoeffType4::FullSymmetric:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::FullSymmetric>( yType );
+    break;
+  case FilterCoeffType4::Generic:
+  default:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::Generic>( yType );
+    break;
+  }
 
-    const Pel* rowStart1 = buf + 0 * buffStride + x - 1;
-    int16x8_t xsum1 = motionErrorLumaFrac_loRes_step( xf, rowStart1, maxSampleValue );
-
-    const Pel* rowStart2 = buf + 1 * buffStride + x - 1;
-    int16x8_t xsum2 = motionErrorLumaFrac_loRes_step( xf, rowStart2, maxSampleValue );
-
-    int y = 0;
-    do
-    {
-      const Pel* rowStart = buf + ( y + 2 ) * buffStride + x - 1;
-      int16x8_t xsum3 = motionErrorLumaFrac_loRes_step( xf, rowStart, maxSampleValue );
-
-      const Pel* origRow = org + y * origStride;
-
-      int32x4_t ysumLo = vmull_lane_s16( vget_low_s16( xsum0 ), yf, 0 );
-      ysumLo = vmlal_lane_s16( ysumLo, vget_low_s16( xsum1 ), yf, 1 );
-      ysumLo = vmlal_lane_s16( ysumLo, vget_low_s16( xsum2 ), yf, 2 );
-      ysumLo = vmlal_lane_s16( ysumLo, vget_low_s16( xsum3 ), yf, 3 );
-
-      int32x4_t ysumHi = vmull_lane_s16( vget_high_s16( xsum0 ), yf, 0 );
-      ysumHi = vmlal_lane_s16( ysumHi, vget_high_s16( xsum1 ), yf, 1 );
-      ysumHi = vmlal_lane_s16( ysumHi, vget_high_s16( xsum2 ), yf, 2 );
-      ysumHi = vmlal_lane_s16( ysumHi, vget_high_s16( xsum3 ), yf, 3 );
-
-      uint16x8_t ysum = vcombine_u16( vqrshrun_n_s32( ysumLo, 6 ), vqrshrun_n_s32( ysumHi, 6 ) );
-
-      int16x8_t ysum16 = vreinterpretq_s16_u16( vminq_u16( ysum, vdupq_n_u16( maxSampleValue ) ) );
-      int16x8_t orig = vld1q_s16( origRow + x );
-      int16x8_t diff = vabdq_s16( ysum16, orig );
-
-      int32x4_t diff2 = vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) );
-      diff2 = vmlal_s16( diff2, vget_high_s16( diff ), vget_high_s16( diff ) );
-
-      error += horizontal_add_s32x4( diff2 );
-      if( error > besterror )
-      {
-        return error;
-      }
-
-      xsum0 = xsum1;
-      xsum1 = xsum2;
-      xsum2 = xsum3;
-    } while( ++y != h );
-    x += 8;
-  } while( x != w );
+  int error = func( org, origStride, buf, buffStride, w, h, xFilter, yFilter, bitDepth, besterror );
 
   return error;
 }
