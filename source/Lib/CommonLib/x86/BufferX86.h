@@ -1252,7 +1252,7 @@ void sub_SSE( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, 
         __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src1[x] );
         __m128i vdest = _mm_sub_epi16 ( vsrc0, vsrc1 );
 
-        _mm_store_si128( ( __m128i* ) &dest[x], vdest );
+        _mm_storeu_si128( ( __m128i* ) &dest[x], vdest );
       }
 
       src0 += src0Stride;
