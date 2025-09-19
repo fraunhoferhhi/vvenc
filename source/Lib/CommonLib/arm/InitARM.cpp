@@ -85,6 +85,12 @@ void InterpolationFilter::initInterpolationFilterARM()
   {
     _initInterpolationFilterARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initInterpolationFilterARM<SVE>();
+  }
+#endif
 }
 #endif
 
