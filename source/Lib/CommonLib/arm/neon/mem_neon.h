@@ -55,11 +55,30 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// Load Helpers
+static inline int16x4_t load_s16x2( const int16_t* src )
+{
+  int32_t tmp;
+  memcpy( &tmp, src, 4 );
+  return vreinterpret_s16_s32( vset_lane_s32( tmp, vdup_n_s32( 0 ), 0 ) );
+}
+
+static inline int16x4_t load_s16x2x2( const int16_t* src, ptrdiff_t stride )
+{
+  int32x2_t ret = vdup_n_s32( 0 );
+  int32_t tmp0, tmp1;
+  memcpy( &tmp0, src + 0 * stride, 4 );
+  memcpy( &tmp1, src + 1 * stride, 4 );
+  ret = vset_lane_s32( tmp0, ret, 0 );
+  ret = vset_lane_s32( tmp1, ret, 1 );
+  return vreinterpret_s16_s32( ret );
+}
+
 static inline void load_s16x4x6( const int16_t* src, const ptrdiff_t p, int16x4_t s[6] )
 {
   s[0] = vld1_s16( src );
   src += p;
-  s[1] = vld1_s16( src);
+  s[1] = vld1_s16( src );
   src += p;
   s[2] = vld1_s16( src );
   src += p;
@@ -85,7 +104,7 @@ static inline void load_s16_16x8x6( const int16_t* src, const ptrdiff_t p, int16
 {
   s[0] = vld1q_s16( src );
   src += p;
-  s[1] = vld1q_s16( src);
+  s[1] = vld1q_s16( src );
   src += p;
   s[2] = vld1q_s16( src );
   src += p;
@@ -94,6 +113,21 @@ static inline void load_s16_16x8x6( const int16_t* src, const ptrdiff_t p, int16
   s[4] = vld1q_s16( src );
   src += p;
   s[5] = vld1q_s16( src );
+}
+
+// Store Helpers
+static inline void store_s16x2( int16_t* dst, int16x4_t src )
+{
+  int32_t tmp = vget_lane_s32( vreinterpret_s32_s16( src ), 0 );
+  memcpy( dst, &tmp, 4 );
+}
+
+static inline void store_s16x2x2( int16_t* dst, int16x4_t src, ptrdiff_t stride )
+{
+  int32_t tmp0 = vget_lane_s32( vreinterpret_s32_s16( src ), 0 );
+  int32_t tmp1 = vget_lane_s32( vreinterpret_s32_s16( src ), 1 );
+  memcpy( dst + 0 * stride, &tmp0, 4 );
+  memcpy( dst + 1 * stride, &tmp1, 4 );
 }
 
 } // namespace vvenc

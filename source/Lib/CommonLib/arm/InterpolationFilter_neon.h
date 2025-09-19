@@ -58,6 +58,38 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+template<bool isLast>
+static inline int16x4_t pack_sum_s32_to_s16x4( int32x4_t vsuma, int16x4_t vibdimax )
+{
+  if( isLast )
+  {
+    // Narrow to u16 with saturation (clamp negatives to 0), then clamp at vibdimax.
+    uint16x4_t usum = vqmovun_s32( vsuma );
+    return vmin_s16( vibdimax, vreinterpret_s16_u16( usum ) );
+  }
+  else
+  {
+    // Narrow to s16 with saturation.
+    return vqmovn_s32( vsuma );
+  }
+}
+
+template<bool isLast>
+static inline int16x8_t pack_sum_s32_to_s16x8( int32x4_t vsuma, int32x4_t vsumb, int16x8_t vibdimax )
+{
+  if( isLast )
+  {
+    // Narrow to u16 with saturation (clamp negatives to 0), then clamp at vibdimax.
+    uint16x8_t usum = vcombine_u16( vqmovun_s32( vsuma ), vqmovun_s32( vsumb ) );
+    return vminq_s16( vibdimax, vreinterpretq_s16_u16( usum ) );
+  }
+  else
+  {
+    // Narrow to s16 with saturation.
+    return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
+  }
+}
+
 static inline int32x4_t filter_vert_4x1_N6_neon( int16x4_t const vsrc[6], int16x8_t cv, int32x4_t voffset2 )
 {
   // For 6-tap, the 0th and 7th cv coefficients are zeros so remove them.
