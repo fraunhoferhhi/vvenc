@@ -1354,11 +1354,59 @@ void simdInterpolateVerM2_N4_neon( const int16_t* src, int srcStride, int16_t* d
   }
 }
 
+template<bool isVertical>
+void simdInterpolate_N2_neon( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
+                              int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
+{
+  CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
+  CHECKD( width % 8 != 4, "Width must be a multiple of 4 but not 8!" );
+  CHECKD( std::max( coeff[0], coeff[1] ) > 16, "Bilinear coeff should not be greater than 16" );
+  CHECKD( offset != 1 << ( shift - 1 ), "Offset must be equal to 1 << ( shift - 1 )" );
+
+  const int16x8_t invshift = vdupq_n_s16( -shift );
+  const int16x4_t vcoeff = load_s16x2( coeff );
+
+  const int cStride = isVertical ? srcStride : 1;
+
+  do
+  {
+    int col = 0;
+    for( ; col + 8 <= width; col += 8 )
+    {
+      int16x8_t vsrc0 = vld1q_s16( &src[col + 0 * cStride] );
+      int16x8_t vsrc1 = vld1q_s16( &src[col + 1 * cStride] );
+
+      int16x8_t vsuma = vmulq_lane_s16( vsrc0, vcoeff, 0 );
+      vsuma = vmlaq_lane_s16( vsuma, vsrc1, vcoeff, 1 );
+
+      // Use rounding shift since offset == 1 << ( shift - 1 ).
+      vsuma = vrshlq_s16( vsuma, invshift );
+
+      vst1q_s16( &dst[col], vsuma );
+    }
+
+    // Last four samples.
+    int16x4_t vsrc0 = vld1_s16( &src[col + 0 * cStride] );
+    int16x4_t vsrc1 = vld1_s16( &src[col + 1 * cStride] );
+
+    int16x4_t vsuma = vmul_lane_s16( vsrc0, vcoeff, 0 );
+    vsuma = vmla_lane_s16( vsuma, vsrc1, vcoeff, 1 );
+
+    // Use rounding shift since offset == 1 << ( shift - 1 ).
+    vsuma = vrshl_s16( vsuma, vget_low_s16( invshift ) );
+
+    vst1_s16( &dst[col], vsuma );
+
+    src += srcStride;
+    dst += dstStride;
+  } while( --height != 0 );
+}
+
 template<int N, bool isVertical, bool isFirst, bool isLast>
 void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
                       int height, TFilterCoeff const* coeff )
 {
-  static_assert( N == 4 || N == 6 || N == 8, "Supported taps: 4/6/8" );
+  static_assert( N == 2 || N == 4 || N == 6 || N == 8, "Supported taps: 2/4/6/8" );
   CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
   CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
 
@@ -1476,6 +1524,16 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
     {
       goto scalar_if;
     }
+
+    return;
+  }
+
+  if( N == 2 )
+  {
+    CHECKD( isLast, "isLast is not supported for 2-tap" );
+    CHECKD( width % 8 != 4, "N2 width must be multiple of 4 but not 8! width=" << width );
+
+    simdInterpolate_N2_neon<isVertical>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
 
     return;
   }
@@ -1923,6 +1981,11 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filterHor[1][1][0] = simdFilter_neon<4, false, true, false>;
   m_filterHor[1][1][1] = simdFilter_neon<4, false, true, true>;
 
+  m_filterHor[2][0][0] = simdFilter_neon<2, false, false, false>;
+  m_filterHor[2][0][1] = simdFilter_neon<2, false, false, true>;
+  m_filterHor[2][1][0] = simdFilter_neon<2, false, true, false>;
+  m_filterHor[2][1][1] = simdFilter_neon<2, false, true, true>;
+
   m_filterHor[3][0][0] = simdFilter_neon<6, false, false, false>;
   m_filterHor[3][0][1] = simdFilter_neon<6, false, false, true>;
   m_filterHor[3][1][0] = simdFilter_neon<6, false, true, false>;
@@ -1937,6 +2000,11 @@ void InterpolationFilter::_initInterpolationFilterARM<NEON>()
   m_filterVer[1][0][1] = simdFilter_neon<4, true, false, true>;
   m_filterVer[1][1][0] = simdFilter_neon<4, true, true, false>;
   m_filterVer[1][1][1] = simdFilter_neon<4, true, true, true>;
+
+  m_filterVer[2][0][0] = simdFilter_neon<2, true, false, false>;
+  m_filterVer[2][0][1] = simdFilter_neon<2, true, false, true>;
+  m_filterVer[2][1][0] = simdFilter_neon<2, true, true, false>;
+  m_filterVer[2][1][1] = simdFilter_neon<2, true, true, true>;
 
   m_filterVer[3][0][0] = simdFilter_neon<6, true, false, false>;
   m_filterVer[3][0][1] = simdFilter_neon<6, true, false, true>;
