@@ -815,6 +815,82 @@ static bool check_applyPlanarCorrection( MCTF* ref, MCTF* opt, unsigned num_case
   return true;
 }
 
+template<bool lowRes, typename G>
+static bool check_one_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned bufStride, unsigned w,
+                                            unsigned h, unsigned xFilterIndex, unsigned yFilterIndex, int bitDepth,
+                                            unsigned besterror, G input_generator )
+{
+  CHECK( orgStride < w, "OrgStride must be greater than or equal to width" );
+  CHECK( bufStride < w, "BufStride must be greater than or equal to width" );
+  CHECK( w % 8, "Width must be a multiple of eight" );
+  CHECK( h % 8, "Height must be a multiple of eight" );
+
+  std::ostringstream sstm;
+  sstm << "motionErrorLumaFrac8 orgStride=" << orgStride << " bufStride=" << bufStride << " w=" << w << " h=" << h
+       << " bitDepth" << bitDepth << " besterror=" << besterror;
+
+  std::vector<Pel> org( orgStride * h );
+  // Initialize source buffer.
+  std::generate( org.begin(), org.end(), input_generator );
+
+  int channelIndex;
+  const int16_t* xFilter;
+  const int16_t* yFilter;
+
+  if( lowRes )
+  {
+    channelIndex = 1;
+    xFilter = MCTF::m_interpolationFilter4[xFilterIndex];
+    yFilter = MCTF::m_interpolationFilter4[yFilterIndex];
+  }
+  else
+  {
+    channelIndex = 0;
+    xFilter = MCTF::m_interpolationFilter8[xFilterIndex];
+    yFilter = MCTF::m_interpolationFilter8[yFilterIndex];
+  }
+
+  // Common buffer size used for m_motionErrorLumaFrac8[0] and m_motionErrorLumaFrac8[1].
+  std::vector<Pel> buf( bufStride * ( h + 10 ) + 3 );
+  std::generate( buf.begin(), buf.end(), input_generator );
+  const Pel* buff = buf.data() + 3 * bufStride + 3;
+
+  int error_ref = ref->m_motionErrorLumaFrac8[channelIndex]( org.data(), orgStride, buff, bufStride, w, h, xFilter,
+                                                             yFilter, bitDepth, besterror );
+  int error_opt = opt->m_motionErrorLumaFrac8[channelIndex]( org.data(), orgStride, buff, bufStride, w, h, xFilter,
+                                                             yFilter, bitDepth, besterror );
+  return compare_value( sstm.str(), error_ref, error_opt );
+}
+
+template<bool lowRes>
+static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
+{
+  printf( "Testing MCTF::motionErrorLumaFrac8 w=%d h=%d\n", w, h );
+  InputGenerator<TCoeff> g{ 10 };
+  DimensionGenerator rng;
+
+  constexpr unsigned motionVectorFactor = 16;
+  constexpr unsigned bitDepth = 10;
+
+  for( unsigned xIndex = 1; xIndex < motionVectorFactor; ++xIndex )
+  {
+    for( unsigned yIndex = 1; yIndex < motionVectorFactor; ++yIndex )
+    {
+      // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
+      unsigned orgStride = rng.get( w, 8192 );
+      unsigned bufStride = rng.get( w, 8192 );
+      unsigned besterror = INT_MAX;
+      if( !check_one_motionErrorLumaFrac8<lowRes>( ref, opt, orgStride, bufStride, w, h, xIndex, yIndex, bitDepth,
+                                                   besterror, g ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 template<typename G>
 static bool check_one_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned bufStride, unsigned w,
                                            unsigned h, unsigned besterror, G input_generator )
@@ -905,6 +981,11 @@ static bool test_MCTF()
   {
     for( unsigned h = 8; h <= 64; h += 8 )
     {
+      // motionErrorLumaFrac4 testing.
+      passed = check_motionErrorLumaFrac8</*lowRes=*/true>( &ref, &opt, w, h ) && passed;
+      // motionErrorLumaFrac6 testing.
+      passed = check_motionErrorLumaFrac8</*lowRes=*/false>( &ref, &opt, w, h ) && passed;
+
       passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
