@@ -1362,6 +1362,22 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
       err.warn( "Bitstream file" ) << cErr;
     }
 
+    if( !m_inputFileName.empty() && m_inputFileName != "-" )
+    {
+      if( !m_bitstreamFileName.empty() && m_inputFileName == m_bitstreamFileName )
+      {
+        err.error( "Bitstream file" ) <<  "Bitstream file and Input file are the same.\n";
+      }
+      if( !m_reconFileName.empty() && m_inputFileName == m_reconFileName )
+      {
+        err.error( "Reconstructed YUV file" ) <<  "Reconstructed YUV file and Input file are the same.\n";
+      }
+      if( !m_RCStatsFileName.empty() && m_inputFileName == m_RCStatsFileName )
+      {
+        err.error( "rate control statistics file" ) <<  "rate control statistics file and Input file are the same.\n";
+      }
+    }
+
     if ( m_FrameSkip < 0 )
     {
       err.error( "number of frames to skip" ) << (m_easyMode ? "frameskip must be >= 0\n" : "FrameSkip must be >= 0\n");
