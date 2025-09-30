@@ -799,7 +799,7 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
       vsrc0 = _mm_srai_epi32(vsrc0, shift);
 
       if (clip) { //clip
-        vsrc0 = _mm_min_epi32(vibdimax, _mm_max_epi32(vibdimin, vsrc0));
+        vsrc0 = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, vsrc0));
       }
 
       *dst = _mm_cvtsi128_si32(vsrc0);
