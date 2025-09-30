@@ -208,6 +208,9 @@ class DimensionGenerator
 public:
   unsigned get( unsigned min, unsigned max, unsigned mod = 1 ) const
   {
+    CHECK( max < min, "max should be >= min" );
+    CHECK( mod == 0, "mod must be >= 1" );                   // Avoids div by 0.
+    CHECK( min == 0 && max == UINT_MAX, "range too large" ); // Avoids (max-min+1)==0.
     unsigned ret = rand() % ( max - min + 1 ) + min;
     ret -= ret % mod;
     return ret;
