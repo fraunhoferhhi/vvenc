@@ -677,8 +677,8 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
     __m128i vcoeffh  = _vv_loadl_epi64((__m128i const*)coeff);
             vcoeffh  = _mm_unpacklo_epi64(vcoeffh, vcoeffh);
     __m128i voffset  = _mm_set1_epi32(offset);
-    __m128i vibdimin = _mm_set1_epi16(clpRng.min());
-    __m128i vibdimax = _mm_set1_epi16(clpRng.max());
+    __m128i vibdimin = _mm_set1_epi32(clpRng.min());
+    __m128i vibdimax = _mm_set1_epi32(clpRng.max());
 
     int row = 0;
 
@@ -708,7 +708,7 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
       vsrc0 = _mm_srai_epi32(vsrc0, shift);
 
       if (clip) { //clip
-        vsrc0 = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, vsrc0));
+        vsrc0 = _mm_min_epi32(vibdimax, _mm_max_epi32(vibdimin, vsrc0));
       }
 
       *dst = _mm_cvtsi128_si32(vsrc0);    dst += dstStride;
@@ -730,7 +730,7 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
       vsrc0 = _mm_srai_epi32(vsrc0, shift);
 
       if (clip) { //clip
-        vsrc0 = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, vsrc0));
+        vsrc0 = _mm_min_epi32(vibdimax, _mm_max_epi32(vibdimin, vsrc0));
       }
 
       *dst = _mm_cvtsi128_si32(vsrc0);
@@ -742,8 +742,8 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
 
     __m128i vcoeffh  = _mm_loadu_si128((__m128i const*)coeff);
     __m128i voffset  = _mm_set1_epi32(offset);
-    __m128i vibdimin = _mm_set1_epi16(clpRng.min());
-    __m128i vibdimax = _mm_set1_epi16(clpRng.max());
+    __m128i vibdimin = _mm_set1_epi32(clpRng.min());
+    __m128i vibdimax = _mm_set1_epi32(clpRng.max());
 
     int row = 0;
 
@@ -775,7 +775,7 @@ static void simdInterpolateHorM1(const int16_t* src, int srcStride, int16_t* dst
       vsrc0 = _mm_srai_epi32(vsrc0, shift);
 
       if (clip) { //clip
-        vsrc0 = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, vsrc0));
+        vsrc0 = _mm_min_epi32(vibdimax, _mm_max_epi32(vibdimin, vsrc0));
       }
 
       *dst = _mm_cvtsi128_si32(vsrc0);    dst += dstStride;
