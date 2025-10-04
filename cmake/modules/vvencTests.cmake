@@ -20,7 +20,7 @@ add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 
 add_test( NAME Test_vvenclibtest-timestamps              COMMAND vvenclibtest 6 )
 
 if( NOT BUILD_SHARED_LIBS )
-  add_test( NAME Test_vvenc_unit_test COMMAND vvenc_unit_test )
+  add_test( NAME Test_vvenc_unit_test COMMAND vvenc_unit_test --fast )
 endif()
 
 set( CLEANUP_TEST_FILES "" )
