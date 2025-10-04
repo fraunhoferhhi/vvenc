@@ -71,6 +71,8 @@ namespace po = apputils::program_options;
 
 #define NUM_CASES 100
 
+static bool g_fastUnitTest = false;
+
 template<typename T>
 static inline bool compare_value( const std::string& context, const T ref, const T opt )
 {
@@ -756,8 +758,8 @@ static bool check_applyFrac( MCTF* ref, MCTF* opt, int w, int h )
       for( int yIndex = 0; yIndex < motionVectorFactor; ++yIndex )
       {
         // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
-        unsigned orgStride = rng.get( w, 8192 );
-        unsigned dstStride = rng.get( w, 8192 );
+        unsigned orgStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+        unsigned dstStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
         if( !check_one_applyFrac<Ch, NumTaps>( ref, opt, orgStride, dstStride, w, h, xIndex, yIndex, bitDepth, g ) )
         {
           return false;
@@ -880,8 +882,8 @@ static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
     for( unsigned yIndex = 1; yIndex < motionVectorFactor; ++yIndex )
     {
       // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
-      unsigned orgStride = rng.get( w, 8192 );
-      unsigned bufStride = rng.get( w, 8192 );
+      unsigned orgStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+      unsigned bufStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
       unsigned besterror = INT_MAX;
       if( !check_one_motionErrorLumaFrac8<lowRes>( ref, opt, orgStride, bufStride, w, h, xIndex, yIndex, bitDepth,
                                                    besterror, g ) )
@@ -1179,9 +1181,9 @@ static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases,
   bool passed = true;
   for( unsigned i = 0; i < num_cases; i++ )
   {
-    int org_stride = rng.get( width, 1024 );
-    int cur_stride = rng.get( width, 1024 );
-    int luma_stride = rng.get( width, 1024 );
+    int org_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int cur_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int luma_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
     std::vector<Pel> orgBuf( org_stride * height );
     std::vector<Pel> curBuf( cur_stride * height );
     std::vector<Pel> orgLumaBuf( luma_stride * height * 2 );
@@ -1231,8 +1233,8 @@ static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, 
   bool passed = true;
   for( unsigned i = 0; i < num_cases; i++ )
   {
-    int org_stride = rng.get( width, 1024 );
-    int cur_stride = rng.get( width, 1024 );
+    int org_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int cur_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
     std::vector<Pel> orgBuf( org_stride * height );
     std::vector<Pel> curBuf( cur_stride * height );
 
@@ -1269,9 +1271,9 @@ static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int wi
   bool passed = true;
   for( unsigned i = 0; i < num_cases; i++ )
   {
-    int org_stride = rng.get( width, 1024 );
-    int cur_stride = rng.get( width, 1024 );
-    int mask_stride = rng.get( width, 1024 );
+    int org_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int cur_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int mask_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
     std::vector<Pel> orgBuf( org_stride * height );
     std::vector<Pel> curBuf( cur_stride * height );
     std::vector<Pel> maskBuf( mask_stride * height );
@@ -1955,9 +1957,9 @@ static bool check_xWeightedGeoBlk( InterpolationFilter* ref, InterpolationFilter
   {
     for( int bitDepth : { 8, 10 } )
     {
-      unsigned src0Stride = rng.get( width, 128 );
-      unsigned src1Stride = rng.get( width, 128 );
-      unsigned dstStride = rng.get( width, 128 );
+      unsigned src0Stride = rng.get( width, MAX_CU_SIZE );
+      unsigned src1Stride = rng.get( width, MAX_CU_SIZE );
+      unsigned dstStride  = rng.get( width, MAX_CU_SIZE );
       if( !check_one_xWeightedGeoBlk( ref, opt, src0Stride, src1Stride, dstStride, width, height, bitDepth, g ) )
       {
         return false;
@@ -2102,6 +2104,7 @@ static const UnitTestEntry test_suites[] = {
 
 struct UnitTestArgs
 {
+  bool isFast = false;
   bool show_help = false;
   int seed;
   std::string testcase;
@@ -2133,10 +2136,13 @@ UnitTestArgs parse_args( int argc, char* argv[] )
   opts.addOptions()
     ( "help,h", args.show_help, "Show help", true )
     ( "seed", args.seed, "Set random seed for running tests" )
-    ( "testcase,t", args.testcase, get_testcase_help_text(), false );
+    ( "testcase,t", args.testcase, get_testcase_help_text(), false )
+    ( "fast", args.isFast, "Run a fast but less real-world accurate version of the tests", false );
 
   po::SilentReporter err;
   po::scanArgv( opts, argc, ( const char** )argv, err );
+
+  g_fastUnitTest = args.isFast;
 
   if( args.show_help )
   {
