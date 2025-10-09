@@ -312,7 +312,8 @@ int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, 
 static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                     const ptrdiff_t buffStride, const int w, int h, const int besterror )
 {
-  CHECK( w % 8 != 0, "Width must be a multiple of eight" );
+  CHECKD( w % 8 != 0, "Width must be a multiple of eight" );
+  CHECKD( h % 2 != 0, "Height must be a multiple of two" );
 
   int error = 0;
   do
@@ -323,12 +324,18 @@ static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, 
     int x1 = 0;
     do
     {
-      int16x8_t o = vld1q_s16( org + x1 );
-      int16x8_t b = vld1q_s16( buf + x1 );
+      int16x8_t o1 = vld1q_s16( org + x1 );
+      int16x8_t b1 = vld1q_s16( buf + x1 );
+      int16x8_t o2 = vld1q_s16( org + origStride + x1 );
+      int16x8_t b2 = vld1q_s16( buf + buffStride + x1 );
 
-      int16x8_t diff = vabdq_s16( o, b );
-      acc_lo         = vmlal_s16( acc_lo, vget_low_s16( diff ), vget_low_s16( diff ) );
-      acc_hi         = vmlal_s16( acc_hi, vget_high_s16( diff ), vget_high_s16( diff ) );
+      int16x8_t diff1 = vabdq_s16( o1, b1 );
+      int16x8_t diff2 = vabdq_s16( o2, b2 );
+      acc_lo = vmlal_s16( acc_lo, vget_low_s16( diff1 ), vget_low_s16( diff1 ) );
+      acc_hi = vmlal_s16( acc_hi, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
+
+      acc_lo = vmlal_s16( acc_lo, vget_low_s16( diff2 ), vget_low_s16( diff2 ) );
+      acc_hi = vmlal_s16( acc_hi, vget_high_s16( diff2 ), vget_high_s16( diff2 ) );
 
       x1 += 8;
     } while( x1 != w );
@@ -340,9 +347,10 @@ static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, 
       return error;
     }
 
-    org += origStride;
-    buf += buffStride;
-  } while( --h != 0 );
+    org += 2 * origStride;
+    buf += 2 * buffStride;
+    h -= 2;
+  } while( h != 0 );
 
   return error;
 }

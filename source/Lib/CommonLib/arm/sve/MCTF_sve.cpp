@@ -66,6 +66,58 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
+int motionErrorLumaInt_sve( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride,
+                            const int w, int h, const int besterror )
+{
+  CHECKD( w % 8 != 0, "Width must be a multiple of eight" );
+  CHECKD( h % 4 != 0, "Height must be a multiple of four" );
+
+  int error = 0;
+  do
+  {
+    int64x2_t acc1 = vdupq_n_s64( 0 );
+    int64x2_t acc2 = vdupq_n_s64( 0 );
+
+    int x1 = 0;
+    do
+    {
+      int16x8_t o1 = vld1q_s16( org + 0 * origStride + x1 );
+      int16x8_t b1 = vld1q_s16( buf + 0 * origStride + x1 );
+      int16x8_t o2 = vld1q_s16( org + 1 * origStride + x1 );
+      int16x8_t b2 = vld1q_s16( buf + 1 * buffStride + x1 );
+      int16x8_t o3 = vld1q_s16( org + 2 * origStride + x1 );
+      int16x8_t b3 = vld1q_s16( buf + 2 * buffStride + x1 );
+      int16x8_t o4 = vld1q_s16( org + 3 * origStride + x1 );
+      int16x8_t b4 = vld1q_s16( buf + 3 * buffStride + x1 );
+
+      int16x8_t diff1 = vabdq_s16( o1, b1 );
+      int16x8_t diff2 = vabdq_s16( o2, b2 );
+      int16x8_t diff3 = vabdq_s16( o3, b3 );
+      int16x8_t diff4 = vabdq_s16( o4, b4 );
+
+      acc1 = vvenc_sdotq_s16( acc1, diff1, diff1 );
+      acc2 = vvenc_sdotq_s16( acc2, diff2, diff2 );
+      acc1 = vvenc_sdotq_s16( acc1, diff3, diff3 );
+      acc2 = vvenc_sdotq_s16( acc2, diff4, diff4 );
+
+      x1 += 8;
+    } while( x1 != w );
+
+    int64x2_t diff2_sum = vaddq_s64( acc1, acc2 );
+    error += ( int32_t )vaddvq_s64( diff2_sum );
+    if( error > besterror )
+    {
+      return error;
+    }
+
+    org += 4 * origStride;
+    buf += 4 * buffStride;
+    h -= 4;
+  } while( h != 0 );
+
+  return error;
+}
+
 void applyPlanarCorrection_sve( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride,
                                 const int32_t w, const int32_t h, const ClpRng& clpRng, const uint16_t motionError )
 {
@@ -353,6 +405,7 @@ void applyBlock_sve( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
 template<>
 void MCTF::_initMCTF_ARM<SVE>()
 {
+  m_motionErrorLumaInt8 = motionErrorLumaInt_sve;
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
   m_applyBlock = applyBlock_sve;
 }
