@@ -1407,12 +1407,14 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
                       int height, TFilterCoeff const* coeff )
 {
   static_assert( N == 2 || N == 4 || N == 6 || N == 8, "Supported taps: 2/4/6/8" );
+  CHECKD( height < 1, "Height must be >= 1!" );
+  CHECKD( width < 1, "Width must be >= 1!" );
   CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
   CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
 
   const int16_t* c = coeff;
 
-  int cStride = isVertical ? srcStride : 1;
+  const int cStride = isVertical ? srcStride : 1;
   src -= ( N / 2 - 1 ) * cStride;
 
   int offset;
@@ -1461,14 +1463,9 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
       {
         simdInterpolateVer_N6_neon<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
       }
-    }
-    else // width == 1
-    {
-      c = coeff + 1;
-      goto scalar_if;
-    }
 
-    return;
+      return;
+    }
   }
 
   if( N == 8 )
@@ -1485,13 +1482,9 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
       {
         simdInterpolateVer_N8_neon<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
       }
-    }
-    else // width == 1
-    {
-      goto scalar_if;
-    }
 
-    return;
+      return;
+    }
   }
 
   if( N == 4 )
@@ -1508,6 +1501,8 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
       {
         simdInterpolateVer_N4_neon<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
       }
+
+      return;
     }
     else if( width == 2 )
     {
@@ -1519,13 +1514,9 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
       {
         simdInterpolateVerM2_N4_neon<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
       }
-    }
-    else // width == 1
-    {
-      goto scalar_if;
-    }
 
-    return;
+      return;
+    }
   }
 
   if( N == 2 )
@@ -1538,42 +1529,41 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
     return;
   }
 
-scalar_if:
-  for( int row = 0; row < height; row++ )
+  // Fallback to scalar code for width == 1.
+  CHECKD( width != 1, "Width must be 1!" );
+
+  if( N == 6 ) c = coeff + 1;
+
+  do
   {
-    for( int col = 0; col < width; col++ )
+    int sum = src[0 * cStride] * c[0];
+    sum    += src[1 * cStride] * c[1];
+    if( N >= 4 )
     {
-      int sum;
-
-      sum = src[col + 0 * cStride] * c[0];
-      sum += src[col + 1 * cStride] * c[1];
-      if( N >= 4 )
-      {
-        sum += src[col + 2 * cStride] * c[2];
-        sum += src[col + 3 * cStride] * c[3];
-      }
-      if( N >= 6 )
-      {
-        sum += src[col + 4 * cStride] * c[4];
-        sum += src[col + 5 * cStride] * c[5];
-      }
-      if( N == 8 )
-      {
-        sum += src[col + 6 * cStride] * c[6];
-        sum += src[col + 7 * cStride] * c[7];
-      }
-
-      Pel val = ( sum + offset ) >> shift;
-      if( isLast )
-      {
-        val = ClipPel( val, clpRng );
-      }
-      dst[col] = val;
+      sum += src[2 * cStride] * c[2];
+      sum += src[3 * cStride] * c[3];
     }
+    if( N >= 6 )
+    {
+      sum += src[4 * cStride] * c[4];
+      sum += src[5 * cStride] * c[5];
+    }
+    if( N == 8 )
+    {
+      sum += src[6 * cStride] * c[6];
+      sum += src[7 * cStride] * c[7];
+    }
+
+    Pel val = ( sum + offset ) >> shift;
+    if( isLast )
+    {
+      val = ClipPel( val, clpRng );
+    }
+    dst[0] = val;
 
     src += srcStride;
     dst += dstStride;
-  }
+  } while( --height != 0 );
 }
 
 void simdFilterCopy_DMVR_neon( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride, int width,
