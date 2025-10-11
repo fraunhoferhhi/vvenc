@@ -60,6 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCTF
 
 #include "MCTF_neon.h"
+#include "mem_neon.h"
 #include "neon_sve_bridge.h"
 #include <arm_neon.h>
 #include <arm_sve.h>
@@ -116,6 +117,149 @@ int motionErrorLumaInt_sve( const Pel* org, const ptrdiff_t origStride, const Pe
   } while( h != 0 );
 
   return error;
+}
+
+template<FilterCoeffType4 xType, FilterCoeffType4 yType>
+static inline int motionErrorLumaFrac_loRes2D_sve( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                                   const ptrdiff_t buffStride, int w, int h, const int16_t* xFilter,
+                                                   const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+
+  CHECKD( w % 8 != 0, "Width must be multiple of 8!" );
+  CHECKD( h % 4 != 0, "Height must be multiple of 4!" );
+
+  const int16x4_t xf = vrshr_n_s16( vld1_s16( xFilter ), 1 );
+  const int16x4_t yf = vrshr_n_s16( vld1_s16( yFilter ), 1 );
+
+  constexpr int numFilterTaps = 4;
+  int16x8_t h_src[numFilterTaps];
+  int16x8_t v_src[numFilterTaps + 3]; // 3 extra elements are needed because the height loop is unrolled 4 times.
+
+  int error = 0;
+
+  do
+  {
+    load_s16_16x8x4( buf - 1 * buffStride - 1, 1, h_src );
+    v_src[0] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    load_s16_16x8x4( buf + 0 * buffStride - 1, 1, h_src );
+    v_src[1] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    load_s16_16x8x4( buf + 1 * buffStride - 1, 1, h_src );
+    v_src[2] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+    const Pel* rowStart = buf + 2 * buffStride - 1;
+    const Pel* origRow = org;
+
+    int64x2_t diffSq0 = vdupq_n_s64( 0 );
+    int64x2_t diffSq1 = vdupq_n_s64( 0 );
+
+    int y = h;
+    do
+    {
+      load_s16_16x8x4( rowStart + 0 * buffStride, 1, h_src );
+      v_src[3] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 1 * buffStride, 1, h_src );
+      v_src[4] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 2 * buffStride, 1, h_src );
+      v_src[5] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      load_s16_16x8x4( rowStart + 3 * buffStride, 1, h_src );
+      v_src[6] = motionErrorLumaFrac_loRes1D_neon<xType>( h_src, xf, maxSampleValue );
+
+      int16x8_t ysum0 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[0], yf, maxSampleValue );
+      int16x8_t ysum1 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[1], yf, maxSampleValue );
+      int16x8_t ysum2 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[2], yf, maxSampleValue );
+      int16x8_t ysum3 = motionErrorLumaFrac_loRes1D_neon<yType>( &v_src[3], yf, maxSampleValue );
+
+      int16x8_t orig0 = vld1q_s16( origRow + 0 * origStride );
+      int16x8_t orig1 = vld1q_s16( origRow + 1 * origStride );
+      int16x8_t orig2 = vld1q_s16( origRow + 2 * origStride );
+      int16x8_t orig3 = vld1q_s16( origRow + 3 * origStride );
+
+      int16x8_t diff0 = vabdq_s16( ysum0, orig0 );
+      int16x8_t diff1 = vabdq_s16( ysum1, orig1 );
+      int16x8_t diff2 = vabdq_s16( ysum2, orig2 );
+      int16x8_t diff3 = vabdq_s16( ysum3, orig3 );
+
+      diffSq0 = vvenc_sdotq_s16( diffSq0, diff0, diff0 );
+      diffSq0 = vvenc_sdotq_s16( diffSq0, diff1, diff1 );
+      diffSq1 = vvenc_sdotq_s16( diffSq1, diff2, diff2 );
+      diffSq1 = vvenc_sdotq_s16( diffSq1, diff3, diff3 );
+
+      v_src[0] = v_src[4];
+      v_src[1] = v_src[5];
+      v_src[2] = v_src[6];
+
+      rowStart += 4 * buffStride;
+      origRow += 4 * origStride;
+      y -= 4;
+    } while( y != 0 );
+
+    int64x2_t diffSq = vaddq_s64( diffSq0, diffSq1 );
+    error += ( int32_t )vaddvq_s64( diffSq );
+    if( error > besterror )
+    {
+      return error;
+    }
+
+    buf += 8;
+    org += 8;
+    w -= 8;
+  } while( w != 0 );
+
+  return error;
+}
+
+template<FilterCoeffType4 xType>
+static inline auto get_motionErrorLumaFrac2D( FilterCoeffType4 type )
+{
+  switch( type )
+  {
+  case FilterCoeffType4::SkewLeft:
+    return &motionErrorLumaFrac_loRes2D_sve<xType, FilterCoeffType4::SkewLeft>;
+  case FilterCoeffType4::SkewRight:
+    return &motionErrorLumaFrac_loRes2D_sve<xType, FilterCoeffType4::SkewRight>;
+  case FilterCoeffType4::FullSymmetric:
+    return &motionErrorLumaFrac_loRes2D_sve<xType, FilterCoeffType4::FullSymmetric>;
+  case FilterCoeffType4::Generic:
+  default:
+    return &motionErrorLumaFrac_loRes2D_sve<xType, FilterCoeffType4::Generic>;
+  }
+}
+
+int motionErrorLumaFrac_loRes_sve( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                   const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter,
+                                   const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  const FilterCoeffType4 xType = selectFilterType4( xFilter );
+  const FilterCoeffType4 yType = selectFilterType4( yFilter );
+
+  using motionErrorLumaFrac_loResFunc = int ( * )( const Pel*, const ptrdiff_t, const Pel*, const ptrdiff_t, const int,
+                                                   const int, const int16_t*, const int16_t*, const int, const int );
+  motionErrorLumaFrac_loResFunc func;
+
+  switch( xType )
+  {
+  case FilterCoeffType4::SkewLeft:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::SkewLeft>( yType );
+    break;
+  case FilterCoeffType4::SkewRight:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::SkewRight>( yType );
+    break;
+  case FilterCoeffType4::FullSymmetric:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::FullSymmetric>( yType );
+    break;
+  case FilterCoeffType4::Generic:
+  default:
+    func = get_motionErrorLumaFrac2D<FilterCoeffType4::Generic>( yType );
+    break;
+  }
+
+  return func( org, origStride, buf, buffStride, w, h, xFilter, yFilter, bitDepth, besterror );
 }
 
 void applyPlanarCorrection_sve( const Pel* refPel, const ptrdiff_t refStride, Pel* dstPel, const ptrdiff_t dstStride,
@@ -406,6 +550,7 @@ template<>
 void MCTF::_initMCTF_ARM<SVE>()
 {
   m_motionErrorLumaInt8 = motionErrorLumaInt_sve;
+  m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_sve;
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
   m_applyBlock = applyBlock_sve;
 }
