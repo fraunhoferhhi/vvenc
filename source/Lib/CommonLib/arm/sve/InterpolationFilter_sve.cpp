@@ -47,17 +47,20 @@ POSSIBILITY OF SUCH DAMAGE.
 //  ====================================================================================================================
 //  Includes
 //  ====================================================================================================================
-#include "../InterpolationFilter_neon.h"
-#include "../CommonDefARM.h"
+
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/InterpolationFilter.h"
-#include "neon_sve_bridge.h"
-#include "../neon/transpose_neon.h"
 
 //! \ingroup CommonLib
 //! \{
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_MCIF
+
+#include "../CommonDefARM.h"
+#include "../InterpolationFilter_neon.h"
+#include "../mem_neon.h"
+#include "../neon/transpose_neon.h"
+#include "neon_sve_bridge.h"
 
 namespace vvenc
 {
@@ -951,6 +954,329 @@ void simdFilter16xH_N4_sve( const ClpRng& clpRng, Pel const* src, int srcStride,
   }
 }
 
+template<bool isLast>
+void simdInterpolateHor_N8_sve( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
+                                int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
+{
+  CHECKD( width % 4 != 0, "Width must be a multiple of 4!" );
+
+  const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
+  const int32x4_t invshift = vdupq_n_s32( -shift );
+
+  const int16x8_t vcoeff = vld1q_s16( coeff );
+  const int32x4_t voffset = vdupq_n_s32( offset );
+
+  do
+  {
+    int col = 0;
+    for( ; col + 8 <= width; col += 8 )
+    {
+      int16x8_t vsrc0 = vld1q_s16( &src[col + 0] );
+      int16x8_t vsrc1 = vld1q_s16( &src[col + 1] );
+      int16x8_t vsrc2 = vld1q_s16( &src[col + 2] );
+      int16x8_t vsrc3 = vld1q_s16( &src[col + 3] );
+      int16x8_t vsrc4 = vld1q_s16( &src[col + 4] );
+      int16x8_t vsrc5 = vld1q_s16( &src[col + 5] );
+      int16x8_t vsrc6 = vld1q_s16( &src[col + 6] );
+      int16x8_t vsrc7 = vld1q_s16( &src[col + 7] );
+
+      int64x2_t vsum0 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc0, vcoeff );
+      int64x2_t vsum1 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc1, vcoeff );
+      int64x2_t vsum2 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc2, vcoeff );
+      int64x2_t vsum3 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc3, vcoeff );
+      int64x2_t vsum4 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc4, vcoeff );
+      int64x2_t vsum5 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc5, vcoeff );
+      int64x2_t vsum6 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc6, vcoeff );
+      int64x2_t vsum7 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc7, vcoeff );
+
+      int64x2_t vsum01 = vpaddq_s64( vsum0, vsum1 );
+      int64x2_t vsum23 = vpaddq_s64( vsum2, vsum3 );
+      int64x2_t vsum45 = vpaddq_s64( vsum4, vsum5 );
+      int64x2_t vsum67 = vpaddq_s64( vsum6, vsum7 );
+
+      int32x4_t vsuma = vcombine_s32( vmovn_s64( vsum01 ), vmovn_s64( vsum23 ) );
+      int32x4_t vsumb = vcombine_s32( vmovn_s64( vsum45 ), vmovn_s64( vsum67 ) );
+
+      vsuma = vaddq_s32( vsuma, voffset );
+      vsumb = vaddq_s32( vsumb, voffset );
+
+      vsuma = vshlq_s32( vsuma, invshift );
+      vsumb = vshlq_s32( vsumb, invshift );
+
+      int16x8_t vsum = pack_sum_s32_to_s16x8<isLast>( vsuma, vsumb, vibdimax );
+
+      vst1q_s16( &dst[col], vsum );
+    }
+    if( col != width ) // Last four samples.
+    {
+      int16x8_t vsrc0 = vld1q_s16( &src[col + 0] );
+      int16x8_t vsrc1 = vld1q_s16( &src[col + 1] );
+      int16x8_t vsrc2 = vld1q_s16( &src[col + 2] );
+      int16x8_t vsrc3 = vld1q_s16( &src[col + 3] );
+
+      int64x2_t vsum0 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc0, vcoeff );
+      int64x2_t vsum1 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc1, vcoeff );
+      int64x2_t vsum2 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc2, vcoeff );
+      int64x2_t vsum3 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc3, vcoeff );
+
+      int64x2_t vsum01 = vpaddq_s64( vsum0, vsum1 );
+      int64x2_t vsum23 = vpaddq_s64( vsum2, vsum3 );
+
+      int32x4_t vsuma = vcombine_s32( vmovn_s64( vsum01 ), vmovn_s64( vsum23 ) );
+      vsuma = vaddq_s32( vsuma, voffset );
+      vsuma = vshlq_s32( vsuma, invshift );
+
+      int16x4_t vsum = pack_sum_s32_to_s16x4<isLast>( vsuma, vget_low_s16( vibdimax ) );
+
+      vst1_s16( &dst[col], vsum );
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  } while( --height != 0 );
+}
+
+template<bool isLast>
+void simdInterpolateHor_N4_sve( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
+                                int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
+{
+  CHECKD( width % 4 != 0, "Width must be a multiple of 4!" );
+
+  const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
+  const int32x4_t invshift = vdupq_n_s32( -shift );
+
+  const int16x8_t vcoeffx2 = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* )coeff ) );
+  const int32x4_t voffset = vdupq_n_s32( offset );
+
+  do
+  {
+    int col = 0;
+    for( ; col + 8 <= width; col += 8 )
+    {
+      int16x8_t vsrc04 = vld1q_s16( &src[col + 0] );
+      int16x8_t vsrc15 = vld1q_s16( &src[col + 1] );
+      int16x8_t vsrc26 = vld1q_s16( &src[col + 2] );
+      int16x8_t vsrc37 = vld1q_s16( &src[col + 3] );
+
+      int64x2_t vsum04 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc04, vcoeffx2 );
+      int64x2_t vsum15 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc15, vcoeffx2 );
+      int64x2_t vsum26 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc26, vcoeffx2 );
+      int64x2_t vsum37 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc37, vcoeffx2 );
+
+      int32x4_t vsum0426 = vcombine_s32( vmovn_s64( vsum04 ), vmovn_s64( vsum26 ) );
+      int32x4_t vsum1537 = vcombine_s32( vmovn_s64( vsum15 ), vmovn_s64( vsum37 ) );
+
+      int32x4_t vsuma = vtrn1q_s32( vsum0426, vsum1537 );
+      int32x4_t vsumb = vtrn2q_s32( vsum0426, vsum1537 );
+
+      vsuma = vaddq_s32( vsuma, voffset );
+      vsumb = vaddq_s32( vsumb, voffset );
+
+      vsuma = vshlq_s32( vsuma, invshift );
+      vsumb = vshlq_s32( vsumb, invshift );
+
+      int16x8_t vsum = pack_sum_s32_to_s16x8<isLast>( vsuma, vsumb, vibdimax );
+
+      vst1q_s16( &dst[col], vsum );
+    }
+    if( col != width ) // Last four samples.
+    {
+      int16x4_t vsrc0 = vld1_s16( &src[col + 0] );
+      int16x4_t vsrc1 = vld1_s16( &src[col + 1] );
+      int16x4_t vsrc2 = vld1_s16( &src[col + 2] );
+      int16x4_t vsrc3 = vld1_s16( &src[col + 3] );
+
+      int16x8_t vsrc01 = vcombine_s16( vsrc0, vsrc1 );
+      int16x8_t vsrc23 = vcombine_s16( vsrc2, vsrc3 );
+      int64x2_t vsum01 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc01, vcoeffx2 );
+      int64x2_t vsum23 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc23, vcoeffx2 );
+
+      int32x4_t vsuma = vcombine_s32( vmovn_s64( vsum01 ), vmovn_s64( vsum23 ) );
+      vsuma = vaddq_s32( vsuma, voffset );
+      vsuma = vshlq_s32( vsuma, invshift );
+
+      int16x4_t vsum = pack_sum_s32_to_s16x4<isLast>( vsuma, vget_low_s16( vibdimax ) );
+
+      vst1_s16( &dst[col], vsum );
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  } while( --height != 0 );
+}
+
+template<bool isLast>
+void simdInterpolateHorM2_N4_sve( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
+                                  int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
+{
+  CHECKD( width != 2, "Width must be two!" );
+
+  const int16x4_t vibdimax = vdup_n_s16( clpRng.max() );
+  const int32x4_t invshift = vdupq_n_s32( -shift );
+
+  const int16x8_t vcoeffx2 = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* )coeff ) );
+  const int32x4_t voffset = vdupq_n_s32( offset );
+
+  int row = 0;
+  for( ; row + 2 <= height; row += 2 )
+  {
+    int16x4_t vsrc0 = vld1_s16( &src[0] );
+    int16x4_t vsrc1 = vld1_s16( &src[1] );
+    int16x4_t vsrc2 = vld1_s16( &src[srcStride + 0] );
+    int16x4_t vsrc3 = vld1_s16( &src[srcStride + 1] );
+
+    int16x8_t vsrc01 = vcombine_s16( vsrc0, vsrc1 );
+    int16x8_t vsrc23 = vcombine_s16( vsrc2, vsrc3 );
+    int64x2_t vsum01 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc01, vcoeffx2 );
+    int64x2_t vsum23 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc23, vcoeffx2 );
+
+    int32x4_t vsuma = vcombine_s32( vmovn_s64( vsum01 ), vmovn_s64( vsum23 ) );
+    vsuma = vaddq_s32( vsuma, voffset );
+    vsuma = vshlq_s32( vsuma, invshift );
+
+    int16x4_t vsum = pack_sum_s32_to_s16x4<isLast>( vsuma, vibdimax );
+
+    store_s16x2x2( &dst[0], vsum, dstStride );
+
+    src += 2 * srcStride;
+    dst += 2 * dstStride;
+  }
+  if( row != height )
+  {
+    int16x4_t vsrc0 = vld1_s16( &src[0] );
+    int16x4_t vsrc1 = vld1_s16( &src[1] );
+
+    int16x8_t vsrc01 = vcombine_s16( vsrc0, vsrc1 );
+    int64x2_t vsum01 = vvenc_sdotq_s16( vdupq_n_s64( 0 ), vsrc01, vcoeffx2 );
+
+    int32x4_t vsuma = vcombine_s32( vmovn_s64( vsum01 ), vdup_n_s32( 0 ) );
+    vsuma = vaddq_s32( vsuma, voffset );
+    vsuma = vshlq_s32( vsuma, invshift );
+
+    int16x4_t vsum = pack_sum_s32_to_s16x4<isLast>( vsuma, vibdimax );
+
+    store_s16x2( &dst[0], vsum );
+  }
+}
+
+template<int N, bool isFirst, bool isLast>
+void simdFilterHor_sve( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                        int height, TFilterCoeff const* coeff )
+{
+  static_assert( N == 4 || N == 6 || N == 8, "Supported taps: 4/6/8" );
+  CHECKD( height < 1, "Height must be >= 1!" );
+  CHECKD( width < 1, "Width must be >= 1!" );
+  CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
+  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
+
+  const int16_t* c = coeff;
+
+  const int cStride = 1; // Horizontal mode.
+  src -= ( N / 2 - 1 ) * cStride;
+
+  int offset;
+  int headRoom = IF_INTERNAL_PREC - clpRng.bd;
+  int shift = IF_FILTER_PREC;
+
+  // Set shift and offset for N != 2 case.
+  if( isLast )
+  {
+    shift += isFirst ? 0 : headRoom;
+    offset = 1 << ( shift - 1 );
+    offset += isFirst ? 0 : IF_INTERNAL_OFFS << IF_FILTER_PREC;
+  }
+  else
+  {
+    shift -= isFirst ? headRoom : 0;
+    offset = isFirst ? -IF_INTERNAL_OFFS * ( 1 << shift ) : 0;
+  }
+
+  if( N == 6 )
+  {
+    CHECKD( width % 4 != 0 && width != 1, "N6 width must be 1 or multiple of 4! width=" << width );
+    CHECKD( coeff[0] != 0 || coeff[7] != 0, "0th and 7th coeff must be zero for 6-tap!" );
+
+    if( width % 4 == 0 )
+    {
+      src -= 1; // Use 8-tap filter, but offset src by -1 since coeff[0] is always zero.
+      simdInterpolateHor_N8_sve<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+    else // width == 1
+    {
+      c = coeff + 1;
+      goto scalar_hor_m1;
+    }
+
+    return;
+  }
+
+  if( N == 8 )
+  {
+    CHECKD( width % 4 != 0 && width != 1, "N8 width must be 1 or multiple of 4! width=" << width );
+
+    if( width % 4 == 0 )
+    {
+      simdInterpolateHor_N8_sve<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+    else // width == 1
+    {
+      goto scalar_hor_m1;
+    }
+
+    return;
+  }
+
+  if( N == 4 )
+  {
+    CHECKD( width % 4 != 0 && width != 2 && width != 1, "N4 width must be 1 or 2 or multiple of 4! width=" << width );
+
+    if( width % 4 == 0 )
+    {
+      simdInterpolateHor_N4_sve<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+    else if( width == 2 )
+    {
+      simdInterpolateHorM2_N4_sve<isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+    }
+    else // width == 1
+    {
+      goto scalar_hor_m1;
+    }
+
+    return;
+  }
+
+scalar_hor_m1: // Use scalar code for width == 1.
+  CHECKD( width != 1, "Width must be 1!" );
+  do
+  {
+    int sum = src[0] * c[0];
+    sum    += src[1] * c[1];
+    sum    += src[2] * c[2];
+    sum    += src[3] * c[3];
+    if( N >= 6 )
+    {
+      sum += src[4] * c[4];
+      sum += src[5] * c[5];
+    }
+    if( N == 8 )
+    {
+      sum += src[6] * c[6];
+      sum += src[7] * c[7];
+    }
+
+    Pel val = ( sum + offset ) >> shift;
+    if( isLast )
+    {
+      val = ClipPel( val, clpRng );
+    }
+    dst[0] = val;
+
+    src += srcStride;
+    dst += dstStride;
+  } while( --height != 0 );
+}
+
 template<>
 void InterpolationFilter::_initInterpolationFilterARM<SVE>()
 {
@@ -968,6 +1294,22 @@ void InterpolationFilter::_initInterpolationFilterARM<SVE>()
   m_filter16xH[0][1] = simdFilter16xH_N8_sve<true>;
   m_filter16xH[1][0] = simdFilter16xH_N4_sve<false>;
   m_filter16xH[1][1] = simdFilter16xH_N4_sve<true>;
+
+  // SVE is only beneficial for the horizontal filtering of the 4-tap, 6-tap, and 8-tap filters.
+  m_filterHor[0][0][0] = simdFilterHor_sve<8, false, false>;
+  m_filterHor[0][0][1] = simdFilterHor_sve<8, false, true>;
+  m_filterHor[0][1][0] = simdFilterHor_sve<8, true, false>;
+  m_filterHor[0][1][1] = simdFilterHor_sve<8, true, true>;
+
+  m_filterHor[1][0][0] = simdFilterHor_sve<4, false, false>;
+  m_filterHor[1][0][1] = simdFilterHor_sve<4, false, true>;
+  m_filterHor[1][1][0] = simdFilterHor_sve<4, true, false>;
+  m_filterHor[1][1][1] = simdFilterHor_sve<4, true, true>;
+
+  m_filterHor[3][0][0] = simdFilterHor_sve<6, false, false>;
+  m_filterHor[3][0][1] = simdFilterHor_sve<6, false, true>;
+  m_filterHor[3][1][0] = simdFilterHor_sve<6, true, false>;
+  m_filterHor[3][1][1] = simdFilterHor_sve<6, true, true>;
 }
 
 } // namespace vvenc
