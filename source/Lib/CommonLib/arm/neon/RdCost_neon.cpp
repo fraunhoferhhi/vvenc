@@ -897,14 +897,6 @@ Distortion xGetHADs_neon( const DistParam &rcDtParam )
 
   return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
-
-Distortion xGetHAD2SADs_neon( const DistParam &rcDtParam )
-{
-  Distortion distHad = xGetHADs_neon<false>( rcDtParam );
-  Distortion distSad = RdCost::xGetSAD_SIMD<SIMD_EVERYWHERE_EXTENSION_LEVEL>( rcDtParam );
-
-  return std::min( distHad, 2*distSad);
-}
 #endif  // defined( TARGET_SIMD_X86 )
 
 template<bool isCalCentrePos>
@@ -996,106 +988,103 @@ void xGetSADX5_16xN_neon(const DistParam& rcDtParam, Distortion* cost, bool isCa
     xGetSADX5_16xN_neon_impl<false>( rcDtParam, cost );
 }
 
-template< int iWidth >
-Distortion xGetSAD_NxN_neon( const DistParam &rcDtParam )
+static inline Distortion xGetSAD_generic_neon( const DistParam& rcDtParam, const int width )
 {
-
-  const short* pSrc1   = (const short*)rcDtParam.org.buf;
-  const short* pSrc2   = (const short*)rcDtParam.cur.buf;
-  int  iRows           = rcDtParam.org.height;
-  int  iSubShift       = rcDtParam.subShift;
-  int  iSubStep        = ( 1 << iSubShift );
-  const int iStrideSrc1 = rcDtParam.org.stride * iSubStep;
-  const int iStrideSrc2 = rcDtParam.cur.stride * iSubStep;
-
-  uint32_t uiSum = 0;
-  int16x8_t vzero_16 = vdupq_n_s16(0);
-
-  if( iWidth == 4 )
+  if( width < 4 )
   {
-    if( iRows == 4 && iSubShift == 0 )
-    {
-      int16x8_t vsrc1 = vcombine_s16( vld1_s16( ( const int16_t* )pSrc1 ),  vld1_s16( ( const int16_t* )( &pSrc1[iStrideSrc1] ) ) );
-      int16x8_t vsrc2 = vcombine_s16( vld1_s16( ( const int16_t* )pSrc2 ),  vld1_s16( ( const int16_t* )( &pSrc2[iStrideSrc2] ) ) );
-      int32x4_t vsum =
-        vmovl_s16( vget_low_s16( pairwise_add_s16x8( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 ) ) );
-      vsrc1 = vcombine_s16( vld1_s16( ( const int16_t* )( &pSrc1[2 * iStrideSrc1] ) ),  vld1_s16( ( const int16_t* )( &pSrc1[3 * iStrideSrc1] ) ) );
-      vsrc2 = vcombine_s16( vld1_s16( ( const int16_t* )( &pSrc2[2 * iStrideSrc2] ) ),  vld1_s16( ( const int16_t* )( &pSrc2[3 * iStrideSrc2] ) ) );
-      vsum = vaddq_s32(
-        vsum, vmovl_s16( vget_low_s16( pairwise_add_s16x8( vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ), vzero_16 ) ) ) );
-      uiSum = horizontal_add_s32x4( vsum );
-    }
-    else
-    {
-      int32x4_t vsum32 = vdupq_n_s32(0);
-      for( int iY = 0; iY < iRows; iY += iSubStep )
-      {
-        int32x4_t vsrc1 = vmovl_s16( vld1_s16( ( const int16_t* )pSrc1 ) );
-        int32x4_t vsrc2 = vmovl_s16( vld1_s16( ( const int16_t* )pSrc2 ) );
-        vsum32 = vaddq_s32( vsum32, vabsq_s32( vsubq_s32( vsrc1, vsrc2 ) ) );
-
-        pSrc1 += iStrideSrc1;
-        pSrc2 += iStrideSrc2;
-      }
-      uiSum = horizontal_add_s32x4( vsum32 );
-    }
-  }
-  else
-  {
-    static constexpr bool earlyExitAllowed = iWidth >= 64;
-    int32x4_t vsum32 = vdupq_n_s32( 0 );
-    int checkExit = 3;
-
-    for( int iY = 0; iY < iRows; iY+=iSubStep )
-    {
-      int16x8_t vsrc1  = vld1q_s16( ( const int16_t* )( pSrc1 ) );
-      int16x8_t vsrc2  = vld1q_s16( ( const int16_t* )( pSrc2 ) );
-      int16x8_t vsum16 = vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) );
-
-      if( iWidth >= 16 )
-      {
-        vsrc1  = vld1q_s16( ( const int16_t* )( &pSrc1[8] ) );
-        vsrc2  = vld1q_s16( ( const int16_t* )( &pSrc2[8] ) );
-        vsum16 = vaddq_s16( vsum16, vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ) );
-
-        for( int iX = 16; iX < iWidth; iX += 16 )
-        {
-          vsrc1  = vld1q_s16( ( const int16_t* )( &pSrc1[iX] ) );
-          vsrc2  = vld1q_s16( ( const int16_t* )( &pSrc2[iX] ) );
-          vsum16 = vaddq_s16( vsum16, vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ) );
-
-          vsrc1  = vld1q_s16( ( const int16_t* )( &pSrc1[iX + 8] ) );
-          vsrc2  = vld1q_s16( ( const int16_t* )( &pSrc2[iX + 8] ) );
-          vsum16 = vaddq_s16( vsum16, vabsq_s16( vsubq_s16( vsrc1, vsrc2 ) ) );
-        }
-      }
-
-      int32x4_t vsumtemp = vpaddlq_s16( vsum16);
-
-      if( earlyExitAllowed ) vsum32 = pairwise_add_s32x4( vsum32, vsumtemp );
-      else                   vsum32 = vaddq_s32 ( vsum32, vsumtemp );
-
-      pSrc1   += iStrideSrc1;
-      pSrc2   += iStrideSrc2;
-
-      if( earlyExitAllowed && checkExit == 0 )
-      {
-        Distortion distTemp = vgetq_lane_s32(vsum32, 0);
-        distTemp <<= iSubShift;
-        distTemp >>= DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
-        if( distTemp > rcDtParam.maximumDistortionForEarlyExit ) return distTemp;
-        checkExit = 3;
-      }
-      else if( earlyExitAllowed )
-      {
-        checkExit--;
-      }
-    }
-    uiSum = horizontal_add_s32x4( vsum32 );
+    return RdCost::xGetSAD( rcDtParam );
   }
 
-  uiSum <<= iSubShift;
-  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
+  const int16_t* src1 = rcDtParam.org.buf;
+  const int16_t* src2 = rcDtParam.cur.buf;
+  int height = rcDtParam.org.height;
+  int subShift = rcDtParam.subShift;
+  int subStep = 1 << subShift;
+  const int strideSrc1 = rcDtParam.org.stride * subStep;
+  const int strideSrc2 = rcDtParam.cur.stride * subStep;
+
+  uint32x4_t sum_u32[2] = { vdupq_n_u32( 0 ), vdupq_n_u32( 0 ) };
+  Distortion sum = 0;
+  do
+  {
+    int w = width;
+
+    const int16_t* src1_ptr = src1;
+    const int16_t* src2_ptr = src2;
+
+    while( w >= 16 )
+    {
+      const int16x8_t s1_lo = vld1q_s16( src1_ptr );
+      const int16x8_t s1_hi = vld1q_s16( src1_ptr + 8 );
+      const int16x8_t s2_lo = vld1q_s16( src2_ptr );
+      const int16x8_t s2_hi = vld1q_s16( src2_ptr + 8 );
+
+      const uint16x8_t abs_lo = vreinterpretq_u16_s16( vabdq_s16( s1_lo, s2_lo ) );
+      const uint16x8_t abs_hi = vreinterpretq_u16_s16( vabdq_s16( s1_hi, s2_hi ) );
+
+      sum_u32[0] = vpadalq_u16( sum_u32[0], abs_lo );
+      sum_u32[1] = vpadalq_u16( sum_u32[1], abs_hi );
+
+      src1_ptr += 16;
+      src2_ptr += 16;
+      w -= 16;
+    }
+
+    if( w >= 8 )
+    {
+      const int16x8_t s1 = vld1q_s16( src1_ptr );
+      const int16x8_t s2 = vld1q_s16( src2_ptr );
+
+      const uint16x8_t abs = vreinterpretq_u16_s16( vabdq_s16( s1, s2 ) );
+      sum_u32[0] = vpadalq_u16( sum_u32[0], abs );
+
+      src1_ptr += 8;
+      src2_ptr += 8;
+      w -= 8;
+    }
+
+    if( w >= 4 )
+    {
+      const int16x4_t s1 = vld1_s16( src1_ptr );
+      const int16x4_t s2 = vld1_s16( src2_ptr );
+
+      const uint16x4_t abs = vreinterpret_u16_s16( vabd_s16( s1, s2 ) );
+      sum_u32[0] = vaddw_u16( sum_u32[0], abs );
+
+      src1_ptr += 4;
+      src2_ptr += 4;
+      w -= 4;
+    }
+
+    while( w != 0 )
+    {
+      sum += abs( src1_ptr[w - 1] - src2_ptr[w - 1] );
+
+      w--;
+    }
+
+    src1 += strideSrc1;
+    src2 += strideSrc2;
+    height -= subStep;
+  } while( height != 0 );
+
+  sum += horizontal_add_u32x4( vaddq_u32( sum_u32[0], sum_u32[1] ) );
+  sum <<= subShift;
+  return sum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+}
+
+Distortion xGetHAD2SADs_neon( const DistParam& rcDtParam )
+{
+  Distortion distHad = xGetHADs_neon<false>( rcDtParam );
+  Distortion distSad = xGetSAD_generic_neon( rcDtParam, rcDtParam.org.width );
+
+  return std::min( distHad, 2 * distSad );
+}
+
+template<int iWidth>
+Distortion xGetSAD_NxN_neon( const DistParam& rcDtParam )
+{
+  return xGetSAD_generic_neon( rcDtParam, iWidth );
 }
 
 Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
@@ -1389,10 +1378,9 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFuncX5[1] = xGetSADX5_16xN_neon;
 
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
-
-#if defined( TARGET_SIMD_X86 )
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
 
+#if defined( TARGET_SIMD_X86 )
   m_afpDistortFunc[0][DF_HAD]     = xGetHADs_neon<false>;
   m_afpDistortFunc[0][DF_HAD2]    = xGetHADs_neon<false>;
   m_afpDistortFunc[0][DF_HAD4]    = xGetHADs_neon<false>;
@@ -1410,6 +1398,7 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_HAD32_fast]   = xGetHADs_neon<true>;
   m_afpDistortFunc[0][DF_HAD64_fast]   = xGetHADs_neon<true>;
   m_afpDistortFunc[0][DF_HAD128_fast]  = xGetHADs_neon<true>;
+#endif // defined( TARGET_SIMD_X86 )
 
   m_afpDistortFunc[0][DF_SAD4   ] = xGetSAD_NxN_neon<4>;
   m_afpDistortFunc[0][DF_SAD8   ] = xGetSAD_NxN_neon<8>;
@@ -1417,7 +1406,6 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD32  ] = xGetSAD_NxN_neon<32>;
   m_afpDistortFunc[0][DF_SAD64  ] = xGetSAD_NxN_neon<64>;
   m_afpDistortFunc[0][DF_SAD128]  = xGetSAD_NxN_neon<128>;
-#endif  // defined( TARGET_SIMD_X86 )
 
   m_wtdPredPtr[0] = lumaWeightedSSE_neon<0>;
   m_wtdPredPtr[1] = lumaWeightedSSE_neon<1>;
