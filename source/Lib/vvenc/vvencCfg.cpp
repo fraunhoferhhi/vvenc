@@ -2808,7 +2808,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
-      c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MMVD                            = 3;
@@ -2882,7 +2881,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
-      c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
@@ -2910,7 +2908,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
         c->m_DMVR                          = 0;
         c->m_ISP                           = 0;
         c->m_LFNST                         = 0;
-        c->m_lumaReshapeEnable             = 0;
         c->m_MIP                           = 0;
         c->m_useFastMIP                    = 0;
         c->m_bUseSAO                       = true;
@@ -2978,7 +2975,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
-      c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
@@ -3053,7 +3049,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
-      c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
@@ -3130,7 +3125,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
-      c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MIP                             = 1;
