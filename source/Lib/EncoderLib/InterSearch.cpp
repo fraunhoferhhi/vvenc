@@ -783,9 +783,11 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   int dstStride = width + 1;
   Pel* intPtr;
   Pel* dstPtr;
-  int filterSize = NTAPS_LUMA;
+  int filterSize     = useAltHpelIf ? ( reduceTap >= 1 ? NTAPS_AFFINE : NTAPS_LUMA )
+                                    : ( reduceTap == 1 ? NTAPS_AFFINE
+                                                       : ( reduceTap == 0 ? NTAPS_LUMA : NTAPS_CHROMA ) );
   int halfFilterSize = ( filterSize >> 1 );
-  const Pel* srcPtr = pattern->buf - halfFilterSize*srcStride - 1;
+  const Pel* srcPtr  = pattern->buf - halfFilterSize*srcStride - 1;
 
   const ChromaFormat chFmt = m_currChromaFormat;
 
@@ -2911,18 +2913,20 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_HPEL_INTERP );
   const ClpRng& clpRng = m_lumaClpRng;
-  int width      = pattern->width;
-  int height     = pattern->height;
-  int srcStride  = pattern->stride;
+  int width            = pattern->width;
+  int height           = pattern->height;
+  int srcStride        = pattern->stride;
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
   int intStride = width + 1;
   int dstStride = width + 1;
   Pel* intPtr;
   Pel* dstPtr;
-  int filterSize = NTAPS_LUMA;
-  int halfFilterSize = (filterSize>>1);
-  const Pel* srcPtr = pattern->buf - halfFilterSize*srcStride - 1;
+  int filterSize     = useAltHpelIf ? ( reduceTap >= 1 ? NTAPS_AFFINE : NTAPS_LUMA )
+                                    : ( reduceTap == 1 ? NTAPS_AFFINE
+                                                       : ( reduceTap == 0 ? NTAPS_LUMA : NTAPS_CHROMA ) );
+  int halfFilterSize = ( filterSize >> 1 );
+  const Pel *srcPtr  = pattern->buf - halfFilterSize * srcStride - 1;
 
   const ChromaFormat chFmt = m_currChromaFormat;
 
@@ -2980,7 +2984,9 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
   int dstStride = width + 1;
   Pel* intPtr;
   Pel* dstPtr;
-  int filterSize = NTAPS_LUMA;
+
+  int filterSize     = reduceTap == 1 ? NTAPS_AFFINE
+                   : ( reduceTap == 0 ? NTAPS_LUMA : NTAPS_CHROMA );
 
   int halfFilterSize = (filterSize>>1);
 

@@ -181,11 +181,10 @@ InterpolationFilter::InterpolationFilter()
   m_filterHor[2][1][0] = filter<2, false, true, false>;
   m_filterHor[2][1][1] = filter<2, false, true, true>;
 
-  // for scalar implementation, use the 8-tap filter, as the 6-tap filter is 0-padded
-  m_filterHor[3][0][0] = filter<8, false, false, false>;
-  m_filterHor[3][0][1] = filter<8, false, false, true>;
-  m_filterHor[3][1][0] = filter<8, false, true, false>;
-  m_filterHor[3][1][1] = filter<8, false, true, true>;
+  m_filterHor[3][0][0] = filter<6, false, false, false>;
+  m_filterHor[3][0][1] = filter<6, false, false, true>;
+  m_filterHor[3][1][0] = filter<6, false, true, false>;
+  m_filterHor[3][1][1] = filter<6, false, true, true>;
 
   m_filterVer[0][0][0] = filter<8, true, false, false>;
   m_filterVer[0][0][1] = filter<8, true, false, true>;
@@ -202,11 +201,10 @@ InterpolationFilter::InterpolationFilter()
   m_filterVer[2][1][0] = filter<2, true, true, false>;
   m_filterVer[2][1][1] = filter<2, true, true, true>;
 
-  // for scalar implementation, use the 8-tap filter, as the 6-tap filter is 0-padded
-  m_filterVer[3][0][0] = filter<8, true, false, false>;
-  m_filterVer[3][0][1] = filter<8, true, false, true>;
-  m_filterVer[3][1][0] = filter<8, true, true, false>;
-  m_filterVer[3][1][1] = filter<8, true, true, true>;
+  m_filterVer[3][0][0] = filter<6, true, false, false>;
+  m_filterVer[3][0][1] = filter<6, true, false, true>;
+  m_filterVer[3][1][0] = filter<6, true, true, false>;
+  m_filterVer[3][1][1] = filter<6, true, true, true>;
 
   m_filterCopy[0][0]   = filterCopy<false, false>;
   m_filterCopy[0][1]   = filterCopy<false, true>;
@@ -359,6 +357,11 @@ template<int N, bool isVertical, bool isFirst, bool isLast>
 void InterpolationFilter::filter(const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeff)
 {
   int row, col;
+
+  if( N == 6 )
+  {
+    coeff++;
+  }
 
   Pel c[8];
   c[0] = coeff[0];
