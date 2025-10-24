@@ -54,6 +54,10 @@ variables:
       - make msvc-arch=${MSVC_ARCH} disable-lto=1 all
       - make msvc-arch=${MSVC_ARCH} disable-lto=1 test
 
+.build_msvc_template:   # this extra template is needed to set msvc-arch=${MSVC_ARCH}
+  extends: .build_only_template_full
+  script:
+    - make msvc-arch=${MSVC_ARCH} enable-lto=${ENABLE_LTO} all
 
 build_gcc5_ubuntu1804:
    extends: .build_only_template_full
@@ -267,12 +271,12 @@ test_vs2022:
   tags:
     - vs2022
 
-test_vs2022_arm64:
-  extends: .build_test_msvc_template
+build_vs2022_arm64:
+  extends: .build_msvc_template
   variables:
      MSVC_ARCH: arm64
   tags:
-    - vs2022-arm
+    - vs2022
 
 test_macos-x86_64:
    extends: .build_test_macos_template
