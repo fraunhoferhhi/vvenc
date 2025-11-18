@@ -1306,6 +1306,102 @@ static Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, int iStr
   return sad;
 }
 
+static Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur, int iBitDepth )
+{
+  int16x4_t diff[8];
+
+  for( int k = 0; k < 8; k++ )
+  {
+    int16x4_t org = vld1_s16( piOrg );
+    int16x4_t cur = vld1_s16( piCur );
+
+    diff[k] = vsub_s16( org, cur ); // 11-bit
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+
+  int16x4_t m1[8], m2[8];
+
+  // Vertical.
+  m1[0] = vadd_s16( diff[0], diff[4] );
+  m1[1] = vadd_s16( diff[1], diff[5] );
+  m1[2] = vadd_s16( diff[2], diff[6] );
+  m1[3] = vadd_s16( diff[3], diff[7] );
+  m1[4] = vsub_s16( diff[0], diff[4] );
+  m1[5] = vsub_s16( diff[1], diff[5] );
+  m1[6] = vsub_s16( diff[2], diff[6] );
+  m1[7] = vsub_s16( diff[3], diff[7] ); // 12-bit
+
+  m2[0] = vadd_s16( m1[0], m1[2] );
+  m2[1] = vadd_s16( m1[1], m1[3] );
+  m2[2] = vsub_s16( m1[0], m1[2] );
+  m2[3] = vsub_s16( m1[1], m1[3] );
+  m2[4] = vadd_s16( m1[4], m1[6] );
+  m2[5] = vadd_s16( m1[5], m1[7] );
+  m2[6] = vsub_s16( m1[4], m1[6] );
+  m2[7] = vsub_s16( m1[5], m1[7] ); // 13-bit
+
+  m1[0] = vadd_s16( m2[0], m2[1] );
+  m1[1] = vsub_s16( m2[0], m2[1] );
+  m1[2] = vadd_s16( m2[2], m2[3] );
+  m1[3] = vsub_s16( m2[2], m2[3] );
+  m1[4] = vadd_s16( m2[4], m2[5] );
+  m1[5] = vsub_s16( m2[4], m2[5] );
+  m1[6] = vadd_s16( m2[6], m2[7] );
+  m1[7] = vsub_s16( m2[6], m2[7] ); // 14-bit
+
+  // Transpose.
+  int16x8_t m1q[8];
+  const int16x4_t zero = vdup_n_s16( 0 );
+  m1q[0] = vcombine_s16( m1[0], zero );
+  m1q[1] = vcombine_s16( m1[1], zero );
+  m1q[2] = vcombine_s16( m1[2], zero );
+  m1q[3] = vcombine_s16( m1[3], zero );
+  m1q[4] = vcombine_s16( m1[4], zero );
+  m1q[5] = vcombine_s16( m1[5], zero );
+  m1q[6] = vcombine_s16( m1[6], zero );
+  m1q[7] = vcombine_s16( m1[7], zero );
+
+  int16x8_t m3[4], m4[4];
+  m3[0] = vzipq_s16( m1q[0], m1q[4] ).val[0];
+  m3[1] = vzipq_s16( m1q[2], m1q[6] ).val[0];
+  m3[2] = vzipq_s16( m1q[1], m1q[5] ).val[0];
+  m3[3] = vzipq_s16( m1q[3], m1q[7] ).val[0];
+
+  m4[0] = vzipq_s16( m3[0], m3[1] ).val[0];
+  m4[1] = vzipq_s16( m3[0], m3[1] ).val[1];
+  m4[2] = vzipq_s16( m3[2], m3[3] ).val[0];
+  m4[3] = vzipq_s16( m3[2], m3[3] ).val[1];
+
+  m3[0] = vzipq_s16( m4[0], m4[2] ).val[0];
+  m3[1] = vzipq_s16( m4[0], m4[2] ).val[1];
+  m3[2] = vzipq_s16( m4[1], m4[3] ).val[0];
+  m3[3] = vzipq_s16( m4[1], m4[3] ).val[1];
+
+  // Horizontal.
+  m4[0] = vaddq_s16( m3[0], m3[2] );
+  m4[1] = vaddq_s16( m3[1], m3[3] );
+  m4[2] = vsubq_s16( m3[0], m3[2] );
+  m4[3] = vsubq_s16( m3[1], m3[3] );
+
+  m3[0] = vabsq_s16( vaddq_s16( m4[0], m4[1] ) );
+  m3[1] = vabdq_s16( m4[0], m4[1] );
+  m3[2] = vabsq_s16( vaddq_s16( m4[2], m4[3] ) );
+  m3[3] = vabdq_s16( m4[2], m4[3] );
+
+  uint32_t absDC = ( uint32_t )vgetq_lane_s16( m3[0], 0 );
+
+  int32x4_t total = horizontal_add_long_4d_s16x8( m3[0], m3[1], m3[2], m3[3] );
+  uint32_t sad = ( uint32_t )horizontal_add_s32x4( total );
+
+  sad -= absDC;
+  sad += absDC >> 2;
+  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+
+  return sad;
+}
+
 template<bool fastHad>
 Distortion xGetHADs_neon( const DistParam &rcDtParam )
 {
@@ -1362,7 +1458,7 @@ Distortion xGetHADs_neon( const DistParam &rcDtParam )
     {
       for( x = 0; x < iCols; x += 4 )
       {
-        uiSum += xCalcHAD4x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+        uiSum += xCalcHAD4x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
