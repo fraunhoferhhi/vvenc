@@ -1402,6 +1402,81 @@ static Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, int iStr
   return sad;
 }
 
+static Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+{
+  int16x4_t r0 = vld1_s16( piOrg );
+  int16x4_t r1 = vld1_s16( piOrg + iStrideOrg );
+  int16x4_t r2 = vld1_s16( piOrg + 2 * iStrideOrg );
+  int16x4_t r3 = vld1_s16( piOrg + 3 * iStrideOrg );
+
+  int16x4_t c0 = vld1_s16( piCur );
+  int16x4_t c1 = vld1_s16( piCur + iStrideCur );
+  int16x4_t c2 = vld1_s16( piCur + 2 * iStrideCur );
+  int16x4_t c3 = vld1_s16( piCur + 3 * iStrideCur );
+
+  int16x4_t m1[4], m2[4];
+
+  // Vertical.
+  m1[0] = vsub_s16( r0, c0 );
+  m1[1] = vsub_s16( r1, c1 );
+  m1[2] = vsub_s16( r2, c2 );
+  m1[3] = vsub_s16( r3, c3 );
+
+  m2[0] = vadd_s16( m1[0], m1[3] );
+  m2[1] = vadd_s16( m1[1], m1[2] );
+  m2[2] = vsub_s16( m1[0], m1[3] );
+  m2[3] = vsub_s16( m1[1], m1[2] );
+
+  m1[0] = vadd_s16( m2[0], m2[1] );
+  m1[1] = vsub_s16( m2[0], m2[1] );
+  m1[2] = vsub_s16( m2[2], m2[3] );
+  m1[3] = vadd_s16( m2[2], m2[3] );
+
+  // Transpose.
+  int16x8_t m1q[4];
+  const int16x4_t zero = vdup_n_s16( 0 );
+  m1q[0] = vcombine_s16( m1[0], zero );
+  m1q[1] = vcombine_s16( m1[1], zero );
+  m1q[2] = vcombine_s16( m1[2], zero );
+  m1q[3] = vcombine_s16( m1[3], zero );
+
+  int16x8_t a0 = vzipq_s16( m1q[0], m1q[2] ).val[0];
+  int16x8_t a1 = vzipq_s16( m1q[1], m1q[3] ).val[0];
+
+  int16x8_t b0 = vzipq_s16( a0, a1 ).val[0];
+  int16x8_t b1 = vzipq_s16( a0, a1 ).val[1];
+
+  m1[0] = vget_low_s16( b0 );
+  m1[1] = vget_high_s16( b0 );
+  m1[2] = vget_low_s16( b1 );
+  m1[3] = vget_high_s16( b1 );
+
+  // Horizontal.
+  m2[0] = vadd_s16( m1[0], m1[3] );
+  m2[1] = vadd_s16( m1[1], m1[2] );
+  m2[2] = vsub_s16( m1[0], m1[3] );
+  m2[3] = vsub_s16( m1[1], m1[2] );
+
+  m1[0] = vabs_s16( vadd_s16( m2[0], m2[1] ) );
+  m1[1] = vabd_s16( m2[0], m2[1] );
+  m1[2] = vabd_s16( m2[2], m2[3] );
+  m1[3] = vabs_s16( vadd_s16( m2[2], m2[3] ) );
+
+  uint32_t absDC = ( uint32_t )vget_lane_s16( m1[0], 0 );
+
+  int32x4_t sum0_32 = vaddl_s16( m1[0], m1[1] );
+  int32x4_t sum1_32 = vaddl_s16( m1[2], m1[3] );
+  int32x4_t sum32 = vaddq_s32( sum0_32, sum1_32 );
+
+  uint32_t sad = ( uint32_t )horizontal_add_s32x4( sum32 );
+
+  sad -= absDC;
+  sad += absDC >> 2;
+  sad = ( sad + 1 ) >> 1;
+
+  return sad;
+}
+
 template<bool fastHad>
 Distortion xGetHADs_neon( const DistParam &rcDtParam )
 {
@@ -1510,7 +1585,7 @@ Distortion xGetHADs_neon( const DistParam &rcDtParam )
     {
       for( x = 0; x < iCols; x += 4 )
       {
-        uiSum += xCalcHAD4x4_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+        uiSum += xCalcHAD4x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
       piOrg += 4*iStrideOrg;
       piCur += 4*iStrideCur;
