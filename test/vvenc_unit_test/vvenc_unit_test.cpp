@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
   \brief   This vvenclibtest.cpp file contains the main entry point of the test application.
 */
 
+#include <cmath>
 #include <iostream>
 #include <limits.h>
 #include <stddef.h>
@@ -1258,6 +1259,46 @@ static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, 
   return passed;
 }
 
+static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  std::ostringstream sstm;
+  sstm << "RdCost::m_afpDistortFunc[0][DF_SAD" << width << "] "
+       << " w=" << width << " h=" << height;
+  printf( "Testing %s\n", sstm.str().c_str() );
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    int org_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    int cur_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( cur_stride * height );
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.org.stride = org_stride;
+    dtParam.cur.buf = curBuf.data();
+    dtParam.cur.stride = cur_stride;
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.bitDepth = 10;
+    dtParam.subShift = rng.get( 0, 1 );
+    dtParam.applyWeight = 0; // applyWeight appears to be always zero.
+
+    std::generate( orgBuf.begin(), orgBuf.end(), g10 );
+    std::generate( curBuf.begin(), curBuf.end(), g10 );
+
+    const int index = DF_SAD + log2( width );
+    Distortion sum_ref = ref->m_afpDistortFunc[0][index]( dtParam );
+    Distortion sum_opt = opt->m_afpDistortFunc[0][index]( dtParam );
+    passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+  return passed;
+}
+
 static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
 {
   std::ostringstream sstm;
@@ -1323,6 +1364,7 @@ static bool test_RdCost()
     {
       passed = check_lumaWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
       passed = check_fixWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_SAD( &ref, &opt, num_cases, w, h ) && passed;
 
       if (w >= 8 && h >= 8)
       {
