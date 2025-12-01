@@ -84,6 +84,19 @@ static inline void transpose_concat_8x4_s16( int16x8_t a0, int16x8_t a1, int16x8
   b3 = b23.val[1];
 }
 
+static inline int16x8x2_t vvenc_vtrnq_s64_to_s16( int16x8_t a0, int16x8_t a1 )
+{
+  int16x8x2_t b0;
+#if REAL_TARGET_AARCH64
+  b0.val[0] = vreinterpretq_s16_s64( vtrn1q_s64( vreinterpretq_s64_s16( a0 ), vreinterpretq_s64_s16( a1 ) ) );
+  b0.val[1] = vreinterpretq_s16_s64( vtrn2q_s64( vreinterpretq_s64_s16( a0 ), vreinterpretq_s64_s16( a1 ) ) );
+#else
+  b0.val[0] = vcombine_s16( vget_low_s16( a0 ), vget_low_s16( a1 ) );
+  b0.val[1] = vcombine_s16( vget_high_s16( a0 ), vget_high_s16( a1 ) );
+#endif
+  return b0;
+}
+
 } // namespace vvenc
 
 #endif
