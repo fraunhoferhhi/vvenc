@@ -59,7 +59,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-AdaptiveLoopFilter::AdaptiveLoopFilter()
+AdaptiveLoopFilter::AdaptiveLoopFilter( bool enableOpt )
   : m_filterShapesCcAlf{ AlfFilterShape( size_CC_ALF ), AlfFilterShape( size_CC_ALF ) }
   , m_filterShapes     { AlfFilterShape(           7 ), AlfFilterShape(           5 ) }
   , m_classifier( nullptr )
@@ -78,11 +78,14 @@ AdaptiveLoopFilter::AdaptiveLoopFilter()
   m_filter7x7Blk[0] = filterBlk<ALF_FILTER_7>; // NonLin is Off
   m_filter7x7Blk[1] = filterBlk<ALF_FILTER_7>; // NonLin is On
 
+  if( enableOpt )
+  {
 #if ENABLE_SIMD_OPT_ALF
 #ifdef TARGET_SIMD_X86
-  initAdaptiveLoopFilterX86();
+    initAdaptiveLoopFilterX86();
 #endif
 #endif
+  }
 }
 
 bool AdaptiveLoopFilter::isCrossedByVirtualBoundaries( const CodingStructure& cs, const int xPos, const int yPos, const int width, const int height, bool& clipTop, bool& clipBottom, bool& clipLeft, bool& clipRight, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[], int& rasterSliceAlfPad )
