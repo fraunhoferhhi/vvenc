@@ -84,6 +84,10 @@ AdaptiveLoopFilter::AdaptiveLoopFilter( bool enableOpt )
 #ifdef TARGET_SIMD_X86
     initAdaptiveLoopFilterX86();
 #endif
+
+#ifdef TARGET_SIMD_ARM
+    initAdaptiveLoopFilterARM();
+#endif
 #endif
   }
 }

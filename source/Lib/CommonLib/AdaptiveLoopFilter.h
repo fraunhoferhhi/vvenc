@@ -141,6 +141,12 @@ public:
   void _initAdaptiveLoopFilterX86();
 #endif
 
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
+  void initAdaptiveLoopFilterARM();
+  template<ARM_VEXT vext>
+  void _initAdaptiveLoopFilterARM();
+#endif
+
 protected:
   bool isCrossedByVirtualBoundaries( const CodingStructure& cs, const int xPos, const int yPos, const int width, const int height, bool& clipTop, bool& clipBottom, bool& clipLeft, bool& clipRight, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[], int& rasterSliceAlfPad );
  

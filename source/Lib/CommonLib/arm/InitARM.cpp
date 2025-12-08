@@ -66,6 +66,17 @@ namespace vvenc
 
 #ifdef TARGET_SIMD_ARM
 
+#if ENABLE_SIMD_OPT_ALF
+void AdaptiveLoopFilter::initAdaptiveLoopFilterARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initAdaptiveLoopFilterARM<NEON>();
+  }
+}
+#endif
+
 #if ENABLE_SIMD_OPT_AFFINE_ME
 void AffineGradientSearch::initAffineGradientSearchARM()
 {
