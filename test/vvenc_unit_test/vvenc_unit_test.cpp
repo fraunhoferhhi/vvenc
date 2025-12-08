@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <time.h>
 
+#include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/IntraPrediction.h"
@@ -2157,6 +2158,150 @@ static bool test_InterpolationFilter()
 }
 #endif // ENABLE_SIMD_OPT_MCIF
 
+#if ENABLE_SIMD_OPT_ALF
+#define MAX_NUM_ALF_TRANSPOSE_ID 4
+
+template<typename G>
+static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
+                                 unsigned int w, unsigned int h, G input_generator, unsigned int linearIndex )
+{
+  CHECK( srcStride < w, "SrcStride must be greater than or equal to width." );
+  CHECK( dstStride < w, "DstStride must be greater than or equal to width." );
+
+  std::ostringstream sstm;
+  sstm << "filterBlk linearIndex=" << linearIndex << " srcStride=" << srcStride << " dstStride=" << dstStride
+       << " w=" << w << " h=" << h;
+
+  ClpRng clpRng{ 10 };
+
+  DimensionGenerator rng;
+
+  int dstX = rng.get( 0, MAX_CU_SIZE, 8 );
+  int dstY = rng.get( 0, MAX_CU_SIZE, 8 );
+
+  const Area blk{ 0, 0, w, h };
+  const Area blkDst{ dstX, dstY, w, h };
+
+  // Padding to src memory so that filterBlk can safely index [-3,+3] rows.
+  constexpr int pad = 3;
+  std::vector<Pel> src( ( blk.y + h + 2 * pad ) * srcStride + blk.x + 2 * pad );
+  std::vector<Pel> dst_ref( ( blkDst.y + h ) * dstStride + blkDst.x );
+  std::vector<Pel> dst_opt( ( blkDst.y + h ) * dstStride + blkDst.x );
+  std::generate( src.begin(), src.end(), input_generator );
+
+  Size sz{ w, h };
+  AreaBuf<const Pel> areaBufSrc{ src.data() + pad * srcStride + pad, srcStride, sz };
+  AreaBuf<Pel> areaBufDst_ref{ dst_ref.data(), dstStride, sz };
+  AreaBuf<Pel> areaBufDst_opt{ dst_opt.data(), dstStride, sz };
+
+  XUCache xuCache;
+  std::mutex csMutex;
+  CodingStructure cs{ xuCache, &csMutex }; // Dummy CodingStructure for filterBlk (unused).
+
+  ComponentID compId = COMP_Y;
+  ChromaFormat chromaFormat = CHROMA_400;
+
+  // Give all three planes same buffer, as only one of them is active in filterBlk.
+  PelUnitBuf dstUnitBuf_ref{
+      chromaFormat,
+      areaBufDst_ref, // COMP_Y
+      areaBufDst_ref, // COMP_Cb
+      areaBufDst_ref  // COMP_Cr
+  };
+  PelUnitBuf dstUnitBuf_opt{ chromaFormat, areaBufDst_opt, areaBufDst_opt, areaBufDst_opt };
+  CPelUnitBuf srcUnitBuf{ chromaFormat, areaBufSrc, areaBufSrc, areaBufSrc };
+
+  const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
+  std::vector<AlfClassifier> classifier;
+  for( unsigned i = 0; i < numClassBlocksInCTU; ++i )
+  {
+    const uint8_t classIdx = rng.get( 0, MAX_NUM_ALF_CLASSES - 1 );
+    const uint8_t transposeIdx = rng.get( 0, MAX_NUM_ALF_TRANSPOSE_ID - 1 );
+    classifier.emplace_back( classIdx, transposeIdx );
+  }
+
+  const int vbCTUHeight = rng.getOneOf<int>( { 32, 64, 128 } );
+  const int vbPos = vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA;
+
+  // Build coefficient and clip arrays for all classes and transpose variants.
+  constexpr size_t LumaSz = MAX_NUM_ALF_TRANSPOSE_ID * MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF;
+  std::vector<short> coeffLuma( LumaSz );
+  std::vector<short> clipLuma( LumaSz );
+
+  for( unsigned t = 0; t < MAX_NUM_ALF_TRANSPOSE_ID; ++t )
+  {
+    for( unsigned c = 0; c < MAX_NUM_ALF_CLASSES; ++c )
+    {
+      int offset = ( t * MAX_NUM_ALF_CLASSES + c ) * MAX_NUM_ALF_LUMA_COEFF;
+      auto coeff_idx = rng.get( 0, ALF_FIXED_FILTER_NUM - 1 );
+      for( unsigned i = 0; i < MAX_NUM_ALF_LUMA_COEFF; ++i )
+      {
+        coeffLuma[offset + i] = static_cast<short>( AdaptiveLoopFilter::m_fixedFilterSetCoeff[coeff_idx][i] );
+        // In optimized versions, clipping is used only when isNonLinear is true.
+        if( linearIndex == 1 )
+        {
+          clipLuma[offset + i] = rng.getOneOf<short>( { 1024, 128, 64, 32 } );
+        }
+        else
+        {
+          clipLuma[offset + i] = INT16_MAX;
+        }
+      }
+    }
+  }
+
+  ref->m_filter7x7Blk[linearIndex]( classifier.data(), dstUnitBuf_ref, srcUnitBuf, blkDst, blk, compId,
+                                    coeffLuma.data(), clipLuma.data(), clpRng, cs, vbCTUHeight, vbPos );
+  opt->m_filter7x7Blk[linearIndex]( classifier.data(), dstUnitBuf_opt, srcUnitBuf, blkDst, blk, compId,
+                                    coeffLuma.data(), clipLuma.data(), clpRng, cs, vbCTUHeight, vbPos );
+
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h + blkDst.y, w, dstStride );
+}
+
+static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing AdaptiveLoopFilter::filterBlk w=%d h=%d\n", w, h );
+
+  DimensionGenerator rng;
+
+  for( unsigned linearIndex : { 0, 1 } )
+  {
+    InputGenerator<TCoeff> g{ 10, /*is_signed=*/false };
+    for( unsigned i = 0; i < num_cases; ++i )
+    {
+      // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
+      unsigned srcStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+      unsigned dstStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+
+      if( !check_one_filterBlk( ref, opt, srcStride, dstStride, w, h, g, linearIndex ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool test_AdaptiveLoopFilter()
+{
+  AdaptiveLoopFilter ref{ /*enableOpt=*/false };
+  AdaptiveLoopFilter opt{ /*enableOpt=*/true };
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
+  {
+    for( unsigned h : { 8, 16, 24, 32, 64, 112, 128 } )
+    {
+      passed = check_filterBlk( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_ALF
+
 struct UnitTestEntry
 {
   std::string name;
@@ -2187,6 +2332,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_OPT_MCIF
     { "InterpolationFilter", test_InterpolationFilter },
+#endif
+#if ENABLE_SIMD_OPT_ALF
+    { "ALF", test_AdaptiveLoopFilter },
 #endif
 };
 
