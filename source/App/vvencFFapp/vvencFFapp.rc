@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2026, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -89,7 +89,7 @@ BEGIN
             VALUE "FileDescription", "vvencFFapp Application"
             VALUE "FileVersion", VS_FILE_VERSION_STR
             VALUE "InternalName", "vvencFFapp.exe"
-            VALUE "LegalCopyright", "(c) Copyright (2019-2025) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
+            VALUE "LegalCopyright", "(c) Copyright (2019-2026) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
             VALUE "OriginalFilename", "vvencFFapp.exe"
             VALUE "ProductName", "vvencFFapp"
             VALUE "ProductVersion", VS_FILE_VERSION_STR
