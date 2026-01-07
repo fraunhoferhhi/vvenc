@@ -122,7 +122,7 @@ static void fastFwdCore_nVec_sve( const TMatrixCoeff* tc, const TCoeff* src, TCo
   CHECK( cutoff == 0, "Cutoff should be non-zero" );
   CHECK( shift == 0, "Shift must be at least one" );
 
-  unsigned trSize = trVecs * svcnth();
+  unsigned trSize = trVecs * (unsigned)svcnth();
   unsigned i      = 0;
   for( ; i < ( reducedLine & ~3U ); i += 4 )
   {
@@ -211,10 +211,10 @@ static void fastFwdCore_nVec_sve( const TMatrixCoeff* tc, const TCoeff* src, TCo
         tcj += svcnth();
       }
       TCoeff* dstij         = dst + j * line + i;
-      dstij[ 0 * line + 0 ] = shift_and_round( svaddv_s64( svptrue_b64(), sum00 ), shift );
-      dstij[ 1 * line + 0 ] = shift_and_round( svaddv_s64( svptrue_b64(), sum01 ), shift );
-      dstij[ 2 * line + 0 ] = shift_and_round( svaddv_s64( svptrue_b64(), sum02 ), shift );
-      dstij[ 3 * line + 0 ] = shift_and_round( svaddv_s64( svptrue_b64(), sum03 ), shift );
+      dstij[ 0 * line + 0 ] = (TCoeff)shift_and_round( svaddv_s64( svptrue_b64(), sum00 ), shift );
+      dstij[ 1 * line + 0 ] = (TCoeff)shift_and_round( svaddv_s64( svptrue_b64(), sum01 ), shift );
+      dstij[ 2 * line + 0 ] = (TCoeff)shift_and_round( svaddv_s64( svptrue_b64(), sum02 ), shift );
+      dstij[ 3 * line + 0 ] = (TCoeff)shift_and_round( svaddv_s64( svptrue_b64(), sum03 ), shift );
     }
   }
 }

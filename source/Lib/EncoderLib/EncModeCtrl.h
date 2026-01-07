@@ -275,7 +275,7 @@ protected:
 
 protected:
 
-  void create   ();
+  void create   ( int ctuSize );
   void destroy  ();
   void init     ( const Slice &slice );
 
@@ -313,7 +313,7 @@ private:
 
 protected:
   bool                 m_reuseCuResults;
-  void create   ( const bool reuseCuResults, const ChromaFormat chFmt );
+  void create   ( const bool reuseCuResults, const ChromaFormat chFmt, int ctuSize );
   void destroy  ();
 
 public:

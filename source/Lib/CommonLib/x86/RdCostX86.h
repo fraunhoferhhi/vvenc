@@ -2976,8 +2976,8 @@ static Distortion lumaWeightedSSE_SIMD( const DistParam& rcDtParam, ChromaFormat
       {
         const int o = n<<csx;
         
-        __m128i xorg = _mm_loadu_si128( ( const __m128i* ) &piOrg[n] );
-        __m128i xcur = _mm_loadu_si128( ( const __m128i* ) &piCur[n] );
+        __m128i xorg = _vv_loadl_epi64( ( const __m128i* ) &piOrg[n] );
+        __m128i xcur = _vv_loadl_epi64( ( const __m128i* ) &piCur[n] );
         
         xcur = _mm_sub_epi16     ( xorg, xcur );
 
