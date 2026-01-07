@@ -1240,13 +1240,14 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     // leaving 12 bit (2^6*2^6) for the sum, which is ok for blocks up to 64x64, with w and h being usually 8 or 16 (2^3 or 2^4)
     // diffsum has double the number of entries, so one less bit
 
-    if( w == 4 )
+    if( ( w & 7 ) == 4 )
     {
       const __m128i xshufr = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
 
       for( int y1 = 0; y1 < h; y1++ )
       {
-        for( int x1 = 0; x1 < w; x1 += 8 )
+        // probably only one iteration anyway. the case of w==4 does not occur very often (probably only for chroma, when MCTFUnitSize=8, i.e for res < 720p).
+        for( int x1 = 0; x1 < w; x1 += 4 )
         {
           const Pel *pix0 = srcPel + srcStride * y1 + x1;
           const Pel *ref0 = refPel + refStride * y1 + x1;
@@ -1341,8 +1342,8 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
     xvar = _mm_hadd_epi32( xvar, xvar );
     int64_t variance = _mm_cvtsi128_si32( xvar );
     int64_t diffsum  = _mm_extract_epi32( xvar, 1 );
-    variance <<= 2*(10-clpRng.bd);
-    diffsum <<= 2*(10-clpRng.bd);
+    variance *= (int64_t) 1 << (2*(10-clpRng.bd));
+    diffsum  *= (int64_t) 1 << (2*(10-clpRng.bd));
 
     const int cntV = w * h;
     const int cntD = 2 * cntV - w - h;

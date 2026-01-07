@@ -307,6 +307,9 @@ if( VVENC_ENABLE_WERROR )
   add_compile_options( "$<$<CXX_COMPILER_ID:MSVC>:/WX>" )
 endif()
 
+# enable warnings for clang, that xcode enables by default
+add_compile_options( "$<$<CXX_COMPILER_ID:Clang>:-Wshorten-64-to-32>" )
+
 if( VVENC_ENABLE_X86_SIMD )
   if( ( UNIX OR MINGW ) AND VVENC_OPT_TARGET_ARCH )
     set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )

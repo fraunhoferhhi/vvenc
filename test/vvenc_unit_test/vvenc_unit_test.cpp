@@ -600,7 +600,7 @@ static bool test_TCoeffOps()
 #define VVENC_MCTF_RANGE 6
 template<typename G>
 static bool check_one_applyBlock( MCTF* ref, MCTF* opt, unsigned srcStride, unsigned dstStride, int w, int h,
-                                  int bitDepth, int numRefs, G inputGenCorrectedPics )
+                                  unsigned bitDepth, int numRefs, G inputGenCorrectedPics )
 {
   CHECK( srcStride < w, "OrgStride must be greater than or equal to width" );
   CHECK( dstStride < w, "BufStride must be greater than or equal to width" );
@@ -608,9 +608,9 @@ static bool check_one_applyBlock( MCTF* ref, MCTF* opt, unsigned srcStride, unsi
   std::ostringstream sstm;
   sstm << "applyBlock srcStride=" << srcStride << " dstStride=" << dstStride << " w=" << w << " h=" << h;
 
-  InputGenerator<TCoeff> g10{ 10, /*is_signed=*/false };
-  std::vector<int> verror( 2 * VVENC_MCTF_RANGE ); // 10bit unsigned
-  std::generate( verror.begin(), verror.end(), g10 );
+  InputGenerator<int> gBD{ bitDepth, /*is_signed=*/false };
+  std::vector<int> verror( 2 * VVENC_MCTF_RANGE ); // BD unsigned
+  std::generate( verror.begin(), verror.end(), gBD );
 
   const double refStrengths[2][VVENC_MCTF_RANGE] = {
       // abs(POC offset)
@@ -626,32 +626,33 @@ static bool check_one_applyBlock( MCTF* ref, MCTF* opt, unsigned srcStride, unsi
   ComponentID compID = ( ComponentID )dg.get( 0, 2 ); // 0 to 2
 
   const CompArea blk( compID, chromaFormat, Area( 0, 0, w, h ) );
-  const ClpRng clpRng{ bitDepth };
+  const ClpRng clpRng{ (int)bitDepth };
   const std::array<double, 3> overallStrength = { 0.5, 0.666667, 1.5 }; // Values taken from a real encoding.
   const double weightScaling = overallStrength[dg.get( 0, 2 )] * ( isChroma( compID ) ? 0.55 : 0.4 );
   const std::array<double, 3> sigmaSqVal = { 900.0, 2275.031250, 4608.0 }; // Values taken from a real encoding.
   double sigmaSq = sigmaSqVal[dg.get( 0, 2 )];
 
   std::vector<const Pel*> correctedPics( 2 * VVENC_MCTF_RANGE );
-  std::vector<Pel> correctedPicsBuf( numRefs * w * h );
+  std::vector<Pel> correctedPicsBuf( numRefs * w * h + w ); // allow one line overread
   std::generate( correctedPicsBuf.begin(), correctedPicsBuf.end(), inputGenCorrectedPics );
   for( int i = 0; i < numRefs; i++ )
   {
-    correctedPics[i] = correctedPicsBuf.data() + ( i * w * h );
+    correctedPics[i] = correctedPicsBuf.data() + i * w * h;
   }
 
-  std::vector<Pel> src_buf( srcStride * h );
-  std::generate( src_buf.begin(), src_buf.end(), g10 );
+  std::vector<Pel> src_buf( srcStride * ( h + 2 ) );
+  std::generate( src_buf.begin(), src_buf.end(), gBD );
 
-  std::vector<Pel> dst_buf_ref( dstStride * h );
-  std::vector<Pel> dst_buf_opt( dstStride * h );
-
+  std::vector<Pel> dst_buf_ref( dstStride * ( h + 2 ) );
+  std::vector<Pel> dst_buf_opt( dstStride * ( h + 2 ) );
+  
   CPelBuf src;
   PelBuf dst_ref, dst_opt;
 
-  src.buf = src_buf.data();
-  dst_ref.buf = dst_buf_ref.data();
-  dst_opt.buf = dst_buf_opt.data();
+  // source data is always padded allowing for overreads - we just offset add one line below and above
+  src.buf = src_buf.data()         + srcStride;
+  dst_ref.buf = dst_buf_ref.data() + dstStride;
+  dst_opt.buf = dst_buf_opt.data() + dstStride;
   src.stride = srcStride;
   dst_ref.stride = dstStride;
   dst_opt.stride = dstStride;
@@ -663,33 +664,33 @@ static bool check_one_applyBlock( MCTF* ref, MCTF* opt, unsigned srcStride, unsi
 
   // The SIMDe implementation of applyBlock may differ by one bit compared to the reference implementation.
   // Adjusted tolerance to reflect this.
-  return compare_values_2d( sstm.str(), dst_buf_ref.data(), dst_buf_opt.data(), h, w, dstStride, 1 );
+  return compare_values_2d( sstm.str(), dst_ref.buf, dst_opt.buf, h, w, dstStride, 1 );
 }
 
 static bool check_applyBlock( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
 {
   printf( "Testing MCTF::applyBlock w=%d h=%d\n", w, h );
-  InputGenerator<TCoeff> g10{ 10, /*is_signed=*/false };
-  InputGenerator<TCoeff> g2{ 2, /*is_signed=*/false };
+  InputGenerator<Pel> g2 { 2, /*is_signed=*/false };
   DimensionGenerator rng;
 
-  for( int bitDepth : { 8, 10 } )
+  for( unsigned bitDepth : { 8, 10 } )
   {
+    InputGenerator<Pel> gBD{ bitDepth, /*is_signed=*/false };
     for( int numRefs : { 6, 8 } )
     {
       for( unsigned i = 0; i < num_cases; ++i )
       {
-        unsigned srcStride = rng.get( w, 128 );
-        unsigned dstStride = rng.get( w, 128 );
+        unsigned srcStride = rng.get( w + 2, 128 );
+        unsigned dstStride = rng.get( w + 2, 128 );
 
-        if( !check_one_applyBlock( ref, opt, srcStride, dstStride, w, h, bitDepth, numRefs, g10 ) )
+        if( !check_one_applyBlock( ref, opt, srcStride, dstStride, w, h, bitDepth, numRefs, gBD ) )
         {
           return false;
         }
       }
       // Test scenarios with high noise (as corner case) - dst buffer having high variance from src buffer.
-      unsigned srcStride = rng.get( w, 128 );
-      unsigned dstStride = rng.get( w, 128 );
+      unsigned srcStride = rng.get( w + 2, 128 );
+      unsigned dstStride = rng.get( w + 2, 128 );
 
       if( !check_one_applyBlock( ref, opt, srcStride, dstStride, w, h, bitDepth, numRefs, g2 ) )
       {
@@ -1003,7 +1004,7 @@ static bool test_MCTF()
 #if ENABLE_SIMD_OPT_BDOF
 template<typename G>
 static bool check_one_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
-                                    ptrdiff_t dstStride, int shift, int offset, int limit, ClpRng clpRng, int bitDepth,
+                                    ptrdiff_t dstStride, int shift, int offset, int limit, ClpRng clpRng, unsigned bitDepth,
                                     G input_generator )
 {
   CHECK( width % 8, "Width must be a multiple of eight" );
@@ -1013,21 +1014,22 @@ static bool check_one_biDirOptFlow( InterPredInterpolation* ref, InterPredInterp
   sstm << "biDirOptFlow width=" << width << " height=" << height << " shift=" << shift << " offset=" << offset
        << " limit=" << limit;
 
-  int srcStride = width + 2 * BDOF_EXTEND_SIZE + 2;
-  int gradStride = width + 2;
+  int srcStride  = width + 2 * BDOF_EXTEND_SIZE + 2;
+  int gradStride = width + 2 * BDOF_EXTEND_SIZE;
 
-  std::vector<Pel> srcY0( srcStride * ( height + 2 ) );
-  std::vector<Pel> srcY1( srcStride * ( height + 2 ) );
-  std::vector<Pel> gradX0( gradStride * ( height + 2 ) );
-  std::vector<Pel> gradX1( gradStride * ( height + 2 ) );
-  std::vector<Pel> gradY0( gradStride * ( height + 2 ) );
-  std::vector<Pel> gradY1( gradStride * ( height + 2 ) );
+  // need to add 2 samples to allow SIMD reads of 6 values by using 128-bit read
+  std::vector<Pel> srcY0 ( srcStride  * ( height + 2 ) + 2 );
+  std::vector<Pel> srcY1 ( srcStride  * ( height + 2 ) + 2 );
+  std::vector<Pel> gradX0( gradStride * ( height + 2 ) + 2 );
+  std::vector<Pel> gradX1( gradStride * ( height + 2 ) + 2 );
+  std::vector<Pel> gradY0( gradStride * ( height + 2 ) + 2 );
+  std::vector<Pel> gradY1( gradStride * ( height + 2 ) + 2 );
   std::vector<Pel> dstYref( dstStride * height );
   std::vector<Pel> dstYopt( dstStride * height );
 
   // Initialize source buffers.
-  std::generate( srcY0.begin(), srcY0.end(), input_generator );
-  std::generate( srcY1.begin(), srcY1.end(), input_generator );
+  std::generate( srcY0.begin(),  srcY0.end(),  input_generator );
+  std::generate( srcY1.begin(),  srcY1.end(),  input_generator );
   std::generate( gradX0.begin(), gradX0.end(), input_generator );
   std::generate( gradX1.begin(), gradX1.end(), input_generator );
   std::generate( gradY0.begin(), gradY0.end(), input_generator );
@@ -1044,7 +1046,6 @@ static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolat
                                 int height )
 {
   printf( "Testing InterPred::xFpBiDirOptFlow w=%d h=%d\n", width, height );
-  InputGenerator<Pel> g{ 10 };
   DimensionGenerator rng;
 
   for( unsigned i = 0; i < num_cases; ++i )
@@ -1053,8 +1054,9 @@ static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolat
     // DstStride is a multiple of eight in the range width to 128 inclusive.
     unsigned dstStride = rng.get( width, 128, 8 );
 
-    for( int bitDepth = 8; bitDepth <= 10; bitDepth += 2 )
+    for( int bitDepth : { 8, 10 } )
     {
+      InputGenerator<Pel> g{ (unsigned) bitDepth };
       const unsigned shift = IF_INTERNAL_PREC + 1 - bitDepth;
       const int offset = ( 1 << ( shift - 1 ) ) + 2 * IF_INTERNAL_OFFS;
       const int limit = ( 1 << 4 ) - 1;
@@ -1353,32 +1355,64 @@ static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int wi
   bool passed = true;
   for( unsigned i = 0; i < num_cases; i++ )
   {
+    int splitDir = rng.get( 0, GEO_NUM_PARTITION_MODE - 1 );
+    int maskStride = 0, maskStride2 = 0;
+    int stepX = 1;
+    Pel *sadMask;
+    int16_t angle = g_GeoParams[splitDir][0];
+    const int wIdx = floorLog2( width ) - GEO_MIN_CU_LOG2;
+    const int hIdx = floorLog2( height ) - GEO_MIN_CU_LOG2;
+    
+    if( g_angle2mirror[angle] == 2 )
+    {
+      maskStride  = -GEO_WEIGHT_MASK_SIZE;
+      maskStride2 = -width;
+      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
+                      [( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][1] ) * GEO_WEIGHT_MASK_SIZE
+                                                  + g_weightOffset[hIdx][wIdx][splitDir][0]
+                      ];
+    }
+    else if( g_angle2mirror[angle] == 1 )
+    {
+      stepX       = -1;
+      maskStride2 = width;
+      maskStride  = GEO_WEIGHT_MASK_SIZE;
+      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
+                      [     GEO_WEIGHT_MASK_SIZE *     g_weightOffset[hIdx][wIdx][splitDir][1]
+                        + ( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][0] )
+                      ];
+    }
+    else
+    {
+      maskStride  = GEO_WEIGHT_MASK_SIZE;
+      maskStride2 = -width;
+      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
+                      [   g_weightOffset[hIdx][wIdx][splitDir][1] * GEO_WEIGHT_MASK_SIZE
+                        + g_weightOffset[hIdx][wIdx][splitDir][0]
+                      ];
+    }
     int org_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
     int cur_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
-    int mask_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
     std::vector<Pel> orgBuf( org_stride * height );
     std::vector<Pel> curBuf( cur_stride * height );
-    std::vector<Pel> maskBuf( mask_stride * height );
-    bool negStepX = rng.get( 0, 1 ) != 0;
 
     DistParam dtParam;
     dtParam.org.buf = orgBuf.data();
     dtParam.org.stride = org_stride;
     dtParam.cur.buf = curBuf.data();
     dtParam.cur.stride = cur_stride;
-    dtParam.mask = maskBuf.data() + (negStepX ? width : 0);
-    dtParam.maskStride = mask_stride;
-    dtParam.maskStride2 = negStepX ? width : -width;
+    dtParam.mask = sadMask;
+    dtParam.maskStride = maskStride;
+    dtParam.maskStride2 = maskStride2;
     dtParam.org.width = width;
     dtParam.org.height = height;
     dtParam.bitDepth = 10;
-    dtParam.subShift = rng.get( 0, 1 );
+    dtParam.subShift = 0; // always 0 for GEO
     dtParam.applyWeight = 0;  // applyWeight appears to be always zero.
-    dtParam.stepX = negStepX ? -1 : 1;
+    dtParam.stepX = stepX;
 
     std::generate( orgBuf.begin(), orgBuf.end(), g10 );
     std::generate( curBuf.begin(), curBuf.end(), g10 );
-    std::generate( maskBuf.begin(), maskBuf.end(), g1);
 
     Distortion sum_ref = ref->m_afpDistortFunc[0][DF_SAD_WITH_MASK]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][DF_SAD_WITH_MASK]( dtParam );
@@ -1413,7 +1447,7 @@ static bool test_RdCost()
         passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false ) && passed;
       }
 
-      if (w >= 8 && h >= 8)
+      if (w >= GEO_MIN_CU_SIZE && h >= GEO_MIN_CU_SIZE && w <= GEO_MAX_CU_SIZE && h <= GEO_MAX_CU_SIZE)
       {
         passed = check_SADwMask( &ref, &opt, num_cases, w, h ) && passed;
       }
@@ -1693,6 +1727,7 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
     tapIdx = 3;
     frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
     pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
+    src_offset += cStride; // some of the 6-tap filter impementations use 8-tap
   }
   else if( N == 4 )
   {
@@ -1762,19 +1797,19 @@ static bool check_filterWxH_N8( InterpolationFilter* ref, InterpolationFilter* o
       const TFilterCoeff *pCoeffH, *pCoeffV;
       if( width == 4 )
       {
-        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
-        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
+        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
         pCoeffH = InterpolationFilter::m_lumaFilter4x4[hCoeff_idx];
         pCoeffV = InterpolationFilter::m_lumaFilter4x4[vCoeff_idx];
       }
       else // Include lumaAltHpelIFilter for other widths.
       {
-        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
-        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
-        pCoeffH = hCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1
+        unsigned hCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+        unsigned vCoeff_idx = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+        pCoeffH = hCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS
                       ? InterpolationFilter::m_lumaAltHpelIFilter
                       : InterpolationFilter::m_lumaFilter[hCoeff_idx];
-        pCoeffV = vCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1
+        pCoeffV = vCoeff_idx == LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS
                       ? InterpolationFilter::m_lumaAltHpelIFilter
                       : InterpolationFilter::m_lumaFilter[vCoeff_idx];
       }
@@ -2354,7 +2389,7 @@ static inline std::string get_testcase_help_text()
   for( const auto& entry : test_suites )
   {
     if( !first )
-    {
+    { 
       sstm << ", ";
     }
     first = false;

@@ -254,17 +254,18 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
     }
   }
 
-  const ChromaFormat cform = encCfg.m_internChromaFormat;
-  for( uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++ )
+  const ChromaFormat cform   = encCfg.m_internChromaFormat;
+  const int          ctuSize = encCfg.m_CTUSize;
+  for (uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++)
   {
-    m_tmpPredStorage[i].create( UnitArea( cform, Area( 0, 0, MAX_CU_SIZE, MAX_CU_SIZE ) ) );
+    m_tmpPredStorage[i].create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
   }
-  m_tmpStorageLCU.create( UnitArea( cform, Area( 0, 0, MAX_CU_SIZE, MAX_CU_SIZE ) ) );
-  m_pTempPel = new Pel[ encCfg.m_CTUSize * encCfg.m_CTUSize ];
-  m_tmpAffiStorage.create(UnitArea(cform, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE + 2)));  // allow overread by 2 samples
-  m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
-  m_tmpAffiDeri[0] = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
-  m_tmpAffiDeri[1] = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
+  m_tmpStorageLCU.create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
+  m_pTempPel = new Pel[ctuSize * ctuSize];
+  m_tmpAffiStorage.create(UnitArea(cform, Area(0, 0, ctuSize, ctuSize + 2)));  // allow overread by 2 samples
+  m_tmpAffiError = new Pel[ctuSize * ctuSize];
+  m_tmpAffiDeri[0] = new Pel[ctuSize * ctuSize];
+  m_tmpAffiDeri[1] = new Pel[ctuSize * ctuSize];
 
   CompArea chromaArea( COMP_Cb, cform, Area( 0, 0, encCfg.m_CTUSize, encCfg.m_CTUSize ), true );
   for( int i = 0; i < 4; i++ )
@@ -2742,7 +2743,7 @@ Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf,
   clipMv( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
   xPredInterBlk( COMP_Y, cu, picRefB, mvB, predBufB, false, cu.slice->clpRngs[ COMP_Y ], false, false );
 
-  PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( UnitAreaRelative( cu, cu ) );
+  PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
   bufTmp.copyFrom( origBuf );
   bufTmp.removeHighFreq( predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
   double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
@@ -4465,7 +4466,7 @@ void InterSearch::xSymMvdCheckBestMvp(
   xClipMvSearch( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_ifpLines );
   xPredInterBlk( COMP_Y, cu, picRefA, mvA, predBufA, false, cu.slice->clpRngs[ COMP_Y ], false, false );
 
-  bufTmp = m_tmpStorageLCU.getBuf( UnitAreaRelative( cu, cu ) );
+  bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
   bufTmp.copyFrom( origBuf );
   bufTmp.removeHighFreq( predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, tarRefList )*/ );
   fWeight = xGetMEDistortionWeight( cu.BcwIdx, tarRefList );
@@ -5929,7 +5930,7 @@ int InterSearch::xIBCSearchMVChromaRefine(CodingUnit& cu,
     cu.interDir = 1;
     cu.refIdx[0] = cu.cs->slice->numRefIdx[REF_PIC_LIST_0]; // last idx in the list
 
-    PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_0].getBuf(UnitAreaRelative(cu, cu));
+    PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_0].getCompactBuf(cu);
     motionCompensation(cu, predBufTmp, REF_PIC_LIST_0);
 
     for (unsigned int ch = COMP_Cb; ch < getNumberValidComponents(cu.cs->sps->chromaFormatIdc); ch++)

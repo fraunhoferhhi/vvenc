@@ -736,7 +736,7 @@ void InterPredInterpolation::init( bool enableOpt )
 
   m_if.initInterpolationFilter( true );
 
-  xFpBiDirOptFlow = xFpBiDirOptFlowCore;
+  xFpBiDirOptFlow   = xFpBiDirOptFlowCore;
   xFpBDOFGradFilter = gradFilterCore;
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;

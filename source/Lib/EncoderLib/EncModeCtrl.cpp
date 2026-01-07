@@ -61,39 +61,39 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-void CacheBlkInfoCtrl::create()
+void CacheBlkInfoCtrl::create(int ctuSize)
 {
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
-  static constexpr size_t numCu = 7921;
+  //static constexpr size_t numCu = 7921;
 
-  //size_t numCu = 0;
-  //
-  //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  //{
-  //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-  //  {
-  //    for( unsigned y = 0; y < numPos; y++ )
-  //    {
-  //      for( unsigned x = 0; x < numPos; x++ )
-  //      {
-  //        // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
-  //        // W = 1 << ( wIdx + 2 )
-  //        // 1/2 W = 1 << ( wIdx + 1 )
-  //        // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
-  //
-  //        if( (x + (1 << (wIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
-  //            && (y + (1 << (hIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
-  //            && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
-  //            && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
-  //        {
-  //          numCu++;
-  //        }
-  //      }
-  //    }
-  //  }
-  //}
+  size_t numCu = 0;
+  
+  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  {
+    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+    {
+      for( unsigned y = 0; y < numPos; y++ )
+      {
+        for( unsigned x = 0; x < numPos; x++ )
+        {
+          // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+          // W = 1 << ( wIdx + 2 )
+          // 1/2 W = 1 << ( wIdx + 1 )
+          // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+  
+          if( (x + (1 << (wIdx)) <= (ctuSize >> MIN_CU_LOG2))
+              && (y + (1 << (hIdx)) <= (ctuSize >> MIN_CU_LOG2))
+              && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
+              && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
+          {
+            numCu++;
+          }
+        }
+      }
+    }
+  }
 
   m_codedCUInfoBuf = new CodedCUInfo[numCu];
   CodedCUInfo* cuInfo = m_codedCUInfoBuf;
@@ -111,8 +111,8 @@ void CacheBlkInfoCtrl::create()
           // 1/2 W = 1 << ( wIdx + 1 )
           // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
 
-          if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-            && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+          if(( x + (1<<(wIdx)) <= ( ctuSize >> MIN_CU_LOG2 ) )
+            && ( y + (1<<(hIdx)) <= ( ctuSize >> MIN_CU_LOG2 ) )
             && ( ( ( x << MIN_CU_LOG2 ) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
             && ( ( ( y << MIN_CU_LOG2 ) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
@@ -256,7 +256,7 @@ static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, co
   return true;
 }
 
-void BestEncInfoCache::create( const bool reuseCuResults, const ChromaFormat chFmt )
+void BestEncInfoCache::create( const bool reuseCuResults, const ChromaFormat chFmt, const int ctuSize )
 {
   m_reuseCuResults = reuseCuResults;
 
@@ -268,57 +268,58 @@ void BestEncInfoCache::create( const bool reuseCuResults, const ChromaFormat chF
   static constexpr size_t yuvNom[4] = { 1, 3, 2, 3 };
   static constexpr size_t yuvDen[4] = { 0, 1, 0, 0 };
 
-  static constexpr size_t numCu = 7921;
-  static constexpr size_t numDmvrMv = 5439;
-  const size_t numCoeff = ( 1345600 * yuvNom[chFmt] ) >> yuvDen[chFmt];
+  // only true for 128x128 CTU
+  //static constexpr size_t numCu = 7921;
+  //static constexpr size_t numDmvrMv = 5439;
+  //const size_t numCoeff = ( 1345600 * yuvNom[chFmt] ) >> yuvDen[chFmt];
 
-  //size_t numCu = 0;
-  //size_t numDmvrMv = 0;
-  //size_t numCoeff = 0;
-  //
-  //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  //{
-  //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-  //  {
-  //    int dmvrSize = 0;
-  //    if( hIdx >= 1 && wIdx >= 1 && (wIdx + hIdx) >= 3 )
-  //    {
-  //      dmvrSize = (1 << std::max( 0, (wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) )) * (1 << std::max( 0, (hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) ));
-  //    }
-  //
-  //    const UnitArea area( chFmt, Area( 0, 0, 1 << (wIdx + 2), 1 << (hIdx + 2) ) );
-  //
-  //    for( unsigned x = 0; x < numPos; x++ )
-  //    {
-  //      for( unsigned y = 0; y < numPos; y++ )
-  //      {
-  //        // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
-  //        // W = 1 << ( wIdx + 2 )
-  //        // 1/2 W = 1 << ( wIdx + 1 )
-  //        // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
-  //
-  //        if( (x + (1 << (wIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
-  //          && (y + (1 << (hIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
-  //          && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
-  //          && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
-  //        {
-  //          numCu++;
-  //
-  //          numCoeff += area.Y().area();
-  //
-  //
-  //          //numCu++;
-  //          numDmvrMv += dmvrSize;
-  //        }
-  //      }
-  //    }
-  //  }
-  //}
-  //
+  size_t numCu = 0;
+  size_t numDmvrMv = 0;
+  size_t numCoeff = 0;
+  
+  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  {
+    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+    {
+      int dmvrSize = 0;
+      if( hIdx >= 1 && wIdx >= 1 && (wIdx + hIdx) >= 3 )
+      {
+        dmvrSize = (1 << std::max( 0, (wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) )) * (1 << std::max( 0, (hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) ));
+      }
+  
+      const UnitArea area( chFmt, Area( 0, 0, 1 << (wIdx + 2), 1 << (hIdx + 2) ) );
+  
+      for( unsigned x = 0; x < numPos; x++ )
+      {
+        for( unsigned y = 0; y < numPos; y++ )
+        {
+          // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+          // W = 1 << ( wIdx + 2 )
+          // 1/2 W = 1 << ( wIdx + 1 )
+          // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+  
+          if( (x + (1 << (wIdx)) <= (ctuSize >> MIN_CU_LOG2))
+            && (y + (1 << (hIdx)) <= (ctuSize >> MIN_CU_LOG2))
+            && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
+            && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
+          {
+            numCu++;
+  
+            numCoeff += area.Y().area();
+  
+  
+            //numCu++;
+            numDmvrMv += dmvrSize;
+          }
+        }
+      }
+    }
+  }
+  
   //std::cout << numCu << " " << numDmvrMv << " " << numCoeff << std::endl;
-  //
-  //numCoeff *= 3;
-  //numCoeff >>= 1;
+  
+  numCoeff  *= yuvNom[chFmt];
+  numCoeff >>= yuvDen[chFmt];
 
   m_encInfoBuf = new BestEncodingInfo[numCu];
   BestEncodingInfo* encInfo = m_encInfoBuf;
@@ -350,8 +351,8 @@ void BestEncInfoCache::create( const bool reuseCuResults, const ChromaFormat chF
           // 1/2 W = 1 << ( wIdx + 1 )
           // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
 
-          if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-            && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+          if(( x + (1<<(wIdx)) <= ( ctuSize >> MIN_CU_LOG2 ) )
+            && ( y + (1<<(hIdx)) <= ( ctuSize >> MIN_CU_LOG2 ) )
             && ( ( ( x << MIN_CU_LOG2 )  & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
             && ( ( ( y << MIN_CU_LOG2 )  & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
@@ -540,8 +541,8 @@ void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
   m_pcRdCost = pRdCost;
   comprCUCtx = nullptr;
 
-  CacheBlkInfoCtrl::create();
-  BestEncInfoCache::create( m_pcEncCfg->m_reuseCuResults, encCfg.m_internChromaFormat );
+  CacheBlkInfoCtrl::create( encCfg.m_CTUSize );
+  BestEncInfoCache::create( encCfg.m_reuseCuResults, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
 }
 
 void EncModeCtrl::destroy()
