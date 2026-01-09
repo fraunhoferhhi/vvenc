@@ -1,4 +1,37 @@
 /////////////////////////////////////////
+tag 1.14.0-rc1
+
+* libvvenc:
+  - public interface change:
+    - cts and dts in vvencYUVBuffer and vvencAccessUnit are now signed instead of unsigned integers
+  - deprecated LMCS (will be removed in the future)
+  - enable VUI if aspectRatioIdc, colourPrimaries, or matrixCoefficients are set
+  - many more ARM SIMD optimizations for both NEON and SVE
+  - cmake build changes:
+    - add build option VVENC_FPP_CONTRACT_OFF to ensure encoded bitstreams are bit-identical on different platforms
+    - don't require nlohmann_json in INTERFACE_LINK_LIBRARIES
+    - update nlohmann_json to v3.12.0
+    - ARM: enable SVE intrinsics by default if compiler supports it
+  - some minor memory optimizations
+  - bug fixes and cleanups
+  - fix some build issues
+
+* vvenFFapp:
+  - new config parameter:
+    - Range: set colour range: unknown, limited | mpeg | tv, full | jpeg | pc
+
+* vvencapp:
+  - new parameters:
+    - --range: set colour range: unknown, limited | mpeg | tv, full | jpeg | pc
+
+* vvenc_unit_test:
+  - add unit tests for many of the functions implemented in SIMD
+  - add --seed parameter
+  - add --testcase/-t to run a subset of unit tests
+  - add --fast parameter for faster CI runs
+  - reduce memory sizes for CI unit testing
+
+/////////////////////////////////////////
 tag 1.13.1
 
 * libvvenc:
