@@ -1020,7 +1020,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
   uint32_t     uiLastModeTemp = 0;
   Distortion   uiAffineCost = MAX_DISTORTION;
   Distortion   uiHevcCost = MAX_DISTORTION;
-  bool checkAffine = (cu.imv == 0);
+  bool checkAffine = (cu.imv == IMV_OFF);
   if (cu.cs->bestParent != nullptr && cu.cs->bestParent->getCU(CH_L,TREE_D) != nullptr && cu.cs->bestParent->getCU(CH_L,TREE_D)->affine == false)
   {
     m_skipPROF = true;
@@ -1147,7 +1147,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
     }
 
     ::memcpy(cMvHevcTemp, cMvTemp, sizeof(cMvTemp));
-    if (cu.imv == 0 && (!cu.slice->sps->BCW || BcwIdx == BCW_DEFAULT))
+    if (cu.imv == IMV_OFF && (!cu.slice->sps->BCW || BcwIdx == BCW_DEFAULT))
     {
       m_BlkUniMvInfoBuffer->insertUniMvCands(cu.Y(), &cMvTemp[0][0]);
 
@@ -1678,7 +1678,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
 
       xPredAffineInterSearch(cu, origBuf, puIdx, uiLastModeTemp, uiAffineCost, cMvHevcTemp, acMvAffine4Para, refIdx4Para, BcwIdx, enforceBcwPred, (cs.slice->sps->BCW == true) ? getWeightIdxBits(BcwIdx) : 0 );
 
-      if (cu.imv == 0)
+      if (cu.imv == IMV_OFF)
       {
         storeAffineMotion(cu.mv, cu.refIdx, AFFINEMODEL_4PARAM, BcwIdx);
       }
@@ -1716,7 +1716,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           cu.affineType = AFFINEMODEL_6PARAM;
           xPredAffineInterSearch(cu, origBuf, puIdx, uiLastModeTemp, uiAffine6Cost, cMvHevcTemp, acMvAffine4Para, refIdx4Para, BcwIdx, enforceBcwPred, (cs.slice->sps->BCW == true) ? getWeightIdxBits(BcwIdx) : 0 );
 
-          if (cu.imv == 0)
+          if (cu.imv == IMV_OFF)
           {
             storeAffineMotion(cu.mv, cu.refIdx, AFFINEMODEL_6PARAM, BcwIdx);
           }
@@ -2109,7 +2109,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
 
   DTRACE( g_trace_ctx, D_ME, "%d %d %d :MECostFPel<L%d,%d>: %d,%d,%dx%d, %d", DTRACE_GET_COUNTER( g_trace_ctx, D_ME ), cu.slice->poc, 0, ( int ) refPicList, ( int ) bBi, cu.Y().x, cu.Y().y, cu.Y().width, cu.Y().height, ruiCost );
   // sub-pel refinement for sub-pel resolution
-  if ( cu.imv == 0 || cu.imv == IMV_HPEL )
+  if ( cu.imv == IMV_OFF || cu.imv == IMV_HPEL )
   {
     if ( m_pcEncCfg->m_fastSubPel != 2 )
     {
@@ -2577,7 +2577,7 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
 void InterSearch::xPatternSearchIntRefine(CodingUnit& cu, TZSearchStruct&  cStruct, Mv& rcMv, Mv& rcMvPred, int& riMVPIdx, uint32_t& ruiBits, Distortion& ruiCost, const AMVPInfo& amvpInfo, double fWeight)
 {
 
-  CHECK( cu.imv == 0 || cu.imv == IMV_HPEL , "xPatternSearchIntRefine(): Sub-pel MV used.");
+  CHECK( cu.imv == IMV_OFF || cu.imv == IMV_HPEL , "xPatternSearchIntRefine(): Sub-pel MV used.");
   CHECK( amvpInfo.mvCand[riMVPIdx] != rcMvPred, "xPatternSearchIntRefine(): MvPred issue.");
 
   m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
@@ -4897,7 +4897,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
   if (cu.affineType == AFFINEMODEL_4PARAM)
   {
     ::memcpy(mvAffine4Para, tmp.affMVs, sizeof(tmp.affMVs));
-    if (cu.imv == 0)
+    if (cu.imv == IMV_OFF)
     {
       m_AffineProfList->insert( tmp, cu.Y());
     }
@@ -5550,7 +5550,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     for (int i = 0; i < mvNum; i++)
     {
       Mv deltaMv = acDeltaMv[i];
-      if (cu.imv == 2)
+      if (cu.imv == IMV_4PEL)
       {
         deltaMv.roundToPrecision(MV_PRECISION_INTERNAL, MV_PRECISION_HALF);
       }
@@ -6471,11 +6471,11 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 {
   Mv           cMvSrchRngLT;
   Mv           cMvSrchRngRB;
-  cu.imv = 2;
+  cu.imv = IMV_4PEL;
   AMVPInfo amvpInfo4Pel;
   CU::fillIBCMvpCand(cu, amvpInfo4Pel);
 
-  cu.imv = 0;// (Int)cu.cs->sps->getUseIMV(); // set as IMV=0 initially
+  cu.imv = IMV_OFF;// (Int)cu.cs->sps->getUseIMV(); // set as IMV=0 initially
   Mv    cMv, cMvPred[2];
   AMVPInfo amvpInfo;
   CU::fillIBCMvpCand(cu, amvpInfo);
@@ -6524,9 +6524,9 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
       bvpIdxBest = bvpIdxTemp;
 
       if (cu.cs->sps->AMVR && cMv != cMvPred[bvpIdxTemp])
-        cu.imv = 1; // set as full-pel
+        cu.imv = IMV_FPEL; // set as full-pel
       else
-        cu.imv = 0; // set as fractional-pel
+        cu.imv = IMV_OFF; // set as fractional-pel
 
     }
 
@@ -6552,7 +6552,7 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
       bvpIdxBest = bvpIdxTemp;
 
       if (cu.cs->sps->AMVR)
-        cu.imv = 2; // set as quad-pel
+        cu.imv = IMV_4PEL;
     }
 
   }
@@ -6562,14 +6562,14 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 
   cu.mvpIdx[REF_PIC_LIST_0] = bvpIdxBest;
 
-  if (cu.imv == 2 && cMv != amvpInfo4Pel.mvCand[bvpIdxBest])
+  if (cu.imv == IMV_4PEL && cMv != amvpInfo4Pel.mvCand[bvpIdxBest])
     cu.mvd[REF_PIC_LIST_0][0] = cMv - amvpInfo4Pel.mvCand[bvpIdxBest];
   else
     cu.mvd[REF_PIC_LIST_0][0] = cMv - amvpInfo.mvCand[bvpIdxBest];
 
   if (cu.mvd[REF_PIC_LIST_0][0] == Mv(0, 0))
-    cu.imv = 0;
-  if (cu.imv == 2)
+    cu.imv = IMV_OFF;
+  if (cu.imv == IMV_4PEL)
     assert((cMv.hor % 16 == 0) && (cMv.ver % 16 == 0));
   if (cu.cs->sps->AMVR)
     assert(cu.imv > 0 || cu.mvd[REF_PIC_LIST_0][0] == Mv());
