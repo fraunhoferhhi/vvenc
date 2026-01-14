@@ -1974,7 +1974,7 @@ void CABACWriter::mvd_coding( const Mv &rMvd, int8_t imv )
     if (imv < IMV_HPEL)
     {
       shift = 2;
-      if (imv == IMV_4PEL)//IMV_4PEL
+      if (imv == IMV_4PEL)
       {
         shift = 4;
       }

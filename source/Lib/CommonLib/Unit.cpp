@@ -319,7 +319,7 @@ void CodingUnit::initData()
   mtsFlag           = 0;
   lfnstIdx          = 0;
   tileIdx           = 0;
-  imv               = 0;
+  imv               = IMV_OFF;
   imvNumCand        = 0;
   BcwIdx            = BCW_DEFAULT;
   smvdMode          = 0;
