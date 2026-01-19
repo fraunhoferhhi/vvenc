@@ -51,6 +51,26 @@ make install-release <options>
 
 Other supported build targets include `configure`, `release`, `debug`, `relwithdebinfo`, `test`,  and `clean`. Refer to the Wiki for a full list of supported features.
 
+### Floating-point contraction and bit-exactness for AArch64
+
+This improves performance but may result in output mismatches between platforms or compiler versions.
+By default, VVenC allows the compiler to apply floating-point contraction (e.g. fusing multiply and add operations into fused multiply-add instructions).
+
+To guarantee fully bit-exact output across builds, VVenC must be built with floating-point contraction disabled.
+
+When configuring the build directly with CMake:
+
+```sh
+mkdir build
+cd build
+cmake .. -DVVENC_FFP_CONTRACT_OFF=On <other build options>
+```
+
+When using the provided Makefile wrapper:
+```sh
+make install-release ffp-contract-off=On <other options>
+```
+
 ## Citing
 
 Please use the following citation when referencing VVenC in literature:
