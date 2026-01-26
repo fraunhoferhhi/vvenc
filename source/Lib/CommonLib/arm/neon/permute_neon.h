@@ -55,6 +55,22 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+static inline int8x16_t vvenc_vqtbl1q_s8( int8x16_t table, uint8x16_t index )
+{
+#if REAL_TARGET_AARCH64
+  return vqtbl1q_s8( table, index );
+#else
+  int8x8x2_t t;
+  t.val[0] = vget_low_s8( table );
+  t.val[1] = vget_high_s8( table );
+
+  int8x8_t lo = vtbl2_s8( t, vreinterpret_s8_u8( vget_low_u8( index ) ) );
+  int8x8_t hi = vtbl2_s8( t, vreinterpret_s8_u8( vget_high_u8( index ) ) );
+
+  return vcombine_s8( lo, hi );
+#endif // REAL_TARGET_AARCH64
+}
+
 static inline uint8x16_t vvenc_vqtbl2q_u8( uint8x16x2_t coeff, uint8x16_t shuffleIndices )
 {
 #if REAL_TARGET_AARCH64
