@@ -1138,6 +1138,52 @@ static bool check_gradFilter( InterPredInterpolation* ref, InterPredInterpolatio
   return true;
 }
 
+template<typename G>
+static bool check_one_padDmvr( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
+                               int srcStride, int dstStride, int padSize, G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << "padDmvr width=" << width << " height=" << height << " padSize=" << padSize;
+
+  std::vector<Pel> src( srcStride * height );
+
+  int dstHeight = height + 2 * padSize;
+  std::vector<Pel> dst_ref( dstStride * dstHeight );
+  std::vector<Pel> dst_opt( dstStride * dstHeight );
+
+  std::generate( src.begin(), src.end(), input_generator );
+
+  // Calculate pointer to actual image area in destination.
+  Pel* dst_ref_img = dst_ref.data() + padSize * dstStride + padSize;
+  Pel* dst_opt_img = dst_opt.data() + padSize * dstStride + padSize;
+
+  ref->xFpPadDmvr( src.data(), srcStride, dst_ref_img, dstStride, width, height, padSize );
+  opt->xFpPadDmvr( src.data(), srcStride, dst_opt_img, dstStride, width, height, padSize );
+
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), dstHeight, ( unsigned )dstStride );
+}
+
+static bool check_padDmvr( InterPredInterpolation* ref, InterPredInterpolation* opt, unsigned num_cases, int width,
+                           int height, int padSize )
+{
+  printf( "Testing InterPred::xFpPadDmvr w=%d h=%d padSize=%d\n", width, height, padSize );
+  InputGenerator<Pel> g{ 14 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    unsigned srcStride = rng.get( width, 128 );
+    unsigned dstStride = rng.get( width + 2 * padSize, 128 );
+
+    if( !check_one_padDmvr( ref, opt, width, height, srcStride, dstStride, padSize, g ) )
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool test_InterPred()
 {
   InterPredInterpolation ref;
@@ -1162,6 +1208,24 @@ static bool test_InterPred()
     for( unsigned h : { 4, 8, 16, 32 } )
     {
       passed = check_gradFilter( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  // padSize=1
+  for( unsigned width : { 7, 11 } )
+  {
+    for( unsigned height : { 7, 11 } )
+    {
+      passed = check_padDmvr( &ref, &opt, num_cases, width, height, 1 ) && passed;
+    }
+  }
+
+  // padSize=2
+  for( unsigned width : { 15, 23 } )
+  {
+    for( unsigned height : { 15, 23 } )
+    {
+      passed = check_padDmvr( &ref, &opt, num_cases, width, height, 2 ) && passed;
     }
   }
 
