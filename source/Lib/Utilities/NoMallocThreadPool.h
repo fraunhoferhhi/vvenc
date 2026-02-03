@@ -157,7 +157,7 @@ struct BlockingBarrier
     BlockingBarrier* nonconst = const_cast<BlockingBarrier*>(this);
 
     std::unique_lock<std::mutex> l( nonconst->m_lock );
-    nonconst->m_cond.wait( l, [=] { return !m_intBarrier.isBlocked(); } );
+    nonconst->m_cond.wait( l, [this] { return !m_intBarrier.isBlocked(); } );
   }
 
   BlockingBarrier()  = default;
@@ -210,7 +210,7 @@ struct WaitCounter
     WaitCounter* nonconst = const_cast<WaitCounter*>(this);
 
     std::unique_lock<std::mutex> l( nonconst->m_lock );
-    nonconst->m_cond.wait( l, [=] { return m_count == 0; } );
+    nonconst->m_cond.wait( l, [this] { return m_count == 0; } );
   }
 
   WaitCounter() = default;
