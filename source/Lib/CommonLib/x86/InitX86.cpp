@@ -62,6 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "TrQuant_EMT.h"
 #include "QuantRDOQ2.h"
 #include "SEIFilmGrainAnalyzer.h"
+#include "DepQuantSimd.h"
 
 #ifdef TARGET_SIMD_X86
 
@@ -408,28 +409,27 @@ void Quant::initQuantX86()
   }
 }
 
-void DepQuant::initDepQuantX86()
+void DQIntern::DepQuantSimd::initDepQuantSimdX86()
 {
   auto vext = read_x86_extension_flags();
   switch (vext){
   case AVX512:
   case AVX2:
 #if ENABLE_AVX2_IMPLEMENTATIONS
-    _initDepQuantX86<AVX2>();
+    _initDepQuantSimdX86<AVX2>();
     break;
 #endif
   case AVX:
   case SSE42:
-    _initDepQuantX86<SSE42>();
+    _initDepQuantSimdX86<SSE42>();
     break;
   case SSE41:
-    _initDepQuantX86<SSE41>();
+    _initDepQuantSimdX86<SSE41>();
     break;
   default:
     break;
   }
 }
-
 #endif
 
 #if ENABLE_SIMD_OPT_FGA

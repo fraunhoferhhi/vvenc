@@ -60,6 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "CommonLib/DepQuantSimd.h"
 
 namespace vvenc
 {
@@ -87,6 +88,17 @@ void AffineGradientSearch::initAffineGradientSearchARM()
   }
 }
 #endif
+
+#if ENABLE_SIMD_OPT_QUANT
+void DQIntern::DepQuantSimd::initDepQuantSimdARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initDepQuantSimdARM<NEON>();
+  }
+}
+#endif // ENABLE_SIMD_OPT_QUANT
 
 #if ENABLE_SIMD_OPT_MCIF
 void InterpolationFilter::initInterpolationFilterARM()

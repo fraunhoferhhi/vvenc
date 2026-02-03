@@ -260,10 +260,8 @@ public:
   virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8 );
 
 private:
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
-  void initDepQuantX86();
-  template <X86_VEXT vext>
-  void _initDepQuantX86();
+#if ENABLE_SIMD_OPT_QUANT
+  void initDepQuantSimd();
 #endif
 
   DepQuantImpl* p = nullptr;

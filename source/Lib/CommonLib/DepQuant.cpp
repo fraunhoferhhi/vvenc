@@ -1397,8 +1397,8 @@ void DepQuantImpl::init( int dqTrVal )
 //===== interface class =====
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists )
 {
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
-  initDepQuantX86();
+#if ENABLE_SIMD_OPT_QUANT
+  initDepQuantSimd();
 #endif
 
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
