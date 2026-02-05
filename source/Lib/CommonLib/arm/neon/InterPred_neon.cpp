@@ -1,7 +1,7 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
@@ -39,24 +39,23 @@ POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     InterPredX86.h
-    \brief    SIMD for InterPrediction
-*/
 
-//! \ingroup CommonLib
-//! \{
+/**
+ * \file InterPred_neon.cpp
+ * \brief Neon implementation of InterPrediction for Arm.
+ */
+//  ====================================================================================================================
+//  Includes
+//  ====================================================================================================================
 
 #include "CommonDefARM.h"
 #include "InterPrediction.h"
 #include "Rom.h"
 #include "neon/sum_neon.h"
 
-//! \ingroup CommonLib
-//! \{
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
 
 namespace vvenc {
-
-#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
 
 static inline int rightShiftMSB( int numer, int denom )
 {
@@ -314,20 +313,14 @@ void gradFilter_neon( const Pel* pSrc, int srcStride, int width, int height, int
   }
 }
 
-template<ARM_VEXT vext>
-void InterPredInterpolation::_initInterPredictionARM()
+template<>
+void InterPredInterpolation::_initInterPredictionARM<NEON>()
 {
-  xFpBiDirOptFlow = BiOptFlowCoreARMSIMD<vext>;
+  xFpBiDirOptFlow = BiOptFlowCoreARMSIMD<NEON>;
   xFpBDOFGradFilter = gradFilter_neon;
   xFpProfGradFilter = gradFilter_neon<false>;
 }
 
-template void InterPredInterpolation::_initInterPredictionARM<SIMDARM>();
-
-#endif
 } // namespace vvenc
 
-//! \}
-
-// #endif // TARGET_SIMD_X86
-//! \}
+#endif // ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
