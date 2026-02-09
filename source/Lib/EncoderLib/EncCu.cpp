@@ -1864,7 +1864,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
     addCiipCandsToPruningList( mergeCtx, localUnitArea, sqrtLambdaForFirstPass, ctxStart, distParam, *cu, sameMV );
   }
 
-  if( sps.MMVD && !( m_pcEncCfg->m_useFastMrg >= 2 && m_mergeItemList.size() <= 1 ) )
+  if( sps.MMVD && !!m_mergeItemList.size() && !( m_pcEncCfg->m_useFastMrg >= 2 && m_mergeItemList.size() <= 1 ) )
   {
     addMmvdCandsToPruningList( mergeCtx, localUnitArea, sqrtLambdaForFirstPass, ctxStart, distParam, *cu );
   }
