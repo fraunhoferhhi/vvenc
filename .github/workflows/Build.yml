@@ -85,12 +85,3 @@ jobs:
         cmake --build build/static --config Release
         cmake -S . -B build/shared  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 -A "${{ matrix.config.msvc_arch }}"
         cmake --build build/shared --config Release
-    
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.config.name }}-artifacts
-        path: |
-          bin/
-          lib/
-        if-no-files-found: warn
