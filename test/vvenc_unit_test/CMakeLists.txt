@@ -24,7 +24,7 @@ endif()
 target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall>
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option -Wno-ignored-attributes -Wno-sign-compare>
 
-                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4244 /wd4251 /wd4996>)
+                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4100 /wd4244 /wd4251 /wd4996>)
 
 target_include_directories( ${EXE_NAME} PRIVATE ${VVENC_LIB_DIR} )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )

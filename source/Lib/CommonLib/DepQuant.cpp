@@ -1410,7 +1410,7 @@ void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const C
   m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef );
 }
 
-DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists ), RateEstimator(), m_commonCtx()
+DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists ), RateEstimator(), m_commonCtx()
 {
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
@@ -1436,9 +1436,12 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : Quant
   m_updateStates        = DQIntern::updateStates;
   m_findFirstPos        = nullptr;
 
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
-  initDepQuantX86();
+    initDepQuantX86();
 #endif
+  }
 }
 
 DepQuant::~DepQuant()

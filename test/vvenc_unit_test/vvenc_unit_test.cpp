@@ -59,6 +59,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/DepQuant.h"
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/IntraPrediction.h"
 #include "CommonLib/MCTF.h"
@@ -84,7 +85,7 @@ static inline bool compare_value( const std::string& context, const T ref, const
   if( opt != ref )
   {
     std::cerr << "failed: " << context << "\n"
-              << "  mismatch:  ref=" << ref << "  opt=" << opt << "\n";
+              << "  mismatch:  ref=" << +ref << "  opt=" << +opt << "\n";
   }
   return opt == ref;
 }
@@ -97,7 +98,7 @@ static inline bool compare_values_1d( const std::string& context, const T* ref, 
     if( ref[idx] != opt[idx] )
     {
       std::cout << "failed: " << context << "\n"
-                << "  mismatch:  ref[" << idx << "]=" << ref[idx] << "  opt[" << idx << "]=" << opt[idx] << "\n";
+                << "  mismatch:  ref[" << idx << "]=" << +ref[idx] << "  opt[" << idx << "]=" << +opt[idx] << "\n";
       return false;
     }
   }
@@ -120,8 +121,8 @@ static inline bool compare_values_2d( const std::string& context, const T* ref, 
       if( abs_diff( ref[idx], opt[idx] ) > tolerance )
       {
         std::cout << "failed: " << context << "\n"
-                  << "  mismatch:  ref[" << row << "*" << stride << "+" << col << "]=" << ref[idx]
-                  << "  opt[" << row << "*" << stride << "+" << col << "]=" << opt[idx] << "\n";
+                  << "  mismatch:  ref[" << row << "*" << stride << "+" << col << "]=" << +ref[idx] << "  opt[" << row
+                  << "*" << stride << "+" << col << "]=" << +opt[idx] << "\n";
         return false;
       }
     }
@@ -252,6 +253,147 @@ public:
     return values[rand() % values.size()];
   }
 };
+
+#if ENABLE_SIMD_OPT_QUANT
+static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::updateStates\n" );
+
+  InputGenerator<TCoeff> g4{ 4, /*is_signed=*/false };
+  InputGenerator<TCoeff> g6{ 6, /*is_signed=*/false };
+  InputGenerator<TCoeff> g7{ 7, /*is_signed=*/false };
+  InputGenerator<TCoeff> g8{ 8, /*is_signed=*/false };
+  InputGenerator<TCoeff> g11{ 11 };
+  InputGenerator<TCoeff> g31{ 31 };
+  DimensionGenerator rng;
+
+  std::ostringstream sstm;
+  sstm << "DepQuant updateStates";
+
+  DQIntern::ScanInfo scanInfo;
+  DQIntern::Decisions decisions;
+  DQIntern::StateMem curr_ref;
+  DQIntern::StateMem curr_opt;
+
+  bool passed = true;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    std::memset( &curr_ref, 0xCD, sizeof( curr_ref ) );
+    std::memset( &curr_opt, 0xCD, sizeof( curr_opt ) );
+
+    // The settings below are chosen to satisfy the updateStates() constraints:
+    // insidePos = ( nextInsidePos + 1 ) % sbbSize.
+    // All scanInfo.currNbInfoSbb.invInPos are smaller than insidePos.
+    // scanInfo.currNbInfoSbb.numInv <= std::min(insidePos, 5).
+    scanInfo.sbbSize = rng.getOneOf<int8_t>( { 4, 16 } );
+    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 1 );
+    scanInfo.insidePos = ( scanInfo.nextInsidePos + 1 ) % scanInfo.sbbSize;
+    scanInfo.gtxCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
+    scanInfo.sigCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
+    scanInfo.currNbInfoSbb.numInv = ( uint8_t )rng.get( 0, std::min<int>( scanInfo.insidePos, 5 ) );
+
+    for( int inv = 0; inv < 5; ++inv )
+    {
+      scanInfo.currNbInfoSbb.invInPos[inv] = ( uint8_t )rng.get( 0, std::max<int>( 0, scanInfo.insidePos - 1 ) );
+    }
+
+    for( int idx = 0; idx < 4; ++idx )
+    {
+      decisions.prevId[idx] = rng.getOneOf<int8_t>( { -2, -1, 0, 1, 2, 3 } );
+
+      // prevId == -1 indicates this would be the first non-zero coefficient (thus absVal > 0).
+      int minLevel = decisions.prevId[idx] >= 0 ? 0 : 1;
+      decisions.absLevel[idx] = ( TCoeffSig )rng.get( minLevel, 127 );
+
+      curr_ref.refSbbCtxId[idx] = rng.getOneOf<int8_t>( { -1, 0, 1, 2, 3 } );
+    }
+    std::generate( decisions.rdCost, decisions.rdCost + 4, g31 );
+
+    curr_ref.initRemRegBins = 4;
+    std::generate( curr_ref.numSig, curr_ref.numSig + 4, g6 );
+    std::generate( curr_ref.remRegBins, curr_ref.remRegBins + 4, g11 );
+    for( int idx = 0; idx < 16; ++idx )
+    {
+      std::generate( curr_ref.tplAcc[idx], curr_ref.tplAcc[idx] + 4, g8 );
+      std::generate( curr_ref.sum1st[idx], curr_ref.sum1st[idx] + 4, g8 );
+    }
+    // Initialize absVal[i][j] to 0 prior to updateStates() and then seed nonZero for i > insidePos, to
+    // ensure that they are shuffled properly (and zeroed for prevId == -1) during updateStates().
+    std::fill_n( &curr_ref.absVal[0][0], 16 * 4, 0 );
+    for( int pos = scanInfo.insidePos + 1; pos < 16; ++pos )
+    {
+      std::generate( curr_ref.absVal[pos], curr_ref.absVal[pos] + 4, g7 );
+    }
+
+    curr_opt = curr_ref;
+
+    ref->m_updateStates( scanInfo, decisions, curr_ref );
+    opt->m_updateStates( scanInfo, decisions, curr_opt );
+
+    passed = compare_value( sstm.str() + " cffBitsCtxOffset", curr_ref.cffBitsCtxOffset, curr_opt.cffBitsCtxOffset ) &&
+             passed;
+    passed = compare_value( sstm.str() + " anyRemRegBinsLt4", curr_ref.anyRemRegBinsLt4, curr_opt.anyRemRegBinsLt4 ) &&
+             passed;
+    passed =
+        compare_value( sstm.str() + " initRemRegBins", curr_ref.initRemRegBins, curr_opt.initRemRegBins ) && passed;
+
+    for( int idx = 0; idx < 4; ++idx )
+    {
+      if( decisions.prevId[idx] == -2 )
+      {
+        continue;
+      }
+      passed = compare_value( sstm.str() + " rdCost", curr_ref.rdCost[idx], curr_opt.rdCost[idx] ) && passed;
+      passed = compare_value( sstm.str() + " numSig", curr_ref.numSig[idx], curr_opt.numSig[idx] ) && passed;
+      passed =
+          compare_value( sstm.str() + " refSbbCtxId", curr_ref.refSbbCtxId[idx], curr_opt.refSbbCtxId[idx] ) && passed;
+
+      passed =
+          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], 16, 1, 4 ) &&
+          passed;
+      passed =
+          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], 16, 1, 4 ) &&
+          passed;
+      passed =
+          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[0][idx], &curr_opt.absVal[0][idx], 16, 1, 4 ) &&
+          passed;
+
+      if( curr_ref.remRegBins[idx] >= 4 )
+      {
+        passed =
+            compare_value( sstm.str() + " remRegBins", curr_ref.remRegBins[idx], curr_opt.remRegBins[idx] ) && passed;
+        passed = compare_value( sstm.str() + " ctx.sig", curr_ref.ctx.sig[idx], curr_opt.ctx.sig[idx] ) && passed;
+        passed = compare_value( sstm.str() + " ctx.cff", curr_ref.ctx.cff[idx], curr_opt.ctx.cff[idx] ) && passed;
+      }
+    }
+  }
+
+  return passed;
+}
+
+static bool test_DepQuant()
+{
+  auto ref = std::make_unique<DepQuant>( /*other=*/nullptr,
+                                         /*enc=*/true,
+                                         /*useScalingLists=*/false,
+                                         /*enableOpt=*/false );
+  auto opt = std::make_unique<DepQuant>( /*other=*/nullptr,
+                                         /*enc=*/true,
+                                         /*useScalingLists=*/false,
+                                         /*enableOpt=*/true );
+
+  ref->init();
+  opt->init();
+
+  unsigned num_cases = NUM_CASES;
+  bool passed = true;
+
+  passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
+
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT_QUANT
 
 #if ENABLE_SIMD_OPT_INTRAPRED
 static bool check_IntraPredAngleLuma( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
@@ -2633,6 +2775,9 @@ struct UnitTestEntry
 };
 
 static const UnitTestEntry test_suites[] = {
+#if ENABLE_SIMD_OPT_QUANT
+    { "DepQuant", test_DepQuant },
+#endif
 #if ENABLE_SIMD_OPT_INTRAPRED
     { "IntraPred", test_IntraPred },
 #endif

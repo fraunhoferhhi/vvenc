@@ -337,7 +337,7 @@ namespace DQIntern
 class DepQuant : public QuantRDOQ2, DQIntern::RateEstimator
 {
 public:
-  DepQuant( const Quant* other, bool enc, bool useScalingLists );
+  DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt = true );
   virtual ~DepQuant();
 
   virtual void quant  (       TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );
@@ -365,7 +365,6 @@ private:
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCostsOdd1 )( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
-  void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
@@ -373,6 +372,9 @@ private:
   template <X86_VEXT vext>
   void _initDepQuantX86();
 #endif
+
+public:
+  void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
 };
 
 } // namespace vvenc
