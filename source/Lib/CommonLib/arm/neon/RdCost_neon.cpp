@@ -1431,89 +1431,170 @@ void xGetSADX5_16xN_neon(const DistParam& rcDtParam, Distortion* cost, bool isCa
     xGetSADX5_16xN_neon_impl<false>( rcDtParam, cost );
 }
 
-static inline Distortion xGetSAD_generic_neon( const DistParam& rcDtParam, const int width )
+static inline Distortion xGetSAD_generic_neon( const DistParam& rcDtParam, const int iCols )
 {
-  if( width < 4 )
+  if( iCols < 4 )
   {
     return RdCost::xGetSAD( rcDtParam );
   }
 
-  const int16_t* src1 = rcDtParam.org.buf;
-  const int16_t* src2 = rcDtParam.cur.buf;
-  int height = rcDtParam.org.height;
-  int subShift = rcDtParam.subShift;
-  int subStep = 1 << subShift;
-  const int strideSrc1 = rcDtParam.org.stride * subStep;
-  const int strideSrc2 = rcDtParam.cur.stride * subStep;
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  int iRows = rcDtParam.org.height;
+  const int iSubShift = rcDtParam.subShift;
+  const int iSubStep = 1 << iSubShift;
+  const int iStrideCur = rcDtParam.cur.stride * iSubStep;
+  const int iStrideOrg = rcDtParam.org.stride * iSubStep;
 
-  uint32x4_t sum_u32[2] = { vdupq_n_u32( 0 ), vdupq_n_u32( 0 ) };
-  Distortion sum = 0;
-  do
+  // These checks ensure that height_limit is well-defined and non-zero.
+  // The project enforces block dimensions <= 128 and power-of-two sizes,
+  // which guarantees that delayed widening is safe under the supported
+  // bit-depth constraints.
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+  CHECKD( iRows > 128 || iCols > 128, "Exceeded MAX_CU_SIZE equal to 128!" );
+  CHECKD( ( iCols & ( iCols - 1 ) ) != 0, "Width can only be power of two!" );
+  CHECKD( ( iRows & ( iRows - 1 ) ) != 0, "Height can only be power of two!" );
+
+  Distortion uiSum = 0;
+  if( ( iCols & 15 ) == 0 )
   {
-    int w = width;
+    uint32x4_t sum_u32_lo = vdupq_n_u32( 0 );
+    uint32x4_t sum_u32_hi = vdupq_n_u32( 0 );
 
-    const int16_t* src1_ptr = src1;
-    const int16_t* src2_ptr = src2;
-
-    while( w >= 16 )
+    int sampled_rows = iRows / iSubStep;
+    // 32 guaranteed safe accumulation in u16 lanes; derived from bitDepth <= 10.
+    const int height_limit = std::min( 32 * 16 / iCols, sampled_rows );
+    if( height_limit > 4 )
     {
-      const int16x8_t s1_lo = vld1q_s16( src1_ptr );
-      const int16x8_t s1_hi = vld1q_s16( src1_ptr + 8 );
-      const int16x8_t s2_lo = vld1q_s16( src2_ptr );
-      const int16x8_t s2_hi = vld1q_s16( src2_ptr + 8 );
+      // Partial chunk processing with height_limit for safe delayed widening.
+      do
+      {
+        // u16 accumulators for delayed widening.
+        uint16x8_t sum_u16_lo = vdupq_n_u16( 0 );
+        uint16x8_t sum_u16_hi = vdupq_n_u16( 0 );
 
-      const uint16x8_t abs_lo = vreinterpretq_u16_s16( vabdq_s16( s1_lo, s2_lo ) );
-      const uint16x8_t abs_hi = vreinterpretq_u16_s16( vabdq_s16( s1_hi, s2_hi ) );
+        int row = 0;
+        do
+        {
+          int col = 0;
+          do
+          {
+            const int16x8_t org_lo = vld1q_s16( piOrg + col + 0 );
+            const int16x8_t org_hi = vld1q_s16( piOrg + col + 8 );
+            const int16x8_t cur_lo = vld1q_s16( piCur + col + 0 );
+            const int16x8_t cur_hi = vld1q_s16( piCur + col + 8 );
 
-      sum_u32[0] = vpadalq_u16( sum_u32[0], abs_lo );
-      sum_u32[1] = vpadalq_u16( sum_u32[1], abs_hi );
+            sum_u16_lo = vvenc_vabaq_s16( sum_u16_lo, org_lo, cur_lo );
+            sum_u16_hi = vvenc_vabaq_s16( sum_u16_hi, org_hi, cur_hi );
 
-      src1_ptr += 16;
-      src2_ptr += 16;
-      w -= 16;
+            col += 16;
+          } while( col != iCols );
+
+          piOrg += iStrideOrg;
+          piCur += iStrideCur;
+        } while( ++row != height_limit );
+
+        // Delayed pairwise widen (u16 -> u32) and accumulate into 32-bit lanes.
+        sum_u32_lo = vpadalq_u16( sum_u32_lo, sum_u16_lo );
+        sum_u32_hi = vpadalq_u16( sum_u32_hi, sum_u16_hi );
+
+        sampled_rows -= height_limit;
+      } while( sampled_rows != 0 );
+    }
+    else
+    {
+      // Immediate widening/fallback path.
+      do
+      {
+        int col = 0;
+        do
+        {
+          const int16x8_t org_lo = vld1q_s16( piOrg + col + 0 );
+          const int16x8_t org_hi = vld1q_s16( piOrg + col + 8 );
+          const int16x8_t cur_lo = vld1q_s16( piCur + col + 0 );
+          const int16x8_t cur_hi = vld1q_s16( piCur + col + 8 );
+
+          const uint16x8_t abs_lo = vreinterpretq_u16_s16( vabdq_s16( org_lo, cur_lo ) );
+          const uint16x8_t abs_hi = vreinterpretq_u16_s16( vabdq_s16( org_hi, cur_hi ) );
+          sum_u32_lo = vpadalq_u16( sum_u32_lo, abs_lo );
+          sum_u32_hi = vpadalq_u16( sum_u32_hi, abs_hi );
+
+          col += 16;
+        } while( col != iCols );
+
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+        iRows -= iSubStep;
+      } while( iRows != 0 );
     }
 
-    if( w >= 8 )
+    uiSum = horizontal_add_u32x4( vaddq_u32( sum_u32_lo, sum_u32_hi ) );
+  }
+  else if( iCols == 8 )
+  {
+    uint32x4_t sum_u32 = vdupq_n_u32( 0 );
+    // Width is a power of two (8 here), allowing safe delayed widening
+    // for (height / subStep) <= 32 without u16 overflow.
+    if( iRows / iSubStep <= 32 )
     {
-      const int16x8_t s1 = vld1q_s16( src1_ptr );
-      const int16x8_t s2 = vld1q_s16( src2_ptr );
+      uint16x8_t sum_u16 = vdupq_n_u16( 0 );
+      do
+      {
+        const int16x8_t org = vld1q_s16( piOrg );
+        const int16x8_t cur = vld1q_s16( piCur );
 
-      const uint16x8_t abs = vreinterpretq_u16_s16( vabdq_s16( s1, s2 ) );
-      sum_u32[0] = vpadalq_u16( sum_u32[0], abs );
+        const uint16x8_t abs = vreinterpretq_u16_s16( vabdq_s16( org, cur ) );
+        sum_u16 = vaddq_u16( sum_u16, abs );
 
-      src1_ptr += 8;
-      src2_ptr += 8;
-      w -= 8;
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+        iRows -= iSubStep;
+      } while( iRows != 0 );
+
+      sum_u32 = vpadalq_u16( sum_u32, sum_u16 );
+    }
+    else
+    {
+      do
+      {
+        const int16x8_t org = vld1q_s16( piOrg );
+        const int16x8_t cur = vld1q_s16( piCur );
+
+        const uint16x8_t abs = vreinterpretq_u16_s16( vabdq_s16( org, cur ) );
+        sum_u32 = vpadalq_u16( sum_u32, abs );
+
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+        iRows -= iSubStep;
+      } while( iRows != 0 );
     }
 
-    if( w >= 4 )
+    uiSum = horizontal_add_u32x4( sum_u32 );
+  }
+  else
+  {
+    // Delayed widening is unnecessary in this path since there is no complex
+    // accumulation pattern.
+    CHECKD( iCols != 4, "iCols Must be equal to 4, got: " << iCols );
+    uint32x4_t sum_u32 = vdupq_n_u32( 0 );
+    do
     {
-      const int16x4_t s1 = vld1_s16( src1_ptr );
-      const int16x4_t s2 = vld1_s16( src2_ptr );
+      const int16x4_t org = vld1_s16( piOrg );
+      const int16x4_t cur = vld1_s16( piCur );
 
-      const uint16x4_t abs = vreinterpret_u16_s16( vabd_s16( s1, s2 ) );
-      sum_u32[0] = vaddw_u16( sum_u32[0], abs );
+      const uint16x4_t abs = vreinterpret_u16_s16( vabd_s16( org, cur ) );
+      sum_u32 = vaddw_u16( sum_u32, abs );
 
-      src1_ptr += 4;
-      src2_ptr += 4;
-      w -= 4;
-    }
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+      iRows -= iSubStep;
+    } while( iRows != 0 );
 
-    while( w != 0 )
-    {
-      sum += abs( src1_ptr[w - 1] - src2_ptr[w - 1] );
+    uiSum = horizontal_add_u32x4( sum_u32 );
+  }
 
-      w--;
-    }
-
-    src1 += strideSrc1;
-    src2 += strideSrc2;
-    height -= subStep;
-  } while( height != 0 );
-
-  sum += horizontal_add_u32x4( vaddq_u32( sum_u32[0], sum_u32[1] ) );
-  sum <<= subShift;
-  return sum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+  uiSum <<= iSubShift;
+  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
 }
 
 Distortion xGetHAD2SADs_neon( const DistParam& rcDtParam )
@@ -1528,6 +1609,11 @@ template<int iWidth>
 Distortion xGetSAD_NxN_neon( const DistParam& rcDtParam )
 {
   return xGetSAD_generic_neon( rcDtParam, iWidth );
+}
+
+Distortion xGetSAD_neon( const DistParam& rcDtParam )
+{
+  return xGetSAD_generic_neon( rcDtParam, rcDtParam.org.width );
 }
 
 Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
@@ -1843,12 +1929,13 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_HAD128_fast]  = xGetHADs_neon<true>;
 #endif // defined( TARGET_SIMD_X86 )
 
-  m_afpDistortFunc[0][DF_SAD4   ] = xGetSAD_NxN_neon<4>;
-  m_afpDistortFunc[0][DF_SAD8   ] = xGetSAD_NxN_neon<8>;
-  m_afpDistortFunc[0][DF_SAD16  ] = xGetSAD_NxN_neon<16>;
-  m_afpDistortFunc[0][DF_SAD32  ] = xGetSAD_NxN_neon<32>;
-  m_afpDistortFunc[0][DF_SAD64  ] = xGetSAD_NxN_neon<64>;
-  m_afpDistortFunc[0][DF_SAD128]  = xGetSAD_NxN_neon<128>;
+  m_afpDistortFunc[0][DF_SAD] = xGetSAD_neon;
+  m_afpDistortFunc[0][DF_SAD4] = xGetSAD_NxN_neon<4>;
+  m_afpDistortFunc[0][DF_SAD8] = xGetSAD_NxN_neon<8>;
+  m_afpDistortFunc[0][DF_SAD16] = xGetSAD_NxN_neon<16>;
+  m_afpDistortFunc[0][DF_SAD32] = xGetSAD_NxN_neon<32>;
+  m_afpDistortFunc[0][DF_SAD64] = xGetSAD_NxN_neon<64>;
+  m_afpDistortFunc[0][DF_SAD128] = xGetSAD_NxN_neon<128>;
 
   m_wtdPredPtr[0] = lumaWeightedSSE_neon<0>;
   m_wtdPredPtr[1] = lumaWeightedSSE_neon<1>;
