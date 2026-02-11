@@ -1262,11 +1262,11 @@ static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, 
   return passed;
 }
 
-static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, const int sad_impl_idx )
 {
   std::ostringstream sstm;
-  sstm << "RdCost::m_afpDistortFunc[0][DF_SAD" << width << "] "
-       << " w=" << width << " h=" << height;
+  std::string print_idx = sad_impl_idx == DF_SAD ? "" : std::to_string( width );
+  sstm << "RdCost::m_afpDistortFunc[0][DF_SAD" << print_idx << "] " << " w=" << width << " h=" << height;
   printf( "Testing %s\n", sstm.str().c_str() );
 
   DimensionGenerator rng;
@@ -1294,12 +1294,17 @@ static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, 
     std::generate( orgBuf.begin(), orgBuf.end(), g10 );
     std::generate( curBuf.begin(), curBuf.end(), g10 );
 
-    const int index = DF_SAD + log2( width );
-    Distortion sum_ref = ref->m_afpDistortFunc[0][index]( dtParam );
-    Distortion sum_opt = opt->m_afpDistortFunc[0][index]( dtParam );
+    Distortion sum_ref = ref->m_afpDistortFunc[0][sad_impl_idx]( dtParam );
+    Distortion sum_opt = opt->m_afpDistortFunc[0][sad_impl_idx]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
   }
   return passed;
+}
+
+static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  const int index = DF_SAD + log2( width );
+  return check_SAD( ref, opt, num_cases, width, height, index );
 }
 
 static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast )
@@ -1443,6 +1448,7 @@ static bool test_RdCost()
 
       if( w >= 2 )
       {
+        passed = check_SAD( &ref, &opt, num_cases, w, h, DF_SAD ) && passed;
         passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true ) && passed;
         passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false ) && passed;
       }
