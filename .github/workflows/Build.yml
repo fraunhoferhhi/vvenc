@@ -2,86 +2,181 @@ name: CI build
 
 on:
   push:
+    branches: [master, release, gh_actions*]
   pull_request:
   release:
     types:
       - created
 
 jobs:
-  build:
-    name: ${{ matrix.config.name }}
-    runs-on: ${{ matrix.config.os }}
+  build_msvc:
+    name: "Windows MSVC: ${{ matrix.toolset }} ${{ matrix.msvc_arch }} ${{ matrix.run_unit_test && '+Test' }}"
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {
-              name: "Windows MSVC 64 Bit",
-              os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-              generators: "Visual Studio 17 2022",
-              msvc_arch: x64
-            }
-          - {
-              name: "Windows MSVC 32 Bit",
-              os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars32.bat",
-              generators: "Visual Studio 17 2022",
-              msvc_arch: Win32
-            }
-          - {
-              name: "Windows MSVC arm64",
-              os: windows-2022,
-              environment_script: "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-              generators: "Visual Studio 17 2022",
-              msvc_arch: arm64,
-            }
-          - {
-              name: "Windows MinGW",
-              os: windows-2022,
-              cc: "gcc",
-              cxx: "g++",
-              generators: "MinGW Makefiles"
-            }
-          - {
-              name: "Ubuntu 22.04",
-              os: ubuntu-22.04
-            }
-          - {
-              name: "Ubuntu 24.04",
-              os: ubuntu-24.04
-            }
-          - {
-              name: "Mac OS Latest x86_64",
-              os: macos-latest,
-              osx_arch: x86_64
-            }
-          - {
-              name: "Mac OS Latest arm64",
-              os: macos-latest,
-              osx_arch: arm64
-            }
-    env:
-      CMAKE_GENERATOR: "${{ matrix.config.generators }}"
+        include:
+          - toolset: v141
+            os: windows-2019
+            msvc_arch: x64
+
+          - toolset: v142
+            os: windows-latest
+            msvc_arch: x64
+
+          - toolset: v143
+            os: windows-latest
+            msvc_arch: x64
+
+          - toolset: v143
+            os: windows-latest
+            msvc_arch: x64
+
+          - toolset: v143
+            os: windows-11-arm
+            msvc_arch: arm64
+            run_unit_test: true
+
+          - toolset: v145
+            os: windows-2025-vs2026
+            msvc_arch: x64
+            run_unit_test: true
+
+          - toolset: v145
+            os: windows-2025-vs2026
+            msvc_arch: Win32
+            run_unit_test: true
+
+          - toolset: v145
+            os: windows-2025-vs2026
+            msvc_arch: arm64
+
     steps:
-    - uses: actions/checkout@v4
-    - run: git fetch --prune --unshallow
+      - uses: actions/checkout@v6
+#      - run: git fetch --prune --unshallow # is this really needed?
 
-    - name: Ubuntu/Mac OS X/MinGW build
-      if: ${{ !contains( matrix.config.generators, 'Visual Studio' ) }}
-      run: |
-        cmake -S . -B build/static -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0 "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.config.osx_arch }}"
-        cmake --build build/static
-        cmake -S . -B build/shared -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.config.osx_arch }}"
-        cmake --build build/shared
+      - name: Static build
+        run: |
+          $ErrorActionPreference = 'stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S . -B build/static  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0 -A "${{ matrix.msvc_arch }}" -T "${{ matrix.toolset }}"
+          cmake --build build/static --config Release
 
-    - name: MSVC build
-      if: contains( matrix.config.generators, 'Visual Studio' )
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = 'stop'
-        $PSNativeCommandUseErrorActionPreference = $true
-        cmake -S . -B build/static  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0 -A "${{ matrix.config.msvc_arch }}"
-        cmake --build build/static --config Release
-        cmake -S . -B build/shared  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 -A "${{ matrix.config.msvc_arch }}"
-        cmake --build build/shared --config Release
+      - name: Shared build
+        run: |
+          $ErrorActionPreference = 'stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S . -B build/shared  -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 -A "${{ matrix.msvc_arch }}" -T "${{ matrix.toolset }}"
+          cmake --build build/shared --config Release
+
+      - name: Run Unit Tests
+        if: ${{ matrix.run_unit_test }}
+        run: |
+          ctest --test-dir build/static --build-config Release --output-on-failure -R unit_test
+
+  build_unix:
+    name: "${{ matrix.name || matrix.os }}: ${{ matrix.compiler[1] || matrix.osx_arch }} ${{ matrix.run_unit_test && '+Test' }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Windows MinGW"
+            os: windows-latest
+            generator: "MinGW Makefiles"
+
+
+          - os: macos-latest
+            osx_arch: x86_64
+            run_unit_test: true
+
+          - os: macos-latest
+            osx_arch: arm64
+            run_unit_test: true
+
+
+          - os: ubuntu-22.04
+            compiler: [gcc-11, g++-11]
+
+          - os: ubuntu-22.04
+            compiler: [gcc-12, g++-12]
+
+          - os: ubuntu-24.04
+            compiler: [gcc-13, g++-13]
+
+          - os: ubuntu-24.04
+            compiler: [gcc-14, g++-14]
+            run_unit_test: true
+
+
+          - os: ubuntu-22.04
+            compiler: [clang-13, clang++-13]
+
+          - os: ubuntu-22.04
+            compiler: [clang-14, clang++-14]
+
+          - os: ubuntu-22.04
+            compiler: [clang-15, clang++-15]
+
+          - os: ubuntu-24.04
+            compiler: [clang-16, clang++-16]
+
+          - os: ubuntu-24.04
+            compiler: [clang-16, clang++-16]
+
+          - os: ubuntu-24.04
+            compiler: [clang-17, clang++-17]
+
+          - os: ubuntu-24.04
+            compiler: [clang-18, clang++-18]
+
+#          - os: ubuntu-24.04
+#            compiler: [clang-19, clang++-19]
+
+          - os: ubuntu-24.04-arm
+            compiler: [aarch64-linux-gnu-gcc, aarch64-linux-gnu-g++]
+            install_packages: g++-aarch64-linux-gnu
+            run_unit_test: true
+
+          - os: ubuntu-24.04
+            compiler: [arm-linux-gnueabihf-gcc, arm-linux-gnueabihf-g++]
+            install_packages: g++-arm-linux-gnueabihf
+
+    env:
+      CMAKE_GENERATOR: "${{ matrix.generator || 'Ninja' }}"
+      CC: ${{ matrix.compiler[0] }}
+      CXX: ${{ matrix.compiler[1] }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 100M
+    steps:
+      - uses: actions/checkout@v6
+#      - run: git fetch --prune --unshallow # is this really needed?
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: ${{ matrix.install_packages || startsWith(matrix.os, 'ubuntu') }}
+        with:
+          packages: ccache ${{ matrix.install_packages }}
+
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ccache
+          key: ccache-{{ matrix.name || matrix.os }}-${{ matrix.compiler[1] || matrix.osx_arch }}
+
+      - name: Static build
+        run: |
+          cmake -S . -B build/static -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0 "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}"
+          cmake --build build/static
+      - name: Shared build
+        run: |
+          cmake -S . -B build/shared -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=1 "-DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}"
+          cmake --build build/shared
+
+      - name: Run Unit Tests
+        if: ${{ matrix.run_unit_test }}
+        run: |
+          ctest --test-dir build/static --output-on-failure -R unit_test
+
+      - uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: ccache-{{ matrix.name || matrix.os }}-${{ matrix.compiler[1] || matrix.osx_arch }}
