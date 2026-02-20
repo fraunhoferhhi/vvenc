@@ -72,7 +72,7 @@ jobs:
       - name: Run Unit Tests
         if: ${{ matrix.run_unit_test }}
         run: |
-          ctest --test-dir build/static --build-config Release --output-on-failure -R unit_test
+          ctest --test-dir build/static --build-config Release --output-on-failure
 
   build_unix:
     name: "${{ matrix.name || matrix.os }}: ${{ matrix.compiler[1] || matrix.osx_arch }} ${{ matrix.run_unit_test && '+Test' }}"
@@ -174,7 +174,7 @@ jobs:
       - name: Run Unit Tests
         if: ${{ matrix.run_unit_test }}
         run: |
-          ctest --test-dir build/static --output-on-failure -R unit_test
+          ctest --test-dir build/static --output-on-failure
 
       - uses: actions/cache/save@v5
         with:
