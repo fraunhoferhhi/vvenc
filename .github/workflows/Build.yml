@@ -16,10 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - toolset: v141
-            os: windows-2019
-            msvc_arch: x64
-
           - toolset: v142
             os: windows-latest
             msvc_arch: x64
