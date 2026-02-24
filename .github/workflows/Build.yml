@@ -25,10 +25,6 @@ jobs:
             msvc_arch: x64
 
           - toolset: v143
-            os: windows-latest
-            msvc_arch: x64
-
-          - toolset: v143
             os: windows-11-arm
             msvc_arch: arm64
             run_unit_test: true
