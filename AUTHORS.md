@@ -20,3 +20,4 @@
 * Mehrdad Ghafari, , Fraunhofer HHI
 * Athulya Raj Raji Mohini, @athulya-arm, Arm
 * Micro Daryl Robles, @micro-arm, Arm
+* Alex Davicenko, @alex-davicenko-arm, Arm
