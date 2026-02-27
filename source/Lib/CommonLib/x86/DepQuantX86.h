@@ -257,7 +257,7 @@ namespace DQIntern
     {
       int8_t s[4] = { 0 }, t[4] = { 0 }, l[4] = { 0 };
 
-      __m128i v254_4 = _mm_setr_epi16( 254, 254, 254, 254,  4,  4,  4,  4 );
+      __m128i v126_4 = _mm_setr_epi16( 126, 126, 126, 126,  4,  4,  4,  4 );
       __m128i v01    = _mm_setr_epi16(   1,   1,   1,   1,  1,  1,  1,  1 );
       __m128i v032   = _mm_setr_epi8 (   0,   0,   0,   0, 32, 32, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0 );
       __m128i vn1    = _mm_set1_epi8 (  -1 );
@@ -273,7 +273,7 @@ namespace DQIntern
       p = _mm_shuffle_epi32( p, 0 ); 
       __m128i n2  = _mm_cmplt_epi8( p, vn1 );
       __m128i a_1 = _mm_and_si128( v, v01 );
-      __m128i a_m = _mm_min_epi16( v, _mm_add_epi16( v254_4, a_1 ) );
+      __m128i a_m = _mm_min_epi16( v, _mm_add_epi16( v126_4, a_1 ) );
       a_m = _mm_packs_epi16( a_m, vn1 );
       a_m = _mm_or_si128   ( a_m, _mm_sign_epi8( v032, a_m ) );
       a_m = _mm_andnot_si128( n2, a_m );
@@ -402,7 +402,7 @@ namespace DQIntern
       for( int i = 0; i < 4; ++i )
       {
         s[i]              = decisions.prevId[i] >= 4 ? -2 : decisions.prevId[i];
-        l[i]              = s[i] > -2 ? std::min<int>( decisions.absLevel[i], 254 + ( decisions.absLevel[i] & 1 ) ) : 0;
+        l[i]              = s[i] > -2 ? std::min<int>( decisions.absLevel[i], 126 + ( decisions.absLevel[i] & 1 ) ) : 0;
         z[i]              = 3 - decisions.prevId[i];
         curr.rdCost[i]    = decisions.rdCost[i];
       }

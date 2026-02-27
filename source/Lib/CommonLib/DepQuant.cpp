@@ -931,7 +931,7 @@ namespace DQIntern
 
       if( decision.absLevel )
       {
-        m_sbb.absLevels[scanInfo.insidePos] = ( uint8_t ) std::min<TCoeff>( 254 + ( decision.absLevel & 1 ), decision.absLevel );
+        m_sbb.absLevels[scanInfo.insidePos] = ( uint8_t ) std::min<TCoeff>( 126 + ( decision.absLevel & 1 ), decision.absLevel );
         
         if( scanInfo.currNbInfoSbb.numInv )
         {
@@ -1024,7 +1024,7 @@ namespace DQIntern
         ::memset( m_sbb.absLevels, 0, sizeof( m_sbb.absLevels ) );
       }
 
-      m_sbb.absLevels[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 254 + ( decision.absLevel & 1 ), decision.absLevel );
+      m_sbb.absLevels[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 126 + ( decision.absLevel & 1 ), decision.absLevel );
 
       m_commonCtx.update( scanInfo, prvState, *this );
 
