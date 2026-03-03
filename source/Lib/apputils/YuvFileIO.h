@@ -270,10 +270,11 @@ public:
 
     // fall back to consuming the input
     char buf[ 512 ];
-    const std::streamoff offset_mod_bufsize = offset % sizeof( buf );
-    for ( std::streamoff i = 0; i < offset - offset_mod_bufsize; i += sizeof( buf ) )
+    const std::streamsize bufsize            = static_cast<std::streamsize>( sizeof( buf ) );
+    const std::streamsize offset_mod_bufsize = static_cast<std::streamsize>( ( offset % sizeof( buf ) ) );
+    for ( std::streamoff i = 0; i < offset - offset_mod_bufsize; i += bufsize )
     {
-      inStream.read( buf, sizeof( buf ) );
+      inStream.read( buf, bufsize );
     }
     inStream.read( buf, offset_mod_bufsize );
 
