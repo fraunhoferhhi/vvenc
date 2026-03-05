@@ -1366,6 +1366,58 @@ static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, 
   return passed;
 }
 
+static bool check_SADX5( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool isCalCentrePos )
+{
+  std::ostringstream sstm;
+  sstm << "RdCost::xGetSAD" << width << "X5"
+       << " w=" << width << " h=" << height << " isCalCentrePos=" << std::boolalpha << isCalCentrePos;
+  printf( "Testing %s\n", sstm.str().c_str() );
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  constexpr int kMargin = 4; // per-row horizontal margin (X5 kernel moves the ptr +/-4).
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    // subShift is always 1 in real encodings (set in InterPrediction::xProcessDMVR).
+    constexpr int subShift = 1;
+    const int minStride = width + 2 * kMargin;
+    const int stride = rng.get( minStride, g_fastUnitTest ? 256 : 1024 );
+
+    std::vector<Pel> orgBuf( stride * height );
+    std::vector<Pel> curBuf( stride * height );
+
+    std::generate( orgBuf.begin(), orgBuf.end(), g10 );
+    std::generate( curBuf.begin(), curBuf.end(), g10 );
+
+    const Pel* orgPtr = orgBuf.data() + kMargin;
+    const Pel* curPtr = curBuf.data() + kMargin;
+
+    DistParam dtRef = ref->setDistParam( orgPtr, curPtr, stride, stride, /*bitDepth=*/10, COMP_Y, width, height,
+                                         subShift, /*isDMVR=*/true );
+    DistParam dtOpt = opt->setDistParam( orgPtr, curPtr, stride, stride, /*bitDepth=*/10, COMP_Y, width, height,
+                                         subShift, /*isDMVR=*/true );
+
+    std::array<Distortion, 5> costRef;
+    std::array<Distortion, 5> costOpt;
+
+    dtRef.dmvrSadX5( dtRef, costRef.data(), isCalCentrePos );
+    dtOpt.dmvrSadX5( dtOpt, costOpt.data(), isCalCentrePos );
+
+    for( int k = 0; k < 5; k++ )
+    {
+      if( !isCalCentrePos && k == 2 )
+      {
+        continue;
+      }
+      passed = compare_value( sstm.str(), costRef[k], costOpt[k] ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast )
 {
   std::ostringstream sstm;
@@ -1517,6 +1569,17 @@ static bool test_RdCost()
       }
     }
   }
+
+  // Constraints based on DMVR::xProcessDMVR.
+  for( int h : { 8, 16 } )
+  {
+    for( int w : { 8, 16 } )
+    {
+      passed = check_SADX5( &ref, &opt, num_cases, w, h, /*isCalCentrePos=*/true ) && passed;
+      passed = check_SADX5( &ref, &opt, num_cases, w, h, /*isCalCentrePos=*/false ) && passed;
+    }
+  }
+
   return passed;
 }
 #endif // ENABLE_SIMD_OPT_DIST
