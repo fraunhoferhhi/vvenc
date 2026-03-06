@@ -372,6 +372,159 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
   return passed;
 }
 
+static bool check_updateStatesEOS( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::updateStatesEOS\n" );
+
+  InputGenerator<TCoeff> g4{ 4, /*is_signed=*/false };
+  InputGenerator<TCoeff> g6{ 6, /*is_signed=*/false };
+  InputGenerator<TCoeff> g8{ 8, /*is_signed=*/false };
+  InputGenerator<TCoeff> g11{ 11 };
+  InputGenerator<TCoeff> g31{ 31 };
+  DimensionGenerator rng;
+
+  std::ostringstream sstm;
+  sstm << "DepQuant updateStatesEOS";
+
+  DQIntern::ScanInfo scanInfo;
+  DQIntern::Decisions decisions;
+  DQIntern::StateMem skip;
+  DQIntern::StateMem curr_ref;
+  DQIntern::StateMem curr_opt;
+  DQIntern::CommonCtx commonCtx_ref;
+  DQIntern::CommonCtx commonCtx_opt;
+
+  DQIntern::Rom rom;
+  rom.init();
+  DQIntern::TUParameters tuPars( rom, 16, 16, CH_C );
+
+  FracBitsAccess fracBitsAccess{ 1 };
+  CodingUnit cu;
+  TransformUnit tu;
+  tu.cu = &cu;
+
+  DQIntern::RateEstimator rateEst;
+  rateEst.initCtx( tuPars, tu, COMP_Cb, fracBitsAccess );
+
+  commonCtx_ref.reset( tuPars, rateEst );
+  commonCtx_ref.swap();
+  commonCtx_ref.reset( tuPars, rateEst ); // Rebinds m_currSbbCtx/m_prevSbbCtx entries to parts of m_memory.
+
+  commonCtx_opt.reset( tuPars, rateEst );
+  commonCtx_opt.swap();
+  commonCtx_opt.reset( tuPars, rateEst );
+
+  bool passed = true;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    std::memset( &curr_ref, 0xCD, sizeof( curr_ref ) );
+    std::memset( &curr_opt, 0xCD, sizeof( curr_opt ) );
+
+    scanInfo.scanIdx = rng.get( 16, 128, 16 );
+    scanInfo.sbbSize = rng.getOneOf<int8_t>( { 4, 16 } );
+    scanInfo.numSbb = 16;
+
+    scanInfo.sbbPos = rng.get( 0, scanInfo.numSbb - 1 );
+    scanInfo.nextSbbRight = 0;
+    scanInfo.nextSbbBelow = 0;
+
+    scanInfo.insidePos = 0;
+    scanInfo.nextInsidePos = 15;
+    scanInfo.gtxCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
+    scanInfo.sigCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
+    scanInfo.currNbInfoSbb.numInv = 0;
+    std::generate( scanInfo.currNbInfoSbb.invInPos, scanInfo.currNbInfoSbb.invInPos + 5, g4 );
+
+    for( int idx = 0; idx < 4; ++idx )
+    {
+      // prevId >= 4 implies prevId - 4 == idx.
+      decisions.prevId[idx] = rng.getOneOf<int8_t>( { -2, -1, 0, 1, 2, 3, int8_t( idx + 4 ) } );
+
+      curr_ref.refSbbCtxId[idx] = rng.getOneOf<int8_t>( { -1, 0, 1, 2, 3 } );
+      if( decisions.prevId[idx] >= 4 )
+      {
+        decisions.absLevel[idx] = 0;
+      }
+      else
+      {
+        // prevId == -1 indicates this would be the first non-zero coefficient (thus absVal > 0).
+        int minLevel = decisions.prevId[idx] >= 0 ? 0 : 1;
+        decisions.absLevel[idx] = ( TCoeffSig )rng.get( minLevel, 127 );
+      }
+    }
+    std::generate( decisions.rdCost, decisions.rdCost + 4, g31 );
+
+    curr_ref.initRemRegBins = 4;
+    std::generate( curr_ref.numSig, curr_ref.numSig + 4, g6 );
+    std::generate( curr_ref.remRegBins, curr_ref.remRegBins + 4, g11 );
+    for( int idx = 0; idx < 16; ++idx )
+    {
+      std::generate( curr_ref.tplAcc[idx], curr_ref.tplAcc[idx] + 4, g8 );
+      std::generate( curr_ref.sum1st[idx], curr_ref.sum1st[idx] + 4, g8 );
+    }
+
+    std::generate( skip.remRegBins, skip.remRegBins + 4, g11 );
+
+    std::fill_n( &curr_ref.absVal[0][0], 16 * 4, 0 ); // AbsVal is always set to 0 prior to updateStates.
+
+    curr_opt = curr_ref;
+
+    ref->m_updateStatesEOS( scanInfo, decisions, skip, curr_ref, commonCtx_ref );
+    opt->m_updateStatesEOS( scanInfo, decisions, skip, curr_opt, commonCtx_opt );
+
+    uint8_t* refLevels[4];
+    uint8_t* optLevels[4];
+    commonCtx_ref.getLevelPtrs( scanInfo, refLevels[0], refLevels[1], refLevels[2], refLevels[3] );
+    commonCtx_opt.getLevelPtrs( scanInfo, optLevels[0], optLevels[1], optLevels[2], optLevels[3] );
+
+    passed = compare_value( sstm.str() + " cffBitsCtxOffset", curr_ref.cffBitsCtxOffset, curr_opt.cffBitsCtxOffset ) &&
+             passed;
+    passed = compare_value( sstm.str() + " anyRemRegBinsLt4", curr_ref.anyRemRegBinsLt4, curr_opt.anyRemRegBinsLt4 ) &&
+             passed;
+    passed =
+        compare_value( sstm.str() + " initRemRegBins", curr_ref.initRemRegBins, curr_opt.initRemRegBins ) && passed;
+
+    for( int idx = 0; idx < 4; ++idx )
+    {
+      passed = compare_value( sstm.str() + " rdCost", curr_ref.rdCost[idx], curr_opt.rdCost[idx] ) && passed;
+
+      if( decisions.prevId[idx] == -2 )
+      {
+        continue;
+      }
+
+      passed = compare_value( sstm.str() + " numSig", curr_ref.numSig[idx], curr_opt.numSig[idx] ) && passed;
+      passed =
+          compare_value( sstm.str() + " refSbbCtxId", curr_ref.refSbbCtxId[idx], curr_opt.refSbbCtxId[idx] ) && passed;
+
+      if( curr_ref.remRegBins[idx] >= 4 )
+      {
+        passed =
+            compare_value( sstm.str() + " remRegBins", curr_ref.remRegBins[idx], curr_opt.remRegBins[idx] ) && passed;
+        passed = compare_value( sstm.str() + " ctx.sig", curr_ref.ctx.sig[idx], curr_opt.ctx.sig[idx] ) && passed;
+        passed = compare_value( sstm.str() + " ctx.cff", curr_ref.ctx.cff[idx], curr_opt.ctx.cff[idx] ) && passed;
+      }
+
+      passed =
+          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], 16, 1, 4 ) &&
+          passed;
+      passed =
+          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], 16, 1, 4 ) &&
+          passed;
+      passed =
+          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[0][idx], &curr_opt.absVal[0][idx], 16, 1, 4 ) &&
+          passed;
+
+      passed = compare_values_1d( sstm.str() + " commonCtx.levels stateId=" + std::to_string( idx ), refLevels[idx],
+                                  optLevels[idx], scanInfo.sbbSize ) &&
+               passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool test_DepQuant()
 {
   auto ref = std::make_unique<DepQuant>( /*other=*/nullptr,
@@ -390,6 +543,7 @@ static bool test_DepQuant()
   bool passed = true;
 
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
+  passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
 
   return passed;
 }
