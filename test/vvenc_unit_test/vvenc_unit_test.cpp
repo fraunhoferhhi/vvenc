@@ -255,6 +255,180 @@ public:
 };
 
 #if ENABLE_SIMD_OPT_QUANT
+static bool check_one_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, DQIntern::ScanPosType spt, int64_t pq_a_dist,
+                                           int64_t pq_b_dist, DQIntern::Decisions& decisions_ref,
+                                           DQIntern::Decisions& decisions_opt, const DQIntern::StateMem& state,
+                                           const std::string& context )
+{
+  ref->m_checkAllRdCostsOdd1( spt, pq_a_dist, pq_b_dist, decisions_ref, state );
+  opt->m_checkAllRdCostsOdd1( spt, pq_a_dist, pq_b_dist, decisions_opt, state );
+
+  bool passed = true;
+  passed = compare_values_1d( context + " rdCost", decisions_ref.rdCost, decisions_opt.rdCost, 4 ) && passed;
+  passed = compare_values_1d( context + " absLevel", decisions_ref.absLevel, decisions_opt.absLevel, 4 ) && passed;
+  passed = compare_values_1d( context + " prevId", decisions_ref.prevId, decisions_opt.prevId, 4 ) && passed;
+  return passed;
+}
+
+static bool check_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, unsigned num_cases )
+{
+  printf( "Testing DepQuant::checkAllRdCostsOdd1\n" );
+
+  InputGenerator<TCoeff> g4{ 4, /*is_signed=*/false };
+  InputGenerator<TCoeff> g20{ 20, /*is_signed=*/false };
+  InputGenerator<TCoeff> g31{ 31 };
+  InputGenerator<TCoeff> g_dist{ 20 };
+  DimensionGenerator rng;
+
+  DQIntern::Decisions decisions_ref;
+  DQIntern::Decisions decisions_opt;
+  DQIntern::StateMem state;
+  BinFracBits sigBuf[4][DQIntern::RateEstimator::sm_maxNumSigCtx];
+
+  bool passed = true;
+
+  auto setup_state_and_decisions = [&]
+  {
+    for( int j = 0; j < 4; ++j )
+    {
+      // Init state.
+      state.rdCost[j] = DQIntern::rdCostInit;
+      state.ctx.cff[j] = 0;
+      state.ctx.sig[j] = 0;
+      state.numSig[j] = 0;
+      state.refSbbCtxId[j] = -1;
+      state.remRegBins[j] = 4;
+      state.m_goRicePar[j] = 0;
+      state.m_goRiceZero[j] = 0;
+      state.sbbBits0[j] = 0;
+      state.sbbBits1[j] = 0;
+      state.m_sigFracBitsArray[j] = sigBuf[j];
+    }
+
+    state.cffBitsCtxOffset = rng.getOneOf<int>( { 1, 6, 11, 16 } );
+    for( int j = 0; j < 4; ++j )
+    {
+      state.ctx.sig[j] = rng.get( 0, DQIntern::RateEstimator::sm_maxNumSigCtx - 1 );
+      // The X86 implementation assumes that the ctx.cff[i] values are in the range [cffBitsCtxOffset,
+      // cffBitsCtxOffset + 4].
+      state.ctx.cff[j] = rng.get( state.cffBitsCtxOffset, state.cffBitsCtxOffset + 4 );
+
+      for( int k = 0; k < DQIntern::RateEstimator::sm_maxNumSigCtx; ++k )
+      {
+        sigBuf[j][k].intBits[0] = g20();
+        sigBuf[j][k].intBits[1] = g20();
+      }
+    }
+
+    std::generate( state.rdCost, state.rdCost + 4, g31 );
+    std::generate( state.sbbBits1, state.sbbBits1 + 4, g20 );
+    std::generate( state.numSig, state.numSig + 4, g4 );
+    std::generate( state.cffBits1, state.cffBits1 + DQIntern::RateEstimator::sm_maxNumGtxCtx + 3, g20 );
+
+    for( int j = 0; j < 4; ++j )
+    {
+      decisions_ref.rdCost[j] = decisions_opt.rdCost[j] = DQIntern::rdCostInit >> 2;
+
+      // These are expected to be updated by checkAllRdCostsOdd1, so the initial values don't matter.
+      // Assign different values between ref and opt so they will fail by default.
+      decisions_ref.absLevel[j] = decisions_ref.prevId[j] = -1;
+      decisions_opt.absLevel[j] = decisions_opt.prevId[j] = -2;
+    }
+  };
+
+  for( unsigned i = 0; i < std::max( 1u, num_cases / 5 ); ++i )
+  {
+    for( DQIntern::ScanPosType spt : { DQIntern::SCAN_ISCSBB, DQIntern::SCAN_SOCSBB, DQIntern::SCAN_EOCSBB } )
+    {
+      std::ostringstream sstm;
+      const char* spt_str = spt == DQIntern::SCAN_ISCSBB   ? "ISC_SBB"
+                            : spt == DQIntern::SCAN_SOCSBB ? "SOC_SBB"
+                                                           : "EOC_SBB";
+      sstm << "DepQuant checkAllRdCostsOdd1 scanPosType=" << spt_str;
+
+      // Test 1: Test with random inputs.
+      setup_state_and_decisions();
+
+      const int64_t pq_a_dist = g_dist();
+      const int64_t pq_b_dist = g_dist();
+
+      passed = check_one_checkAllRdCostsOdd1( ref, opt, spt, pq_a_dist, pq_b_dist, decisions_ref, decisions_opt, state,
+                                              sstm.str() + " random" ) &&
+               passed;
+
+      // Test 2: Keep the total candidate costs so close that any one small mistake in the accumulated RDCost
+      // calculation can change the selected path. It is not just about closeness, but about the whole sum being
+      // sensitive. Make the final candidate costs (rdCostA and rdCostZ across lanes/destinations) close enough that the
+      // comparison becomes sensitive (differ by 0 or 1 or 2).
+      // Cover mixed close-call cases as well as the three explicit close-sum outcomes: A wins, Z wins, and exact ties.
+      struct SensitiveSumCase
+      {
+        int64_t pq_a_dist;
+        int64_t pq_b_dist;
+        int sig_cost_z;
+        int sig_cost_a;
+        int cff_cost;
+        int offset;
+        const char* name;
+      };
+
+      for( const SensitiveSumCase tc :
+           { SensitiveSumCase{ 1, 1, 4, 2, 0, 0, " A wins" },
+             SensitiveSumCase{ 1, 0, 2, 2, 1, 0, " Z wins" },
+             SensitiveSumCase{ 1, 1, 3, 2, 0, 0, " A and Z ties" },
+             SensitiveSumCase{ 1, 1, 4, 2, 1, 1, " mixed case 1" },
+             SensitiveSumCase{ 1, 2, 4, 2, 0, 1, " mixed case 2" } } )
+      {
+        setup_state_and_decisions();
+
+        // With tc.offset == 0 the input is flat; state.rdCost = { base, base, base, base }.
+        // With tc.offset == 1 the input becomes state.rdCost = { base, base + 1, base + 2, base + 3 }.
+        const int64_t base_rd_cost = g31();
+        for( int j = 0; j < 4; ++j )
+        {
+          state.rdCost[j] = base_rd_cost + j * tc.offset;
+          state.sbbBits1[j] = tc.offset ? ( j & 1 ) : 1;
+          state.numSig[j] = 1;
+
+          state.ctx.sig[j] = 0;
+          state.ctx.cff[j] = state.cffBitsCtxOffset;
+
+          sigBuf[j][0].intBits[0] = tc.sig_cost_z;
+          sigBuf[j][0].intBits[1] = tc.sig_cost_a;
+          state.cffBits1[state.ctx.cff[j]] = tc.cff_cost;
+        }
+
+        passed = check_one_checkAllRdCostsOdd1( ref, opt, spt, tc.pq_a_dist, tc.pq_b_dist, decisions_ref, decisions_opt,
+                                                state, sstm.str() + " sensitive_sum" + tc.name ) &&
+                 passed;
+      }
+    }
+
+    // Test 3: SCAN_EOCSBB cases with mixed numSig == 0 or 1 to verify handling of the numSig == 0 vs. numSig > 0 cases.
+    std::ostringstream sstm;
+    sstm << "DepQuant checkAllRdCostsOdd1 scanPosType=EOC_SBB";
+
+    for( int pattern : { 0, 1 } )
+    {
+      setup_state_and_decisions();
+
+      const int64_t pq_a_dist = g_dist();
+      const int64_t pq_b_dist = g_dist();
+      // pattern 0 -> indices 0 and 2 are zero, pattern 1 -> indices 1 and 3 are zero.
+      for( int j = 0; j < 4; ++j )
+      {
+        state.numSig[j] = ( j & 1 ) ^ pattern; // 0,1,0,1 or 1,0,1,0.
+      }
+
+      passed = check_one_checkAllRdCostsOdd1( ref, opt, DQIntern::SCAN_EOCSBB, pq_a_dist, pq_b_dist, decisions_ref,
+                                              decisions_opt, state, sstm.str() + " numSig-01mixed" ) &&
+               passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases )
 {
   printf( "Testing DepQuant::updateStates\n" );
@@ -542,6 +716,7 @@ static bool test_DepQuant()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
+  passed = check_checkAllRdCostsOdd1( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
 
