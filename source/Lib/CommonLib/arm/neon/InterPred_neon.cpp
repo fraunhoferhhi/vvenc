@@ -85,13 +85,13 @@ static inline void calcBIOSums_neon( const Pel* srcY0Tmp, const Pel* srcY1Tmp, c
 
   for( int y = 0; y < 6; y++ )
   {
-    int16x8_t shiftSrcY0Tmp = vshrq_n_s16( vld1q_s16( ( int16_t* )( srcY0Tmp ) ), 4 );
-    int16x8_t shiftSrcY1Tmp = vshrq_n_s16( vld1q_s16( ( int16_t* )( srcY1Tmp ) ), 4 );
+    int16x8_t shiftSrcY0Tmp = vshrq_n_s16( vld1q_s16( srcY0Tmp ), 4 );
+    int16x8_t shiftSrcY1Tmp = vshrq_n_s16( vld1q_s16( srcY1Tmp ), 4 );
 
-    int16x8_t loadGradX0 = vld1q_s16( ( int16_t* )( gradX0 + gradOfs ) );
-    int16x8_t loadGradX1 = vld1q_s16( ( int16_t* )( gradX1 + gradOfs ) );
-    int16x8_t loadGradY0 = vld1q_s16( ( int16_t* )( gradY0 + gradOfs ) );
-    int16x8_t loadGradY1 = vld1q_s16( ( int16_t* )( gradY1 + gradOfs ) );
+    int16x8_t loadGradX0 = vld1q_s16( gradX0 + gradOfs );
+    int16x8_t loadGradX1 = vld1q_s16( gradX1 + gradOfs );
+    int16x8_t loadGradY0 = vld1q_s16( gradY0 + gradOfs );
+    int16x8_t loadGradY1 = vld1q_s16( gradY1 + gradOfs );
     int16x8_t subTemp1 = vsubq_s16( shiftSrcY1Tmp, shiftSrcY0Tmp );
     int16x8_t packTempX = vhaddq_s16( loadGradX0, loadGradX1 );
     int16x8_t packTempY = vhaddq_s16( loadGradY0, loadGradY1 );
@@ -123,39 +123,46 @@ static inline void calcBIOSums_neon( const Pel* srcY0Tmp, const Pel* srcY1Tmp, c
   int secsGxGy = sumSignGY_GX & ( ( 1 << 12 ) - 1 );
   int tmpData = tmpx * mainsGxGy;
   tmpData = ( ( tmpData << 12 ) + tmpx * secsGxGy ) >> 1;
-  tmpy = sumAbsGY == 0 ? 0 : rightShiftMSB( ( ( sumDIY << 2 ) - tmpData ), sumAbsGY );
+  tmpy = sumAbsGY == 0 ? 0 : rightShiftMSB( ( sumDIY << 2 ) - tmpData, sumAbsGY );
   tmpy = Clip3( -limit, limit, tmpy );
 }
 
-static inline void addBIOAvg4_neon( const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride,
-                                    const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0,
-                                    const int16_t* gradY1, int gradOfs, ptrdiff_t widthG, int tmpx, int tmpy, int shift,
-                                    int offset, const ClpRng& clpRng )
+static inline void addBIOAvg4_x2_neon( const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride,
+                                       const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0,
+                                       const int16_t* gradY1, int gradOfs, ptrdiff_t widthG, int tmpx[2], int tmpy[2],
+                                       int shift, int offset, const ClpRng& clpRng )
 {
   const ptrdiff_t srcStride = widthG + 2;
   const ptrdiff_t gradStride = widthG;
   const int32x4_t voffset = vdupq_n_s32( offset );
-  const uint16x4_t vibdimax = vdup_n_u16( clpRng.max() );
+  const uint16x8_t vibdimax = vdupq_n_u16( clpRng.max() );
 
   for( int y = 0; y < 4; y++ )
   {
+    int16x8_t a = vsubq_s16( vld1q_s16( gradX0 + gradOfs ), vld1q_s16( gradX1 + gradOfs ) );
+    int16x8_t b = vsubq_s16( vld1q_s16( gradY0 + gradOfs ), vld1q_s16( gradY1 + gradOfs ) );
 
-    int16x4_t a = vsub_s16( vld1_s16( ( const int16_t* )( gradX0 + gradOfs ) ),
-                            vld1_s16( ( const int16_t* )( gradX1 + gradOfs ) ) );
-    int16x4_t b = vsub_s16( vld1_s16( ( const int16_t* )( gradY0 + gradOfs ) ),
-                            vld1_s16( ( const int16_t* )( gradY1 + gradOfs ) ) );
+    int16x8_t s0 = vld1q_s16( src0 );
+    int16x8_t s1 = vld1q_s16( src1 );
 
-    int16x4_t s0 = vld1_s16( ( const int16_t* )( src0 ) );
-    int16x4_t s1 = vld1_s16( ( const int16_t* )( src1 ) );
-    int32x4_t s01 = vaddl_s16( s0, s1 );
+    int32x4_t s01_lo = vaddl_s16( vget_low_s16( s0 ), vget_low_s16( s1 ) );
+    int32x4_t s01_hi = vaddl_s16( vget_high_s16( s0 ), vget_high_s16( s1 ) );
 
-    int32x4_t sum = vaddq_s32( voffset, s01 );
-    sum = vmlal_n_s16( sum, a, tmpx );
-    sum = vmlal_n_s16( sum, b, tmpy );
-    int16x4_t sum3 =
-        vreinterpret_s16_u16( vmin_u16( vibdimax, vqmovun_s32( vshlq_s32( sum, vdupq_n_s32( -shift ) ) ) ) );
+    int32x4_t sum_lo = vaddq_s32( voffset, s01_lo );
+    int32x4_t sum_hi = vaddq_s32( voffset, s01_hi );
 
-    vst1_s16( ( int16_t* )dst, sum3 );
+    sum_lo = vmlal_n_s16( sum_lo, vget_low_s16( a ), tmpx[0] );
+    sum_lo = vmlal_n_s16( sum_lo, vget_low_s16( b ), tmpy[0] );
+    sum_hi = vmlal_n_s16( sum_hi, vget_high_s16( a ), tmpx[1] );
+    sum_hi = vmlal_n_s16( sum_hi, vget_high_s16( b ), tmpy[1] );
+
+    uint16x4_t sum_u16_lo = vqmovun_s32( vshlq_s32( sum_lo, vdupq_n_s32( -shift ) ) );
+    uint16x4_t sum_u16_hi = vqmovun_s32( vshlq_s32( sum_hi, vdupq_n_s32( -shift ) ) );
+    uint16x8_t sum_u16 = vcombine_u16( sum_u16_lo, sum_u16_hi );
+
+    int16x8_t sum_s16 = vreinterpretq_s16_u16( vminq_u16( vibdimax, sum_u16 ) );
+
+    vst1q_s16( dst, sum_s16 );
 
     dst += dstStride;
     src0 += srcStride;
@@ -164,45 +171,78 @@ static inline void addBIOAvg4_neon( const int16_t* src0, const int16_t* src1, in
   }
 }
 
-template<ARM_VEXT vext>
-void BiOptFlowCoreARMSIMD( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0,
-                           const Pel* gradY1, const int width, const int height, Pel* dstY, const ptrdiff_t dstStride,
-                           const int shiftNum, const int offset, const int limit, const ClpRng& clpRng,
-                           const int bitDepth )
+template<int width, int height>
+static void BiOptFlow_neon_impl( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1,
+                                 const Pel* gradY0, const Pel* gradY1, Pel* dstY, const ptrdiff_t dstStride,
+                                 const int shiftNum, const int offset, const int limit, const ClpRng& clpRng,
+                                 const int bitDepth )
 {
-  const int widthG = width + 2 * BDOF_EXTEND_SIZE;
-  const int stridePredMC = widthG + 2;
-  const int xUnit = width >> 2;
-  const int yUnit = height >> 2;
+  constexpr int widthG = width + 2 * BDOF_EXTEND_SIZE;
+  constexpr int stridePredMC = widthG + 2;
+  constexpr int xUnit = width >> 2;
+  int yUnit = height >> 2;
   int offsetPos = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
+  int offsetPad = 0;
 
-  for( int yu = 0; yu < yUnit; yu++ )
+  static_assert( width >= 8 && height >= 4, "Invalid width or height" );
+
+  do
   {
     const Pel* srcY0Temp = srcY0;
     const Pel* srcY1Temp = srcY1;
     Pel* dstY0 = dstY;
 
-    int OffPos = offsetPos;
-    int OffPad = ( yu * widthG ) << 2;
-    for( int xu = 0; xu < xUnit; xu++ )
-    {
-      int tmpx, tmpy;
-      calcBIOSums_neon( srcY0Temp, srcY1Temp, gradX0, gradX1, gradY0, gradY1, OffPad, widthG, bitDepth, limit, tmpx,
-                        tmpy );
-      addBIOAvg4_neon( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0, gradX1,
-                       gradY0, gradY1, OffPos, widthG, tmpx, tmpy, shiftNum, offset, clpRng );
+    int offPos = offsetPos;
+    int offPad = offsetPad;
 
-      srcY0Temp += 4;
-      srcY1Temp += 4;
-      dstY0 += 4;
-      OffPos += 4;
-      OffPad += 4;
+    for( int xu = 0; xu < xUnit; xu += 2 )
+    {
+      int tmpx[2], tmpy[2];
+      calcBIOSums_neon( srcY0Temp, srcY1Temp, gradX0, gradX1, gradY0, gradY1, offPad, widthG, bitDepth, limit, tmpx[0],
+                        tmpy[0] );
+
+      calcBIOSums_neon( srcY0Temp + 4, srcY1Temp + 4, gradX0, gradX1, gradY0, gradY1, offPad + 4, widthG, bitDepth,
+                        limit, tmpx[1], tmpy[1] );
+
+      addBIOAvg4_x2_neon( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0, gradX1,
+                          gradY0, gradY1, offPos, widthG, tmpx, tmpy, shiftNum, offset, clpRng );
+      srcY0Temp += 8;
+      srcY1Temp += 8;
+      dstY0 += 8;
+      offPos += 8;
+      offPad += 8;
     }
 
     srcY0 += stridePredMC << 2;
     srcY1 += stridePredMC << 2;
     dstY += dstStride << 2;
     offsetPos += widthG << 2;
+    offsetPad += widthG << 2;
+  } while( --yUnit != 0 );
+}
+
+void BiOptFlow_neon( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0,
+                     const Pel* gradY1, const int width, const int height, Pel* dstY, const ptrdiff_t dstStride,
+                     const int shiftNum, const int offset, const int limit, const ClpRng& clpRng, const int bitDepth )
+{
+  if( width == 8 && height == 16 )
+  {
+    BiOptFlow_neon_impl<8, 16>( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, dstY, dstStride, shiftNum, offset, limit,
+                                clpRng, bitDepth );
+  }
+  else if( width == 16 && height == 8 )
+  {
+    BiOptFlow_neon_impl<16, 8>( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, dstY, dstStride, shiftNum, offset, limit,
+                                clpRng, bitDepth );
+  }
+  else if( width == 16 && height == 16 )
+  {
+    BiOptFlow_neon_impl<16, 16>( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, dstY, dstStride, shiftNum, offset, limit,
+                                 clpRng, bitDepth );
+  }
+  else
+  {
+    CHECKD( true, "Unsupported height and width combination" );
   }
 }
 
@@ -504,7 +544,7 @@ void padDmvr_neon( const Pel* src, const int srcStride, Pel* dst, const int dstS
 template<>
 void InterPredInterpolation::_initInterPredictionARM<NEON>()
 {
-  xFpBiDirOptFlow = BiOptFlowCoreARMSIMD<NEON>;
+  xFpBiDirOptFlow = BiOptFlow_neon;
   xFpBDOFGradFilter = gradFilter_neon;
   xFpProfGradFilter = gradFilter_neon<false>;
   xFpPadDmvr = padDmvr_neon;
