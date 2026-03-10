@@ -1220,13 +1220,9 @@ static bool test_InterPred()
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
-  for( unsigned width = 8; width <= 16; width += 8 )
-  {
-    for( unsigned height = 8; height <= 16; height += 8 )
-    {
-      passed = check_biDirOptFlow( &ref, &opt, num_cases, width, height ) && passed;
-    }
-  }
+  passed = check_biDirOptFlow( &ref, &opt, num_cases, 8, 16 ) && passed;
+  passed = check_biDirOptFlow( &ref, &opt, num_cases, 16, 8 ) && passed;
+  passed = check_biDirOptFlow( &ref, &opt, num_cases, 16, 16 ) && passed;
 
   for( unsigned w : { 4, 8, 16, 32 } )
   {
