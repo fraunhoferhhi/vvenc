@@ -797,8 +797,21 @@ namespace vvenc {
         if( firstTestPos >= 0 )
         {
           // if a coefficient was found, advance the pointer to the end of the current subblock
-          // for the subsequent coefficient-wise refinement (C-impl after endif)
+          // for the subsequent coefficient-wise refinement.
           firstTestPos += sbbSize - 1;
+        }
+      }
+
+      for( ; firstTestPos >= 0; firstTestPos-- )
+      {
+        if( zeroOutForThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth ||
+                                tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) )
+        {
+          continue;
+        }
+        if( abs( tCoeff[tuPars.m_scanId2BlkPos[firstTestPos].idx] ) > defaultTh )
+        {
+          break;
         }
       }
     }

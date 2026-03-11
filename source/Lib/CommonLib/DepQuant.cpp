@@ -55,6 +55,23 @@ namespace vvenc {
 
 namespace DQIntern
 {
+  static void findFirstPos( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh,
+                            bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
+  {
+    for( ; firstTestPos >= 0; firstTestPos-- )
+    {
+      if( zeroOutForThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth ||
+                              tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) )
+      {
+        continue;
+      }
+      if( abs( tCoeff[tuPars.m_scanId2BlkPos[firstTestPos].idx] ) > defaultTh )
+      {
+        break;
+      }
+    }
+  }
+
   void Rom::xInitScanArrays()
   {
     if( m_scansInitialized )
@@ -1169,16 +1186,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   {
     const TCoeff defaultTh = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
 
-    if( m_findFirstPos )
-    {
-      m_findFirstPos( firstTestPos, tCoeff, tuPars, defaultTh, zeroOutforThres, zeroOutWidth, zeroOutHeight );
-    }
-
-    for( ; firstTestPos >= 0; firstTestPos-- )
-    {
-      if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) ) continue;
-      if( abs( tCoeff[tuPars.m_scanId2BlkPos[firstTestPos].idx] ) > defaultTh ) break;
-    }
+    m_findFirstPos( firstTestPos, tCoeff, tuPars, defaultTh, zeroOutforThres, zeroOutWidth, zeroOutHeight );
   }
 
   if( firstTestPos < 0 )
@@ -1434,7 +1442,7 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
   m_updateStates        = DQIntern::updateStates;
-  m_findFirstPos        = nullptr;
+  m_findFirstPos        = DQIntern::findFirstPos;
 
   if( enableOpt )
   {
