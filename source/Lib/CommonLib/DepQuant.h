@@ -363,10 +363,15 @@ private:
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
 
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   void initDepQuantX86();
   template <X86_VEXT vext>
   void _initDepQuantX86();
+#endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+  void initDepQuantARM();
+  template <ARM_VEXT vext>
+  void _initDepQuantARM();
 #endif
 
 public:

@@ -1449,6 +1449,9 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
     initDepQuantX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+    initDepQuantARM();
+#endif
   }
 }
 

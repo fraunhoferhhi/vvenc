@@ -51,11 +51,34 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined( TARGET_SIMD_ARM )
 
 #include <arm_neon.h>
+#include <string.h>
 
 namespace vvenc
 {
 
 // Load Helpers
+static inline uint8x8_t load_u8x4( const uint8_t* src )
+{
+  uint32_t tmp;
+  memcpy( &tmp, src, sizeof( tmp ) );
+  return vreinterpret_u8_u32( vset_lane_u32( tmp, vdup_n_u32( 0 ), 0 ) );
+};
+
+static inline int8x8_t load_s8x4( const int8_t* src )
+{
+  uint32_t tmp;
+  memcpy( &tmp, src, sizeof( tmp ) );
+  return vreinterpret_s8_u32( vset_lane_u32( tmp, vdup_n_u32( 0 ), 0 ) );
+};
+
+static inline uint8x16x2_t load_u8x16x2( const uint8_t* src )
+{
+  uint8x16x2_t ret;
+  ret.val[0] = vld1q_u8( src + 0 );
+  ret.val[1] = vld1q_u8( src + 16 );
+  return ret;
+}
+
 static inline int16x4_t load_s16x2( const int16_t* src )
 {
   int32_t tmp;
@@ -93,7 +116,7 @@ static inline void load_s16_16x8x4( const int16_t* src, const ptrdiff_t p, int16
 {
   s[0] = vld1q_s16( src );
   src += p;
-  s[1] = vld1q_s16( src);
+  s[1] = vld1q_s16( src );
   src += p;
   s[2] = vld1q_s16( src );
   src += p;
@@ -116,6 +139,24 @@ static inline void load_s16_16x8x6( const int16_t* src, const ptrdiff_t p, int16
 }
 
 // Store Helpers
+static inline void store_u8x4( uint8_t* dst, uint8x8_t src )
+{
+  const uint32_t tmp = vget_lane_u32( vreinterpret_u32_u8( src ), 0 );
+  memcpy( dst, &tmp, sizeof( tmp ) );
+};
+
+static inline void store_s8x4( int8_t* dst, int8x8_t src )
+{
+  const uint32_t tmp = vget_lane_u32( vreinterpret_u32_s8( src ), 0 );
+  memcpy( dst, &tmp, sizeof( tmp ) );
+};
+
+static inline void store_u8x16x2( uint8_t* dst, uint8x16x2_t src )
+{
+  vst1q_u8( dst + 0, src.val[0] );
+  vst1q_u8( dst + 16, src.val[1] );
+}
+
 static inline void store_s16x2( int16_t* dst, int16x4_t src )
 {
   int32_t tmp = vget_lane_s32( vreinterpret_s32_s16( src ), 0 );
