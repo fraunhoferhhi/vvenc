@@ -414,10 +414,21 @@ void SAOBlkParam::reset()
   }
 }
 
-
-
-SampleAdaptiveOffset::SampleAdaptiveOffset()
+SampleAdaptiveOffset::SampleAdaptiveOffset( bool enableOpt )
 {
+  offsetBlock = offsetBlock_core;
+  calcSaoStatisticsEo90 = calcSaoStatisticsEo90_Core;
+  calcSaoStatisticsEo135 = calcSaoStatisticsEo135_Core;
+  calcSaoStatisticsEo45 = calcSaoStatisticsEo45_Core;
+  calcSaoStatisticsEo0 = calcSaoStatisticsEo0_Core;
+  calcSaoStatisticsBo = calcSaoStatisticsBo_Core;
+
+  if( enableOpt )
+  {
+#if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
+    initSampleAdaptiveOffsetX86();
+#endif
+  }
 }
 
 
@@ -429,16 +440,6 @@ SampleAdaptiveOffset::~SampleAdaptiveOffset()
 
 void SampleAdaptiveOffset::init( ChromaFormat format, uint32_t maxCUWidth, uint32_t maxCUHeight, uint32_t lumaBitShift, uint32_t chromaBitShift )
 {
-  offsetBlock = offsetBlock_core;
-  calcSaoStatisticsEo90 =  calcSaoStatisticsEo90_Core;
-  calcSaoStatisticsEo135 =  calcSaoStatisticsEo135_Core;
-  calcSaoStatisticsEo45 =  calcSaoStatisticsEo45_Core;
-  calcSaoStatisticsEo0 =  calcSaoStatisticsEo0_Core;
-  calcSaoStatisticsBo = calcSaoStatisticsBo_Core;
-#if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
-  initSampleAdaptiveOffsetX86();
-#endif
-
   //bit-depth related
   for(int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++)
   {
