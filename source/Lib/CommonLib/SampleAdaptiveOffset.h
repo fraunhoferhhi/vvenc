@@ -130,6 +130,11 @@ protected:
   template <X86_VEXT vext>
   void _initSampleAdaptiveOffsetX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_SAO
+  void initSampleAdaptiveOffsetARM();
+  template<ARM_VEXT vext>
+  void _initSampleAdaptiveOffsetARM();
+#endif
 
 protected:
   uint32_t    m_offsetStepLog2[MAX_NUM_COMP]; //offset step
