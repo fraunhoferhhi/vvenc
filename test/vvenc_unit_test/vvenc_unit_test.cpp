@@ -67,6 +67,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 
 #include "apputils/ParseArg.h"
+#include "vvenc/vvenc.h"
 
 using namespace vvenc;
 namespace po = apputils::program_options;
@@ -2505,6 +2506,7 @@ struct UnitTestArgs
   bool isFast = false;
   bool show_help = false;
   int seed;
+  std::string simd;
   std::string testcase;
 };
 
@@ -2535,7 +2537,8 @@ UnitTestArgs parse_args( int argc, char* argv[] )
     ( "help,h", args.show_help, "Show help", true )
     ( "seed", args.seed, "Set random seed for running tests" )
     ( "testcase,t", args.testcase, get_testcase_help_text(), false )
-    ( "fast", args.isFast, "Run a fast but less real-world accurate version of the tests", false );
+    ( "fast", args.isFast, "Run a fast but less real-world accurate version of the tests", false )
+    ( "SIMD", args.simd, "Test a specific SIMD extension.", false );
 
   po::SilentReporter err;
   po::scanArgv( opts, argc, ( const char** )argv, err );
@@ -2557,8 +2560,15 @@ int main( int argc, char* argv[] )
 {
   UnitTestArgs args = parse_args( argc, argv );
 
+  const char* simd = vvenc_set_SIMD_extension( args.simd.c_str() );
+  if( !simd )
+  {
+    std::cout << args.simd << " is not supported!\n\n";
+    exit( EXIT_FAILURE );
+  }
+
   srand( args.seed );
-  std::cout << "Running unit tests with seed=" << args.seed << ".\n\n";
+  std::cout << "Running unit tests with seed=" << args.seed << " SIMD=" << simd << ".\n\n";
 
   bool passed = true;
 
