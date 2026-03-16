@@ -58,10 +58,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/AffineGradientSearch.h"
+#include "CommonLib/CommonDef.h"
 #include "CommonLib/InterPrediction.h"
 #include "CommonLib/IntraPrediction.h"
 #include "CommonLib/MCTF.h"
 #include "CommonLib/RdCost.h"
+#include "CommonLib/SampleAdaptiveOffset.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
@@ -159,6 +161,28 @@ public:
 private:
   T m_min;
   T m_max;
+};
+
+template<typename T>
+class ConstantGenerator
+{
+public:
+  explicit ConstantGenerator( T val ) : val( val )
+  {
+  }
+
+  T operator()() const
+  {
+    return val;
+  }
+
+  std::string input_type() const
+  {
+    return "Constant";
+  }
+
+private:
+  T val;
 };
 
 template<typename T>
@@ -2465,6 +2489,90 @@ static bool test_AdaptiveLoopFilter()
 }
 #endif // ENABLE_SIMD_OPT_ALF
 
+#if ENABLE_SIMD_OPT_SAO
+
+template<typename G>
+static bool check_SAOcalcSaoStatisticsBo( SampleAdaptiveOffset* ref, SampleAdaptiveOffset* opt, int bd, G src_generator,
+                                          G org_generator )
+{
+  bool passed = true;
+  const unsigned blk_size = MAX_CU_SIZE * MAX_CU_SIZE;
+  const int srcStride = MAX_CU_SIZE;
+  const int orgStride = MAX_CU_SIZE;
+  std::vector<Pel> srcBlk( blk_size );
+  std::vector<Pel> orgBlk( blk_size );
+  std::vector<int64_t> countRef( NUM_SAO_BO_CLASSES );
+  std::vector<int64_t> diffRef( NUM_SAO_BO_CLASSES );
+  std::vector<int64_t> countOpt( NUM_SAO_BO_CLASSES );
+  std::vector<int64_t> diffOpt( NUM_SAO_BO_CLASSES );
+
+  std::ostringstream sstm_test;
+  sstm_test << "SampleAdaptiveOffset::calcSaoStatisticsBo " << bd << " bit";
+  std::cout << "Testing " << sstm_test.str() << '\n';
+
+  for( unsigned width : { 32, 64, 128 } )
+  {
+    for( unsigned height : { 32, 64, 128 } )
+    {
+      for( int skipLinesX : { 0, 3, 5 } )
+      {
+        for( int skipLinesY : { 0, 2, 4 } )
+        {
+          std::generate( srcBlk.begin(), srcBlk.end(), src_generator );
+          std::generate( orgBlk.begin(), orgBlk.end(), org_generator );
+
+          // endX is the same, or -3, or -5 of the width.
+          int endX = width - skipLinesX;
+          // endY is the same, or -2, or -4 of the height.
+          int endY = height - skipLinesY;
+
+          std::fill( countRef.begin(), countRef.end(), 0 );
+          std::fill( diffRef.begin(), diffRef.end(), 0 );
+          std::fill( countOpt.begin(), countOpt.end(), 0 );
+          std::fill( diffOpt.begin(), diffOpt.end(), 0 );
+
+          ref->calcSaoStatisticsBo( width, endX, endY, srcBlk.data(), orgBlk.data(), srcStride, orgStride, bd,
+                                    countRef.data(), diffRef.data() );
+          opt->calcSaoStatisticsBo( width, endX, endY, srcBlk.data(), orgBlk.data(), srcStride, orgStride, bd,
+                                    countOpt.data(), diffOpt.data() );
+
+          std::ostringstream sstm_subtest;
+          sstm_subtest << sstm_test.str() << " width=" << width << " endX=" << endX << " endY=" << endY;
+
+          passed =
+              compare_values_1d( sstm_subtest.str(), countRef.data(), countOpt.data(), NUM_SAO_BO_CLASSES ) && passed;
+          passed =
+              compare_values_1d( sstm_subtest.str(), diffRef.data(), diffOpt.data(), NUM_SAO_BO_CLASSES ) && passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
+static bool test_SampleAdaptiveOffset()
+{
+  SampleAdaptiveOffset ref{ false };
+  SampleAdaptiveOffset opt{ true };
+
+  bool passed = true;
+
+  for( unsigned bd : { 8, 10 } )
+  {
+    ConstantGenerator<Pel> max_gen{ Pel( ( 1 << bd ) - 1 ) };
+    ConstantGenerator<Pel> min_gen{ 0 };
+    InputGenerator<Pel> rand_gen{ bd, /*is_signed=*/false };
+
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, max_gen, min_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, min_gen, max_gen ) && passed;
+    passed = check_SAOcalcSaoStatisticsBo( &ref, &opt, bd, rand_gen, rand_gen ) && passed;
+  }
+
+  return passed;
+}
+
+#endif // ENABLE_SIMD_OPT_SAO
+
 struct UnitTestEntry
 {
   std::string name;
@@ -2498,6 +2606,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_OPT_ALF
     { "ALF", test_AdaptiveLoopFilter },
+#endif
+#if ENABLE_SIMD_OPT_SAO
+    { "SAO", test_SampleAdaptiveOffset },
 #endif
 };
 
