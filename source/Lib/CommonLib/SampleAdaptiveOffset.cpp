@@ -428,6 +428,9 @@ SampleAdaptiveOffset::SampleAdaptiveOffset( bool enableOpt )
 #if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
     initSampleAdaptiveOffsetX86();
 #endif
+#if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_ARM )
+    initSampleAdaptiveOffsetARM();
+#endif
   }
 }
 

@@ -150,6 +150,17 @@ void MCTF::initMCTF_ARM()
 }
 #endif // ENABLE_SIMD_OPT_MCTF
 
+#if ENABLE_SIMD_OPT_SAO
+void SampleAdaptiveOffset::initSampleAdaptiveOffsetARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initSampleAdaptiveOffsetARM<NEON>();
+  }
+}
+#endif
+
 #if ENABLE_SIMD_TRAFO
 void TCoeffOps::initTCoeffOpsARM()
 {
