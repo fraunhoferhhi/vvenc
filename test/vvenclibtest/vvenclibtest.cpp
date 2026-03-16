@@ -391,6 +391,7 @@ int callingOrderInitNoUninit()
     return -1;
   }
 
+  vvenc_encoder_close( enc );
   return 0;
 }
 
@@ -451,11 +452,13 @@ int callingOrderNoInit()
 
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
+  vvenc_encoder_close( enc );
   return 0;
 
 fail:
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
+  vvenc_encoder_close( enc );
   return -1;
 }
 
@@ -577,6 +580,7 @@ int callingOrderNotRegular()
 fail:
   vvenc_YUVBuffer_free( pcYuvPicture, true );
   vvenc_accessUnit_free( AU, true );
+  vvenc_encoder_close( enc );
   return -1;
 }
 
@@ -1207,16 +1211,18 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
+    vvenc_accessUnit_free( AU, true );
+    vvenc_encoder_close( enc );
     return -1;
   }
 
   if( 0 != vvenc_encoder_close( enc ))
   {
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
   vvenc_accessUnit_free( AU, true );
-
   return 0;
 }
 
@@ -1267,11 +1273,11 @@ int invalidInputInvalidSampleRange( )
 
   if( 0 != inputBufTest( pcYuvPicture ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, false );
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
     return -1;
   }
 
-  vvenc_YUVBuffer_free( pcYuvPicture, false );
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
 
   return 0;
 }
