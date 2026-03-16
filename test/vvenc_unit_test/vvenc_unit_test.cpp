@@ -1197,7 +1197,7 @@ static bool check_padDmvr( InterPredInterpolation* ref, InterPredInterpolation* 
 
   for( unsigned i = 0; i < num_cases; ++i )
   {
-    unsigned srcStride = rng.get( width, 128 );
+    unsigned srcStride = rng.get( width + 8, 128 );
     unsigned dstStride = rng.get( width + 2 * padSize, 128 );
 
     if( !check_one_padDmvr( ref, opt, width, height, srcStride, dstStride, padSize, g ) )
@@ -2453,8 +2453,8 @@ static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, u
     for( unsigned i = 0; i < num_cases; ++i )
     {
       // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
-      unsigned srcStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
-      unsigned dstStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
+      unsigned srcStride = rng.get( w + 8, g_fastUnitTest ? 512 : 8192 );
+      unsigned dstStride = rng.get( w    , g_fastUnitTest ? 512 : 8192 );
 
       if( !check_one_filterBlk( ref, opt, srcStride, dstStride, w, h, g, linearIndex ) )
       {
