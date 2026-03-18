@@ -1317,7 +1317,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
-  
+
+  // ensure there is no ABI change in m_poc0idr due to the change from bool to int8_t
+  static_assert(sizeof(int8_t) == sizeof(bool), "ERROR: ABI change in m_poc0idr size change" );
+  static_assert(alignof(int8_t) == alignof(bool), "ERROR: ABI change in m_poc0idr alignment change" );
+  static_assert(offsetof(vvenc_config, m_poc0idr)  == offsetof(vvenc_config, m_fga) + 1,     "ERROR: ABI change in m_poc0idr offset change" );
+  static_assert(offsetof(vvenc_config, m_ifpLines) == offsetof(vvenc_config, m_poc0idr) + 1, "ERROR: ABI change in m_ifpLines offset change" );
+
+
   if( c->m_DecodingRefreshType == VVENC_DRT_IDR2 )
   {
     msg.log( VVENC_WARNING, "Configuration warning: DecodingRefreshType IDR2 is deprecated\n\n" );
@@ -1327,7 +1334,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_rprEnabledFlag == -1 )
   {
-    c->m_rprEnabledFlag = ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? 2 : 0;
+    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
   }
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
@@ -1967,7 +1974,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 6,                "Decoding refresh type must be comprised between 0 and 6 included" );
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType == 6 && !c->m_poc0idr,                              "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL && !c->m_poc0idr,          "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
