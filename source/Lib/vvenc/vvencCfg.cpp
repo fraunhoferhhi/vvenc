@@ -1317,7 +1317,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
-  
+
+  // ensure there is no ABI change in m_poc0idr due to the change from bool to int8_t
+  static_assert(sizeof(int8_t) == sizeof(bool), "ERROR: ABI change in m_poc0idr size change" );
+  static_assert(alignof(int8_t) == alignof(bool), "ERROR: ABI change in m_poc0idr alignment change" );
+  static_assert(offsetof(vvenc_config, m_poc0idr)  == offsetof(vvenc_config, m_fga) + 1,     "ERROR: ABI change in m_poc0idr offset change" );
+  static_assert(offsetof(vvenc_config, m_ifpLines) == offsetof(vvenc_config, m_poc0idr) + 1, "ERROR: ABI change in m_ifpLines offset change" );
+
+
   if( c->m_DecodingRefreshType == VVENC_DRT_IDR2 )
   {
     msg.log( VVENC_WARNING, "Configuration warning: DecodingRefreshType IDR2 is deprecated\n\n" );
