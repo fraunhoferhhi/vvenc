@@ -1331,10 +1331,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_poc0idr, "for using deprecated IDR2, POC0IDR has to be disabled" );
     c->m_DecodingRefreshType = VVENC_DRT_IDR;
   }
-  else if( c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL )
-  {
-    c->m_poc0idr = true;
-  }
 
   if( c->m_rprEnabledFlag == -1 )
   {
