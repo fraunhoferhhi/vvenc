@@ -40,7 +40,15 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
+#if defined ( TARGET_SIMD_X86 )
+#include "x86/CommonDefX86.h"
+#endif
+
 #include "DepQuant.h"
+#if ENABLE_SIMD_OPT_QUANT
+#include "DepQuantSimd.h"
+#endif
+
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
@@ -609,44 +617,6 @@ namespace DQIntern
     int     prevId;
   };
 
-  struct SbbCtx
-  {
-    uint8_t*  sbbFlags;
-    uint8_t*  levels;
-  };
-
-  class CommonCtx
-  {
-  public:
-    CommonCtx() : m_currSbbCtx( m_allSbbCtx ), m_prevSbbCtx( m_currSbbCtx + 4 ) {}
-
-    inline void swap() { std::swap(m_currSbbCtx, m_prevSbbCtx); }
-
-    inline void reset( const TUParameters& tuPars, const RateEstimator &rateEst)
-    {
-      m_nbInfo = tuPars.m_scanId2NbInfoOut;
-      ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2*sizeof(BinFracBits) );
-      const int numSbb    = tuPars.m_numSbb;
-      const int chunkSize = numSbb + tuPars.m_numCoeff;
-      uint8_t*  nextMem   = m_memory;
-      for( int k = 0; k < 8; k++, nextMem += chunkSize )
-      {
-        m_allSbbCtx[k].sbbFlags = nextMem;
-        m_allSbbCtx[k].levels   = nextMem + numSbb;
-      }
-    }
-
-    inline void update(const ScanInfo &scanInfo, const State *prevState, State &currState);
-
-  private:
-    const NbInfoOut*            m_nbInfo;
-    BinFracBits                 m_sbbFlagBits[2];
-    SbbCtx                      m_allSbbCtx  [8];
-    SbbCtx*                     m_currSbbCtx;
-    SbbCtx*                     m_prevSbbCtx;
-    uint8_t                     m_memory[ 8 * ( MAX_TB_SIZEY * MAX_TB_SIZEY + MLS_GRP_NUM ) ];
-  };
-
   const int32_t g_goRiceBits[4][RICEMAX] =
   {
     { 32768,  65536,  98304, 131072, 163840, 196608, 262144, 262144, 327680, 327680, 327680, 327680, 393216, 393216, 393216, 393216, 393216, 393216, 393216, 393216, 458752, 458752, 458752, 458752, 458752, 458752, 458752, 458752, 458752, 458752, 458752, 458752},
@@ -1026,7 +996,7 @@ namespace DQIntern
 
       m_sbb.absLevels[ scanInfo.insidePos ] = (uint8_t)std::min<TCoeff>( 126 + ( decision.absLevel & 1 ), decision.absLevel );
 
-      m_commonCtx.update( scanInfo, prvState, *this );
+      m_commonCtx.updateScalar( scanInfo, prvState, *this );
 
       if (m_remRegBins >= 4)
       {
@@ -1047,7 +1017,7 @@ namespace DQIntern
     }
   }
 
-  inline void CommonCtx::update(const ScanInfo &scanInfo, const State *prevState, State &currState)
+  inline void CommonCtx::updateScalar(const ScanInfo &scanInfo, const State *prevState, State &currState)
   {
     uint8_t*    sbbFlags  = m_currSbbCtx[ currState.m_stateId ].sbbFlags;
     uint8_t*    levels    = m_currSbbCtx[ currState.m_stateId ].levels;
@@ -1398,8 +1368,27 @@ void DepQuantImpl::init( int dqTrVal )
 DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists )
 {
 #if ENABLE_SIMD_OPT_QUANT
-  initDepQuantSimd();
+  // SIMD DepQuant implementation is currently available only for x86, so create
+  // the DepQuantSimd instance only when building for x86 or SIMDe and a SIMD
+  // extension beyond SCALAR is detected. Otherwise, fall back to the scalar
+  // DepQuant implementation.
+  // Not all DepQuantSimd functions have a reference C implementation yet,
+  // so some functionality still depends on the x86 implementation.
+  // When SIMD support becomes available for additional targets (for example,
+  // Neon), and equivalent implementations exist for all functions without
+  // relying on any x86 implementation, this logic can be extended to
+  // instantiate DepQuantSimd for those targets as well.
+
+  bool isSimd = false;
+#if defined( TARGET_SIMD_X86 )
+  isSimd = read_x86_extension_flags() > x86_simd::SCALAR;
 #endif
+
+  if( !p && isSimd )
+  {
+    p = new DQIntern::DepQuantSimd();
+  }
+#endif // ENABLE_SIMD_OPT_QUANT
 
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );

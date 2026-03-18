@@ -192,6 +192,55 @@ namespace DQIntern
     CoeffFracBits       m_gtxFracBits                          [ sm_maxNumGtxCtx ];
   };
 
+  struct SbbCtx
+  {
+    uint8_t* sbbFlags;
+    uint8_t* levels;
+  };
+
+  class State;
+#if ENABLE_SIMD_OPT_QUANT
+  class StateSimd;
+  struct StateMem;
+#endif
+
+  class CommonCtx
+  {
+  public:
+    CommonCtx() : m_currSbbCtx( m_allSbbCtx ), m_prevSbbCtx( m_currSbbCtx + 4 ) {}
+
+    inline void swap()
+    {
+      std::swap( m_currSbbCtx, m_prevSbbCtx );
+    }
+
+    inline void reset( const TUParameters& tuPars, const RateEstimator& rateEst )
+    {
+      m_nbInfo = tuPars.m_scanId2NbInfoOut;
+      ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2 * sizeof( BinFracBits ) );
+      const int numSbb = tuPars.m_numSbb;
+      const int chunkSize = numSbb + tuPars.m_numCoeff;
+      uint8_t* nextMem = m_memory;
+      for( int k = 0; k < 8; k++, nextMem += chunkSize )
+      {
+        m_allSbbCtx[k].sbbFlags = nextMem;
+        m_allSbbCtx[k].levels = nextMem + numSbb;
+      }
+    }
+
+    inline void updateScalar(const ScanInfo &scanInfo, const State *prevState, State &currState);
+#if ENABLE_SIMD_OPT_QUANT
+    void updateSimd( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr );
+#endif
+
+    SbbCtx* m_currSbbCtx;
+  private:
+    const NbInfoOut* m_nbInfo;
+    BinFracBits m_sbbFlagBits[2];
+    SbbCtx m_allSbbCtx[8];
+    SbbCtx* m_prevSbbCtx;
+    uint8_t m_memory[8 * ( MAX_TB_SIZEY * MAX_TB_SIZEY + MLS_GRP_NUM )];
+  };
   /*================================================================================*/
   /*=====                                                                      =====*/
   /*=====   P R E - Q U A N T I Z E R                                          =====*/
@@ -260,9 +309,6 @@ public:
   virtual void init   ( int rdoq = 0, bool useRDOQTS = false, int dqThrVal = 8 );
 
 private:
-#if ENABLE_SIMD_OPT_QUANT
-  void initDepQuantSimd();
-#endif
 
   DepQuantImpl* p = nullptr;
 };

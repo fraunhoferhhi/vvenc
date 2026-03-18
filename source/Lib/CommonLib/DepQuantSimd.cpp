@@ -54,29 +54,81 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
-void DepQuant::initDepQuantSimd()
+namespace DQIntern
 {
-  // SIMD DepQuant implementation is currently available only for x86, so create
-  // the DepQuantSimd instance only when building for x86 or SIMDe and a SIMD
-  // extension beyond SCALAR is detected. Otherwise, fall back to the scalar
-  // DepQuant implementation.
-  // Not all DepQuantSimd functions have a reference C implementation yet,
-  // so some functionality still depends on the x86 implementation.
-  // When SIMD support becomes available for additional targets (for example,
-  // Neon), and equivalent implementations exist for all functions without
-  // relying on any x86 implementation, this logic can be extended to
-  // instantiate DepQuantSimd for those targets as well.
-
-  bool isSimd = false;
-#if defined( TARGET_SIMD_X86 )
-  isSimd = read_x86_extension_flags() > x86_simd::SCALAR;
-#endif
-
-  if( !p && isSimd )
+void CommonCtx::updateSimd( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
+{
+  uint8_t* sbbFlags = m_currSbbCtx[stateId].sbbFlags;
+  uint8_t* levels = m_currSbbCtx[stateId].levels;
+  uint16_t maxDist = m_nbInfo[scanInfo.scanIdx - 1].maxDist;
+  uint16_t sbbSize = scanInfo.sbbSize;
+  std::size_t setCpSize = ( maxDist > sbbSize ? maxDist - sbbSize : 0 ) * sizeof( uint8_t );
+  if( prevId >= 0 )
   {
-    p = new DQIntern::DepQuantSimd();
+    ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, scanInfo.numSbb * sizeof( uint8_t ) );
+    ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize,
+              setCpSize );
+  }
+  else
+  {
+    ::memset( sbbFlags, 0, scanInfo.numSbb * sizeof( uint8_t ) );
+    ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
+  }
+  sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
+
+  const int sigNSbb = ( ( scanInfo.nextSbbRight ? sbbFlags[scanInfo.nextSbbRight] : false ) ||
+                                ( scanInfo.nextSbbBelow ? sbbFlags[scanInfo.nextSbbBelow] : false )
+                            ? 1
+                            : 0 );
+  curr.refSbbCtxId[stateId] = stateId;
+  const BinFracBits sbbBits = m_sbbFlagBits[sigNSbb];
+
+  curr.sbbBits0[stateId] = sbbBits.intBits[0];
+  curr.sbbBits1[stateId] = sbbBits.intBits[1];
+
+  if( sigNSbb ||
+      ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
+  {
+    const int scanBeg = scanInfo.scanIdx - scanInfo.sbbSize;
+    const NbInfoOut* nbOut = m_nbInfo + scanBeg;
+    const uint8_t* absLevels = levels + scanBeg;
+
+    for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+    {
+      const int idAddr = ( id << 2 ) + stateId;
+
+      if( nbOut->num )
+      {
+        TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
+#define UPDATE( k )                                                                                                    \
+{                                                                                                                    \
+  TCoeff t = absLevels[nbOut->outPos[k]];                                                                            \
+  sumAbs += t;                                                                                                       \
+  sumAbs1 += std::min<TCoeff>( 4 + ( t & 1 ), t );                                                                   \
+  sumNum += !!t;                                                                                                     \
+}
+        switch( nbOut->num )
+        {
+        default:
+        case 5:
+          UPDATE( 4 );
+        case 4:
+          UPDATE( 3 );
+        case 3:
+          UPDATE( 2 );
+        case 2:
+          UPDATE( 1 );
+        case 1:
+          UPDATE( 0 );
+        }
+#undef UPDATE
+        curr.tplAcc[idAddr] = ( sumNum << 5 ) | sumAbs1;
+        curr.sum1st[idAddr] = ( uint8_t )std::min( 255, sumAbs );
+      }
+    }
   }
 }
+} // namespace DQIntern
 
 } // namespace vvenc
 

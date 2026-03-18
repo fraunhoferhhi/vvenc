@@ -110,119 +110,7 @@ struct StateMem
 
 static constexpr size_t StateMemSkipCpySize = offsetof( StateMem, sbbBits1 );
 
-struct SbbCtx
-{
-  uint8_t* sbbFlags;
-  uint8_t* levels;
-};
-
-class CommonCtx
-{
-public:
-  CommonCtx() : m_currSbbCtx( m_allSbbCtx ), m_prevSbbCtx( m_currSbbCtx + 4 ) {}
-
-  inline void swap()
-  {
-    std::swap( m_currSbbCtx, m_prevSbbCtx );
-  }
-
-  inline void reset( const TUParameters& tuPars, const RateEstimator& rateEst )
-  {
-    m_nbInfo = tuPars.m_scanId2NbInfoOut;
-    ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2 * sizeof( BinFracBits ) );
-    const int numSbb = tuPars.m_numSbb;
-    const int chunkSize = numSbb + tuPars.m_numCoeff;
-    uint8_t* nextMem = m_memory;
-    for( int k = 0; k < 8; k++, nextMem += chunkSize )
-    {
-      m_allSbbCtx[k].sbbFlags = nextMem;
-      m_allSbbCtx[k].levels = nextMem + numSbb;
-    }
-  }
-
-  inline void update( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
-  {
-    uint8_t* sbbFlags = m_currSbbCtx[stateId].sbbFlags;
-    uint8_t* levels = m_currSbbCtx[stateId].levels;
-    uint16_t maxDist = m_nbInfo[scanInfo.scanIdx - 1].maxDist;
-    uint16_t sbbSize = scanInfo.sbbSize;
-    std::size_t setCpSize = ( maxDist > sbbSize ? maxDist - sbbSize : 0 ) * sizeof( uint8_t );
-    if( prevId >= 0 )
-    {
-      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize,
-                setCpSize );
-    }
-    else
-    {
-      ::memset( sbbFlags, 0, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
-    }
-    sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
-
-    const int sigNSbb = ( ( scanInfo.nextSbbRight ? sbbFlags[scanInfo.nextSbbRight] : false ) ||
-                                  ( scanInfo.nextSbbBelow ? sbbFlags[scanInfo.nextSbbBelow] : false )
-                              ? 1
-                              : 0 );
-    curr.refSbbCtxId[stateId] = stateId;
-    const BinFracBits sbbBits = m_sbbFlagBits[sigNSbb];
-
-    curr.sbbBits0[stateId] = sbbBits.intBits[0];
-    curr.sbbBits1[stateId] = sbbBits.intBits[1];
-
-    if( sigNSbb ||
-        ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
-    {
-      const int scanBeg = scanInfo.scanIdx - scanInfo.sbbSize;
-      const NbInfoOut* nbOut = m_nbInfo + scanBeg;
-      const uint8_t* absLevels = levels + scanBeg;
-
-      for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
-      {
-        const int idAddr = ( id << 2 ) + stateId;
-
-        if( nbOut->num )
-        {
-          TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
-#define UPDATE( k )                                                                                                    \
-  {                                                                                                                    \
-    TCoeff t = absLevels[nbOut->outPos[k]];                                                                            \
-    sumAbs += t;                                                                                                       \
-    sumAbs1 += std::min<TCoeff>( 4 + ( t & 1 ), t );                                                                   \
-    sumNum += !!t;                                                                                                     \
-  }
-          switch( nbOut->num )
-          {
-          default:
-          case 5:
-            UPDATE( 4 );
-          case 4:
-            UPDATE( 3 );
-          case 3:
-            UPDATE( 2 );
-          case 2:
-            UPDATE( 1 );
-          case 1:
-            UPDATE( 0 );
-          }
-#undef UPDATE
-          curr.tplAcc[idAddr] = ( sumNum << 5 ) | sumAbs1;
-          curr.sum1st[idAddr] = ( uint8_t )std::min( 255, sumAbs );
-        }
-      }
-    }
-  }
-
-  SbbCtx* m_currSbbCtx;
-private:
-  const NbInfoOut* m_nbInfo;
-  BinFracBits m_sbbFlagBits[2];
-  SbbCtx m_allSbbCtx[8];
-  SbbCtx* m_prevSbbCtx;
-  uint8_t m_memory[8 * ( MAX_TB_SIZEY * MAX_TB_SIZEY + MLS_GRP_NUM )];
-};
-
-class State
+class StateSimd
 {
   friend class CommonCtx;
 
@@ -446,8 +334,7 @@ public:
       }
     }
   }
-
-  // End of class State.
+  // End of class StateSimd.
 };
 
 class DepQuantSimd : private RateEstimator, public DepQuantImpl
@@ -582,8 +469,8 @@ public:
     m_commonCtx.reset( tuPars, *this );
     for( int k = 0; k < 4; k++ )
     {
-      State::init( k, m_state_curr );
-      State::init( k, m_state_skip );
+      StateSimd::init( k, m_state_curr );
+      StateSimd::init( k, m_state_skip );
       m_state_curr.m_sigFracBitsArray[k] = RateEstimator::sigFlagBits( k );
     }
 
@@ -690,10 +577,10 @@ private:
     {
       if( scanInfo.spt == SCAN_EOCSBB )
       {
-        State::checkRdCostSkipSbbZeroOut( 0, decisions, 0, skip );
-        State::checkRdCostSkipSbbZeroOut( 1, decisions, 1, skip );
-        State::checkRdCostSkipSbbZeroOut( 2, decisions, 2, skip );
-        State::checkRdCostSkipSbbZeroOut( 3, decisions, 3, skip );
+        StateSimd::checkRdCostSkipSbbZeroOut( 0, decisions, 0, skip );
+        StateSimd::checkRdCostSkipSbbZeroOut( 1, decisions, 1, skip );
+        StateSimd::checkRdCostSkipSbbZeroOut( 2, decisions, 2, skip );
+        StateSimd::checkRdCostSkipSbbZeroOut( 3, decisions, 3, skip );
       }
       return;
     }
@@ -713,17 +600,17 @@ private:
 
       if( prev.anyRemRegBinsLt4 )
       {
-        State::setRiceParam( 0, scanInfo, prev, false );
-        State::checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
+        StateSimd::setRiceParam( 0, scanInfo, prev, false );
+        StateSimd::checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
 
-        State::setRiceParam( 1, scanInfo, prev, false );
-        State::checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
+        StateSimd::setRiceParam( 1, scanInfo, prev, false );
+        StateSimd::checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
 
-        State::setRiceParam( 2, scanInfo, prev, false );
-        State::checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
+        StateSimd::setRiceParam( 2, scanInfo, prev, false );
+        StateSimd::checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
 
-        State::setRiceParam( 3, scanInfo, prev, false );
-        State::checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
+        StateSimd::setRiceParam( 3, scanInfo, prev, false );
+        StateSimd::checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
       }
       else
       {
@@ -731,7 +618,7 @@ private:
         m_checkAllRdCostsOdd1( scanInfo.spt, pq_a_dist, pq_b_dist, decisions, prev );
       }
 
-      State::checkRdCostStart( lastOffset, PQData{ 1, pq_b_dist }, decisions, 2, prev );
+      StateSimd::checkRdCostStart( lastOffset, PQData{ 1, pq_b_dist }, decisions, 2, prev );
     }
     else
     {
@@ -770,20 +657,20 @@ private:
       {
         if( prev.anyRemRegBinsLt4 || cff02ge4 )
         {
-          State::setRiceParam( 0, scanInfo, prev, cff02ge4 );
-          State::setRiceParam( 1, scanInfo, prev, cff02ge4 );
+          StateSimd::setRiceParam( 0, scanInfo, prev, cff02ge4 );
+          StateSimd::setRiceParam( 1, scanInfo, prev, cff02ge4 );
         }
 
         if( prev.anyRemRegBinsLt4 || cff13ge4 )
         {
-          State::setRiceParam( 2, scanInfo, prev, cff13ge4 );
-          State::setRiceParam( 3, scanInfo, prev, cff13ge4 );
+          StateSimd::setRiceParam( 2, scanInfo, prev, cff13ge4 );
+          StateSimd::setRiceParam( 3, scanInfo, prev, cff13ge4 );
         }
 
-        State::checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
-        State::checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
-        State::checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
-        State::checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
+        StateSimd::checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
+        StateSimd::checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
+        StateSimd::checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
+        StateSimd::checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
       }
       else
       {
@@ -791,16 +678,16 @@ private:
         m_checkAllRdCosts( scanInfo.spt, pqData, decisions, prev );
       }
 
-      State::checkRdCostStart( lastOffset, pqData[0], decisions, 0, prev );
-      State::checkRdCostStart( lastOffset, pqData[2], decisions, 2, prev );
+      StateSimd::checkRdCostStart( lastOffset, pqData[0], decisions, 0, prev );
+      StateSimd::checkRdCostStart( lastOffset, pqData[2], decisions, 2, prev );
     }
 
     if( scanInfo.spt == SCAN_EOCSBB )
     {
-      State::checkRdCostSkipSbb( 0, decisions, 0, skip );
-      State::checkRdCostSkipSbb( 1, decisions, 1, skip );
-      State::checkRdCostSkipSbb( 2, decisions, 2, skip );
-      State::checkRdCostSkipSbb( 3, decisions, 3, skip );
+      StateSimd::checkRdCostSkipSbb( 0, decisions, 0, skip );
+      StateSimd::checkRdCostSkipSbb( 1, decisions, 1, skip );
+      StateSimd::checkRdCostSkipSbb( 2, decisions, 2, skip );
+      StateSimd::checkRdCostSkipSbb( 3, decisions, 3, skip );
     }
   }
 

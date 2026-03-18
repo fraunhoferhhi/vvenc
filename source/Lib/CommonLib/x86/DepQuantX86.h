@@ -311,7 +311,7 @@ inline void updateStatesEOS_SIMD( const ScanInfo& scanInfo, const Decisions& dec
     if( prevId > -2 )
     {
       const int refId = prevId < 0 ? -1 : ( prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4 );
-      commonCtx.update( scanInfo, refId, i, curr );
+      commonCtx.updateSimd( scanInfo, refId, i, curr );
     }
   }
 
