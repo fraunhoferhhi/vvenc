@@ -191,22 +191,18 @@ Distortion xCalcHAD16x16_fast_neon( const Pel* piOrg, const Pel* piCur, const in
   return sad << 2;
 }
 
-static uint32_t xCalcHAD8x8_Neon( const Pel *piOrg, const Pel *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
+Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
 {
-  CHECK( iBitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
-
   int16x8_t m1[8], m2[8];
-  int32x4x2_t m3[8], m4[8];
-
+  int32x4_t m3[8];
   for( int i = 0; i < 8; i++ )
   {
-    int16x8_t r0 = vld1q_s16( piOrg + i * iStrideOrg );
-    int16x8_t r1 = vld1q_s16( piCur + i * iStrideCur );
-
-    m2[i] = vsubq_s16( r0, r1 ); // 11-bit
+    const int16x8_t org = vld1q_s16( piOrg + iStrideOrg * i );
+    const int16x8_t cur = vld1q_s16( piCur + iStrideCur * i );
+    m2[i] = vsubq_s16( org, cur ); // 11-bit
   }
 
-  // Vertical.
+  // Vertical Hadamard.
   m1[0] = vaddq_s16( m2[0], m2[4] );
   m1[1] = vaddq_s16( m2[1], m2[5] );
   m1[2] = vaddq_s16( m2[2], m2[6] );
@@ -234,6 +230,8 @@ static uint32_t xCalcHAD8x8_Neon( const Pel *piOrg, const Pel *piCur, const int 
   m1[6] = vaddq_s16( m2[6], m2[7] );
   m1[7] = vsubq_s16( m2[6], m2[7] ); // 14-bit
 
+  const uint32_t absDC = std::abs( horizontal_add_long_s16x8( m1[0] ) );
+
   // Partial transpose to do the first horizontal step.
   m2[0] = vtrnq_s16( m1[0], m1[1] ).val[0];
   m2[1] = vtrnq_s16( m1[0], m1[1] ).val[1];
@@ -244,87 +242,57 @@ static uint32_t xCalcHAD8x8_Neon( const Pel *piOrg, const Pel *piCur, const int 
   m2[6] = vtrnq_s16( m1[6], m1[7] ).val[0];
   m2[7] = vtrnq_s16( m1[6], m1[7] ).val[1];
 
-  m1[0] = vaddq_s16( m2[0], m2[1] );
-  m1[1] = vaddq_s16( m2[2], m2[3] );
-  m1[2] = vaddq_s16( m2[4], m2[5] );
-  m1[3] = vaddq_s16( m2[6], m2[7] );
-  m1[4] = vsubq_s16( m2[0], m2[1] );
-  m1[5] = vsubq_s16( m2[2], m2[3] );
-  m1[6] = vsubq_s16( m2[4], m2[5] );
-  m1[7] = vsubq_s16( m2[6], m2[7] ); // 15-bit
+  // First horizontal butterfly.
+  m3[0] = vreinterpretq_s32_s16( vaddq_s16( m2[0], m2[1] ) );
+  m3[1] = vreinterpretq_s32_s16( vsubq_s16( m2[0], m2[1] ) );
+  m3[2] = vreinterpretq_s32_s16( vaddq_s16( m2[2], m2[3] ) );
+  m3[3] = vreinterpretq_s32_s16( vsubq_s16( m2[2], m2[3] ) );
+  m3[4] = vreinterpretq_s32_s16( vaddq_s16( m2[4], m2[5] ) );
+  m3[5] = vreinterpretq_s32_s16( vsubq_s16( m2[4], m2[5] ) );
+  m3[6] = vreinterpretq_s32_s16( vaddq_s16( m2[6], m2[7] ) );
+  m3[7] = vreinterpretq_s32_s16( vsubq_s16( m2[6], m2[7] ) ); // 15-bit
 
-  // Finish the transpose.
-  m2[0] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[0] ), vreinterpretq_s32_s16( m1[1] ) ).val[0] );
-  m2[1] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[0] ), vreinterpretq_s32_s16( m1[1] ) ).val[1] );
-  m2[2] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[2] ), vreinterpretq_s32_s16( m1[3] ) ).val[0] );
-  m2[3] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[2] ), vreinterpretq_s32_s16( m1[3] ) ).val[1] );
-  m2[4] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[4] ), vreinterpretq_s32_s16( m1[5] ) ).val[0] );
-  m2[5] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[4] ), vreinterpretq_s32_s16( m1[5] ) ).val[1] );
-  m2[6] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[6] ), vreinterpretq_s32_s16( m1[7] ) ).val[0] );
-  m2[7] = vreinterpretq_s16_s32( vzipq_s32( vreinterpretq_s32_s16( m1[6] ), vreinterpretq_s32_s16( m1[7] ) ).val[1] );
+  m1[0] = vreinterpretq_s16_s32( vzipq_s32( m3[0], m3[1] ).val[0] );
+  m1[1] = vreinterpretq_s16_s32( vzipq_s32( m3[0], m3[1] ).val[1] );
+  m1[2] = vreinterpretq_s16_s32( vzipq_s32( m3[2], m3[3] ).val[0] );
+  m1[3] = vreinterpretq_s16_s32( vzipq_s32( m3[2], m3[3] ).val[1] );
+  m1[4] = vreinterpretq_s16_s32( vzipq_s32( m3[4], m3[5] ).val[0] );
+  m1[5] = vreinterpretq_s16_s32( vzipq_s32( m3[4], m3[5] ).val[1] );
+  m1[6] = vreinterpretq_s16_s32( vzipq_s32( m3[6], m3[7] ).val[0] );
+  m1[7] = vreinterpretq_s16_s32( vzipq_s32( m3[6], m3[7] ).val[1] );
 
-  m4[0].val[0] = vaddl_s16( vget_low_s16( m2[0] ), vget_low_s16( m2[1] ) );
-  m4[1].val[0] = vaddl_s16( vget_high_s16( m2[0] ), vget_high_s16( m2[1] ) );
-  m4[2].val[0] = vsubl_s16( vget_low_s16( m2[0] ), vget_low_s16( m2[1] ) );
-  m4[3].val[0] = vsubl_s16( vget_high_s16( m2[0] ), vget_high_s16( m2[1] ) );
-  m4[4].val[0] = vaddl_s16( vget_low_s16( m2[4] ), vget_low_s16( m2[5] ) );
-  m4[5].val[0] = vaddl_s16( vget_high_s16( m2[4] ), vget_high_s16( m2[5] ) );
-  m4[6].val[0] = vsubl_s16( vget_low_s16( m2[4] ), vget_low_s16( m2[5] ) );
-  m4[7].val[0] = vsubl_s16( vget_high_s16( m2[4] ), vget_high_s16( m2[5] ) );
+  // vabs_s16 of -2^15 returns -2^15, which later gets reinterpreted to 2^15.
+  m2[0] = vabsq_s16( vaddq_s16( m1[0], m1[1] ) );
+  m2[1] = vabdq_s16( m1[0], m1[1] );
+  m2[2] = vabsq_s16( vaddq_s16( m1[2], m1[3] ) );
+  m2[3] = vabdq_s16( m1[2], m1[3] );
+  m2[4] = vabsq_s16( vaddq_s16( m1[4], m1[5] ) );
+  m2[5] = vabdq_s16( m1[4], m1[5] );
+  m2[6] = vabsq_s16( vaddq_s16( m1[6], m1[7] ) );
+  m2[7] = vabdq_s16( m1[6], m1[7] ); // 16-bit
 
-  m3[0].val[0] = vabsq_s32( vaddq_s32( m4[0].val[0], m4[1].val[0] ) );
-  m3[1].val[0] = vabdq_s32(m4[0].val[0], m4[1].val[0]);
-  m3[2].val[0] = vabsq_s32( vaddq_s32( m4[2].val[0], m4[3].val[0] ) );
-  m3[3].val[0] = vabdq_s32(m4[2].val[0], m4[3].val[0]);
-  m3[4].val[0] = vabsq_s32( vaddq_s32( m4[4].val[0], m4[5].val[0] ) );
-  m3[5].val[0] = vabdq_s32(m4[4].val[0], m4[5].val[0]);
-  m3[6].val[0] = vabsq_s32( vaddq_s32( m4[6].val[0], m4[7].val[0] ) );
-  m3[7].val[0] = vabdq_s32(m4[6].val[0], m4[7].val[0]);
+  const uint16x8_t r0 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[0], m2[1] ).val[0] );
+  const uint16x8_t r1 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[0], m2[1] ).val[1] );
+  const uint16x8_t r2 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[2], m2[3] ).val[0] );
+  const uint16x8_t r3 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[2], m2[3] ).val[1] );
+  const uint16x8_t r4 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[4], m2[5] ).val[0] );
+  const uint16x8_t r5 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[4], m2[5] ).val[1] );
+  const uint16x8_t r6 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[6], m2[7] ).val[0] );
+  const uint16x8_t r7 = vreinterpretq_u16_s16( vvenc_vtrnq_s64_to_s16( m2[6], m2[7] ).val[1] );
 
-  // --------------------------------------------------------------------------------------------
-  m4[0].val[1] = vaddl_s16( vget_low_s16( m2[2] ), vget_low_s16( m2[3] ) );
-  m4[1].val[1] = vaddl_s16( vget_high_s16( m2[2] ), vget_high_s16( m2[3] ) );
-  m4[2].val[1] = vsubl_s16( vget_low_s16( m2[2] ), vget_low_s16( m2[3] ) );
-  m4[3].val[1] = vsubl_s16( vget_high_s16( m2[2] ), vget_high_s16( m2[3] ) );
-  m4[4].val[1] = vaddl_s16( vget_low_s16( m2[6] ), vget_low_s16( m2[7] ) );
-  m4[5].val[1] = vaddl_s16( vget_high_s16( m2[6] ), vget_high_s16( m2[7] ) );
-  m4[6].val[1] = vsubl_s16( vget_low_s16( m2[6] ), vget_low_s16( m2[7] ) );
-  m4[7].val[1] = vsubl_s16( vget_high_s16( m2[6] ), vget_high_s16( m2[7] ) );
+  // The last butterfly uses |x+y|+|x-y| = 2*max(|x|,|y|); we delay the "*2".
+  const uint16x8_t max0 = vmaxq_u16( r0, r1 );
+  const uint16x8_t max1 = vmaxq_u16( r2, r3 );
+  const uint16x8_t max2 = vmaxq_u16( r4, r5 );
+  const uint16x8_t max3 = vmaxq_u16( r6, r7 );
 
-  m3[0].val[1] = vabsq_s32( vaddq_s32( m4[0].val[1], m4[1].val[1] ) );
-  m3[1].val[1] = vabdq_s32(m4[0].val[1], m4[1].val[1]);
-  m3[2].val[1] = vabsq_s32( vaddq_s32( m4[2].val[1], m4[3].val[1] ) );
-  m3[3].val[1] = vabdq_s32(m4[2].val[1], m4[3].val[1]);
-  m3[4].val[1] = vabsq_s32( vaddq_s32( m4[4].val[1], m4[5].val[1] ) );
-  m3[5].val[1] = vabdq_s32(m4[4].val[1], m4[5].val[1]);
-  m3[6].val[1] = vabsq_s32( vaddq_s32( m4[6].val[1], m4[7].val[1] ) );
-  m3[7].val[1] = vabdq_s32(m4[6].val[1], m4[7].val[1]);
+  const uint32x4_t sum = horizontal_add_long_4d_u16x8( max0, max1, max2, max3 );
 
-  m4[0].val[0] = m3[0].val[0];
-
-  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[0].val[1] );
-  m3[1].val[0] = vaddq_s32( m3[1].val[0], m3[1].val[1] );
-  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[2].val[1] );
-  m3[3].val[0] = vaddq_s32( m3[3].val[0], m3[3].val[1] );
-  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[4].val[1] );
-  m3[5].val[0] = vaddq_s32( m3[5].val[0], m3[5].val[1] );
-  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[6].val[1] );
-  m3[7].val[0] = vaddq_s32( m3[7].val[0], m3[7].val[1] );
-
-  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[1].val[0] );
-  m3[2].val[0] = vaddq_s32( m3[2].val[0], m3[3].val[0] );
-  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[5].val[0] );
-  m3[6].val[0] = vaddq_s32( m3[6].val[0], m3[7].val[0] );
-
-  m3[0].val[0] = vaddq_s32( m3[0].val[0], m3[2].val[0] );
-  m3[4].val[0] = vaddq_s32( m3[4].val[0], m3[6].val[0] );
-  int32x4_t iSum = vaddq_s32( m3[0].val[0], m3[4].val[0] );
-
-  uint32_t sad = ( uint32_t ) horizontal_add_s32x4(iSum);
-  uint32_t absDC = vgetq_lane_s32( m4[0].val[0], 0 );
+  uint32_t sad = horizontal_add_u32x4( sum );
+  sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( ( sad + 2 ) >> 2 );
+  sad = ( sad + 2 ) >> 2;
 
   return sad;
 }
@@ -1232,16 +1200,14 @@ Distortion xGetHADs_neon( const DistParam& rcDtParam )
   }
   else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
   {
-    for( y = 0; y<iRows; y += 8 )
+    for( y = 0; y < iRows; y += 8 )
     {
+      for( x = 0; x < iCols; x += 8 )
       {
-        for( x = 0; x < iCols; x += 8 )
-        {
-          uiSum += xCalcHAD8x8_Neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
-        }
+        uiSum += xCalcHAD8x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
-      piOrg += 8*iStrideOrg;
-      piCur += 8*iStrideCur;
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
     }
   }
   else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
