@@ -197,9 +197,9 @@ typedef enum
   VVENC_DRT_CRA                = 1,
   VVENC_DRT_IDR                = 2,
   VVENC_DRT_RECOVERY_POINT_SEI = 3,
-  VVENC_DRT_IDR2               = 4,             //deprecated
-  VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
-  VVENC_DRT_IDR_NO_RADL        = 6,
+  VVENC_DRT_IDR2               = 4,             // deprecated
+  VVENC_DRT_CRA_CRE            = 5,             // constrained RASL encoding
+  VVENC_DRT_IDR_NO_RADL        = 6,             // IDR without leading pictures, use for closed GOP DASH, requires poc0idr
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -762,7 +762,7 @@ typedef struct vvenc_config
 
   bool                m_picReordering;
   bool                m_fga;                                                             // Film grain analysis configuration options, set to 0 to disable (default), or 1 to enable analysis.
-  bool                m_poc0idr;
+  int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
   bool                m_blockImportanceMapping;
   bool                m_saoScc;

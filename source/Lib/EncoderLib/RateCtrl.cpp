@@ -346,7 +346,7 @@ int RateCtrl::getBaseQP()
 
   if (firstPassData.size() > 0 && encRCSeq->frameRate > 0.0)
   {
-    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? std::min (MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (0, MAX_QP_PERCEPT_QPA - (m_pcEncCfg->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + firstQPOffset)));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? std::min (MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (0, MAX_QP_INIT_QPA - (m_pcEncCfg->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0;  // sum of first-pass frame bits
 
     for (auto& stats : firstPassData)
@@ -375,7 +375,7 @@ int RateCtrl::getBaseQP()
   else if (m_pcEncCfg->m_LookAhead)
   {
     baseQP = int (24.5 - log (std::max (1.0, d)) / log (2.0)); // QPstart, round(24 + 2*log2(resRatio))
-    d = MAX_QP_PERCEPT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log ((double) encRCSeq->intraPeriod / encRCSeq->gopSize) / log (2.0);
+    d = MAX_QP_INIT_QPA - 2.0 - 1.5 * firstQPOffset - 0.5 * log ((double) encRCSeq->intraPeriod / encRCSeq->gopSize) / log (2.0);
     baseQP = int (0.5 + d + 0.5 * std::max (0.0, baseQP - d));
   }
 
