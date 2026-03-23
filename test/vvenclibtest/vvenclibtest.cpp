@@ -921,16 +921,16 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
   vvencYUVBuffer *yuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( yuvPicture, c.m_internChromaFormat, c.m_SourceWidth, c.m_SourceHeight );
   fillInputPic( yuvPicture );
-  
-  int64_t lastDts=0;
-  uint64_t auCount=0;
-  bool eof       = false;
-  bool encodeDone = false;
-  uint64_t framesRcvd = 0;
+
+  int64_t  lastDts          = 0;
+  uint64_t auCount          = 0;
+  bool     eof              = false;
+  bool     encodeDone       = false;
+  uint64_t framesRcvd       = 0;
   uint64_t numMissingFrames = emulateMissingFrames ? 10 : 0;
 
 #if VVENC_USE_UNSTABLE_API
-  std::unordered_set<int> userDataSet;
+  std::unordered_set<uint64_t> userDataSet;
 #endif
 
   while( !eof || !encodeDone )
@@ -942,7 +942,7 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
       yuvPicture->cts      = (c.m_TicksPerSecond > 0) ? (ctsOffset + (framesRcvd * c.m_TicksPerSecond * c.m_FrameScale / c.m_FrameRate)) : (ctsOffset + framesRcvd);
       yuvPicture->ctsValid = true;
 #if VVENC_USE_UNSTABLE_API
-      yuvPicture->userData   = new int(framesRcvd);
+      yuvPicture->userData = new uint64_t(framesRcvd);
 #endif
       framesRcvd++;
 
@@ -977,8 +977,8 @@ static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMis
       }
       lastDts = AU->dts;
 #if VVENC_USE_UNSTABLE_API
-      int* userData = static_cast<int*>(AU->userData);
-      userDataSet.insert( *userData);
+      uint64_t* userData = static_cast<uint64_t*>(AU->userData);
+      userDataSet.insert( *userData );
       delete userData;
 #endif
     }
