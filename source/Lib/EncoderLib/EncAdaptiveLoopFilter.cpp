@@ -1257,23 +1257,14 @@ void EncAdaptiveLoopFilter::destroy()
 
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    if( m_ctuEnableFlagTmp[compIdx] )
-    {
-      delete[] m_ctuEnableFlagTmp[compIdx];
-      m_ctuEnableFlagTmp[compIdx] = nullptr;
-    }
+    delete[] m_ctuEnableFlagTmp[compIdx];
+    m_ctuEnableFlagTmp[compIdx] = nullptr;
 
-    if( m_ctuEnableFlagTmp2[compIdx] )
-    {
-      delete[] m_ctuEnableFlagTmp2[compIdx];
-      m_ctuEnableFlagTmp2[compIdx] = nullptr;
-    }
+    delete[] m_ctuEnableFlagTmp2[compIdx];
+    m_ctuEnableFlagTmp2[compIdx] = nullptr;
 
-    if( m_ctuAlternativeTmp[compIdx] )
-    {
-      delete[] m_ctuAlternativeTmp[compIdx];
-      m_ctuAlternativeTmp[compIdx] = nullptr;
-    }
+    delete[] m_ctuAlternativeTmp[compIdx];
+    m_ctuAlternativeTmp[compIdx] = nullptr;
 
     if( m_alfCovariance[compIdx] )
     {
@@ -1369,32 +1360,20 @@ void EncAdaptiveLoopFilter::destroy()
     }
   }
 
-  if (m_trainingCovControl)
-  {
-    delete[] m_trainingCovControl;
-    m_trainingCovControl = nullptr;
-  }
+  delete[] m_trainingCovControl;
+  m_trainingCovControl = nullptr;
 
   for ( int i = 0; i < MAX_NUM_CC_ALF_FILTERS; i++ )
   {
-    if (m_trainingDistortion[i])
-    {
-      delete[] m_trainingDistortion[i];
-      m_trainingDistortion[i] = nullptr;
-    }
+    delete[] m_trainingDistortion[i];
+    m_trainingDistortion[i] = nullptr;
   }
 
-  if (m_filterControl)
-  {
-    delete[] m_filterControl;
-    m_filterControl = nullptr;
-  }
+  delete[] m_filterControl;
+  m_filterControl = nullptr;
 
-  if (m_bestFilterControl)
-  {
-    delete[] m_bestFilterControl;
-    m_bestFilterControl = nullptr;
-  }
+  delete[] m_bestFilterControl;
+  m_bestFilterControl = nullptr;
 
   if (m_bufOrigin)
   {
@@ -1402,22 +1381,14 @@ void EncAdaptiveLoopFilter::destroy()
     m_bufOrigin = nullptr;
   }
 
-  if (m_buf)
-  {
-    delete m_buf;
-    m_buf = nullptr;
-  }
+  delete m_buf;
+  m_buf = nullptr;
 
-  if (m_lumaSwingGreaterThanThresholdCount)
-  {
-    delete[] m_lumaSwingGreaterThanThresholdCount;
-    m_lumaSwingGreaterThanThresholdCount = nullptr;
-  }
-  if (m_chromaSampleCountNearMidPoint)
-  {
-    delete[] m_chromaSampleCountNearMidPoint;
-    m_chromaSampleCountNearMidPoint = nullptr;
-  }
+  delete[] m_lumaSwingGreaterThanThresholdCount;
+  m_lumaSwingGreaterThanThresholdCount = nullptr;
+
+  delete[] m_chromaSampleCountNearMidPoint;
+  m_chromaSampleCountNearMidPoint = nullptr;
 #if ALF_CTU_PAR_TRACING
   delete[] m_traceStreams;
 #endif

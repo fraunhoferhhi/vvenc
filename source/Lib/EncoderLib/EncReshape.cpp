@@ -1038,7 +1038,8 @@ void EncReshape::initLUTfromdQPModel()
   for (int i = (235 << (m_lumaBD - 8)); i < m_reshapeLUTSize; i++) { slopeLUT[i] = 0.0; }
   for (int i = 0; i < m_reshapeLUTSize - 1; i++)
     fwdLUTHighPrec[i + 1] = fwdLUTHighPrec[i] + slopeLUT[i];
-  if (slopeLUT != nullptr) { delete[] slopeLUT;    slopeLUT = nullptr; }
+  delete[] slopeLUT;
+  slopeLUT = nullptr;
 
   double maxY = fwdLUTHighPrec[m_reshapeLUTSize - 1];
   for (int i = 0; i < m_reshapeLUTSize; i++)
@@ -1046,7 +1047,8 @@ void EncReshape::initLUTfromdQPModel()
     m_fwdLUT[i] = (int16_t)((fwdLUTHighPrec[i] / maxY * (double)(m_reshapeLUTSize - 1)) + 0.5);
   }
 
-  if (fwdLUTHighPrec != nullptr)   {    delete[] fwdLUTHighPrec;    fwdLUTHighPrec = nullptr;  }
+  delete[] fwdLUTHighPrec;
+  fwdLUTHighPrec = nullptr;
   m_sliceReshapeInfo.reshaperModelMinBinIdx = 1;
   m_sliceReshapeInfo.reshaperModelMaxBinIdx = PIC_CODE_CW_BINS-2;
 

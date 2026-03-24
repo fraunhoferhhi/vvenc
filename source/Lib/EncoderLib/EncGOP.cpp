@@ -170,7 +170,7 @@ EncGOP::~EncGOP()
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
 
-  for( auto& p : m_globalApsList ) if( p ) delete p;
+  for( auto& p : m_globalApsList ) delete p;
   m_globalApsList.clear();
 }
 
