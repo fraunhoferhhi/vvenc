@@ -2242,6 +2242,54 @@ static bool check_xWeightedGeoBlk( InterpolationFilter* ref, InterpolationFilter
   return true;
 }
 
+static bool check_filterN2_2D( InterpolationFilter* ref, InterpolationFilter* opt, unsigned width, unsigned height,
+                               unsigned num_cases )
+{
+  static constexpr unsigned bd = 10;
+  ClpRng clpRng{ ( int )bd };
+  DimensionGenerator dim;
+  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
+  const int w = width + 4;  // Input width is the CU width + 4.
+  const int h = height + 4; // Input height is the CU height + 4.
+
+  const int bufferSize = ( MAX_CU_SIZE + 5 ) * ( MAX_CU_SIZE + 5 );
+  std::vector<Pel> src( bufferSize );
+  std::vector<Pel> dst_ref( bufferSize );
+  std::vector<Pel> dst_opt( bufferSize );
+
+  bool passed = true;
+
+  std::ostringstream sstm_test;
+  sstm_test << "InterpolationFilter::filterN2_2D " << width << "x" << height;
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    unsigned srcStride = dim.get( w, MAX_CU_SIZE + 4 );
+    unsigned dstStride = dim.get( w, MAX_CU_SIZE + 4 );
+
+    unsigned fracX = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
+    unsigned fracY = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
+    const TFilterCoeff* ch = InterpolationFilter::m_bilinearFilterPrec4[fracX];
+    const TFilterCoeff* cv = InterpolationFilter::m_bilinearFilterPrec4[fracY];
+
+    std::generate( src.begin(), src.end(), inp_gen );
+    std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+    std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+    ref->m_filterN2_2D( clpRng, src.data(), ( int )srcStride, dst_ref.data(), ( int )dstStride, w, h, ch, cv );
+    opt->m_filterN2_2D( clpRng, src.data(), ( int )srcStride, dst_opt.data(), ( int )dstStride, w, h, ch, cv );
+
+    std::ostringstream sstm_subtest;
+    sstm_subtest << sstm_test.str() << " width=" << w << " height=" << h << " srcStride=" << srcStride
+                 << " dstStride=" << dstStride << " fracX=" << fracX << " fracY=" << fracY;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), h, w, dstStride ) && passed;
+  }
+
+  return passed;
+}
+
 static bool test_InterpolationFilter()
 {
   InterpolationFilter ref;
@@ -2336,6 +2384,15 @@ static bool test_InterpolationFilter()
   passed = check_filterCopy<1, 0>( &ref, &opt, num_cases, false ) && passed;
   passed = check_filterCopy<1, 1>( &ref, &opt, num_cases, false ) && passed;
   passed = check_filterCopy<1, 0>( &ref, &opt, num_cases, true ) && passed;
+
+  // filterN2_2D
+  for( unsigned height : { 8, 16, 32, 64, 128 } )
+  {
+    for( unsigned width : { 8, 16, 32, 64, 128 } )
+    {
+      passed = check_filterN2_2D( &ref, &opt, width, height, num_cases ) && passed;
+    }
+  }
 
   return passed;
 }
