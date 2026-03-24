@@ -50,6 +50,16 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <ctime>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include "EncApp.h"
 #include "apputils/ParseArg.h"
 
@@ -113,8 +123,31 @@ int main(int argc, char* argv[])
 
   delete pcEncApp;
 
+  // On POSIX systems, clock() returns CPU time (sum of all threads).
+  // On Windows, clock() returns wall-clock time, not CPU time.
+  // Use GetProcessTimes() on Windows for consistent cross-platform CPU time measurement.
+  double cpuTimeSec;
+#ifdef _WIN32
+  FILETIME ftCreation, ftExit, ftKernel, ftUser;
+  if( GetProcessTimes( GetCurrentProcess(), &ftCreation, &ftExit, &ftKernel, &ftUser ) )
+  {
+    ULARGE_INTEGER uUser, uKernel;
+    uUser.LowPart    = ftUser.dwLowDateTime;
+    uUser.HighPart   = ftUser.dwHighDateTime;
+    uKernel.LowPart  = ftKernel.dwLowDateTime;
+    uKernel.HighPart = ftKernel.dwHighDateTime;
+    cpuTimeSec = ( uUser.QuadPart + uKernel.QuadPart ) / 10000000.0;
+  }
+  else
+  {
+    cpuTimeSec = (endClock - startClock) * 1.0 / CLOCKS_PER_SEC;
+  }
+#else
+  cpuTimeSec = (endClock - startClock) * 1.0 / CLOCKS_PER_SEC;
+#endif
+
   msgApp( VVENC_INFO, "\nvvencFFapp [info]: finished @ %s", std::ctime(&endTime2) );
-  msgApp( VVENC_INFO, "vvencFFapp [info]: Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
+  msgApp( VVENC_INFO, "vvencFFapp [info]: Total Time: %12.3f sec. [cpu] %12.3f sec. [elapsed]\n", cpuTimeSec, encTime / 1000.0);
 
   return ret;
 }
