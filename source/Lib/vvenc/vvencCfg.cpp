@@ -388,7 +388,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size
-  c->m_poc0idr                                 = false;
+  c->m_poc0idr                                 = -1;
   c->m_picReordering                           = 1;
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
@@ -827,7 +827,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   const double d = (c->m_RCTargetBitrate != VVENC_RC_OFF ? 1.0 : 2.25) * (3840.0 * 2160.0) / double (c->m_SourceWidth * c->m_SourceHeight);
   const double f = 38183.5 * sqrt (0.5 + c->m_GOPSize / double (c->m_IntraPeriod < 0 ? INT32_MAX : c->m_GOPSize + std::max (c->m_GOPSize, (c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 ? (c->m_IntraPeriodSec * c->m_FrameRate) / c->m_FrameScale : c->m_IntraPeriod))));
-  const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_PERCEPT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, c->m_RCTargetBitrate)) / 500000.0))));
+  const int rcQP = (c->m_RCInitialQP > 0 ? std::min (vvenc::MAX_QP, c->m_RCInitialQP) : std::max (0, vvenc::MAX_QP_INIT_QPA - (c->m_FirstPassMode > 2 ? 4 : 2) - int (0.5 + sqrt ((d * std::max (0, c->m_RCTargetBitrate)) / 500000.0))));
 
   // TODO 2.0: make this an error
   //vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && c->m_QP != VVENC_AUTO_QP && c->m_QP != VVENC_DEFAULT_QP, "Rate-control and QP based encoding are mutually exclusive!" );
@@ -1317,17 +1317,26 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
-  
+
+  if( c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL && c->m_poc0idr < 0 )
+  {
+    c->m_poc0idr = 1;
+  }
+
   if( c->m_DecodingRefreshType == VVENC_DRT_IDR2 )
   {
     msg.log( VVENC_WARNING, "Configuration warning: DecodingRefreshType IDR2 is deprecated\n\n" );
+    if( c->m_poc0idr < 0 )
+    {
+      c->m_poc0idr = 0;
+    }
     vvenc_confirmParameter( c, c->m_poc0idr, "for using deprecated IDR2, POC0IDR has to be disabled" );
     c->m_DecodingRefreshType = VVENC_DRT_IDR;
   }
 
   if( c->m_rprEnabledFlag == -1 )
   {
-    c->m_rprEnabledFlag = ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ) ? 2 : 0;
+    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
   }
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
@@ -1378,9 +1387,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_IntraPeriod = idrPeriod;
   }
 
-  if( c->m_IntraPeriod == 1 && !c->m_poc0idr )
+  if( c->m_IntraPeriod == 1 && c->m_poc0idr < 0 )
   {
-    c->m_poc0idr = true;
+    c->m_poc0idr = 1;
   }
 
   if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
@@ -1394,8 +1403,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   vvenc_confirmParameter( c, c->m_IntraPeriod == 0, "intra period must not be equal 0" );
-
-  vvenc_confirmParameter( c, !c->m_poc0idr && ( c->m_IntraPeriod == 1 || !c->m_picReordering ), "when POC 0 is not an IDR frame it is only possible for random access, for all intra and low delay encoding POC0IDR must be set!" );
 
   if( c->m_IntraPeriod >= 16 && c->m_GOPSize >= 16 && c->m_IntraPeriod % c->m_GOPSize >= 1 && c->m_IntraPeriod % c->m_GOPSize <= 4 )
   {
@@ -1421,6 +1428,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_picReordering = false;
     }
   }
+  if( !c->m_picReordering && c->m_poc0idr < 0 )
+  {
+    c->m_poc0idr = 1;
+  }
+  vvenc_confirmParameter( c, c->m_poc0idr != 1 && ( c->m_IntraPeriod == 1 || !c->m_picReordering ), "when POC 0 is not an IDR frame it is only possible for random access, for all intra and low delay encoding POC0IDR must be set!" );
 
   // slice type adaptation (STA)
   if( c->m_sliceTypeAdapt < 0 )
@@ -1458,19 +1470,26 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     case VVENC_SEG_MID:
       c->m_leadFrames  = std::max( staFrames, mctfFrames );
       c->m_trailFrames = mctfFrames;
-      c->m_poc0idr     = true;
+      c->m_poc0idr     = c->m_poc0idr < 0 ? 1 : c->m_poc0idr;
       break;
     case VVENC_SEG_LAST:
       c->m_leadFrames  = std::max( staFrames, mctfFrames );
       c->m_trailFrames = 0;
-      c->m_poc0idr     = true;
+      c->m_poc0idr     = c->m_poc0idr < 0 ? 1 : c->m_poc0idr;
       break;
     default:
       // do nothing
       break;
   }
+  vvenc_confirmParameter( c, c->m_poc0idr <= 0 && (c->m_SegmentMode == VVENC_SEG_MID || c->m_SegmentMode == VVENC_SEG_LAST), "poc0idr needs to be enabled for segment modes 'mid' & 'last'" );
 
   vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
+
+  if( c->m_poc0idr < 0 )  // if poc0idr is still undefined, default to false
+  {
+    c->m_poc0idr = 0;
+  }
+  vvenc_confirmParameter( c, c->m_poc0idr != 0 && c->m_poc0idr != 1 , "poc0idr must be either 0 or 1" );
 
   //
   // do some check and set of parameters next
@@ -1518,7 +1537,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   if ( c->m_usePerceptQPATempFiltISlice == 2
-      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
+      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_INIT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
   {
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
@@ -1536,7 +1555,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_cuQpDeltaSubdiv = 0;
     if ( c->m_usePerceptQPA
-        && c->m_QP <= vvenc::MAX_QP_PERCEPT_QPA
+        && c->m_QP <= vvenc::MAX_QP_INIT_QPA
         && ( c->m_CTUSize == 128 || ( c->m_CTUSize == 64 && std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ) )
         && std::min( c->m_SourceWidth, c->m_SourceHeight ) <= 1280 )
     {
@@ -1967,7 +1986,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 6,                "Decoding refresh type must be comprised between 0 and 6 included" );
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType == 6 && !c->m_poc0idr,                              "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL && !c->m_poc0idr,          "Decoding refresh type VVENC_DRT_IDR_NO_RADL without POC0IDR not supported" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 

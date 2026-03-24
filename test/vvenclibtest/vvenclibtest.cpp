@@ -240,12 +240,15 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,6,7 }, true );
-  vvencParams.m_poc0idr = true;
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 5, 6 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4,7 }, true );
-  vvencParams.m_poc0idr = false;
+  testParamList( "poc0idr=-1, DecodingRefreshType",        vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5, 6 } );
+  testParamList( "poc0idr=-1, DecodingRefreshType",        vvencParams.m_DecodingRefreshType,        vvencParams, { -1, 0, 3, 7 }, true );
+  vvencParams.m_poc0idr = 0;
+  testParamList( "poc0idr=0, DecodingRefreshType",         vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5 } );
+  testParamList( "poc0idr=0, DecodingRefreshType",         vvencParams.m_DecodingRefreshType,        vvencParams, { -1, 0, 3, 6, 7 }, true );
+  vvencParams.m_poc0idr = 1;
+  testParamList( "poc0idr=1, DecodingRefreshType",         vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 5, 6 } );
+  testParamList( "poc0idr=1, DecodingRefreshType",         vvencParams.m_DecodingRefreshType,        vvencParams, { -1, 0, 3, 4, 7 }, true );
+  vvencParams.m_poc0idr = -1;
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 32,35,48,51,64,67,80,83,86,96,99,102 } );
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,15,31,255,256 }, true ); // level 1 is not enough for 176x144p60 just because of the sample rate
@@ -264,11 +267,12 @@ int testLibParameterRanges()
 
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 16,32 } );
   vvencParams.m_IntraPeriod = 1;
-  vvencParams.m_poc0idr = true;
+  vvencParams.m_poc0idr = 1;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1 } );
   vvencParams.m_IntraPeriod = 32;
-  vvencParams.m_poc0idr = false;
+  vvencParams.m_poc0idr = 0;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { -1,0,33,64,128 }, true ); //th is this intended
+  vvencParams.m_poc0idr = -1;
 
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { 320,1920,3840 } );
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { -1,0 }, true );
@@ -276,12 +280,15 @@ int testLibParameterRanges()
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { 16,32,1080,1088 } );
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
-  vvencParams.m_poc0idr = true;
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
-  vvencParams.m_poc0idr = false;
+  testParamList( "poc0idr=-1, IDRPeriod",                  vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
+  testParamList( "poc0idr=-1, IDRPeriod",                  vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
+  vvencParams.m_poc0idr = 0;
+  testParamList( "poc0idr=0, IDRPeriod",                   vvencParams.m_IntraPeriod,                vvencParams, { -1,16,17,24,25,32,48,50,60, 0 } );
+  testParamList( "poc0idr=0, IDRPeriod",                   vvencParams.m_IntraPeriod,                vvencParams, { -2, 1 }, true );
+  vvencParams.m_poc0idr = 1;
+  testParamList( "poc0idr=1, IDRPeriod",                   vvencParams.m_IntraPeriod,                vvencParams, { -1,1,16,17,24,25,32,48,50,60, 0 } );
+  testParamList( "poc0idr=1, IDRPeriod",                   vvencParams.m_IntraPeriod,                vvencParams, { -2 }, true );
+  vvencParams.m_poc0idr = -1;
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );

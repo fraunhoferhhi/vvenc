@@ -594,6 +594,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
+  IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toUseIfp                      ( &c->m_ifp,                         &FlagToIntMap<int8_t> );
@@ -685,8 +686,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("mtprofile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
-    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding, none, rpsei: Recovery Point SEI,\n"
-                                                                                                             "                    idr_no_radl: IDR, without leading pictures, use for DASH)")
+    ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (none, cra, idr, rpsei: Recovery Point SEI, cra_cre: CRA, constrained RASL picture encoding, idr_no_radl: IDR w/o leading pictures, use for DASH, implies POC0IDR)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "intra period in frames (0: specify intra period in seconds instead, see -refreshsec)")
     ;
@@ -705,11 +705,10 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     opts.addOptions()
     ("IntraPeriod,-ip",                                c->m_IntraPeriod,                                     "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
     ("RefreshSec,-rs",                                 c->m_IntraPeriodSec,                                  "Intra period/refresh in seconds")
-    ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "intra refresh type (idr, cra, cra_cre: CRA, constrained RASL picture encoding, none, rpsei: Recovery Point SEI,\n"
-                                                                                                             "                    idr_no_radl: IDR, without leading pictures, use for DASH)")
+    ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "intra refresh type (none, cra, idr, rpsei: Recovery Point SEI, cra_cre: CRA, constrained RASL picture encoding, idr_no_radl: IDR w/o leading pictures, use for DASH, implies POC0IDR)")
     ("GOPSize,g",                                      c->m_GOPSize,                                         "GOP size of temporal structure (16,32)")
     ("PicReordering",                                  c->m_picReordering,                                   "Allow reordering of pictures (0:off, 1:on), should be disabled for low delay requirements")
-    ("POC0IDR",                                        c->m_poc0idr,                                         "start encoding with POC 0 IDR" )
+    ("POC0IDR",                                        toPOC0IDR,                                            "encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))" )
     ;
 
     opts.setSubSection("Rate control, Perceptual Quantization");
@@ -1260,7 +1259,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
         additionalStr << "Additional useful options of full feature app can be used with string option 'additional'." << std::endl;
         additionalStr << "All available options of full feature app and vvencapp can be used in 'additional'." << std::endl;
         additionalStr << "Options are assigned by '(long)optionname=value'. Concatenate options with ':'" << std::endl;
-        additionalStr << "For instanse set hdr10 bt2020 mode (corresponds to option '--hdr pq_2020')" << std::endl;
+        additionalStr << "For instance set hdr10 bt2020 mode (corresponds to option '--hdr pq_2020')" << std::endl;
         additionalStr << "vvencapp  --additional ColourPrimaries=bt2020:TransferCharacteristics=smpte2084:MatrixCoefficients=bt2020nc" << std::endl;
         additionalStr << "'additional' options are always parsed after all other options have been parsed!" << std::endl;
         additionalStr << "Overview of usefull additional options:" << std::endl;

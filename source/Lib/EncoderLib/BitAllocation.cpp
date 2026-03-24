@@ -639,7 +639,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
       if (optChromaQPOffsets != nullptr) // adapts sliceChromaQpOffsetIntraOrPeriodic
       {
         GCC_WARNING_DISABLE_maybe_uninitialized // probably spurious warning, when building with -fsanitize=undefined: "error: 'encCfg.33' may be used uninitialized in this function"
-        const int lumaChromaMappingDQP = (averageAdaptedLumaQP - slice->sps->chromaQpMappingTable.getMappedChromaQpValue (compID, averageAdaptedLumaQP)) >> (encCfg->m_QP >= MAX_QP_PERCEPT_QPA ? 1 : 0);
+        const int lumaChromaMappingDQP = (averageAdaptedLumaQP - slice->sps->chromaQpMappingTable.getMappedChromaQpValue (compID, averageAdaptedLumaQP)) >> (encCfg->m_HdrMode == vvencHDRMode::VVENC_HDR_OFF ? 1 : 2);
         GCC_WARNING_RESET
         optChromaQPOffsets[comp - 1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
       }
