@@ -50,6 +50,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <ctime>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "EncApp.h"
 #include "apputils/ParseArg.h"
 
@@ -113,8 +117,29 @@ int main(int argc, char* argv[])
 
   delete pcEncApp;
 
+  // On POSIX systems, clock() returns CPU time (sum of all threads).
+  // On Windows, clock() returns wall-clock time, not CPU time.
+  // Use GetProcessTimes() on Windows for consistent cross-platform CPU time measurement.
+  double cpuTimeSec;
+#ifdef _WIN32
+  FILETIME ftCreation, ftExit, ftKernel, ftUser;
+  if( GetProcessTimes( GetCurrentProcess(), &ftCreation, &ftExit, &ftKernel, &ftUser ) )
+  {
+    // FILETIME is in 100-nanosecond intervals
+    uint64_t userTime   = ( (uint64_t)ftUser.dwHighDateTime << 32 ) | ftUser.dwLowDateTime;
+    uint64_t kernelTime = ( (uint64_t)ftKernel.dwHighDateTime << 32 ) | ftKernel.dwLowDateTime;
+    cpuTimeSec = ( userTime + kernelTime ) / 10000000.0;
+  }
+  else
+  {
+    cpuTimeSec = (endClock - startClock) * 1.0 / CLOCKS_PER_SEC;
+  }
+#else
+  cpuTimeSec = (endClock - startClock) * 1.0 / CLOCKS_PER_SEC;
+#endif
+
   msgApp( VVENC_INFO, "\nvvencFFapp [info]: finished @ %s", std::ctime(&endTime2) );
-  msgApp( VVENC_INFO, "vvencFFapp [info]: Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
+  msgApp( VVENC_INFO, "vvencFFapp [info]: Total Time: %12.3f sec. [cpu] %12.3f sec. [elapsed]\n", cpuTimeSec, encTime / 1000.0);
 
   return ret;
 }
