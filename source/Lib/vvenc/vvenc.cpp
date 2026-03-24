@@ -125,6 +125,7 @@ VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
   for ( int i = 0; i < 3; i++ )
   {
     delete [] yuvBuffer->planes[ i ].ptr;
+    yuvBuffer->planes[ i ].ptr = nullptr;
   }
 }
 
