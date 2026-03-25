@@ -65,77 +65,137 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
-static void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, TFilterCoeff const *ch, TFilterCoeff const *cv )
+static inline int16x4_t interpolate_2tap_4( int16x4_t s0, int16x4_t s1, int16x8_t offset, int16x8_t shift,
+                                            int16x4_t coeff )
 {
-  const int shift1st  = IF_FILTER_PREC_BILINEAR - ( IF_INTERNAL_PREC_BILINEAR - clpRng.bd );
-  const int offset1st = 1 << ( shift1st - 1 );
+  int16x4_t sum = vmla_lane_s16( vget_low_s16( offset ), s0, coeff, 0 );
+  sum = vmla_lane_s16( sum, s1, coeff, 1 );
 
-  const int shift2nd  = 4;
-  const int offset2nd = 1 << ( shift2nd - 1 );
+  return vshl_s16( sum, vget_low_s16( shift ) );
+}
 
-  int16x8_t mmOffset1 = vdupq_n_s16( offset1st );
-  int16x8_t mmOffset2 = vdupq_n_s16( offset2nd );
-  int16x8_t mmCoeffH  = vdupq_n_s16( ch[ 1 ] );
-  int16x8_t mmCoeffV  = vdupq_n_s16( cv[ 1 ] );
+static inline int16x8_t interpolate_2tap_8( int16x8_t s0, int16x8_t s1, int16x8_t offset, int16x8_t shift,
+                                            int16x4_t coeff )
+{
+  int16x8_t sum = vmlaq_lane_s16( offset, s0, coeff, 0 );
+  sum = vmlaq_lane_s16( sum, s1, coeff, 1 );
 
-  int16x8_t mmLastH[ 16 ];
+  return vshlq_s16( sum, shift );
+}
 
-  int16x8_t mmLast4H;
+void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int srcStride, Pel* dst,
+                                const int dstStride, int width, int height, TFilterCoeff const* ch,
+                                TFilterCoeff const* cv )
+{
+  CHECKD( ( width - 4 ) % 8 != 0, "Width must be a multiple of 8 plus 4" );
+  CHECKD( width > MAX_CU_SIZE + 4, "Width must <= MAX_CU_SIZE + 4" );
+  CHECKD( height < 2, "Height must be >= 2" );
+  CHECKD( height % 2 != 0, "Height must be a multiple of 2" );
+  CHECKD( height > MAX_CU_SIZE + 4, "Height must <= MAX_CU_SIZE + 4" );
 
-  // workaround for over-sensitive compilers
-  mmLastH[ 0 ] = vdupq_n_s16( 0 );
+  const int shiftH = IF_FILTER_PREC_BILINEAR - ( IF_INTERNAL_PREC_BILINEAR - clpRng.bd );
+  const int offsetH = 1 << ( shiftH - 1 );
 
-  int16x8_t shift1inv = vdupq_n_s16( -shift1st );
-  int16x8_t shift2inv = vdupq_n_s16( -shift2nd );
+  const int shiftV = 4;
+  const int offsetV = 1 << ( shiftV - 1 );
 
-  for( int row = -1; row < height; row++ )
+  const int16x8_t offsetH_vec = vdupq_n_s16( offsetH );
+  const int16x8_t offsetV_vec = vdupq_n_s16( offsetV );
+  const int16x8_t shiftH_vec = vdupq_n_s16( -shiftH );
+  const int16x8_t shiftV_vec = vdupq_n_s16( -shiftV );
+
+  const int16x4_t coeffH = load_s16x2( ch );
+  const int16x4_t coeffV = load_s16x2( cv );
+
+  Pel tmpArr[( MAX_CU_SIZE + 4 ) * ( MAX_CU_SIZE + 5 )];
+
+  // Horizontal pass.
+  Pel* tmp = tmpArr;
+  int h = height;
+  do
   {
-    int16x8_t mmPix  = vld1q_s16( src );
-    int16x8_t mmPix1 = vld1q_s16( src + 1 );
-
-    int16x8_t mmFiltered = vmlaq_n_s16( mmOffset1, mmPix, 16 );
-
-    mmFiltered = vmlaq_s16( mmFiltered, vsubq_s16( mmPix1, mmPix ), mmCoeffH );
-    mmFiltered = vshlq_s16( mmFiltered, shift1inv );
-
-    if( row >= 0 )
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
     {
-      int16x8_t mmFiltered2 = vmlaq_n_s16( mmOffset2, mmLast4H, 16 );
-      mmFiltered2           = vmlaq_s16( mmFiltered2, vsubq_s16( mmFiltered, mmLast4H ), mmCoeffV );
-      mmFiltered2           = vshlq_s16( mmFiltered2, shift2inv );
+      int16x8_t s0 = vld1q_s16( src + x );
+      int16x8_t s1 = vld1q_s16( src + x + 1 );
+      int16x8_t s2 = vld1q_s16( src + x + srcStride );
+      int16x8_t s3 = vld1q_s16( src + x + srcStride + 1 );
 
-      vst1q_lane_s64( (int64_t*) dst, (int64x2_t) mmFiltered2, 0 );
+      int16x8_t h0 = interpolate_2tap_8( s0, s1, offsetH_vec, shiftH_vec, coeffH );
+      int16x8_t h1 = interpolate_2tap_8( s2, s3, offsetH_vec, shiftH_vec, coeffH );
+
+      vst1q_s16( tmp + x, h0 );
+      vst1q_s16( tmp + x + width, h1 );
     }
 
-    mmLast4H = mmFiltered;
+    // Process the last 4 of the line.
+    int16x4_t s0 = vld1_s16( src + x );
+    int16x4_t s1 = vld1_s16( src + x + 1 );
+    int16x4_t s2 = vld1_s16( src + x + srcStride );
+    int16x4_t s3 = vld1_s16( src + x + srcStride + 1 );
 
-    for( int x = 4; x < width; x += 8 )
-    {
-      int16x8_t mmPix  = vld1q_s16( src + x );
-      int16x8_t mmPix1 = vld1q_s16( src + x + 1 );
+    int16x4_t h0 = interpolate_2tap_4( s0, s1, offsetH_vec, shiftH_vec, coeffH );
+    int16x4_t h1 = interpolate_2tap_4( s2, s3, offsetH_vec, shiftH_vec, coeffH );
 
-      int16x8_t mmFiltered = vmlaq_n_s16( mmOffset1, mmPix, 16 );
-      mmFiltered           = vmlaq_s16( mmFiltered, vsubq_s16( mmPix1, mmPix ), mmCoeffH );
-      mmFiltered           = vshlq_s16( mmFiltered, shift1inv );
+    vst1_s16( tmp + x, h0 );
+    vst1_s16( tmp + x + width, h1 );
 
-      int       idx   = x >> 3;
-      int16x8_t mLast = mmLastH[ idx ];
-      mmLastH[ idx ]  = mmFiltered;
+    src += 2 * srcStride;
+    tmp += 2 * width;
+    h -= 2;
+  } while( h != 0 );
 
-      if( row >= 0 )
-      {
-        int16x8_t mmFiltered2 = vmlaq_n_s16( mmOffset2, mLast, 16 );
-        mmFiltered2           = vmlaq_s16( mmFiltered2, vsubq_s16( mmFiltered, mLast ), mmCoeffV );
-        mmFiltered2           = vshlq_s16( mmFiltered2, shift2inv );
+  // Process h + 1 line for the vertical pass.
+  int x = 0;
+  for( ; x + 8 <= width; x += 8 )
+  {
+    int16x8_t s0 = vld1q_s16( src + x );
+    int16x8_t s1 = vld1q_s16( src + x + 1 );
+    int16x8_t h0 = interpolate_2tap_8( s0, s1, offsetH_vec, shiftH_vec, coeffH );
 
-        vst1q_s16( ( dst + x ), mmFiltered2 );
-      }
-    }
-    if( row >= 0 )
-      dst += dstStride;
-
-    src += srcStride;
+    vst1q_s16( tmp + x, h0 );
   }
+
+  int16x4_t s0 = vld1_s16( src + x );
+  int16x4_t s1 = vld1_s16( src + x + 1 );
+  int16x4_t h0 = interpolate_2tap_4( s0, s1, offsetH_vec, shiftH_vec, coeffH );
+
+  vst1_s16( tmp + x, h0 );
+
+  // Vertical pass.
+  tmp = tmpArr;
+  do
+  {
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      int16x8_t s0 = vld1q_s16( tmp + x );
+      int16x8_t s1 = vld1q_s16( tmp + x + width );
+      int16x8_t s2 = vld1q_s16( tmp + x + width * 2 );
+
+      int16x8_t v0 = interpolate_2tap_8( s0, s1, offsetV_vec, shiftV_vec, coeffV );
+      int16x8_t v1 = interpolate_2tap_8( s1, s2, offsetV_vec, shiftV_vec, coeffV );
+
+      vst1q_s16( dst + x, v0 );
+      vst1q_s16( dst + x + dstStride, v1 );
+    }
+
+    // Process the last 4 of the line.
+    int16x4_t s0 = vld1_s16( tmp + x );
+    int16x4_t s1 = vld1_s16( tmp + x + width );
+    int16x4_t s2 = vld1_s16( tmp + x + width * 2 );
+
+    int16x4_t v0 = interpolate_2tap_4( s0, s1, offsetV_vec, shiftV_vec, coeffV );
+    int16x4_t v1 = interpolate_2tap_4( s1, s2, offsetV_vec, shiftV_vec, coeffV );
+
+    vst1_s16( dst + x, v0 );
+    vst1_s16( dst + x + dstStride, v1 );
+
+    tmp += 2 * width;
+    dst += 2 * dstStride;
+    height -= 2;
+  } while( height != 0 );
 }
 
 static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
