@@ -90,11 +90,8 @@ EncLib::EncLib( MsgLog& logger )
 
 EncLib::~EncLib()
 {
-  if( m_rateCtrl )
-  {
-    delete m_rateCtrl;
-    m_rateCtrl = nullptr;
-  }
+  delete m_rateCtrl;
+  m_rateCtrl = nullptr;
 }
 
 void EncLib::setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func )
