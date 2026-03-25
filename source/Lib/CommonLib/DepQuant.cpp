@@ -1114,7 +1114,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   using namespace DQIntern;
   
   //===== reset / pre-init =====
-  const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
+  const TUParameters& tuPars  = *m_scansRom->getTUPars( tu.blocks[compID], compID );
   m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
@@ -1415,7 +1415,15 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : Quant
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
 
-  m_scansRom.init();
+  if( !dq )
+  {
+    m_scansRom = std::make_shared<DQIntern::Rom>();
+    m_scansRom->init();
+  }
+  else
+  {
+    m_scansRom = dq->m_scansRom;
+  }
 
   for( int t = 0; t < ( MAX_TB_SIZEY * MAX_TB_SIZEY ); t++ )
   {

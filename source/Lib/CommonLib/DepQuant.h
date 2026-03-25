@@ -352,7 +352,8 @@ private:
   void    xDecide           ( const DQIntern::ScanInfo &scanInfo, const TCoeff absCoeff, const int lastOffset, DQIntern::Decisions &decisions, bool zeroOut, int quantCoeff );
 
   DQIntern::CommonCtx m_commonCtx;
-  DQIntern::Rom       m_scansRom;
+  std::shared_ptr<DQIntern::Rom>
+                      m_scansRom;
   DQIntern::Quantizer m_quant;
 
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
