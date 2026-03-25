@@ -41,11 +41,8 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 #include "DepQuant.h"
-#include "CodingStructure.h"
-#include "UnitTools.h"
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
-#include "TrQuant.h"
 
 #  include "x86/CommonDefX86.h"
 #  include <simde/x86/sse4.1.h>
