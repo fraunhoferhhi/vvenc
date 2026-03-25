@@ -57,7 +57,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
 //! \ingroup CommonLib
 //! \{
-
 namespace vvenc {
 
 #if USE_SSE41 && defined( REAL_TARGET_X86 )
@@ -66,6 +65,8 @@ namespace vvenc {
 #define _my_cmpgt_epi64( a, b ) _mm_cmpgt_epi64( a, b )
 #endif
 
+
+#if 0
 
 namespace DQIntern
 {
@@ -1504,17 +1505,17 @@ namespace DQIntern
   };
 }; // namespace DQIntern
 
+#endif
 template<X86_VEXT vext>
 void DepQuant::_initDepQuantX86()
 {
-  p = new DQIntern::DepQuantSimd<vext>();
+  //p = new DQIntern::DepQuantSimd<vext>();
 }
 template void DepQuant::_initDepQuantX86<SIMDX86>();
 
 } // namespace vvenc
 
 //! \}
-
 ;
 #endif //ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
 
