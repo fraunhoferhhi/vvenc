@@ -122,6 +122,15 @@ static inline int horizontal_add_long_s16x8( const int16x8_t a )
 #endif
 }
 
+static inline uint32_t horizontal_add_long_u16x8( const uint16x8_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlvq_u16( a );
+#else
+  return horizontal_add_u32x4( vpaddlq_u16( a ) );
+#endif
+}
+
 static inline int64_t horizontal_add_long_s32x4( const int32x4_t a )
 {
 #if REAL_TARGET_AARCH64
