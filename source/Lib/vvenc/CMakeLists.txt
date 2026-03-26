@@ -205,6 +205,11 @@ else()
   target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads )
 endif()
 
+find_library( VVENC_MATH_LIBRARY m )
+if( VVENC_MATH_LIBRARY )
+  target_link_libraries( ${LIB_NAME} PRIVATE ${VVENC_MATH_LIBRARY} )
+endif()
+
 if( CMAKE_USE_PTHREADS_INIT )
   target_compile_definitions( ${LIB_NAME} PRIVATE HAVE_PTHREADS )
 endif()
