@@ -205,9 +205,15 @@ else()
   target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads )
 endif()
 
+# On some platforms (e.g. OpenBSD/powerpc, sparc64) the C math library is not
+# linked automatically.  Functions such as roundevenf() are only available in
+# libm, so we must link it explicitly.  The variable is prefixed VVENC_ to
+# avoid colliding with any MATH_LIBRARY variable set by a parent project.
+# PUBLIC visibility ensures that consumers that rely on these symbols can also
+# find them through vvenc's link interface.
 find_library( VVENC_MATH_LIBRARY m )
 if( VVENC_MATH_LIBRARY )
-  target_link_libraries( ${LIB_NAME} PRIVATE ${VVENC_MATH_LIBRARY} )
+  target_link_libraries( ${LIB_NAME} PUBLIC ${VVENC_MATH_LIBRARY} )
 endif()
 
 if( CMAKE_USE_PTHREADS_INIT )
