@@ -298,7 +298,7 @@ Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const int iStri
   return sad;
 }
 
-static Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
 {
   int16x8_t diff_s16[16];
   for( int k = 0; k < 8; k++ )
@@ -313,6 +313,7 @@ static Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iSt
   }
 
   int16x8_t m1[16], m2[16];
+  int32x4_t m3[16], m4[32];
 
   // Vertical.
   m2[0] = vaddq_s16( diff_s16[0], diff_s16[8] );
@@ -366,217 +367,136 @@ static Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iSt
   m2[14] = vsubq_s16( m1[12], m1[14] );
   m2[15] = vsubq_s16( m1[13], m1[15] ); // 14-bit
 
-  // Transpose.
-  m1[0] = vzipq_s16( m2[0], m2[8] ).val[0];
-  m1[1] = vzipq_s16( m2[0], m2[8] ).val[1];
-  m1[2] = vzipq_s16( m2[2], m2[10] ).val[0];
-  m1[3] = vzipq_s16( m2[2], m2[10] ).val[1];
-  m1[4] = vzipq_s16( m2[4], m2[12] ).val[0];
-  m1[5] = vzipq_s16( m2[4], m2[12] ).val[1];
-  m1[6] = vzipq_s16( m2[6], m2[14] ).val[0];
-  m1[7] = vzipq_s16( m2[6], m2[14] ).val[1];
-  m1[8] = vzipq_s16( m2[1], m2[9] ).val[0];
-  m1[9] = vzipq_s16( m2[1], m2[9] ).val[1];
-  m1[10] = vzipq_s16( m2[3], m2[11] ).val[0];
-  m1[11] = vzipq_s16( m2[3], m2[11] ).val[1];
-  m1[12] = vzipq_s16( m2[5], m2[13] ).val[0];
-  m1[13] = vzipq_s16( m2[5], m2[13] ).val[1];
-  m1[14] = vzipq_s16( m2[7], m2[15] ).val[0];
-  m1[15] = vzipq_s16( m2[7], m2[15] ).val[1];
-
-  m2[0] = vzipq_s16( m1[0], m1[4] ).val[0];
-  m2[1] = vzipq_s16( m1[0], m1[4] ).val[1];
-  m2[2] = vzipq_s16( m1[1], m1[5] ).val[0];
-  m2[3] = vzipq_s16( m1[1], m1[5] ).val[1];
-  m2[4] = vzipq_s16( m1[2], m1[6] ).val[0];
-  m2[5] = vzipq_s16( m1[2], m1[6] ).val[1];
-  m2[6] = vzipq_s16( m1[3], m1[7] ).val[0];
-  m2[7] = vzipq_s16( m1[3], m1[7] ).val[1];
-  m2[8] = vzipq_s16( m1[8], m1[12] ).val[0];
-  m2[9] = vzipq_s16( m1[8], m1[12] ).val[1];
-  m2[10] = vzipq_s16( m1[9], m1[13] ).val[0];
-  m2[11] = vzipq_s16( m1[9], m1[13] ).val[1];
-  m2[12] = vzipq_s16( m1[10], m1[14] ).val[0];
-  m2[13] = vzipq_s16( m1[10], m1[14] ).val[1];
-  m2[14] = vzipq_s16( m1[11], m1[15] ).val[0];
-  m2[15] = vzipq_s16( m1[11], m1[15] ).val[1];
-
-  m1[0] = vzipq_s16( m2[0], m2[4] ).val[0];
-  m1[1] = vzipq_s16( m2[0], m2[4] ).val[1];
-  m1[2] = vzipq_s16( m2[1], m2[5] ).val[0];
-  m1[3] = vzipq_s16( m2[1], m2[5] ).val[1];
-  m1[4] = vzipq_s16( m2[2], m2[6] ).val[0];
-  m1[5] = vzipq_s16( m2[2], m2[6] ).val[1];
-  m1[6] = vzipq_s16( m2[3], m2[7] ).val[0];
-  m1[7] = vzipq_s16( m2[3], m2[7] ).val[1];
-  m1[8] = vzipq_s16( m2[8], m2[12] ).val[0];
-  m1[9] = vzipq_s16( m2[8], m2[12] ).val[1];
-  m1[10] = vzipq_s16( m2[9], m2[13] ).val[0];
-  m1[11] = vzipq_s16( m2[9], m2[13] ).val[1];
-  m1[12] = vzipq_s16( m2[10], m2[14] ).val[0];
-  m1[13] = vzipq_s16( m2[10], m2[14] ).val[1];
-  m1[14] = vzipq_s16( m2[11], m2[15] ).val[0];
-  m1[15] = vzipq_s16( m2[11], m2[15] ).val[1];
-
   // Horizontal.
-  m2[0] = vaddq_s16( m1[0], m1[8] );
-  m2[1] = vaddq_s16( m1[1], m1[9] );
-  m2[2] = vaddq_s16( m1[2], m1[10] );
-  m2[3] = vaddq_s16( m1[3], m1[11] );
-  m2[4] = vaddq_s16( m1[4], m1[12] );
-  m2[5] = vaddq_s16( m1[5], m1[13] );
-  m2[6] = vaddq_s16( m1[6], m1[14] );
-  m2[7] = vaddq_s16( m1[7], m1[15] );
-  m2[8] = vsubq_s16( m1[0], m1[8] );
-  m2[9] = vsubq_s16( m1[1], m1[9] );
-  m2[10] = vsubq_s16( m1[2], m1[10] );
-  m2[11] = vsubq_s16( m1[3], m1[11] );
-  m2[12] = vsubq_s16( m1[4], m1[12] );
-  m2[13] = vsubq_s16( m1[5], m1[13] );
-  m2[14] = vsubq_s16( m1[6], m1[14] );
-  m2[15] = vsubq_s16( m1[7], m1[15] ); // 15-bit
+  m1[0] = vaddq_s16( m2[0], m2[1] );
+  m1[1] = vaddq_s16( m2[2], m2[3] );
+  m1[2] = vaddq_s16( m2[4], m2[5] );
+  m1[3] = vaddq_s16( m2[6], m2[7] );
+  m1[4] = vaddq_s16( m2[8], m2[9] );
+  m1[5] = vaddq_s16( m2[10], m2[11] );
+  m1[6] = vaddq_s16( m2[12], m2[13] );
+  m1[7] = vaddq_s16( m2[14], m2[15] );
+  m1[8] = vsubq_s16( m2[0], m2[1] );
+  m1[9] = vsubq_s16( m2[2], m2[3] );
+  m1[10] = vsubq_s16( m2[4], m2[5] );
+  m1[11] = vsubq_s16( m2[6], m2[7] );
+  m1[12] = vsubq_s16( m2[8], m2[9] );
+  m1[13] = vsubq_s16( m2[10], m2[11] );
+  m1[14] = vsubq_s16( m2[12], m2[13] );
+  m1[15] = vsubq_s16( m2[14], m2[15] ); // 15-bit
 
-  int32x4_t m3[32], m4[32];
+  const uint32_t absDC = std::abs( horizontal_add_long_s16x8( m1[0] ) );
 
-  m3[0] = vaddl_s16( vget_low_s16( m2[0] ), vget_low_s16( m2[4] ) );
-  m3[1] = vaddl_s16( vget_high_s16( m2[0] ), vget_high_s16( m2[4] ) );
-  m3[2] = vaddl_s16( vget_low_s16( m2[1] ), vget_low_s16( m2[5] ) );
-  m3[3] = vaddl_s16( vget_high_s16( m2[1] ), vget_high_s16( m2[5] ) );
-  m3[4] = vaddl_s16( vget_low_s16( m2[2] ), vget_low_s16( m2[6] ) );
-  m3[5] = vaddl_s16( vget_high_s16( m2[2] ), vget_high_s16( m2[6] ) );
-  m3[6] = vaddl_s16( vget_low_s16( m2[3] ), vget_low_s16( m2[7] ) );
-  m3[7] = vaddl_s16( vget_high_s16( m2[3] ), vget_high_s16( m2[7] ) );
-  m3[8] = vsubl_s16( vget_low_s16( m2[0] ), vget_low_s16( m2[4] ) );
-  m3[9] = vsubl_s16( vget_high_s16( m2[0] ), vget_high_s16( m2[4] ) );
-  m3[10] = vsubl_s16( vget_low_s16( m2[1] ), vget_low_s16( m2[5] ) );
-  m3[11] = vsubl_s16( vget_high_s16( m2[1] ), vget_high_s16( m2[5] ) );
-  m3[12] = vsubl_s16( vget_low_s16( m2[2] ), vget_low_s16( m2[6] ) );
-  m3[13] = vsubl_s16( vget_high_s16( m2[2] ), vget_high_s16( m2[6] ) );
-  m3[14] = vsubl_s16( vget_low_s16( m2[3] ), vget_low_s16( m2[7] ) );
-  m3[15] = vsubl_s16( vget_high_s16( m2[3] ), vget_high_s16( m2[7] ) );
-  m3[16] = vaddl_s16( vget_low_s16( m2[8] ), vget_low_s16( m2[12] ) );
-  m3[17] = vaddl_s16( vget_high_s16( m2[8] ), vget_high_s16( m2[12] ) );
-  m3[18] = vaddl_s16( vget_low_s16( m2[9] ), vget_low_s16( m2[13] ) );
-  m3[19] = vaddl_s16( vget_high_s16( m2[9] ), vget_high_s16( m2[13] ) );
-  m3[20] = vaddl_s16( vget_low_s16( m2[10] ), vget_low_s16( m2[14] ) );
-  m3[21] = vaddl_s16( vget_high_s16( m2[10] ), vget_high_s16( m2[14] ) );
-  m3[22] = vaddl_s16( vget_low_s16( m2[11] ), vget_low_s16( m2[15] ) );
-  m3[23] = vaddl_s16( vget_high_s16( m2[11] ), vget_high_s16( m2[15] ) );
-  m3[24] = vsubl_s16( vget_low_s16( m2[8] ), vget_low_s16( m2[12] ) );
-  m3[25] = vsubl_s16( vget_high_s16( m2[8] ), vget_high_s16( m2[12] ) );
-  m3[26] = vsubl_s16( vget_low_s16( m2[9] ), vget_low_s16( m2[13] ) );
-  m3[27] = vsubl_s16( vget_high_s16( m2[9] ), vget_high_s16( m2[13] ) );
-  m3[28] = vsubl_s16( vget_low_s16( m2[10] ), vget_low_s16( m2[14] ) );
-  m3[29] = vsubl_s16( vget_high_s16( m2[10] ), vget_high_s16( m2[14] ) );
-  m3[30] = vsubl_s16( vget_low_s16( m2[11] ), vget_low_s16( m2[15] ) );
-  m3[31] = vsubl_s16( vget_high_s16( m2[11] ), vget_high_s16( m2[15] ) );
+  m2[0] = vtrnq_s16( m1[0], m1[1] ).val[0];
+  m2[1] = vtrnq_s16( m1[0], m1[1] ).val[1];
+  m2[2] = vtrnq_s16( m1[2], m1[3] ).val[0];
+  m2[3] = vtrnq_s16( m1[2], m1[3] ).val[1];
+  m2[4] = vtrnq_s16( m1[4], m1[5] ).val[0];
+  m2[5] = vtrnq_s16( m1[4], m1[5] ).val[1];
+  m2[6] = vtrnq_s16( m1[6], m1[7] ).val[0];
+  m2[7] = vtrnq_s16( m1[6], m1[7] ).val[1];
+  m2[8] = vtrnq_s16( m1[8], m1[9] ).val[0];
+  m2[9] = vtrnq_s16( m1[8], m1[9] ).val[1];
+  m2[10] = vtrnq_s16( m1[10], m1[11] ).val[0];
+  m2[11] = vtrnq_s16( m1[10], m1[11] ).val[1];
+  m2[12] = vtrnq_s16( m1[12], m1[13] ).val[0];
+  m2[13] = vtrnq_s16( m1[12], m1[13] ).val[1];
+  m2[14] = vtrnq_s16( m1[14], m1[15] ).val[0];
+  m2[15] = vtrnq_s16( m1[14], m1[15] ).val[1];
 
-  m4[0] = vaddq_s32( m3[0], m3[4] );
-  m4[1] = vaddq_s32( m3[1], m3[5] );
-  m4[2] = vaddq_s32( m3[2], m3[6] );
-  m4[3] = vaddq_s32( m3[3], m3[7] );
-  m4[4] = vsubq_s32( m3[0], m3[4] );
-  m4[5] = vsubq_s32( m3[1], m3[5] );
-  m4[6] = vsubq_s32( m3[2], m3[6] );
-  m4[7] = vsubq_s32( m3[3], m3[7] );
-  m4[8] = vaddq_s32( m3[8], m3[12] );
-  m4[9] = vaddq_s32( m3[9], m3[13] );
-  m4[10] = vaddq_s32( m3[10], m3[14] );
-  m4[11] = vaddq_s32( m3[11], m3[15] );
-  m4[12] = vsubq_s32( m3[8], m3[12] );
-  m4[13] = vsubq_s32( m3[9], m3[13] );
-  m4[14] = vsubq_s32( m3[10], m3[14] );
-  m4[15] = vsubq_s32( m3[11], m3[15] );
-  m4[16] = vaddq_s32( m3[16], m3[20] );
-  m4[17] = vaddq_s32( m3[17], m3[21] );
-  m4[18] = vaddq_s32( m3[18], m3[22] );
-  m4[19] = vaddq_s32( m3[19], m3[23] );
-  m4[20] = vsubq_s32( m3[16], m3[20] );
-  m4[21] = vsubq_s32( m3[17], m3[21] );
-  m4[22] = vsubq_s32( m3[18], m3[22] );
-  m4[23] = vsubq_s32( m3[19], m3[23] );
-  m4[24] = vaddq_s32( m3[24], m3[28] );
-  m4[25] = vaddq_s32( m3[25], m3[29] );
-  m4[26] = vaddq_s32( m3[26], m3[30] );
-  m4[27] = vaddq_s32( m3[27], m3[31] );
-  m4[28] = vsubq_s32( m3[24], m3[28] );
-  m4[29] = vsubq_s32( m3[25], m3[29] );
-  m4[30] = vsubq_s32( m3[26], m3[30] );
-  m4[31] = vsubq_s32( m3[27], m3[31] );
+  m3[0] = vreinterpretq_s32_s16( vaddq_s16( m2[0], m2[1] ) );
+  m3[1] = vreinterpretq_s32_s16( vsubq_s16( m2[0], m2[1] ) );
+  m3[2] = vreinterpretq_s32_s16( vaddq_s16( m2[2], m2[3] ) );
+  m3[3] = vreinterpretq_s32_s16( vsubq_s16( m2[2], m2[3] ) );
+  m3[4] = vreinterpretq_s32_s16( vaddq_s16( m2[4], m2[5] ) );
+  m3[5] = vreinterpretq_s32_s16( vsubq_s16( m2[4], m2[5] ) );
+  m3[6] = vreinterpretq_s32_s16( vaddq_s16( m2[6], m2[7] ) );
+  m3[7] = vreinterpretq_s32_s16( vsubq_s16( m2[6], m2[7] ) );
+  m3[8] = vreinterpretq_s32_s16( vaddq_s16( m2[8], m2[9] ) );
+  m3[9] = vreinterpretq_s32_s16( vsubq_s16( m2[8], m2[9] ) );
+  m3[10] = vreinterpretq_s32_s16( vaddq_s16( m2[10], m2[11] ) );
+  m3[11] = vreinterpretq_s32_s16( vsubq_s16( m2[10], m2[11] ) );
+  m3[12] = vreinterpretq_s32_s16( vaddq_s16( m2[12], m2[13] ) );
+  m3[13] = vreinterpretq_s32_s16( vsubq_s16( m2[12], m2[13] ) );
+  m3[14] = vreinterpretq_s32_s16( vaddq_s16( m2[14], m2[15] ) );
+  m3[15] = vreinterpretq_s32_s16( vsubq_s16( m2[14], m2[15] ) ); // 16-bit
 
-  m3[0] = vabsq_s32( vaddq_s32( m4[0], m4[2] ) );
-  m3[1] = vabsq_s32( vaddq_s32( m4[1], m4[3] ) );
-  m3[2] = vabdq_s32( m4[0], m4[2] );
-  m3[3] = vabdq_s32( m4[1], m4[3] );
-  m3[4] = vabsq_s32( vaddq_s32( m4[4], m4[6] ) );
-  m3[5] = vabsq_s32( vaddq_s32( m4[5], m4[7] ) );
-  m3[6] = vabdq_s32( m4[4], m4[6] );
-  m3[7] = vabdq_s32( m4[5], m4[7] );
-  m3[8] = vabsq_s32( vaddq_s32( m4[8], m4[10] ) );
-  m3[9] = vabsq_s32( vaddq_s32( m4[9], m4[11] ) );
-  m3[10] = vabdq_s32( m4[8], m4[10] );
-  m3[11] = vabdq_s32( m4[9], m4[11] );
-  m3[12] = vabsq_s32( vaddq_s32( m4[12], m4[14] ) );
-  m3[13] = vabsq_s32( vaddq_s32( m4[13], m4[15] ) );
-  m3[14] = vabdq_s32( m4[12], m4[14] );
-  m3[15] = vabdq_s32( m4[13], m4[15] );
-  m3[16] = vabsq_s32( vaddq_s32( m4[16], m4[18] ) );
-  m3[17] = vabsq_s32( vaddq_s32( m4[17], m4[19] ) );
-  m3[18] = vabdq_s32( m4[16], m4[18] );
-  m3[19] = vabdq_s32( m4[17], m4[19] );
-  m3[20] = vabsq_s32( vaddq_s32( m4[20], m4[22] ) );
-  m3[21] = vabsq_s32( vaddq_s32( m4[21], m4[23] ) );
-  m3[22] = vabdq_s32( m4[20], m4[22] );
-  m3[23] = vabdq_s32( m4[21], m4[23] );
-  m3[24] = vabsq_s32( vaddq_s32( m4[24], m4[26] ) );
-  m3[25] = vabsq_s32( vaddq_s32( m4[25], m4[27] ) );
-  m3[26] = vabdq_s32( m4[24], m4[26] );
-  m3[27] = vabdq_s32( m4[25], m4[27] );
-  m3[28] = vabsq_s32( vaddq_s32( m4[28], m4[30] ) );
-  m3[29] = vabsq_s32( vaddq_s32( m4[29], m4[31] ) );
-  m3[30] = vabdq_s32( m4[28], m4[30] );
-  m3[31] = vabdq_s32( m4[29], m4[31] );
+  m1[0] = vreinterpretq_s16_s32( vzipq_s32( m3[0], m3[1] ).val[0] );
+  m1[1] = vreinterpretq_s16_s32( vzipq_s32( m3[0], m3[1] ).val[1] );
+  m1[2] = vreinterpretq_s16_s32( vzipq_s32( m3[2], m3[3] ).val[0] );
+  m1[3] = vreinterpretq_s16_s32( vzipq_s32( m3[2], m3[3] ).val[1] );
+  m1[4] = vreinterpretq_s16_s32( vzipq_s32( m3[4], m3[5] ).val[0] );
+  m1[5] = vreinterpretq_s16_s32( vzipq_s32( m3[4], m3[5] ).val[1] );
+  m1[6] = vreinterpretq_s16_s32( vzipq_s32( m3[6], m3[7] ).val[0] );
+  m1[7] = vreinterpretq_s16_s32( vzipq_s32( m3[6], m3[7] ).val[1] );
+  m1[8] = vreinterpretq_s16_s32( vzipq_s32( m3[8], m3[9] ).val[0] );
+  m1[9] = vreinterpretq_s16_s32( vzipq_s32( m3[8], m3[9] ).val[1] );
+  m1[10] = vreinterpretq_s16_s32( vzipq_s32( m3[10], m3[11] ).val[0] );
+  m1[11] = vreinterpretq_s16_s32( vzipq_s32( m3[10], m3[11] ).val[1] );
+  m1[12] = vreinterpretq_s16_s32( vzipq_s32( m3[12], m3[13] ).val[0] );
+  m1[13] = vreinterpretq_s16_s32( vzipq_s32( m3[12], m3[13] ).val[1] );
+  m1[14] = vreinterpretq_s16_s32( vzipq_s32( m3[14], m3[15] ).val[0] );
+  m1[15] = vreinterpretq_s16_s32( vzipq_s32( m3[14], m3[15] ).val[1] );
 
-  uint32_t absDC = vgetq_lane_s32( m3[0], 0 );
+  m4[0] = vabsq_s32( vaddl_s16( vget_low_s16( m1[0] ), vget_low_s16( m1[1] ) ) );
+  m4[1] = vabsq_s32( vaddl_s16( vget_high_s16( m1[0] ), vget_high_s16( m1[1] ) ) );
+  m4[2] = vabdl_s16( vget_low_s16( m1[0] ), vget_low_s16( m1[1] ) );
+  m4[3] = vabdl_s16( vget_high_s16( m1[0] ), vget_high_s16( m1[1] ) );
+  m4[4] = vabsq_s32( vaddl_s16( vget_low_s16( m1[2] ), vget_low_s16( m1[3] ) ) );
+  m4[5] = vabsq_s32( vaddl_s16( vget_high_s16( m1[2] ), vget_high_s16( m1[3] ) ) );
+  m4[6] = vabdl_s16( vget_low_s16( m1[2] ), vget_low_s16( m1[3] ) );
+  m4[7] = vabdl_s16( vget_high_s16( m1[2] ), vget_high_s16( m1[3] ) );
+  m4[8] = vabsq_s32( vaddl_s16( vget_low_s16( m1[4] ), vget_low_s16( m1[5] ) ) );
+  m4[9] = vabsq_s32( vaddl_s16( vget_high_s16( m1[4] ), vget_high_s16( m1[5] ) ) );
+  m4[10] = vabdl_s16( vget_low_s16( m1[4] ), vget_low_s16( m1[5] ) );
+  m4[11] = vabdl_s16( vget_high_s16( m1[4] ), vget_high_s16( m1[5] ) );
+  m4[12] = vabsq_s32( vaddl_s16( vget_low_s16( m1[6] ), vget_low_s16( m1[7] ) ) );
+  m4[13] = vabsq_s32( vaddl_s16( vget_high_s16( m1[6] ), vget_high_s16( m1[7] ) ) );
+  m4[14] = vabdl_s16( vget_low_s16( m1[6] ), vget_low_s16( m1[7] ) );
+  m4[15] = vabdl_s16( vget_high_s16( m1[6] ), vget_high_s16( m1[7] ) );
+  m4[16] = vabsq_s32( vaddl_s16( vget_low_s16( m1[8] ), vget_low_s16( m1[9] ) ) );
+  m4[17] = vabsq_s32( vaddl_s16( vget_high_s16( m1[8] ), vget_high_s16( m1[9] ) ) );
+  m4[18] = vabdl_s16( vget_low_s16( m1[8] ), vget_low_s16( m1[9] ) );
+  m4[19] = vabdl_s16( vget_high_s16( m1[8] ), vget_high_s16( m1[9] ) );
+  m4[20] = vabsq_s32( vaddl_s16( vget_low_s16( m1[10] ), vget_low_s16( m1[11] ) ) );
+  m4[21] = vabsq_s32( vaddl_s16( vget_high_s16( m1[10] ), vget_high_s16( m1[11] ) ) );
+  m4[22] = vabdl_s16( vget_low_s16( m1[10] ), vget_low_s16( m1[11] ) );
+  m4[23] = vabdl_s16( vget_high_s16( m1[10] ), vget_high_s16( m1[11] ) );
+  m4[24] = vabsq_s32( vaddl_s16( vget_low_s16( m1[12] ), vget_low_s16( m1[13] ) ) );
+  m4[25] = vabsq_s32( vaddl_s16( vget_high_s16( m1[12] ), vget_high_s16( m1[13] ) ) );
+  m4[26] = vabdl_s16( vget_low_s16( m1[12] ), vget_low_s16( m1[13] ) );
+  m4[27] = vabdl_s16( vget_high_s16( m1[12] ), vget_high_s16( m1[13] ) );
+  m4[28] = vabsq_s32( vaddl_s16( vget_low_s16( m1[14] ), vget_low_s16( m1[15] ) ) );
+  m4[29] = vabsq_s32( vaddl_s16( vget_high_s16( m1[14] ), vget_high_s16( m1[15] ) ) );
+  m4[30] = vabdl_s16( vget_low_s16( m1[14] ), vget_low_s16( m1[15] ) );
+  m4[31] = vabdl_s16( vget_high_s16( m1[14] ), vget_high_s16( m1[15] ) );
 
-  m3[0] = vaddq_s32( m3[0], m3[1] );
-  m3[2] = vaddq_s32( m3[2], m3[3] );
-  m3[4] = vaddq_s32( m3[4], m3[5] );
-  m3[6] = vaddq_s32( m3[6], m3[7] );
-  m3[8] = vaddq_s32( m3[8], m3[9] );
-  m3[10] = vaddq_s32( m3[10], m3[11] );
-  m3[12] = vaddq_s32( m3[12], m3[13] );
-  m3[14] = vaddq_s32( m3[14], m3[15] );
-  m3[16] = vaddq_s32( m3[16], m3[17] );
-  m3[18] = vaddq_s32( m3[18], m3[19] );
-  m3[20] = vaddq_s32( m3[20], m3[21] );
-  m3[22] = vaddq_s32( m3[22], m3[23] );
-  m3[24] = vaddq_s32( m3[24], m3[25] );
-  m3[26] = vaddq_s32( m3[26], m3[27] );
-  m3[28] = vaddq_s32( m3[28], m3[29] );
-  m3[30] = vaddq_s32( m3[30], m3[31] );
+  const int32x4_t max0 = vmaxq_s32( m4[0], m4[1] );
+  const int32x4_t max1 = vmaxq_s32( m4[2], m4[3] );
+  const int32x4_t max2 = vmaxq_s32( m4[4], m4[5] );
+  const int32x4_t max3 = vmaxq_s32( m4[6], m4[7] );
+  const int32x4_t max4 = vmaxq_s32( m4[8], m4[9] );
+  const int32x4_t max5 = vmaxq_s32( m4[10], m4[11] );
+  const int32x4_t max6 = vmaxq_s32( m4[12], m4[13] );
+  const int32x4_t max7 = vmaxq_s32( m4[14], m4[15] );
+  const int32x4_t max8 = vmaxq_s32( m4[16], m4[17] );
+  const int32x4_t max9 = vmaxq_s32( m4[18], m4[19] );
+  const int32x4_t max10 = vmaxq_s32( m4[20], m4[21] );
+  const int32x4_t max11 = vmaxq_s32( m4[22], m4[23] );
+  const int32x4_t max12 = vmaxq_s32( m4[24], m4[25] );
+  const int32x4_t max13 = vmaxq_s32( m4[26], m4[27] );
+  const int32x4_t max14 = vmaxq_s32( m4[28], m4[29] );
+  const int32x4_t max15 = vmaxq_s32( m4[30], m4[31] );
 
-  m3[0] = vaddq_s32( m3[0], m3[2] );
-  m3[4] = vaddq_s32( m3[4], m3[6] );
-  m3[8] = vaddq_s32( m3[8], m3[10] );
-  m3[12] = vaddq_s32( m3[12], m3[14] );
-  m3[16] = vaddq_s32( m3[16], m3[18] );
-  m3[20] = vaddq_s32( m3[20], m3[22] );
-  m3[24] = vaddq_s32( m3[24], m3[26] );
-  m3[28] = vaddq_s32( m3[28], m3[30] );
+  const int32x4_t sum0 = horizontal_add_4d_s32x4( max0, max1, max2, max3 );
+  const int32x4_t sum1 = horizontal_add_4d_s32x4( max4, max5, max6, max7 );
+  const int32x4_t sum2 = horizontal_add_4d_s32x4( max8, max9, max10, max11 );
+  const int32x4_t sum3 = horizontal_add_4d_s32x4( max12, max13, max14, max15 );
 
-  m3[0] = vaddq_s32( m3[0], m3[4] );
-  m3[8] = vaddq_s32( m3[8], m3[12] );
-  m3[16] = vaddq_s32( m3[16], m3[20] );
-  m3[24] = vaddq_s32( m3[24], m3[28] );
+  int32x4_t sum0123 = horizontal_add_4d_s32x4( sum0, sum1, sum2, sum3 );
 
-  m3[0] = vaddq_s32( m3[0], m3[8] );
-  m3[16] = vaddq_s32( m3[16], m3[24] );
-
-  m3[0] = vaddq_s32( m3[0], m3[16] );
-
-  int sad = horizontal_add_s32x4( m3[0] );
-
+  uint32_t sad = ( uint32_t )horizontal_add_s32x4( sum0123 );
+  sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
   sad = ( int )( sad / sqrt( 16.0 * 8 ) * 2 );
@@ -1089,8 +1009,8 @@ Distortion xGetHADs_neon( const DistParam& rcDtParam )
       {
         uiSum += xCalcHAD16x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
-      piOrg += 8*iStrideOrg;
-      piCur += 8*iStrideCur;
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
     }
   }
   else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
