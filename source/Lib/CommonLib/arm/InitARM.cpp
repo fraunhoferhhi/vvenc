@@ -60,6 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "CommonLib/DepQuant.h"
 
 namespace vvenc
 {
@@ -196,6 +197,17 @@ void IntraPrediction::initIntraPredictionARM()
   if( vext >= NEON )
   {
     _initIntraPredictionARM<NEON>();
+  }
+}
+#endif
+
+#if ENABLE_SIMD_OPT_QUANT
+void DepQuant::initDepQuantARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initDepQuantARM<NEON>();
   }
 }
 #endif

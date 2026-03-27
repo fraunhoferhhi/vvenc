@@ -266,6 +266,12 @@ private:
   void _initDepQuantX86();
 #endif
 
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+  void initDepQuantARM();
+  template<ARM_VEXT vext>
+  void _initDepQuantARM();
+#endif
+
   DepQuantImpl* p = nullptr;
 };
 

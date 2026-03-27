@@ -1400,6 +1400,9 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : Quant
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   initDepQuantX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+  initDepQuantARM();
+#endif
 
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
