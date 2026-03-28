@@ -44,7 +44,8 @@ simde_vcgeh_f16(simde_float16_t a, simde_float16_t b){
     return (simde_float16_to_float32(a) >= simde_float16_to_float32(b)) ? UINT16_MAX : 0;
   #endif
 }
-#if defined(SIMDE_ARM_NEON_A64V8_ENABLE_NATIVE_ALIASES)
+#if defined(SIMDE_ARM_NEON_A64V8_ENABLE_NATIVE_ALIASES) || (defined(SIMDE_ENABLE_NATIVE_ALIASES) && \
+    !(defined(SIMDE_ARM_NEON_FP16)))
   #undef vcgeh_f16
   #define vcgeh_f16(a, b) simde_vcgeh_f16((a), (b))
 #endif
@@ -74,7 +75,8 @@ simde_vcgeq_f16(simde_float16x8_t a, simde_float16x8_t b) {
     return simde_uint16x8_from_private(r_);
   #endif
 }
-#if defined(SIMDE_ARM_NEON_A32V8_ENABLE_NATIVE_ALIASES)
+#if defined(SIMDE_ARM_NEON_A32V8_ENABLE_NATIVE_ALIASES) || (defined(SIMDE_ENABLE_NATIVE_ALIASES) && \
+    !(defined(SIMDE_ARM_NEON_FP16)))
   #undef vcgeq_f16
   #define vcgeq_f16(a, b) simde_vcgeq_f16((a), (b))
 #endif
@@ -508,7 +510,8 @@ simde_vcge_f16(simde_float16x4_t a, simde_float16x4_t b) {
     return simde_uint16x4_from_private(r_);
   #endif
 }
-#if defined(SIMDE_ARM_NEON_A32V8_ENABLE_NATIVE_ALIASES)
+#if defined(SIMDE_ARM_NEON_A32V8_ENABLE_NATIVE_ALIASES) || (defined(SIMDE_ENABLE_NATIVE_ALIASES) && \
+    !(defined(SIMDE_ARM_NEON_FP16)))
   #undef vcge_f16
   #define vcge_f16(a, b) simde_vcge_f16((a), (b))
 #endif
@@ -660,10 +663,6 @@ simde_vcge_s32(simde_int32x2_t a, simde_int32x2_t b) {
       r_.m64 = _mm_or_si64(_mm_cmpgt_pi32(a_.m64, b_.m64), _mm_cmpeq_pi32(a_.m64, b_.m64));
     #elif defined(SIMDE_VECTOR_SUBSCRIPT_OPS) && !defined(SIMDE_BUG_GCC_100762)
       r_.values = HEDLEY_REINTERPRET_CAST(__typeof__(r_.values), a_.values >= b_.values);
-    #elif defined(SIMDE_RISCV_V_NATIVE)
-      vbool32_t result = __riscv_vmsge_vv_i32m1_b32(a_.sv64, b_.sv64, 2);
-      r_.sv64 = __riscv_vmv_v_x_i32m1(0, 2);
-      r_.sv64 = __riscv_vmerge_vxm_i32m1(r_.sv64, -1, result, 2);
     #else
       SIMDE_VECTORIZE
       for (size_t i = 0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
