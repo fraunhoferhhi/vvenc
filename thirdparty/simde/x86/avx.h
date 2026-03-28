@@ -25,12 +25,26 @@
  *        2020 Michael R. Crusoe <crusoe@debian.org>
  */
 
-#include "sse.h"
 #if !defined(SIMDE_X86_AVX_H)
 #define SIMDE_X86_AVX_H
 
-#include "sse4.2.h"
+#include <limits.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "../hedley.h"
+#include "../simde-align.h"
+#include "../simde-arch.h"
+#include "../simde-detect-clang.h"
+#include "../simde-diagnostic.h"
+#include "../simde-features.h"
+#include "../simde-math.h"
+#include "../simde-common.h"
 #include "../simde-f16.h"
+#include "sse.h"
+#include "sse2.h"
+#include "sse4.1.h"
+#include "sse4.2.h"
 
 HEDLEY_DIAGNOSTIC_PUSH
 SIMDE_DISABLE_UNWANTED_DIAGNOSTICS
@@ -392,7 +406,9 @@ simde_mm256_castps_pd (simde__m256 a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256d)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256d*, &a);
+    simde__m256d r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -408,7 +424,9 @@ simde_mm256_castps_si256 (simde__m256 a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256i)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256i*, &a);
+    simde__m256i r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -424,7 +442,9 @@ simde_mm256_castsi256_pd (simde__m256i a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256d)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256d*, &a);
+    simde__m256d r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -440,7 +460,9 @@ simde_mm256_castsi256_ps (simde__m256i a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256*, &a);
+    simde__m256 r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -456,7 +478,9 @@ simde_mm256_castpd_ps (simde__m256d a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256*, &a);
+    simde__m256 r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -472,7 +496,9 @@ simde_mm256_castpd_si256 (simde__m256d a) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return (simde__m256i)a;
   #else
-    return *HEDLEY_REINTERPRET_CAST(simde__m256i*, &a);
+    simde__m256i r;
+    simde_memcpy(&r, &a, sizeof(r));
+    return r;
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -493,6 +519,8 @@ simde_mm256_setzero_si256 (void) {
     #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
       r_.m128i[0] = simde_mm_setzero_si128();
       r_.m128i[1] = simde_mm_setzero_si128();
+    #elif defined(SIMDE_VECTOR_SUBSCRIPT)
+      r_.i32 = __extension__ (__typeof__(r_.i32)) { 0, 0, 0, 0, 0, 0, 0, 0 };
     #else
       SIMDE_VECTORIZE
       for (size_t i = 0 ; i < (sizeof(r_.i32f) / sizeof(r_.i32f[0])) ; i++) {
@@ -1016,15 +1044,15 @@ simde_mm256_set_ps (simde_float32 e7, simde_float32 e6, simde_float32 e5, simde_
                     simde_float32 e3, simde_float32 e2, simde_float32 e1, simde_float32 e0) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_set_ps(e7, e6, e5, e4, e3, e2, e1, e0);
+  #elif defined(SIMDE_ARCH_LOONGARCH)
+    simde__m256 tmp_ = { e0, e1, e2, e3, e4, e5, e6, e7 };
+    return tmp_;
   #else
     simde__m256_private r_;
 
     #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
       r_.m128[0] = simde_mm_set_ps(e3, e2, e1, e0);
       r_.m128[1] = simde_mm_set_ps(e7, e6, e5, e4);
-    #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
-      SIMDE_ALIGN_LIKE_32(__m256) simde_float32 data[8] = { e0, e1, e2, e3, e4, e5, e6, e7 };
-      r_.i256 = __lasx_xvld(data, 0);
     #else
       r_.f32[0] = e0;
       r_.f32[1] = e1;
@@ -1050,6 +1078,9 @@ simde__m256d
 simde_mm256_set_pd (simde_float64 e3, simde_float64 e2, simde_float64 e1, simde_float64 e0) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_set_pd(e3, e2, e1, e0);
+  #elif defined(SIMDE_ARCH_LOONGARCH)
+    simde__m256d tmp_ = { e0, e1, e2, e3 };
+    return tmp_;
   #else
     simde__m256d_private r_;
 
@@ -2167,10 +2198,12 @@ simde_mm256_castps128_ps256 (simde__m128 a) {
   #else
     simde__m256_private r_;
     simde__m128_private a_ = simde__m128_to_private(a);
-
+    HEDLEY_DIAGNOSTIC_PUSH
+    SIMDE_DIAGNOSTIC_DISABLE_MAYBE_UNINITIALIZED_
     r_.m128_private[0] = a_;
 
     return simde__m256_from_private(r_);
+    HEDLEY_DIAGNOSTIC_POP
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -2764,8 +2797,7 @@ simde_mm_cmp_sd (simde__m128d a, simde__m128d b, const int imm8)
     case SIMDE_CMP_GT_OQ:
     case SIMDE_CMP_GT_OS:
       #if defined(SIMDE_LOONGARCH_LASX_NATIVE)
-        t_ = __lsx_vfcmp_cle_d(a_.lsx_f64, b_.lsx_f64);
-        a_.lsx_i64 = __lsx_vextrins_d(a_.lsx_i64, __lsx_vnor_v(t_, t_), 0x00);
+        a_.lsx_i64 = __lsx_vextrins_d(a_.lsx_i64, __lsx_vfcmp_clt_d(b_.lsx_f64, a_.lsx_f64), 0x00);
       #else
         a_.i64[0] = (a_.f64[0] > b_.f64[0]) ? ~INT64_C(0) : INT64_C(0);
       #endif
@@ -2934,8 +2966,7 @@ simde_mm_cmp_ss (simde__m128 a, simde__m128 b, const int imm8)
     case SIMDE_CMP_GT_OQ:
     case SIMDE_CMP_GT_OS:
       #if defined(SIMDE_LOONGARCH_LASX_NATIVE)
-        t_ = __lsx_vfcmp_cle_s(a_.lsx_f32, b_.lsx_f32);
-        a_.lsx_i64 = __lsx_vextrins_w(a_.lsx_i64, __lsx_vnor_v(t_, t_), 0x00);
+        a_.lsx_i64 = __lsx_vextrins_w(a_.lsx_i64, __lsx_vfcmp_clt_s(b_.lsx_f32, a_.lsx_f32), 0x00);
       #else
         a_.i32[0] = (a_.f32[0] > b_.f32[0]) ? ~INT32_C(0) : INT32_C(0);
       #endif
@@ -3175,8 +3206,7 @@ simde_mm256_cmp_pd
     case SIMDE_CMP_GT_OQ:
     case SIMDE_CMP_GT_OS:
       #if defined(SIMDE_LOONGARCH_LASX_NATIVE)
-        t_ = __lasx_xvfcmp_cle_d(a_.d256, b_.d256);
-        r_.i256 = __lasx_xvnor_v(t_, t_);
+        r_.i256 = __lasx_xvfcmp_clt_d(b_.d256, a_.d256);
       #elif defined(SIMDE_VECTOR_SUBSCRIPT_OPS)
         r_.i64 = HEDLEY_REINTERPRET_CAST(__typeof__(r_.i64), (a_.f64 > b_.f64));
       #else
@@ -3604,22 +3634,31 @@ simde__m128i
 simde_mm256_cvtpd_epi32 (simde__m256d a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_cvtpd_epi32(a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && defined(SIMDE_FAST_CONVERSION_RANGE)
     simde__m256d_private a_;
     a_.i256 = __lasx_xvftintrne_w_d(a, a);
     a_.i256 = __lasx_xvpermi_d(a_.i256, 0xd8);
     return a_.m128d_private[0].lsx_i64;
   #else
     simde__m128i_private r_;
-    simde__m256d_private a_ = simde__m256d_to_private(a);
+    simde__m256d_private a_;
 
-    #if defined(simde_math_nearbyint)
-      SIMDE_VECTORIZE
-      for (size_t i = 0 ; i < (sizeof(a_.f64) / sizeof(a_.f64[0])) ; i++) {
-        r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, simde_math_nearbyint(a_.f64[i]));
-      }
+    #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      a_ = simde__m256d_to_private(a);
+      r_.m64[0] = simde_mm_cvtpd_pi32(a_.m128d[0]);
+      r_.m64[1] = simde_mm_cvtpd_pi32(a_.m128d[1]);
     #else
-      HEDLEY_UNREACHABLE();
+      a_ = simde__m256d_to_private(simde_mm256_round_pd(a, SIMDE_MM_FROUND_TO_NEAREST_INT));
+      SIMDE_VECTORIZE
+      for (size_t i = 0 ; i < (sizeof(r_.i32) / sizeof(r_.i32[0])) ; i++) {
+        simde_float64 v = simde_math_round(a_.f64[i]);
+        #if defined(SIMDE_FAST_CONVERSION_RANGE)
+          r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, v);
+        #else
+          r_.i32[i] = ((v > HEDLEY_STATIC_CAST(simde_float64, INT32_MIN)) && (v < HEDLEY_STATIC_CAST(simde_float64, INT32_MAX))) ?
+            SIMDE_CONVERT_FTOI(int32_t, v) : INT32_MIN;
+        #endif
+      }
     #endif
 
     return simde__m128i_from_private(r_);
@@ -3662,19 +3701,28 @@ simde__m256i
 simde_mm256_cvtps_epi32 (simde__m256 a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_cvtps_epi32(a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && defined(SIMDE_FAST_CONVERSION_RANGE)
     return __lasx_xvftintrne_w_s(a);
   #else
     simde__m256i_private r_;
-    simde__m256_private a_ = simde__m256_to_private(a);
+    simde__m256_private a_;
 
-    #if defined(simde_math_nearbyintf)
-      SIMDE_VECTORIZE
-      for (size_t i = 0 ; i < (sizeof(a_.f32) / sizeof(a_.f32[0])) ; i++) {
-        r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, simde_math_nearbyintf(a_.f32[i]));
-      }
+    #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      a_ = simde__m256_to_private(a);
+      r_.m128i[0] = simde_mm_cvtps_epi32(a_.m128[0]);
+      r_.m128i[1] = simde_mm_cvtps_epi32(a_.m128[1]);
     #else
-      HEDLEY_UNREACHABLE();
+      a_ = simde__m256_to_private(simde_mm256_round_ps(a, SIMDE_MM_FROUND_TO_NEAREST_INT));
+      SIMDE_VECTORIZE
+      for (size_t i = 0 ; i < (sizeof(r_.i32) / sizeof(r_.i32[0])) ; i++) {
+        simde_float32 v = simde_math_roundf(a_.f32[i]);
+        #if defined(SIMDE_FAST_CONVERSION_RANGE)
+          r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, v);
+        #else
+          r_.i32[i] = ((v > HEDLEY_STATIC_CAST(simde_float32, INT32_MIN)) && (v < HEDLEY_STATIC_CAST(simde_float32, INT32_MAX))) ?
+            SIMDE_CONVERT_FTOI(int32_t, v) : INT32_MIN;
+        #endif
+      }
     #endif
 
     return simde__m256i_from_private(r_);
@@ -3775,7 +3823,7 @@ simde__m128i
 simde_mm256_cvttpd_epi32 (simde__m256d a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_cvttpd_epi32(a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && defined(SIMDE_FAST_CONVERSION_RANGE)
     simde__m256i_private a_;
     a_.i256 = __lasx_xvftintrz_w_d(a, a);
     a_.i256 = __lasx_xvpermi_d(a_.i256, 0xd8);
@@ -3784,13 +3832,20 @@ simde_mm256_cvttpd_epi32 (simde__m256d a) {
     simde__m128i_private r_;
     simde__m256d_private a_ = simde__m256d_to_private(a);
 
-    #if defined(simde_math_trunc)
-      SIMDE_VECTORIZE
-      for (size_t i = 0 ; i < (sizeof(a_.f64) / sizeof(a_.f64[0])) ; i++) {
-        r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, simde_math_trunc(a_.f64[i]));
-      }
+    #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      r_.m64[0] = simde_mm_cvttpd_pi32(a_.m128d[0]);
+      r_.m64[1] = simde_mm_cvttpd_pi32(a_.m128d[1]);
     #else
-      HEDLEY_UNREACHABLE();
+      SIMDE_VECTORIZE
+      for (size_t i = 0 ; i < (sizeof(r_.i32) / sizeof(r_.i32[0])) ; i++) {
+        simde_float64 v = simde_math_trunc(a_.f64[i]);
+        #if defined(SIMDE_FAST_CONVERSION_RANGE)
+          r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, v);
+        #else
+          r_.i32[i] = ((v > HEDLEY_STATIC_CAST(simde_float64, INT32_MIN)) && (v < HEDLEY_STATIC_CAST(simde_float64, INT32_MAX))) ?
+            SIMDE_CONVERT_FTOI(int32_t, v) : INT32_MIN;
+        #endif
+      }
     #endif
 
     return simde__m128i_from_private(r_);
@@ -3806,19 +3861,26 @@ simde__m256i
 simde_mm256_cvttps_epi32 (simde__m256 a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_cvttps_epi32(a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && defined(SIMDE_FAST_CONVERSION_RANGE)
     return __lasx_xvftintrz_w_s(a);
   #else
     simde__m256i_private r_;
     simde__m256_private a_ = simde__m256_to_private(a);
 
-    #if defined(simde_math_truncf)
-      SIMDE_VECTORIZE
-      for (size_t i = 0 ; i < (sizeof(a_.f32) / sizeof(a_.f32[0])) ; i++) {
-        r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, simde_math_truncf(a_.f32[i]));
-      }
+    #if SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      r_.m128i[0] = simde_mm_cvttps_epi32(a_.m128[0]);
+      r_.m128i[1] = simde_mm_cvttps_epi32(a_.m128[1]);
     #else
-      HEDLEY_UNREACHABLE();
+      SIMDE_VECTORIZE
+      for (size_t i = 0 ; i < (sizeof(r_.i32) / sizeof(r_.i32[0])) ; i++) {
+        simde_float32 v = simde_math_truncf(a_.f32[i]);
+        #if defined(SIMDE_FAST_CONVERSION_RANGE)
+          r_.i32[i] = SIMDE_CONVERT_FTOI(int32_t, v);
+        #else
+          r_.i32[i] = ((v > HEDLEY_STATIC_CAST(simde_float32, INT32_MIN)) && (v < HEDLEY_STATIC_CAST(simde_float32, INT32_MAX))) ?
+            SIMDE_CONVERT_FTOI(int32_t, v) : INT32_MIN;
+        #endif
+      }
     #endif
 
     return simde__m256i_from_private(r_);
@@ -4284,6 +4346,14 @@ simde_mm256_loadu_epi8(void const * mem_addr) {
   #define _mm256_loadu_epi8(a) simde_mm256_loadu_epi8(a)
 #endif
 
+SIMDE_FUNCTION_ATTRIBUTES
+simde__m256i
+simde_x_mm256_loadu_epu8(void const * mem_addr) {
+  simde__m256i r;
+  simde_memcpy(&r, mem_addr, sizeof(r));
+  return r;
+}
+
 #if defined(SIMDE_X86_AVX512VL_NATIVE) && defined(SIMDE_X86_AVX512BW_NATIVE) \
     && !defined(SIMDE_BUG_GCC_95483) && !defined(SIMDE_BUG_CLANG_REV_344862) \
     && (!defined(HEDLEY_MSVC_VERSION) || HEDLEY_MSVC_VERSION_CHECK(19,20,0))
@@ -4308,6 +4378,14 @@ simde_mm256_loadu_epi16(void const * mem_addr) {
   #undef _mm256_loadu_epi16
   #define _mm256_loadu_epi16(a) simde_mm256_loadu_epi16(a)
 #endif
+
+SIMDE_FUNCTION_ATTRIBUTES
+simde__m256i
+simde_x_mm256_loadu_epu16(void const * mem_addr) {
+  simde__m256i r;
+  simde_memcpy(&r, mem_addr, sizeof(r));
+  return r;
+}
 
 #if defined(SIMDE_X86_AVX512VL_NATIVE) && !defined(SIMDE_BUG_GCC_95483) \
     && !defined(SIMDE_BUG_CLANG_REV_344862) \
@@ -4334,6 +4412,14 @@ simde_mm256_loadu_epi32(void const * mem_addr) {
   #define _mm256_loadu_epi32(a) simde_mm256_loadu_epi32(a)
 #endif
 
+SIMDE_FUNCTION_ATTRIBUTES
+simde__m256i
+simde_x_mm256_loadu_epu32(void const * mem_addr) {
+  simde__m256i r;
+  simde_memcpy(&r, mem_addr, sizeof(r));
+  return r;
+}
+
 #if defined(SIMDE_X86_AVX512VL_NATIVE) && !defined(SIMDE_BUG_GCC_95483) \
     && !defined(SIMDE_BUG_CLANG_REV_344862) \
     && (!defined(HEDLEY_MSVC_VERSION) || HEDLEY_MSVC_VERSION_CHECK(19,20,0))
@@ -4358,6 +4444,14 @@ simde_mm256_loadu_epi64(void const * mem_addr) {
   #undef _mm256_loadu_epi64
   #define _mm256_loadu_epi64(a) simde_mm256_loadu_epi64(a)
 #endif
+
+SIMDE_FUNCTION_ATTRIBUTES
+simde__m256i
+simde_x_mm256_loadu_epu64(void const * mem_addr) {
+  simde__m256i r;
+  simde_memcpy(&r, mem_addr, sizeof(r));
+  return r;
+}
 
 SIMDE_FUNCTION_ATTRIBUTES
 simde__m256i
@@ -4718,6 +4812,8 @@ simde_mm256_min_ps (simde__m256 a, simde__m256 b) {
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return __lasx_xvfmin_s(a, b);
   #else
+    HEDLEY_DIAGNOSTIC_PUSH
+    SIMDE_DIAGNOSTIC_DISABLE_MAYBE_UNINITIALIZED_
     simde__m256_private
       r_,
       a_ = simde__m256_to_private(a),
@@ -4734,6 +4830,7 @@ simde_mm256_min_ps (simde__m256 a, simde__m256 b) {
     #endif
 
     return simde__m256_from_private(r_);
+    HEDLEY_DIAGNOSTIC_POP
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -5166,7 +5263,9 @@ simde_mm256_permute_pd (simde__m256d a, const int imm8)
 SIMDE_FUNCTION_ATTRIBUTES
 simde__m128
 simde_mm_permute_ps (simde__m128 a, const int imm8)
-    SIMDE_REQUIRE_CONSTANT_RANGE(imm8, 0, 255) {
+  SIMDE_REQUIRE_CONSTANT_RANGE(imm8, 0, 255) {
+  HEDLEY_DIAGNOSTIC_PUSH
+  SIMDE_DIAGNOSTIC_DISABLE_MAYBE_UNINITIALIZED_
   simde__m128_private
     r_,
     a_ = simde__m128_to_private(a);
@@ -5177,6 +5276,7 @@ simde_mm_permute_ps (simde__m128 a, const int imm8)
   }
 
   return simde__m128_from_private(r_);
+  HEDLEY_DIAGNOSTIC_POP
 }
 #if defined(SIMDE_X86_AVX_NATIVE)
 #  define simde_mm_permute_ps(a, imm8) _mm_permute_ps(a, imm8)
@@ -5399,7 +5499,7 @@ simde_mm256_permute2f128_si256 (simde__m256i a, simde__m256i b, const int imm8)
   return simde__m256i_from_private(r_);
 }
 #if defined(SIMDE_X86_AVX_NATIVE)
-#  define simde_mm256_permute2f128_si128(a, b, imm8) _mm256_permute2f128_si128(a, b, imm8)
+#  define simde_mm256_permute2f128_si256(a, b, imm8) _mm256_permute2f128_si256(a, b, imm8)
 #endif
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
   #undef _mm256_permute2f128_si256
@@ -5790,7 +5890,7 @@ void
 simde_mm256_store_ps (simde_float32 mem_addr[8], simde__m256 a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_store_ps(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #else
     simde_memcpy(SIMDE_ALIGN_ASSUME_LIKE(mem_addr, simde__m256), &a, sizeof(a));
@@ -5806,7 +5906,7 @@ void
 simde_mm256_store_pd (simde_float64 mem_addr[4], simde__m256d a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_store_pd(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #else
     simde_memcpy(SIMDE_ALIGN_ASSUME_LIKE(mem_addr, simde__m256d), &a, sizeof(a));
@@ -5822,7 +5922,7 @@ void
 simde_mm256_store_si256 (simde__m256i* mem_addr, simde__m256i a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_store_si256(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #else
   simde_memcpy(SIMDE_ALIGN_ASSUME_LIKE(mem_addr, simde__m256i), &a, sizeof(a));
@@ -5838,7 +5938,7 @@ void
 simde_mm256_storeu_ps (simde_float32 mem_addr[8], simde__m256 a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_storeu_ps(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #else
     simde_memcpy(mem_addr, &a, sizeof(a));
@@ -5854,7 +5954,7 @@ void
 simde_mm256_storeu_pd (simde_float64 mem_addr[4], simde__m256d a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_storeu_pd(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #elif SIMDE_NATURAL_VECTOR_SIZE_LE(128)
     simde__m256d_private a_ = simde__m256d_to_private(a);
@@ -5875,7 +5975,7 @@ void
 simde_mm256_storeu_si256 (void* mem_addr, simde__m256i a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_storeu_si256(SIMDE_ALIGN_CAST(__m256i*, mem_addr), a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #else
     simde_memcpy(mem_addr, &a, sizeof(a));
@@ -5936,7 +6036,7 @@ void
 simde_mm256_stream_ps (simde_float32 mem_addr[8], simde__m256 a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_stream_ps(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #elif HEDLEY_HAS_BUILTIN(__builtin_nontemporal_store) && defined(SIMDE_VECTOR_SUBSCRIPT)
     __builtin_nontemporal_store(a, SIMDE_ALIGN_CAST(__typeof__(a)*, mem_addr));
@@ -5954,7 +6054,7 @@ void
 simde_mm256_stream_pd (simde_float64 mem_addr[4], simde__m256d a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_stream_pd(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #elif HEDLEY_HAS_BUILTIN(__builtin_nontemporal_store) && defined(SIMDE_VECTOR_SUBSCRIPT)
     __builtin_nontemporal_store(a, SIMDE_ALIGN_CAST(__typeof__(a)*, mem_addr));
@@ -5972,7 +6072,7 @@ void
 simde_mm256_stream_si256 (simde__m256i* mem_addr, simde__m256i a) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     _mm256_stream_si256(mem_addr, a);
-  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
+  #elif defined(SIMDE_LOONGARCH_LASX_NATIVE) && !defined(SIMDE_BUG_GCC_123766)
     return __lasx_xvst(a, mem_addr, 0);
   #elif HEDLEY_HAS_BUILTIN(__builtin_nontemporal_store) && defined(SIMDE_VECTOR_SUBSCRIPT)
     __builtin_nontemporal_store(a, SIMDE_ALIGN_CAST(__typeof__(a)*, mem_addr));
@@ -6603,7 +6703,6 @@ simde_mm256_testc_si256 (simde__m256i a, simde__m256i b) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_testc_si256(a, b);
   #else
-    int_fast32_t r = 0;
     simde__m256i_private
       a_ = simde__m256i_to_private(a),
       b_ = simde__m256i_to_private(b);
@@ -6612,14 +6711,16 @@ simde_mm256_testc_si256 (simde__m256i a, simde__m256i b) {
       a_.i256 = __lasx_xvandn_v(a_.i256, b_.i256);
       a_.i256 = __lasx_xvmsknz_b(a_.i256);
       return (__lasx_xvpickve2gr_w(a_.i256, 0) + __lasx_xvpickve2gr_w(a_.i256, 4)) ? 0 : 1;
+    #elif SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      return simde_mm_testc_si128(a_.m128i[0], b_.m128i[0]) && simde_mm_testc_si128(a_.m128i[1], b_.m128i[1]);
     #else
+      int_fast32_t r = 0;
       SIMDE_VECTORIZE_REDUCTION(|:r)
       for (size_t i = 0 ; i < (sizeof(a_.i32f) / sizeof(a_.i32f[0])) ; i++) {
         r |= ~a_.i32f[i] & b_.i32f[i];
       }
+      return HEDLEY_STATIC_CAST(int, !r);
     #endif
-
-    return HEDLEY_STATIC_CAST(int, !r);
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -6761,7 +6862,6 @@ simde_mm256_testz_si256 (simde__m256i a, simde__m256i b) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_testz_si256(a, b);
   #else
-    int_fast32_t r = 0;
     simde__m256i_private
       a_ = simde__m256i_to_private(a),
       b_ = simde__m256i_to_private(b);
@@ -6771,17 +6871,15 @@ simde_mm256_testz_si256 (simde__m256i a, simde__m256i b) {
       a_.i256 = __lasx_xvmsknz_b(a_.i256);
       return (__lasx_xvpickve2gr_w(a_.i256, 0) + __lasx_xvpickve2gr_w(a_.i256, 4)) ? 0 : 1;
     #elif SIMDE_NATURAL_VECTOR_SIZE_LE(128)
-      r = simde_mm_testz_si128(a_.m128i[0], b_.m128i[0]) && simde_mm_testz_si128(a_.m128i[1], b_.m128i[1]);
+      return simde_mm_testz_si128(a_.m128i[0], b_.m128i[0]) && simde_mm_testz_si128(a_.m128i[1], b_.m128i[1]);
     #else
+      int_fast32_t r = 0;
       SIMDE_VECTORIZE_REDUCTION(|:r)
       for (size_t i = 0 ; i < (sizeof(a_.i32f) / sizeof(a_.i32f[0])) ; i++) {
         r |= a_.i32f[i] & b_.i32f[i];
       }
-
-      r = !r;
+      return HEDLEY_STATIC_CAST(int, !r);
     #endif
-
-    return HEDLEY_STATIC_CAST(int, r);
   #endif
 }
 #if defined(SIMDE_X86_AVX_ENABLE_NATIVE_ALIASES)
@@ -6943,25 +7041,27 @@ simde_mm256_testnzc_si256 (simde__m256i a, simde__m256i b) {
   #if defined(SIMDE_X86_AVX_NATIVE)
     return _mm256_testnzc_si256(a, b);
   #else
-    int32_t rc = 0, rz = 0;
     simde__m256i_private
       a_ = simde__m256i_to_private(a),
       b_ = simde__m256i_to_private(b);
 
     #if defined(SIMDE_LOONGARCH_LASX_NATIVE)
+      int_fast32_t rc = 0, rz = 0;
       __m256i m = __lasx_xvandn_v(a_.i256, b_.i256);
       __m256i n = __lasx_xvand_v(a_.i256, b_.i256);
       m = __lasx_xvmsknz_b(m); n = __lasx_xvmsknz_b(n);
       rc = __lasx_xvpickve2gr_w(m, 0) + __lasx_xvpickve2gr_w(m, 4);
       rz = __lasx_xvpickve2gr_w(n, 0) + __lasx_xvpickve2gr_w(n, 4);
       return (rc != 0) && (rz != 0);
+    #elif SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+      return simde_mm_testnzc_si128(a_.m128i[0], b_.m128i[0]) && simde_mm_testnzc_si128(a_.m128i[1], b_.m128i[1]);
     #else
+      int_fast32_t rc = 0, rz = 0;
       for (size_t i = 0 ; i < (sizeof(a_.i32f) / sizeof(a_.i32f[0])) ; i++) {
         rc |= ~a_.i32f[i] & b_.i32f[i];
         rz |=  a_.i32f[i] & b_.i32f[i];
       }
-
-      return !!(rc & rz);
+      return HEDLEY_STATIC_CAST(int, rc && rz);
     #endif
   #endif
 }

@@ -60,7 +60,21 @@
  */
 
 #if defined(__clang__) && !defined(SIMDE_DETECT_CLANG_VERSION)
-#  if __has_warning("-Wmissing-designated-field-initializers")
+#  if __has_warning("-Wlifetime-safety")
+#    define SIMDE_DETECT_CLANG_VERSION 230000
+#  elif __has_warning("-Wunsafe-buffer-usage-in-format-attr-call")
+#    define SIMDE_DETECT_CLANG_VERSION 220100
+#  elif __has_builtin(__builtin_elementwise_fshl)
+#    define SIMDE_DETECT_CLANG_VERSION 220000
+#  elif __has_warning("-Wdefault-const-init-var") || __has_builtin(__builtin_structured_binding_size)
+#    if __clang_major__ == 21 && __clang_minor__ >= 1 && __clang_patchlevel__ >= 1
+#      define SIMDE_DETECT_CLANG_VERSION 210101  // for SIMDE_BUG_CLANG_179057
+#    else
+#      define SIMDE_DETECT_CLANG_VERSION 210000
+#    endif
+#  elif __has_warning("-Warray-compare-cxx26")
+#    define SIMDE_DETECT_CLANG_VERSION 200000
+#  elif __has_warning("-Wmissing-designated-field-initializers")
 #    define SIMDE_DETECT_CLANG_VERSION 190000
 #  elif __has_warning("-Woverriding-option")
 #    define SIMDE_DETECT_CLANG_VERSION 180000
@@ -121,8 +135,8 @@
  * such as pragmas to disable a specific warning. */
 
 #if defined(SIMDE_DETECT_CLANG_VERSION)
-#  define SIMDE_DETECT_CLANG_VERSION_CHECK(major, minor, revision) (SIMDE_DETECT_CLANG_VERSION >= ((major * 10000) + (minor * 1000) + (revision)))
-#  define SIMDE_DETECT_CLANG_VERSION_NOT(major, minor, revision) (SIMDE_DETECT_CLANG_VERSION < ((major * 10000) + (minor * 1000) + (revision)))
+#  define SIMDE_DETECT_CLANG_VERSION_CHECK(major, minor, revision) (SIMDE_DETECT_CLANG_VERSION >= ((major * 10000) + (minor * 100) + (revision)))
+#  define SIMDE_DETECT_CLANG_VERSION_NOT(major, minor, revision) (SIMDE_DETECT_CLANG_VERSION < ((major * 10000) + (minor * 100) + (revision)))
 #else
 #  define SIMDE_DETECT_CLANG_VERSION_CHECK(major, minor, revision) (0)
 #  define SIMDE_DETECT_CLANG_VERSION_NOT(major, minor, revision) (0)
