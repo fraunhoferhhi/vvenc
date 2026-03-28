@@ -27,6 +27,16 @@
 #if !defined(SIMDE_X86_FMA_H)
 #define SIMDE_X86_FMA_H
 
+#include <stddef.h>
+
+#include "../hedley.h"
+#include "../simde-diagnostic.h"
+#include "../simde-features.h"
+#include "../simde-math.h"
+#include "../simde-common.h"
+#include "sse.h"
+#include "sse2.h"
+#include "sse3.h"
 #include "avx.h"
 
 #if !defined(SIMDE_X86_FMA_NATIVE) && defined(SIMDE_ENABLE_NATIVE_ALIASES)
@@ -82,6 +92,16 @@ simde_mm256_fmadd_pd (simde__m256d a, simde__m256d b, simde__m256d c) {
     return _mm256_fmadd_pd(a, b, c);
   #elif defined(SIMDE_LOONGARCH_LASX_NATIVE)
     return __lasx_xvfmadd_d(a, b, c);
+  #elif SIMDE_NATURAL_VECTOR_SIZE_LE(128)
+   simde__m256d_private
+     r_,
+     a_ = simde__m256d_to_private(a),
+     b_ = simde__m256d_to_private(b),
+     c_ = simde__m256d_to_private(c);
+
+   r_.m128d[0] = simde_mm_fmadd_pd(a_.m128d[0], b_.m128d[0], c_.m128d[0]);
+   r_.m128d[1] = simde_mm_fmadd_pd(a_.m128d[1], b_.m128d[1], c_.m128d[1]);
+   return simde__m256d_from_private(r_);
   #else
     return simde_mm256_add_pd(simde_mm256_mul_pd(a, b), c);
   #endif

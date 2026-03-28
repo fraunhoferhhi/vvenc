@@ -27,6 +27,13 @@
 #if !defined(SIMDE_X86_SSE3_H)
 #define SIMDE_X86_SSE3_H
 
+#include <stddef.h>
+
+#include "../hedley.h"
+#include "../simde-diagnostic.h"
+#include "../simde-features.h"
+#include "../simde-common.h"
+#include "sse.h"
 #include "sse2.h"
 
 HEDLEY_DIAGNOSTIC_PUSH
@@ -434,7 +441,14 @@ simde_mm_loaddup_pd (simde_float64 const* mem_addr) {
     #if defined(SIMDE_ARM_NEON_A64V8_NATIVE)
       r_.neon_f64 = vdupq_n_f64(*mem_addr);
     #elif defined(SIMDE_ARM_NEON_A32V7_NATIVE)
+      #if HEDLEY_HAS_WARNING("-Wundefined-reinterpret-cast") && SIMDE_DETECT_CLANG_VERSION_CHECK(21, 0, 0)
+        HEDLEY_DIAGNOSTIC_PUSH
+        _Pragma("clang diagnostic ignored \"-Wundefined-reinterpret-cast\"")
+      #endif
       r_.neon_i64 = vdupq_n_s64(*HEDLEY_REINTERPRET_CAST(int64_t const*, mem_addr));
+      #if HEDLEY_HAS_WARNING("-Wundefined-reinterpret-cast") && SIMDE_DETECT_CLANG_VERSION_CHECK(21, 0, 0)
+        HEDLEY_DIAGNOSTIC_POP
+      #endif
     #elif defined(SIMDE_LOONGARCH_LSX_NATIVE)
       r_.lsx_i64 = __lsx_vldrepl_d(mem_addr, 0);
     #else
@@ -477,6 +491,11 @@ simde_mm_movedup_pd (simde__m128d a) {
 }
 #if defined(SIMDE_X86_SSE3_ENABLE_NATIVE_ALIASES)
 #  define _mm_movedup_pd(a) simde_mm_movedup_pd(a)
+#endif
+
+#if defined(SIMDE_DIAGNOSTIC_DISABLE_UNINITIALIZED_)
+HEDLEY_DIAGNOSTIC_PUSH
+SIMDE_DIAGNOSTIC_DISABLE_UNINITIALIZED_
 #endif
 
 SIMDE_FUNCTION_ATTRIBUTES
@@ -541,6 +560,10 @@ simde_mm_moveldup_ps (simde__m128 a) {
 }
 #if defined(SIMDE_X86_SSE3_ENABLE_NATIVE_ALIASES)
 #  define _mm_moveldup_ps(a) simde_mm_moveldup_ps(a)
+#endif
+
+#if defined(SIMDE_DIAGNOSTIC_DISABLE_UNINITIALIZED_)
+HEDLEY_DIAGNOSTIC_POP
 #endif
 
 SIMDE_END_DECLS_

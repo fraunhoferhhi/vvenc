@@ -103,10 +103,11 @@ SIMDE_DISABLE_UNWANTED_DIAGNOSTICS
    * macro libc++ uses. */
   #if defined(isnan) || (defined(_LIBCPP_MATH_H) && !defined(_LIBCPP_CMATH))
     #define SIMDE_MATH_HAVE_MATH_H
-  #elif defined(__cplusplus)
+  #elif defined(__cplusplus) && !defined(HEDLEY_MSVC_VERSION)
     #define SIMDE_MATH_HAVE_CMATH
   #endif
-#elif defined(__has_include)
+#endif
+#if defined(__has_include) && !(defined(SIMDE_MATH_HAVE_MATH_H) || defined(SIMDE_MATH_HAVE_CMATH))
   #if defined(__cplusplus) && (__cplusplus >= 201103L) && __has_include(<cmath>)
     #define SIMDE_MATH_HAVE_CMATH
     #include <cmath>
@@ -1265,9 +1266,17 @@ simde_math_fpclass(double v, const int imm8) {
 #endif
 
 #if !defined(simde_math_roundeven)
+  /* GCC 10+ lowers __builtin_roundeven to a libm roundeven() call when
+   * the target has no native instruction.  roundeven() is C23 and only
+   * available in glibc >= 2.25; other platforms (musl, OpenBSD, MinGW,
+   * etc.) lack the symbol and produce a link error.  Clang lowers the
+   * builtin to an llvm.roundeven.* intrinsic which is always emitted
+   * inline (no libm dependency), so the GCC guard is not needed there. */
   #if \
-     ((!defined(HEDLEY_EMSCRIPTEN_VERSION) || HEDLEY_EMSCRIPTEN_VERSION_CHECK(3, 1, 43)) && HEDLEY_HAS_BUILTIN(__builtin_roundeven)) || \
-      HEDLEY_GCC_VERSION_CHECK(10,0,0)
+     ((!defined(HEDLEY_EMSCRIPTEN_VERSION) || HEDLEY_EMSCRIPTEN_VERSION_CHECK(3, 1, 43)) && \
+       HEDLEY_HAS_BUILTIN(__builtin_roundeven) && \
+       (!HEDLEY_GCC_VERSION_CHECK(10,0,0) || \
+        (defined(__GLIBC__) && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25)))))
     #define simde_math_roundeven(v) __builtin_roundeven(v)
   #elif defined(simde_math_round) && defined(simde_math_fabs)
     static HEDLEY_INLINE
@@ -1285,9 +1294,14 @@ simde_math_fpclass(double v, const int imm8) {
 #endif
 
 #if !defined(simde_math_roundevenf)
+  /* Same rationale as simde_math_roundeven above; applies to the float
+   * variant.  GCC 10+ requires glibc >= 2.25 for roundevenf(); Clang
+   * is always safe via llvm.roundeven.f32 inline expansion. */
   #if \
-     ((!defined(HEDLEY_EMSCRIPTEN_VERSION) || HEDLEY_EMSCRIPTEN_VERSION_CHECK(3, 1, 43)) && HEDLEY_HAS_BUILTIN(__builtin_roundevenf)) || \
-      HEDLEY_GCC_VERSION_CHECK(10,0,0)
+     ((!defined(HEDLEY_EMSCRIPTEN_VERSION) || HEDLEY_EMSCRIPTEN_VERSION_CHECK(3, 1, 43)) && \
+       HEDLEY_HAS_BUILTIN(__builtin_roundevenf) && \
+       (!HEDLEY_GCC_VERSION_CHECK(10,0,0) || \
+        (defined(__GLIBC__) && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25)))))
     #define simde_math_roundevenf(v) __builtin_roundevenf(v)
   #elif defined(simde_math_roundf) && defined(simde_math_fabsf)
     static HEDLEY_INLINE
@@ -1915,7 +1929,7 @@ simde_math_adds_u32(uint32_t a, uint32_t b) {
     return vqadds_u32(a, b);
   #else
     uint32_t r = a + b;
-    r |= -(r < a);
+    r |= HEDLEY_STATIC_CAST(uint32_t, -(r < a));
     return r;
   #endif
 }
@@ -1927,7 +1941,7 @@ simde_math_adds_u64(uint64_t a, uint64_t b) {
     return vqaddd_u64(a, b);
   #else
     uint64_t r = a + b;
-    r |= -(r < a);
+    r |= HEDLEY_STATIC_CAST(uint64_t, -(r < a));
     return r;
   #endif
 }
@@ -2043,7 +2057,7 @@ simde_math_subs_u32(uint32_t a, uint32_t b) {
     return vqsubs_u32(a, b);
   #else
     uint32_t res = a - b;
-    res &= -(res <= a);
+    res &= HEDLEY_STATIC_CAST(uint32_t, -(res <= a));
     return res;
   #endif
 }
@@ -2055,7 +2069,7 @@ simde_math_subs_u64(uint64_t a, uint64_t b) {
     return vqsubd_u64(a, b);
   #else
     uint64_t res = a - b;
-    res &= -(res <= a);
+    res &= HEDLEY_STATIC_CAST(uint64_t, -(res <= a));
     return res;
   #endif
 }
