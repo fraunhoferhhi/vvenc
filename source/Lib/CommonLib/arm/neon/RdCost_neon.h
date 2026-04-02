@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2025-2026, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2026, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -40,48 +40,23 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-/** \file     neon_sve_bridge.h
-    \brief    Helper functions for SVE
+/** \file     RdCost_neon.h
+    \brief    RD cost computation class, Neon version
 */
 
 #pragma once
 
-#if defined( TARGET_SIMD_ARM )
-
-#include <arm_neon_sve_bridge.h>
+#include "CommonLib/CommonDef.h"
+#include "CommonLib/RdCost.h"
 
 namespace vvenc
 {
-// We can access instructions exclusive to the SVE instruction set from a
-// predominantly Neon context by making use of the Neon-SVE bridge intrinsics
-// to reinterpret Neon vectors as SVE vectors - with the high part of the SVE
-// vector (if it's longer than 128 bits) being "don't care".
 
-// While sub-optimal on machines that have SVE vector length > 128-bit - as the
-// remainder of the vector is unused - this approach is still beneficial when
-// compared to a Neon-only solution.
+#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_ARM )
 
-static inline int64x2_t vvenc_sdotq_s16( int64x2_t acc, int16x8_t x, int16x8_t y )
-{
-  return svget_neonq_s64( svdot_s64( svset_neonq_s64( svundef_s64(), acc ), svset_neonq_s16( svundef_s16(), x ),
-                                     svset_neonq_s16( svundef_s16(), y ) ) );
-}
+template<int width>
+Distortion xGetHADs_neon( const DistParam& rcDtParam );
 
-template<uint64_t Lane>
-static inline int64x2_t vvenc_sdotq_lane_s16( int64x2_t acc, int16x8_t x, int16x8_t y )
-{
-  // Lane = 0 selects y[0..3], the first four elements of y.
-  // Lane = 1 selects y[4..7], the last four elements of y.
-  return svget_neonq_s64( svdot_lane_s64( svset_neonq_s64( svundef_s64(), acc ), svset_neonq_s16( svundef_s16(), x ),
-                                          svset_neonq_s16( svundef_s16(), y ), Lane ) );
-}
-
-static inline int16x8_t vvenc_svtbl_s16( int16x8_t data, uint16x8_t indices )
-{
-  return svget_neonq_s16(
-      svtbl_s16( svset_neonq_s16( svundef_s16(), data ), svset_neonq_u16( svundef_u16(), indices ) ) );
-}
+#endif // defined( TARGET_SIMD_ARM )
 
 } // namespace vvenc
-
-#endif
