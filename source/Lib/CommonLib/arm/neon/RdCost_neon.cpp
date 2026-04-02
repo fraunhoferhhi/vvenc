@@ -54,20 +54,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "sum_neon.h"
 #include "transpose_neon.h"
 
-#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
-#if SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_AVX2
-#define USE_AVX2
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE42
-#define USE_SSE42
-#elif SIMD_EVERYWHERE_EXTENSION_LEVEL_ID == X86_SIMD_SSE41
-#define USE_SSE41
-#endif
-#endif
-
-#if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_X86 )
-# include "CommonLib/x86/RdCostX86.h"
-#endif
-
 namespace vvenc
 {
 
@@ -1921,7 +1907,6 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
 
-#if defined( TARGET_SIMD_X86 )
   m_afpDistortFunc[0][DF_HAD]     = xGetHADs_neon<false>;
   m_afpDistortFunc[0][DF_HAD2]    = xGetHADs_neon<false>;
   m_afpDistortFunc[0][DF_HAD4]    = xGetHADs_neon<false>;
@@ -1939,7 +1924,6 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_HAD32_fast]   = xGetHADs_neon<true>;
   m_afpDistortFunc[0][DF_HAD64_fast]   = xGetHADs_neon<true>;
   m_afpDistortFunc[0][DF_HAD128_fast]  = xGetHADs_neon<true>;
-#endif // defined( TARGET_SIMD_X86 )
 
   m_afpDistortFunc[0][DF_SAD] = xGetSAD_neon;
   m_afpDistortFunc[0][DF_SAD4] = xGetSAD_NxN_neon<4>;
