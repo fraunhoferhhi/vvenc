@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/RdCost.h"
+#include "permute_neon.h"
 #include "reverse_neon.h"
 #include "sum_neon.h"
 #include "transpose_neon.h"
@@ -1005,74 +1006,58 @@ Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg,
   return sad;
 }
 
-static Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+static const uint8_t k4x4PermuteTbl[] = { 6, 7, 4, 5, 22, 23, 20, 21, 14, 15, 12, 13, 30, 31, 28, 29 };
+
+Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
 {
-  int16x4_t r0 = vld1_s16( piOrg );
-  int16x4_t r1 = vld1_s16( piOrg + iStrideOrg );
-  int16x4_t r2 = vld1_s16( piOrg + 2 * iStrideOrg );
-  int16x4_t r3 = vld1_s16( piOrg + 3 * iStrideOrg );
+  const int16x4_t r0 = vld1_s16( piOrg + 0 * iStrideOrg );
+  const int16x4_t r1 = vld1_s16( piOrg + 1 * iStrideOrg );
+  const int16x4_t r2 = vld1_s16( piOrg + 2 * iStrideOrg );
+  const int16x4_t r3 = vld1_s16( piOrg + 3 * iStrideOrg );
 
-  int16x4_t c0 = vld1_s16( piCur );
-  int16x4_t c1 = vld1_s16( piCur + iStrideCur );
-  int16x4_t c2 = vld1_s16( piCur + 2 * iStrideCur );
-  int16x4_t c3 = vld1_s16( piCur + 3 * iStrideCur );
+  const int16x4_t c0 = vld1_s16( piCur + 0 * iStrideCur );
+  const int16x4_t c1 = vld1_s16( piCur + 1 * iStrideCur );
+  const int16x4_t c2 = vld1_s16( piCur + 2 * iStrideCur );
+  const int16x4_t c3 = vld1_s16( piCur + 3 * iStrideCur );
 
-  int16x4_t m1[4], m2[4];
+  const int16x4_t diff0 = vsub_s16( r0, c0 );
+  const int16x4_t diff1 = vsub_s16( r1, c1 );
+  const int16x4_t diff2 = vsub_s16( r2, c2 );
+  const int16x4_t diff3 = vsub_s16( r3, c3 );
+
+  int16x8_t m1[2], m2[2];
 
   // Vertical.
-  m1[0] = vsub_s16( r0, c0 );
-  m1[1] = vsub_s16( r1, c1 );
-  m1[2] = vsub_s16( r2, c2 );
-  m1[3] = vsub_s16( r3, c3 );
+  m2[0] = vcombine_s16( vadd_s16( diff0, diff3 ), vadd_s16( diff1, diff2 ) ); // 11-bit
+  m2[1] = vcombine_s16( vsub_s16( diff0, diff3 ), vsub_s16( diff1, diff2 ) );
 
-  m2[0] = vadd_s16( m1[0], m1[3] );
-  m2[1] = vadd_s16( m1[1], m1[2] );
-  m2[2] = vsub_s16( m1[0], m1[3] );
-  m2[3] = vsub_s16( m1[1], m1[2] );
+  m1[0] = vvenc_vtrnq_s64_to_s16( m2[0], m2[1] ).val[0];
+  m1[1] = vvenc_vtrnq_s64_to_s16( m2[0], m2[1] ).val[1];
 
-  m1[0] = vadd_s16( m2[0], m2[1] );
-  m1[1] = vsub_s16( m2[0], m2[1] );
-  m1[2] = vsub_s16( m2[2], m2[3] );
-  m1[3] = vadd_s16( m2[2], m2[3] );
+  m2[0] = vaddq_s16( m1[0], m1[1] );
+  m2[1] = vsubq_s16( m1[0], m1[1] ); // 13-bit
 
-  // Transpose.
-  int16x8_t m1q[4];
-  const int16x4_t zero = vdup_n_s16( 0 );
-  m1q[0] = vcombine_s16( m1[0], zero );
-  m1q[1] = vcombine_s16( m1[1], zero );
-  m1q[2] = vcombine_s16( m1[2], zero );
-  m1q[3] = vcombine_s16( m1[3], zero );
+  const int absDC = std::abs( horizontal_add_long_s16x4( vget_low_s16( m2[0] ) ) );
 
-  int16x8_t a0 = vzipq_s16( m1q[0], m1q[2] ).val[0];
-  int16x8_t a1 = vzipq_s16( m1q[1], m1q[3] ).val[0];
+  const uint8x16_t idx0 = vld1q_u8( k4x4PermuteTbl );
+  uint8x16x2_t tbl;
+  tbl.val[0] = vreinterpretq_u8_s16( m2[0] );
+  tbl.val[1] = vreinterpretq_u8_s16( m2[1] );
 
-  int16x8_t b0 = vzipq_s16( a0, a1 ).val[0];
-  int16x8_t b1 = vzipq_s16( a0, a1 ).val[1];
+  m1[0] = vreinterpretq_s16_s32( vtrnq_s32( vreinterpretq_s32_s16( m2[0] ), vreinterpretq_s32_s16( m2[1] ) ).val[0] );
+  m1[1] = vreinterpretq_s16_u8( vvenc_vqtbl2q_u8( tbl, idx0 ) );
 
-  m1[0] = vget_low_s16( b0 );
-  m1[1] = vget_high_s16( b0 );
-  m1[2] = vget_low_s16( b1 );
-  m1[3] = vget_high_s16( b1 );
+  // The last butterfly uses |x+y|+|x-y| = 2*max(|x|,|y|); we delay the "*2".
+  m2[0] = vabsq_s16( vaddq_s16( m1[0], m1[1] ) );
+  m2[1] = vabdq_s16( m1[0], m1[1] ); // 14-bit
 
-  // Horizontal.
-  m2[0] = vadd_s16( m1[0], m1[3] );
-  m2[1] = vadd_s16( m1[1], m1[2] );
-  m2[2] = vsub_s16( m1[0], m1[3] );
-  m2[3] = vsub_s16( m1[1], m1[2] );
+  m1[0] = vtrnq_s16( m2[0], m2[1] ).val[0];
+  m1[1] = vtrnq_s16( m2[0], m2[1] ).val[1];
 
-  m1[0] = vabs_s16( vadd_s16( m2[0], m2[1] ) );
-  m1[1] = vabd_s16( m2[0], m2[1] );
-  m1[2] = vabd_s16( m2[2], m2[3] );
-  m1[3] = vabs_s16( vadd_s16( m2[2], m2[3] ) );
+  int16x8_t max = vmaxq_s16( m1[0], m1[1] );
 
-  uint32_t absDC = ( uint32_t )vget_lane_s16( m1[0], 0 );
-
-  int32x4_t sum0_32 = vaddl_s16( m1[0], m1[1] );
-  int32x4_t sum1_32 = vaddl_s16( m1[2], m1[3] );
-  int32x4_t sum32 = vaddq_s32( sum0_32, sum1_32 );
-
-  uint32_t sad = ( uint32_t )horizontal_add_s32x4( sum32 );
-
+  int sad = horizontal_add_long_s16x8( max );
+  sad <<= 1;
   sad -= absDC;
   sad += absDC >> 2;
   sad = ( sad + 1 ) >> 1;
