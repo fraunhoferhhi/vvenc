@@ -113,6 +113,15 @@ static inline uint64_t horizontal_add_u64x2( const uint64x2_t a )
 #endif
 }
 
+static inline int horizontal_add_long_s16x4( const int16x4_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlv_s16( a );
+#else
+  return horizontal_add_s32x4( vmovl_s16( a ) );
+#endif
+}
+
 static inline int horizontal_add_long_s16x8( const int16x8_t a )
 {
 #if REAL_TARGET_AARCH64
