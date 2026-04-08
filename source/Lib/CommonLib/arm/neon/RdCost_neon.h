@@ -57,6 +57,24 @@ namespace vvenc
 template<int width>
 Distortion xGetHADs_neon( const DistParam& rcDtParam );
 
+Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur );
+
+Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                              const ptrdiff_t iStrideCur );
+
+Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                              const ptrdiff_t iStrideCur );
+
+Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur );
+
+Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur );
+
+Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur );
+
 #endif // defined( TARGET_SIMD_ARM )
 
 } // namespace vvenc
