@@ -776,6 +776,74 @@ Distortion xCalcHAD8x4_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
   return sad;
 }
 
+static const uint16_t kZip1DHalfTbl[] = { 0, 2, 1, 3, 4, 6, 5, 7 };
+
+Distortion xCalcHAD4x8_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur )
+{
+  int16x8_t m1[4], m2[4];
+  int16x4_t diff[8];
+  for( int k = 0; k < 8; k++ )
+  {
+    int16x4_t org = vld1_s16( piOrg );
+    int16x4_t cur = vld1_s16( piCur );
+
+    diff[k] = vsub_s16( org, cur ); // 11-bit
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+
+  const uint16x8_t idxs = vld1q_u16( kZip1DHalfTbl );
+
+  // Vertical distance 1.
+  m1[0] = vcombine_s16( vadd_s16( diff[0], diff[1] ), vsub_s16( diff[0], diff[1] ) );
+  m1[1] = vcombine_s16( vadd_s16( diff[2], diff[3] ), vsub_s16( diff[2], diff[3] ) );
+  m1[2] = vcombine_s16( vadd_s16( diff[4], diff[5] ), vsub_s16( diff[4], diff[5] ) );
+  m1[3] = vcombine_s16( vadd_s16( diff[6], diff[7] ), vsub_s16( diff[6], diff[7] ) ); // 12-bit
+
+  // Horizontal distance 1.
+  m2[0] = vvenc_cadd_s16<90>( m1[0], m1[0] );
+  m2[1] = vvenc_cadd_s16<90>( m1[1], m1[1] );
+  m2[2] = vvenc_cadd_s16<90>( m1[2], m1[2] );
+  m2[3] = vvenc_cadd_s16<90>( m1[3], m1[3] ); // 12-bit
+
+  m1[0] = vvenc_svtbl_s16( m2[0], idxs );
+  m1[1] = vvenc_svtbl_s16( m2[1], idxs );
+  m1[2] = vvenc_svtbl_s16( m2[2], idxs );
+  m1[3] = vvenc_svtbl_s16( m2[3], idxs );
+
+  // Horizontal distance 2.
+  m2[0] = vvenc_cadd_s16<90>( m1[0], m1[0] );
+  m2[1] = vvenc_cadd_s16<90>( m1[1], m1[1] );
+  m2[2] = vvenc_cadd_s16<90>( m1[2], m1[2] );
+  m2[3] = vvenc_cadd_s16<90>( m1[3], m1[3] ); // 13-bit
+
+  // The last butterfly uses |x+y|+|x-y| = 2*max(|x|,|y|); we delay the "*2".
+  int16x8_t dcVec0 = vaddq_s16( m2[0], m2[2] );
+  int16x8_t dcVec1 = vaddq_s16( m2[1], m2[3] );
+
+  // Vertical distance 4.
+  m1[0] = vabsq_s16( vaddq_s16( m2[0], m2[2] ) );
+  m1[1] = vabsq_s16( vaddq_s16( m2[1], m2[3] ) );
+  m1[2] = vabdq_s16( m2[0], m2[2] );
+  m1[3] = vabdq_s16( m2[1], m2[3] ); // 15-bit
+
+  const int32x4_t dcVec = vabsq_s32( vaddl_s16( vget_low_s16( dcVec0 ), vget_low_s16( dcVec1 ) ) );
+  const uint32_t absDC = ( uint32_t )vgetq_lane_s32( dcVec, 3 );
+
+  const uint16x8_t max0 = vmaxq_u16( vreinterpretq_u16_s16( m1[0] ), vreinterpretq_u16_s16( m1[1] ) );
+  const uint16x8_t max1 = vmaxq_u16( vreinterpretq_u16_s16( m1[2] ), vreinterpretq_u16_s16( m1[3] ) );
+
+  uint32_t sad = horizontal_add_long_u16x8( vaddq_u16( max0, max1 ) );
+  sad <<= 1; // Apply the deferred doubling from the last butterfly.
+  sad -= absDC;
+  sad += absDC >> 2;
+  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+
+  return sad;
+}
+
 Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
 {
   const Pel* piOrg = rcDtParam.org.buf;
