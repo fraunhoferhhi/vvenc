@@ -825,12 +825,12 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   {
     for( auto& ctuEncParam : ctuEncParams )
     {
-      m_threadPool->addBarrierTask<CtuEncParam>( EncSlice::xProcessCtuTask<false>,
-                                                 &ctuEncParam,
-                                                 m_ctuTasksDoneCounter,
-                                                 nullptr,
-                                                 {},
-                                                 EncSlice::xProcessCtuTask<true> );
+      m_threadPool->addBarrierTask( EncSlice::xProcessCtuTask<false>,
+                                    &ctuEncParam,
+                                    m_ctuTasksDoneCounter,
+                                    nullptr,
+                                    {},
+                                    EncSlice::xProcessCtuTask<true> );
     }
   }
   else
@@ -879,8 +879,9 @@ inline bool checkCtuTaskNbBotRgt( const PPS& pps, const int& ctuPosX, const int&
 }
 
 template<bool checkReadyState>
-bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
+bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 {
+  CtuEncParam* ctuEncParam       = static_cast<CtuEncParam*>( taskParam );
   Picture* pic                   = ctuEncParam->pic;
   EncSlice* encSlice             = ctuEncParam->encSlice;
   CodingStructure& cs            = *pic->cs;
