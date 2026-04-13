@@ -1,3 +1,30 @@
+/* SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use, copy,
+ * modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Copyright:
+ *   2021      Kunwar Maheep Singh <kunwar.maheep@students.iiit.ac.in>
+ *   2026      Michael R. Crusoe <crusoe@debian.org>
+ */
+
 #if !defined(SIMDE_X86_AVX512_FIXUPIMM_H)
 #define SIMDE_X86_AVX512_FIXUPIMM_H
 
@@ -374,7 +401,14 @@ simde_mm_fixupimm_ss (simde__m128 a, simde__m128 b, simde__m128i c, int imm8)
 
   switch (((c_.i32[0] >> (select << 2)) & 15)) {
     case 0:
-      b_.f32[0] =  a_.f32[0];
+      #if defined(SIMDE_BUG_GCC_121064)
+      {
+         simde_float32 tmp = a_.f32[0];
+         simde_memcpy(&b_.f32[0], &tmp, sizeof(tmp));
+      }
+      #else
+         b_.f32[0] = a_.f32[0];
+      #endif
       break;
     case 2:
       b_.f32[0] =  SIMDE_MATH_NANF;
@@ -430,7 +464,7 @@ simde_mm_fixupimm_ss (simde__m128 a, simde__m128 b, simde__m128i c, int imm8)
   #define _mm_fixupimm_ss(a, b, c, imm8) simde_mm_fixupimm_ss(a, b, c, imm8)
 #endif
 
-#if defined(SIMDE_X86_AVX512F_NATIVE)
+#if defined(SIMDE_X86_AVX512F_NATIVE) && !defined(SIMDE_BUG_CLANG_179057)
   #define simde_mm_mask_fixupimm_ss(a, k, b, c, imm8) _mm_mask_fixupimm_ss(a, k, b, c, imm8)
 #else
   #define simde_mm_mask_fixupimm_ss(a, k, b, c, imm8) simde_mm_mask_mov_ps(a, ((k) | 14), simde_mm_fixupimm_ss(a, b, c, imm8))
@@ -440,7 +474,7 @@ simde_mm_fixupimm_ss (simde__m128 a, simde__m128 b, simde__m128i c, int imm8)
   #define _mm_mask_fixupimm_ss(a, k, b, c, imm8) simde_mm_mask_fixupimm_ss(a, k, b, c, imm8)
 #endif
 
-#if defined(SIMDE_X86_AVX512F_NATIVE)
+#if defined(SIMDE_X86_AVX512F_NATIVE) && !defined(SIMDE_BUG_CLANG_179057)
   #define simde_mm_maskz_fixupimm_ss(k, a, b, c, imm8) _mm_maskz_fixupimm_ss(k, a, b, c, imm8)
 #else
   #define simde_mm_maskz_fixupimm_ss(k, a, b, c, imm8) simde_mm_maskz_mov_ps(((k) | 14), simde_mm_fixupimm_ss(a, b, c, imm8))
@@ -874,7 +908,7 @@ simde_mm_fixupimm_sd (simde__m128d a, simde__m128d b, simde__m128i c, int imm8)
   #define _mm_fixupimm_sd(a, b, c, imm8) simde_mm_fixupimm_sd(a, b, c, imm8)
 #endif
 
-#if defined(SIMDE_X86_AVX512F_NATIVE)
+#if defined(SIMDE_X86_AVX512F_NATIVE) && !defined(SIMDE_BUG_CLANG_179057)
   #define simde_mm_mask_fixupimm_sd(a, k, b, c, imm8) _mm_mask_fixupimm_sd(a, k, b, c, imm8)
 #else
   #define simde_mm_mask_fixupimm_sd(a, k, b, c, imm8) simde_mm_mask_mov_pd(a, ((k) | 2), simde_mm_fixupimm_sd(a, b, c, imm8))
@@ -884,7 +918,7 @@ simde_mm_fixupimm_sd (simde__m128d a, simde__m128d b, simde__m128i c, int imm8)
   #define _mm_mask_fixupimm_sd(a, k, b, c, imm8) simde_mm_mask_fixupimm_sd(a, k, b, c, imm8)
 #endif
 
-#if defined(SIMDE_X86_AVX512F_NATIVE)
+#if defined(SIMDE_X86_AVX512F_NATIVE) && !defined(SIMDE_BUG_CLANG_179057)
   #define simde_mm_maskz_fixupimm_sd(k, a, b, c, imm8) _mm_maskz_fixupimm_sd(k, a, b, c, imm8)
 #else
   #define simde_mm_maskz_fixupimm_sd(k, a, b, c, imm8) simde_mm_maskz_mov_pd(((k) | 2), simde_mm_fixupimm_sd(a, b, c, imm8))

@@ -44,12 +44,12 @@ simde_vxarq_u64(simde_uint64x2_t a, simde_uint64x2_t b, const int d)
 
   SIMDE_VECTORIZE
   for (size_t i=0 ; i < (sizeof(r_.values) / sizeof(r_.values[0])) ; i++) {
-    r_.values[i] = ((t.values[i] >> d) | (t.values[i] << (64 - d)));
+    r_.values[i] = ((t.values[i] >> d) | (t.values[i] << ((64 - d) & 63 )));
   }
 
   return simde_uint64x2_from_private(r_);
 }
-#if defined(SIMDE_ARM_NEON_A64V8_NATIVE) && defined(SIMDE_ARCH_ARM_SHA3)
+#if defined(SIMDE_ARM_NEON_A64V8_NATIVE) && defined(SIMDE_ARCH_ARM_SHA3) && !defined(SIMDE_BUG_GCC_123584)
   #define simde_vxarq_u64(a, b, d) vxarq_u64((a), (b), (d))
 #endif
 #if defined(SIMDE_ARM_NEON_A64V8_ENABLE_NATIVE_ALIASES) || (defined(SIMDE_ENABLE_NATIVE_ALIASES) && !defined(SIMDE_ARCH_ARM_SHA3))
