@@ -391,13 +391,12 @@ public:
   NoMallocThreadPool( int numThreads = 1, const char *threadPoolName = nullptr, const VVEncCfg* encCfg = nullptr );
   ~NoMallocThreadPool();
 
-  template<class TParam>
-  bool addBarrierTask( bool             ( *func )( int, TParam* ),
-                       TParam*             param,
-                       WaitCounter*        counter                      = nullptr,
-                       Barrier*            done                         = nullptr,
-                       const CBarrierVec&& barriers                     = {},
-                       bool             ( *readyCheck )( int, TParam* ) = nullptr )
+  bool addBarrierTask( bool             ( *func )( int, void* ),
+                       void*               param,
+                       WaitCounter*        counter                    = nullptr,
+                       Barrier*            done                       = nullptr,
+                       const CBarrierVec&& barriers                   = {},
+                       bool             ( *readyCheck )( int, void* ) = nullptr )
   {
     if( m_threads.empty() )
     {
@@ -452,8 +451,8 @@ public:
             counter->operator++();
           }
 
-          t.func       = (TaskFunc)func;
-          t.readyCheck = (TaskFunc)readyCheck;
+          t.func       = func;
+          t.readyCheck = readyCheck;
           t.param      = param;
           t.done       = done;
           t.counter    = counter;

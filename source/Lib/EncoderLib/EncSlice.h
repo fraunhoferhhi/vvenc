@@ -150,7 +150,7 @@ private:
   double  xCalculateLambda    ( const Slice* slice, const int depth, const double refQP, const double dQP, int& iQP );
   void    xProcessCtus        ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
   template<bool checkReadyState=false>
-  static bool xProcessCtuTask ( int taskIdx, CtuEncParam* ctuEncParam );
+  static bool xProcessCtuTask ( int taskIdx, void* taskParam );
 
   int     xGetQPForPicture    ( const Slice* slice );
 };

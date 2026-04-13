@@ -1356,10 +1356,11 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
     for( int n = 0, blockY = 0; blockY + 8 <= origHeight; blockY += stepSize, n++ )
     {
-      static auto task = []( int tId, EstParams* params)
+      static auto task = []( int, void* task_param )
       {
         ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
 
+        EstParams* params = static_cast<EstParams*>( task_param );
         bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
 
         ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
@@ -1380,7 +1381,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       cEstParams.blockY = blockY;
       cEstParams.bitDepth = bitDepth;
 
-      m_threadPool->addBarrierTask<EstParams>( task, &cEstParams, &taskCounter);
+      m_threadPool->addBarrierTask( task, &cEstParams, &taskCounter);
     }
     taskCounter.wait();
   }
@@ -1512,32 +1513,32 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
       int yStart; 
     };
 
-    std::vector<FltParams> FltParamsArray( orgPic.Y().height/ m_mctfUnitSize + 1 );
+    std::vector<FltParams> FltParamsArray( orgPic.Y().height / m_mctfUnitSize + 1 );
 
     WaitCounter taskCounter;
-
-    for (int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize, n++)
+    for( int n = 0, yStart = 0; yStart < orgPic.Y().height; yStart += m_mctfUnitSize, n++ )
     {
-      static auto task = []( int tId, FltParams* params)
+      static auto task = []( int, void* task_param )
       {
         ITT_TASKSTART( itt_domain_MCTF_flt, itt_handle_flt );
 
+        FltParams* params = static_cast<FltParams*>( task_param );
         params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, params->yStart, params->sigmaSqCh, params->overallStrength );
 
         ITT_TASKEND( itt_domain_MCTF_flt, itt_handle_flt );
         return true;
       };
 
-      FltParams& cFltParams = FltParamsArray[n];
-      cFltParams.orgPic = &orgPic; 
-      cFltParams.srcFrameInfo = &srcFrameInfo; 
-      cFltParams.newOrgPic = &newOrgPic;
-      cFltParams.sigmaSqCh = sigmaSqCh;
+      FltParams& cFltParams      = FltParamsArray[n];
+      cFltParams.orgPic          = &orgPic;
+      cFltParams.srcFrameInfo    = &srcFrameInfo;
+      cFltParams.newOrgPic       = &newOrgPic;
+      cFltParams.sigmaSqCh       = sigmaSqCh;
       cFltParams.overallStrength = overallStrength;
-      cFltParams.mctf = this;
-      cFltParams.yStart = yStart;
+      cFltParams.mctf            = this;
+      cFltParams.yStart          = yStart;
 
-      m_threadPool->addBarrierTask<FltParams>( task, &cFltParams, &taskCounter);
+      m_threadPool->addBarrierTask( task, &cFltParams, &taskCounter );
     }
     taskCounter.wait();
   }

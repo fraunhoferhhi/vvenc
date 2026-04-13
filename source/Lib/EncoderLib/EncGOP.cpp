@@ -649,12 +649,15 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
   // finish picture encoding and cleanup
   if( m_pcEncCfg->m_numThreads > 0 )
   {
-    static auto finishTask = []( int, FinishTaskParam* param ) {
+    static auto finishTask = []( int, void* task_param )
+    {
+      FinishTaskParam* param = static_cast<FinishTaskParam*>( task_param );
       param->picEncoder->finalizePicture( *param->pic );
       {
         std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
         param->pic->isReconstructed = true;
-        if( param->pic->picApsGlobal ) param->pic->picApsGlobal->initalized = true;
+        if( param->pic->picApsGlobal )
+          param->pic->picApsGlobal->initalized = true;
         param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
         param->gopEncoder->m_gopEncCond.notify_one();
       }
@@ -662,7 +665,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
       return true;
     };
     FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
-    m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+    m_threadPool->addBarrierTask( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
   }
   else
   {
