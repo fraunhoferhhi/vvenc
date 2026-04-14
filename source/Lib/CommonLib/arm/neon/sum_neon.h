@@ -113,12 +113,30 @@ static inline uint64_t horizontal_add_u64x2( const uint64x2_t a )
 #endif
 }
 
+static inline int horizontal_add_long_s16x4( const int16x4_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlv_s16( a );
+#else
+  return horizontal_add_s32x4( vmovl_s16( a ) );
+#endif
+}
+
 static inline int horizontal_add_long_s16x8( const int16x8_t a )
 {
 #if REAL_TARGET_AARCH64
   return vaddlvq_s16( a );
 #else
   return horizontal_add_s32x4( vpaddlq_s16( a ) );
+#endif
+}
+
+static inline uint32_t horizontal_add_long_u16x8( const uint16x8_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vaddlvq_u16( a );
+#else
+  return horizontal_add_u32x4( vpaddlq_u16( a ) );
 #endif
 }
 
@@ -142,6 +160,23 @@ static inline uint64_t horizontal_add_long_u32x4( const uint32x4_t a )
 #endif
 }
 
+static inline uint32x4_t horizontal_add_4d_u32x4( const uint32x4_t v0, const uint32x4_t v1, const uint32x4_t v2,
+                           const uint32x4_t v3 )
+{
+#if REAL_TARGET_AARCH64
+  uint32x4_t v01 = vpaddq_u32( v0, v1 );
+  uint32x4_t v23 = vpaddq_u32( v2, v3 );
+  return vpaddq_u32( v01, v23 );
+#else
+  uint32x4_t res = vdupq_n_u32( 0 );
+  res            = vsetq_lane_u32( horizontal_add_u32x4( v0 ), res, 0 );
+  res            = vsetq_lane_u32( horizontal_add_u32x4( v1 ), res, 1 );
+  res            = vsetq_lane_u32( horizontal_add_u32x4( v2 ), res, 2 );
+  res            = vsetq_lane_u32( horizontal_add_u32x4( v3 ), res, 3 );
+  return res;
+#endif
+}
+
 static inline int32x4_t horizontal_add_4d_s32x4( const int32x4_t v0, const int32x4_t v1, const int32x4_t v2,
                                                  const int32x4_t v3 )
 {
@@ -157,6 +192,12 @@ static inline int32x4_t horizontal_add_4d_s32x4( const int32x4_t v0, const int32
   res           = vsetq_lane_s32( horizontal_add_s32x4( v3 ), res, 3 );
   return res;
 #endif
+}
+
+static inline uint32x4_t horizontal_add_long_4d_u16x8( const uint16x8_t v0, const uint16x8_t v1, const uint16x8_t v2,
+                                                      const uint16x8_t v3 )
+{
+  return horizontal_add_4d_u32x4( vpaddlq_u16( v0 ), vpaddlq_u16( v1 ), vpaddlq_u16( v2 ), vpaddlq_u16( v3 ) );
 }
 
 static inline int32x4_t horizontal_add_long_4d_s16x8( const int16x8_t v0, const int16x8_t v1, const int16x8_t v2,
