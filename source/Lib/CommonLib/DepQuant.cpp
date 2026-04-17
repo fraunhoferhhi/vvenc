@@ -55,6 +55,23 @@ namespace vvenc {
 
 namespace DQIntern
 {
+  static void findFirstPos( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh,
+                            bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
+  {
+    for( ; firstTestPos >= 0; firstTestPos-- )
+    {
+      if( zeroOutForThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth ||
+                              tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) )
+      {
+        continue;
+      }
+      if( abs( tCoeff[tuPars.m_scanId2BlkPos[firstTestPos].idx] ) > defaultTh )
+      {
+        break;
+      }
+    }
+  }
+
   void Rom::xInitScanArrays()
   {
     if( m_scansInitialized )
@@ -1169,16 +1186,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   {
     const TCoeff defaultTh = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
 
-    if( m_findFirstPos )
-    {
-      m_findFirstPos( firstTestPos, tCoeff, tuPars, defaultTh, zeroOutforThres, zeroOutWidth, zeroOutHeight );
-    }
-
-    for( ; firstTestPos >= 0; firstTestPos-- )
-    {
-      if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) ) continue;
-      if( abs( tCoeff[tuPars.m_scanId2BlkPos[firstTestPos].idx] ) > defaultTh ) break;
-    }
+    m_findFirstPos( firstTestPos, tCoeff, tuPars, defaultTh, zeroOutforThres, zeroOutWidth, zeroOutHeight );
   }
 
   if( firstTestPos < 0 )
@@ -1410,7 +1418,7 @@ void DepQuant::xDequantDQ( const TransformUnit& tu,  CoeffBuf& recCoeff, const C
   m_quant.dequantBlock( tu, compID, cQP, recCoeff, enableScalingLists, piDequantCoef );
 }
 
-DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists ), RateEstimator(), m_commonCtx()
+DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool enableOpt ) : QuantRDOQ2( other, useScalingLists ), RateEstimator(), m_commonCtx()
 {
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
@@ -1434,11 +1442,14 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : Quant
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
   m_updateStates        = DQIntern::updateStates;
-  m_findFirstPos        = nullptr;
+  m_findFirstPos        = DQIntern::findFirstPos;
 
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
-  initDepQuantX86();
+    initDepQuantX86();
 #endif
+  }
 }
 
 DepQuant::~DepQuant()
