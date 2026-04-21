@@ -61,7 +61,8 @@ namespace vvenc
 
 #if ENABLE_SIMD_OPT_DIST && defined( TARGET_SIMD_ARM )
 
-Distortion xCalcHAD16x16_fast_neon( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+Distortion xCalcHAD16x16_fast_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                                    const ptrdiff_t iStrideCur )
 {
   int16x8_t m1[8], m2[8];
   int32x4_t m3[8];
@@ -192,7 +193,8 @@ Distortion xCalcHAD16x16_fast_neon( const Pel* piOrg, const Pel* piCur, const in
   return sad << 2;
 }
 
-Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur )
 {
   int16x8_t m1[8], m2[8];
   int32x4_t m3[8];
@@ -298,7 +300,8 @@ Distortion xCalcHAD8x8_neon( const Pel* piOrg, const Pel* piCur, const int iStri
   return sad;
 }
 
-Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                              const ptrdiff_t iStrideCur )
 {
   int16x8_t diff_s16[16];
   for( int k = 0; k < 8; k++ )
@@ -504,7 +507,8 @@ Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg
   return sad;
 }
 
-Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                              const ptrdiff_t iStrideCur )
 {
   int16x8_t diff_s16[16];
   for( int k = 0; k < 16; k++ )
@@ -709,7 +713,8 @@ Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg
   return sad;
 }
 
-Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur )
+Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur )
 {
   int16x8_t diff[4];
 
@@ -780,7 +785,8 @@ Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg,
   return sad;
 }
 
-Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg, int iStrideCur, int iBitDepth )
+Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur )
 {
   int16x4_t diff[8];
 
@@ -847,7 +853,8 @@ Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, int iStrideOrg,
 
 static const uint8_t k4x4PermuteTbl[] = { 6, 7, 4, 5, 22, 23, 20, 21, 14, 15, 12, 13, 30, 31, 28, 29 };
 
-Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t iStrideOrg,
+                             const ptrdiff_t iStrideCur )
 {
   const int16x4_t r0 = vld1_s16( piOrg + 0 * iStrideOrg );
   const int16x4_t r1 = vld1_s16( piOrg + 1 * iStrideOrg );
@@ -904,124 +911,243 @@ Distortion xCalcHAD4x4_neon( const Pel* piOrg, const Pel* piCur, const int iStri
   return sad;
 }
 
-template<bool fastHad>
-Distortion xGetHADs_neon( const DistParam& rcDtParam )
+Distortion xGetHADs_generic_neon( const DistParam& rcDtParam )
 {
   const Pel* piOrg = rcDtParam.org.buf;
   const Pel* piCur = rcDtParam.cur.buf;
-  const int iRows = rcDtParam.org.height;
+  int iRows = rcDtParam.org.height;
   const int iCols = rcDtParam.org.width;
-  const int iStrideCur = rcDtParam.cur.stride;
-  const int iStrideOrg = rcDtParam.org.stride;
-  const int iBitDepth = rcDtParam.bitDepth;
+  const ptrdiff_t iStrideCur = rcDtParam.cur.stride;
+  const ptrdiff_t iStrideOrg = rcDtParam.org.stride;
 
-  CHECKD( iBitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
 
-  int x, y;
   Distortion uiSum = 0;
 
-  if( iCols > iRows && ( iCols & 15 ) == 0 && ( iRows & 7 ) == 0 )
+  if( iCols > iRows && iCols % 16 == 0 && iRows % 8 == 0 )
   {
-    for( y = 0; y < iRows; y += 8 )
+    do
     {
-      for( x = 0; x < iCols; x += 16 )
+      for( int x = 0; x < iCols; x += 16 )
       {
         uiSum += xCalcHAD16x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
-    }
+      iRows -= 8;
+    } while( iRows != 0 );
   }
-  else if( iCols < iRows && ( iRows & 15 ) == 0 && ( iCols & 7 ) == 0 )
+  else if( iCols < iRows && iRows % 16 == 0 && iCols % 8 == 0 )
   {
-    for( y = 0; y < iRows; y += 16 )
+    do
     {
-      for( x = 0; x < iCols; x += 8 )
+      for( int x = 0; x < iCols; x += 8 )
       {
         uiSum += xCalcHAD8x16_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
+      iRows -= 16;
+    } while( iRows != 0 );
+  }
+  else if( iCols > iRows && iCols % 8 == 0 && iRows % 4 == 0 )
+  {
+    for( int x = 0; x < iCols; x += 8 )
+    {
+      uiSum += xCalcHAD8x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
     }
   }
-  else if( iCols > iRows && ( iCols & 7 ) == 0 && ( iRows & 3 ) == 0 )
+  else if( iCols < iRows && ( iRows % 8 ) == 0 && ( iCols % 4 ) == 0 )
   {
-    for( y = 0; y < iRows; y += 4 )
+    do
     {
-      for( x = 0; x < iCols; x += 8 )
-      {
-        uiSum += xCalcHAD8x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
-      }
-      piOrg += 4 * iStrideOrg;
-      piCur += 4 * iStrideCur;
-    }
+      uiSum += xCalcHAD4x8_neon( piOrg, piCur, iStrideOrg, iStrideCur );
+
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
+      iRows -= 8;
+    } while( iRows != 0 );
   }
-  else if( iCols < iRows && ( iRows & 7 ) == 0 && ( iCols & 3 ) == 0 )
+  else if( iCols % 8 == 0 && iRows == iCols )
   {
-    for( y = 0; y < iRows; y += 8 )
+    do
     {
-      for( x = 0; x < iCols; x += 4 )
-      {
-        uiSum += xCalcHAD4x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
-      }
-      piOrg += 8*iStrideOrg;
-      piCur += 8*iStrideCur;
-    }
-  }
-  else if( fastHad && ( ( ( iRows | iCols ) & 31 ) == 0 ) && ( iRows == iCols ) )
-  {
-    for( y = 0; y < iRows; y += 16 )
-    {
-      for( x = 0; x < iCols; x += 16 )
-      {
-        uiSum += xCalcHAD16x16_fast_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
-      }
-      piOrg += 16 * iStrideOrg;
-      piCur += 16 * iStrideCur;
-    }
-  }
-  else if( ( ( ( iRows | iCols ) & 7 ) == 0 ) && ( iRows == iCols ) )
-  {
-    for( y = 0; y < iRows; y += 8 )
-    {
-      for( x = 0; x < iCols; x += 8 )
+      for( int x = 0; x < iCols; x += 8 )
       {
         uiSum += xCalcHAD8x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
-    }
+      iRows -= 8;
+    } while( iRows != 0 );
   }
-  else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
+  else if( iRows % 4 == 0 && iCols % 4 == 0 )
   {
-    for( y = 0; y < iRows; y += 4 )
+    do
     {
-      for( x = 0; x < iCols; x += 4 )
+      for( int x = 0; x < iCols; x += 4 )
       {
         uiSum += xCalcHAD4x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
       }
-      piOrg += 4*iStrideOrg;
-      piCur += 4*iStrideCur;
-    }
-  }
-  else if( ( iRows % 2 == 0 ) && ( iCols % 2 == 0 ) )
-  {
-    for( y = 0; y < iRows; y += 2 )
-    {
-      for( x = 0; x < iCols; x += 2 )
-      {
-        uiSum += RdCost::xCalcHADs2x2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
-      }
-      piOrg += 2*iStrideOrg;
-      piCur += 2*iStrideCur;
-    }
+      piOrg += 4 * iStrideOrg;
+      piCur += 4 * iStrideCur;
+      iRows -= 4;
+    } while( iRows != 0 );
   }
   else
   {
-    THROW( "Unsupported size" );
+    do
+    {
+      for( int x = 0; x < iCols; x += 2 )
+      {
+        uiSum += RdCost::xCalcHADs2x2( &piOrg[x], &piCur[x], ( int )iStrideOrg, ( int )iStrideCur );
+      }
+      piOrg += 2 * iStrideOrg;
+      piCur += 2 * iStrideCur;
+      iRows -= 2;
+    } while( iRows != 0 );
   }
 
-  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
+  return uiSum;
+}
+
+template<int width>
+Distortion xGetHADs_neon( const DistParam& rcDtParam )
+{
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  int iRows = rcDtParam.org.height;
+  const int iCols = width;
+  const ptrdiff_t iStrideCur = rcDtParam.cur.stride;
+  const ptrdiff_t iStrideOrg = rcDtParam.org.stride;
+
+  CHECKD( iRows < 2 || iRows > 128 || iCols < 2 || iCols > 128 || iRows % 2 != 0 || iCols % 2 != 0,
+          "Invalid row or column count!" );
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+
+  Distortion uiSum = 0;
+
+  if( iCols > iRows && ( iCols % 16 ) == 0 && ( iRows % 8 ) == 0 )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 16 )
+      {
+        uiSum += xCalcHAD16x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
+      iRows -= 8;
+    } while( iRows != 0 );
+  }
+  else if( iCols < iRows && ( iRows % 16 ) == 0 && ( iCols % 8 ) == 0 )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 8 )
+      {
+        uiSum += xCalcHAD8x16_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 16 * iStrideOrg;
+      piCur += 16 * iStrideCur;
+      iRows -= 16;
+    } while( iRows != 0 );
+  }
+  else if( iCols > iRows && ( iCols % 8 ) == 0 && ( iRows % 4 ) == 0 )
+  {
+    for( int x = 0; x < iCols; x += 8 )
+    {
+      uiSum += xCalcHAD8x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+    }
+  }
+  else if( iCols < iRows && ( iRows % 8 ) == 0 && ( iCols % 4 ) == 0 )
+  {
+    do
+    {
+      uiSum += xCalcHAD4x8_neon( piOrg, piCur, iStrideOrg, iStrideCur );
+
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
+      iRows -= 8;
+    } while( iRows != 0 );
+  }
+  else if( ( ( iCols % 8 ) == 0 ) && ( iRows == iCols ) )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 8 )
+      {
+        uiSum += xCalcHAD8x8_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 8 * iStrideOrg;
+      piCur += 8 * iStrideCur;
+      iRows -= 8;
+    } while( iRows != 0 );
+  }
+  else if( ( iRows % 4 == 0 ) && ( iCols % 4 == 0 ) )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 4 )
+      {
+        uiSum += xCalcHAD4x4_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 4 * iStrideOrg;
+      piCur += 4 * iStrideCur;
+      iRows -= 4;
+    } while( iRows != 0 );
+  }
+  else
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 2 )
+      {
+        uiSum += RdCost::xCalcHADs2x2( &piOrg[x], &piCur[x], ( int )iStrideOrg, ( int )iStrideCur );
+      }
+      piOrg += 2 * iStrideOrg;
+      piCur += 2 * iStrideCur;
+      iRows -= 2;
+    } while( iRows != 0 );
+  }
+
+  return uiSum;
+}
+
+template<int width>
+Distortion xGetHADs_fast_neon( const DistParam& rcDtParam )
+{
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  int iRows = rcDtParam.org.height;
+  int iCols = width;
+  const ptrdiff_t iStrideCur = rcDtParam.cur.stride;
+  const ptrdiff_t iStrideOrg = rcDtParam.org.stride;
+
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+  CHECKD( iRows < 2 || iRows > 128 || iCols < 2 || iCols > 128 || iRows % 2 != 0 || iCols % 2 != 0,
+          "Invalid row or column count!" );
+
+  Distortion uiSum = 0;
+  if( ( ( iCols % 32 ) == 0 ) && ( iRows == iCols ) )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 16 )
+      {
+        uiSum += xCalcHAD16x16_fast_neon( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 16 * iStrideOrg;
+      piCur += 16 * iStrideCur;
+      iRows -= 16;
+    } while( iRows != 0 );
+  }
+  else
+  {
+    return xGetHADs_neon<width>( rcDtParam );
+  }
+
+  return uiSum;
 }
 
 template<bool isCalCentrePos>
@@ -1293,7 +1419,7 @@ static inline Distortion xGetSAD_generic_neon( const DistParam& rcDtParam, const
 
 Distortion xGetHAD2SADs_neon( const DistParam& rcDtParam )
 {
-  Distortion distHad = xGetHADs_neon<false>( rcDtParam );
+  Distortion distHad = xGetHADs_generic_neon( rcDtParam );
   Distortion distSad = xGetSAD_generic_neon( rcDtParam, rcDtParam.org.width );
 
   return std::min( distHad, 2 * distSad );
@@ -1603,23 +1729,23 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_neon;
   m_afpDistortFunc[0][DF_HAD_2SAD ] = xGetHAD2SADs_neon;
 
-  m_afpDistortFunc[0][DF_HAD]     = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD2]    = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD4]    = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD8]    = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD16]   = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD32]   = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD64]   = xGetHADs_neon<false>;
-  m_afpDistortFunc[0][DF_HAD128]  = xGetHADs_neon<false>;
+  m_afpDistortFunc[0][DF_HAD] = xGetHADs_generic_neon;
+  m_afpDistortFunc[0][DF_HAD2] = xGetHADs_neon<2>;
+  m_afpDistortFunc[0][DF_HAD4] = xGetHADs_neon<4>;
+  m_afpDistortFunc[0][DF_HAD8] = xGetHADs_neon<8>;
+  m_afpDistortFunc[0][DF_HAD16] = xGetHADs_neon<16>;
+  m_afpDistortFunc[0][DF_HAD32] = xGetHADs_neon<32>;
+  m_afpDistortFunc[0][DF_HAD64] = xGetHADs_neon<64>;
+  m_afpDistortFunc[0][DF_HAD128] = xGetHADs_neon<128>;
 
-  m_afpDistortFunc[0][DF_HAD_fast]     = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD2_fast]    = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD4_fast]    = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD8_fast]    = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD16_fast]   = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD32_fast]   = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD64_fast]   = xGetHADs_neon<true>;
-  m_afpDistortFunc[0][DF_HAD128_fast]  = xGetHADs_neon<true>;
+  m_afpDistortFunc[0][DF_HAD_fast] = xGetHADs_generic_neon;
+  m_afpDistortFunc[0][DF_HAD2_fast] = xGetHADs_neon<2>;
+  m_afpDistortFunc[0][DF_HAD4_fast] = xGetHADs_neon<4>;
+  m_afpDistortFunc[0][DF_HAD8_fast] = xGetHADs_neon<8>;
+  m_afpDistortFunc[0][DF_HAD16_fast] = xGetHADs_neon<16>;
+  m_afpDistortFunc[0][DF_HAD32_fast] = xGetHADs_fast_neon<32>;
+  m_afpDistortFunc[0][DF_HAD64_fast] = xGetHADs_fast_neon<64>;
+  m_afpDistortFunc[0][DF_HAD128_fast] = xGetHADs_fast_neon<128>;
 
   m_afpDistortFunc[0][DF_SAD] = xGetSAD_neon;
   m_afpDistortFunc[0][DF_SAD4] = xGetSAD_NxN_neon<4>;
