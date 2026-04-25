@@ -332,11 +332,118 @@ void updateStatesEOS_neon( const ScanInfo& scanInfo, const Decisions& decisions,
   updateNextCtx_neon( scanInfo, curr );
 }
 
+static inline uint64x2_t vvenc_vcgtq_s64( int64x2_t a, int64x2_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vcgtq_s64( a, b );
+#else
+  return vreinterpretq_u64_s64( vshrq_n_s64( vqsubq_s64( b, a ), 63 ) );
+#endif
+}
+
+void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist,
+                               Decisions& decisions, const StateMem& state )
+{
+  int64x2_t rdCostZ01 = vld1q_s64( &state.rdCost[0] );
+  int64x2_t rdCostZ23 = vld1q_s64( &state.rdCost[2] );
+
+  const int64x2_t delta01 = vdupq_n_s64( pq_b_dist );
+  const int64x2_t delta23 = vdupq_n_s64( pq_a_dist );
+  int64x2_t rdCostA01 = vaddq_s64( rdCostZ01, delta01 );
+  int64x2_t rdCostA23 = vaddq_s64( rdCostZ23, delta23 );
+
+  // cffBits1[24], but ctx.cff[4] actual range is [0..20] only.
+  int32x4_t cffBits = vsetq_lane_s32( state.cffBits1[state.ctx.cff[0]], vdupq_n_s32( 0 ), 0 );
+  cffBits = vsetq_lane_s32( state.cffBits1[state.ctx.cff[1]], cffBits, 1 );
+  cffBits = vsetq_lane_s32( state.cffBits1[state.ctx.cff[2]], cffBits, 2 );
+  cffBits = vsetq_lane_s32( state.cffBits1[state.ctx.cff[3]], cffBits, 3 );
+
+  rdCostA01 = vaddw_s32( rdCostA01, vget_low_s32( cffBits ) );
+  rdCostA23 = vaddw_s32( rdCostA23, vget_high_s32( cffBits ) );
+
+  CHECKD( state.ctx.sig[0] > RateEstimator::sm_maxNumSigCtx - 1, "ctx.sig[0] out of range" );
+  CHECKD( state.ctx.sig[1] > RateEstimator::sm_maxNumSigCtx - 1, "ctx.sig[1] out of range" );
+  CHECKD( state.ctx.sig[2] > RateEstimator::sm_maxNumSigCtx - 1, "ctx.sig[2] out of range" );
+  CHECKD( state.ctx.sig[3] > RateEstimator::sm_maxNumSigCtx - 1, "ctx.sig[3] out of range" );
+
+  // BinFracBits: uint32_t intBits[2].
+  const BinFracBits sigBits0 = state.m_sigFracBitsArray[0][state.ctx.sig[0]];
+  const BinFracBits sigBits1 = state.m_sigFracBitsArray[1][state.ctx.sig[1]];
+  const BinFracBits sigBits2 = state.m_sigFracBitsArray[2][state.ctx.sig[2]];
+  const BinFracBits sigBits3 = state.m_sigFracBitsArray[3][state.ctx.sig[3]];
+  const uint32x4_t sigBits02 = vcombine_u32( vld1_u32( sigBits0.intBits ), vld1_u32( sigBits2.intBits ) );
+  const uint32x4_t sigBits13 = vcombine_u32( vld1_u32( sigBits1.intBits ), vld1_u32( sigBits3.intBits ) );
+  const int32x4_t sigBitsZ = vreinterpretq_s32_u32( vtrnq_u32( sigBits02, sigBits13 ).val[0] );
+  const int32x4_t sigBitsA = vreinterpretq_s32_u32( vtrnq_u32( sigBits02, sigBits13 ).val[1] );
+
+  const int64x2_t rdCostZ01_sigBits = vaddw_s32( rdCostZ01, vget_low_s32( sigBitsZ ) );
+  const int64x2_t rdCostZ23_sigBits = vaddw_s32( rdCostZ23, vget_high_s32( sigBitsZ ) );
+  const int64x2_t rdCostA01_sigBits = vaddw_s32( rdCostA01, vget_low_s32( sigBitsA ) );
+  const int64x2_t rdCostA23_sigBits = vaddw_s32( rdCostA23, vget_high_s32( sigBitsA ) );
+
+  if( spt == DQIntern::SCAN_ISCSBB )
+  {
+    rdCostZ01 = rdCostZ01_sigBits;
+    rdCostZ23 = rdCostZ23_sigBits;
+    rdCostA01 = rdCostA01_sigBits;
+    rdCostA23 = rdCostA23_sigBits;
+  }
+  else if( spt == DQIntern::SCAN_SOCSBB )
+  {
+    const int32x4_t sbbBits = vld1q_s32( state.sbbBits1 );
+
+    rdCostZ01 = vaddw_s32( rdCostZ01_sigBits, vget_low_s32( sbbBits ) );
+    rdCostZ23 = vaddw_s32( rdCostZ23_sigBits, vget_high_s32( sbbBits ) );
+    rdCostA01 = vaddw_s32( rdCostA01_sigBits, vget_low_s32( sbbBits ) );
+    rdCostA23 = vaddw_s32( rdCostA23_sigBits, vget_high_s32( sbbBits ) );
+  }
+  else // if( spt == DQIntern::SCAN_EOCSBB )
+  {
+    const int64x2_t rdMax = vdupq_n_s64( DQIntern::rdCostInit );
+    const uint8x8_t numSig = load_u8x4( state.numSig );
+    const uint8x8_t mask8 = vcgt_u8( numSig, vdup_n_u8( 0 ) );
+    const uint64x2_t mask64_lo =
+        vreinterpretq_u64_u8( vcombine_u8( vdup_lane_u8( mask8, 0 ), vdup_lane_u8( mask8, 1 ) ) );
+    const uint64x2_t mask64_hi =
+        vreinterpretq_u64_u8( vcombine_u8( vdup_lane_u8( mask8, 2 ), vdup_lane_u8( mask8, 3 ) ) );
+
+    rdCostZ01 = vbslq_s64( mask64_lo, rdCostZ01_sigBits, rdMax );
+    rdCostZ23 = vbslq_s64( mask64_hi, rdCostZ23_sigBits, rdMax );
+    rdCostA01 = vbslq_s64( mask64_lo, rdCostA01_sigBits, rdCostA01 );
+    rdCostA23 = vbslq_s64( mask64_hi, rdCostA23_sigBits, rdCostA23 );
+  }
+
+  const int64x2_t rdCostZ02 = vcombine_s64( vget_low_s64( rdCostZ01 ), vget_low_s64( rdCostZ23 ) );
+  const int64x2_t rdCostZ13 = vcombine_s64( vget_high_s64( rdCostZ01 ), vget_high_s64( rdCostZ23 ) );
+  const int64x2_t rdCostA02 = vcombine_s64( vget_low_s64( rdCostA01 ), vget_low_s64( rdCostA23 ) );
+  const int64x2_t rdCostA13 = vcombine_s64( vget_high_s64( rdCostA01 ), vget_high_s64( rdCostA23 ) );
+
+  const uint64x2_t cmp64_lo = vvenc_vcgtq_s64( rdCostZ02, rdCostA13 );
+  const uint64x2_t cmp64_hi = vvenc_vcgtq_s64( rdCostA02, rdCostZ13 );
+
+  const int64x2_t rdBest01 = vbslq_s64( cmp64_lo, rdCostA13, rdCostZ02 );
+  const int64x2_t rdBest23 = vbslq_s64( cmp64_hi, rdCostZ13, rdCostA02 );
+  vst1q_s64( &decisions.rdCost[0], rdBest01 );
+  vst1q_s64( &decisions.rdCost[2], rdBest23 );
+
+  static constexpr int16_t absLevelLut[8] = { 1, 1, 0, 0, 0, 0, 1, 1 };
+  const uint32x4_t cmp32 = vcombine_u32( vmovn_u64( cmp64_lo ), vmovn_u64( cmp64_hi ) );
+  const uint16x4_t cmp16 = vmovn_u32( cmp32 );
+  const int16x4_t absLevel = vbsl_s16( cmp16, vld1_s16( absLevelLut ), vld1_s16( absLevelLut + 4 ) );
+  vst1_s16( decisions.absLevel, absLevel );
+
+  static constexpr int8_t prevIdLut[8] = { 0, 2, 0, 2, 0, 0, 0, 0 };
+  const uint8x8_t cmp8 = vmovn_u16( vcombine_u16( cmp16, vdup_n_u16( 0 ) ) );
+  const int8x8_t prevId = vsub_s8( vld1_s8( prevIdLut ), vreinterpret_s8_u8( cmp8 ) );
+  store_s8x4( decisions.prevId, prevId );
+}
+
 } // namespace DQInternSimd
 
 template<>
 void DepQuant::_initDepQuantARM<NEON>()
 {
+  m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1_neon;
   m_updateStates = DQInternSimd::updateStates_neon;
   m_updateStatesEOS = DQInternSimd::updateStatesEOS_neon;
 }
