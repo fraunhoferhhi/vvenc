@@ -110,7 +110,11 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
   // inititialize yuv input buffer
   for( int comp = 0; comp < 3; comp++ )
   {
-    memset( cYUVInputBuffer.planes[ comp ].ptr, 512, cYUVInputBuffer.planes[comp].width*cYUVInputBuffer.planes[comp].height*sizeof(int16_t));
+    const int size = cYUVInputBuffer.planes[comp].stride * cYUVInputBuffer.planes[comp].height;
+    for( int i = 0; i < size; i++ )
+    {
+      cYUVInputBuffer.planes[comp].ptr[i] = 512;
+    }
   }
 
   // --- allocate memory for output packets
