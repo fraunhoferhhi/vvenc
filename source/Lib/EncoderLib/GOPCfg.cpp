@@ -242,12 +242,18 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
 
 void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
 {
+  const bool isMidGopRestart = !gopEntry.m_isStartOfGop;
+
   // set gop entry
   gopEntry.m_sliceType      = 'I';
   gopEntry.m_isStartOfIntra = true;
   gopEntry.m_isStartOfGop   = true;
   gopEntry.m_temporalId     = 0;
   gopEntry.m_vtl            = 0;
+  if (isMidGopRestart)
+  {
+    gopEntry.m_gopNum += 1;
+  }
   m_lastIntraPOC            = gopEntry.m_POC;
 
   // start with first gop list
@@ -255,6 +261,10 @@ void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
   m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
   m_numTillIntra = m_fixIntraPeriod;
   m_numTillGop   = (int)m_gopList->size();
+  m_gopNum = gopEntry.m_gopNum;
+  m_pocOffset = gopEntry.m_POC;
+  m_cnOffset = gopEntry.m_codingNum + 1;
+  m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
 
   xCreatePocToGopIdx( *m_gopList, !m_poc0idr, m_pocToGopIdx );
 

@@ -110,6 +110,19 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
     m_gopCfg.getNextGopEntry( pic->m_picShared->m_gopEntry );
     CHECK( pic->m_picShared->m_gopEntry.m_POC != pic->poc, "invalid state" );
 
+    pic->m_picShared->m_gopEntry.m_isForcedIdr = pic->m_picShared->m_isForcedIdr;
+    if( pic->m_picShared->m_gopEntry.m_isForcedIdr )
+    {
+      if( pic->m_picShared->isLeadTrail() )
+      {
+        pic->m_picShared->m_gopEntry.m_isForcedIdr = false;
+      }
+      else
+      {
+        m_gopCfg.startIntraPeriod( pic->m_picShared->m_gopEntry );
+      }
+    }
+
     if( ! pic->m_picShared->isLeadTrail() )
     {
       // link previous frames

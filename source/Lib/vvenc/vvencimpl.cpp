@@ -261,6 +261,10 @@ int VVEncImpl::setRecYUVBufferCallback( void * ctx, vvencRecYUVBufferCallback ca
 
 int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUnit, bool* pbEncodeDone )
 {
+#if VVENC_USE_UNSTABLE_API
+  static constexpr uint32_t validPicFlags = VVENC_PIC_FLAG_FORCE_IDR;
+#endif
+
   if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
   if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
 
@@ -349,10 +353,18 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     }
 
     if ( ! xConvertVerifyYUVBuffer( pcYUVBuffer ) )
-    {     
+    {
       m_cErrorString = "InputPicture: Source image contains values outside the specified bit range";
       return VVENC_ERR_UNSPECIFIED;
     }
+
+#if VVENC_USE_UNSTABLE_API
+    if ((pcYUVBuffer->picFlags & ~validPicFlags) != 0)
+    {
+      m_cErrorString = "InputPicture: unsupported picFlags value";
+      return VVENC_ERR_PARAMETER;
+    }
+#endif
 
     if( m_eState == INTERNAL_STATE_INITIALIZED ){ m_eState = INTERNAL_STATE_ENCODING; }
   }
