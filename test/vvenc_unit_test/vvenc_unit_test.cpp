@@ -989,30 +989,33 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
 
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
-                                   unsigned reducedLines, unsigned cutoff, G input_generator, T trafo_generator )
+                                   unsigned reducedLines, unsigned rows, G input_generator, T trafo_generator )
 {
   CHECK( lines == 0, "Lines must be non-zero" );
   CHECK( reducedLines > lines, "ReducedLines must be less than or equal to lines" );
-  CHECK( cutoff == 0, "Cutoff must be non-zero" );
-  CHECK( cutoff % 4, "Cutoff must be a multiple of four" );
-  CHECK( cutoff > trSize, "Cutoff must not be larger than transformation size" );
+  CHECK( rows == 0, "Rows must be non-zero" );
+  CHECK( rows % 4, "Rows must be a multiple of four" );
+  CHECK( rows > trSize, "Rows must not be larger than transformation size" );
 
   std::ostringstream sstm;
-  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " cutoff=" << cutoff;
+  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows;
 
   TMatrixCoeff *it   = ( TMatrixCoeff* ) xMalloc( TMatrixCoeff, trSize * trSize );
   TCoeff       *src  = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
   TCoeff       *dst0 = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
   TCoeff       *dst1 = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
 
-  // Initialize source buffers.
-  std::generate( it, it + trSize * trSize, trafo_generator );
-  std::generate( src, src + trSize * lines, input_generator );
+  // First `rows` of coefficients are non-zero, remainder are zero.
+  std::generate_n( it, rows * trSize, trafo_generator );
+  std::fill_n( it + rows * trSize, (trSize - rows) * trSize, 0 );
+
+  // Initialize source and destination buffers.
+  std::generate_n( src, trSize * lines, input_generator );
   memset( dst0, 0, trSize * lines * sizeof( TCoeff ) );
   memset( dst1, 0, trSize * lines * sizeof( TCoeff ) );
 
-  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, cutoff );
-  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, cutoff );
+  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows );
+  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows );
 
   auto ret = compare_values_2d( sstm.str(), dst0, dst1, trSize, lines );
 
@@ -1080,8 +1083,8 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
     // reducedLines to avoid existing x86 implementations over-writing.
     unsigned lines        = 1 << rng.get( 1, 6 );
     unsigned reducedLines = lines == 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
-    unsigned cutoff       = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
-    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, cutoff, g, t ) )
+    unsigned rows         = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
+    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, g, t ) )
     {
       return false;
     }
