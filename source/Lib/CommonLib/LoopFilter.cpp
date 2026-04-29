@@ -355,6 +355,9 @@ LoopFilter::LoopFilter()
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_DBLF
   initLoopFilterX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
+  initLoopFilterARM();
+#endif
 }
 
 LoopFilter::~LoopFilter()
