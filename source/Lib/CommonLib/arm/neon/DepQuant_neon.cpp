@@ -93,7 +93,7 @@ static inline void shuffleStateBuf_neon( uint8_t* buf, const uint8x16_t stateShu
 
 static inline uint8x8_t capWithParity_u8x8_neon( const uint8x8_t value, int capEven )
 {
-  CHECKD( capEven % 2 == 0, "Cap value must be even" );
+  CHECKD( capEven % 2 != 0, "Cap value must be even" );
   uint8x8_t cappedValue = vmin_u8( value, vdup_n_u8( uint8_t( capEven ) ) );
   cappedValue = vbsl_u8( vdup_n_u8( 1 ), value, cappedValue ); // Preserve parity bit.
   return cappedValue;
@@ -101,7 +101,7 @@ static inline uint8x8_t capWithParity_u8x8_neon( const uint8x8_t value, int capE
 
 static inline int16x4_t capWithParity_s16x4_neon( const int16x4_t value, int capEven )
 {
-  CHECKD( capEven % 2 == 0, "Cap value must be even" );
+  CHECKD( capEven % 2 != 0, "Cap value must be even" );
   int16x4_t cappedValue = vmin_s16( value, vdup_n_s16( int16_t( capEven ) ) );
   cappedValue = vbsl_s16( vdup_n_u16( 1 ), value, cappedValue ); // Preserve parity bit.
   return cappedValue;
