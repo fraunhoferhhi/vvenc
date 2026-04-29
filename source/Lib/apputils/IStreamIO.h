@@ -104,10 +104,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
   size_t idx = 0;
   bool fail = false;
   // split into multiple lines if any
-  while ( ! in.eof() )
+  for ( std::string line; std::getline( in, line ); )
   {
-    std::string line;
-    std::getline( in, line );
     // treat all whitespaces and commas as valid separators
     if( toVec.sep == 'x')
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
@@ -386,10 +384,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
 
   bool fail = false;
   // split into multiple lines if any
-  while ( ! in.eof() )
+  for ( std::string line; std::getline( in, line ); )
   {
-    std::string line;
-    std::getline( in, line );
 
     if( line == "[]" || line == "empty"  )
     {
@@ -498,10 +494,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   size_t pos = 0;
   if ( toArr._curSize ) *toArr._curSize = 0;
   // split into multiple lines if any
-  while ( ! in.eof() )
+  for ( std::string line; std::getline( in, line ); )
   {
-    std::string line;
-    std::getline( in, line );
 
     if( line == "[]" || line == "empty"  )
     {
@@ -551,10 +545,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
   bool fail = false;
   size_t size = 0;
   // split into multiple lines if any
-  while ( ! in.eof() )
+  for ( std::string line; std::getline( in, line ); )
   {
-    std::string line;
-    std::getline( in, line );
 
     if( line == "" || line == "\"\"" || line == "[]" || line == "empty" || line == "''"  )
     {
