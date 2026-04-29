@@ -875,16 +875,6 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.onePictureOnlyConstraintFlag                 = false;
   ci.lowerBitRateConstraintFlag                   = false;
   ci.allLayersIndependentConstraintFlag           = false;
-  ci.noMrlConstraintFlag                          = false;
-  ci.noIspConstraintFlag                          = false;
-  ci.noMipConstraintFlag                          = false;
-  ci.noLfnstConstraintFlag                        = false;
-  ci.noMmvdConstraintFlag                         = false;
-  ci.noSmvdConstraintFlag                         = false;
-  ci.noProfConstraintFlag                         = false;
-  ci.noPaletteConstraintFlag                      = false;
-  ci.noActConstraintFlag                          = false;
-  ci.noLmcsConstraintFlag                         = false;
   ci.noQtbttDualTreeIntraConstraintFlag           = ! m_pcEncCfg->m_dualITree;
   ci.noPartitionConstraintsOverrideConstraintFlag = false;
   ci.noSaoConstraintFlag                          = ! m_pcEncCfg->m_bUseSAO;
