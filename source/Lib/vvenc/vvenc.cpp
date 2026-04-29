@@ -214,13 +214,7 @@ VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
 
 VVENC_DECL vvencEncoder* vvenc_encoder_create()
 {
-  vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
-  if (!encCtx)
-  {
-    return nullptr;
-  }
-
-  return (vvencEncoder*)encCtx;
+  return (vvencEncoder*) new(std::nothrow) vvenc::VVEncImpl();
 }
 
 
