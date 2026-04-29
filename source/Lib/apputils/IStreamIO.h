@@ -103,6 +103,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
   const size_t maxSize = toVec.valVec.size();
   size_t idx = 0;
   bool fail = false;
+  auto savedEx = in.exceptions();
+  in.exceptions( std::ios::goodbit );
   // split into multiple lines if any
   for ( std::string line; std::getline( in, line ); )
   {
@@ -136,11 +138,12 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
     }
   }
 
+  in.clear( in.rdstate() & ~std::ios::failbit );
   if ( fail || (toVec.allRequired && idx != maxSize) )
   {
     in.setstate( std::ios::failbit );
   }
-
+  in.exceptions( savedEx );
   return in;
 }
 
@@ -383,12 +386,15 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
   valVec->clear();
 
   bool fail = false;
+  auto savedEx = in.exceptions();
+  in.exceptions( std::ios::goodbit );
   // split into multiple lines if any
   for ( std::string line; std::getline( in, line ); )
   {
 
     if( line == "[]" || line == "empty"  )
     {
+      in.exceptions( savedEx );
       return in;    // forcing empty entry
     }
     else
@@ -412,11 +418,12 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
     }
   }
 
+  in.clear( in.rdstate() & ~std::ios::failbit );
   if ( fail || (! valVec->size() ) )
   {
     in.setstate( std::ios::failbit );
   }
-
+  in.exceptions( savedEx );
   return in;
 }
 
@@ -493,12 +500,15 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   bool fail = false;
   size_t pos = 0;
   if ( toArr._curSize ) *toArr._curSize = 0;
+  auto savedEx = in.exceptions();
+  in.exceptions( std::ios::goodbit );
   // split into multiple lines if any
   for ( std::string line; std::getline( in, line ); )
   {
 
     if( line == "[]" || line == "empty"  )
     {
+      in.exceptions( savedEx );
       return in;    // forcing empty entry
     }
     else
@@ -527,6 +537,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
     }
   }
 
+  in.clear( in.rdstate() & ~std::ios::failbit );
   if ( fail || ( 0 == pos ) || (pos > toArr._maxSize) )
   {
     in.setstate( std::ios::failbit );
@@ -534,6 +545,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
 
   if ( toArr._curSize ) *toArr._curSize = static_cast<int>( std::min<size_t>( pos, toArr._maxSize ) );
 
+  in.exceptions( savedEx );
   return in;
 }
 
@@ -544,12 +556,15 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
 
   bool fail = false;
   size_t size = 0;
+  auto savedEx = in.exceptions();
+  in.exceptions( std::ios::goodbit );
   // split into multiple lines if any
   for ( std::string line; std::getline( in, line ); )
   {
 
     if( line == "" || line == "\"\"" || line == "[]" || line == "empty" || line == "''"  )
     {
+      in.exceptions( savedEx );
       return in;    // forcing empty entry
     }
     else
@@ -569,11 +584,13 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
     }
   }
 
+  in.clear( in.rdstate() & ~std::ios::failbit );
   if ( fail || ( 0 == size ) )
   {
     in.setstate( std::ios::failbit );
   }
 
+  in.exceptions( savedEx );
   return in;
 }
 
