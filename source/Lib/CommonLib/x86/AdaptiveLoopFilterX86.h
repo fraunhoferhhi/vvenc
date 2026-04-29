@@ -382,8 +382,8 @@ void simdFilter5x5Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
           pImg1 = (yVb == vbPos) ? pImg0 : pImg1;
           pImg3 = (yVb <= vbPos + 1) ? pImg1 : pImg3;
         }
-        bool isNearVBabove = yVb < vbPos && (yVb >= vbPos - 1);
-        bool isNearVBbelow = yVb >= vbPos && (yVb <= vbPos);
+        bool isNearVBabove = yVb == vbPos - 1;
+        bool isNearVBbelow = yVb == vbPos;
 
         __m128i cur = _mm_loadu_si128((const __m128i *) pImg0);
         __m128i accumA = mmOffset;
@@ -540,8 +540,8 @@ void simdFilter5x5Blk_AVX2( const AlfClassifier *, const PelUnitBuf& recDst, con
           pImg3 = ( yVb <= vbPos + 1 ) ? pImg1 : pImg3;
         }
 
-        bool isNearVBabove = yVb < vbPos && (yVb >= vbPos - 1);
-        bool isNearVBbelow = yVb >= vbPos && (yVb <= vbPos);
+        bool isNearVBabove = yVb == vbPos - 1;
+        bool isNearVBbelow = yVb == vbPos;
 
         __m256i cur = _mm256_loadu_si256((const __m256i *) pImg0);
 
@@ -781,8 +781,8 @@ void simdFilter7x7Blk( const AlfClassifier *classifier, const PelUnitBuf& recDst
           pImg5 = (yVb <= vbPos + 2) ? pImg3 : pImg5;
         }
 
-        bool isNearVBabove = yVb < vbPos && (yVb >= vbPos - 1);
-        bool isNearVBbelow = yVb >= vbPos && (yVb <= vbPos);
+        bool isNearVBabove = yVb == vbPos - 1;
+        bool isNearVBbelow = yVb == vbPos;
 
         __m128i cur = _mm_loadu_si128((const __m128i *) pImg0);
 
@@ -1024,8 +1024,8 @@ void simdFilter7x7Blk_AVX2( const AlfClassifier *classifier, const PelUnitBuf& r
           pImg5 = ( yVb <= vbPos + 2 ) ? pImg3 : pImg5;
         }
 
-        bool isNearVBabove = yVb < vbPos && (yVb >= vbPos - 1);
-        bool isNearVBbelow = yVb >= vbPos && (yVb <= vbPos);
+        bool isNearVBabove = yVb == vbPos - 1;
+        bool isNearVBbelow = yVb == vbPos;
 
 
         __m256i cur = _mm256_loadu_si256((const __m256i *) pImg0);

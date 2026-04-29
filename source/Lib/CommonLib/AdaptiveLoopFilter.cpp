@@ -893,8 +893,8 @@ void AdaptiveLoopFilter::filterBlk( const AlfClassifier *classifier,
           pImg3 = (yVb <= vbPos + 1) ? pImg1 : pImg3;
           pImg5 = (yVb <= vbPos + 2) ? pImg3 : pImg5;
         }
-        bool isNearVBabove = yVb < vbPos && (yVb >= vbPos - 1);
-        bool isNearVBbelow = yVb >= vbPos && (yVb <= vbPos);
+        bool isNearVBabove = yVb == vbPos - 1;
+        bool isNearVBbelow = yVb == vbPos;
 
         for( int jj = 0; jj < clsSizeX; jj++ )
         {
