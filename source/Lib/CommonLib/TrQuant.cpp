@@ -309,14 +309,9 @@ void TrQuant::init( const Quant* otherQuant,
   delete m_quant;
   m_quant = nullptr;
 
-  {
-    m_quant = new DepQuant( otherQuant, bEnc, scalingListsEnabled );
-  }
-
-  if( m_quant )
-  {
-    m_quant->init( rdoq, bUseRDOQTS, thrVal );
-  }
+  m_quant = new(std::nothrow) DepQuant( otherQuant, bEnc, scalingListsEnabled );
+  CHECK( !m_quant, "allocation failed" );
+  m_quant->init( rdoq, bUseRDOQTS, thrVal );
 }
 
 
