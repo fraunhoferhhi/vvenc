@@ -85,6 +85,12 @@ private:
   void _initLoopFilterX86();
 #endif
 
+#if defined(TARGET_SIMD_ARM) && ENABLE_SIMD_DBLF
+  void initLoopFilterARM();
+  template <ARM_VEXT vext>
+  void _initLoopFilterARM();
+#endif
+
 public:
 
   LoopFilter();

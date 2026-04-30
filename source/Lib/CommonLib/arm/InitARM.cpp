@@ -217,6 +217,17 @@ void IntraPrediction::initIntraPredictionARM()
 }
 #endif
 
+#if ENABLE_SIMD_DBLF
+void LoopFilter::initLoopFilterARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initLoopFilterARM<NEON>();
+  }
+}
+#endif  // ENABLE_SIMD_DBLF
+
 #endif  // TARGET_SIMD_ARM
 
 }   // namespace
