@@ -147,7 +147,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
   setEyFromClip( clip, kE, ky, size );
 
-  gnsSolveByChol( kE, ky, f, size );
+  m_gnsSolveByChol( kE, ky, f, size );
   err_best = calculateError( clip, f, size );
 
   int step = optimize_clip ? (numBins+1)/2 : 0;
@@ -170,7 +170,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
           kE[l][k] = E[clip[l]][clip[k]][l][k];
         }
 
-        gnsSolveByChol( kE, ky, f, size );
+        m_gnsSolveByChol( kE, ky, f, size );
         err_last = calculateError( clip, f, size );
 
         if( err_last < err_min )
@@ -191,7 +191,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
           kE[l][k] = E[clip[l]][clip[k]][l][k];
         }
 
-        gnsSolveByChol( kE, ky, f, size );
+        m_gnsSolveByChol( kE, ky, f, size );
         err_last = calculateError( clip, f, size );
 
         if( err_last < err_min )
@@ -238,7 +238,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
     Ty ky_max;
     setEyFromClip( clip_max, kE_max, ky_max, size );
 
-    gnsSolveByChol( kE_max, ky_max, f, size );
+    m_gnsSolveByChol( kE_max, ky_max, f, size );
     err_last = calculateError( clip_max, f, size );
     if( err_last < err_best )
     {
@@ -254,7 +254,7 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
       reduceClipCost(alfShape, clip);
 
       // update f with best solution
-      gnsSolveByChol( kE, ky, f, size );
+      m_gnsSolveByChol( kE, ky, f, size );
     }
   }
 
@@ -982,7 +982,7 @@ int AlfCovariance::gnsSolveByChol( const int *clip, alf_float_t*x, int numEq ) c
   Ty rhs;
 
   setEyFromClip( clip, LHS, rhs, numEq );
-  return gnsSolveByChol( LHS, rhs, x, numEq );
+  return m_gnsSolveByChol( LHS, rhs, x, numEq );
 }
 
 template<int NumEq>
@@ -1037,7 +1037,7 @@ static int solveByChol( AlfCovariance::TE LHS, alf_float_t* rhs, alf_float_t*x )
   return res;
 }
 
-int AlfCovariance::gnsSolveByChol( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq ) const
+int AlfCovariance::gnsSolveByChol( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq )
 {
   if( numEq == 7 )
   {
@@ -5421,7 +5421,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, short fi
     }
   }
 
-  m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].gnsSolveByChol(kE, ky, filterCoeffDbl, size);
+  m_alfCovarianceFrameCcAlf[compID - 1][filterIdx].m_gnsSolveByChol( kE, ky, filterCoeffDbl, size );
   roundFiltCoeffCCALF(filterCoeffInt, filterCoeffDbl, size, (1 << m_scaleBits));
 
   for (int k = 0; k < size; k++)

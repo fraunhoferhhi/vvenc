@@ -60,6 +60,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AffineGradientSearch.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "EncoderLib/EncAdaptiveLoopFilter.h"
 
 namespace vvenc
 {
@@ -73,6 +74,15 @@ void AdaptiveLoopFilter::initAdaptiveLoopFilterARM()
   if( vext >= NEON )
   {
     _initAdaptiveLoopFilterARM<NEON>();
+  }
+}
+
+void AlfCovariance::initAlfCovarianceARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initAlfCovarianceARM<NEON>();
   }
 }
 #endif
