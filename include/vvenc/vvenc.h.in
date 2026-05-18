@@ -129,6 +129,18 @@ typedef struct vvencYUVPlane
 }vvencYUVPlane;
 
 /*
+  The enum vvencYUVBufferPicFlags defines optional per-picture encode requests.
+  Setting FORCE_IDR starts a new GOP for the picture and lets the encoder choose the concrete random-access NAL type from the active configuration.
+*/
+#if VVENC_USE_UNSTABLE_API
+typedef enum vvencYUVBufferPicFlags
+{
+  VVENC_PIC_FLAG_NONE = 0,
+  VVENC_PIC_FLAG_FORCE_IDR = 1 << 0
+} vvencYUVBufferPicFlags;
+#endif
+
+/*
   The struct vvencYUVBuffer contains the data and attributes to hand over the uncompressed input picture and metadata related to the picture.
 */
 typedef struct vvencYUVBuffer
@@ -139,6 +151,7 @@ typedef struct vvencYUVBuffer
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 #if VVENC_USE_UNSTABLE_API
   void*         userData;              // user data to be returned in corresponding access unit
+  uint32_t      picFlags;              // optional per-picture request flags, see vvencYUVBufferPicFlags
 #endif
 }vvencYUVBuffer;
 

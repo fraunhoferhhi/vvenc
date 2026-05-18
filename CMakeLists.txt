@@ -88,6 +88,7 @@ set( VVENC_USE_UNSTABLE_API 0 )
 if( VVENC_ENABLE_UNSTABLE_API )
   set( VVENC_USE_UNSTABLE_API 1 )
 endif()
+add_compile_definitions( VVENC_USE_UNSTABLE_API=${VVENC_USE_UNSTABLE_API} )
 configure_file( include/vvenc/vvenc.h.in ${CMAKE_BINARY_DIR}/vvenc/vvenc.h @ONLY )
 
 # enable sse4.1 build for all source files for gcc and clang

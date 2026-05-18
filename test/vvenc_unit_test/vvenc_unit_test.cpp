@@ -70,6 +70,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
 
+#include "EncoderLib/EncCfg.h"
+#include "EncoderLib/PreProcess.h"
+
 #include "apputils/ParseArg.h"
 #include "vvenc/vvenc.h"
 
@@ -79,6 +82,73 @@ namespace po = apputils::program_options;
 #define NUM_CASES 100
 
 static bool g_fastUnitTest = false;
+
+#if VVENC_USE_UNSTABLE_API
+static bool test_ForcedIdr()
+{
+  printf("Testing ForcedIdr\n");
+
+  vvenc_config externCfg;
+  vvenc_config_default(&externCfg);
+  externCfg.m_SourceWidth = 176;
+  externCfg.m_SourceHeight = 144;
+  externCfg.m_GOPSize = 16;
+  externCfg.m_DecodingRefreshType = VVENC_DRT_CRA;
+  externCfg.m_IntraPeriod = 64;
+  externCfg.m_verbosity = VVENC_SILENT;
+  externCfg.m_FrameRate = 60;
+  externCfg.m_FrameScale = 1;
+  externCfg.m_numThreads = 0;
+  externCfg.m_usePerceptQPA = false;
+  externCfg.m_inputBitDepth[0] = 8;
+  externCfg.m_internalBitDepth[0] = 10;
+  externCfg.m_internChromaFormat = VVENC_CHROMA_420;
+  vvenc_init_preset(&externCfg, vvencPresetMode::VVENC_FASTER);
+  if (vvenc_init_config_parameter(&externCfg))
+  {
+    return false;
+  }
+
+  VVEncCfg encCfg;
+  encCfg = externCfg;
+
+  MsgLog msg;
+  PreProcess preProcess(msg);
+  preProcess.initStage(encCfg, 1, -encCfg.m_leadFrames, true, true, false);
+  preProcess.init(encCfg, true);
+
+  vvencYUVBuffer *yuvBuffer = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer(yuvBuffer, encCfg.m_internChromaFormat, encCfg.m_SourceWidth, encCfg.m_SourceHeight);
+  for (int comp = 0; comp < VVENC_MAX_NUM_COMP; ++comp)
+  {
+    const int size = yuvBuffer->planes[comp].stride * yuvBuffer->planes[comp].height;
+    std::fill_n(yuvBuffer->planes[comp].ptr, size, int16_t(512));
+  }
+  yuvBuffer->picFlags = VVENC_PIC_FLAG_FORCE_IDR;
+
+  PicShared picShared;
+  picShared.create(1, encCfg.m_internChromaFormat, Size{static_cast<SizeType>(encCfg.m_SourceWidth), static_cast<SizeType>(encCfg.m_SourceHeight)}, false);
+  picShared.reuse(0, yuvBuffer);
+
+  AccessUnitList auList;
+  preProcess.addPicSorted(&picShared, false);
+  preProcess.runStage(false, auList);
+
+  vvenc_YUVBuffer_free(yuvBuffer, true);
+
+  if (!picShared.m_gopEntry.m_isStartOfIntra)
+  {
+    std::cerr << "failed: ForcedIdr start of intra\n";
+    return false;
+  }
+  if (!picShared.m_gopEntry.m_isStartOfGop)
+  {
+    std::cerr << "failed: ForcedIdr start of gop\n";
+    return false;
+  }
+  return true;
+}
+#endif
 
 template<typename T>
 static inline bool compare_value( const std::string& context, const T ref, const T opt )
@@ -3260,6 +3330,9 @@ struct UnitTestEntry
 };
 
 static const UnitTestEntry test_suites[] = {
+#if VVENC_USE_UNSTABLE_API
+    {"ForcedIdr", test_ForcedIdr},
+#endif
 #if ENABLE_SIMD_OPT_QUANT
     { "DepQuant", test_DepQuant },
 #endif

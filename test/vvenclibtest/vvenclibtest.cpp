@@ -73,6 +73,9 @@ int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
 int testStringApiInterface();  // check behaviour when using in sdk by using string api
 int testTimestamps();          // check behaviour when using in sdk by using string api
+#if VVENC_USE_UNSTABLE_API
+int testForcedPerFrameIdr();   // check per-picture forced IDR behavior
+#endif
 
 int main( int argc, char* argv[] )
 {
@@ -87,12 +90,24 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 6 );
+      printHelp = (testId < 1 || testId >
+#if VVENC_USE_UNSTABLE_API
+                   7
+#else
+                   6
+#endif
+      );
     }
 
     if( printHelp )
     {
-      printf( "venclibtest <test> [1..5]\n");
+      printf("venclibtest <test> [1..%d]\n",
+#if VVENC_USE_UNSTABLE_API
+             7
+#else
+             6
+#endif
+      );
       return -1;
     }
   }
@@ -133,6 +148,13 @@ int main( int argc, char* argv[] )
     testTimestamps();
     break;
   }
+#if VVENC_USE_UNSTABLE_API
+  case 7:
+  {
+    testForcedPerFrameIdr();
+    break;
+  }
+#endif
   default:
     testLibParameterRanges();
     testLibCallingOrder();
@@ -140,6 +162,9 @@ int main( int argc, char* argv[] )
     testSDKDefaultBehaviour();
     testStringApiInterface();
     testTimestamps();
+#if VVENC_USE_UNSTABLE_API
+    testForcedPerFrameIdr();
+#endif
     break;
   }
 
@@ -203,6 +228,192 @@ void fillInputPic( vvencYUVBuffer* pcYuvBuffer, const short val = 512 )
     std::fill_n( static_cast<short*> (pcYuvBuffer->planes[n].ptr), size, val );
   }
 }
+
+#if VVENC_USE_UNSTABLE_API
+static bool isVclNalType(vvencNalUnitType nalType)
+{
+  switch (nalType)
+  {
+  case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+  case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+  case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+  case VVENC_NAL_UNIT_CODED_SLICE_RASL:
+  case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+  case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+  case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+  case VVENC_NAL_UNIT_CODED_SLICE_GDR:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static vvencNalUnitType findFirstVclNalType(const vvencAccessUnit *accessUnit)
+{
+  if (!accessUnit || !accessUnit->payload || accessUnit->payloadUsedSize < 2)
+  {
+    return VVENC_NAL_UNIT_INVALID;
+  }
+
+  const unsigned char *payload = accessUnit->payload;
+  const int payloadSize = accessUnit->payloadUsedSize;
+  for (int offset = 0; offset + 4 < payloadSize; ++offset)
+  {
+    const bool startCode3 = payload[offset] == 0 && payload[offset + 1] == 0 && payload[offset + 2] == 1;
+    const bool startCode4 = startCode3 ? false : payload[offset] == 0 && payload[offset + 1] == 0 && payload[offset + 2] == 0 && payload[offset + 3] == 1;
+    if (!startCode3 && !startCode4)
+    {
+      continue;
+    }
+
+    const int headerOffset = offset + (startCode4 ? 4 : 3);
+    if (headerOffset + 1 >= payloadSize)
+    {
+      break;
+    }
+
+    const vvencNalUnitType nalType = static_cast<vvencNalUnitType>(payload[headerOffset + 1] >> 3);
+    if (isVclNalType(nalType))
+    {
+      return nalType;
+    }
+  }
+
+  return VVENC_NAL_UNIT_INVALID;
+}
+
+static int checkForcedPerFrameIdr(vvencDecodingRefreshType refreshType, vvencNalUnitType expectedNalType, int poc0idr = 1)
+{
+  vvenc_config vvencParams;
+  vvenc_config_default(&vvencParams);
+  fillEncoderParameters(vvencParams, false);
+  vvencParams.m_GOPSize = 16;
+  vvencParams.m_IntraPeriod = -1;
+  vvencParams.m_DecodingRefreshType = refreshType;
+  vvencParams.m_picReordering = refreshType != VVENC_DRT_NONE;
+  vvencParams.m_poc0idr = poc0idr;
+  vvencParams.m_usePerceptQPA = false;
+  vvencParams.m_framesToBeEncoded = 0;
+  vvencParams.m_GOPList[0].m_POC = -1;
+
+  if (vvenc_init_config_parameter(&vvencParams))
+  {
+    return -1;
+  }
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if (nullptr == enc)
+  {
+    return -1;
+  }
+
+  if (0 != vvenc_encoder_open(enc, &vvencParams))
+  {
+    vvenc_encoder_close(enc);
+    return -1;
+  }
+
+  vvencAccessUnit *AU = vvenc_accessUnit_alloc();
+  if( nullptr == AU )
+  {
+    vvenc_encoder_close(enc);
+    return -1;
+  }
+  vvenc_accessUnit_alloc_payload(AU, vvencParams.m_SourceWidth * vvencParams.m_SourceHeight * 2);
+  if( nullptr == AU->payload )
+  {
+    vvenc_accessUnit_free(AU, true);
+    vvenc_encoder_close(enc);
+    return -1;
+  }
+
+  vvencYUVBuffer *yuvPicture = vvenc_YUVBuffer_alloc();
+  if( nullptr == yuvPicture )
+  {
+    vvenc_accessUnit_free(AU, true);
+    vvenc_encoder_close(enc);
+    return -1;
+  }
+  vvenc_YUVBuffer_alloc_buffer(yuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight);
+
+  const uint64_t framesToEncode = 12;
+  const uint64_t forcedPoc = 5;
+  uint64_t framesRcvd = 0;
+  uint64_t auCount = 0;
+  bool eof = false;
+  bool encodeDone = false;
+  bool sawForcedAu = false;
+  bool sawPostForcedAu = false;
+
+  while (!eof || !encodeDone)
+  {
+    vvencYUVBuffer *inputPtr = nullptr;
+    if (!eof)
+    {
+      inputPtr = yuvPicture;
+      fillInputPic(yuvPicture, static_cast<short>(256 + framesRcvd * 4));
+      yuvPicture->cts = static_cast<int64_t>(framesRcvd);
+      yuvPicture->ctsValid = true;
+      yuvPicture->picFlags = framesRcvd == forcedPoc ? VVENC_PIC_FLAG_FORCE_IDR : VVENC_PIC_FLAG_NONE;
+      framesRcvd++;
+    }
+
+    if (0 != vvenc_encode(enc, inputPtr, AU, &encodeDone))
+    {
+      goto fail;
+    }
+
+    if (AU->payloadUsedSize > 0)
+    {
+      auCount++;
+      const vvencNalUnitType nalType = findFirstVclNalType(AU);
+      if (nalType == VVENC_NAL_UNIT_INVALID)
+      {
+        goto fail;
+      }
+
+      if (AU->poc == forcedPoc)
+      {
+        if (sawForcedAu)
+        {
+          goto fail;
+        }
+        sawForcedAu = true;
+        if (!AU->rap || AU->sliceType != VVENC_I_SLICE || nalType != expectedNalType)
+        {
+          goto fail;
+        }
+      }
+      else if (sawForcedAu && AU->poc > forcedPoc)
+      {
+        sawPostForcedAu = true;
+      }
+    }
+
+    if (framesRcvd >= framesToEncode)
+    {
+      eof = true;
+    }
+  }
+
+  if (auCount != framesToEncode || !sawForcedAu || !sawPostForcedAu)
+  {
+    goto fail;
+  }
+
+  vvenc_YUVBuffer_free(yuvPicture, true);
+  vvenc_accessUnit_free(AU, true);
+  vvenc_encoder_close(enc);
+  return 0;
+
+fail:
+  vvenc_YUVBuffer_free(yuvPicture, true);
+  vvenc_accessUnit_free(AU, true);
+  vvenc_encoder_close(enc);
+  return -1;
+}
+
+#endif
 
 template< typename T, typename V = int>
 int testParamList( const std::string& w, T& testParam, vvenc_config& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
@@ -1193,6 +1404,20 @@ int testTimestamps()
   return 0;
 }
 
+#if VVENC_USE_UNSTABLE_API
+int testForcedPerFrameIdr()
+{
+  testfunc("checkForcedPerFrameIdrCra", []()
+           { return checkForcedPerFrameIdr(VVENC_DRT_CRA, VVENC_NAL_UNIT_CODED_SLICE_CRA); }, false);
+  testfunc("checkForcedPerFrameIdrIdr", []()
+           { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL); }, false);
+  testfunc("checkForcedPerFrameIdrCraCre", []()
+           { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, VVENC_NAL_UNIT_CODED_SLICE_CRA); }, false);
+  testfunc("checkForcedPerFrameIdrNoRadl", []()
+           { return checkForcedPerFrameIdr(VVENC_DRT_IDR_NO_RADL, VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP); }, false);
+  return 0;
+}
+#endif
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {
   vvenc_config vvencParams;
