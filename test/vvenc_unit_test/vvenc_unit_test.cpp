@@ -70,6 +70,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
 
+#include "EncoderLib/EncAdaptiveLoopFilter.h"
+
 #include "apputils/ParseArg.h"
 #include "vvenc/vvenc.h"
 
@@ -91,12 +93,15 @@ static inline bool compare_value( const std::string& context, const T ref, const
   return opt == ref;
 }
 
-template<typename T>
-static inline bool compare_values_1d( const std::string& context, const T* ref, const T* opt, unsigned length )
+template<typename T, typename U = T>
+static inline bool compare_values_1d( const std::string& context, const T* ref, const T* opt, unsigned length,
+                                      U tolerance = U( 0 ) )
 {
+  auto abs_diff = []( T value1, T value2 ) -> U { return static_cast<U>( std::abs( value1 - value2 ) ); };
+
   for( unsigned idx = 0; idx < length; ++idx )
   {
-    if( ref[idx] != opt[idx] )
+    if( abs_diff( ref[idx], opt[idx] ) > tolerance )
     {
       std::cout << "failed: " << context << "\n"
                 << "  mismatch:  ref[" << idx << "]=" << +ref[idx] << "  opt[" << idx << "]=" << +opt[idx] << "\n";
@@ -253,6 +258,24 @@ public:
     CHECK( values.empty(), "getOneOf: values vector must not be empty" );
     return values[rand() % values.size()];
   }
+};
+
+class FloatGenerator
+{
+public:
+  FloatGenerator( float min_val, float max_val ) : m_min( min_val ), m_max( max_val )
+  {
+  }
+
+  float operator()() const
+  {
+    const float scale = float( rand() ) / float( RAND_MAX );
+    return m_min + ( m_max - m_min ) * scale;
+  }
+
+private:
+  float m_min;
+  float m_max;
 };
 
 #if ENABLE_SIMD_OPT_QUANT
@@ -3061,6 +3084,170 @@ static bool check_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, u
   return true;
 }
 
+template<typename G>
+static void generate_symmetric_positive_definite_matrix( AlfCovariance::TE lhs, AlfCovariance::Ty rhs, int size, G gen )
+{
+  // Builds a random linear system that is guaranteed to be solvable by Cholesky.
+  // The matrix is symmetric positive definite, i.e. A = A^T and x^T A x > 0 for every nonzero x.
+  // It is constructed as A = U^T * U with a strictly positive diagonal in U.
+  AlfCovariance::TE upper;
+  AlfCovariance::Ty x;
+
+  // Generate a random solution vector x and a random upper-triangular matrix U.
+  std::generate_n( x, size, gen );
+
+  for( int row = 0; row < size; ++row )
+  {
+    // Fill the lower triangle part with zeros.
+    std::fill_n( upper[row], row, 0.0f );
+    // Diagonal entries are never zero (kept far away from zero) and strictly positive.
+    upper[row][row] = 50000.0f + std::abs( gen() );
+    // Upper triangular entries can be zero or any value, but smaller in magnitude than the diagonal.
+    std::generate_n( upper[row] + row + 1, size - row - 1, [&]() { return gen() * 0.25f; } );
+  }
+
+  // Form the symmetric positive-definite matrix A = U^T * U.
+  // A is lhs and U is upper.
+  for( int row = 0; row < size; ++row )
+  {
+    for( int col = 0; col < size; ++col )
+    {
+      alf_float_t sum = 0.0f;
+      for( int k = 0; k < size; ++k )
+      {
+        sum += upper[k][row] * upper[k][col];
+      }
+      lhs[row][col] = sum;
+    }
+  }
+
+  // Generate rhs = A * x so that the system A * x = rhs has a consistent solution.
+  for( int row = 0; row < size; ++row )
+  {
+    alf_float_t sum = 0.0f;
+    for( int col = 0; col < size; ++col )
+    {
+      sum += lhs[row][col] * x[col];
+    }
+    rhs[row] = sum;
+  }
+}
+
+template<typename GDiag, typename GRhs>
+static void generate_non_positive_definite_matrix( AlfCovariance::TE lhs, AlfCovariance::Ty rhs, int size,
+                                                   GDiag genDiag, GRhs genRhs )
+{
+  // Builds a diagonal matrix with strictly negative diagonal entries.
+  // Such a matrix is symmetric but not positive definite, so the initial Cholesky check fails.
+  // Depending on the chosen value range, regularization may or may not recover it.
+  for( int i = 0; i < size; ++i )
+  {
+    lhs[i][i] = genDiag();
+    CHECK( lhs[i][i] >= 0.0f, "Diagonal entries must be negative to ensure non-positive definiteness." );
+    rhs[i] = genRhs();
+  }
+}
+
+static bool check_one_gnsSolveByChol( const std::string& context, AlfCovariance* ref, AlfCovariance* opt,
+                                      AlfCovariance::TE lhsRef, AlfCovariance::Ty rhsRef, AlfCovariance::TE lhsOpt,
+                                      AlfCovariance::Ty rhsOpt, int size )
+{
+  AlfCovariance::Ty xRef;
+  AlfCovariance::Ty xOpt;
+
+  // gnsSolveByChol returns non-zero on successful Cholesky factorization and zero on failure.
+  const bool refOk = ref->m_gnsSolveByChol( lhsRef, rhsRef, xRef, size );
+  const bool optOk = opt->m_gnsSolveByChol( lhsOpt, rhsOpt, xOpt, size );
+
+  bool passed = true;
+  passed = compare_value( context + " Cholesky status", refOk, optOk ) && passed;
+  passed = compare_values_1d( context + " x", xRef, xOpt, size, 0.1f ) && passed;
+  return passed;
+}
+
+enum class CholeskyTestCase
+{
+  PositiveDefinite,
+  RegularizedRecovery,
+  NonPositiveDefinite,
+  AllZero,
+};
+
+template<CholeskyTestCase TestCase>
+static bool check_gnsSolveByChol( AlfCovariance* ref, AlfCovariance* opt, int size, unsigned num_cases )
+{
+  std::ostringstream sstm;
+  bool passed = true;
+
+  const char* caseStr = TestCase == CholeskyTestCase::PositiveDefinite      ? "Positive Definite"
+                        : TestCase == CholeskyTestCase::RegularizedRecovery ? "Regularized Recovery"
+                        : TestCase == CholeskyTestCase::NonPositiveDefinite ? "Non-Positive Definite"
+                                                                            : "All Zero";
+  sstm << "AlfCovariance::gnsSolveByChol " << caseStr << " Size=" << size;
+  std::cout << "Testing " << sstm.str() << '\n';
+
+  AlfCovariance::TE lhsRef;
+  AlfCovariance::Ty rhsRef;
+  AlfCovariance::TE lhsOpt;
+  AlfCovariance::Ty rhsOpt;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    if( TestCase == CholeskyTestCase::PositiveDefinite )
+    {
+      FloatGenerator gen( -100000.0f, 100000.0f );
+      generate_symmetric_positive_definite_matrix( lhsRef, rhsRef, size, gen );
+    }
+    else if( TestCase == CholeskyTestCase::RegularizedRecovery )
+    {
+      // Negative before regularization, positive after adding REG=0.0001f.
+      FloatGenerator genDiag( -0.00009f, -0.00001f );
+      FloatGenerator genRhs( -1000.0f, 1000.0f );
+      generate_non_positive_definite_matrix( lhsRef, rhsRef, size, genDiag, genRhs );
+    }
+    else if( TestCase == CholeskyTestCase::NonPositiveDefinite )
+    {
+      FloatGenerator genDiag( -2.0f, -0.1f ); // Every diagonal entry is negative.
+      FloatGenerator genRhs( 0.0f, 0.0f );
+      generate_non_positive_definite_matrix( lhsRef, rhsRef, size, genDiag, genRhs );
+    }
+    else // TestCase == CholeskyTestCase::AllZero.
+    {
+      std::memset( lhsRef, 0, sizeof( lhsRef ) );
+      std::memset( rhsRef, 0, sizeof( rhsRef ) );
+    }
+
+    std::memcpy( lhsOpt, lhsRef, sizeof( lhsRef ) );
+    std::memcpy( rhsOpt, rhsRef, sizeof( rhsRef ) );
+
+    passed = check_one_gnsSolveByChol( sstm.str(), ref, opt, lhsRef, rhsRef, lhsOpt, rhsOpt, size ) && passed;
+  }
+
+  return passed;
+}
+
+static bool test_AlfCovariance( unsigned num_cases )
+{
+  AlfCovariance ref( /*enableOpt=*/false );
+  AlfCovariance opt( /*enableOpt=*/true );
+  bool passed = true;
+
+  // 13 for luma and 7 for chroma.
+  for( int size : { 7, 13 } )
+  {
+    // Uses a valid positive-definite matrix.
+    passed = check_gnsSolveByChol<CholeskyTestCase::PositiveDefinite>( &ref, &opt, size, num_cases ) && passed;
+    // First Cholesky fails, but regularization makes the matrix solvable.
+    passed = check_gnsSolveByChol<CholeskyTestCase::RegularizedRecovery>( &ref, &opt, size, num_cases ) && passed;
+    // Failure handling - uses an invalid/singular matrix.
+    passed = check_gnsSolveByChol<CholeskyTestCase::NonPositiveDefinite>( &ref, &opt, size, num_cases ) && passed;
+    // All-zero LHS and RHS.
+    passed = check_gnsSolveByChol<CholeskyTestCase::AllZero>( &ref, &opt, size, 1 ) && passed;
+  }
+
+  return passed;
+}
+
 static bool test_AdaptiveLoopFilter()
 {
   AdaptiveLoopFilter ref{ /*enableOpt=*/false };
@@ -3068,6 +3255,8 @@ static bool test_AdaptiveLoopFilter()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+
+  passed = test_AlfCovariance( num_cases ) && passed;
 
   for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
   {

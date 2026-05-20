@@ -79,8 +79,28 @@ public:
   alf_float_t pixAcc;
   bool all0;
 
-  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true ) {}
+  int ( *m_gnsSolveByChol )( AlfCovariance::TE LHS, alf_float_t* rhs, alf_float_t* x, int numEq );
+
+  AlfCovariance( bool enableOpt = true ) : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true )
+  {
+    m_gnsSolveByChol = &AlfCovariance::gnsSolveByChol;
+
+    if( enableOpt )
+    {
+#if ENABLE_SIMD_OPT_ALF
+#ifdef TARGET_SIMD_ARM
+      initAlfCovarianceARM();
+#endif
+#endif
+    }
+  }
   ~AlfCovariance() { }
+
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
+  void initAlfCovarianceARM();
+  template<ARM_VEXT vext>
+  void _initAlfCovarianceARM();
+#endif
 
   void create( int size, int num_bins )
   {
@@ -303,7 +323,7 @@ public:
 
   void getClipMax          ( const AlfFilterShape& alfShape, int *clip_max) const;
   void reduceClipCost      ( const AlfFilterShape& alfShape, int *clip) const;
-  int  gnsSolveByChol              ( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq ) const;
+  static int gnsSolveByChol( TE LHS, alf_float_t* rhs, alf_float_t* x, int numEq );
 
 private:
   // Cholesky decomposition
