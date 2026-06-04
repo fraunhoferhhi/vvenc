@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
+#include "sum_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
@@ -123,6 +124,56 @@ void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, u
   else
   {
     THROW( "Unsupported size. numSamples must be 4 or 8 or a multiple of 16" );
+  }
+}
+
+void recoCore_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, const ClpRng& clpRng )
+{
+  CHECKD( numSamples != 4 && numSamples != 8 && ( numSamples & 15 ) != 0,
+          "numSamples must be 4 or 8 or a multiple of 16" );
+
+  if( ( numSamples & 15 ) == 0 )
+  {
+    const uint16x8_t vbdmax = vdupq_n_u16( clpRng.max() );
+
+    int x = 0;
+    do
+    {
+      uint16x8_t s0 = vreinterpretq_u16_s16( vld1q_s16( src0 + x ) );
+      uint16x8_t s2 = vreinterpretq_u16_s16( vld1q_s16( src0 + x + 8 ) );
+      int16x8_t s1 = vld1q_s16( src1 + x );
+      int16x8_t s3 = vld1q_s16( src1 + x + 8 );
+
+      uint16x8_t sum0 = vvenc_vsqaddq_u16( s0, s1 );
+      uint16x8_t sum1 = vvenc_vsqaddq_u16( s2, s3 );
+      sum0 = vminq_u16( vbdmax, sum0 );
+      sum1 = vminq_u16( vbdmax, sum1 );
+
+      vst1q_s16( dest + x, vreinterpretq_s16_u16( sum0 ) );
+      vst1q_s16( dest + x + 8, vreinterpretq_s16_u16( sum1 ) );
+
+      x += 16;
+    } while( x != numSamples );
+  }
+  else if( numSamples == 8 )
+  {
+    uint16x8_t s0 = vreinterpretq_u16_s16( vld1q_s16( src0 ) );
+    int16x8_t s1 = vld1q_s16( src1 );
+
+    uint16x8_t sum = vvenc_vsqaddq_u16( s0, s1 );
+    sum = vminq_u16( vdupq_n_u16( clpRng.max() ), sum );
+
+    vst1q_s16( dest, vreinterpretq_s16_u16( sum ) );
+  }
+  else // if( numSamples == 4 )
+  {
+    uint16x4_t s0 = vreinterpret_u16_s16( vld1_s16( src0 ) );
+    int16x4_t s1 = vld1_s16( src1 );
+
+    uint16x4_t sum = vvenc_vsqadd_u16( s0, s1 );
+    sum = vmin_u16( vdup_n_u16( clpRng.max() ), sum );
+
+    vst1_s16( dest, vreinterpret_s16_u16( sum ) );
   }
 }
 
@@ -569,6 +620,7 @@ template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
   addAvg   = addAvg_neon;
+  reco     = recoCore_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
