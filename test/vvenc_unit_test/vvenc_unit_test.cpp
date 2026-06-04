@@ -2365,6 +2365,52 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
   return passed;
 }
 
+static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers.
+  Pel* src0 = ( Pel* )xMalloc( Pel, buf_size );
+  Pel* src1 = ( Pel* )xMalloc( Pel, buf_size );
+  Pel* dest_ref = ( Pel* )xMalloc( Pel, buf_size );
+  Pel* dest_opt = ( Pel* )xMalloc( Pel, buf_size );
+
+  bool passed = true;
+
+  for( unsigned bd : { 8, 10 } )
+  {
+    ClpRng clpRng{ ( int )bd };
+    InputGenerator<Pel> src0_gen{ bd, /*is_signed=*/false };
+    // src1 holds signed residuals, use a wider range to exercise reconstruction clipping.
+    InputGenerator<Pel> src1_gen{ bd + 2, /*is_signed=*/true };
+
+    for( int size : { 4, 8, 16, 32, 48, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384 } )
+    {
+      std::ostringstream sstm_test;
+      sstm_test << "PelBufferOps::reco" << " bd=" << bd << " size=" << size;
+      std::cout << "Testing " << sstm_test.str() << std::endl;
+
+      for( unsigned n = 0; n < num_cases; n++ )
+      {
+        std::generate( src0, src0 + buf_size, src0_gen );
+        std::generate( src1, src1 + buf_size, src1_gen );
+
+        ref->reco( src0, src1, dest_ref, size, clpRng );
+        opt->reco( src0, src1, dest_opt, size, clpRng );
+
+        passed = compare_values_1d( sstm_test.str(), dest_ref, dest_opt, size ) && passed;
+      }
+    }
+  }
+
+  xFree( src0 );
+  xFree( src1 );
+  xFree( dest_ref );
+  xFree( dest_opt );
+
+  return passed;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2381,6 +2427,7 @@ static bool test_PelBufferOps()
   bool passed = true;
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
+  passed = check_reco( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }
