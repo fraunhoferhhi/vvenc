@@ -24,13 +24,13 @@ endif()
 
 if( VVENC_ENABLE_X86_SIMD )
   # get x86 source files
-  file( GLOB X86_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.cpp" )
+  file( GLOB X86_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.cpp" "../EncoderLib/x86/*.cpp" )
 
   # get x86 source files
-  file( GLOB X86_INC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.h" )
+  file( GLOB X86_INC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/*.h" "../EncoderLib/x86/*.h" )
 
   # get sse4.1 source files
-  file( GLOB SSE41_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/sse41/*.cpp" )
+  file( GLOB SSE41_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/sse41/*.cpp" "../EncoderLib/x86/sse41/*.cpp" )
   
   # get sse4.2 source files
   file( GLOB SSE42_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/sse42/*.cpp" )
