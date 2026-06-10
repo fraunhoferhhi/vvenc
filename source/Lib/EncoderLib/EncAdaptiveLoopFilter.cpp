@@ -1057,7 +1057,7 @@ static void getPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterSh
 static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                          const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
 
-EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
+EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
   : m_encCfg         ( nullptr )
   , m_apsMap         ( nullptr )
   , m_CABACEstimator ( nullptr )
@@ -1100,9 +1100,12 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
   m_getPreBlkStatsAccum = getPreBlkStatsAccum;
   m_getPreBlkStatsWeightedAccum = getPreBlkStatsWeightedAccum;
 
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-  initEncAdaptiveLoopFilter_X86();
+    initEncAdaptiveLoopFilter_X86();
 #endif
+  }
 }
 
 void EncAdaptiveLoopFilter::initASU( int alfUnitSize )

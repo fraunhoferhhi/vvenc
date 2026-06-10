@@ -82,26 +82,31 @@ namespace po = apputils::program_options;
 
 static bool g_fastUnitTest = false;
 
-template<typename T>
-static inline bool compare_value( const std::string& context, const T ref, const T opt )
+template<typename T, typename U>
+static inline U abs_diff( const T value1, const T value2 )
 {
-  if( opt != ref )
+  return static_cast<U>( value1 > value2 ? value1 - value2 : value2 - value1 );
+}
+
+template<typename T, typename U = T>
+static inline bool compare_value( const std::string& context, const T ref, const T opt, U tolerance = U( 0 ) )
+{
+  if( abs_diff<T, U>( ref, opt ) > tolerance )
   {
     std::cerr << "failed: " << context << "\n"
               << "  mismatch:  ref=" << +ref << "  opt=" << +opt << "\n";
+    return false;
   }
-  return opt == ref;
+  return true;
 }
 
 template<typename T, typename U = T>
 static inline bool compare_values_1d( const std::string& context, const T* ref, const T* opt, unsigned length,
                                       U tolerance = U( 0 ) )
 {
-  auto abs_diff = []( T value1, T value2 ) -> U { return static_cast<U>( std::abs( value1 - value2 ) ); };
-
   for( unsigned idx = 0; idx < length; ++idx )
   {
-    if( abs_diff( ref[idx], opt[idx] ) > tolerance )
+    if( abs_diff<T, U>( ref[idx], opt[idx] ) > tolerance )
     {
       std::cout << "failed: " << context << "\n"
                 << "  mismatch:  ref[" << idx << "]=" << +ref[idx] << "  opt[" << idx << "]=" << +opt[idx] << "\n";
@@ -117,14 +122,12 @@ static inline bool compare_values_2d( const std::string& context, const T* ref, 
 {
   stride = stride != 0 ? stride : cols;
 
-  auto abs_diff = []( T value1, T value2 ) -> U { return static_cast<U>( std::abs( value1 - value2 ) ); };
-
   for( unsigned row = 0; row < rows; ++row )
   {
     for( unsigned col = 0; col < cols; ++col )
     {
       unsigned idx = row * stride + col;
-      if( abs_diff( ref[idx], opt[idx] ) > tolerance )
+      if( abs_diff<T, U>( ref[idx], opt[idx] ) > tolerance )
       {
         std::cout << "failed: " << context << "\n"
                   << "  mismatch:  ref[" << row << "*" << stride << "+" << col << "]=" << +ref[idx] << "  opt[" << row
@@ -3295,6 +3298,122 @@ static bool test_AlfCovariance( unsigned num_cases )
   return passed;
 }
 
+template<bool Weighted>
+static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize,
+                                       int numBins, unsigned num_cases )
+{
+  const char* testName =
+      Weighted ? "EncAdaptiveLoopFilter::getPreBlkStatsWeightedAccum" : "EncAdaptiveLoopFilter::getPreBlkStatsAccum";
+  std::cout << "Testing " << testName << " filterSize=" << filterSize << " numBins=" << numBins << '\n';
+
+  bool passed = true;
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g8{ 8, /*is_signed=*/true };
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/true };
+  FloatGenerator fg( -1000.0f, 1000.0f );
+  FloatGenerator fgPix( 0.0f, 1000.0f );
+
+  AlfFilterShape shape( filterSize );
+  AlfCovariance covRef;
+  AlfCovariance covOpt;
+  covRef.create( shape.numCoeff, numBins );
+  covOpt.create( shape.numCoeff, numBins );
+
+  static constexpr int MaxAlfNumClippingValues = 4;
+
+  Pel y[4][4];
+  std::vector<Pel> e( MaxAlfNumClippingValues * ( MAX_NUM_ALF_LUMA_COEFF << 4 ) );
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    covRef.reset();
+    covOpt.reset();
+
+    std::generate_n( &y[0][0], 4 * 4, g8 );
+    std::generate( e.begin(), e.end(), g10 );
+
+    for( int b = 0; b < numBins; ++b )
+    {
+      std::generate_n( &covRef.E[b][0][0][0], numBins * MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_LUMA_COEFF, fg );
+    }
+    std::generate_n( &covRef.y[0][0], numBins * MAX_NUM_ALF_LUMA_COEFF, fg );
+
+    covRef.pixAcc = fgPix();
+    covOpt = covRef;
+
+    if( Weighted )
+    {
+      auto gen_luma_weight = []( int i )
+      {
+        // Use the same PQ luma-to-weight mapping used by initLumaLevelToWeightTableReshape().
+        double y = 0.015 * i - 1.5 - 6;
+        y = y < -3 ? -3 : y > 6 ? 6 : y;
+        return pow( 2.0, y / 3.0 );
+      };
+
+      alf_float_t weight[4][4];
+      for( int ii = 0; ii < 4; ++ii )
+      {
+        for( int jj = 0; jj < 4; ++jj )
+        {
+          weight[ii][jj] = gen_luma_weight( rng.get( 0, 1023 ) );
+        }
+      }
+
+      ref->m_getPreBlkStatsWeightedAccum( covRef, shape, e.data(), y, weight, numBins );
+      opt->m_getPreBlkStatsWeightedAccum( covOpt, shape, e.data(), y, weight, numBins );
+    }
+    else
+    {
+      ref->m_getPreBlkStatsAccum( covRef, shape, e.data(), y, numBins );
+      opt->m_getPreBlkStatsAccum( covOpt, shape, e.data(), y, numBins );
+    }
+
+    std::ostringstream sstm;
+    sstm << "getPreBlkStatsAccum filterSize=" << filterSize << " numBins=" << numBins;
+
+    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, Weighted ? 0.1f : 0.0f ) && passed;
+    passed = compare_values_2d( sstm.str() + " y", &covRef.y[0][0], &covOpt.y[0][0], covRef.numBins, covRef.numCoeff,
+                                MAX_NUM_ALF_LUMA_COEFF, Weighted ? 0.2f : 0.0f ) &&
+             passed;
+
+    for( int b0 = 0; b0 < covRef.numBins; ++b0 )
+    {
+      for( int b1 = 0; b1 < covRef.numBins; ++b1 )
+      {
+        passed = compare_values_2d( sstm.str() + " E b0=" + std::to_string( b0 ) + " b1=" + std::to_string( b1 ),
+                                    &covRef.E[b0][b1][0][0], &covOpt.E[b0][b1][0][0], covRef.numCoeff, covRef.numCoeff,
+                                    MAX_NUM_ALF_LUMA_COEFF, Weighted ? 1.0f : 0.0f ) &&
+                 passed;
+      }
+    }
+  }
+
+  covRef.destroy();
+  covOpt.destroy();
+
+  return passed;
+}
+
+static bool test_EncAdaptiveLoopFilter( unsigned num_cases )
+{
+  EncAdaptiveLoopFilter ref( /*enableOpt=*/false );
+  EncAdaptiveLoopFilter opt( /*enableOpt=*/true );
+  bool passed = true;
+
+  for( int numBin : { 1, AdaptiveLoopFilter::AlfNumClippingValues } )
+  {
+    for( int filterSize : { 5, 7 } )
+    {
+      passed = check_getPreBlkStatsAccum<false>( &ref, &opt, filterSize, numBin, num_cases ) && passed;
+      passed = check_getPreBlkStatsAccum<true>( &ref, &opt, filterSize, numBin, num_cases ) && passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool test_AdaptiveLoopFilter()
 {
   AdaptiveLoopFilter ref{ /*enableOpt=*/false };
@@ -3304,6 +3423,7 @@ static bool test_AdaptiveLoopFilter()
   bool passed = true;
 
   passed = test_AlfCovariance( num_cases ) && passed;
+  passed = test_EncAdaptiveLoopFilter( num_cases ) && passed;
 
   for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
   {

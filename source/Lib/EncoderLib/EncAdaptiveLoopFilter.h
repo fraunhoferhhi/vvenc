@@ -413,7 +413,7 @@ private:
   bool                   m_alfFilterStatEnabled[MAX_NUM_COMP];
 
 public:
-  EncAdaptiveLoopFilter();
+  EncAdaptiveLoopFilter( bool enableOpt = true );
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
   void init                         ( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
