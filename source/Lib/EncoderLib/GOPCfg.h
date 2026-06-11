@@ -166,6 +166,7 @@ class GOPCfg
     int  xGetMaxTid          ( const GOPEntryList& gopList ) const;
     int  xGetMaxRefPics      ( const GOPEntry& gopEntry ) const;
     int  xGetMaxNumReorder   ( const GOPEntry& gopEntry, const GOPEntryList& gopList ) const;
+    void xSetIntraEntry(GOPEntry &gopEntry);
     void xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const;
 };
 

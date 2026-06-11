@@ -185,11 +185,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   // mark start of intra
   if( m_numTillIntra == 0 )
   {
-    gopEntry.m_sliceType      = 'I';
-    gopEntry.m_isStartOfIntra = true;
-    gopEntry.m_temporalId     = 0;
-    gopEntry.m_vtl            = 0;
-    m_lastIntraPOC            = m_nextPoc;
+    xSetIntraEntry(gopEntry);
   }
 
   // check for end of current gop
@@ -243,12 +239,8 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
 void GOPCfg::startIntraPeriod( GOPEntry& gopEntry )
 {
   // set gop entry
-  gopEntry.m_sliceType      = 'I';
-  gopEntry.m_isStartOfIntra = true;
-  gopEntry.m_isStartOfGop   = true;
-  gopEntry.m_temporalId     = 0;
-  gopEntry.m_vtl            = 0;
-  m_lastIntraPOC            = gopEntry.m_POC;
+  xSetIntraEntry(gopEntry);
+  gopEntry.m_isStartOfGop = true;
 
   // start with first gop list
   m_gopList      = &m_defaultGopLists[ 0 ];
@@ -271,11 +263,7 @@ void GOPCfg::fixStartOfLastGop( GOPEntry& gopEntry )
   gopEntry.m_isStartOfGop = true;
   if( ! m_poc0idr && gopEntry.m_gopNum == 0 && ! gopEntry.m_isStartOfIntra )
   {
-    gopEntry.m_isStartOfIntra = true;
-    gopEntry.m_sliceType      = 'I';
-    gopEntry.m_temporalId     = 0;
-    gopEntry.m_vtl            = 0;
-    m_lastIntraPOC            = gopEntry.m_POC;
+    xSetIntraEntry(gopEntry);
   }
 }
 
@@ -331,6 +319,15 @@ bool GOPCfg::isChromaDeltaQPEnabled() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void GOPCfg::xSetIntraEntry(GOPEntry &gopEntry)
+{
+  gopEntry.m_isStartOfIntra = true;
+  gopEntry.m_sliceType      = 'I';
+  gopEntry.m_temporalId     = 0;
+  gopEntry.m_vtl            = 0;
+  m_lastIntraPOC            = gopEntry.m_POC;
+}
 
 int GOPCfg::xGetMinPoc( int maxGopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ] ) const
 {
