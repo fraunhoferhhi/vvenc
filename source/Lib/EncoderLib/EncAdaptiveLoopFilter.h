@@ -453,6 +453,11 @@ public:
   template<X86_VEXT vext>
   void _initEncAdaptiveLoopFilter_X86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
+  void initEncAdaptiveLoopFilterARM();
+  template<ARM_VEXT vext>
+  void _initEncAdaptiveLoopFilterARM();
+#endif
 
   void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
   void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );

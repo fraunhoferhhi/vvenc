@@ -85,6 +85,15 @@ void AlfCovariance::initAlfCovarianceARM()
     _initAlfCovarianceARM<NEON>();
   }
 }
+
+void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilterARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initEncAdaptiveLoopFilterARM<NEON>();
+  }
+}
 #endif
 
 #if ENABLE_SIMD_OPT_AFFINE_ME
