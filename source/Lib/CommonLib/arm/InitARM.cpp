@@ -93,6 +93,12 @@ void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilterARM()
   {
     _initEncAdaptiveLoopFilterARM<NEON>();
   }
+#if TARGET_SIMD_ARM_SVE
+  if( vext >= SVE )
+  {
+    _initEncAdaptiveLoopFilterARM<SVE>();
+  }
+#endif
 }
 #endif
 
