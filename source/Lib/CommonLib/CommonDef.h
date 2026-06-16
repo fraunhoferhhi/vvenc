@@ -150,9 +150,7 @@ namespace vvenc {
 #else
 #define NVM_ONARCH    "[on 32-bit] "
 #endif
-#endif
-
-#ifdef __INTEL_COMPILER
+#elif __INTEL_COMPILER
 #define NVM_COMPILEDBY  "[ICC %d]", __INTEL_COMPILER
 #elif  _MSC_VER
 #define NVM_COMPILEDBY  "[VS %d]", _MSC_VER
@@ -685,7 +683,7 @@ static inline unsigned int bit_scan_reverse( int a )
 // {
 //   return _bit_scan_reverse( a );
 // }
-#elif defined( __GNUC__ )
+#elif defined( __GNUC__ ) || defined( __clang__ )
 static inline unsigned int bit_scan_reverse( int a )
 {
   return __builtin_clz( a ) ^ ( 8 * sizeof( a ) - 1 );
