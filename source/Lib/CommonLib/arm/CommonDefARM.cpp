@@ -45,6 +45,17 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 
+#if defined( __APPLE__ )
+#include <sys/sysctl.h>
+#endif
+
+#if defined( _WIN32 )
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #if TARGET_SIMD_ARM_SVE
 #if defined( __linux__ ) || HAVE_ELF_AUX_INFO
 #include <sys/auxv.h>  // getauxval / elf_aux_info
@@ -143,12 +154,44 @@ static ARM_VEXT _get_arm_extensions()
   return ext;
 }
 
+#elif defined( __APPLE__ )
+
+static ARM_VEXT _get_arm_extensions()
+{
+  // We assume Neon is always supported for relevant Apple Silicon processors.
+  // The SVE and SVE2 features are not available at time of writing.
+  return NEON;
+}
+
+#elif defined( _WIN32 )
+
+static ARM_VEXT _get_arm_extensions()
+{
+  // We assume Neon is always supported for relevant Arm processors.
+  ARM_VEXT ext = NEON;
+
+#if TARGET_SIMD_ARM_SVE && defined( PF_ARM_SVE_INSTRUCTIONS_AVAILABLE )
+  if( IsProcessorFeaturePresent( PF_ARM_SVE_INSTRUCTIONS_AVAILABLE ) )
+  {
+    ext = SVE;
+  }
+#endif
+
+#if TARGET_SIMD_ARM_SVE2 && defined( PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE )
+  if( ext >= SVE && IsProcessorFeaturePresent( PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE ) )
+  {
+    ext = SVE2;
+  }
+#endif
+
+  return ext;
+}
+
 #else
 
 static ARM_VEXT _get_arm_extensions()
 {
   // We assume Neon is always supported for relevant Arm processors.
-  // No other extensions supported on non-Linux platforms for now.
   return NEON;
 }
 
