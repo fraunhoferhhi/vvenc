@@ -3489,6 +3489,56 @@ static bool test_LoopFilterPandQ()
 
 #endif // TARGET_SIMD_ARM && ENABLE_SIMD_DBLF
 
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_FGA
+
+namespace vvenc {
+  double calcVarCore( const Pel*, const ptrdiff_t, const int, const int );
+  double calcVarNeonEntry( const Pel*, const ptrdiff_t, const int, const int );
+  int    calcMeanNeonEntry( const Pel*, const ptrdiff_t, const int, const int );
+}
+// calcMeanCore is a global free function (SEIFilmGrainAnalyzer.cpp uses
+// "using namespace vvenc;", so it is not inside namespace vvenc).
+int calcMeanCore( const Pel*, const ptrdiff_t, const int, const int );
+
+static bool test_FGAnalyzer()
+{
+  printf( "Testing FGAnalyzer::calcVar / calcMean\n" );
+
+  bool                passed    = true;
+  InputGenerator<Pel> gen{ 10, /*is_signed=*/false };
+  unsigned            num_cases = g_fastUnitTest ? 10 : NUM_CASES;
+
+  // FGA block sizes are power-of-two squares; widths are multiples of 8.
+  const int sizes[] = { 8, 16, 32, 64 };
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int w : sizes )
+    {
+      for( int h : sizes )
+      {
+        const ptrdiff_t  stride = w + 8;  // stride != width
+        std::vector<Pel> buf( stride * h );
+        std::generate( buf.begin(), buf.end(), gen );
+
+        std::ostringstream ctx;
+        ctx << "calcVar/calcMean w=" << w << " h=" << h;
+
+        const double varRef = vvenc::calcVarCore( buf.data(), stride, w, h );
+        const double varOpt = vvenc::calcVarNeonEntry( buf.data(), stride, w, h );
+        passed = compare_value( ctx.str() + " var", varRef, varOpt ) && passed;
+
+        const int meanRef = calcMeanCore( buf.data(), stride, w, h );
+        const int meanOpt = vvenc::calcMeanNeonEntry( buf.data(), stride, w, h );
+        passed = compare_value( ctx.str() + " mean", meanRef, meanOpt ) && passed;
+      }
+    }
+  }
+  return passed;
+}
+
+#endif // TARGET_SIMD_ARM && ENABLE_SIMD_OPT_FGA
+
 struct UnitTestEntry
 {
   std::string name;
@@ -3531,6 +3581,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+#endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_FGA
+    { "FGAnalyzer", test_FGAnalyzer },
 #endif
 };
 

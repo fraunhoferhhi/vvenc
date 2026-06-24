@@ -336,6 +336,11 @@ private:
   template <X86_VEXT vext>
   void _initFGAnalyzerX86();
 #endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAnalyzerARM();
+  template <ARM_VEXT vext>
+  void _initFGAnalyzerARM();
+#endif
 };
 
 } // namespace vvenc
