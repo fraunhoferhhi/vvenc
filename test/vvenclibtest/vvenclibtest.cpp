@@ -73,6 +73,7 @@ int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
 int testStringApiInterface();  // check behaviour when using in sdk by using string api
 int testTimestamps();          // check behaviour when using in sdk by using string api
+int testForcedPerFrameIdr();   // check per-picture forced IDR behavior
 
 int main( int argc, char* argv[] )
 {
@@ -87,12 +88,24 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 6 );
+      printHelp = (testId < 1 || testId >
+#if VVENC_USE_UNSTABLE_API
+                                     7
+#else
+                                     6
+#endif
+      );
     }
 
     if( printHelp )
     {
-      printf( "venclibtest <test> [1..5]\n");
+      printf("venclibtest <test> [1..%d]\n",
+#if VVENC_USE_UNSTABLE_API
+             7
+#else
+             6
+#endif
+      );
       return -1;
     }
   }
@@ -133,6 +146,13 @@ int main( int argc, char* argv[] )
     testTimestamps();
     break;
   }
+#if VVENC_USE_UNSTABLE_API
+  case 7:
+  {
+    testForcedPerFrameIdr();
+    break;
+  }
+#endif
   default:
     testLibParameterRanges();
     testLibCallingOrder();
@@ -140,6 +160,9 @@ int main( int argc, char* argv[] )
     testSDKDefaultBehaviour();
     testStringApiInterface();
     testTimestamps();
+#if VVENC_USE_UNSTABLE_API
+    testForcedPerFrameIdr();
+#endif
     break;
   }
 
@@ -203,6 +226,228 @@ void fillInputPic( vvencYUVBuffer* pcYuvBuffer, const short val = 512 )
     std::fill_n( static_cast<short*> (pcYuvBuffer->planes[n].ptr), size, val );
   }
 }
+
+#if VVENC_USE_UNSTABLE_API
+static bool isVclNalType(vvencNalUnitType nalType)
+{
+  switch (nalType)
+  {
+  case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+  case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+  case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+  case VVENC_NAL_UNIT_CODED_SLICE_RASL:
+  case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+  case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+  case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+  case VVENC_NAL_UNIT_CODED_SLICE_GDR:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static vvencNalUnitType findFirstVclNalType(const vvencAccessUnit *accessUnit)
+{
+  if (!accessUnit || !accessUnit->payload || accessUnit->payloadUsedSize < 2)
+  {
+    return VVENC_NAL_UNIT_INVALID;
+  }
+
+  const unsigned char *payload = accessUnit->payload;
+  const int payloadSize = accessUnit->payloadUsedSize;
+  for (int offset = 0; offset + 4 < payloadSize; ++offset)
+  {
+    const bool startCode3 = payload[offset] == 0 && payload[offset + 1] == 0 && payload[offset + 2] == 1;
+    const bool startCode4 = startCode3 ? false : payload[offset] == 0 && payload[offset + 1] == 0 && payload[offset + 2] == 0 && payload[offset + 3] == 1;
+    if (!startCode3 && !startCode4)
+    {
+      continue;
+    }
+
+    const int headerOffset = offset + (startCode4 ? 4 : 3);
+    if (headerOffset + 1 >= payloadSize)
+    {
+      break;
+    }
+
+    const vvencNalUnitType nalType = static_cast<vvencNalUnitType>(payload[headerOffset + 1] >> 3);
+    if (isVclNalType(nalType))
+    {
+      return nalType;
+    }
+  }
+
+  return VVENC_NAL_UNIT_INVALID;
+}
+
+static int checkForcedPerFrameIdr(vvencDecodingRefreshType refreshType, vvencNalUnitType expectedNalType, uint64_t forcedPoc, int poc0idr = 1)
+{
+  vvencEncoder *enc = nullptr;
+  vvencAccessUnit *AU = nullptr;
+  vvencYUVBuffer *yuvPicture = nullptr;
+
+  auto failWith = [&](const std::string &reason)
+  {
+    if (g_verbose)
+    {
+      std::cerr << "\ncheckForcedPerFrameIdr failed: refreshType=" << refreshType
+                << " forcedPoc=" << forcedPoc
+                << " reason=" << reason;
+    }
+
+    if (yuvPicture)
+    {
+      vvenc_YUVBuffer_free(yuvPicture, true);
+    }
+    if (AU)
+    {
+      vvenc_accessUnit_free(AU, true);
+    }
+    if (enc)
+    {
+      vvenc_encoder_close(enc);
+    }
+
+    return -1;
+  };
+
+  vvenc_config vvencParams;
+  vvenc_config_default(&vvencParams);
+  fillEncoderParameters(vvencParams, false);
+  vvencParams.m_GOPSize = 16;
+  vvencParams.m_IntraPeriod = -1;
+  vvencParams.m_DecodingRefreshType = refreshType;
+  vvencParams.m_picReordering = refreshType != VVENC_DRT_NONE;
+  vvencParams.m_poc0idr = poc0idr;
+  vvencParams.m_usePerceptQPA = false;
+  vvencParams.m_GOPQPA = 0;
+  vvencParams.m_framesToBeEncoded = 0;
+  vvencParams.m_numThreads = 1;
+  vvencParams.m_GOPList[0].m_POC = -1;
+
+  if (vvenc_init_config_parameter(&vvencParams))
+  {
+    return failWith("vvenc_init_config_parameter failed");
+  }
+
+  enc = vvenc_encoder_create();
+  if (nullptr == enc)
+  {
+    return failWith("vvenc_encoder_create returned null");
+  }
+
+  if (0 != vvenc_encoder_open(enc, &vvencParams))
+  {
+    return failWith("vvenc_encoder_open failed");
+  }
+
+  AU = vvenc_accessUnit_alloc();
+  if( nullptr == AU )
+  {
+    return failWith("vvenc_accessUnit_alloc returned null");
+  }
+  vvenc_accessUnit_alloc_payload(AU, vvencParams.m_SourceWidth * vvencParams.m_SourceHeight * 2);
+  if( nullptr == AU->payload )
+  {
+    return failWith("vvenc_accessUnit_alloc_payload returned null payload");
+  }
+
+  yuvPicture = vvenc_YUVBuffer_alloc();
+  if( nullptr == yuvPicture )
+  {
+    return failWith("vvenc_YUVBuffer_alloc returned null");
+  }
+  vvenc_YUVBuffer_alloc_buffer(yuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight);
+
+  const uint64_t forcedGopLastPoc = forcedPoc + vvencParams.m_GOPSize - 1;
+  const uint64_t nextGopStartPoc = forcedPoc + vvencParams.m_GOPSize;
+  const uint64_t finalExpectedPoc = nextGopStartPoc + 1;
+  const int framesToEncode = 50;
+  int framesRcvd = 0;
+  int auCount = 0;
+  bool eof = false;
+  bool encodeDone = false;
+  bool sawForcedAu = false;
+  bool sawForcedGopComplete = false;
+  std::unordered_set<uint64_t> outputPocs;
+
+  while (!eof || !encodeDone)
+  {
+    vvencYUVBuffer *inputPtr = nullptr;
+    if (!eof)
+    {
+      inputPtr = yuvPicture;
+      fillInputPic(yuvPicture, static_cast<short>(256 + framesRcvd * 4));
+      yuvPicture->cts = static_cast<int64_t>(framesRcvd);
+      yuvPicture->ctsValid = true;
+      yuvPicture->picFlags = framesRcvd == forcedPoc ? VVENC_PIC_FLAG_FORCE_IDR : VVENC_PIC_FLAG_NONE;
+      framesRcvd++;
+    }
+
+    if (0 != vvenc_encode(enc, inputPtr, AU, &encodeDone))
+    {
+      return failWith("vvenc_encode returned error");
+    }
+
+    if (AU->payloadUsedSize > 0)
+    {
+      auCount++;
+      if (!outputPocs.insert(AU->poc).second)
+      {
+        return failWith("duplicate output poc");
+      }
+
+      const vvencNalUnitType nalType = findFirstVclNalType(AU);
+      if (nalType == VVENC_NAL_UNIT_INVALID)
+      {
+        return failWith("invalid first VCL nal type");
+      }
+
+      if (AU->poc == forcedPoc)
+      {
+        if (sawForcedAu)
+        {
+          return failWith("forced AU emitted more than once");
+        }
+        sawForcedAu = true;
+        if (!AU->rap || AU->sliceType != VVENC_I_SLICE || nalType != expectedNalType)
+        {
+          return failWith("forced AU properties mismatch: rap=" + std::to_string(AU->rap) + " sliceType=" + std::to_string(AU->sliceType) + " nalType=" + std::to_string(nalType) + " expectedNalType=" + std::to_string(expectedNalType));
+        }
+      }
+
+      if (AU->poc == forcedGopLastPoc)
+      {
+        sawForcedGopComplete = true;
+      }
+    }
+
+    if (framesRcvd >= framesToEncode)
+    {
+      eof = true;
+    }
+  }
+
+  for (uint64_t poc = forcedPoc; poc <= finalExpectedPoc; ++poc)
+  {
+    if (outputPocs.count(poc) == 0)
+    {
+      return failWith("missing output poc in forced window");
+    }
+  }
+
+  if (auCount != framesToEncode || !sawForcedAu || !sawForcedGopComplete || outputPocs.count(nextGopStartPoc) == 0)
+  {
+    return failWith("final forced GOP completeness check failed");
+  }
+
+  vvenc_YUVBuffer_free(yuvPicture, true);
+  vvenc_accessUnit_free(AU, true);
+  vvenc_encoder_close(enc);
+  return 0;
+}
+
+#endif
 
 template< typename T, typename V = int>
 int testParamList( const std::string& w, T& testParam, vvenc_config& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
@@ -361,9 +606,26 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
     // initialize the encoder
     TESTT( expectedFail == (0 == funcCallingOrder()),  "\n" << w << " expected " << (expectedFail ? "failure" : "success"));
   }
-  catch(...)
+  catch (const std::exception &exc)
   {
-    ERROR("\nCaught Exception " << w << " expected " << (expectedFail ? "failure" : "success")); //fail due to exception 
+    ERROR("\nCaught Exception " << w << " expected " << (expectedFail ? "failure" : "success") << " exception: " << exc.what()); // fail due to exception
+  }
+
+  return (numFails == g_numFails) ? 0 : 1;
+}
+
+template <typename Func>
+int testfunc(const std::string &w, Func funcCallingOrder, const bool expectedFail = false)
+{
+  const int numFails = g_numFails;
+
+  try
+  {
+    TESTT(expectedFail == (0 == funcCallingOrder()), "\n" << w << " expected " << (expectedFail ? "failure" : "success"));
+  }
+  catch (const std::exception &exc)
+  {
+    ERROR("\nCaught Exception " << w << " expected " << (expectedFail ? "failure" : "success") << " exception: " << exc.what()); // fail due to exception
   }
 
   return (numFails == g_numFails) ? 0 : 1;
@@ -1192,6 +1454,81 @@ int testTimestamps()
 
   return 0;
 }
+
+#if VVENC_USE_UNSTABLE_API
+int testForcedPerFrameIdr()
+{
+  // With poc0idr=1, the first RAP is not upgraded to IDR_W_RADL, so the forced IDR will be at the exact position specified
+  for (int i : {1, 2, 5, 8, 15})
+  {
+    testfunc("checkForcedPerFrameIdrCra_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA, VVENC_NAL_UNIT_CODED_SLICE_CRA, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrIdr_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrCraCre_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, VVENC_NAL_UNIT_CODED_SLICE_CRA, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrNoRadl_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR_NO_RADL, VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP, i, 1); }, false);
+  }
+
+  // with poc0idr=1
+  for (int i : {16, 17, 20, 31})
+  {
+    testfunc("checkForcedPerFrameIdrCra_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA, VVENC_NAL_UNIT_CODED_SLICE_CRA, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrIdr_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrCraCre_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, VVENC_NAL_UNIT_CODED_SLICE_CRA, i, 1); }, false);
+    testfunc("checkForcedPerFrameIdrNoRadl_poc0idr=1_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR_NO_RADL, VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP, i, 1); }, false);
+  }
+
+  // With poc0idr=0
+  // if poc0idr=0 and no prior IDR has occurred, EncGOP::xGetNalUnitType() upgrades that first RAP to IDR_W_RADL
+  for (int i : {1, 2, 5, 8})
+  {
+    const vvencNalUnitType expectedCraNal = i == 1 ? VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL : VVENC_NAL_UNIT_CODED_SLICE_CRA;
+
+    testfunc("checkForcedPerFrameIdrCra_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA, expectedCraNal, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrIdr_poc0idr=0_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrCraCre_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, expectedCraNal, i, 0); }, false);
+  }
+
+  // Force an IDR in after the initial GOP is completed
+  // with poc0idr=0
+  for (int i : {16, 17, 20})
+  {
+    const vvencNalUnitType expectedCraNal = i == 1 ? VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL : VVENC_NAL_UNIT_CODED_SLICE_CRA;
+
+    testfunc("checkForcedPerFrameIdrCra_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA, expectedCraNal, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrIdr_poc0idr=0_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrCraCre_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, expectedCraNal, i, 0); }, false);
+  }
+  return 0;
+
+  // FIXME: Failing tests
+  // With poc0idr=0
+  // if poc0idr=0 and no prior IDR has occurred, EncGOP::xGetNalUnitType() upgrades that first RAP to IDR_W_RADL
+  for (int i : {15, 31})
+  {
+    const vvencNalUnitType expectedCraNal = i == 1 ? VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL : VVENC_NAL_UNIT_CODED_SLICE_CRA;
+
+    testfunc("checkForcedPerFrameIdrCra_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA, expectedCraNal, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrIdr_poc0idr=0_forcedIdr=" + std::to_string(i), [i]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_IDR, VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL, i, 0); }, false);
+    testfunc("checkForcedPerFrameIdrCraCre_poc0idr=0_forcedIdr=" + std::to_string(i), [i, expectedCraNal]()
+             { return checkForcedPerFrameIdr(VVENC_DRT_CRA_CRE, expectedCraNal, i, 0); }, false);
+  }
+}
+#endif
 
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {

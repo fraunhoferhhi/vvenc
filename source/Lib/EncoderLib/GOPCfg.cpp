@@ -168,6 +168,47 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     return;
   }
 
+  if (gopEntry.m_isForcedIdr && !(m_poc0idr && m_nextPoc == 0))
+  {
+    const int prevGopSize = (int)m_gopList->size();
+
+    gopEntry.setDefaultGOPEntry();
+    gopEntry.m_POC = m_nextPoc;
+    gopEntry.m_isForcedIdr = true;
+    gopEntry.m_allowsCodingGap = true;
+    gopEntry.m_isValid = true;
+    startIntraPeriod(gopEntry);
+
+    // ---- Counter adjustments depend on whether poc0idr is set ----
+    //
+    // poc0idr=0: the POC-0 frame already consumed one decrement from both
+    //   counters before the forced-IDR reset.  startIntraPeriod brings both
+    //   back to 15, but only the intra counter needs compensating (shift it
+    //   down by 1 so the intra fires on the same POC as the GOP-boundary
+    //   entry).  The offset must survive GOP rollovers, hence the flag.
+    //
+    // poc0idr=1: the forced IDR itself is the first frame of the new GOP.
+    //   startIntraPeriod already consumed one slot (m_numTillGop=size-1),
+    //   and m_numTillIntra is set to fixIntraPeriod-1.  No further
+    //   adjustments are needed because the forced IDR naturally fills the
+    //   first-GOP-picture slot and resets the intra clock.
+    if (!m_poc0idr && m_fixIntraPeriod > 0)
+    {
+      m_numTillIntra = m_numTillGop - 1;
+      m_hadForcedIdr  = true;
+    }
+
+    const int gopId = 0;
+    m_pocOffset = gopEntry.m_POC;
+    m_gopNum += 1;
+    m_cnOffset += prevGopSize + 1;
+    gopEntry.m_gopNum = m_gopNum;
+    gopEntry.m_codingNum = m_cnOffset + gopId - 1;
+
+    m_nextPoc += 1;
+    return;
+  }
+
   const int  pocInGop   = m_nextPoc - m_pocOffset;
   const int  gopId      = m_pocToGopIdx[ pocInGop % (int)m_pocToGopIdx.size() ];
   const bool isLeading0 = m_poc0idr && m_nextPoc == 0 ? true : false; // for poc0idr, we have a leading poc 0
@@ -198,7 +239,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     {
       m_gopList      = &m_defaultGopLists[ 0 ];
       m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
-      m_numTillIntra = m_fixIntraPeriod;
+      m_numTillIntra = m_fixIntraPeriod - (m_hadForcedIdr ? 1 : 0);
       m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
     }
     else
