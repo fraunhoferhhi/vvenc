@@ -413,7 +413,7 @@ private:
   bool                   m_alfFilterStatEnabled[MAX_NUM_COMP];
 
 public:
-  EncAdaptiveLoopFilter();
+  EncAdaptiveLoopFilter( bool enableOpt = true );
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
   void init                         ( const VVEncCfg& encCfg, const PPS& pps, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
@@ -441,7 +441,19 @@ public:
   void resetFrameStats              ( bool ccAlfEnabled );
   bool isSkipAlfForFrame            ( const Picture& pic ) const;
   int  getAsuHeightInCtus           () { return m_numCtusInAsuHeight; }
-private:
+
+  void ( *m_getPreBlkStatsAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
+                                   const Pel yLocal[4][4], const int numBins );
+  void ( *m_getPreBlkStatsWeightedAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
+                                           const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
+
+                                           private:
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+  void initEncAdaptiveLoopFilter_X86();
+  template<X86_VEXT vext>
+  void _initEncAdaptiveLoopFilter_X86();
+#endif
+
   void   xStoreAlfAsuEnabledFlag    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, bool flag );
   void   xStoreAlfAsuAlternative    ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const int compIdx, const uint8_t alt );
   void   xStoreAlfAsuFilterIdx      ( CodingStructure& cs, int ctuX, int ctuY, int ctuIdx, const short fltIdx, short* alfCtbFilterSetIndex );

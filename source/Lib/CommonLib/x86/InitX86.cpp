@@ -62,6 +62,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "TrQuant_EMT.h"
 #include "QuantRDOQ2.h"
 #include "SEIFilmGrainAnalyzer.h"
+#include "EncoderLib/EncAdaptiveLoopFilter.h"
 
 #ifdef TARGET_SIMD_X86
 
@@ -205,6 +206,22 @@ void AdaptiveLoopFilter::initAdaptiveLoopFilterX86()
     break;
   default:
     break;
+  }
+}
+
+void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilter_X86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+    case AVX:
+    case SSE42:
+    case SSE41:
+      _initEncAdaptiveLoopFilter_X86<SSE41>();
+      break;
+    default:
+      break;
   }
 }
 #endif
