@@ -134,11 +134,7 @@ endfunction()
 # Check if the compiler supports the AArch64 SVE and SVE2 extensions, and set
 # variables for flags used to enable them to avoid duplication.
 function( set_if_compiler_supports_arm_extensions output_flag_sve output_flag_sve2 )
-  if( NOT(( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64" ) OR
-          ( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" )))
-    return()
-  endif()
-  if( UNIX OR MINGW )
+  if( NOT MSVC )
     # SVE is an optional feature from Armv8.2-A.
     set( _flag_sve "-march=armv8.2-a+sve" )
     _set_if_compiler_supports_sve_flag( _sve_supported "${_flag_sve}" )
