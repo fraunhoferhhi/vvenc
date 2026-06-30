@@ -752,7 +752,8 @@ void FGAnalyzer::init ( const int width,
 
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
   initFGAnalyzerX86();
-#elif ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
   initFGAnalyzerARM();
 #endif
 

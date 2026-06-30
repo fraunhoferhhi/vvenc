@@ -62,7 +62,8 @@ namespace vvenc
 static int calcMeanNeon( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
 {
   // Two independent accumulators allow out-of-order execution to overlap
-  // the add chains and avoid the per-row int16 accumulator reset overhead.
+  // the add chains. vpadalq_s16 folds the pairwise widen and accumulate
+  // into a single instruction.
   int32x4_t acc0 = vdupq_n_s32( 0 );
   int32x4_t acc1 = vdupq_n_s32( 0 );
   for( int y = 0; y < h; y++, org += origStride )
@@ -70,11 +71,11 @@ static int calcMeanNeon( const Pel* org, const ptrdiff_t origStride, const int w
     int x = 0;
     for( ; x < w - 8; x += 16 )
     {
-      acc0 = vaddq_s32( acc0, vpaddlq_s16( vld1q_s16( org + x ) ) );
-      acc1 = vaddq_s32( acc1, vpaddlq_s16( vld1q_s16( org + x + 8 ) ) );
+      acc0 = vpadalq_s16( acc0, vld1q_s16( org + x ) );
+      acc1 = vpadalq_s16( acc1, vld1q_s16( org + x + 8 ) );
     }
     for( ; x < w; x += 8 )
-      acc0 = vaddq_s32( acc0, vpaddlq_s16( vld1q_s16( org + x ) ) );
+      acc0 = vpadalq_s16( acc0, vld1q_s16( org + x ) );
   }
   return horizontal_add_s32x4( vaddq_s32( acc0, acc1 ) );
 }
@@ -82,7 +83,7 @@ static int calcMeanNeon( const Pel* org, const ptrdiff_t origStride, const int w
 // Mirrors calcVarSse: integer accumulation throughout, single final divide.
 static double calcVarNeon( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
 {
-  // Pass 1: mean — same dual-accumulator pattern as calcMean.
+  // Pass 1: mean — same dual-accumulator + vpadalq_s16 pattern as calcMean.
   int32x4_t avgAcc0 = vdupq_n_s32( 0 );
   int32x4_t avgAcc1 = vdupq_n_s32( 0 );
   const Pel* p      = org;
@@ -91,18 +92,19 @@ static double calcVarNeon( const Pel* org, const ptrdiff_t origStride, const int
     int x = 0;
     for( ; x < w - 8; x += 16 )
     {
-      avgAcc0 = vaddq_s32( avgAcc0, vpaddlq_s16( vld1q_s16( p + x ) ) );
-      avgAcc1 = vaddq_s32( avgAcc1, vpaddlq_s16( vld1q_s16( p + x + 8 ) ) );
+      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
+      avgAcc1 = vpadalq_s16( avgAcc1, vld1q_s16( p + x + 8 ) );
     }
     for( ; x < w; x += 8 )
-      avgAcc0 = vaddq_s32( avgAcc0, vpaddlq_s16( vld1q_s16( p + x ) ) );
+      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
   }
   const int shift    = Log2( w ) + Log2( h ) - 4;
   const int avg      = horizontal_add_s32x4( vaddq_s32( avgAcc0, avgAcc1 ) ) >> shift;
   // Match _mm_packs_epi32 saturation to the int16 range.
   const int16x8_t vavg = vdupq_n_s16( (int16_t)Clip3( -32768, 32767, avg ) );
 
-  // Pass 2: variance — dual int64 accumulators to hide add-chain latency.
+  // Pass 2: variance — dual int64 accumulators; vpadalq_s32 pairwise-adds
+  // adjacent squared products and widens to int64 in a single instruction.
   int64x2_t var0 = vdupq_n_s64( 0 );
   int64x2_t var1 = vdupq_n_s64( 0 );
   p = org;
@@ -114,10 +116,8 @@ static double calcVarNeon( const Pel* org, const ptrdiff_t origStride, const int
       pix           = vsubq_s16( pix, vavg );
       const int32x4_t lo = vmull_s16( vget_low_s16( pix ), vget_low_s16( pix ) );
       const int32x4_t hi = vmull_s16( vget_high_s16( pix ), vget_high_s16( pix ) );
-      // Match _mm_madd_epi16 + _mm_cvtepi32_epi64: add adjacent products in
-      // 32-bit (wrapping), then sign-extend to 64-bit before accumulating.
-      var0 = vaddq_s64( var0, vmovl_s32( vpadd_s32( vget_low_s32( lo ), vget_high_s32( lo ) ) ) );
-      var1 = vaddq_s64( var1, vmovl_s32( vpadd_s32( vget_low_s32( hi ), vget_high_s32( hi ) ) ) );
+      var0 = vpadalq_s32( var0, lo );
+      var1 = vpadalq_s32( var1, hi );
     }
   }
 
