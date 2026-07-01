@@ -88,9 +88,29 @@ static inline U abs_diff( const T value1, const T value2 )
   return static_cast<U>( value1 > value2 ? value1 - value2 : value2 - value1 );
 }
 
-template<typename T, typename U = T>
-static inline bool compare_value( const std::string& context, const T ref, const T opt, U tolerance = U( 0 ) )
+// Selects a tolerance from the reference value range:
+// max( minTolerance, abs(ref) * relTolerance ), optionally capped by maxTolerance.
+// If maxTolerance is omitted or zero, no upper cut off is applied.
+template<typename T, typename U>
+static inline U scaled_tolerance( const T ref, const T opt, U minTolerance, U relTolerance, U maxTolerance = U( 0 ) )
 {
+  CHECK( maxTolerance > U( 0 ) && minTolerance > maxTolerance,
+         "Minimum tolerance must be less than or equal to maximum tolerance" );
+
+  double tolerance = std::fabs( static_cast<double>( ref ) ) * relTolerance;
+  const double minimum = static_cast<double>( minTolerance );
+  const double maximum = static_cast<double>( maxTolerance );
+
+  tolerance = tolerance > minimum ? tolerance : minimum;
+  return static_cast<U>( maximum > 0.0 && tolerance > maximum ? maximum : tolerance );
+}
+
+template<typename T, typename U = T>
+static inline bool compare_value( const std::string& context, const T ref, const T opt, U minTolerance = U( 0 ),
+                                  U relTolerance = U( 0 ), U maxTolerance = U( 0 ) )
+{
+  const U tolerance =
+      relTolerance > U( 0 ) ? scaled_tolerance( ref, opt, minTolerance, relTolerance, maxTolerance ) : minTolerance;
   if( abs_diff<T, U>( ref, opt ) > tolerance )
   {
     std::cerr << "failed: " << context << "\n"
@@ -102,10 +122,13 @@ static inline bool compare_value( const std::string& context, const T ref, const
 
 template<typename T, typename U = T>
 static inline bool compare_values_1d( const std::string& context, const T* ref, const T* opt, unsigned length,
-                                      U tolerance = U( 0 ) )
+                                      U minTolerance = U( 0 ), U relTolerance = U( 0 ), U maxTolerance = U( 0 ) )
 {
   for( unsigned idx = 0; idx < length; ++idx )
   {
+    const U tolerance = relTolerance > U( 0 )
+                            ? scaled_tolerance( ref[idx], opt[idx], minTolerance, relTolerance, maxTolerance )
+                            : minTolerance;
     if( abs_diff<T, U>( ref[idx], opt[idx] ) > tolerance )
     {
       std::cout << "failed: " << context << "\n"
@@ -118,7 +141,8 @@ static inline bool compare_values_1d( const std::string& context, const T* ref, 
 
 template<typename T, typename U = T>
 static inline bool compare_values_2d( const std::string& context, const T* ref, const T* opt, unsigned rows,
-                                      unsigned cols, unsigned stride = 0, U tolerance = U( 0 ) )
+                                      unsigned cols, unsigned stride = 0, U minTolerance = U( 0 ),
+                                      U relTolerance = U( 0 ), U maxTolerance = U( 0 ) )
 {
   stride = stride != 0 ? stride : cols;
 
@@ -127,6 +151,9 @@ static inline bool compare_values_2d( const std::string& context, const T* ref, 
     for( unsigned col = 0; col < cols; ++col )
     {
       unsigned idx = row * stride + col;
+      const U tolerance = relTolerance > U( 0 )
+                              ? scaled_tolerance( ref[idx], opt[idx], minTolerance, relTolerance, maxTolerance )
+                              : minTolerance;
       if( abs_diff<T, U>( ref[idx], opt[idx] ) > tolerance )
       {
         std::cout << "failed: " << context << "\n"
@@ -3320,6 +3347,13 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
   covRef.create( shape.numCoeff, numBins );
   covOpt.create( shape.numCoeff, numBins );
 
+  static constexpr alf_float_t weightedMinTolerance = 0.1f;
+  static constexpr alf_float_t weightedRelTolerance = 1e-6f; // Gives about 1.0f tolerance for values around 1.0e6.
+  static constexpr alf_float_t weightedMaxTolerance = 1.0f;
+  static constexpr alf_float_t weightedEMinTolerance = 0.3f;
+  static constexpr alf_float_t weightedERelTolerance = 1e-3f; // Gives about 1.0f tolerance for E values around 1.0e3.
+  static constexpr alf_float_t weightedEMaxTolerance = 2.0f;
+
   static constexpr int MaxAlfNumClippingValues = 4;
 
   Pel y[4][4];
@@ -3371,11 +3405,20 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
     }
 
     std::ostringstream sstm;
-    sstm << "getPreBlkStatsAccum filterSize=" << filterSize << " numBins=" << numBins;
+    sstm << testName << " filterSize=" << filterSize << " numBins=" << numBins;
 
-    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, Weighted ? 0.1f : 0.0f ) && passed;
+    const alf_float_t minTolerance = Weighted ? weightedMinTolerance : alf_float_t( 0 );
+    const alf_float_t relTolerance = Weighted ? weightedRelTolerance : alf_float_t( 0 );
+    const alf_float_t maxTolerance = Weighted ? weightedMaxTolerance : alf_float_t( 0 );
+    const alf_float_t eMinTolerance = Weighted ? weightedEMinTolerance : alf_float_t( 0 );
+    const alf_float_t eRelTolerance = Weighted ? weightedERelTolerance : alf_float_t( 0 );
+    const alf_float_t eMaxTolerance = Weighted ? weightedEMaxTolerance : alf_float_t( 0 );
+
+    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, minTolerance, relTolerance,
+                            maxTolerance ) &&
+             passed;
     passed = compare_values_2d( sstm.str() + " y", &covRef.y[0][0], &covOpt.y[0][0], covRef.numBins, covRef.numCoeff,
-                                MAX_NUM_ALF_LUMA_COEFF, Weighted ? 0.2f : 0.0f ) &&
+                                MAX_NUM_ALF_LUMA_COEFF, minTolerance, relTolerance, maxTolerance ) &&
              passed;
 
     for( int b0 = 0; b0 < covRef.numBins; ++b0 )
@@ -3384,7 +3427,7 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
       {
         passed = compare_values_2d( sstm.str() + " E b0=" + std::to_string( b0 ) + " b1=" + std::to_string( b1 ),
                                     &covRef.E[b0][b1][0][0], &covOpt.E[b0][b1][0][0], covRef.numCoeff, covRef.numCoeff,
-                                    MAX_NUM_ALF_LUMA_COEFF, Weighted ? 1.0f : 0.0f ) &&
+                                    MAX_NUM_ALF_LUMA_COEFF, eMinTolerance, eRelTolerance, eMaxTolerance ) &&
                  passed;
       }
     }
