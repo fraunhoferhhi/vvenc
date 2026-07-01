@@ -133,17 +133,6 @@ void FGAnalyzer::_initFGAnalyzerARM()
 
 template void FGAnalyzer::_initFGAnalyzerARM<NEON>();
 
-// Entry points for the unit test (the function pointers are private to init).
-double calcVarNeonEntry( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
-{
-  return calcVarNeon( org, origStride, w, h );
-}
-
-int calcMeanNeonEntry( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
-{
-  return calcMeanNeon( org, origStride, w, h );
-}
-
 }  // namespace vvenc
 
 #endif  // TARGET_SIMD_ARM && ENABLE_SIMD_OPT_FGA

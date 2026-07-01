@@ -195,6 +195,20 @@ public:
 
   SeiFgc::CompModel  getCompModel( int idx ) { return m_compModel[idx];  };
 
+  double (*calcVar) ( const Pel* org,
+                      const ptrdiff_t origStride,
+                      const int w,
+                      const int h );
+
+  int (*calcMean) ( const Pel* org,
+                    const ptrdiff_t origStride,
+                    const int w,
+                    const int h );
+
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAnalyzerARM();
+#endif
+
 private:
   int                             *m_bitDepths;
   ChromaFormat                    m_inputChromaFormat;
@@ -314,16 +328,6 @@ private:
                               uint32_t bitDepth,
                               ComponentID compId );
 
-  double (*calcVar) ( const Pel* org,
-                      const ptrdiff_t origStride,
-                      const int w,
-                      const int h );
-
-  int (*calcMean) ( const Pel* org,
-                    const ptrdiff_t origStride,
-                    const int w,
-                    const int h );
-
   void (*fastDCT2_64) ( const TCoeff* src,
                         TCoeff* dst,
                         int shift,
@@ -337,7 +341,6 @@ private:
   void _initFGAnalyzerX86();
 #endif
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
-  void initFGAnalyzerARM();
   template <ARM_VEXT vext>
   void _initFGAnalyzerARM();
 #endif

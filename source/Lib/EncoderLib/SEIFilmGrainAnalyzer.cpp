@@ -611,6 +611,8 @@ int calcMeanCore ( const Pel* org,
 // ====================================================================================================================
 FGAnalyzer::FGAnalyzer()
 {
+  calcVar  = calcVarCore;
+  calcMean = calcMeanCore;
 }
 
 FGAnalyzer::~FGAnalyzer()
