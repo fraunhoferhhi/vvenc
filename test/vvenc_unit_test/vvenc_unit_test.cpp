@@ -3514,16 +3514,12 @@ static bool test_SampleAdaptiveOffset()
 
 #endif // ENABLE_SIMD_OPT_SAO
 
-#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
+#if ENABLE_SIMD_DBLF
 
-namespace vvenc {
-  void xFilteringPandQCore( Pel*, ptrdiff_t, const ptrdiff_t, int, int, int );
-  void xFilteringPandQNeonEntry( Pel*, ptrdiff_t, const ptrdiff_t, int, int, int );
-}
 
-static bool check_xFilteringPandQ( void ( *neon )( Pel*, ptrdiff_t, const ptrdiff_t, int, int, int ),
-                                    const std::vector<Pel>& input,
-                                    ptrdiff_t step, ptrdiff_t offset, int nP, int nQ, int tc )
+static bool check_xFilteringPandQ( LoopFilter& ref, LoopFilter& opt,
+                                   const std::vector<Pel>& input,
+                                   ptrdiff_t step, ptrdiff_t offset, int nP, int nQ, int tc )
 {
   const ptrdiff_t stride = 32;
   std::vector<Pel> buf_ref  = input;
@@ -3533,8 +3529,8 @@ static bool check_xFilteringPandQ( void ( *neon )( Pel*, ptrdiff_t, const ptrdif
   // Vertical   (step==stride): boundary at row 0, col 8 -- needs cols [0..16]
   ptrdiff_t src_idx = ( step == 1 ) ? 8 * stride : 8;
 
-  vvenc::xFilteringPandQCore( buf_ref.data()  + src_idx, step, offset, nP, nQ, tc );
-  neon(                        buf_neon.data() + src_idx, step, offset, nP, nQ, tc );
+  ref.xFilteringPandQ( buf_ref.data() + src_idx, step, offset, nP, nQ, tc );
+  opt.xFilteringPandQ( buf_neon.data() + src_idx, step, offset, nP, nQ, tc );
 
   std::ostringstream ctx;
   ctx << "xFilteringPandQ step=" << step << " offset=" << offset
@@ -3546,7 +3542,8 @@ static bool test_LoopFilterPandQ()
 {
   printf( "Testing LoopFilter::xFilteringPandQ\n" );
 
-  auto neon = vvenc::xFilteringPandQNeonEntry;
+  LoopFilter ref( /*enableOpt=*/false );
+  LoopFilter opt( /*enableOpt=*/true );
 
   const ptrdiff_t stride   = 32;
   const int       buf_rows = 20;
@@ -3575,8 +3572,8 @@ static bool test_LoopFilterPandQ()
     for( int k = 0; k < 8; ++k )
     {
       int nP = nP_vals[k], nQ = nQ_vals[k];
-      passed = check_xFilteringPandQ( neon, *f.buf, 1,      stride, nP, nQ, f.tc ) && passed;
-      passed = check_xFilteringPandQ( neon, *f.buf, stride, 1,      nP, nQ, f.tc ) && passed;
+      passed = check_xFilteringPandQ( ref, opt, *f.buf, 1,      stride, nP, nQ, f.tc ) && passed;
+      passed = check_xFilteringPandQ( ref, opt, *f.buf, stride, 1,      nP, nQ, f.tc ) && passed;
     }
   }
 
@@ -3593,14 +3590,14 @@ static bool test_LoopFilterPandQ()
     for( int k = 0; k < 8; ++k )
     {
       int nP = nP_vals[k], nQ = nQ_vals[k];
-      passed = check_xFilteringPandQ( neon, buf_rand, 1,      stride, nP, nQ, tc ) && passed;
-      passed = check_xFilteringPandQ( neon, buf_rand, stride, 1,      nP, nQ, tc ) && passed;
+      passed = check_xFilteringPandQ( ref, opt, buf_rand, 1,      stride, nP, nQ, tc ) && passed;
+      passed = check_xFilteringPandQ( ref, opt, buf_rand, stride, 1,      nP, nQ, tc ) && passed;
     }
   }
   return passed;
 }
 
-#endif // TARGET_SIMD_ARM && ENABLE_SIMD_DBLF
+#endif   // ENABLE_SIMD_DBLF
 
 struct UnitTestEntry
 {
@@ -3642,7 +3639,7 @@ static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT_SAO
     { "SAO", test_SampleAdaptiveOffset },
 #endif
-#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
+#if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
 #endif
 };
