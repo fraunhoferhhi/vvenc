@@ -609,10 +609,20 @@ int calcMeanCore ( const Pel* org,
 // ====================================================================================================================
 // Film Grain Analysis Functions
 // ====================================================================================================================
-FGAnalyzer::FGAnalyzer()
+FGAnalyzer::FGAnalyzer( bool enableOpt )
 {
   calcVar  = calcVarCore;
   calcMean = calcMeanCore;
+
+  if( enableOpt )
+  {
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
+    initFGAnalyzerX86();
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+    initFGAnalyzerARM();
+#endif
+  }
 }
 
 FGAnalyzer::~FGAnalyzer()
@@ -748,16 +758,7 @@ void FGAnalyzer::init ( const int width,
     m_DCTtemp = ( TCoeff* ) xMalloc( TCoeff, DATA_BASE_SIZE * DATA_BASE_SIZE );
   }
 
-  calcVar=calcVarCore;
-  calcMean=calcMeanCore;
   fastDCT2_64 = fastForwardDCT2_B64;
-
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  initFGAnalyzerX86();
-#endif
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
-  initFGAnalyzerARM();
-#endif
 
 }
 

@@ -3490,15 +3490,14 @@ static bool test_LoopFilterPandQ()
 
 #endif // TARGET_SIMD_ARM && ENABLE_SIMD_DBLF
 
-#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_FGA
+#if ENABLE_SIMD_OPT_FGA
 
 static bool test_FGAnalyzer()
 {
   printf( "Testing FGAnalyzer::calcVar / calcMean\n" );
 
-  vvenc::FGAnalyzer ref;
-  vvenc::FGAnalyzer opt;
-  opt.initFGAnalyzerARM();
+  vvenc::FGAnalyzer ref{ /*enableOpt=*/false };
+  vvenc::FGAnalyzer opt{ /*enableOpt=*/true };
 
   bool                passed    = true;
   InputGenerator<Pel> gen{ 10, /*is_signed=*/false };
@@ -3532,7 +3531,7 @@ static bool test_FGAnalyzer()
   return passed;
 }
 
-#endif // TARGET_SIMD_ARM && ENABLE_SIMD_OPT_FGA
+#endif // ENABLE_SIMD_OPT_FGA
 
 struct UnitTestEntry
 {
@@ -3577,7 +3576,7 @@ static const UnitTestEntry test_suites[] = {
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
 #endif
-#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_FGA
+#if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },
 #endif
 };

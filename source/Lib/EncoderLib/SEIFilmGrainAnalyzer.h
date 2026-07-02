@@ -177,7 +177,7 @@ public:
 class FGAnalyzer
 {
 public:
-  FGAnalyzer();
+  FGAnalyzer( bool enableOpt = true );
   ~FGAnalyzer();
 
   int                             prevAnalysisPoc                = -1;
@@ -204,10 +204,6 @@ public:
                     const ptrdiff_t origStride,
                     const int w,
                     const int h );
-
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
-  void initFGAnalyzerARM();
-#endif
 
 private:
   int                             *m_bitDepths;
@@ -341,6 +337,7 @@ private:
   void _initFGAnalyzerX86();
 #endif
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAnalyzerARM();
   template <ARM_VEXT vext>
   void _initFGAnalyzerARM();
 #endif
