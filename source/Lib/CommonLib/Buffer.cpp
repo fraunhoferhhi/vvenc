@@ -447,8 +447,6 @@ uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int heigh
 
 PelBufferOps::PelBufferOps()
 {
-  isInitX86Done = false;
-
   addAvg            = addAvgCore<Pel>;
   reco              = recoCore<Pel>;
   copyClip          = copyClipCore<Pel>;
@@ -495,6 +493,27 @@ PelBufferOps::PelBufferOps()
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
   HDHighPass = HDHighPassCore;
   HDHighPass2 = HDHighPass2Core;
+}
+
+void PelBufferOps::initPelBufOps( bool enableOpt )
+{
+  if( isInitSIMDDone )
+  {
+    return;
+  }
+  isInitSIMDDone = true;
+
+  if( enableOpt )
+  {
+#if ENABLE_SIMD_OPT_BUFFER
+#  if defined( TARGET_SIMD_X86 )
+    g_pelBufOP.initPelBufOpsX86();
+#  endif
+#  if defined( TARGET_SIMD_ARM )
+    g_pelBufOP.initPelBufOpsARM();
+#  endif
+#endif   // ENABLE_SIMD_OPT_BUFFER
+  }
 }
 
 PelBufferOps g_pelBufOP = PelBufferOps();

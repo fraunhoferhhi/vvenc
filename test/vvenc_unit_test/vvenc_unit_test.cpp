@@ -2253,7 +2253,7 @@ static bool test_AffineGradientSearch()
 }
 #endif // ENABLE_SIMD_OPT_AFFINE_ME
 
-#ifdef ENABLE_SIMD_OPT_BUFFER
+#if ENABLE_SIMD_OPT_BUFFER
 static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
   static constexpr unsigned bd = 10;
@@ -2416,12 +2416,8 @@ static bool test_PelBufferOps()
   PelBufferOps ref;
   PelBufferOps opt;
 
-#if defined( TARGET_SIMD_X86 )
-  opt.initPelBufOpsX86();
-#endif
-#if defined( TARGET_SIMD_ARM )
-  opt.initPelBufOpsARM();
-#endif
+  ref.initPelBufOps( /*enableOpt=*/false );
+  opt.initPelBufOps( /*enableOpt=*/true  );
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
