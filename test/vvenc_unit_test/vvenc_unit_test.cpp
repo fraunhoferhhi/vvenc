@@ -1148,12 +1148,9 @@ static bool test_TCoeffOps()
 {
   TCoeffOps ref;
   TCoeffOps opt;
-#if defined( TARGET_SIMD_X86 )
-  opt.initTCoeffOpsX86();
-#endif
-#if defined( TARGET_SIMD_ARM )
-  opt.initTCoeffOpsARM();
-#endif
+
+  ref.initTCoeffOps( /*enableOpt=*/false );
+  opt.initTCoeffOps( /*enableOpt=*/true );
 
   unsigned num_cases = NUM_CASES;
   bool passed        = true;

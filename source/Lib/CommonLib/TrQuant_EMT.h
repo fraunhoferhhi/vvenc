@@ -63,17 +63,7 @@ using namespace arm_simd;
 struct TCoeffOps
 {
   TCoeffOps();
-
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_TRAFO
-  void initTCoeffOpsX86();
-  template<X86_VEXT vext>
-  void _initTCoeffOpsX86();
-#endif
-#if defined(TARGET_SIMD_ARM)  && ENABLE_SIMD_TRAFO
-  void initTCoeffOpsARM();
-  template<ARM_VEXT vext>
-  void _initTCoeffOpsARM();
-#endif
+  void initTCoeffOps( bool enableOpt = true );
 
   void( *cpyResi8 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyResi4 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
@@ -84,6 +74,18 @@ struct TCoeffOps
   void( *fastFwdCore_1D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
   void( *roundClip4 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *roundClip8 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
+
+private:
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
+  void initTCoeffOpsX86();
+  template<X86_VEXT vext>
+  void _initTCoeffOpsX86();
+#endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
+  void initTCoeffOpsARM();
+  template<ARM_VEXT vext>
+  void _initTCoeffOpsARM();
+#endif
 };
 
 extern TCoeffOps g_tCoeffOps;
