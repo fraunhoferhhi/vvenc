@@ -1105,6 +1105,9 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
     initEncAdaptiveLoopFilter_X86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
+    initEncAdaptiveLoopFilterARM();
+#endif
   }
 }
 
