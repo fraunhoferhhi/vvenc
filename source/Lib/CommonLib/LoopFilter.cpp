@@ -344,7 +344,7 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-LoopFilter::LoopFilter()
+LoopFilter::LoopFilter( bool enableOpt )
 {
   m_origin[0] = Position{ 0, 0 };
   m_origin[1] = Position{ 0, 0 };
@@ -352,16 +352,18 @@ LoopFilter::LoopFilter()
   xPelFilterLuma  = xPelFilterLumaCore;
   xFilteringPandQ = xFilteringPandQCore;
 
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_DBLF
-  initLoopFilterX86();
+    initLoopFilterX86();
 #endif
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_DBLF
-  initLoopFilterARM();
+    initLoopFilterARM();
 #endif
+  }
 }
 
-LoopFilter::~LoopFilter()
-{}
+
 
 // ====================================================================================================================
 // Public member functions

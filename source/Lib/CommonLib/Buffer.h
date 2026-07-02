@@ -81,20 +81,7 @@ using namespace arm_simd;
 struct PelBufferOps
 {
   PelBufferOps();
-
-  bool isInitX86Done;
-
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
-  void initPelBufOpsX86();
-  template<X86_VEXT vext>
-  void _initPelBufOpsX86();
-#endif
-	
-#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_ARM )
-  void initPelBufOpsARM();
-  template<ARM_VEXT vext>
-  void _initPelBufOpsARM();
-#endif
+  void initPelBufOps( bool enableOpt = true );
 
 #define INCX( ptr, stride ) { ptr++; }
 #define INCY( ptr, stride ) { ptr += ( stride ); }
@@ -140,6 +127,21 @@ struct PelBufferOps
   uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
   uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
   uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
+
+private:
+  bool isInitSIMDDone = false;
+
+#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+  void initPelBufOpsX86();
+  template<X86_VEXT vext>
+  void _initPelBufOpsX86();
+#endif
+
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_ARM )
+  void initPelBufOpsARM();
+  template<ARM_VEXT vext>
+  void _initPelBufOpsARM();
+#endif
 };
 
 extern PelBufferOps g_pelBufOP;

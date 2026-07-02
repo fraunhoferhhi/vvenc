@@ -2025,6 +2025,19 @@ TCoeffOps::TCoeffOps()
   fastFwdCore_2D[4] = fastFwdCore<64>;
 }
 
+void TCoeffOps::initTCoeffOps( bool enableOpt )
+{
+  if( enableOpt )
+  {
+# if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
+    initTCoeffOpsX86();
+# endif
+# if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_TRAFO
+    initTCoeffOpsARM();
+# endif
+  }
+}
+
 TCoeffOps g_tCoeffOps;
 
 #endif
