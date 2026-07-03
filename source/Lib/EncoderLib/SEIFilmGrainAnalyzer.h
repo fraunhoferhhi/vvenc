@@ -205,6 +205,13 @@ public:
                     const int w,
                     const int h );
 
+  void (*fastDCT2_64) ( const TCoeff* src,
+                        TCoeff* dst,
+                        int shift,
+                        int line,
+                        int iSkipLine,
+                        int iSkipLine2 );
+
 private:
   int                             *m_bitDepths;
   ChromaFormat                    m_inputChromaFormat;
@@ -323,13 +330,6 @@ private:
                               PelStorage& buff2,
                               uint32_t bitDepth,
                               ComponentID compId );
-
-  void (*fastDCT2_64) ( const TCoeff* src,
-                        TCoeff* dst,
-                        int shift,
-                        int line,
-                        int iSkipLine,
-                        int iSkipLine2 );
 
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
   void initFGAnalyzerX86();

@@ -611,8 +611,9 @@ int calcMeanCore ( const Pel* org,
 // ====================================================================================================================
 FGAnalyzer::FGAnalyzer( bool enableOpt )
 {
-  calcVar  = calcVarCore;
-  calcMean = calcMeanCore;
+  calcVar     = calcVarCore;
+  calcMean    = calcMeanCore;
+  fastDCT2_64 = fastForwardDCT2_B64;
 
   if( enableOpt )
   {
@@ -757,8 +758,6 @@ void FGAnalyzer::init ( const int width,
   {
     m_DCTtemp = ( TCoeff* ) xMalloc( TCoeff, DATA_BASE_SIZE * DATA_BASE_SIZE );
   }
-
-  fastDCT2_64 = fastForwardDCT2_B64;
 
 }
 
