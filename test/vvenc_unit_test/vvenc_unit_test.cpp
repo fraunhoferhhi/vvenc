@@ -71,6 +71,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
 #include "apputils/ParseArg.h"
 #include "vvenc/vvenc.h"
@@ -3642,6 +3643,49 @@ static bool test_LoopFilterPandQ()
 
 #endif   // ENABLE_SIMD_DBLF
 
+#if ENABLE_SIMD_OPT_FGA
+
+static bool test_FGAnalyzer()
+{
+  printf( "Testing FGAnalyzer::calcVar / calcMean\n" );
+
+  vvenc::FGAnalyzer ref{ /*enableOpt=*/false };
+  vvenc::FGAnalyzer opt{ /*enableOpt=*/true };
+
+  bool                passed    = true;
+  InputGenerator<Pel> gen{ 10, /*is_signed=*/false };
+  unsigned            num_cases = g_fastUnitTest ? 10 : NUM_CASES;
+
+  const int sizes[] = { 8, 16, 32, 64 };
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int w : sizes )
+    {
+      for( int h : sizes )
+      {
+        const ptrdiff_t  stride = w + 8;
+        std::vector<Pel> buf( stride * h );
+        std::generate( buf.begin(), buf.end(), gen );
+
+        std::ostringstream ctx;
+        ctx << "calcVar/calcMean w=" << w << " h=" << h;
+
+        const double varRef = ref.calcVar( buf.data(), stride, w, h );
+        const double varOpt = opt.calcVar( buf.data(), stride, w, h );
+        passed = compare_value( ctx.str() + " var", varRef, varOpt ) && passed;
+
+        const int meanRef = ref.calcMean( buf.data(), stride, w, h );
+        const int meanOpt = opt.calcMean( buf.data(), stride, w, h );
+        passed = compare_value( ctx.str() + " mean", meanRef, meanOpt ) && passed;
+      }
+    }
+  }
+  return passed;
+}
+
+#endif // ENABLE_SIMD_OPT_FGA
+
 struct UnitTestEntry
 {
   std::string name;
@@ -3684,6 +3728,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+#endif
+#if ENABLE_SIMD_OPT_FGA
+    { "FGAnalyzer", test_FGAnalyzer },
 #endif
 };
 

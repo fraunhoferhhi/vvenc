@@ -61,6 +61,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
 namespace vvenc
 {
@@ -252,6 +253,17 @@ void LoopFilter::initLoopFilterARM()
   }
 }
 #endif  // ENABLE_SIMD_DBLF
+
+#if ENABLE_SIMD_OPT_FGA
+void FGAnalyzer::initFGAnalyzerARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initFGAnalyzerARM<NEON>();
+  }
+}
+#endif  // ENABLE_SIMD_OPT_FGA
 
 #endif  // TARGET_SIMD_ARM
 

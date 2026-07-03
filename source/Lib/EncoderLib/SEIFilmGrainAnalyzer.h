@@ -177,7 +177,7 @@ public:
 class FGAnalyzer
 {
 public:
-  FGAnalyzer();
+  FGAnalyzer( bool enableOpt = true );
   ~FGAnalyzer();
 
   int                             prevAnalysisPoc                = -1;
@@ -194,6 +194,23 @@ public:
   int getLog2scaleFactor()  { return m_log2ScaleFactor; };
 
   SeiFgc::CompModel  getCompModel( int idx ) { return m_compModel[idx];  };
+
+  double (*calcVar) ( const Pel* org,
+                      const ptrdiff_t origStride,
+                      const int w,
+                      const int h );
+
+  int (*calcMean) ( const Pel* org,
+                    const ptrdiff_t origStride,
+                    const int w,
+                    const int h );
+
+  void (*fastDCT2_64) ( const TCoeff* src,
+                        TCoeff* dst,
+                        int shift,
+                        int line,
+                        int iSkipLine,
+                        int iSkipLine2 );
 
 private:
   int                             *m_bitDepths;
@@ -314,27 +331,15 @@ private:
                               uint32_t bitDepth,
                               ComponentID compId );
 
-  double (*calcVar) ( const Pel* org,
-                      const ptrdiff_t origStride,
-                      const int w,
-                      const int h );
-
-  int (*calcMean) ( const Pel* org,
-                    const ptrdiff_t origStride,
-                    const int w,
-                    const int h );
-
-  void (*fastDCT2_64) ( const TCoeff* src,
-                        TCoeff* dst,
-                        int shift,
-                        int line,
-                        int iSkipLine,
-                        int iSkipLine2 );
-
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
   void initFGAnalyzerX86();
   template <X86_VEXT vext>
   void _initFGAnalyzerX86();
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAnalyzerARM();
+  template <ARM_VEXT vext>
+  void _initFGAnalyzerARM();
 #endif
 };
 
