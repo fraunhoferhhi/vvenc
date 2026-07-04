@@ -1559,6 +1559,36 @@ static bool check_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned num_cases,
   return true;
 }
 
+// calcVar's mean uses a Log2(w)+Log2(h) shift, so the optimized path only
+// matches the scalar reference for power-of-two block sizes. MCTF edge blocks
+// can be non-power-of-two multiples of 8 (e.g. 24), where the optimized result
+// intentionally follows the x86 calcVarSse behavior instead; those sizes are
+// not exercised here. For the power-of-two sizes below both paths are
+// integer-exact up to the final /256.0 divide, so an exact compare is valid.
+static bool check_calcVar( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
+{
+  printf( "Testing MCTF::calcVar w=%d h=%d\n", w, h );
+  InputGenerator<Pel> gen{ 10, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const ptrdiff_t  stride = w + 8;  // stride != width
+    std::vector<Pel> buf( stride * h );
+    std::generate( buf.begin(), buf.end(), gen );
+
+    std::ostringstream sstm;
+    sstm << "MCTF::calcVar w=" << w << " h=" << h;
+    const double varRef = ref->m_calcVar( buf.data(), stride, w, h );
+    const double varOpt = opt->m_calcVar( buf.data(), stride, w, h );
+    if( !compare_value( sstm.str(), varRef, varOpt ) )
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool test_MCTF()
 {
   MCTF ref{ /*enableOpt=*/false };
@@ -1610,6 +1640,14 @@ static bool test_MCTF()
       passed = check_motionErrorLumaFrac8</*lowRes=*/false>( &ref, &opt, w, h ) && passed;
 
       passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
+    }
+  }
+
+  for( int w : { 8, 16, 32, 64 } )
+  {
+    for( int h : { 8, 16, 32, 64 } )
+    {
+      passed = check_calcVar( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
   return passed;
