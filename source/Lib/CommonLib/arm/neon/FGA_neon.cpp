@@ -46,7 +46,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
-#include "CommonLib/Rom.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
 #include "sum_neon.h"
 
@@ -80,54 +79,18 @@ static int calcMeanNeon( const Pel* org, const ptrdiff_t origStride, const int w
   return horizontal_add_s32x4( vaddq_s32( acc0, acc1 ) );
 }
 
-// Mirrors calcVarSse: integer accumulation throughout, single final divide.
-static double calcVarNeon( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
-{
-  // Pass 1: mean — same dual-accumulator + vpadalq_s16 pattern as calcMean.
-  int32x4_t avgAcc0 = vdupq_n_s32( 0 );
-  int32x4_t avgAcc1 = vdupq_n_s32( 0 );
-  const Pel* p      = org;
-  for( int y = 0; y < h; y++, p += origStride )
-  {
-    int x = 0;
-    for( ; x < w - 8; x += 16 )
-    {
-      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
-      avgAcc1 = vpadalq_s16( avgAcc1, vld1q_s16( p + x + 8 ) );
-    }
-    for( ; x < w; x += 8 )
-      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
-  }
-  const int shift    = Log2( w ) + Log2( h ) - 4;
-  const int avg      = horizontal_add_s32x4( vaddq_s32( avgAcc0, avgAcc1 ) ) >> shift;
-  // Match _mm_packs_epi32 saturation to the int16 range.
-  const int16x8_t vavg = vdupq_n_s16( (int16_t)Clip3( -32768, 32767, avg ) );
-
-  // Pass 2: variance — dual int64 accumulators; vpadalq_s32 pairwise-adds
-  // adjacent squared products and widens to int64 in a single instruction.
-  int64x2_t var0 = vdupq_n_s64( 0 );
-  int64x2_t var1 = vdupq_n_s64( 0 );
-  p = org;
-  for( int y = 0; y < h; y++, p += origStride )
-  {
-    for( int x = 0; x < w; x += 8 )
-    {
-      int16x8_t pix = vshlq_n_s16( vld1q_s16( p + x ), 4 );
-      pix           = vsubq_s16( pix, vavg );
-      const int32x4_t lo = vmull_s16( vget_low_s16( pix ), vget_low_s16( pix ) );
-      const int32x4_t hi = vmull_s16( vget_high_s16( pix ), vget_high_s16( pix ) );
-      var0 = vpadalq_s32( var0, lo );
-      var1 = vpadalq_s32( var1, hi );
-    }
-  }
-
-  return horizontal_add_s64x2( vaddq_s64( var0, var1 ) ) / 256.0;
-}
+#if ENABLE_SIMD_OPT_MCTF
+// Defined in MCTF_neon.cpp and reused here, mirroring how the x86 build
+// shares calcVarSse between MCTF and the film grain analyzer.
+double calcVar_neon( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
+#endif
 
 template <ARM_VEXT vext>
 void FGAnalyzer::_initFGAnalyzerARM()
 {
-  calcVar  = calcVarNeon;
+#if ENABLE_SIMD_OPT_MCTF
+  calcVar  = calcVar_neon;
+#endif
   calcMean = calcMeanNeon;
 }
 
