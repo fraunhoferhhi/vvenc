@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 //  ====================================================================================================================
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Rom.h"
 
 #include "MCTF.h"
 
@@ -62,6 +63,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "MCTF_neon.h"
 #include "mem_neon.h"
 #include "neon_sve_bridge.h"
+#include "../neon/sum_neon.h"
 #include <arm_neon.h>
 #include <arm_sve.h>
 
@@ -546,6 +548,57 @@ void applyBlock_sve( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
                      weightScaling, sigmaSq );
 }
 
+// SVE variant of calcVar_neon. The mean pass is unchanged; the variance pass
+// uses the SVE dot-product (vvenc_sdotq_s16) to square and accumulate eight
+// int16 differences into two int64 lanes per call, which also removes the
+// separate widening step of the Neon vmull_s16 + vpadalq_s32 sequence. The
+// result is bit-identical to calcVar_neon (see MCTF_neon.cpp).
+double calcVar_sve( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
+{
+  // Pass 1: mean. Same dual-accumulator vpadalq_s16 sum as calcVar_neon.
+  int32x4_t avgAcc0 = vdupq_n_s32( 0 );
+  int32x4_t avgAcc1 = vdupq_n_s32( 0 );
+  const Pel* p      = org;
+  for( int y = 0; y < h; y++, p += origStride )
+  {
+    int x = 0;
+    for( ; x < w - 8; x += 16 )
+    {
+      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
+      avgAcc1 = vpadalq_s16( avgAcc1, vld1q_s16( p + x + 8 ) );
+    }
+    for( ; x < w; x += 8 )
+      avgAcc0 = vpadalq_s16( avgAcc0, vld1q_s16( p + x ) );
+  }
+  const int shift    = Log2( w ) + Log2( h ) - 4;
+  const int avg      = horizontal_add_s32x4( vaddq_s32( avgAcc0, avgAcc1 ) ) >> shift;
+  const int16x8_t vavg = vdupq_n_s16( (int16_t)Clip3( -32768, 32767, avg ) );
+
+  // Pass 2: variance. vvenc_sdotq_s16( acc, pix, pix ) accumulates the eight
+  // squared differences of pix into the two int64 lanes of acc in one step.
+  int64x2_t var0 = vdupq_n_s64( 0 );
+  int64x2_t var1 = vdupq_n_s64( 0 );
+  p = org;
+  for( int y = 0; y < h; y++, p += origStride )
+  {
+    int x = 0;
+    for( ; x < w - 8; x += 16 )
+    {
+      const int16x8_t pix0 = vsubq_s16( vshlq_n_s16( vld1q_s16( p + x ), 4 ), vavg );
+      const int16x8_t pix1 = vsubq_s16( vshlq_n_s16( vld1q_s16( p + x + 8 ), 4 ), vavg );
+      var0 = vvenc_sdotq_s16( var0, pix0, pix0 );
+      var1 = vvenc_sdotq_s16( var1, pix1, pix1 );
+    }
+    for( ; x < w; x += 8 )
+    {
+      const int16x8_t pix = vsubq_s16( vshlq_n_s16( vld1q_s16( p + x ), 4 ), vavg );
+      var0 = vvenc_sdotq_s16( var0, pix, pix );
+    }
+  }
+
+  return horizontal_add_s64x2( vaddq_s64( var0, var1 ) ) / 256.0;
+}
+
 template<>
 void MCTF::_initMCTF_ARM<SVE>()
 {
@@ -553,6 +606,7 @@ void MCTF::_initMCTF_ARM<SVE>()
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_sve;
   m_applyPlanarCorrection = applyPlanarCorrection_sve;
   m_applyBlock = applyBlock_sve;
+  m_calcVar = calcVar_sve;
 }
 
 } // namespace vvenc
