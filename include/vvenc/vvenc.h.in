@@ -139,8 +139,14 @@ typedef struct vvencYUVBuffer
   bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 #if VVENC_USE_UNSTABLE_API
   void*         userData;              // user data to be returned in corresponding access unit
+  uint32_t picFlags;                   // per picture flags (see VVENC_PIC_FLAG_*)
 #endif
 }vvencYUVBuffer;
+
+#if VVENC_USE_UNSTABLE_API
+#define VVENC_PIC_FLAG_NONE 0
+#define VVENC_PIC_FLAG_FORCE_IDR (1 << 0)
+#endif
 
 /* vvenc_YUVBuffer_alloc:
    Allocates an vvencYUVBuffer instance.

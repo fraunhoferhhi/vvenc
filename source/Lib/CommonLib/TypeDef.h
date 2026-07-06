@@ -888,6 +888,8 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_skipFirstPass;
   SceneType m_scType;
   int       m_vtl;
+  bool      m_isForcedIdr;
+  bool      m_allowsCodingGap;
 
   void setDefaultGOPEntry()
   {
@@ -904,6 +906,8 @@ typedef struct GOPEntry : vvencGOPEntry
     m_skipFirstPass    = false;
     m_scType           = SCT_NONE;
     m_vtl              = 0;
+    m_isForcedIdr      = false;
+    m_allowsCodingGap  = false;
   }
 
   void copyFromGopCfg( const vvencGOPEntry& cfgEntry )

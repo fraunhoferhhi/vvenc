@@ -1447,7 +1447,10 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     auto pic = (*it);
     // skip pics, which have already been initialized
     if( pic->isInitDone )
+    {
+      m_lastCodingNum = pic->gopEntry->m_codingNum;
       continue;
+    }
 
     // update visual activity for last start of GOP picture
     // this may have been changed in the shared picture data due to fixStartOfLastGop()
@@ -1473,7 +1476,8 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     }
 
     // continue with next pic in increasing coding number order
-    if( pic->gopEntry->m_codingNum != m_lastCodingNum + 1 && ! picList.back()->isFlush )
+    if( pic->gopEntry->m_codingNum != m_lastCodingNum + 1 && ! picList.back()->isFlush
+        && ! pic->gopEntry->m_allowsCodingGap && ! picList.back()->gopEntry->m_allowsCodingGap )
       break;
 
     CHECK( m_lastCodingNum == -1 && ! pic->gopEntry->m_isStartOfIntra, "encoding should start with an I-Slice" );
