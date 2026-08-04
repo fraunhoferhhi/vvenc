@@ -106,7 +106,7 @@ void CodingStructure::destroy()
   m_reco.destroy();
   m_rspreco.destroy();
   m_org = nullptr;
-  m_rsporg = nullptr;
+  m_filtorg = nullptr;
 
   destroyCoeffs();
   delete[] m_motionBuf;
@@ -666,7 +666,7 @@ void CodingStructure::destroyCoeffs()
   }
 }
 
-void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer, PelStorage* pRspBuffer )
+void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer, PelStorage* pFiltOrgBuffer )
 {
   CHECK( this == &subStruct, "Trying to init self as sub-structure" );
 
@@ -675,11 +675,10 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
   UnitArea subAreaLuma = subArea;
   subAreaLuma.blocks.resize( 1 );
-  if( pRspBuffer ) pRspBuffer->compactResize( subAreaLuma );
+  if( pFiltOrgBuffer ) pFiltOrgBuffer->compactResize( subAreaLuma );
 
   subStruct.m_org    = (pOrgBuffer) ? pOrgBuffer : m_org;
-  subStruct.m_rsporg = (pRspBuffer) ? pRspBuffer : m_rsporg;
-
+  subStruct.m_filtorg = (pFiltOrgBuffer) ? pFiltOrgBuffer : m_filtorg;
   subStruct.compactResize( subArea );
 
   subStruct.costDbOffset = 0;
@@ -700,8 +699,6 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   subStruct.picHeader = picHeader;
 
   memcpy(subStruct.alfAps, alfAps, sizeof(alfAps));
-
-  subStruct.lmcsAps   = lmcsAps;
 
   subStruct.slice     = slice;
   subStruct.baseQP    = baseQP;
@@ -1062,13 +1059,9 @@ PelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type )
   {
     buf = m_org;
   }
-  else if( type == PIC_ORIGINAL_RSP)
+  else if( type == PIC_FILT_ORIGINAL)
   {
-    buf = m_rsporg;
-  }
-  else if (type == PIC_ORIGINAL_RSP_REC)
-  {
-    buf = &m_rspreco;
+    buf = m_filtorg;
   }
 
   CHECK( !buf, "Unknown buffer requested" );
@@ -1101,13 +1094,9 @@ const CPelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType ty
   {
     buf = m_org;
   }
-  else if( type == PIC_ORIGINAL_RSP)
+  else if( type == PIC_FILT_ORIGINAL)
   {
-    buf = m_rsporg;
-  }
-  else if (type == PIC_ORIGINAL_RSP_REC)
-  {
-    buf = &m_rspreco;
+    buf = m_filtorg;
   }
 
   CHECK( !buf, "Unknown buffer requested" );

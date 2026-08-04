@@ -379,8 +379,6 @@ enum DFunc : uint8_t
   DF_HAD128_fast     = DF_HAD_fast+7,      ///< 16NxM fast HAD
 
   DF_TOTAL_FUNCTIONS = 34,
-
-  DF_SSE_WTD         = 0xf2u          // out of func scope
 };
 
 /// motion vector predictor direction used in AMVP
@@ -613,15 +611,6 @@ public:
 public:
   bool Cb;
   bool Cr;
-};
-
-
-enum RESHAPE_SIGNAL_TYPE : int8_t
-{
-  RESHAPE_SIGNAL_SDR = 0,
-  RESHAPE_SIGNAL_PQ  = 1,
-  RESHAPE_SIGNAL_HLG = 2,
-  RESHAPE_SIGNAL_NULL = 100,
 };
 
 

@@ -53,7 +53,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/MotionInfo.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/UnitTools.h"
-#include "CommonLib/Reshape.h"
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
@@ -3557,16 +3556,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
   if (bCheckFull)
   {
-    ReshapeData& reshapeData = cs.picture->reshapeData;
-
     TransformUnit& tu = csFull->addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, &cu);
     tu.depth          = currDepth;
     tu.mtsIdx[COMP_Y] = MTS_DCT2_DCT2;
     tu.checkTuNoResidual( partitioner.currPartIdx() );
-    if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && cs.picHeader->lmcsChromaResidualScale && !(CS::isDualITree(cs) && cs.slice->isIntra() && tu.cu->predMode == MODE_IBC))
-    {
-      tu.chromaAdj = reshapeData.calculateChromaAdjVpduNei(tu, tu.blocks[COMP_Y], tu.cu->treeType);
-    }
 
     double minCost [MAX_NUM_TBLOCKS];
 
@@ -3640,13 +3633,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         const QpParam cQP(tu, compID);  // note: uses tu.transformSkip[compID]
         m_pcTrQuant->selectLambda(compID);
 
-        const Slice& slice = *tu.cu->slice;
-        if (slice.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && isChroma(compID) && slice.picHeader->lmcsChromaResidualScale )
-        {
-          double cRescale = (double)(1 << CSCALE_FP_PREC) / (double)(tu.chromaAdj);
-          m_pcTrQuant->scaleLambda( 1.0/(cRescale*cRescale) );
-        }
-
         if ( sps.jointCbCr && isChroma( compID ) && ( tu.cu->cs->slice->sliceQp > 18 ) )
         {
           m_pcTrQuant->scaleLambda( 1.05 );
@@ -3658,12 +3644,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         uint64_t   nonCoeffFracBits = 0;
         Distortion nonCoeffDist = 0;
         double     nonCoeffCost = 0;
-
-        if (slice.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && isChroma(compID) && slice.picHeader->lmcsChromaResidualScale && tu.blocks[compID].width*tu.blocks[compID].height > 4 )
-        {
-          PelBuf resiBuf = csFull->getResiBuf(compArea);
-          resiBuf.scaleSignal(tu.chromaAdj, 1, slice.clpRngs[compID]);
-        }
 
         if (nNumTransformCands > 1)
         {
@@ -3731,11 +3711,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           CPelBuf orgResi = orgResiBuf.get(compID);
 
           m_pcTrQuant->invTransformNxN(tu, compID, resiBuf, cQP);
-          if (slice.picHeader->lmcsEnabled && isChroma(compID) && slice.picHeader->lmcsChromaResidualScale && tu.blocks[compID].width*tu.blocks[compID].height > 4)
-          {
-            resiBuf.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
-          }
-
           currCompDist = m_pcRdCost->getDistPart(orgResi, resiBuf, channelBitDepth, compID, DF_SSE);
           currCompCost = m_pcRdCost->calcRdCost(currCompFracBits, currCompDist, false);
         }
@@ -3798,9 +3773,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       const CompArea& crArea = tu.blocks[COMP_Cr];
       bool checkJointCbCr = (sps.jointCbCr) && (!tu.noResidual) && (TU::getCbf(tu, COMP_Cb) || TU::getCbf(tu, COMP_Cr));
       const int channelBitDepth = sps.bitDepths[toChannelType(COMP_Cb)];
-      const Slice& slice = *tu.cu->slice;
-      bool      reshape         = slice.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && slice.picHeader->lmcsChromaResidualScale
-                               && tu.blocks[COMP_Cb].width * tu.blocks[COMP_Cb].height > 4;
       double minCostCbCr = minCost[COMP_Cb] + minCost[COMP_Cr];
       bool   isLastBest  = false;
 
@@ -3821,11 +3793,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
         m_orgResiCb[0].copyFrom(orgResiBuf.Cb());
         m_orgResiCr[0].copyFrom(orgResiBuf.Cr());
-        if (reshape)
-        {
-          m_orgResiCb[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cb]);
-          m_orgResiCr[0].scaleSignal(tu.chromaAdj, 1, slice.clpRngs[COMP_Cr]);
-        }
 
         jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(tu, m_orgResiCb, m_orgResiCr);
 
@@ -3893,12 +3860,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           cbResi.copyFrom(m_orgResiCb[cbfMask]);
           crResi.copyFrom(m_orgResiCr[cbfMask]);
 
-          if (reshape)
-          {
-            double cRescale = (double)(1 << CSCALE_FP_PREC) / (double)(tu.chromaAdj);
-            m_pcTrQuant->scaleLambda(1.0 / (cRescale * cRescale));
-          }
-
           int         codedCbfMask = 0;
           ComponentID codeCompId = (tu.jointCbCr >> 1 ? COMP_Cb : COMP_Cr);
           ComponentID otherCompId = (codeCompId == COMP_Cr ? COMP_Cb : COMP_Cr);
@@ -3963,11 +3924,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             currCompFracBits = m_CABACEstimator->getEstFracBits();
 
             m_pcTrQuant->invTransformICT(tu, cbResi, crResi);
-            if (reshape)
-            {
-              cbResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cb]);
-              crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
-            }
 
             currCompDistCb = m_pcRdCost->getDistPart(orgResiBuf.Cb(), cbResi, channelBitDepth, COMP_Cb, DF_SSE);
             currCompDistCr = m_pcRdCost->getDistPart(orgResiBuf.Cr(), crResi, channelBitDepth, COMP_Cr, DF_SSE);
@@ -4131,7 +4087,6 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   const ChromaFormat format      = cs.area.chromaFormat;;
   const int  numValidComponents  = getNumberValidComponents(format);
   const SPS &sps                 = *cs.sps;
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
 
   if( skipResidual ) //  No residual coding : SKIP mode
   {
@@ -4140,10 +4095,6 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     CHECK( cu.sbtInfo != 0, "sbtInfo shall be 0 if CU has no residual" );
     cs.getResiBuf().fill(0);
     cs.getRecoBuf().copyFrom(cs.getPredBuf() );
-    if( cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && !cu.ciip && !CU::isIBC(cu))
-    {
-      cs.getRecoBuf().Y().rspSignal( reshapeData.getFwdLUT());
-    }
 
     // add new "empty" TU(s) spanning the whole CU
     cs.addEmptyTUs( partitioner, &cu );
@@ -4158,23 +4109,8 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
         continue;
       CPelBuf reco = cs.getRecoBuf (compID);
       CPelBuf org  = cs.getOrgBuf  (compID);
-      if ((cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag()) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
-      {
-        const CompArea& areaY = cu.Y();
-        const CPelBuf orgLuma = cs.getOrgBuf( areaY );
-        if (compID == COMP_Y && !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
-        {
-          PelBuf tmpRecLuma = cs.getRspRecoBuf();
-          tmpRecLuma.rspSignal(reco, reshapeData.getInvLUT());
-          distortion += m_pcRdCost->getDistPart(org, tmpRecLuma, sps.bitDepths[ CH_L ], compID, DF_SSE_WTD, &orgLuma);
-        }
-        else
-          distortion += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[ CH_C ], compID, DF_SSE_WTD, &orgLuma );
-      }
-      else
-      {
-        distortion  += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[ toChannelType( compID ) ], compID, DF_SSE );
-      }
+
+      distortion  += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[ toChannelType( compID ) ], compID, DF_SSE );
     }
 
     CodingUnit& cu = *cs.getCU(partitioner.chType, TREE_D);
@@ -4191,24 +4127,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   //  Residual coding.
   if (luma)
   {
-    if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
-    {
-      if (!cu.ciip && !CU::isIBC(cu))
-      {
-        const CompArea& areaY = cu.Y();
-        PelBuf tmpPred = m_tmpStorageLCU.getCompactBuf(areaY);
-        tmpPred.rspSignal(cs.getPredBuf(COMP_Y), reshapeData.getFwdLUT());
-        cs.getResiBuf(COMP_Y).subtract(cs.getRspOrgBuf(), tmpPred);
-      }
-      else
-      {
-        cs.getResiBuf(COMP_Y).subtract(cs.getRspOrgBuf(), cs.getPredBuf(COMP_Y));
-      }
-    }
-    else
-    {
-      cs.getResiBuf(COMP_Y).subtract(cs.getOrgBuf(COMP_Y), cs.getPredBuf(COMP_Y));
-    }
+    cs.getResiBuf(COMP_Y).subtract(cs.getOrgBuf(COMP_Y), cs.getPredBuf(COMP_Y));
   }
   if (chroma)
   {
@@ -4269,27 +4188,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   }
   if (luma)
   {
-    if (cu.rootCbf && cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
-    {
-      if (!cu.ciip && !CU::isIBC(cu))
-      {
-        PelBuf tmpPred = m_tmpStorageLCU.getCompactBuf(cu.Y());
-        tmpPred.rspSignal(cs.getPredBuf(COMP_Y), reshapeData.getFwdLUT());
-        cs.getRecoBuf(COMP_Y).reconstruct(tmpPred, cs.getResiBuf(COMP_Y), cs.slice->clpRngs[COMP_Y]);
-      }
-      else
-      {
-        cs.getRecoBuf(COMP_Y).reconstruct(cs.getPredBuf(COMP_Y), cs.getResiBuf(COMP_Y), cs.slice->clpRngs[COMP_Y]);
-      }
-    }
-    else
-    {
-      cs.getRecoBuf().bufs[0].reconstruct(cs.getPredBuf().bufs[0], cs.getResiBuf().bufs[0], cs.slice->clpRngs[COMP_Y]);
-      if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && !cu.ciip && !CU::isIBC(cu))
-      {
-        cs.getRecoBuf().bufs[0].rspSignal(reshapeData.getFwdLUT());
-      }
-    }
+    cs.getRecoBuf().bufs[0].reconstruct(cs.getPredBuf().bufs[0], cs.getResiBuf().bufs[0], cs.slice->clpRngs[COMP_Y]);
   }
   if (chroma)
   {
@@ -4309,24 +4208,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     CPelBuf reco = cs.getRecoBuf (compID);
     CPelBuf org  = cs.getOrgBuf  (compID);
 
-    if( (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag()) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
-    {
-      const CPelBuf orgLuma = cs.getOrgBuf( cs.area.blocks[COMP_Y] );
-      if (compID == COMP_Y && !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
-      {
-        PelBuf tmpRecLuma = cs.getRspRecoBuf();
-        tmpRecLuma.rspSignal( reco, reshapeData.getInvLUT());
-        finalDistortion += m_pcRdCost->getDistPart(org, tmpRecLuma, sps.bitDepths[toChannelType(compID)], compID, DF_SSE_WTD, &orgLuma);
-      }
-      else
-      {
-        finalDistortion += m_pcRdCost->getDistPart(org, reco, sps.bitDepths[toChannelType(compID)], compID, DF_SSE_WTD, &orgLuma);
-      }
-    }
-    else
-    {
-      finalDistortion += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[toChannelType(compID)], compID, DF_SSE );
-    }
+    finalDistortion += m_pcRdCost->getDistPart( org, reco, sps.bitDepths[toChannelType(compID)], compID, DF_SSE );
   }
 
   cs.dist     = finalDistortion;
@@ -6321,14 +6203,6 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPr
   //  Search key pattern initialization
   CPelBuf  tmpPattern = pBuf->Y();
   CPelBuf* pcPatternKey = &tmpPattern;
-  PelBuf tmpOrgLuma;
-  ReshapeData& reshapeData = cu.cs->picture->reshapeData;
-  if ((cu.cs->slice->lmcsEnabled && reshapeData.getCTUFlag()))
-  {
-    tmpOrgLuma = m_tmpStorageLCU.getCompactBuf(cu.Y());
-    tmpOrgLuma.rspSignal(tmpPattern, reshapeData.getInvLUT());
-    pcPatternKey = (CPelBuf*)&tmpOrgLuma;
-  }
   m_lumaClpRng = cu.cs->slice->clpRngs[COMP_Y];
   Picture* refPic = cu.slice->pic;
   const CPelBuf refBuf = refPic->getRecoBuf(cu.blocks[COMP_Y]);

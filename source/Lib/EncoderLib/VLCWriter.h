@@ -118,7 +118,6 @@ public:
   void  codePPS                 ( const PPS* pcPPS, const SPS* pcSPS );
   void  codeAPS                 ( const APS* pcAPS );
   void  codeAlfAps              ( const APS* pcAPS );
-  void  codeLmcsAps             ( const APS* aps );
   void  codeVPS                 ( const VPS* pcVPS );
   void  codeDCI                 ( const DCI* dci );
   void  codePictureHeader       ( const PicHeader* picHeader, bool writeRbspTrailingBits );

@@ -524,7 +524,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   }
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !pic->isPreAnalysis);
-  const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isSccStrongRC    = ((encCfg->m_LookAhead > 0 || encCfg->m_RCNumPasses == 2) && pic->isSccStrong);
   const bool isHighResolution = (std::min (encCfg->m_SourceWidth, encCfg->m_SourceHeight) > 1280);
@@ -820,7 +820,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   }
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !pic->isPreAnalysis);
-  const bool isHDR            = (encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF) && !(encCfg->m_lumaReshapeEnable != 0 && encCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ);
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isSccStrongRC    = ((encCfg->m_LookAhead > 0 || encCfg->m_RCNumPasses == 2) && pic->isSccStrong);
   const bool isHighResolution = (std::min (encCfg->m_SourceWidth, encCfg->m_SourceHeight) > 1280);

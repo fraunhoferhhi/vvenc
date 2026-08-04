@@ -76,7 +76,6 @@ Slice::Slice()
   , sliceType                           ( VVENC_I_SLICE )
   , sliceQp                             ( 0 )
   , chromaQpAdjEnabled                  ( false )
-  , lmcsEnabled                         ( 0 )
   , explicitScalingListUsed             ( 0 )
   , deblockingFilterDisable             ( false )
   , deblockingFilterOverride            ( false )
@@ -698,7 +697,6 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   TLayerSwitchingFlag           = slice->TLayerSwitchingFlag;
   independentSliceIdx           = slice->independentSliceIdx;
   clpRngs                       = slice->clpRngs;
-  lmcsEnabled                   = slice->lmcsEnabled;
   explicitScalingListUsed       = slice->explicitScalingListUsed;
   pendingRasInit                = slice->pendingRasInit;
 
@@ -1408,11 +1406,7 @@ void PicHeader::copyPicInfo( const PicHeader* other, bool cpyAll)
   deblockingFilterDisable                 = other->deblockingFilterDisable;                
   memcpy(deblockingFilterBetaOffsetDiv2,  other->deblockingFilterBetaOffsetDiv2,  sizeof(deblockingFilterBetaOffsetDiv2));                
   memcpy(deblockingFilterTcOffsetDiv2,    other->deblockingFilterTcOffsetDiv2,    sizeof(deblockingFilterTcOffsetDiv2));                
-  lmcsEnabled                             = other->lmcsEnabled;                           
-  lmcsApsId                               = other->lmcsApsId;                             
-//lmcsAps;                                = other->lmcsAps;                               
-  lmcsChromaResidualScale                 = other->lmcsChromaResidualScale;               
-  explicitScalingListEnabled              = other->explicitScalingListEnabled;            
+  explicitScalingListEnabled              = other->explicitScalingListEnabled;
   scalingListApsId                        = other->scalingListApsId;                      
 //scalingListAps;                         = other->scalingListAps;                        
   memcpy(minQTSize,   other->minQTSize, sizeof(minQTSize));                
@@ -1511,7 +1505,6 @@ SPS::SPS()
 , IBC                             ( false )
 , useColorTrans                   ( false )
 , PLT                             ( false )
-, lumaReshapeEnable               ( false )
 , AMVR                            ( false )
 , LMChroma                        ( false )
 , horCollocatedChroma             ( false )

@@ -304,17 +304,6 @@ void copyBufferCore( const char* src, int srcStride, char* dst, int dstStride, i
   }
 }
 
-void applyLutCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
-{
-#define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
-#define RSP_SGNL_INC        src      += srcStride; dst += dstStride;
-
-  SIZE_AWARE_PER_EL_OP( RSP_SGNL_OP, RSP_SGNL_INC )
-
-#undef RSP_SGNL_OP
-#undef RSP_SGNL_INC
-}
-
 void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val )
 {
   if( width == mapStride )
@@ -484,8 +473,6 @@ PelBufferOps::PelBufferOps()
   weightCiip        = weightCiipCore;
   roundIntVector    = nullptr;
 
-  applyLut          = applyLutCore;
-
   fillPtrMap        = fillMapPtr_Core;
   AvgHighPassWithDownsampling = AvgHighPassWithDownsamplingCore;
   AvgHighPass = AvgHighPassCore;
@@ -555,69 +542,6 @@ void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBu
 
 #undef WGHT_AVG_OP
 #undef WGHT_AVG_INC
-  }
-}
-
-template<>
-void AreaBuf<Pel>::rspSignal( const Pel* pLUT)
-{
-  g_pelBufOP.applyLut( buf, stride, buf, stride, width, height, pLUT );
-}
-
-
-template<>
-void AreaBuf<Pel>::rspSignal( const AreaBuf<const Pel>& other, const Pel* pLUT)
-{
-  g_pelBufOP.applyLut( other.buf, other.stride, buf, stride, width, height, pLUT );
-}
-
-template<>
-void AreaBuf<Pel>::scaleSignal(const int scale, const bool dir, const ClpRng& clpRng)
-{
-        Pel* dst = buf;
-  const Pel* src = buf;
-  const int maxAbsclipBD = (1<<clpRng.bd) - 1;
-
-  if (dir) // forward
-  {
-    if (width == 1)
-    {
-      THROW("Blocks of width = 1 not supported");
-    }
-    else
-    {
-      for (unsigned y = 0; y < height; y++)
-      {
-        for (unsigned x = 0; x < width; x++)
-        {
-          int sign = src[x] >= 0 ? 1 : -1;
-          int absval = sign * src[x];
-          dst[x] = (Pel)Clip3(-maxAbsclipBD, maxAbsclipBD, sign * (((absval << CSCALE_FP_PREC) + (scale >> 1)) / scale));
-        }
-        dst += stride;
-        src += stride;
-      }
-    }
-  }
-  else // inverse
-  {
-    for (unsigned y = 0; y < height; y++)
-    {
-      for (unsigned x = 0; x < width; x++)
-      {
-        int val    = Clip3<int>((-maxAbsclipBD - 1), maxAbsclipBD, (int)src[x]);
-        int sign   = src[x] >= 0 ? 1 : -1;
-        int absval = sign * val;
-               val = sign * ((absval * scale + (1 << (CSCALE_FP_PREC - 1))) >> CSCALE_FP_PREC);
-        if (sizeof(Pel) == 2) // avoid overflow when storing data
-        {
-          val = Clip3<int>(-32768, 32767, val);
-        }
-        dst[x] = (Pel)val;
-      }
-      dst += stride;
-      src += stride;
-    }
   }
 }
 

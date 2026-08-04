@@ -201,7 +201,6 @@ struct BlkUniMvInfoBuffer
 
 class EncPicture;
 class EncModeCtrl;
-class EncReshape;
 class EncCu;
 
 struct AffineMVInfo
@@ -358,7 +357,6 @@ protected:
 
   // interface to classes
   TrQuant*          m_pcTrQuant;
-  EncReshape*       m_pcReshape;
 
   // ME parameters
   int               m_iSearchRange;

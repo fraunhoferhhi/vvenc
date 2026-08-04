@@ -587,8 +587,8 @@ void setJointCbCrModes( CodingStructure& cs, const Position topLeftLuma, const S
     const CompArea  cbArea  = CompArea( COMP_Cb, cs.picture->chromaFormat, Area(topLeftLuma,sizeLuma), true );
     const CompArea  crArea  = CompArea( COMP_Cr, cs.picture->chromaFormat, Area(topLeftLuma,sizeLuma), true );
 
-    const CPelBuf   orgCb   = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( cbArea ): cs.picture->getOrigBuf( cbArea );
-    const CPelBuf   orgCr   = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( crArea ): cs.picture->getOrigBuf( crArea );
+    const CPelBuf   orgCb   = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getFiltOrigBuf( cbArea ): cs.picture->getOrigBuf( cbArea );
+    const CPelBuf   orgCr   = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getFiltOrigBuf( crArea ): cs.picture->getOrigBuf( crArea );
     const int       x0      = ( cbArea.x > 0 ? 0 : 1 );
     const int       y0      = ( cbArea.y > 0 ? 0 : 1 );
     const int       x1      = ( cbArea.x + cbArea.width  < cs.picture->Cb().width  ? cbArea.width  : cbArea.width  - 1 );
@@ -966,12 +966,12 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
         ITT_TASKEND( itt_domain_encode, itt_handle_ctuEncode );
 
-        processStates[ ctuRsAddr ] = RESHAPE_LF_VER;
+        processStates[ ctuRsAddr ] = LF_VER;
       }
       break;
 
-    // reshape + vertical loopfilter
-    case RESHAPE_LF_VER:
+    // vertical loopfilter
+    case LF_VER:
       {
         // clip check to right tile border (CTU_ENCODE pre-processing delay due to IBC)
         const int tileCol = slice.pps->ctuToTileCol[ctuPosX];
@@ -1008,15 +1008,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 
         ITT_TASKSTART( itt_domain_encode, itt_handle_rspLfVer );
 
-        // reshape
-        if( slice.sps->lumaReshapeEnable && slice.picHeader->lmcsEnabled )
-        {
-          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_RESHAPER, &cs, CH_L );
-          PelBuf reco = pic->getRecoBuf( COMP_Y ).subBuf( x, y, width, height );
-          reco.rspSignal( pic->reshapeData.getInvLUT() );
-          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
-        }
-
         // loopfilter
         if( !cs.pps->deblockingFilterControlPresent || !cs.pps->deblockingFilterDisabled || cs.pps->deblockingFilterOverrideEnabled )
         {
@@ -1046,7 +1037,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         // ensure vertical loop filter of neighbor ctu's will not modify current residual
         // check top, top-right and right ctu
         // (top, top-right checked implicitly due to ordering check above)
-        if( checkCtuTaskNbRgt   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, RESHAPE_LF_VER ) ) 
+        if( checkCtuTaskNbRgt   ( pps, ctuPosX, ctuPosY, ctuRsAddr, processStates, LF_VER ) )
           return false;
 
         if( checkReadyState )

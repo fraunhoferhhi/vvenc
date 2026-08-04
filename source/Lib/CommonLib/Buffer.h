@@ -119,7 +119,6 @@ struct PelBufferOps
   void ( *mipMatrixMul_8_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_8)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *weightCiip)     ( Pel* res, const Pel* intra, const int numSamples, int numIntra );
-  void ( *applyLut )      ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, ptrdiff_t dstStride, int width, int height, const Pel* lut );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
   uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
   uint64_t ( *AvgHighPass )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
@@ -194,9 +193,6 @@ struct AreaBuf : public Size
   void transposedFrom       ( const AreaBuf<const T>& other );
   void weightCiip           ( const AreaBuf<const T>& intra, const int numIntra );
 
-  void rspSignal            ( const Pel* pLUT );
-  void rspSignal            ( const AreaBuf<const T>& other, const Pel* pLUT );
-  void scaleSignal          ( const int scale, const bool dir , const ClpRng& clpRng);
   bool compare              ( const AreaBuf<const T>& other ) const;
 
         T& at( const int& x, const int& y )          { return buf[y * stride + x]; }
@@ -429,16 +425,6 @@ void AreaBuf<T>::reconstruct( const AreaBuf<const T>& pred, const AreaBuf<const 
 
 template<>
 void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<const Pel>& resi, const ClpRng& clpRng );
-
-template<>
-void AreaBuf<Pel>::rspSignal( const AreaBuf<const Pel>& other, const Pel* pLUT);
-
-template<typename T>
-void AreaBuf<T>::rspSignal( const AreaBuf<const T>& other, const Pel* pLUT)
-{
-  THROW( "Type not supported" );
-}
-
 
 template<typename T>
 void AreaBuf<T>::addAvg( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng )

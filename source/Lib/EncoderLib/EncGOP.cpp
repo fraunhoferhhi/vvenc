@@ -131,7 +131,6 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_isPreAnalysis      ( false )
   , m_bFirstWrite        ( true )
   , m_bRefreshPending    ( false )
-  , m_disableLMCSIP      ( false )
   , m_lastCodingNum      ( -1 )
   , m_numPicsCoded       ( 0 )
   , m_numPicsInMissing   ( 0 )
@@ -207,7 +206,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     m_associatedIRAPType = VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
   m_seiEncoder.init( encCfg, gopCfg, m_EncHRD );
-  m_Reshaper.init  ( encCfg );
 
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   for ( int i = 0; i < maxPicEncoder; i++ )
@@ -283,7 +281,7 @@ void EncGOP::initPicture( Picture* pic )
   }
 
   std::mutex* mutex = ( m_pcEncCfg->m_maxParallelFrames ) ? &m_unitCacheMutex : nullptr;
-  pic->finalInit( m_VPS, sps, pps, nullptr, m_shrdUnitCache, mutex, nullptr, nullptr );
+  pic->finalInit( m_VPS, sps, pps, nullptr, m_shrdUnitCache, mutex, nullptr );
 
   pic->vps = &m_VPS;
   pic->dci = &m_DCI;
@@ -911,7 +909,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noProfConstraintFlag                         = ! m_pcEncCfg->m_PROF;
   ci.noPaletteConstraintFlag                      = true;
   ci.noActConstraintFlag                          = true;
-  ci.noLmcsConstraintFlag                         = m_pcEncCfg->m_lumaReshapeEnable == 0;
+  ci.noLmcsConstraintFlag                         = true;
   ci.noTrailConstraintFlag                        = m_pcEncCfg->m_IntraPeriod == 1;
   ci.noStsaConstraintFlag                         = m_pcEncCfg->m_IntraPeriod == 1 || ! m_gopCfg->hasNonZeroTemporalId();
   ci.noRaslConstraintFlag                         = m_pcEncCfg->m_IntraPeriod == 1 || ! m_gopCfg->hasLeadingPictures();
@@ -919,7 +917,7 @@ void EncGOP::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noIdrConstraintFlag                          = false;
   ci.noCraConstraintFlag                          = (m_pcEncCfg->m_DecodingRefreshType != VVENC_DRT_CRA && m_pcEncCfg->m_DecodingRefreshType != VVENC_DRT_CRA_CRE);
   ci.noGdrConstraintFlag                          = false;
-  ci.noApsConstraintFlag                          = ( !m_pcEncCfg->m_alf && m_pcEncCfg->m_lumaReshapeEnable == 0 /*&& m_useScalingListId == SCALING_LIST_OFF*/);
+  ci.noApsConstraintFlag                          = !m_pcEncCfg->m_alf;
 }
 
 void EncGOP::xInitSPS(SPS &sps) const
@@ -993,7 +991,6 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.verCollocatedChroma           = m_pcEncCfg->m_verCollocatedChromaFlag;
   sps.BDOF                          = m_pcEncCfg->m_BDOF;
   sps.DMVR                          = m_pcEncCfg->m_DMVR;
-  sps.lumaReshapeEnable             = m_pcEncCfg->m_lumaReshapeEnable != 0;
   sps.Affine                        = m_pcEncCfg->m_Affine;
   sps.PROF                          = m_pcEncCfg->m_PROF;
   sps.ProfPresent                   = m_pcEncCfg->m_PROF;
@@ -1088,11 +1085,15 @@ void EncGOP::xInitSPS(SPS &sps) const
 void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
 {
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
-  bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled;
+  bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
   bUseDQP |= m_pcEncCfg->m_blockImportanceMapping;
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
+  {
+    bUseDQP = false;
+  }
+  if( m_pcEncCfg->m_maxDeltaQP == 0 )
   {
     bUseDQP = false;
   }
@@ -2131,9 +2132,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.cs->allocateVectorsAtPicLevel();
   pic.isReferenced = true;
 
-  // reshaper
-  xInitLMCS( pic );
-
   pic.picApsMap.clearActive();
   pic.picApsMap.setApsIdStart( ALF_CTB_MAX_NUM_APS );
   for ( int i = 0; i < ALF_CTB_MAX_NUM_APS; i++ )
@@ -2272,134 +2270,6 @@ void EncGOP::xInitSliceMvdL1Zero( PicHeader* picHeader, const Slice* slice )
   }
 }
 
-void EncGOP::xInitLMCS( Picture& pic )
-{
-  Slice* slice = pic.cs->slice;
-  const SliceType sliceType = slice->sliceType;
-
-  if( ! pic.useLMCS || (!slice->isIntra() && m_disableLMCSIP) )
-  {
-    pic.reshapeData.copyReshapeData( m_Reshaper );
-    m_Reshaper.setCTUFlag     ( false );
-    pic.reshapeData.setCTUFlag( false );
-    if( slice->isIntra() )  m_disableLMCSIP = true;
-    return;
-  }
-  if( slice->isIntra() ) m_disableLMCSIP = false;
-
-  m_Reshaper.getReshapeCW()->rspTid = slice->TLayer + (slice->isIntra() ? 0 : 1);
-  m_Reshaper.getSliceReshaperInfo().chrResScalingOffset = m_pcEncCfg->m_LMCSOffset;
-
-  if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ )
-  {
-    m_Reshaper.preAnalyzerHDR( pic, sliceType, m_pcEncCfg->m_reshapeCW );
-  }
-  else if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_HLG )
-  {
-    m_Reshaper.preAnalyzerLMCS( pic, m_pcEncCfg->m_reshapeSignalType, sliceType, m_pcEncCfg->m_reshapeCW );
-  }
-  else
-  {
-    THROW("Reshaper for other signal currently not defined!");
-  }
-
-  if ( sliceType == VVENC_I_SLICE )
-  {
-    if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ )
-    {
-      m_Reshaper.initLUTfromdQPModel();
-      m_Reshaper.updateReshapeLumaLevelToWeightTableChromaMD( m_Reshaper.getInvLUT() );
-    }
-    else if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_HLG )
-    {
-      if ( m_Reshaper.getReshapeFlag() )
-      {
-        m_Reshaper.constructReshaperLMCS();
-        m_Reshaper.updateReshapeLumaLevelToWeightTable( m_Reshaper.getSliceReshaperInfo(), m_Reshaper.getWeightTable(), m_Reshaper.getCWeight() );
-      }
-    }
-    else
-    {
-      THROW( "Reshaper for other signal currently not defined!" );
-    }
-
-        //reshape original signal
-    if( m_Reshaper.getSliceReshaperInfo().sliceReshaperEnabled )
-    {
-      CPelUnitBuf origBuf = pic.getOrigBuf();
-      if( pic.getFilteredOrigBuffer().valid() )
-      {
-        pic.getRspOrigBuf().get(COMP_Y).rspSignal( m_Reshaper.getFwdLUT() );
-      }
-      else
-      {
-        pic.getFilteredOrigBuffer().create( pic.cs->pcv->chrFormat, Area( 0, 0, origBuf.get( COMP_Y ).width, origBuf.get( COMP_Y ).height) );
-        PelUnitBuf rspOrigBuf = pic.getRspOrigBuf();
-        rspOrigBuf.get(COMP_Y).rspSignal( origBuf.get(COMP_Y), m_Reshaper.getFwdLUT() );
-        if( CHROMA_400 != pic.cs->pcv->chrFormat )
-        {
-          rspOrigBuf.get(COMP_Cb).copyFrom( origBuf.get(COMP_Cb) );
-          rspOrigBuf.get(COMP_Cr).copyFrom( origBuf.get(COMP_Cr) );
-        }
-      }
-    }
-
-    m_Reshaper.setCTUFlag( false );
-  }
-  else
-  {
-    m_Reshaper.setCTUFlag( m_Reshaper.getReshapeFlag() );
-    m_Reshaper.getSliceReshaperInfo().sliceReshaperModelPresent = false;
-
-    if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ )
-    {
-      m_Reshaper.restoreReshapeLumaLevelToWeightTable();
-    }
-    else if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_HLG )
-    {
-      int modIP = pic.getPOC() - pic.getPOC() / m_pcEncCfg->m_reshapeCW.rspFpsToIp * m_pcEncCfg->m_reshapeCW.rspFpsToIp;
-      if (m_Reshaper.getReshapeFlag() && m_pcEncCfg->m_reshapeCW.updateCtrl == 2 && modIP == 0)
-      {
-        m_Reshaper.getSliceReshaperInfo().sliceReshaperModelPresent = true;
-        m_Reshaper.constructReshaperLMCS();
-        m_Reshaper.updateReshapeLumaLevelToWeightTable(m_Reshaper.getSliceReshaperInfo(), m_Reshaper.getWeightTable(), m_Reshaper.getCWeight());
-      }
-    }
-    else
-    {
-      THROW("Reshaper for other signal currently not defined!");
-    }
-  }
-
-  //set all necessary information in LMCS APS and slice
-  slice->lmcsEnabled = slice->picHeader->lmcsEnabled = m_Reshaper.getSliceReshaperInfo().sliceReshaperEnabled;
-  slice->picHeader->lmcsChromaResidualScale          = ( m_Reshaper.getSliceReshaperInfo().enableChromaAdj == 1 );
-  if ( m_Reshaper.getSliceReshaperInfo().sliceReshaperModelPresent )
-  {
-    ParameterSetMap<APS>& picApsMap = pic.picApsMap;
-    const int apsId0                = 0;
-    const int apsMapIdx             = ( apsId0 << NUM_APS_TYPE_LEN ) + LMCS_APS;
-    APS* picAps                     = picApsMap.getPS( apsMapIdx );
-    if ( picAps == nullptr )
-    {
-      picAps = picApsMap.allocatePS( apsMapIdx );
-      picAps->apsType     = LMCS_APS;
-      picAps->apsId       = apsId0;
-    }
-    picAps->lmcsParam = m_Reshaper.getSliceReshaperInfo();
-    picApsMap.setChangedFlag( apsMapIdx );
-    slice->picHeader->lmcsAps    = picAps;
-    slice->picHeader->lmcsApsId  = apsId0;
-  }
-
-  if ( slice->picHeader->lmcsEnabled )
-  {
-    slice->picHeader->lmcsApsId = 0;
-  }
-
-  pic.reshapeData.copyReshapeData( m_Reshaper );
-}
-
 void EncGOP::xSelectReferencePictureList( Slice* slice ) const
 {
   const GOPEntry& gopEntry = *(slice->pic->gopEntry);
@@ -2505,26 +2375,6 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
   if ((( slice->vps->maxLayers > 1 && IrapOrGdrAu) || m_pcEncCfg->m_AccessUnitDelimiter) && !slice->nuhLayerId )
   {
     xWriteAccessUnitDelimiter( accessUnit, slice, IrapOrGdrAu, hlsWriter );
-  }
-
-  // send LMCS APS when LMCSModel is updated. It can be updated even current slice does not enable reshaper.
-  // For example, in RA, update is on intra slice, but intra slice may not use reshaper
-  if ( sps.lumaReshapeEnable && slice->picHeader->lmcsApsId >= 0 )
-  {
-    // only 1 LMCS data for 1 picture
-    ParameterSetMap<APS>& apsMap = pic.picApsMap;
-    const int apsId              = slice->picHeader->lmcsApsId;
-    const int apsMapIdx          = apsId >= 0 ?  ( apsId << NUM_APS_TYPE_LEN ) + LMCS_APS : 0;
-    APS* aps                     = apsId >= 0 ?  apsMap.getPS( apsMapIdx ) : nullptr;
-    const bool doAPS             = aps && apsMap.getChangedFlag( apsMapIdx );
-    if ( doAPS )
-    {
-      aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;
-      aps->temporalId = slice->TLayer;
-      actualTotalBits += xWriteAPS( accessUnit, aps, hlsWriter, VVENC_NAL_UNIT_PREFIX_APS );
-      apsMap.clearChangedFlag( apsMapIdx );
-      CHECK( aps != slice->picHeader->lmcsAps, "Wrong LMCS APS pointer" );
-    }
   }
 
   // send ALF APS

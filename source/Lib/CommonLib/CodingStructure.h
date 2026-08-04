@@ -65,12 +65,11 @@ enum PictureType
 {
   PIC_RECONSTRUCTION = 0,
   PIC_ORIGINAL,
-  PIC_ORIGINAL_RSP,
+  PIC_FILT_ORIGINAL,
   PIC_PREDICTION,
   PIC_RESIDUAL,
   PIC_SAO_TEMP,
   NUM_PIC_TYPES,
-  PIC_ORIGINAL_RSP_REC,
 };
 
 // ---------------------------------------------------------------------------
@@ -99,7 +98,6 @@ public:
   const PPS*  pps;
   PicHeader*  picHeader;
   APS*        alfAps[ALF_CTB_MAX_NUM_APS];
-  APS*        lmcsAps;
   APS*        scalinglistAps;
   const VPS*  vps;
   const PreCalcValues* pcv;
@@ -158,7 +156,7 @@ public:
   Distortion  interHad;
 
   void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = true, const UnitArea* area = nullptr );
-  void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
+  void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pFiltOrgBuffer = nullptr);
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
@@ -203,7 +201,7 @@ private:
   PelStorage  m_reco;
   PelStorage  m_rspreco;
   PelStorage* m_org;
-  PelStorage* m_rsporg;
+  PelStorage* m_filtorg;
 
   TCoeffSig*  m_coeffs [MAX_NUM_COMP];
   int         m_offsets[MAX_NUM_COMP];
@@ -273,18 +271,13 @@ public:
          PelUnitBuf   getOrgBuf(const UnitArea& unit)           { return getBuf(unit, PIC_ORIGINAL); }
   const CPelUnitBuf   getOrgBuf(const UnitArea& unit)     const { return getBuf(unit, PIC_ORIGINAL); }
 
-         PelBuf       getRspOrgBuf(const CompArea& blk)         { return getBuf(blk,  PIC_ORIGINAL_RSP); }
-  const CPelBuf       getRspOrgBuf(const CompArea& blk)   const { return getBuf(blk,  PIC_ORIGINAL_RSP); }
-
-         PelBuf        getRspRecoBuf(const CompArea &blk)         { return getBuf(blk, PIC_ORIGINAL_RSP_REC); }
-  const CPelBuf        getRspRecoBuf(const CompArea &blk)   const { return getBuf(blk, PIC_ORIGINAL_RSP_REC); }
+         PelBuf       getFiltOrgBuf(const CompArea& blk)        { return getBuf(blk,  PIC_FILT_ORIGINAL); }
+  const CPelBuf       getFiltOrgBuf(const CompArea& blk)  const { return getBuf(blk,  PIC_FILT_ORIGINAL); }
 
          PelUnitBuf&  getRecoBufRef()                           { return m_reco; }
-         PelBuf&      getRspRecoBuf()                           { return m_rspreco.Y(); }
-  const CPelBuf       getRspRecoBuf()                     const { return m_rspreco.Y(); }
 
-         PelBuf&      getRspOrgBuf()                            { return m_rsporg->Y(); }
-  const CPelBuf       getRspOrgBuf()                      const { return m_rsporg->Y(); }
+         PelBuf&      getFiltOrgBuf()                           { return m_filtorg->Y(); }
+  const CPelBuf       getFiltOrgBuf()                     const { return m_filtorg->Y(); }
 
          PelBuf       getOrgBuf(const ComponentID compID)       { return m_org->get(compID); }
   const CPelBuf       getOrgBuf(const ComponentID compID) const { return m_org->get(compID); }

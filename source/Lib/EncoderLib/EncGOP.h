@@ -51,7 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SEIEncoder.h"
 #include "Analyze.h"
 #include "EncPicture.h"
-#include "EncReshape.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
@@ -134,7 +133,6 @@ private:
   HLSWriter                 m_HLSWriter;
   SEIWriter                 m_seiWriter;
   SEIEncoder                m_seiEncoder;
-  EncReshape                m_Reshaper;
   BlkStat                   m_BlkStat;
 
   ParameterSetMap<SPS>      m_spsMap;
@@ -146,7 +144,6 @@ private:
   bool                      m_isPreAnalysis;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
-  bool                      m_disableLMCSIP;
   int                       m_lastCodingNum;
   int                       m_numPicsCoded;
   int                       m_numPicsInMissing;
@@ -178,8 +175,6 @@ public:
   virtual ~EncGOP();
 
   void setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> func );
-
-  const EncReshape& getReshaper() const { return m_Reshaper; }
 
   void init               ( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
@@ -218,7 +213,6 @@ private:
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice );
   void xUpdateRPRtmvp                 ( PicHeader* picHeader, Slice* slice );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
-  void xInitLMCS                      ( Picture& pic );
   void xSelectReferencePictureList    ( Slice* slice ) const;
   void xSyncAlfAps                    ( Picture& pic );
 

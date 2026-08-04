@@ -93,7 +93,6 @@ namespace vvenc {
   E_( P_QUANT                   ) \
   E_( P_DEQUANT                 ) \
   E_( P_TRAFO                   ) \
-  E_( P_RESHAPER                ) \
   E_( P_DEBLOCK_FILTER          ) \
   E_( P_SAO                     ) \
   E_( P_ALF_CLASS               ) \

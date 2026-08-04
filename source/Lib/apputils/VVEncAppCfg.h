@@ -595,6 +595,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
+  IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
+  IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toUseIfp                      ( &c->m_ifp,                         &FlagToIntMap<int8_t> );
@@ -721,6 +723,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bitrate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
     ("MaxBitrate",                                      toMaxRate,                                           "Rate control: approximate maximum instantaneous bitrate [bits/second] (0: no rate cap; least constraint)" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
+    ("MaxDeltaQP",                                      toMaxDeltaQP,                                        "QPA: set lambda - limit delta QP (-2: set depending on base QP, -1: max QP, 0 .. max QP)")
     ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt NAL unit type)")
     ("MinIntraDistance",                                c->m_minIntraDist,                                   "With STA: set a minimum coded frame distance to the previous intra frame (-1: GOPSize)" )
     ;
@@ -898,7 +901,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("SliceCbQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[0],          "Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
     ("SliceCrQpOffsetIntraOrPeriodic",                  c->m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
-    ("LumaLevelToDeltaQPMode",                          c->m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
+    ("LumaLevelToDeltaQPMode",                          toLumaLevelToDeltaQP,                                "Luma based Delta QP 0(default): not used. 1: Based on CTU average. -1: auto - enable for HDR PQ")
     ("GOPQPA",                                          toGOPQPA,                                            "Enable GOP QP-cascade (0: off, 1: on, -1: auto - enable when QPA is disabled)")
     ; 
 
@@ -915,7 +918,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("WaveFrontSynchro",                                toUseWpp,                                            "Enable entropy coding sync (WPP) (-1: auto, 0: off, 1: on)")
     ("EntryPointsPresent",                              c->m_entryPointsPresent,                             "Enable entry points in slice header")
 
-    ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
+    ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
     
     ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
@@ -1095,15 +1098,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("DMVR",                                            c->m_DMVR,                                           "Decoder-side Motion Vector Refinement")
     ("EncDbOpt",                                        c->m_EDO,                                            "Encoder optimization with deblocking filter 0:off 1:vtm 2:fast")
     ("EDO",                                             c->m_EDO,                                            "Encoder optimization with deblocking filter 0:off 1:vtm 2:fast")
-    ("LMCSEnable",                                      c->m_lumaReshapeEnable,                              "LMCS is deprecated and will be removed")
-    ("LMCS",                                            c->m_lumaReshapeEnable,                              "LMCS is deprecated and will be removed")
-    ("LMCSSignalType",                                  c->m_reshapeSignalType,                              "Input signal type (0:SDR, 1:HDR-PQ, 2:HDR-HLG)")
-    ("LMCSUpdateCtrl",                                  c->m_updateCtrl,                                     "LMCS model update control (0:RA, 1:AI, 2:LDB/LDP)")
-    ("LMCSAdpOption",                                   c->m_adpOption,                                      "LMCS adaptation options: 0:automatic, "
-                                                                                                               "1: rsp both (CW66 for QP<=22), 2: rsp TID0 (for all QP), "
-                                                                                                               "3: rsp inter(CW66 for QP<=22), 4: rsp inter(for all QP).")
-    ("LMCSInitialCW",                                   c->m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
-    ("LMCSOffset",                                      c->m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
     ("ALF",                                             c->m_alf,                                            "Adaptive Loop Filter" )
     ("ALFSpeed",                                        c->m_alfSpeed,                                       "ALF speed (skip filtering of non-referenced frames) [0-1]" )
     ("CCALF",                                           c->m_ccalf,                                          "Cross-component Adaptive Loop Filter" )

@@ -258,6 +258,8 @@ private:
   PelStorage            m_pOrgBuffer[maxCuDepth];
   PelStorage            m_pRspBuffer[maxCuDepth];
 
+  int                   m_lumaLevelToDeltaQPLUT[LUMA_LEVEL_TO_DQP_LUT_MAXSIZE];
+
   //  Access channel
   const VVEncCfg*       m_pcEncCfg;
   IntraSearch           m_cIntraSearch;
@@ -347,6 +349,8 @@ private:
 
   void xEncodeInterResidual   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, 
                                 int residualPass = 0, bool* bestHasNonResi = NULL, double* equBcwCost = NULL );
+  
+  void xInitLumaDeltaQpLUT    ();
 
   bool xIsBcwSkip( const CodingUnit& cu )
   {

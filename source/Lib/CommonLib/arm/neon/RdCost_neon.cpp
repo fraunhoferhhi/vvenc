@@ -1755,8 +1755,6 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD64] = xGetSAD_NxN_neon<64>;
   m_afpDistortFunc[0][DF_SAD128] = xGetSAD_NxN_neon<128>;
 
-  m_wtdPredPtr[0] = lumaWeightedSSE_neon<0>;
-  m_wtdPredPtr[1] = lumaWeightedSSE_neon<1>;
   m_fxdWtdPredPtr = fixWeightedSSE_neon;
 }
 
