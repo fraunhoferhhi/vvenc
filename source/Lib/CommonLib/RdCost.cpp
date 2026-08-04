@@ -59,9 +59,6 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 
-template<int csx>
-static Distortion lumaWeightedSSE_Core( const DistParam& rcDtParam, ChromaFormat chmFmt, const uint32_t* lumaWeights );
-
 static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixedWeight );
 
 RdCost::RdCost()
@@ -84,9 +81,7 @@ void RdCost::setLambda( double dLambda, const BitDepths &bitDepths )
 // Initialize Function Pointer by [eDFunc]
 void RdCost::create( bool enableOpt )
 {
-  m_signalType                 = RESHAPE_SIGNAL_NULL;
   m_chromaWeight               = 1.0;
-  m_lumaBD                     = 10;
   m_afpDistortFunc[0][DF_SSE    ] = RdCost::xGetSSE;
   m_afpDistortFunc[0][DF_SSE2   ] = RdCost::xGetSSE;
   m_afpDistortFunc[0][DF_SSE4   ] = RdCost::xGetSSE4;
@@ -130,8 +125,6 @@ void RdCost::create( bool enableOpt )
   // m_afpDistortFunc[1] can be used in any case
   memcpy( m_afpDistortFunc[1], m_afpDistortFunc[0], sizeof(m_afpDistortFunc)/2);
 
-  m_wtdPredPtr[0] = lumaWeightedSSE_Core<0>;
-  m_wtdPredPtr[1] = lumaWeightedSSE_Core<1>;
   m_fxdWtdPredPtr = fixWeightedSSE_Core;
 
   m_afpDistortFuncX5[0] = RdCost::xGetSAD8X5;
@@ -271,30 +264,21 @@ DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStri
   return rcDP;
 }
 
-Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma )
+Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc )
 {
   DistParam dp( org, cur, nullptr, bitDepth, 0, compId );
 # if ENABLE_MEASURE_SEARCH_SPACE
   g_searchSpaceAcc.addPrediction( dp.cur.width, dp.cur.height, toChannelType( dp.compID ) );
 #endif
   Distortion dist;
-  if( orgLuma )
+  if( ( org.width == 1 ) )
   {
-    CHECKD( eDFunc != DF_SSE_WTD, "mismatch func and parameter")
-    dp.orgLuma  = orgLuma;
-    dist = RdCost::xGetSSE_WTD( dp );
+    dist = xGetSSE( dp );
   }
   else
   {
-    if( ( org.width == 1 ) )
-    {
-      dist = xGetSSE( dp );
-    }
-    else
-    {
-      const int base = (bitDepth > 10) ? 1 : 0;
-      dist = m_afpDistortFunc[base][eDFunc + Log2(org.width)](dp);
-    }
+    const int base = (bitDepth > 10) ? 1 : 0;
+    dist = m_afpDistortFunc[base][eDFunc + Log2(org.width)](dp);
   }
   if (isChroma(compId))
   {
@@ -1967,43 +1951,6 @@ inline Distortion getWeightedMSE(const Pel org, const Pel cur, const int64_t fix
   return Intermediate_Int((fixedPTweight*(iTemp*iTemp) + (1 << 15)) >> uiShift);
 }
 
-template<int csx>
-static Distortion lumaWeightedSSE_Core( const DistParam& rcDtParam, ChromaFormat chmFmt, const uint32_t* lumaWeights )
-{
-        int  iRows = rcDtParam.org.height;
-  const Pel* piOrg = rcDtParam.org.buf;
-  const Pel* piCur = rcDtParam.cur.buf;
-  const int  iCols = rcDtParam.org.width;
-  const int  iStrideCur = rcDtParam.cur.stride;
-  const int  iStrideOrg = rcDtParam.org.stride;
-  const Pel* piOrgLuma        = rcDtParam.orgLuma->buf;
-  const int  iStrideOrgLuma   = rcDtParam.orgLuma->stride;
-
-  Distortion uiSum   = 0;
-  uint32_t uiShift   = 16 + (DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth) << 1);
-
-  // cf, column factor, offset of the second column, to be set to '0' for width of '1'
-  const int cf =  1 - ( iCols & 1 );
-  CHECK( ( iCols & 1 ) && iCols != 1, "Width can only be even or equal to '1'!" );
-  const ComponentID compId = rcDtParam.compID;
-  const size_t  cShiftY    = getComponentScaleY(compId, chmFmt);
-
-  for( ; iRows != 0; iRows-- )
-  {
-    for (int n = 0; n < iCols; n+=2 )
-    {
-      uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], lumaWeights[piOrgLuma[(n   )<<csx]], uiShift );
-      uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], lumaWeights[piOrgLuma[(n+cf)<<csx]], uiShift );
-    }
-
-    piOrg     += iStrideOrg;
-    piCur     += iStrideCur;
-    piOrgLuma += iStrideOrgLuma<<cShiftY;
-  }
-
-  return ( uiSum >> ( 1 - cf ) );
-}
-
 static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixedPTweight )
 {
         int  iRows = rcDtParam.org.height;
@@ -2032,27 +1979,6 @@ static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixe
   }
 
   return ( uiSum >> ( 1 - cf ) );
-}
-
-Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
-{
-  if( rcDtParam.applyWeight )
-  {
-    THROW("no support");
-  }
-
-  if ((m_signalType == RESHAPE_SIGNAL_SDR || m_signalType == RESHAPE_SIGNAL_HLG) && rcDtParam.compID != COMP_Y)
-  {
-    const uint32_t fixedPTweight = ( uint32_t ) ( m_chromaWeight * ( double ) ( 1 << 16 ) );
-
-    return m_fxdWtdPredPtr( rcDtParam, fixedPTweight );
-  }
-  else
-  {
-    return m_wtdPredPtr[getComponentScaleX(rcDtParam.compID, m_cf)]( rcDtParam, m_cf, m_reshapeLumaLevelToWeightPLUT );
-  }
-
-  return 0;
 }
 
 void RdCost::xGetSAD8X5(const DistParam& rcDtParam, Distortion* cost, bool isCalCentrePos) {
@@ -2249,6 +2175,22 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
     {
       return getIComponentBitsIBC(rmvH[1]) + getIComponentBitsIBC(rmvV[1]);
     }
+  }
+}
+
+void RdCost::initLumaLevelToWeightTable( int lumaBD )
+{
+  const int lutSize = 1 << lumaBD;
+  if (m_lumaLevelToWeightPLUT.empty())
+    m_lumaLevelToWeightPLUT.resize(lutSize, 1.0);
+
+  for (int i = 0; i < lutSize; i++)
+  {
+    double x = lumaBD < 10 ? i << (10 - lumaBD) : lumaBD > 10 ? i >> (lumaBD - 10) : i;
+    double y;
+    y = 0.015*x - 1.5 - 6;
+    y = y < -3 ? -3 : (y > 6 ? 6 : y);
+    m_lumaLevelToWeightPLUT[i] = (uint32_t)(pow(2.0, y / 3.0) * (double)(1 << 16));
   }
 }
 

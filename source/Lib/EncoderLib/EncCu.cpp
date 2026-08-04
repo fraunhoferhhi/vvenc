@@ -242,8 +242,6 @@ EncCu::EncCu()
 
 void EncCu::initPic( Picture* pic )
 {
-  const ReshapeData& reshapeData = pic->reshapeData;
-  m_cRdCost.setReshapeParams( reshapeData.getReshapeLumaLevelToWeightPLUT(), reshapeData.getChromaWeight() );
   m_cInterSearch.setSearchRange( pic->cs->slice, *m_pcEncCfg );
 
   m_wppMutex = (m_pcEncCfg->m_numThreads > 0 ) ? &pic->wppMutex : nullptr;
@@ -303,8 +301,21 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
 {
   const double  corrFactor = pow (2.0, double (newQP - ctuQP) / 3.0);
   const double  newLambda  = ctuLambda * corrFactor;
-  const double* oldLambdas = slice.getLambdas(); // assumes prior setUpLambda (slice, ctuLambda) call!
-  const double  newLambdas[MAX_NUM_COMP] = { oldLambdas[COMP_Y] * corrFactor, oldLambdas[COMP_Cb] * corrFactor, oldLambdas[COMP_Cr] * corrFactor };
+  
+  double newLambdas[MAX_NUM_COMP] = { newLambda };
+  for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
+    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, newQP) + chromaQPOffset;
+    double tmpWeight         = pow( 2.0, ( newQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
+    if( m_pcEncCfg->m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
+    {
+      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
+    }
+    m_cRdCost.setDistortionWeight( compID, tmpWeight );
+    newLambdas[compIdx] = newLambda / tmpWeight;
+  }
 
   m_cTrQuant.setLambdas ( newLambdas);
   m_cRdCost.setLambda   ( newLambda, slice.sps->bitDepths);
@@ -320,9 +331,11 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
   m_cRdCost.create     ();
   m_cRdCost.setCostMode( encCfg.m_costMode );
-  if ( encCfg.m_lumaReshapeEnable || encCfg.m_lumaLevelToDeltaQPEnabled )
+  if ( encCfg.m_lumaLevelToDeltaQPEnabled == 1 )
   {
-    m_cRdCost.setReshapeInfo( encCfg.m_lumaReshapeEnable ? encCfg.m_reshapeSignalType : RESHAPE_SIGNAL_PQ, encCfg.m_internalBitDepth[ CH_L ], encCfg.m_internChromaFormat );
+    m_cRdCost.setChromaFormat( encCfg.m_internChromaFormat );
+    m_cRdCost.initLumaLevelToWeightTable( encCfg.m_internalBitDepth[ CH_L ] );
+    xInitLumaDeltaQpLUT();
   }
 
   m_modeCtrl.init     ( encCfg, &m_cRdCost );
@@ -550,14 +563,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   // copy the relevant area
   UnitArea clippedArea = clipArea( partitioner->currArea(), cs.area );
-  CPelUnitBuf org = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( clippedArea ) : cs.picture->getOrigBuf( clippedArea );
+  CPelUnitBuf org = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getFiltOrigBuf( clippedArea ) : cs.picture->getOrigBuf( clippedArea );
   tempCS->getOrgBuf( clippedArea ).copyFrom( org );
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
-  if( cs.slice->lmcsEnabled && reshapeData.getCTUFlag() )
-  {
-    tempCS->getRspOrgBuf( clippedArea.Y() ).rspSignal( org.get( COMP_Y) , reshapeData.getFwdLUT() );
-  }
-
   tempCS->currQP[CH_L] = bestCS->currQP[CH_L] =
   tempCS->baseQP       = bestCS->baseQP       = cs.slice->sliceQp;
   tempCS->prevQP[CH_L] = bestCS->prevQP[CH_L] = prevQP[CH_L];
@@ -728,7 +735,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
   m_CABACEstimator->determineNeighborCus( *tempCS, partitioner.currArea(), partitioner.chType, partitioner.treeType );
 
-  if ((m_pcEncCfg->m_usePerceptQPA || isBimEnabled) && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
+  if ((m_pcEncCfg->m_usePerceptQPA || isBimEnabled || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1) && ( pps.useDQP || m_pcEncCfg->m_maxDeltaQP == 0 ) && isLuma (partitioner.chType) && partitioner.currQgEnable())
   {
     const PreCalcValues &pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
@@ -742,6 +749,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         {
           m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
         }
+
+        int clippedMaxDQP = 0;
 
         if ((!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU QPA behavior - Museum fix
             (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
@@ -776,26 +785,120 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
         }
 
+        int deltaQP       = slice.sliceQp - tempCS->baseQP;
+        if( abs( deltaQP ) > m_pcEncCfg->m_maxDeltaQP )
+        {
+          clippedMaxDQP = deltaQP > 0 ? slice.sliceQp - m_pcEncCfg->m_maxDeltaQP : slice.sliceQp + m_pcEncCfg->m_maxDeltaQP;
+          tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+          bestCS->currQP[partitioner.chType] = bestCS->baseQP = clippedMaxDQP;
+        }
+
+        //the ctuAdaptedQP correspones with the ctuQpaLambda
         setUpLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true);
       }
       else // isBimEnabled without QPA
       {
-        const int baseQp         = tempCS->baseQP;
-        const unsigned bimQpSize = (unsigned) bestCS->picture->m_picShared->m_ctuBimQpOffset.size();
-        uint32_t ctuAddr         = ctuRsAddr;
-
-        if (bimQpSize != pcv.sizeInCtus) // re-calculate correct address of BIM CTU QP offset
+        const int baseQp  = tempCS->baseQP;
+        int adaptedLumaQP = 0;
+        int lumaQPoffset  = 0;
+        
+        if( m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1 )
         {
-          const unsigned bimCtuSize  = m_pcEncCfg->m_bimCtuSize;
-          const unsigned bimCtuWidth = (pcv.lumaWidth + bimCtuSize - 1) / bimCtuSize;
+          uint32_t meanLuma = 0;
+          if( ( uiLPelX + lumaArea.width > pps.picWidthInLumaSamples ) || ( uiTPelY + lumaArea.height > pps.picHeightInLumaSamples ) )
+          {
+            int wdth = ( uiLPelX + lumaArea.width > pps.picWidthInLumaSamples )   ? pps.picWidthInLumaSamples - uiLPelX  : lumaArea.width;
+            int hght = ( uiTPelY + lumaArea.height > pps.picHeightInLumaSamples ) ? pps.picHeightInLumaSamples - uiTPelY : lumaArea.height;
+            
+            int sum = 0;
+            for( int y = 0; y < hght; y++ )
+            {
+              for( int x = 0; x < wdth; x++ )
+              {
+                sum += tempCS->getOrgBuf().Y().at( x, y );
+              }
+            }
+            double avg = (double) sum / ( wdth*hght );
+            meanLuma = (uint32_t)( avg + 0.5 );
+          }
+          else
+          {
+            meanLuma = tempCS->getOrgBuf().Y().getAvg();
+          }
 
-          ctuAddr = getCtuAddrFromCtuSize (partitioner.currQgPos, Log2 (bimCtuSize), bimCtuWidth);
-          CHECK (ctuAddr >= bimQpSize, "ctuAddr exceeds size of m_ctuBimQpOffset");
+          int lumaBD     = m_pcEncCfg->m_internalBitDepth[ CH_L ];
+          int lumaIdxOrg = Clip3<int>( 0, int( 1 << lumaBD ) - 1, meanLuma );
+          int lumaIdx    = lumaBD < 10 ? lumaIdxOrg << (10 - lumaBD) : lumaBD > 10 ? lumaIdxOrg >> (lumaBD - 10) : lumaIdxOrg;
+          lumaQPoffset   = m_lumaLevelToDeltaQPLUT[lumaIdx];
+          adaptedLumaQP  = Clip3( -sps.qpBDOffset[CH_L], MAX_QP, baseQp - lumaQPoffset );
         }
-        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-        bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, tempCS->baseQP + pic->m_picShared->m_ctuBimQpOffset[ctuAddr]);
+        
+        if( isBimEnabled )
+        {
+          const unsigned bimQpSize = (unsigned) bestCS->picture->m_picShared->m_ctuBimQpOffset.size();
+          uint32_t ctuAddr         = ctuRsAddr;
 
-        updateLambda (slice, slice.getLambdas()[0], baseQp, tempCS->baseQP, true);
+          double avgBimOffset = 0.0;
+
+          if (bimQpSize != pcv.sizeInCtus) // re-calculate correct address of BIM CTU QP offset
+          {
+            const unsigned bimCtuSize  = m_pcEncCfg->m_bimCtuSize;
+            const unsigned bimCtuWidth = (pcv.lumaWidth + bimCtuSize - 1) / bimCtuSize;
+
+            ctuAddr = getCtuAddrFromCtuSize (partitioner.currQgPos, Log2 (bimCtuSize), bimCtuWidth);
+            CHECK (ctuAddr >= bimQpSize, "ctuAddr exceeds size of m_ctuBimQpOffset");
+
+            int maxY = m_pcEncCfg->m_CTUSize / bimCtuSize;
+            int maxX = m_pcEncCfg->m_CTUSize / bimCtuSize;
+            if( ( partitioner.currQgPos.y + maxY * bimCtuSize ) > pcv.lumaHeight )
+            {
+              int reduceHeight = ( partitioner.currQgPos.y + ( maxY - 1 ) * bimCtuSize ) - pcv.lumaHeight;
+              int reduceY = ( reduceHeight + bimCtuSize ) / bimCtuSize;
+              maxY = maxY - reduceY;
+            }
+            if( ( partitioner.currQgPos.x + maxX * bimCtuSize ) > pcv.lumaWidth )
+            {
+              int reduceWidth = ( partitioner.currQgPos.x + ( maxX - 1 ) * bimCtuSize ) - pcv.lumaWidth;
+              int reduceX = ( reduceWidth + bimCtuSize ) / bimCtuSize;
+              maxX = maxX - reduceX;
+            }
+            for (int y = 0; y < maxY * bimCtuSize; y = y + bimCtuSize)
+            {
+              for (int x = 0; x < maxX * bimCtuSize; x = x + bimCtuSize)
+              {
+                int theBlockId = ctuAddr + (y / bimCtuSize) * ((pcv.lumaWidth + bimCtuSize - 1) / bimCtuSize) + (x / bimCtuSize);
+                avgBimOffset += pic->m_picShared->m_ctuBimQpOffset[theBlockId];
+              }
+            }
+            if (maxY * maxX > 0)
+            {
+              avgBimOffset = avgBimOffset / (double)(maxY * maxX);
+            }
+            else
+            {
+              avgBimOffset = 0.0;
+            }
+          }
+          else
+          {
+            avgBimOffset = pic->m_picShared->m_ctuBimQpOffset[ctuAddr];
+          }
+          int intAvgBimOffset = avgBimOffset >= 0 ? (int)(0.5 + avgBimOffset) : (int)(-0.5 + avgBimOffset);
+          adaptedLumaQP       = Clip3 (-sps.qpBDOffset[CH_L], MAX_QP, baseQp - lumaQPoffset + intAvgBimOffset );
+        }
+        
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+        bestCS->currQP[partitioner.chType] = bestCS->baseQP = adaptedLumaQP;
+        
+        int deltaQP         = slice.sliceQp - adaptedLumaQP;
+        if( abs( deltaQP ) > m_pcEncCfg->m_maxDeltaQP )
+        {
+          int clippedMaxDQP = deltaQP > 0 ? slice.sliceQp - m_pcEncCfg->m_maxDeltaQP : slice.sliceQp + m_pcEncCfg->m_maxDeltaQP;
+          tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+          bestCS->currQP[partitioner.chType] = bestCS->baseQP = clippedMaxDQP;
+        }
+
+        updateLambda (slice, slice.getLambdas()[0], baseQp, adaptedLumaQP, true);
       }
     }
     else if (m_pcEncCfg->m_usePerceptQPA && slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
@@ -808,7 +911,15 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
 
-      updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
+      int backupBaseQP  = tempCS->baseQP;
+      int deltaQP       = slice.sliceQp - tempCS->baseQP;
+      int clippedMaxDQP = 0;
+      if( abs( deltaQP ) > m_pcEncCfg->m_maxDeltaQP )
+      {
+        clippedMaxDQP = deltaQP > 0 ? slice.sliceQp - m_pcEncCfg->m_maxDeltaQP : slice.sliceQp + m_pcEncCfg->m_maxDeltaQP;
+        tempCS->currQP[partitioner.chType] = tempCS->baseQP = clippedMaxDQP;
+      }
+      updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], backupBaseQP, true );
     }
   }
 
@@ -1164,7 +1275,6 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   const int qp                     = encTestMode.qp;
   const int oldPrevQp              = tempCS->prevQP[partitioner.chType];
   const auto oldMotionLut          = tempCS->motionLut;
-  const ReshapeData& reshapeData   = tempCS->picture->reshapeData;
                                    
   const PartSplit split            = getPartSplit( encTestMode );
   const ModeType  modeTypeChild    = partitioner.modeType;
@@ -1295,10 +1405,6 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
       // copy org buffer, need to be done after initSubStructure because of reshaping!
       orgBuffer->copyFrom( tempCS->getOrgBuf( subCUArea ) );
-      if( tempCS->slice->lmcsEnabled && reshapeData.getCTUFlag() )
-      {
-        rspBuffer->Y().copyFrom( tempCS->getRspOrgBuf( subCUArea.Y() ) );
-      }
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;
 
@@ -2100,11 +2206,6 @@ void EncCu::generateMergePrediction( const UnitArea &unitArea, MergeItem *mergeI
 
     if( luma )
     {
-      const ReshapeData& reshapeData = pu.cs->picture->reshapeData;
-      if( pu.cs->slice->lmcsEnabled && reshapeData.getCTUFlag() )
-      {
-        dstBuf.Y().rspSignal( reshapeData.getFwdLUT() );
-      }
       // generate intrainter Y prediction
       dstBuf.Y().weightCiip( predBuf2->Y(), mergeItem->numCiipIntra );
     }
@@ -2200,9 +2301,7 @@ void EncCu::addRegularCandsToPruningList( const MergeCtx &mergeCtx, const UnitAr
 
 void EncCu::addCiipCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &localUnitArea, double sqrtLambdaForFirstPassIntra, const TempCtx &ctxStart, DistParam &distParam, CodingUnit &pu, bool* sameMv )
 {
-  const ReshapeData& reshapeData  = pu.cs->picture->reshapeData;
   int                numCiipIntra = -1;
-  PelUnitBuf         rspBuffer    = m_aTmpStorageLCU[0].getCompactBuf( pu );
   PelUnitBuf         ciipBuf      = m_aTmpStorageLCU[1].getCompactBuf( pu );
 
   pu.ciip        = true;
@@ -2243,17 +2342,7 @@ void EncCu::addCiipCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     ciipMerge->numCiipIntra   = numCiipIntra;
     auto dstBuf               = ciipMerge->getPredBuf( localUnitArea );
     generateMergePrediction   ( localUnitArea, ciipMerge, pu, true, false, dstBuf, false, false, nullptr, &ciipBuf );
-
-    if( pu.cs->slice->lmcsEnabled && reshapeData.getCTUFlag() )
-    {
-      // distortion is calculated in the original domain
-      rspBuffer.Y()           . rspSignal( dstBuf.Y(), reshapeData.getInvLUT() );
-      ciipMerge->cost         = calcLumaCost4MergePrediction( ctxStart, rspBuffer, sqrtLambdaForFirstPassIntra, pu, distParam );
-    }
-    else
-    {
       ciipMerge->cost         = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam );
-    }
     if( !m_mergeItemList      . insertMergeItemToList( ciipMerge ) && m_pcEncCfg->m_CIIP > 1 )
     {
       break;
@@ -2856,17 +2945,8 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
     const CompArea& compArea = localUnitArea.block(COMP_Y);
     const CPelBuf refBuf = refPic->getRecoBuf(compArea);
     const Pel* piRefSrch = refBuf.buf;
-    const ReshapeData& reshapeData = cu.cs->picture->reshapeData;
-    if (cu.cs->slice->lmcsEnabled && reshapeData.getCTUFlag())
-    {
-      PelBuf tmpLmcs = m_aTmpStorageLCU[0].getCompactBuf(cu.Y());
-      tmpLmcs.rspSignal(tempCS->getOrgBuf().Y(), reshapeData.getFwdLUT());
-      distParam = m_cRdCost.setDistParam( tmpLmcs, refBuf, sps.bitDepths[CH_L], DF_HAD);
-    }
-    else
-    {
+
       distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), refBuf, sps.bitDepths[CH_L], DF_HAD);
-    }
     int refStride = refBuf.stride;
 
     int numValidBv = mergeCtx.numValidMergeCand;
@@ -3500,30 +3580,13 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     ComponentID compId = (ComponentID)compIdx;
 
     //Copy current CU's reco to Deblock Pic Buffer
-    const ReshapeData& reshapeData = cs.picture->reshapeData;
     const CompArea&  compArea = currCsArea.block( compId );
     CompArea         locArea  = compArea;
     locArea.x -= cu->blocks[compIdx].x;
     locArea.y -= cu->blocks[compIdx].y;
     PelBuf dbReco = picDbBuf.getBuf( locArea );
-    if (cs.slice->lmcsEnabled && isLuma(compId) )
-    {
-      if ((!cs.sps->LFNST) && (!cs.sps->MTS) && (!cs.sps->ISP)&& reshapeData.getCTUFlag())
-      {
-        PelBuf rspReco = cs.getRspRecoBuf();
-        dbReco.copyFrom( rspReco );
-      }
-      else
-      {
-        PelBuf reco = cs.getRecoBuf( compId );
-        dbReco.rspSignal( reco, reshapeData.getInvLUT() );
-      }
-    }
-    else
-    {
       PelBuf reco = cs.getRecoBuf( compId );
       dbReco.copyFrom( reco );
-    }
     //left neighbour
     if ( leftEdgeAvai )
     {
@@ -3532,15 +3595,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       locArea.x -= cu->blocks[compIdx].x;
       locArea.y -= cu->blocks[compIdx].y;
       PelBuf dbReco = picDbBuf.getBuf( locArea );
-      if (cs.slice->lmcsEnabled && isLuma(compId))
-      {
-        dbReco.rspSignal( cs.picture->getRecoBuf( compArea ), reshapeData.getInvLUT() );
-      }
-      else
-      {
         dbReco.copyFrom( cs.picture->getRecoBuf( compArea ) );
       }
-    }
     //top neighbour
     if ( topEdgeAvai )
     {
@@ -3549,16 +3605,9 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       locArea.x -= cu->blocks[compIdx].x;
       locArea.y -= cu->blocks[compIdx].y;
       PelBuf dbReco = picDbBuf.getBuf( locArea );
-      if (cs.slice->lmcsEnabled && isLuma(compId))
-      {
-        dbReco.rspSignal( cs.picture->getRecoBuf( compArea ), reshapeData.getInvLUT() );
-      }
-      else
-      {
         dbReco.copyFrom( cs.picture->getRecoBuf( compArea ) );
       }
     }
-  }
 
   ChannelType dbChType = CU::isSepTree(*cu) ? partitioner.chType : MAX_NUM_CH;
 
@@ -3602,7 +3651,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       CPelBuf org    = cs.picture->getOrigBuf( compArea );
       if ( cs.picture->getFilteredOrigBuffer().valid() )
       {
-        org = cs.picture->getRspOrigBuf( compArea );
+        org = cs.picture->getFiltOrigBuf( compArea );
       }
       CPelBuf reco   = cs.picture->getRecoBuf( compArea );
       CPelBuf recoDb = picDbBuf.getBuf( locArea );
@@ -3619,7 +3668,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
       CPelBuf org    = cs.picture->getOrigBuf( compArea );
       if ( cs.picture->getFilteredOrigBuffer().valid() )
       {
-        org = cs.picture->getRspOrigBuf( compArea );
+        org = cs.picture->getFiltOrigBuf( compArea );
       }
       CPelBuf reco   = cs.picture->getRecoBuf( compArea );
       CPelBuf recoDb = picDbBuf.getBuf( locArea );
@@ -3636,53 +3685,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 Distortion EncCu::xGetDistortionDb(CodingStructure &cs, CPelBuf& org, CPelBuf& reco, const CompArea& compArea, bool beforeDb)
 {
   Distortion dist;
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
   const ComponentID compID = compArea.compID;
-  if( (cs.slice->lmcsEnabled && reshapeData.getCTUFlag()) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled)
-  {
-    if ( compID == COMP_Y && !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled)
-    {
-      CPelBuf tmpReco;
-      if( beforeDb )
-      {
-        PelBuf tmpLmcs = m_aTmpStorageLCU[0].getCompactBuf( compArea );
-        tmpLmcs.rspSignal( reco, reshapeData.getInvLUT() );
-        tmpReco = tmpLmcs;
-      }
-      else
-      {
-        tmpReco = reco;
-      }
-      dist = m_cRdCost.getDistPart( org, tmpReco, cs.sps->bitDepths[CH_L], compID, DF_SSE_WTD, &org );
-    }
-    else if( m_EDO == 2)
-    {
-      // use the correct luma area to scale chroma
-      const int csx = getComponentScaleX( compID, cs.area.chromaFormat );
-      const int csy = getComponentScaleY( compID, cs.area.chromaFormat );
-      CompArea lumaArea = CompArea( COMP_Y, cs.area.chromaFormat, Area( compArea.x << csx, compArea.y << csy, compArea.width << csx, compArea.height << csy), true);
-      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( lumaArea ): cs.picture->getOrigBuf( lumaArea );
-      dist = m_cRdCost.getDistPart( org, reco, cs.sps->bitDepths[toChannelType( compID )], compID, DF_SSE_WTD, &orgLuma );
-    }
-    else
-    {
-      const int csx = getComponentScaleX( compID, cs.area.chromaFormat );
-      const int csy = getComponentScaleY( compID, cs.area.chromaFormat );
-      CompArea lumaArea = compArea.compID ? CompArea( COMP_Y, cs.area.chromaFormat, Area( compArea.x << csx, compArea.y << csy, compArea.width << csx, compArea.height << csy), true) : cs.area.blocks[COMP_Y];
-      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( lumaArea ): cs.picture->getOrigBuf( lumaArea );
-//      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( cs.area.blocks[COMP_Y] ): cs.picture->getOrigBuf( cs.area.blocks[COMP_Y] );
-      dist = m_cRdCost.getDistPart( org, reco, cs.sps->bitDepths[toChannelType( compID )], compID, DF_SSE_WTD, &orgLuma );
-    }
-    return dist;
-  }
 
-  if ( cs.slice->lmcsEnabled && cs.slice->isIntra() && compID == COMP_Y && !beforeDb ) //intra slice
-  {
-    PelBuf tmpLmcs = m_aTmpStorageLCU[0].getCompactBuf( compArea );
-    tmpLmcs.rspSignal( reco, reshapeData.getFwdLUT() );
-    dist = m_cRdCost.getDistPart( org, tmpLmcs, cs.sps->bitDepths[CH_L], compID, DF_SSE );
-    return dist;
-  }
   dist = m_cRdCost.getDistPart(org, reco, cs.sps->bitDepths[toChannelType(compID)], compID, DF_SSE);
   return dist;
 }
@@ -4153,6 +4157,24 @@ int EncCu::xCheckMMVDCand(MmvdIdx& mmvdMergeCand, int& bestDir, int tempNum, dou
   return 0;
 }
 
+void EncCu::xInitLumaDeltaQpLUT()
+{
+  //TODO: to be discussed: add config parameters for these?
+  std::vector<int> defaultLumaLevelTodQp_QpChangePoints   =  { -3,  -2,  -1,   0,   1,   2,   3,   4,   5,   6 };
+  std::vector<int> defaultLumaLevelTodQp_LumaChangePoints =  {  0, 301, 367, 434, 501, 567, 634, 701, 767, 834 };
+  
+  int         lastDeltaQPValue = 0;
+  std::size_t nextSparseIndex = 0;
+  for( int index = 0; index < LUMA_LEVEL_TO_DQP_LUT_MAXSIZE; index++ )
+  {
+    while( nextSparseIndex < defaultLumaLevelTodQp_QpChangePoints.size() && index >= defaultLumaLevelTodQp_LumaChangePoints[nextSparseIndex] )
+    {
+      lastDeltaQPValue = defaultLumaLevelTodQp_QpChangePoints[nextSparseIndex];
+      nextSparseIndex++;
+    }
+    m_lumaLevelToDeltaQPLUT[index] = lastDeltaQPValue;
+  }
+}
 
 MergeItem::MergeItem()
 {

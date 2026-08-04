@@ -1883,59 +1883,6 @@ static bool test_InterPred()
 #endif
 
 #if ENABLE_SIMD_OPT_DIST
-static bool check_lumaWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
-{
-  printf( "Testing RdCost::lumaWeightedSSE %dx%d\n", width, height );
-
-  std::ostringstream sstm;
-  sstm << "lumaWeightedSSE" << " w=" << width << " h=" << height;
-
-  InputGenerator<Pel> g14{ 14 };
-  InputGenerator<Pel> g10{ 10, /*is_signed=*/false }; // Index range : 0 - 1023.
-  InputGenerator<uint32_t> g17{ 17, /*is_signed=*/false };
-  DimensionGenerator rng;
-
-  bool passed = true;
-  for( unsigned i = 0; i < num_cases; i++ )
-  {
-    int org_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
-    int cur_stride  = rng.get( width, g_fastUnitTest ? 256 : 1024 );
-    int luma_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
-    std::vector<Pel> orgBuf( org_stride * height );
-    std::vector<Pel> curBuf( cur_stride * height );
-    std::vector<Pel> orgLumaBuf( luma_stride * height * 2 );
-    std::vector<uint32_t> lumaWeights( 1024 );
-
-    DistParam dtParam;
-    dtParam.org.buf = orgBuf.data();
-    dtParam.cur.buf = curBuf.data();
-    dtParam.org.width = width;
-    dtParam.org.height = height;
-    dtParam.cur.stride = cur_stride;
-    dtParam.org.stride = org_stride;
-    CPelBuf pelBuf;
-    pelBuf.buf = orgLumaBuf.data();
-    pelBuf.stride = luma_stride;
-    dtParam.orgLuma = &pelBuf;
-    dtParam.bitDepth = 10;
-    dtParam.compID = COMP_Y;
-
-    std::generate( orgBuf.begin(), orgBuf.end(), g14 );
-    std::generate( curBuf.begin(), curBuf.end(), g14 );
-    std::generate( orgLumaBuf.begin(), orgLumaBuf.end(), g10 );
-    std::generate( lumaWeights.begin(), lumaWeights.end(), g17 );
-
-    for( unsigned csx = 0; csx < 2; csx++ )
-    {
-      Distortion sum_ref = ref->m_wtdPredPtr[csx]( dtParam, VVENC_CHROMA_420, lumaWeights.data() );
-      Distortion sum_opt = opt->m_wtdPredPtr[csx]( dtParam, VVENC_CHROMA_420, lumaWeights.data() );
-      passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
-    }
-  }
-
-  return passed;
-}
-
 static bool check_fixWeightedSSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
 {
   printf( "Testing RdCost::fixWeightedSSE %dx%d\n", width, height );
@@ -2202,7 +2149,6 @@ static bool test_RdCost()
   {
     for( int w : widths )
     {
-      passed = check_lumaWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
       passed = check_fixWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
       passed = check_SAD( &ref, &opt, num_cases, w, h ) && passed;
 
@@ -3357,17 +3303,14 @@ static bool test_AlfCovariance( unsigned num_cases )
   return passed;
 }
 
-template<bool Weighted>
 static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize,
                                        int numBins, unsigned num_cases )
 {
-  const char* testName =
-      Weighted ? "EncAdaptiveLoopFilter::getPreBlkStatsWeightedAccum" : "EncAdaptiveLoopFilter::getPreBlkStatsAccum";
-  std::cout << "Testing " << testName << " filterSize=" << filterSize << " numBins=" << numBins << '\n';
+  std::cout << "Testing EncAdaptiveLoopFilter::getPreBlkStatsAccum" << " filterSize=" << filterSize << " numBins=" << numBins << '\n';
 
   bool passed = true;
 
-  DimensionGenerator rng;
+//  DimensionGenerator rng;
   InputGenerator<Pel> g8{ 8, /*is_signed=*/true };
   InputGenerator<Pel> g10{ 10, /*is_signed=*/true };
   FloatGenerator fg( -1000.0f, 1000.0f );
@@ -3378,13 +3321,6 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
   AlfCovariance covOpt;
   covRef.create( shape.numCoeff, numBins );
   covOpt.create( shape.numCoeff, numBins );
-
-  static constexpr alf_float_t weightedMinTolerance = 0.1f;
-  static constexpr alf_float_t weightedRelTolerance = 1e-6f; // Gives about 1.0f tolerance for values around 1.0e6.
-  static constexpr alf_float_t weightedMaxTolerance = 1.0f;
-  static constexpr alf_float_t weightedEMinTolerance = 0.3f;
-  static constexpr alf_float_t weightedERelTolerance = 1e-3f; // Gives about 1.0f tolerance for E values around 1.0e3.
-  static constexpr alf_float_t weightedEMaxTolerance = 2.0f;
 
   static constexpr int MaxAlfNumClippingValues = 4;
 
@@ -3408,49 +3344,17 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
     covRef.pixAcc = fgPix();
     covOpt = covRef;
 
-    if( Weighted )
-    {
-      auto gen_luma_weight = []( int i )
-      {
-        // Use the same PQ luma-to-weight mapping used by initLumaLevelToWeightTableReshape().
-        double y = 0.015 * i - 1.5 - 6;
-        y = y < -3 ? -3 : y > 6 ? 6 : y;
-        return pow( 2.0, y / 3.0 );
-      };
-
-      alf_float_t weight[4][4];
-      for( int ii = 0; ii < 4; ++ii )
-      {
-        for( int jj = 0; jj < 4; ++jj )
-        {
-          weight[ii][jj] = gen_luma_weight( rng.get( 0, 1023 ) );
-        }
-      }
-
-      ref->m_getPreBlkStatsWeightedAccum( covRef, shape, e.data(), y, weight, numBins );
-      opt->m_getPreBlkStatsWeightedAccum( covOpt, shape, e.data(), y, weight, numBins );
-    }
-    else
-    {
-      ref->m_getPreBlkStatsAccum( covRef, shape, e.data(), y, numBins );
-      opt->m_getPreBlkStatsAccum( covOpt, shape, e.data(), y, numBins );
-    }
+    ref->m_getPreBlkStatsAccum( covRef, shape, e.data(), y, numBins );
+    opt->m_getPreBlkStatsAccum( covOpt, shape, e.data(), y, numBins );
 
     std::ostringstream sstm;
-    sstm << testName << " filterSize=" << filterSize << " numBins=" << numBins;
+    sstm << "EncAdaptiveLoopFilter::getPreBlkStatsAccum filterSize=" << filterSize << " numBins=" << numBins;
 
-    const alf_float_t minTolerance = Weighted ? weightedMinTolerance : alf_float_t( 0 );
-    const alf_float_t relTolerance = Weighted ? weightedRelTolerance : alf_float_t( 0 );
-    const alf_float_t maxTolerance = Weighted ? weightedMaxTolerance : alf_float_t( 0 );
-    const alf_float_t eMinTolerance = Weighted ? weightedEMinTolerance : alf_float_t( 0 );
-    const alf_float_t eRelTolerance = Weighted ? weightedERelTolerance : alf_float_t( 0 );
-    const alf_float_t eMaxTolerance = Weighted ? weightedEMaxTolerance : alf_float_t( 0 );
-
-    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, minTolerance, relTolerance,
-                            maxTolerance ) &&
+    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, alf_float_t( 0 ), alf_float_t( 0 ),
+                           alf_float_t( 0 ) ) &&
              passed;
     passed = compare_values_2d( sstm.str() + " y", &covRef.y[0][0], &covOpt.y[0][0], covRef.numBins, covRef.numCoeff,
-                                MAX_NUM_ALF_LUMA_COEFF, minTolerance, relTolerance, maxTolerance ) &&
+                                MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
              passed;
 
     for( int b0 = 0; b0 < covRef.numBins; ++b0 )
@@ -3459,7 +3363,7 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
       {
         passed = compare_values_2d( sstm.str() + " E b0=" + std::to_string( b0 ) + " b1=" + std::to_string( b1 ),
                                     &covRef.E[b0][b1][0][0], &covOpt.E[b0][b1][0][0], covRef.numCoeff, covRef.numCoeff,
-                                    MAX_NUM_ALF_LUMA_COEFF, eMinTolerance, eRelTolerance, eMaxTolerance ) &&
+                                    MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
                  passed;
       }
     }
@@ -3481,8 +3385,7 @@ static bool test_EncAdaptiveLoopFilter( unsigned num_cases )
   {
     for( int filterSize : { 5, 7 } )
     {
-      passed = check_getPreBlkStatsAccum<false>( &ref, &opt, filterSize, numBin, num_cases ) && passed;
-      passed = check_getPreBlkStatsAccum<true>( &ref, &opt, filterSize, numBin, num_cases ) && passed;
+      passed = check_getPreBlkStatsAccum( &ref, &opt, filterSize, numBin, num_cases ) && passed;
     }
   }
 

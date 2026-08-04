@@ -53,7 +53,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/dtrace_buffer.h"
-#include "CommonLib/Reshape.h"
 #include <math.h>
 #include "vvenc/vvencCfg.h"
 
@@ -206,11 +205,6 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   CPelBuf piOrg   = cu.cs->getOrgBuf(COMP_Y);
   PelBuf piPred  = m_SortedPelUnitBufs->getTestBuf(COMP_Y);
 
-  const ReshapeData& reshapeData = cu.cs->picture->reshapeData;
-  if (cu.cs->picHeader->lmcsEnabled && reshapeData.getCTUFlag())
-  {
-    piOrg = cu.cs->getRspOrgBuf();
-  }
   DistParam distParam    = m_pcRdCost->setDistParam( piOrg, piPred, sps.bitDepths[ CH_L ], DF_HAD_2SAD); // Use HAD (SATD) cost
 
   const int numHadCand = (testMip ? 2 : 1) * 3;
@@ -696,11 +690,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   if( validReturn )
   {
     cs.useSubStructure( *csBest, partitioner.chType, TREE_D, cu.singleChan( CH_L ), true );
-    const ReshapeData& reshapeData = cs.picture->reshapeData;
-    if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
-    {
-      cs.getRspRecoBuf().copyFrom(csBest->getRspRecoBuf());
-    }
 
     //=== update PU data ====
     cu.lfnstIdx           = bestLfnstIdx;
@@ -1266,7 +1255,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   CodingStructure &cs             = *tu.cs;
   const CompArea      &area       = tu.blocks[compID];
   const SPS           &sps        = *cs.sps;
-  const ReshapeData&  reshapeData = cs.picture->reshapeData;
 
   const ChannelType    chType     = toChannelType(compID);
   const int            bitDepth   = sps.bitDepths[chType];
@@ -1333,20 +1321,11 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     }
   }
   DTRACE( g_trace_ctx, D_PRED, "@(%4d,%4d) [%2dx%2d] IMode=%d\n", tu.lx(), tu.ly(), tu.lwidth(), tu.lheight(), CU::getFinalIntraMode(cu, chType) );
-  const Slice &slice = *cs.slice;
-  bool flag = cs.picHeader->lmcsEnabled && (slice.isIntra() || (!slice.isIntra() && reshapeData.getCTUFlag()));
 
   if (isLuma(compID))
   {
     //===== get residual signal =====
-    if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() )
-    {
-      piResi.subtract(cs.getRspOrgBuf(area), piPred);
-    }
-    else
-    {
-      piResi.subtract( piOrg, piPred );
-    }
+    piResi.subtract( piOrg, piPred );
   }
 
   //===== transform and quantization =====
@@ -1356,14 +1335,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   const QpParam cQP(tu, compID);
 
   m_pcTrQuant->selectLambda(compID);
-
-  flag =flag && (tu.blocks[compID].width*tu.blocks[compID].height > 4);
-  if (flag && isChroma(compID) && cs.picHeader->lmcsChromaResidualScale )
-  {
-    int cResScaleInv = tu.chromaAdj;
-    double cRescale = (double)(1 << CSCALE_FP_PREC) / (double)cResScaleInv;
-    m_pcTrQuant->scaleLambda( 1.0/(cRescale*cRescale) );
-  }
 
   if ( jointCbCr )
   {
@@ -1445,16 +1416,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     }
 
     //===== reconstruction =====
-    if ( flag && uiAbsSum > 0 && cs.picHeader->lmcsChromaResidualScale )
-    {
-      piResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
-
-      if( jointCbCr )
-      {
-        crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
-      }
-    }
-
     if( jointCbCr )
     {
       crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
@@ -1465,36 +1426,12 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
 
   //===== update distortion =====
-  const bool reshapeIntraCMD = m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ;
-  if(((cs.picHeader->lmcsEnabled && (reshapeData.getCTUFlag() || (isChroma(compID) && reshapeIntraCMD))) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled ) )
+  ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE );
+  if( jointCbCr )
   {
-    const CPelBuf orgLuma = cs.getOrgBuf( cs.area.blocks[COMP_Y] );
-    if( compID == COMP_Y && !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
-    {
-      PelBuf tmpRecLuma = cs.getRspRecoBuf(area);
-      tmpRecLuma.rspSignal( piReco, reshapeData.getInvLUT());
-      ruiDist += m_pcRdCost->getDistPart(piOrg, tmpRecLuma, sps.bitDepths[toChannelType(compID)], compID, DF_SSE_WTD, &orgLuma);
-    }
-    else
-    {
-      ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE_WTD, &orgLuma );
-      if( jointCbCr )
-      {
-        CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
-        PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
-        ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE_WTD, &orgLuma );
-      }
-    }
-  }
-  else
-  {
-    ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE );
-    if( jointCbCr )
-    {
-      CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
-      PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
-      ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE );
-    }
+    CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
+    PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
+    ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE );
   }
 }
 
@@ -2055,16 +1992,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     resiCb.subtract(cs.getOrgBuf(COMP_Cb), piPredCb);
     resiCr.subtract(cs.getOrgBuf(COMP_Cr), piPredCr);
 
-    //----- get reshape parameter ----
-    ReshapeData& reshapeData = cs.picture->reshapeData;
-    bool doReshaping = (cs.picHeader->lmcsEnabled && cs.picHeader->lmcsChromaResidualScale && (cs.slice->isIntra() || reshapeData.getCTUFlag()) && (cbArea.width * cbArea.height > 4));
-    if (doReshaping)
-    {
-      const Area area = currTU.Y().valid() ? currTU.Y() : Area(recalcPosition(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].pos()), recalcSize(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].size()));
-      const CompArea& areaY = CompArea(COMP_Y, currTU.chromaFormat, area);
-      currTU.chromaAdj = reshapeData.calculateChromaAdjVpduNei(currTU, areaY, currTU.cu->treeType);
-    }
-
     //===== store original residual signals (std and crossCompPred) =====
     for( int k = 0; k < 5; k++ )
     {
@@ -2075,13 +2002,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     {
       m_orgResiCb[k].copyFrom(resiCb);
       m_orgResiCr[k].copyFrom(resiCr);
-
-      if (doReshaping)
-      {
-        int cResScaleInv = currTU.chromaAdj;
-        m_orgResiCb[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cb]);
-        m_orgResiCr[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cr]);
-      }
     }
 
     CUCtx cuCtx;
@@ -2189,7 +2109,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         ctxStart = m_CABACEstimator->getCtx();
         for (int modeId = 0; modeId < nNumTransformCands; modeId++)
         {
-          if (doReshaping || lfnstIdx || modeId)
+          if (lfnstIdx || modeId)
           {
             resiCb.copyFrom(m_orgResiCb[0]);
             resiCr.copyFrom(m_orgResiCr[0]);
@@ -2696,7 +2616,6 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
   {
     CodingStructure&  cs = *tu.cs;
     const CompArea& area = tu.blocks[compID];
-    const ReshapeData& reshapeData = cs.picture->reshapeData;
     const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
     PelBuf piPred = cs.getPredBuf(area);
     PelBuf piResi = cs.getResiBuf(area);
@@ -2717,15 +2636,8 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
     }
 
     //===== get residual signal =====
-    if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
-    {
-      piResi.subtract(cs.getRspOrgBuf(), piPred);
-    }
-    else
-    {
-      CPelBuf piOrg = cs.getOrgBuf(COMP_Y);
-      piResi.subtract(piOrg, piPred);
-    }
+    CPelBuf piOrg = cs.getOrgBuf(COMP_Y);
+    piResi.subtract(piOrg, piPred);
     m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, compID);
   }
   else

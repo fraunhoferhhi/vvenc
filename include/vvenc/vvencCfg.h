@@ -386,21 +386,23 @@ typedef struct vvencChromaQpMappingTableParams
 
 VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTableParams *ChromaQpMappingTableParams );
 
-
-typedef struct vvencReshapeCW
+// begin: unused, will be removed in future versions
+typedef struct vvencUnusedStruct1
 {
-  unsigned int binCW[3];
-  int          updateCtrl;
-  int          adpOption;
-  unsigned int initialCW;
-  int          rspPicSize;
-  int          rspUnused;
-  int          rspFps;
-  int          rspTid;
-  int          rspFpsToIp;
-}vvencReshapeCW;
+  unsigned int m_cfgUnused0[3]; // TODO: remove unused memory from configuration
+  int          m_cfgUnused1;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused2;    // TODO: remove unused memory from configuration
+  unsigned int m_cfgUnused3;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused4;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused5;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused6;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused7;    // TODO: remove unused memory from configuration
+  int          m_cfgUnused8;    // TODO: remove unused memory from configuration
+}vvencUnusedStruct1;
 
+typedef vvencUnusedStruct1 vvencReshapeCW;
 VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *ReshapeCW );
+// end: unused
 
 
 typedef struct vvencMCTF
@@ -530,7 +532,7 @@ typedef struct vvenc_config
 
   int                 m_usePerceptQPATempFiltISlice;                                     // Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  bool                m_lumaLevelToDeltaQPEnabled;
+  int8_t              m_lumaLevelToDeltaQPEnabled;
   vvencUnusedStruct0  m_cfgUnused24;
 
   vvencChromaFormat   m_internChromaFormat;
@@ -620,13 +622,13 @@ typedef struct vvenc_config
   bool                m_BDOF;
   bool                m_DMVR;
   int                 m_EDO;
-  int                 m_lumaReshapeEnable;
-  int                 m_reshapeSignalType;
-  int                 m_updateCtrl;
-  int                 m_adpOption;
-  int                 m_initialCW;
-  int                 m_LMCSOffset;
-  vvencReshapeCW      m_reshapeCW;
+  int                 m_cfgUnused28; // TODO: remove unused memory from configuration
+  int                 m_cfgUnused35; // TODO: remove unused memory from configuration
+  int                 m_cfgUnused29; // TODO: remove unused memory from configuration
+  int                 m_cfgUnused30; // TODO: remove unused memory from configuration
+  int                 m_cfgUnused31; // TODO: remove unused memory from configuration
+  int                 m_cfgUnused32; // TODO: remove unused memory from configuration
+  vvencUnusedStruct1  m_cfgUnused34; // TODO: remove unused memory from configuration
   int                 m_Affine;
   bool                m_PROF;
   bool                m_AffineType;
@@ -784,8 +786,9 @@ typedef struct vvenc_config
   int8_t              m_GOPQPA;
   int                 m_minIntraDist;
   int8_t              m_numParallelGOPs;
+  int8_t              m_maxDeltaQP;
 
-  int8_t              m_reservedInt8[3];
+  int8_t              m_reservedInt8[2];
   double              m_reservedDouble[8];
 
   // internal state variables

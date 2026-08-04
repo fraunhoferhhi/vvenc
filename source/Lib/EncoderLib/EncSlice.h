@@ -74,7 +74,7 @@ struct CtuEncParam;
 
 enum TaskType {
   CTU_ENCODE     = 0,
-  RESHAPE_LF_VER,
+  LF_VER,
   LF_HOR,
   SAO_FILTER,
   ALF_GET_STATISTICS,

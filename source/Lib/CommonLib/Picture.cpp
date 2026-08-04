@@ -192,7 +192,6 @@ Picture::Picture()
     , useTS               ( false )
     , useBDPCM            ( false )
     , useIBC              ( false )
-    , useLMCS             ( false )
     , useSAO              ( false )
     , useNumRefs          ( false )
     , useFastMrg          ( 0 )
@@ -301,8 +300,8 @@ void Picture::destroy( bool bPicHeader )
 void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_QPA_PREV_FRAMES ], PicShared* picShared )
 {
   m_picShared                      = picShared;
-  m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
-  m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
+  m_sharedBufs[ PIC_ORIGINAL ]      = origBuf;
+  m_sharedBufs[ PIC_FILT_ORIGINAL ] = filteredBuf;
   for( int i = 0; i < NUM_QPA_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
 }
@@ -317,7 +316,7 @@ void Picture::releaseSharedBuffers()
 {
   m_picShared                      = nullptr;
   m_sharedBufs[ PIC_ORIGINAL ]     = nullptr;
-  m_sharedBufs[ PIC_ORIGINAL_RSP ] = nullptr;
+  m_sharedBufs[ PIC_FILT_ORIGINAL ] = nullptr;
 }
 
 void Picture::createTempBuffers( unsigned _maxCUSize )
@@ -341,7 +340,7 @@ const CPelBuf     Picture::getOrigBufPrev (const CompArea &blk, const PrevFrameT
 const CPelUnitBuf Picture::getOrigBufPrev (const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? *m_bufsOrigPrev[ type ] : PelUnitBuf()); }
 const CPelBuf     Picture::getOrigBufPrev (const ComponentID compID, const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? m_bufsOrigPrev[ type ]->getBuf (compID) : PelBuf()); }
 
-void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps )
+void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps )
 {
   for( auto &sei : SEIs )
   {
@@ -383,7 +382,6 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   {
     memcpy( cs->alfAps, alfAps, sizeof( cs->alfAps ) );
   }
-  cs->lmcsAps = lmcsAps;
   cs->pcv     = pps.pcv;
   vps         = &_vps;
   dci         = nullptr;
@@ -408,7 +406,6 @@ void Picture::setSccFlags( const VVEncCfg* encCfg )
   useTS      = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
   useBDPCM   = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
   useMCTF    = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
-  useLMCS    = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
   useIBC     = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
   useSAO     = encCfg->m_bUseSAO                && ( !encCfg->m_saoScc                || isSccWeak );
   useSelectiveRdoq = encCfg->m_useSelectiveRDOQ == 2 ? !isSccWeak : !!encCfg->m_useSelectiveRDOQ;

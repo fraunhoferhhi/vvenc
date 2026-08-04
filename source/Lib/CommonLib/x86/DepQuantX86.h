@@ -359,36 +359,63 @@ namespace vvenc {
       __m128i mrd01 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[0] );
       __m128i mrd23 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[2] );
 
-      //int64_t         rdCostA   = state.rdCost[m_stateId] + pqDataA.deltaDist;
-      //int64_t         rdCostB   = state.rdCost[m_stateId] + pqDataB.deltaDist;
-      //int64_t         rdCostZ   = state.rdCost[m_stateId];
-      __m128i rdCostZ01 = _mm_unpacklo_epi64( mrd01, mrd23 );
-      __m128i rdCostZ23 = _mm_unpackhi_epi64( mrd01, mrd23 );
-      __m128i deltaDist = _mm_unpacklo_epi64( _mm_loadu_si64( &pqData[2].deltaDist ), _mm_loadu_si64( &pqData[1].deltaDist ) );
-      __m128i rdCostB01 = _mm_add_epi64( rdCostZ23, deltaDist );
-      __m128i rdCostB23 = _mm_add_epi64( rdCostZ01, deltaDist );
-      deltaDist = _mm_unpacklo_epi64( _mm_loadu_si64( &pqData[0].deltaDist ), _mm_loadu_si64( &pqData[3].deltaDist ) );
-      __m128i rdCostA01 = _mm_add_epi64( rdCostZ01, deltaDist );
-      __m128i rdCostA23 = _mm_add_epi64( rdCostZ23, deltaDist );
+      __m128i rdCostZ01 = mrd01;
+      __m128i rdCostZ23 = mrd23;
+      __m128i rdCostB01 = _mm_add_epi64( rdCostZ01, _mm_set1_epi64x( pqData[2].deltaDist ) );
+      __m128i rdCostB23 = _mm_add_epi64( rdCostZ23, _mm_set1_epi64x( pqData[1].deltaDist )  );
+      __m128i rdCostA01 = _mm_add_epi64( rdCostZ01, _mm_set1_epi64x( pqData[0].deltaDist )  );
+      __m128i rdCostA23 = _mm_add_epi64( rdCostZ23, _mm_set1_epi64x( pqData[3].deltaDist )  );
 
       //const CoeffFracBits &cffBits = m_gtxFracBitsArray[state.ctx.cff[m_stateId]];
       //const BinFracBits    sigBits = m_sigFracBitsArray[state.ctx.sig[m_stateId]];
       //
       //rdCostA += cffBits.bits[ pqDataA.absLevel ];
       //rdCostB += cffBits.bits[ pqDataB.absLevel ];
-      __m128i sgbts02 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
-                                            _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ) );
-      __m128i sgbts13 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ),
+      __m128i sgbts01 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
+                                            _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ) );
+      __m128i sgbts23 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ),
                                             _mm_loadu_si64( &state.m_sigFracBitsArray[3][state.ctx.sig[3]] ) );
 
-      {
-        __m128i sgbts02_0 = _mm_shuffle_epi32( sgbts02, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
-        __m128i sgbts02_1 = _mm_shuffle_epi32( sgbts02, 1 + ( 3 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-        __m128i sgbts13_0 = _mm_shuffle_epi32( sgbts13, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
-        __m128i sgbts13_1 = _mm_shuffle_epi32( sgbts13, 1 + ( 3 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      sgbts01 = _mm_shuffle_epi32( sgbts01, 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      sgbts23 = _mm_shuffle_epi32( sgbts23, 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
 
-        sgbts02 = _mm_unpacklo_epi64( sgbts02_0, sgbts02_1 );
-        sgbts13 = _mm_unpacklo_epi64( sgbts13_0, sgbts13_1 );
+      __m128i addZ = _mm_unpacklo_epi64( sgbts01, sgbts23 );
+      __m128i addA, addB;
+      __m128i sgbts1 = _mm_unpackhi_epi64( sgbts01, sgbts23 );
+
+      const TCoeff lvl0 = pqData[0].absLevel, lvl1 = pqData[1].absLevel, lvl2 = pqData[2].absLevel, lvl3 = pqData[3].absLevel;
+
+#if USE_AVX2
+      static_assert( sizeof( state.m_gtxFracBitsArray[0] ) == 24, "CoeffFracBits has to be 6 x int32_t" );
+      static_assert( sizeof( state.m_gtxFracBitsArray[0].bits[0] ) == 4, "bits has to be int32_t" );
+
+      __m128i absLvl = _mm_setr_epi32( lvl0, lvl1, lvl2, lvl3 );
+      __m128i cffs   = _mm_loadu_si32( ( const void* ) state.ctx.cff );
+      cffs           = _mm_cvtepi8_epi32( cffs );
+      cffs           = _mm_slli_epi32( cffs, 1 );
+      cffs           = _mm_add_epi32 ( cffs, _mm_slli_epi32( cffs, 1 ) ); // 6 x cff, is the CoeffFracBits offset in multiples of int32_t
+
+      __m128i idxA   = _mm_shuffle_epi32( absLvl, 0 + ( 0 << 2 ) + ( 3 << 4 ) + ( 3 << 6 ) );
+      __m128i idxB   = _mm_shuffle_epi32( absLvl, 2 + ( 2 << 2 ) + ( 1 << 4 ) + ( 1 << 6 ) );
+      idxA           = _mm_add_epi32( idxA, cffs );
+      idxB           = _mm_add_epi32( idxB, cffs );
+
+      addA           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxA, 4 );
+      addB           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxB, 4 );
+#else
+      {
+        // coeff context is indepndent of state
+        auto& base = state.m_gtxFracBitsArray;
+
+        int32_t cffBitsArr[4] =
+        {
+          base[state.ctx.cff[0]].bits[lvl2],
+          base[state.ctx.cff[1]].bits[lvl2],
+          base[state.ctx.cff[2]].bits[lvl1],
+          base[state.ctx.cff[3]].bits[lvl1],
+        };
+
+        addB = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
       }
 
       {
@@ -397,120 +424,66 @@ namespace vvenc {
 
         int32_t cffBitsArr[4] =
         {
-          base[state.ctx.cff[1]].bits[pqData[2].absLevel],
-          base[state.ctx.cff[3]].bits[pqData[1].absLevel],
-          base[state.ctx.cff[0]].bits[pqData[2].absLevel],
-          base[state.ctx.cff[2]].bits[pqData[1].absLevel],
+          base[state.ctx.cff[0]].bits[lvl0],
+          base[state.ctx.cff[1]].bits[lvl0],
+          base[state.ctx.cff[2]].bits[lvl3],
+          base[state.ctx.cff[3]].bits[lvl3],
         };
 
-        __m128i cffBits = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-        __m128i add = _mm_cvtepi32_epi64( cffBits );
-        rdCostB01 = _mm_add_epi64( rdCostB01, add );
-        add = _mm_cvtepi32_epi64( _mm_unpackhi_epi64( cffBits, cffBits ) );
-        rdCostB23 = _mm_add_epi64( rdCostB23, add );
+        addA  = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
       }
-
-      {
-        // coeff context is indepndent of state
-        auto& base = state.m_gtxFracBitsArray;
-
-        int32_t cffBitsArr[4] =
-        {
-          base[state.ctx.cff[0]].bits[pqData[0].absLevel],
-          base[state.ctx.cff[2]].bits[pqData[3].absLevel],
-          base[state.ctx.cff[1]].bits[pqData[0].absLevel],
-          base[state.ctx.cff[3]].bits[pqData[3].absLevel],
-        };
-
-        __m128i cffBits = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-        __m128i add = _mm_cvtepi32_epi64( cffBits );
-        rdCostA01 = _mm_add_epi64( rdCostA01, add );
-        add = _mm_cvtepi32_epi64( _mm_unpackhi_epi64( cffBits, cffBits ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, add );
-      }
+#endif
 
       if( spt == DQIntern::SCAN_ISCSBB )
       {
-        //  rdCostZ += sigBits.intBits[ 0 ];
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
-
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-
-        //  rdCostB += sigBits.intBits[ 1 ];
-        rdCostB01 = _mm_add_epi64( rdCostB01, _mm_cvtepi32_epi64( sgbts13 ) );
-        rdCostB23 = _mm_add_epi64( rdCostB23, _mm_cvtepi32_epi64( sgbts02 ) );
-
-        //  rdCostA += sigBits.intBits[ 1 ];
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( sgbts13 ) );
       }
       else if( spt == DQIntern::SCAN_SOCSBB )
       {
-        //  rdCostA += m_sbbFracBits.intBits[ 1 ] + sigBits.intBits[ 1 ];
-        //  rdCostB += m_sbbFracBits.intBits[ 1 ] + sigBits.intBits[ 1 ];
-        //  rdCostZ += m_sbbFracBits.intBits[ 1 ] + sigBits.intBits[ 0 ];
         __m128i sbbBits = _mm_loadu_si128( ( const __m128i* ) state.sbbBits1 );
-        sbbBits = _mm_shuffle_epi32( sbbBits, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
-
-        __m128i add = _mm_cvtepi32_epi64( sbbBits );
-        rdCostB23 = _mm_add_epi64( rdCostB23, add );
-        rdCostA01 = _mm_add_epi64( rdCostA01, add );
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, add );
-        add = _mm_cvtepi32_epi64( _mm_unpackhi_epi64( sbbBits, sbbBits ) );
-        rdCostB01 = _mm_add_epi64( rdCostB01, add );
-        rdCostA23 = _mm_add_epi64( rdCostA23, add );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, add );
-
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-        rdCostB01 = _mm_add_epi64( rdCostB01, _mm_cvtepi32_epi64( sgbts13 ) );
-        rdCostB23 = _mm_add_epi64( rdCostB23, _mm_cvtepi32_epi64( sgbts02 ) );
-
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( sgbts13 ) );
+        addA = _mm_add_epi32( sbbBits, addA );
+        addB = _mm_add_epi32( sbbBits, addB );
+        addZ = _mm_add_epi32( sbbBits, addZ );
       }
-      else
+      else if( spt == DQIntern::SCAN_EOCSBB )
       {
-        //else if( state.numSig[m_stateId] )
-        //{
-        //  rdCostA += sigBits.intBits[ 1 ];
-        //  rdCostB += sigBits.intBits[ 1 ];
-        //  rdCostZ += sigBits.intBits[ 0 ];
-        //}
-        //else
-        //{
-        //  rdCostZ = decisionA.rdCost;
-        //}
         __m128i numSig = _mm_loadu_si32( state.numSig );
 
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
+        __m128i mask = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 ) );
+        mask         = _mm_cmpeq_epi8( mask, _mm_setzero_si128() );
 
-        __m128i mask13 = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3 ) );
-        mask13 = _mm_cmpgt_epi8( mask13, _mm_setzero_si128() );
-        __m128i mask02 = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2 ) );
-        mask02 = _mm_cmpgt_epi8( mask02, _mm_setzero_si128() );
-
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-
-        rdCostB01 = _mm_add_epi64( rdCostB01, _mm_and_si128( mask13, _mm_cvtepi32_epi64( sgbts13 ) ) );
-        rdCostB23 = _mm_add_epi64( rdCostB23, _mm_and_si128( mask02, _mm_cvtepi32_epi64( sgbts02 ) ) );
-
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_and_si128( mask02, _mm_cvtepi32_epi64( sgbts02 ) ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_and_si128( mask13, _mm_cvtepi32_epi64( sgbts13 ) ) );
+        sgbts1 = _mm_andnot_si128( mask, sgbts1 );
 
         __m128i rdMax = _mm_loadu_si64( &DQIntern::rdCostInit );
         rdMax = _mm_unpacklo_epi64( rdMax, rdMax );
 
-        rdCostZ01 = _mm_blendv_epi8( rdMax, rdCostZ01, mask02 );
-        rdCostZ23 = _mm_blendv_epi8( rdMax, rdCostZ23, mask13 );
+        rdCostZ01 = _mm_blendv_epi8( rdCostZ01, rdMax, _mm_cvtepi32_epi64( mask ) );
+        rdCostZ23 = _mm_blendv_epi8( rdCostZ23, rdMax, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( mask, mask ) ) );
       }
+
+      addA = _mm_add_epi32( addA, sgbts1 );
+      addB = _mm_add_epi32( addB, sgbts1 );
+
+      rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( addZ ) );
+      rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addZ, addZ ) ) );
+      rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( addA ) );
+      rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addA, addA ) ) );
+      rdCostB01 = _mm_add_epi64( rdCostB01, _mm_cvtepi32_epi64( addB ) );
+      rdCostB23 = _mm_add_epi64( rdCostB23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addB, addB ) ) );
+
+      {
+        __m128i tmp1 = rdCostZ01, tmp2 = rdCostZ23;
+        rdCostZ01 = _mm_unpacklo_epi64( tmp1, tmp2 );
+        rdCostZ23 = _mm_unpackhi_epi64( tmp1, tmp2 );
+
+        tmp1 = rdCostA01; tmp2 = rdCostA23;
+        rdCostA01 = _mm_unpacklo_epi64( tmp1, tmp2 );
+        rdCostA23 = _mm_unpackhi_epi64( tmp1, tmp2 );
+
+        tmp1 = rdCostB01; tmp2 = rdCostB23;
+        rdCostB01 = _mm_unpackhi_epi64( tmp1, tmp2 );
+        rdCostB23 = _mm_unpacklo_epi64( tmp1, tmp2 );
+      }
+
       // decision 0: either A from 0 (pq0), or B from 1 (pq2), or 0 from 0
       // decision 1: either A from 2 (pq3), or B from 3 (pq1), or 0 from 2
       // decision 2: either A from 1 (pq0), or B from 0 (pq2), or 0 from 1
@@ -523,55 +496,36 @@ namespace vvenc {
       __m128i rdBest01 = rdCostZ01;
       __m128i rdBest23 = rdCostB23;
 
-      __m128i valBest = _mm_setr_epi32( 0, 0, pqData[2].absLevel, pqData[1].absLevel );
-
-#if ENABLE_VALGRIND_CODE
-      // just to avoid strange "unknown instruction"  error
-      __m128i valCand = _mm_setr_epi32( 0, pqData[3].absLevel, 0, 0 );
-      valCand = _mm_insert_epi32( valCand, pqData[0].absLevel, 0 );
-#else
-      __m128i valCand = _mm_setr_epi32( pqData[0].absLevel, pqData[3].absLevel, 0, 0 );
-#endif
-      __m128i idxBest = _mm_setr_epi32( 0, 2, 0, 2 );
-      __m128i idxCand = _mm_setr_epi32( 0, 2, 1, 3 );
+      __m128i valIdxBest = _mm_setr_epi16( 0, 0, lvl2, lvl1, 0, 2, 0, 2 );
+      __m128i valIdxCand = _mm_setr_epi16( lvl0, lvl3, 0, 0, 0, 2, 1, 3 );
 
       __m128i chng01 = _my_cmpgt_epi64( rdBest01, rdCostA01 );
       __m128i chng23 = _my_cmpgt_epi64( rdBest23, rdCostZ23 );
-      __m128i chng = _mm_blend_epi16( chng01, chng23, ( 3 << 2 ) + ( 3 << 6 ) ); // 00110011
-      chng = _mm_shuffle_epi32( chng, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      __m128i chng = _mm_packs_epi32( chng01, chng23 );
+      chng = _mm_packs_epi32( chng, chng );
 
       rdBest01 = _mm_blendv_epi8( rdBest01, rdCostA01, chng01 );
       rdBest23 = _mm_blendv_epi8( rdBest23, rdCostZ23, chng23 );
 
-      valBest = _mm_blendv_epi8( valBest, valCand, chng );
-      idxBest = _mm_blendv_epi8( idxBest, idxCand, chng );
-
-
-      valCand = _mm_setr_epi32( pqData[2].absLevel, pqData[1].absLevel, pqData[0].absLevel, pqData[3].absLevel );
-      idxCand = _mm_setr_epi32( 1, 3, 1, 3 );
+      valIdxBest = _mm_blendv_epi8( valIdxBest, valIdxCand, chng );
+      valIdxCand = _mm_setr_epi16( lvl2, lvl1, lvl0, lvl3, 1, 3, 1, 3 );
 
       chng01 = _my_cmpgt_epi64( rdBest01, rdCostB01 );
       chng23 = _my_cmpgt_epi64( rdBest23, rdCostA23 );
-      chng = _mm_blend_epi16( chng01, chng23, ( 3 << 2 ) + ( 3 << 6 ) ); // 00110011
-      chng = _mm_shuffle_epi32( chng, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      chng = _mm_packs_epi32( chng01, chng23 );
+      chng = _mm_packs_epi32( chng, chng );
 
       rdBest01 = _mm_blendv_epi8( rdBest01, rdCostB01, chng01 );
       rdBest23 = _mm_blendv_epi8( rdBest23, rdCostA23, chng23 );
 
-      valBest = _mm_blendv_epi8( valBest, valCand, chng );
-      idxBest = _mm_blendv_epi8( idxBest, idxCand, chng );
+      valIdxBest = _mm_blendv_epi8( valIdxBest, valIdxCand, chng );
 
+      _mm_storeu_si128( ( __m128i* )& decisions.rdCost[0], rdBest01 );
+      _mm_storeu_si128( ( __m128i* )& decisions.rdCost[2], rdBest23 );
 
-      valBest = _mm_packs_epi32( valBest, _mm_setzero_si128() );
-      idxBest = _mm_packs_epi32( idxBest, _mm_setzero_si128() );
-      idxBest = _mm_packs_epi16( idxBest, _mm_setzero_si128() );
-
-
-      _mm_storeu_si128( ( __m128i* ) & decisions.rdCost[0], rdBest01 );
-      _mm_storeu_si128( ( __m128i* ) & decisions.rdCost[2], rdBest23 );
-
-      _mm_storeu_si64( decisions.absLevel, valBest );
-      _mm_storeu_si32( decisions.prevId, idxBest );
+      _mm_storeu_si64( decisions.absLevel, valIdxBest );
+      valIdxBest = _mm_packs_epi16( _mm_unpackhi_epi64( valIdxBest, valIdxBest ), _mm_setzero_si128() );
+      _mm_storeu_si32( decisions.prevId, valIdxBest );
     }
 
     // has to be called as a first check, assumes no decision has been made yet!!!
@@ -587,37 +541,32 @@ namespace vvenc {
       __m128i mrd01 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[0] );
       __m128i mrd23 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[2] );
 
-      //int64_t         rdCostA   = state.rdCost[m_stateId] + pqDataA.deltaDist; // done
-      //int64_t         rdCostZ   = state.rdCost[m_stateId]; // done
-      __m128i rdCostZ01 = _mm_unpacklo_epi64( mrd01, mrd23 );
-      __m128i rdCostZ23 = _mm_unpackhi_epi64( mrd01, mrd23 );
-      __m128i deltaDist = _mm_unpacklo_epi64( _mm_cvtsi64_si128( pq_b_dist ), _mm_cvtsi64_si128( pq_a_dist ) );
-      __m128i rdCostA01 = _mm_add_epi64( rdCostZ23, deltaDist );
-      __m128i rdCostA23 = _mm_add_epi64( rdCostZ01, deltaDist );
+      __m128i rdCostZ01 = mrd01;
+      __m128i rdCostZ23 = mrd23;
 
-      //const BinFracBits sigBits = m_sigFracBitsArray[state.ctx.sig[m_stateId]];
-      //
-      //rdCostA += m_gtxFracBitsArray[state.ctx.cff[m_stateId]].bits[1]; // done
-      //
-      __m128i sgbts02 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
-                                            _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ) );
-      __m128i sgbts13 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ),
-                                            _mm_loadu_si64( &state.m_sigFracBitsArray[3][state.ctx.sig[3]] ) );
+      __m128i deltaDist  = _mm_unpacklo_epi64( _mm_cvtsi64_si128( pq_b_dist ), _mm_cvtsi64_si128( pq_a_dist ) );
+      __m128i deltaDistB = _mm_unpacklo_epi64( deltaDist, deltaDist );
+      __m128i deltaDistA = _mm_unpackhi_epi64( deltaDist, deltaDist );
+
+      __m128i rdCostA01 = _mm_add_epi64( rdCostZ01, deltaDistB );
+      __m128i rdCostA23 = _mm_add_epi64( rdCostZ23, deltaDistA );
+      __m128i sgbts1, addZ, addA = _mm_setzero_si128();
 
       {
-        __m128i sgbts02_0 = _mm_shuffle_epi32( sgbts02, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
-        __m128i sgbts02_1 = _mm_shuffle_epi32( sgbts02, 1 + ( 3 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-        __m128i sgbts13_0 = _mm_shuffle_epi32( sgbts13, 0 + ( 2 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
-        __m128i sgbts13_1 = _mm_shuffle_epi32( sgbts13, 1 + ( 3 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+        __m128i sgbts01 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[0][state.ctx.sig[0]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[1][state.ctx.sig[1]] ) );
+        __m128i sgbts23 = _mm_unpacklo_epi64( _mm_loadu_si64( &state.m_sigFracBitsArray[2][state.ctx.sig[2]] ),
+                                              _mm_loadu_si64( &state.m_sigFracBitsArray[3][state.ctx.sig[3]] ) );
 
-        sgbts02 = _mm_unpacklo_epi64( sgbts02_0, sgbts02_1 );
-        sgbts13 = _mm_unpacklo_epi64( sgbts13_0, sgbts13_1 );
+        sgbts01 = _mm_shuffle_epi32( sgbts01, 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+        sgbts23 = _mm_shuffle_epi32( sgbts23, 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+        sgbts1  = _mm_unpackhi_epi64( sgbts01, sgbts23 );
+        addZ    = _mm_unpacklo_epi64( sgbts01, sgbts23 );
       }
 
       {
 #if USE_AVX2
         __m128i cffidx = _mm_cvtepi8_epi32( _mm_loadu_si32( &state.ctx.cff ) );
-        cffidx = _mm_shuffle_epi32( cffidx, ( 1 << 0 ) + ( 3 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
         cffidx = _mm_sub_epi8( cffidx, _mm_set1_epi32( state.cffBitsCtxOffset ) );
         __m256i cffBits256 = _mm256_loadu_si256( ( const __m256i* ) & state.cffBits1[state.cffBitsCtxOffset] );
         cffBits256 = _mm256_permutevar8x32_epi32( cffBits256, _mm256_castsi128_si256( cffidx ) );
@@ -636,78 +585,52 @@ namespace vvenc {
         cffBits = _mm_shuffle_epi8( bits4, _mm_sub_epi8( cfCtxIdx, _mm_set1_epi8( 16 ) ) );
         cfCtxIdx = _mm_or_si128( cfCtxIdx, _mm_cmpgt_epi8( cfCtxIdx, _mm_set1_epi8( 15 ) ) );
         cffBits = _mm_or_si128( cffBits, _mm_shuffle_epi8( bits0123, cfCtxIdx ) );
-        cffBits = _mm_shuffle_epi32( cffBits, ( 1 << 0 ) + ( 3 << 2 ) + ( 0 << 4 ) + ( 2 << 6 ) );
 #endif
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( cffBits ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( cffBits, cffBits ) ) );
+        addA = _mm_add_epi32( addA, cffBits );
       }
 
       if( spt == DQIntern::SCAN_ISCSBB )
       {
-        //  rdCostZ += sigBits.intBits[ 0 ]; // done
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
-
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-
-        //  rdCostA += sigBits.intBits[ 1 ]; // done
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( sgbts13 ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( sgbts02 ) );
       }
       else if( spt == DQIntern::SCAN_SOCSBB )
       {
-        //  rdCostZ += m_sbbFracBits.intBits[ 1 ] + sigBits.intBits[ 0 ]; // done
-        //  rdCostA += m_sbbFracBits.intBits[ 1 ] + sigBits.intBits[ 1 ]; // dome
         __m128i sbbBits = _mm_loadu_si128( ( const __m128i* ) state.sbbBits1 );
-        sbbBits = _mm_shuffle_epi32( sbbBits, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
-
-        __m128i add = _mm_cvtepi32_epi64( sbbBits );
-        rdCostA23 = _mm_add_epi64( rdCostA23, add );
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, add );
-        add = _mm_cvtepi32_epi64( _mm_unpackhi_epi64( sbbBits, sbbBits ) );
-        rdCostA01 = _mm_add_epi64( rdCostA01, add );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, add );
-
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( sgbts13 ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( sgbts02 ) );
+        addA = _mm_add_epi32( addA, sbbBits );
+        addZ = _mm_add_epi32( addZ, sbbBits );
       }
-      else
+      else if( spt == DQIntern::SCAN_EOCSBB )
       {
-        //else if( m_numSigSbb )
-        //{
-        //  rdCostA += sigBits.intBits[ 1 ]; // done
-        //  rdCostZ += sigBits.intBits[ 0 ]; // done
-        //}
-        //else
-        //{
-        //  rdCostZ = decisionZ.rdCost; // done
-        //}
-
         __m128i numSig = _mm_loadu_si32( state.numSig );
 
-        rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( sgbts02 ) );
-        rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( sgbts13 ) );
+        __m128i mask = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 ) );
+        mask         = _mm_cmpeq_epi8( mask, _mm_setzero_si128() );
 
-        __m128i mask01 = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3, 3 ) );
-        mask01 = _mm_cmpgt_epi8( mask01, _mm_setzero_si128() );
-        __m128i mask23 = _mm_shuffle_epi8( numSig, _mm_setr_epi8( 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2 ) );
-        mask23 = _mm_cmpgt_epi8( mask23, _mm_setzero_si128() );
-        sgbts02 = _mm_unpackhi_epi64( sgbts02, sgbts02 );
-        sgbts13 = _mm_unpackhi_epi64( sgbts13, sgbts13 );
-        rdCostA01 = _mm_add_epi64( rdCostA01, _mm_and_si128( mask01, _mm_cvtepi32_epi64( sgbts13 ) ) );
-        rdCostA23 = _mm_add_epi64( rdCostA23, _mm_and_si128( mask23, _mm_cvtepi32_epi64( sgbts02 ) ) );
+        // if last coeff and first significant coeff, no sig-flag signalled
+        sgbts1 = _mm_andnot_si128( mask, sgbts1 );
 
         __m128i rdMax = _mm_loadu_si64( &DQIntern::rdCostInit );
         rdMax = _mm_unpacklo_epi64( rdMax, rdMax );
 
-        rdCostZ01 = _mm_blendv_epi8( rdMax, rdCostZ01, mask23 );
-        rdCostZ23 = _mm_blendv_epi8( rdMax, rdCostZ23, mask01 );
+        // if last coeff in the so-far empty sbb, and sbb-sig-flag is 1, cannot be 0!
+        rdCostZ01 = _mm_blendv_epi8( rdCostZ01, rdMax, _mm_cvtepi32_epi64( mask ) );
+        rdCostZ23 = _mm_blendv_epi8( rdCostZ23, rdMax, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( mask, mask ) ) );
+      }
+
+      addA = _mm_add_epi32( addA, sgbts1 );
+
+      rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( addZ ) );
+      rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addZ, addZ ) ) );
+      rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( addA ) );
+      rdCostA23 = _mm_add_epi64( rdCostA23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addA, addA ) ) );
+
+      {
+        __m128i tmp1 = rdCostZ01, tmp2 = rdCostZ23;
+        rdCostZ01 = _mm_unpacklo_epi64( tmp1, tmp2 );
+        rdCostZ23 = _mm_unpackhi_epi64( tmp1, tmp2 );
+
+        tmp1 = rdCostA01; tmp2 = rdCostA23;
+        rdCostA01 = _mm_unpackhi_epi64( tmp1, tmp2 );
+        rdCostA23 = _mm_unpacklo_epi64( tmp1, tmp2 );
       }
 
       //// decision 0: either 1 from 1 (pqData[2]), or 0 from 0
@@ -723,16 +646,13 @@ namespace vvenc {
       __m128i rdBest01 = rdCostZ01;
       __m128i rdBest23 = rdCostA23;
 
-      __m128i valBest = _mm_setr_epi32( 0, 0, 1, 1 );
-      __m128i valCand = _mm_setr_epi32( 1, 1, 0, 0 );
-
-      __m128i idxBest = _mm_setr_epi32( 0, 2, 0, 2 );
-      __m128i idxCand = _mm_setr_epi32( 1, 3, 1, 3 );
+      __m128i valIdxBest = _mm_setr_epi16( 0, 0, 1, 1, 0, 2, 0, 2 );
+      __m128i valIdxCand = _mm_setr_epi16( 1, 1, 0, 0, 1, 3, 1, 3 );
 
       __m128i chng01 = _my_cmpgt_epi64( rdBest01, rdCostA01 );
       __m128i chng23 = _my_cmpgt_epi64( rdBest23, rdCostZ23 );
-      __m128i chng = _mm_blend_epi16( chng01, chng23, ( 3 << 2 ) + ( 3 << 6 ) ); // 00110011
-      chng = _mm_shuffle_epi32( chng, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+      __m128i chng = _mm_packs_epi32( chng01, chng23 );
+      chng = _mm_packs_epi32( chng, chng );
 
       rdBest01 = _mm_blendv_epi8( rdBest01, rdCostA01, chng01 );
       rdBest23 = _mm_blendv_epi8( rdBest23, rdCostZ23, chng23 );
@@ -740,12 +660,10 @@ namespace vvenc {
       _mm_storeu_si128( ( __m128i* ) & decisions.rdCost[0], rdBest01 );
       _mm_storeu_si128( ( __m128i* ) & decisions.rdCost[2], rdBest23 );
 
-      valBest = _mm_packs_epi32( _mm_blendv_epi8( valBest, valCand, chng ), _mm_setzero_si128() );
-      idxBest = _mm_packs_epi32( _mm_blendv_epi8( idxBest, idxCand, chng ), _mm_setzero_si128() );
-      idxBest = _mm_packs_epi16( idxBest, _mm_setzero_si128() );
-
-      _mm_storeu_si64( decisions.absLevel, valBest );
-      _mm_storeu_si32( decisions.prevId, idxBest );
+      valIdxBest = _mm_blendv_epi8( valIdxBest, valIdxCand, chng );
+      _mm_storeu_si64( decisions.absLevel, valIdxBest );
+      valIdxBest = _mm_packs_epi16( _mm_unpackhi_epi64( valIdxBest, valIdxBest ), _mm_setzero_si128() );
+      _mm_storeu_si32( decisions.prevId, valIdxBest );
     }
 
     template<X86_VEXT vext>

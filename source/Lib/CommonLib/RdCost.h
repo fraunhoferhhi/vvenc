@@ -115,7 +115,6 @@ class RdCost
 {
 public:
   Distortion ( *m_fxdWtdPredPtr )( const DistParam& dp, uint32_t fixedWeight );
-  Distortion ( *m_wtdPredPtr[2] )( const DistParam& dp, ChromaFormat chmFmt, const uint32_t* lumaWeights );
 
   // for distortion
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
@@ -128,11 +127,9 @@ private:
   double                  m_dLambda_unadjusted; // TODO: check is necessary
   double                  m_DistScaleUnadjusted;
 
-  const uint32_t*         m_reshapeLumaLevelToWeightPLUT;
+  std::vector<uint32_t>   m_lumaLevelToWeightPLUT;
 
-  uint32_t                m_signalType;
   double                  m_chromaWeight;
-  int                     m_lumaBD;
   ChromaFormat            m_cf;
   double                  m_DistScale;
   double                  m_dLambdaMotionSAD;
@@ -161,7 +158,6 @@ public:
   void _initRdCostARM();
 #endif   // TARGET_SIMD_ARM
 
-  void          setReshapeParams    ( const uint32_t* pPLUT, double chrWght)    { m_reshapeLumaLevelToWeightPLUT = pPLUT; m_chromaWeight = chrWght; }
   void          setDistortionWeight ( const ComponentID compID, const double distortionWeight ) { m_distortionWeight[compID] = distortionWeight; }
   void          setLambda           ( double dLambda, const BitDepths &bitDepths );
   void          setCostMode         ( vvencCostMode m )                      { m_costMode = m; }
@@ -207,7 +203,7 @@ public:
   uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x * (1 << m_iCostScale)) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y * (1 << m_iCostScale)) - m_mvPredictor.ver)>>imvShift); }
 
   void           saveUnadjustedLambda ();
-  void           setReshapeInfo       ( uint32_t type, int lumaBD, ChromaFormat cf )   { m_signalType = type; m_lumaBD = lumaBD; m_cf = cf; }
+  void           setChromaFormat      ( ChromaFormat cf )   { m_cf = cf; }
   void           setPredictorsIBC     (Mv* pcMv)
   {
     for (int i = 0; i < 2; i++)
@@ -221,8 +217,6 @@ public:
   static Distortion xGetSAD8          ( const DistParam& pcDtParam );
   static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvenc )
   static void       xGetSAD16X5       ( const DistParam& pcDtParam, Distortion* cost, bool isCalCentrePos ); // needs to be public for xGetSADX5_16xN_SIMD ( NOTE: they are all public in vvenc )
-
-         Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
 
   static Distortion xGetSSE           ( const DistParam& pcDtParam );
   static Distortion xGetSSE4          ( const DistParam& pcDtParam );
@@ -275,8 +269,9 @@ public:
 
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
 
-  Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma = NULL );
+  Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc );
 
+  void initLumaLevelToWeightTable( int lumaBD );
 };// END CLASS DEFINITION RdCost
 
 } // namespace vvenc

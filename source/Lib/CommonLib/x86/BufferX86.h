@@ -1589,69 +1589,6 @@ void transposeNxN_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride )
 #endif
 }
 
-template<X86_VEXT vext>
-void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
-{
-#if USE_AVX2 && ! ENABLE_VALGRIND_CODE // valgrind will report _mm256_i32gather_epi32 to access uninitialized memory
-  // this implementation is only faster on modern CPUs
-  if( ( width & 15 ) == 0 && ( height & 1 ) == 0 )
-  {
-    const __m256i vLutShuf = _mm256_setr_epi8( 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, 4, 5, 8, 9, 12, 13, -1, -1, -1, -1, -1, -1, -1, -1 );
-
-    for( int y = 0; y < height; y += 2 )
-    {
-      for( int x = 0; x < width; x += 16 )
-      {
-        __m256i vin16    = _mm256_loadu_si256       ( ( const __m256i * ) &src[x] );
-                                                    
-        __m256i vin32_1  = _mm256_unpacklo_epi16    ( vin16, _mm256_setzero_si256() );
-        __m256i vin32_2  = _mm256_unpackhi_epi16    ( vin16, _mm256_setzero_si256() );
-
-        __m256i vout32_1 = _mm256_i32gather_epi32   ( ( const int * ) lut, vin32_1, 2 );
-        __m256i vout32_2 = _mm256_i32gather_epi32   ( ( const int * ) lut, vin32_2, 2 );
-
-        vout32_1         = _mm256_shuffle_epi8      ( vout32_1, vLutShuf );
-        vout32_2         = _mm256_shuffle_epi8      ( vout32_2, vLutShuf );
-
-        __m256i vout16   = _mm256_unpacklo_epi64    ( vout32_1, vout32_2 );
-
-        _mm256_storeu_si256( ( __m256i * ) &dst[x], vout16 );
-        
-        vin16            = _mm256_loadu_si256       ( ( const __m256i * ) &src[x + srcStride] );
-                                                    
-        vin32_1          = _mm256_unpacklo_epi16    ( vin16, _mm256_setzero_si256() );
-        vin32_2          = _mm256_unpackhi_epi16    ( vin16, _mm256_setzero_si256() );
-                         
-        vout32_1         = _mm256_i32gather_epi32   ( ( const int * ) lut, vin32_1, 2 );
-        vout32_2         = _mm256_i32gather_epi32   ( ( const int * ) lut, vin32_2, 2 );
-
-        vout32_1         = _mm256_shuffle_epi8      ( vout32_1, vLutShuf );
-        vout32_2         = _mm256_shuffle_epi8      ( vout32_2, vLutShuf );
-
-        vout16           = _mm256_unpacklo_epi64    ( vout32_1, vout32_2 );
-
-        _mm256_storeu_si256( ( __m256i * ) &dst[x + dstStride], vout16 );
-      }
-
-      src += ( srcStride << 1 );
-      dst += ( dstStride << 1 );
-    }
-
-    _mm256_zeroupper();
-  }
-  else
-#endif
-  {
-#define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
-#define RSP_SGNL_INC        src += srcStride; dst += dstStride;
-
-    SIZE_AWARE_PER_EL_OP( RSP_SGNL_OP, RSP_SGNL_INC )
-
-#undef RSP_SGNL_OP
-#undef RSP_SGNL_INC
-  }
-}
-
 #if INTPTR_MAX == INT64_MAX
 template<X86_VEXT vext>
 void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, void* val )
@@ -2592,8 +2529,6 @@ void PelBufferOps::_initPelBufOpsX86()
   mipMatrixMul_8_8 = mipMatrixMul_SSE<vext, 8, 8>;
 
   weightCiip = weightCiip_SSE<vext>;
-
-  applyLut = applyLut_SIMD<vext>;
 
   fillPtrMap = fillPtrMap_SIMD<vext>;
 

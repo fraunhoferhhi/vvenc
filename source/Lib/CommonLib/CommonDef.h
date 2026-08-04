@@ -514,7 +514,6 @@ static constexpr int MVD_MIN =                               -(1 << 17);
 
 static constexpr int PIC_ANALYZE_CW_BINS =                           32;
 static constexpr int PIC_CODE_CW_BINS =                              16;
-static constexpr int LMCS_SEG_NUM =                                  32;
 static constexpr int FP_PREC =                                       11;
 static constexpr int CSCALE_FP_PREC =                                11;
 
@@ -533,6 +532,7 @@ static constexpr uint8_t MAX_TMP_BUFS = 2 + 2 * GEO_MAX_NUM_UNI_CANDS;
 
 static constexpr int QPA_MAX_NOISE_LEVELS = 8;
 
+static constexpr int LUMA_LEVEL_TO_DQP_LUT_MAXSIZE = 1024; ///< max LUT size for QP offset based on lumavv
 
 
 // ====================================================================================================================

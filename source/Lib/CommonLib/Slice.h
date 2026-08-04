@@ -288,31 +288,6 @@ struct ProfileTierLevel
 };
 
 
-struct LmcsParam
-{
-  LmcsParam()
-  : sliceReshaperEnabled( false )
-  , sliceReshaperModelPresent( false )
-  , enableChromaAdj(0)
-  , reshaperModelMinBinIdx(0)
-  , reshaperModelMaxBinIdx(0)
-  , reshaperModelBinCWDelta { 0 }
-  , maxNbitsNeededDeltaCW (0)
-  , chrResScalingOffset (0)
-  {
-  }
-
-  bool      sliceReshaperEnabled;
-  bool      sliceReshaperModelPresent;
-  unsigned  enableChromaAdj;
-  uint32_t  reshaperModelMinBinIdx;
-  uint32_t  reshaperModelMaxBinIdx;
-  int       reshaperModelBinCWDelta[PIC_CODE_CW_BINS];
-  int       maxNbitsNeededDeltaCW;
-  int       chrResScalingOffset;
-};
-
-
 struct ChromaQpAdj
 {
   union
@@ -761,7 +736,6 @@ struct SPS
   bool              useColorTrans;
   bool              PLT;
 
-  bool              lumaReshapeEnable;
   bool              AMVR;
   bool              LMChroma;
   bool              horCollocatedChroma;
@@ -980,7 +954,6 @@ struct APS
   int                    layerId;
   uint32_t               apsType;                  // aps_params_type
   AlfParam               alfParam;
-  LmcsParam              lmcsParam;
   CcAlfFilterParam       ccAlfParam;
   bool                   hasPrefixNalUnitType;
   bool                   chromaPresent;
@@ -1069,10 +1042,6 @@ struct PicHeader
   bool                        deblockingFilterDisable;                                //!< deblocking filter disabled flag
   int                         deblockingFilterBetaOffsetDiv2[MAX_NUM_COMP];           //!< beta offset for deblocking filter
   int                         deblockingFilterTcOffsetDiv2[MAX_NUM_COMP];              //!< tc offset for deblocking filter
-  bool                        lmcsEnabled;                                            //!< lmcs enabled flag
-  int                         lmcsApsId;                                              //!< lmcs APS ID
-  APS*                        lmcsAps;                                                //!< lmcs APS
-  bool                        lmcsChromaResidualScale;                                //!< lmcs chroma residual scale flag
   bool                        explicitScalingListEnabled;                             //!< quantization scaling lists present
   int                         scalingListApsId;                                       //!< quantization scaling list APS ID
   APS*                        scalingListAps;                                         //!< quantization scaling list APS
@@ -1137,10 +1106,6 @@ struct PicHeader
     deblockingFilterTcOffsetDiv2[COMP_Cb]         = 0;
     deblockingFilterBetaOffsetDiv2[COMP_Cr]       = 0;
     deblockingFilterTcOffsetDiv2[COMP_Cr]         = 0;
-    lmcsEnabled                                   = 0;
-    lmcsApsId                                     = 0;
-    lmcsAps                                       = nullptr;
-    lmcsChromaResidualScale                       = 0;
     explicitScalingListEnabled                    = 0;
     scalingListApsId                              = -1;
     scalingListAps                                = nullptr;
@@ -1202,7 +1167,6 @@ class Slice
   SliceType                   sliceType;
   int                         sliceQp;
   bool                        chromaQpAdjEnabled;
-  bool                        lmcsEnabled;
   bool                        explicitScalingListUsed;
   bool                        deblockingFilterDisable;
   bool                        deblockingFilterOverride;      //< offsets for deblocking filter inherit from PPS

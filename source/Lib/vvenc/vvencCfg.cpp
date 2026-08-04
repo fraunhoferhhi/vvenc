@@ -326,14 +326,7 @@ VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry )
 
 VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *reshapeCW )
 {
-  memset( reshapeCW->binCW, 0, sizeof( reshapeCW->binCW ) );
-  reshapeCW->updateCtrl = 0;
-  reshapeCW->adpOption  = 0;
-  reshapeCW->initialCW  = 0;
-  reshapeCW->rspPicSize = 0;
-  reshapeCW->rspFps     = 0;
-  reshapeCW->rspTid     = 0;
-  reshapeCW->rspFpsToIp = 0;
+  memset( reshapeCW, 0, sizeof( vvencReshapeCW ) );
 }
 
 VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
@@ -478,7 +471,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  c->m_lumaLevelToDeltaQPEnabled               = false;
+  c->m_lumaLevelToDeltaQPEnabled               = -1;
   vvenc_WCGChromaQPControl_default( &c->m_cfgUnused24 );
 
   c->m_internChromaFormat                      = VVENC_NUM_CHROMA_FORMAT;
@@ -565,13 +558,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_BDOF                                    = false;
   c->m_DMVR                                    = false;
   c->m_EDO                                     = 0;
-  c->m_lumaReshapeEnable                       = 0;
-  c->m_reshapeSignalType                       = 0;
-  c->m_updateCtrl                              = 0;
-  c->m_adpOption                               = 0;
-  c->m_initialCW                               = 0;
-  c->m_LMCSOffset                              = 0;
-  vvenc_ReshapeCW_default( &c->m_reshapeCW );
+  vvenc_ReshapeCW_default( &c->m_cfgUnused34 );
   c->m_Affine                                  = 0;
   c->m_PROF                                    = false;
   c->m_AffineType                              = true;
@@ -652,6 +639,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
   c->m_blockImportanceMapping                  = true;
+
+  c->m_maxDeltaQP                              = -1;
 
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
@@ -1020,8 +1009,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 )
   {
-    c->m_reshapeSignalType       = vvenc::RESHAPE_SIGNAL_PQ;
-    c->m_LMCSOffset              = 1;
     c->m_useSameChromaQPTables   = false;
     c->m_verCollocatedChromaFlag = true;
 
@@ -1077,8 +1064,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   else if( c->m_HdrMode == VVENC_HDR_HLG || c->m_HdrMode == VVENC_HDR_HLG_BT2020 )
   {
-    c->m_reshapeSignalType       = vvenc::RESHAPE_SIGNAL_HLG;
-    c->m_LMCSOffset              = 0;
     c->m_useSameChromaQPTables   = true;
     c->m_verCollocatedChromaFlag = true;
 
@@ -1141,6 +1126,18 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_preferredTransferCharacteristics = 0;
   }
 
+  if( c->m_lumaLevelToDeltaQPEnabled == -1 )
+  {
+    if( ( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 ) && !c->m_usePerceptQPA )
+    {
+      c->m_lumaLevelToDeltaQPEnabled = 1;
+    }
+    else
+    {
+      c->m_lumaLevelToDeltaQPEnabled = 0;
+    }
+  }
+  
   if( c->m_AccessUnitDelimiter < 0 )
   {
     c->m_AccessUnitDelimiter = 0;
@@ -1310,13 +1307,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   int fps = c->m_FrameRate/c->m_FrameScale;
-
-  c->m_reshapeCW.rspFps     = fps;
-  c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
-  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_reshapeCW.rspFps/16.0)));
-  c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
-  c->m_reshapeCW.adpOption  = c->m_adpOption;
-  c->m_reshapeCW.initialCW  = c->m_initialCW;
 
   if( c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL && c->m_poc0idr < 0 )
   {
@@ -1495,11 +1485,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // do some check and set of parameters next
   //
 
-  if ( c->m_lumaReshapeEnable )
-  {
-    if ( c->m_updateCtrl > 0 && c->m_adpOption > 2 ) { c->m_adpOption -= 2; }
-  }
-
   if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400 ) )
   {
     c->m_JointCbCrMode = false;
@@ -1576,22 +1561,27 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPQPA = c->m_usePerceptQPA ? 0 : 1;
   }
 
+  vvenc_confirmParameter(c, c->m_maxDeltaQP < -2 || c->m_maxDeltaQP > vvenc::MAX_QP, "MaxDeltaQP must be in range of -2 - 63" );
+  if( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 )
+  {
+    if( c->m_maxDeltaQP == -1 )
+    {
+      c->m_maxDeltaQP = vvenc::MAX_QP;
+    }
+    if( c->m_maxDeltaQP == -2 )
+    {
+      c->m_maxDeltaQP = 15 - (c->m_QP >> 2);
+    }
+  }
+
   if( c->m_treatAsSubPic )
   {
     if( c->m_sliceTypeAdapt )    msg.log( VVENC_WARNING, "Configuration warning: combination of TreatAsSubPic and STA may not work with VTM subPicMerge tool, consider disabling STA\n\n" );
     if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "Configuration warning: disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
     if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "Configuration warning: disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
-    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "Configuration warning: disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n\n" );
     c->m_alfTempPred       = 0;
     c->m_JointCbCrMode     = false;
-    c->m_lumaReshapeEnable = 0;
-    c->m_reshapeSignalType = 0;
-    c->m_updateCtrl        = 0;
-    c->m_adpOption         = 0;
-    c->m_initialCW         = 0;
-    c->m_LMCSOffset        = 0;
     c->m_useAMaxBT         = 0;
-    vvenc_ReshapeCW_default( &c->m_reshapeCW );
   }
 
   const bool autoGop = c->m_GOPList[0].m_POC;
@@ -2013,18 +2003,6 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFFrames[ i ] <= 0, "MCTFFrame has to be greater then zero" );
   }
 
-  if (c->m_lumaReshapeEnable)
-  {
-    vvenc_confirmParameter( c, c->m_reshapeSignalType < vvenc::RESHAPE_SIGNAL_SDR || c->m_reshapeSignalType > vvenc::RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
-    vvenc_confirmParameter( c, c->m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
-    vvenc_confirmParameter( c, c->m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
-    vvenc_confirmParameter( c, c->m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
-    vvenc_confirmParameter( c, c->m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
-    vvenc_confirmParameter( c, c->m_initialCW < 0,     "Min. Initial Total Codeword is 0");
-    vvenc_confirmParameter( c, c->m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
-    vvenc_confirmParameter( c, c->m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
-    vvenc_confirmParameter( c, c->m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
-  }
   vvenc_confirmParameter( c, c->m_EDO && c->m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
   vvenc_confirmParameter( c, c->m_EDO < 0 || c->m_EDO > 2,                    "EDO out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_TMVPModeId < 0 || c->m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
@@ -2127,6 +2105,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, ( c->m_leadFrames > 0 || c->m_trailFrames > 0 ) && c->m_usePerceptQPATempFiltISlice > 0 && c->m_usePerceptQPATempFiltISlice < 3, "Segmentwise encoding requires disabling of force 2nd order filter with PerceptQPATempFiltIPic set to 3 or 4"  );
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                           "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
+
+  vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA or BIM or LumaLevelToDeltaQPMode" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
   vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
   vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                      "Minimum QT size should be larger than or equal to 4");
@@ -2596,9 +2578,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_useSelectiveRDOQ                = 0;
   c->m_fastQtBtEnc                     = true;
   c->m_maxNumMergeCand                 = 6;
-  c->m_reshapeSignalType               = 0;
-  c->m_updateCtrl                      = 0;
-  c->m_LMCSOffset                      = 6;
   c->m_RDOQ                            = 1;
   c->m_SignDataHidingEnabled           = 0;
   c->m_useFastLCTU                     = 1;
@@ -2624,7 +2603,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_JointCbCrMode                   = 0;
   c->m_LFNST                           = 0;
   c->m_LMChroma                        = 0;
-  c->m_lumaReshapeEnable               = 0;
   c->m_vvencMCTF.MCTF                  = 0;
   c->m_vvencMCTF.MCTFSpeed             = 0;
   c->m_MIP                             = 0;
@@ -3323,17 +3301,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "AMVR:" << c->m_AMVRspeed << " ";
     css << "SMVD:" << c->m_SMVD << " ";
 
-    css << "LMCS:" << c->m_lumaReshapeEnable << " ";
-    if( c->m_lumaReshapeEnable )
-    {
-      css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
-      css << "Opt:" << c->m_adpOption << "";
-      if( c->m_adpOption > 0 )
-      {
-        css << " CW:" << c->m_initialCW << "";
-      }
-      css << ") ";
-    }
     css << "CIIP:" << c->m_CIIP << " ";
     css << "MIP:" << c->m_MIP << " ";
     css << "AFFINE:" << c->m_Affine << " ";
@@ -3366,6 +3333,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << "\n" << loglvl << "ENC. ALG. CFG: ";
     css << "QPA:" << c->m_usePerceptQPA << " ";
+    css << "MaxDeltaQP:" << +c->m_maxDeltaQP << " ";
     css << "HAD:" << c->m_bUseHADME << " ";
     if( c->m_fastHad ) css << "(fast) ";
     css << "RDQ:" << c->m_RDOQ << " ";
@@ -3515,6 +3483,38 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
   {
     value += 1;
     v = value;
+  }
+
+  if( n == "preset" )
+  {
+    using PresetToIntMap = std::map<std::string, vvencPresetMode>;
+    static const PresetToIntMap mapPresets = {
+                                      { "none",      vvencPresetMode::VVENC_NONE },
+                                      { "faster",    vvencPresetMode::VVENC_FASTER },
+                                      { "fast",      vvencPresetMode::VVENC_FAST },
+                                      { "medium",    vvencPresetMode::VVENC_MEDIUM },
+                                      { "slow",      vvencPresetMode::VVENC_SLOW },
+                                      { "slower",    vvencPresetMode::VVENC_SLOWER },
+                                      { "0",         vvencPresetMode::VVENC_FASTER },
+                                      { "1",         vvencPresetMode::VVENC_FAST },
+                                      { "2",         vvencPresetMode::VVENC_MEDIUM },
+                                      { "3",         vvencPresetMode::VVENC_SLOW },
+                                      { "4",         vvencPresetMode::VVENC_SLOWER },
+                                      { "medium_lowDecEnergy", vvencPresetMode::VVENC_MEDIUM_LOWDECNRG },
+                                      { "medium_lowdecenergy", vvencPresetMode::VVENC_MEDIUM_LOWDECNRG },
+                                      { "firstpass", vvencPresetMode::VVENC_FIRSTPASS },
+                                      { "tooltest",  vvencPresetMode::VVENC_TOOLTEST },
+                                      };
+
+    vvencPresetMode preset = vvencPresetMode::VVENC_NONE;
+    const PresetToIntMap::const_iterator iter = mapPresets.find(v);
+    iter != mapPresets.end()? preset = iter->second : vvencPresetMode::VVENC_NONE;
+    if ( preset == vvencPresetMode::VVENC_NONE )
+    {
+      return VVENC_PARAM_BAD_VALUE;
+    }
+    vvenc_init_preset( c, preset );
+    return 0;
   }
 
   char *argv[2];

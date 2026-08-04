@@ -443,9 +443,9 @@ void HLSWriter::codeAPS( const APS* pcAPS )
   {
     codeAlfAps(pcAPS);
   }
-  else if (pcAPS->apsType == LMCS_APS)
+  else if( pcAPS->apsType == LMCS_APS )
   {
-    codeLmcsAps (pcAPS );
+    THROW("no support");
   }
   else if( pcAPS->apsType == SCALING_LIST_APS )
   {
@@ -538,38 +538,6 @@ void HLSWriter::codeAlfAps( const APS* pcAPS )
         DTRACE(g_trace_ctx, D_SYNTAX, "\n");
       }
     }
-  }
-}
-
-void HLSWriter::codeLmcsAps( const APS* aps )
-{
-  const LmcsParam& param = aps->lmcsParam;
-  WRITE_UVLC(param.reshaperModelMinBinIdx,                          "lmcs_min_bin_idx");
-  WRITE_UVLC(PIC_CODE_CW_BINS - 1 - param.reshaperModelMaxBinIdx,   "lmcs_delta_max_bin_idx");
-  assert(param.maxNbitsNeededDeltaCW > 0);
-  WRITE_UVLC(param.maxNbitsNeededDeltaCW - 1,                       "lmcs_delta_cw_prec_minus1");
-
-  for (int i = param.reshaperModelMinBinIdx; i <= param.reshaperModelMaxBinIdx; i++)
-  {
-    int deltaCW = param.reshaperModelBinCWDelta[i];
-    int signCW = (deltaCW < 0) ? 1 : 0;
-    int absCW = (deltaCW < 0) ? (-deltaCW) : deltaCW;
-    WRITE_CODE(absCW, param.maxNbitsNeededDeltaCW,                  "lmcs_delta_abs_cw[ i ]");
-    if (absCW > 0)
-    {
-      WRITE_FLAG(signCW,                                            "lmcs_delta_sign_cw_flag[ i ]");
-    }
-  }
-  int deltaCRS = aps->chromaPresent ? param.chrResScalingOffset : 0;
-  int signCRS = (deltaCRS < 0) ? 1 : 0;
-  int absCRS = (deltaCRS < 0) ? (-deltaCRS) : deltaCRS;
-  if (aps->chromaPresent)
-  {
-    WRITE_CODE(absCRS, 3,                                           "lmcs_delta_abs_crs");
-  }
-  if (absCRS > 0)
-  {
-    WRITE_FLAG(signCRS,                                             "lmcs_delta_sign_crs_val_flag");
   }
 }
 
@@ -849,7 +817,7 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
   {
     WRITE_FLAG( pcSPS->ccalfEnabled,                      "sps_ccalf_enabled_flag" );
   }
-  WRITE_FLAG(pcSPS->lumaReshapeEnable,                    "sps_lmcs_enable_flag");
+  WRITE_FLAG( false,                                      "sps_lmcs_enable_flag");
   WRITE_FLAG( pcSPS->weightPred,                          "sps_weighted_pred_flag" );   // Use of Weighting Prediction (P_SLICE)
   WRITE_FLAG( pcSPS->weightedBiPred,                      "sps_weighted_bipred_flag" );  // Use of Weighting Bi-Prediction (B_SLICE)
   WRITE_FLAG( pcSPS->longTermRefsPresent,                 "sps_long_term_ref_pics_flag" );
@@ -1393,20 +1361,6 @@ void HLSWriter::codePictureHeader( const PicHeader* picHeader, bool writeRbspTra
     }
   }
 
-  // luma mapping / chroma scaling controls
-  if (sps->lumaReshapeEnable)
-  {
-    WRITE_FLAG(picHeader->lmcsEnabled,                  "ph_lmcs_enabled_flag");
-    if (picHeader->lmcsEnabled)
-    {
-      WRITE_CODE(picHeader->lmcsApsId, 2,               "ph_lmcs_aps_id");
-      if (sps->chromaFormatIdc != CHROMA_400)
-      {
-        WRITE_FLAG(picHeader->lmcsChromaResidualScale,  "ph_chroma_residual_scale_flag");
-      }
-    }
-  }
-
   // quantization scaling lists
   if( sps->scalingListEnabled )
   {
@@ -1809,10 +1763,6 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
     }
   }
 
-  if (picHeader->lmcsEnabled && !slice->pictureHeaderInSliceHeader)
-  {
-    WRITE_FLAG( slice->lmcsEnabled,             "sh_lmcs_enabled_flag");
-  }
   if (picHeader->explicitScalingListEnabled && !slice->pictureHeaderInSliceHeader)
   {
     WRITE_FLAG(slice->explicitScalingListUsed,  "sh_explicit_scaling_list_used_flag");

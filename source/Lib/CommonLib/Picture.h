@@ -51,7 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Slice.h"
 #include "CodingStructure.h"
 #include "BitStream.h"
-#include "Reshape.h"
 
 #include <deque>
 #include <chrono>
@@ -153,7 +152,7 @@ struct Picture : public UnitArea
   void destroyTempBuffers();
 
   void extendPicBorder();
-  void finalInit( const VPS& vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps );
+  void finalInit( const VPS& vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps );
   void setSccFlags( const VVEncCfg* encCfg );
 
   int  getPOC()                                                     const { return poc; }
@@ -179,12 +178,12 @@ struct Picture : public UnitArea
          PelUnitBuf getSaoBuf()                                           { return getPicBuf(        PIC_SAO_TEMP); }
   const CPelUnitBuf getSaoBuf()                                     const { return getPicBuf(        PIC_SAO_TEMP); }
 
-        PelStorage& getFilteredOrigBuffer()                               { return *m_sharedBufs[       PIC_ORIGINAL_RSP]; }
-         PelUnitBuf getRspOrigBuf()                                       { return getSharedBuf(        PIC_ORIGINAL_RSP); }
-  const CPelUnitBuf getRspOrigBuf()                                 const { return getSharedBuf(        PIC_ORIGINAL_RSP); }
-  const CPelBuf     getRspOrigBuf(const ComponentID compID)         const { return getSharedBuf(compID, PIC_ORIGINAL_RSP); }
-  const CPelBuf     getRspOrigBuf(const CompArea& blk)              const { return getSharedBuf(blk,    PIC_ORIGINAL_RSP); }
-  const CPelUnitBuf getRspOrigBuf(const UnitArea& unit)             const { return getSharedBuf(unit,   PIC_ORIGINAL_RSP); }
+        PelStorage& getFilteredOrigBuffer()                               { return *m_sharedBufs[       PIC_FILT_ORIGINAL]; }
+         PelUnitBuf getFiltOrigBuf()                                      { return getSharedBuf(        PIC_FILT_ORIGINAL); }
+  const CPelUnitBuf getFiltOrigBuf()                                const { return getSharedBuf(        PIC_FILT_ORIGINAL); }
+  const CPelBuf     getFiltOrigBuf(const ComponentID compID)        const { return getSharedBuf(compID, PIC_FILT_ORIGINAL); }
+  const CPelBuf     getFiltOrigBuf(const CompArea& blk)             const { return getSharedBuf(blk,    PIC_FILT_ORIGINAL); }
+  const CPelUnitBuf getFiltOrigBuf(const UnitArea& unit)            const { return getSharedBuf(unit,   PIC_FILT_ORIGINAL); }
 
   const CPelBuf     getOrigBufPrev(const CompArea &blk, const PrevFrameType type) const;
   const CPelUnitBuf getOrigBufPrev(const PrevFrameType type) const;
@@ -216,7 +215,6 @@ public:
   ParameterSetMap<APS>          picApsMap;
   std::deque<Slice*>            slices;
   std::vector<const Slice*>     ctuSlice;
-  ReshapeData                   reshapeData;
   SEIMessages                   SEIs;
   BlkStat                       picBlkStat;
   std::vector<OutputBitstream>  sliceDataStreams;
@@ -275,7 +273,6 @@ public:
   bool                          useTS;
   bool                          useBDPCM;
   bool                          useIBC;
-  bool                          useLMCS;
   bool                          useSAO;
   bool                          useNumRefs;
   bool                          useSelectiveRdoq;

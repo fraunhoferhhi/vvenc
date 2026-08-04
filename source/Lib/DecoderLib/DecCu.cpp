@@ -52,7 +52,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/LoopFilter.h"
-#include "CommonLib/Reshape.h"
 #include "CommonLib/dtrace_buffer.h"
 
 //! \ingroup DecoderLib
@@ -156,16 +155,7 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
       m_pcIntraPred->predIntraAng(compID, piPred, cu);
     }
   }
-  //===== inverse transform =====
-  const Slice& slice       = *cs.slice;
-  ReshapeData& reshapeData = cs.picture->reshapeData;
-  bool lmcsflag = slice.lmcsEnabled && (slice.isIntra() || (!slice.isIntra() && reshapeData.getCTUFlag()));
-  if (lmcsflag && slice.picHeader->lmcsChromaResidualScale && (compID != COMP_Y) && (tu.cbf[COMP_Cb] || tu.cbf[COMP_Cr]))
-  {
-    const Area area = tu.Y().valid() ? tu.Y() : Area(recalcPosition(tu.chromaFormat, tu.chType, CH_L, tu.blocks[tu.chType].pos()), recalcSize(tu.chromaFormat, tu.chType, CH_L, tu.blocks[tu.chType].size()));
-    const CompArea& areaY = CompArea(COMP_Y, tu.chromaFormat, area);
-    tu.chromaAdj = reshapeData.calculateChromaAdjVpduNei(tu, areaY, TREE_D);
-  }
+
   //===== inverse transform =====
   PelBuf piResi = cs.getResiBuf( area );
 
@@ -199,13 +189,6 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   }
 
   //===== reconstruction =====
-  lmcsflag &= (tu.blocks[compID].width*tu.blocks[compID].height > 4) && slice.picHeader->lmcsChromaResidualScale;
-  if (lmcsflag && (TU::getCbf(tu, compID) || tu.jointCbCr) && isChroma(compID) )
-  {
-    piResi.scaleSignal(tu.chromaAdj, 0, tu.cu->cs->slice->clpRngs[compID]);
-  }
-
-
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
   pReco.copyFrom( piPred );
 
@@ -264,7 +247,6 @@ void DecCu::xReconInter( CodingUnit &cu )
   CodingStructure &cs = *cu.cs;
 
   PelUnitBuf predBuf = m_PredBuffer.getCompactBuf( cu ); 
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
   if (cu.geo)
   {
     m_pcInterPred->motionCompensationGeo(cu, predBuf, m_geoMrgCtx);
@@ -311,10 +293,6 @@ void DecCu::xReconInter( CodingUnit &cu )
       m_pcIntraPred->initIntraPatternChType(cu, cu.Y());
       m_pcIntraPred->predIntraAng(COMP_Y, ciipBuf, cu);
 
-      if( cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() )
-      {
-        predBuf.Y().rspSignal( reshapeData.getFwdLUT());
-      }
       const int numCiipIntra = m_pcIntraPred->getNumIntraCiip( cu );
       predBuf.Y().weightCiip( ciipBuf, numCiipIntra);
 
@@ -330,11 +308,6 @@ void DecCu::xReconInter( CodingUnit &cu )
         predBuf.Cr().weightCiip( ciipBufC, numCiipIntra);
       }
     }
-  }
-
-  if (cs.slice->lmcsEnabled && reshapeData.getCTUFlag() && !cu.ciip && !CU::isIBC(cu) )
-  {
-    predBuf.Y().rspSignal(reshapeData.getFwdLUT());
   }
 
   // inter recon
@@ -406,14 +379,6 @@ void DecCu::xDecodeInterTU( TransformUnit&  currTU, const ComponentID compID )
   {
     resiBuf.fill( 0 );
   }
-
-  const Slice& slice = *currTU.cu->slice;
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
-  if( slice.lmcsEnabled && reshapeData.getCTUFlag() && isChroma(compID) && (TU::getCbf(currTU, compID) || currTU.jointCbCr)
-   && slice.picHeader->lmcsChromaResidualScale && currTU.blocks[compID].width * currTU.blocks[compID].height > 4)
-  {
-    resiBuf.scaleSignal(currTU.chromaAdj, 0, slice.clpRngs[compID]);
-  }
 }
 
 void DecCu::xDecodeInterTexture(CodingUnit &cu)
@@ -424,19 +389,12 @@ void DecCu::xDecodeInterTexture(CodingUnit &cu)
   }
 
   const uint32_t uiNumVaildComp = getNumberValidComponents(cu.chromaFormat);
-  ReshapeData& reshapeData = cu.cs->picture->reshapeData;
-  const bool chromaAdj = cu.slice->lmcsEnabled && reshapeData.getCTUFlag() && cu.slice->picHeader->lmcsChromaResidualScale;
   for (uint32_t ch = 0; ch < uiNumVaildComp; ch++)
   {
     const ComponentID compID = ComponentID(ch);
 
     for( auto& currTU : CU::traverseTUs( cu ) )
     {
-      if( chromaAdj && (compID == COMP_Y) && (currTU.cbf[COMP_Cb] || currTU.cbf[COMP_Cr]))
-      {
-        currTU.chromaAdj = reshapeData.calculateChromaAdjVpduNei(currTU, currTU.blocks[COMP_Y], TREE_D);
-      }
-
       xDecodeInterTU( currTU, compID );
     }
   }
