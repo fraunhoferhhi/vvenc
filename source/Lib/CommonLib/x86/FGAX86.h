@@ -642,8 +642,8 @@ int dilation_SIMD ( PelStorage *buff,
   // The vectorized path below requires width to be a multiple of eight and
   // strictly greater than sixteen: at exactly 16, the AVX2 branch's 16-wide
   // main loop runs zero times, leaving its tail write to read an
-  // uninitialized column -1 (width 16 is fine under SSE alone, but this
-  // guard can't tell which one vext will pick, so it excludes 16 either
+  // uninitialized column -1 (width 16 is fine under SSE alone, but it's not
+  // worth special-casing vext for a single width, so it's excluded either
   // way). It also assumes at least two rows: at height == 1 the y == 0 case
   // makes p_buf_down point past the single row, an out-of-bounds read.
   // Anything outside those bounds falls back to the scalar reference, which
