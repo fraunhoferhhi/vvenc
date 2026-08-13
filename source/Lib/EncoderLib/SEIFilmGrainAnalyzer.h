@@ -350,6 +350,14 @@ private:
 
 } // namespace vvenc
 
+// Scalar reference for Morph::dilation. Global (not vvenc::) because this
+// header's .cpp only does "using namespace vvenc;" rather than wrapping its
+// definitions in the namespace. SIMD dilation implementations that need a
+// fallback for widths their vectorized path can't handle delegate to it
+// directly instead of duplicating the 3x3 test.
+int dilation_core( vvenc::PelStorage* buff, vvenc::PelStorage* Wbuf, uint32_t bitDepth, vvenc::ComponentID compID,
+                   int numIter, int iter, vvenc::Pel Value );
+
 #endif // __SEIFILMGRAINANALYZER__
 
 

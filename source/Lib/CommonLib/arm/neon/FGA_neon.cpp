@@ -102,7 +102,7 @@ template void FGAnalyzer::_initFGAnalyzerARM<NEON>();
 // never alias at real call sites. The two buffers generally have different
 // strides (buff has a margin, Wbuf usually has none), so they are indexed
 // with their own strides.
-static int dilationNeon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth, ComponentID compID, int numIter,
+static int dilation_neon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth, ComponentID compID, int numIter,
                          int iter, Pel Value )
 {
   CHECKD( buff == Wbuf, "buff and Wbuf must not alias" );
@@ -189,7 +189,7 @@ static int dilationNeon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth, 
 template <ARM_VEXT vext>
 void Morph::_initFGAMorphARM()
 {
-  dilation = dilationNeon;
+  dilation = dilation_neon;
 }
 
 template void Morph::_initFGAMorphARM<NEON>();

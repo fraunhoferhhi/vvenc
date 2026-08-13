@@ -3634,9 +3634,9 @@ static bool test_MorphDilation()
   bool     passed    = true;
   unsigned num_cases = g_fastUnitTest ? 5 : NUM_CASES;
 
-  const int widths[]     = { 4, 8, 24, 44, 64 };
+  const int widths[]     = { 4, 8, 16, 24, 44, 64 };
   const int heights[]    = { 4, 8, 33, 44, 64 };
-  const int iters_list[] = { 1, 2, 4 };
+  const int iters_list[] = { 1, 2, 3, 4 };
   const int bitDepth     = 10;
   const Pel strongPel    = ( (Pel)1 << bitDepth ) - 1;
   const Pel values[]     = { strongPel, 0 };
