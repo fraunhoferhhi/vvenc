@@ -85,17 +85,6 @@ static int calcMeanNeon( const Pel* org, const ptrdiff_t origStride, const int w
 double calcVar_neon( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
 #endif
 
-template <ARM_VEXT vext>
-void FGAnalyzer::_initFGAnalyzerARM()
-{
-#if ENABLE_SIMD_OPT_MCTF
-  calcVar  = calcVar_neon;
-#endif
-  calcMean = calcMeanNeon;
-}
-
-template void FGAnalyzer::_initFGAnalyzerARM<NEON>();
-
 // Morphological dilation: a pixel becomes Value if any of its 3x3 neighbours
 // (including itself) equals Value, otherwise it keeps its original value.
 // buff carries the (border-extended) input, Wbuf receives the output; they
@@ -103,9 +92,17 @@ template void FGAnalyzer::_initFGAnalyzerARM<NEON>();
 // strides (buff has a margin, Wbuf usually has none), so they are indexed
 // with their own strides.
 static int dilation_neon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth, ComponentID compID, int numIter,
-                         int iter, Pel Value )
+                          int iter, Pel Value )
 {
   CHECKD( buff == Wbuf, "buff and Wbuf must not alias" );
+
+  // width doesn't change across iterations, so a width<8 buffer stays that
+  // way for the whole call; let the scalar reference handle it rather than
+  // duplicating its 3x3 test here.
+  if( buff->get( compID ).width < 8 )
+  {
+    return dilation_core( buff, Wbuf, bitDepth, compID, numIter, iter, Value );
+  }
 
   for( ; iter != numIter; ++iter )
   {
@@ -119,65 +116,37 @@ static int dilation_neon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth,
     Pel*            dst    = Wbuf->bufs[0].buf;
     const ptrdiff_t dStr   = Wbuf->bufs[0].stride;
 
-    if( width >= 8 )
+    const int16x8_t vVal = vdupq_n_s16( Value );
+
+    auto rowMask = [vVal]( const Pel* row ) -> uint16x8_t {
+      int16x8_t  l = vld1q_s16( row - 1 );
+      int16x8_t  c = vld1q_s16( row );
+      int16x8_t  r = vld1q_s16( row + 1 );
+      uint16x8_t m = vceqq_s16( c, vVal );
+      m            = vorrq_u16( m, vceqq_s16( l, vVal ) );
+      m            = vorrq_u16( m, vceqq_s16( r, vVal ) );
+      return m;
+    };
+
+    for( int y = 0; y < height; y++ )
     {
-      const int16x8_t vVal = vdupq_n_s16( Value );
+      const Pel* srcRow = src + (ptrdiff_t)y * sStr;
+      Pel*       dstRow = dst + (ptrdiff_t)y * dStr;
 
-      auto rowMask = [vVal]( const Pel* row ) -> uint16x8_t {
-        int16x8_t  l = vld1q_s16( row - 1 );
-        int16x8_t  c = vld1q_s16( row );
-        int16x8_t  r = vld1q_s16( row + 1 );
-        uint16x8_t m = vceqq_s16( c, vVal );
-        m            = vorrq_u16( m, vceqq_s16( l, vVal ) );
-        m            = vorrq_u16( m, vceqq_s16( r, vVal ) );
-        return m;
-      };
-
-      for( int x = 0; ; x += 8 )
+      for( int x = 0; x < width; x += 8 )
       {
         if( x + 8 > width ) x = width - 8;   // overlapping tail strip; safe, dst != src within an iteration
-        const Pel* p = src + x;
+        const Pel* p = srcRow + x;
 
-        uint16x8_t mTop = rowMask( p - sStr );
-        uint16x8_t mMid = rowMask( p );
+        // The centre row's vector is needed both for the compare and as
+        // the blend source, so compute its mask inline instead of going
+        // through rowMask() a second time for the same load.
         int16x8_t  cMid = vld1q_s16( p );
-
-        for( int y = 0; y < height; y++ )
-        {
-          uint16x8_t mBot    = rowMask( p + ( (ptrdiff_t)y + 1 ) * sStr );
-          uint16x8_t strong  = vorrq_u16( mTop, vorrq_u16( mMid, mBot ) );
-          int16x8_t  res     = vbslq_s16( strong, vVal, cMid );
-          vst1q_s16( dst + (ptrdiff_t)y * dStr + x, res );
-
-          mTop = mMid;
-          mMid = mBot;
-          cMid = vld1q_s16( p + ( (ptrdiff_t)y + 1 ) * sStr );
-        }
-
-        if( x + 8 >= width ) break;
-      }
-    }
-    else
-    {
-      // scalar fallback for width < 8, same 3x3 test as dilation_core
-      for( int y = 0; y < height; y++ )
-      {
-        for( int x = 0; x < width; x++ )
-        {
-          bool strong = false;
-          for( int dy = -1; dy <= 1 && !strong; dy++ )
-          {
-            for( int dx = -1; dx <= 1; dx++ )
-            {
-              if( buff->get( compID ).at( x + dx, y + dy ) == Value )
-              {
-                strong = true;
-                break;
-              }
-            }
-          }
-          dst[y * dStr + x] = strong ? Value : src[y * sStr + x];
-        }
+        uint16x8_t mMid = vorrq_u16( vceqq_s16( cMid, vVal ),
+                                     vorrq_u16( vceqq_s16( vld1q_s16( p - 1 ), vVal ),
+                                                vceqq_s16( vld1q_s16( p + 1 ), vVal ) ) );
+        uint16x8_t strong = vorrq_u16( rowMask( p - sStr ), vorrq_u16( mMid, rowMask( p + sStr ) ) );
+        vst1q_s16( dstRow + x, vbslq_s16( strong, vVal, cMid ) );
       }
     }
 
@@ -186,13 +155,20 @@ static int dilation_neon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth,
   return iter;
 }
 
-template <ARM_VEXT vext>
-void Morph::_initFGAMorphARM()
+template<>
+void FGAnalyzer::_initFGAnalyzerARM<NEON>()
+{
+#if ENABLE_SIMD_OPT_MCTF
+  calcVar  = calcVar_neon;
+#endif
+  calcMean = calcMeanNeon;
+}
+
+template<>
+void Morph::_initFGAMorphARM<NEON>()
 {
   dilation = dilation_neon;
 }
-
-template void Morph::_initFGAMorphARM<NEON>();
 
 }  // namespace vvenc
 
