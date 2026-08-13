@@ -3625,6 +3625,69 @@ static bool test_FGAnalyzer()
   return passed;
 }
 
+static bool test_MorphDilation()
+{
+  printf( "Testing Morph::dilation\n" );
+  vvenc::Morph ref{ /*enableOpt=*/false };
+  vvenc::Morph opt{ /*enableOpt=*/true };
+
+  bool     passed    = true;
+  unsigned num_cases = g_fastUnitTest ? 5 : NUM_CASES;
+
+  const int widths[]     = { 4, 8, 24, 44, 64 };
+  const int heights[]    = { 4, 8, 33, 44, 64 };
+  const int iters_list[] = { 1, 2, 4 };
+  const int bitDepth     = 10;
+  const Pel strongPel    = ( (Pel)1 << bitDepth ) - 1;
+  const Pel values[]     = { strongPel, 0 };
+
+  for( unsigned c = 0; c < num_cases; ++c )
+  {
+    for( int w : widths )
+    {
+      for( int h : heights )
+      {
+        for( int numIter : iters_list )
+        {
+          for( Pel value : values )
+          {
+            // Input buffers need margin >= 1 (extendBorderPel requirement). Output/working
+            // buffers use margin 0, matching real call sites (m_maskBuf vs m_dilationBuf).
+            vvenc::PelStorage buffRef, buffOpt, wbufRef, wbufOpt;
+            buffRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, 2, 0, false );
+            buffOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, 2, 0, false );
+            wbufRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ) );
+            wbufOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ) );
+
+            InputGenerator<Pel> gen{ (unsigned)bitDepth, /*is_signed=*/false };
+            for( int y = 0; y < h; y++ )
+            {
+              for( int x = 0; x < w; x++ )
+              {
+                Pel v = gen();
+                if( ( rand() % 16 ) == 0 ) v = value;   // sprinkle strong pixels
+                buffRef.getBuf( COMP_Y ).at( x, y ) = v;
+                buffOpt.getBuf( COMP_Y ).at( x, y ) = v;
+              }
+            }
+
+            int rRef = ref.dilation( &buffRef, &wbufRef, bitDepth, COMP_Y, numIter, 0, value );
+            int rOpt = opt.dilation( &buffOpt, &wbufOpt, bitDepth, COMP_Y, numIter, 0, value );
+
+            std::ostringstream ctx;
+            ctx << "Morph::dilation w=" << w << " h=" << h << " numIter=" << numIter << " value=" << value;
+            passed = compare_value( ctx.str() + " ret", rRef, rOpt ) && passed;
+            passed = compare_values_2d( ctx.str(), buffRef.getBuf( COMP_Y ).bufAt( 0, 0 ),
+                                        buffOpt.getBuf( COMP_Y ).bufAt( 0, 0 ), h, w,
+                                        buffRef.getBuf( COMP_Y ).stride ) && passed;
+          }
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 #endif // ENABLE_SIMD_OPT_FGA
 
 struct UnitTestEntry
@@ -3672,6 +3735,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },
+    { "MorphDilation", test_MorphDilation },
 #endif
 };
 

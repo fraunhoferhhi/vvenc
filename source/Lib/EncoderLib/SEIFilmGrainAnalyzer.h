@@ -146,7 +146,7 @@ private:
 class Morph
 {
 public:
-  Morph();
+  Morph( bool enableOpt = true );
   ~Morph();
 
   void init ( uint32_t width,
@@ -166,6 +166,11 @@ public:
   void initFGAMorphX86();
   template <X86_VEXT vext>
   void _initFGAMorphX86();
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAMorphARM();
+  template <ARM_VEXT vext>
+  void _initFGAMorphARM();
 #endif
 
   PelStorage* m_dilationBuf = nullptr;

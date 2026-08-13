@@ -96,6 +96,104 @@ void FGAnalyzer::_initFGAnalyzerARM()
 
 template void FGAnalyzer::_initFGAnalyzerARM<NEON>();
 
+// Morphological dilation: a pixel becomes Value if any of its 3x3 neighbours
+// (including itself) equals Value, otherwise it keeps its original value.
+// buff carries the (border-extended) input, Wbuf receives the output; they
+// never alias at real call sites. The two buffers generally have different
+// strides (buff has a margin, Wbuf usually has none), so they are indexed
+// with their own strides.
+static int dilationNeon( PelStorage* buff, PelStorage* Wbuf, uint32_t bitDepth, ComponentID compID, int numIter,
+                         int iter, Pel Value )
+{
+  CHECKD( buff == Wbuf, "buff and Wbuf must not alias" );
+
+  for( ; iter != numIter; ++iter )
+  {
+    Wbuf->bufs[0].copyFrom( buff->get( compID ) );
+    buff->get( compID ).extendBorderPel( 1, 1 );
+
+    const int       width  = buff->get( compID ).width;
+    const int       height = buff->get( compID ).height;
+    const Pel*      src    = buff->get( compID ).buf;
+    const ptrdiff_t sStr   = buff->get( compID ).stride;
+    Pel*            dst    = Wbuf->bufs[0].buf;
+    const ptrdiff_t dStr   = Wbuf->bufs[0].stride;
+
+    if( width >= 8 )
+    {
+      const int16x8_t vVal = vdupq_n_s16( Value );
+
+      auto rowMask = [vVal]( const Pel* row ) -> uint16x8_t {
+        int16x8_t  l = vld1q_s16( row - 1 );
+        int16x8_t  c = vld1q_s16( row );
+        int16x8_t  r = vld1q_s16( row + 1 );
+        uint16x8_t m = vceqq_s16( c, vVal );
+        m            = vorrq_u16( m, vceqq_s16( l, vVal ) );
+        m            = vorrq_u16( m, vceqq_s16( r, vVal ) );
+        return m;
+      };
+
+      for( int x = 0; ; x += 8 )
+      {
+        if( x + 8 > width ) x = width - 8;   // overlapping tail strip; safe, dst != src within an iteration
+        const Pel* p = src + x;
+
+        uint16x8_t mTop = rowMask( p - sStr );
+        uint16x8_t mMid = rowMask( p );
+        int16x8_t  cMid = vld1q_s16( p );
+
+        for( int y = 0; y < height; y++ )
+        {
+          uint16x8_t mBot    = rowMask( p + ( (ptrdiff_t)y + 1 ) * sStr );
+          uint16x8_t strong  = vorrq_u16( mTop, vorrq_u16( mMid, mBot ) );
+          int16x8_t  res     = vbslq_s16( strong, vVal, cMid );
+          vst1q_s16( dst + (ptrdiff_t)y * dStr + x, res );
+
+          mTop = mMid;
+          mMid = mBot;
+          cMid = vld1q_s16( p + ( (ptrdiff_t)y + 1 ) * sStr );
+        }
+
+        if( x + 8 >= width ) break;
+      }
+    }
+    else
+    {
+      // scalar fallback for width < 8, same 3x3 test as dilation_core
+      for( int y = 0; y < height; y++ )
+      {
+        for( int x = 0; x < width; x++ )
+        {
+          bool strong = false;
+          for( int dy = -1; dy <= 1 && !strong; dy++ )
+          {
+            for( int dx = -1; dx <= 1; dx++ )
+            {
+              if( buff->get( compID ).at( x + dx, y + dy ) == Value )
+              {
+                strong = true;
+                break;
+              }
+            }
+          }
+          dst[y * dStr + x] = strong ? Value : src[y * sStr + x];
+        }
+      }
+    }
+
+    buff->get( compID ).copyFrom( Wbuf->bufs[0] );
+  }
+  return iter;
+}
+
+template <ARM_VEXT vext>
+void Morph::_initFGAMorphARM()
+{
+  dilation = dilationNeon;
+}
+
+template void Morph::_initFGAMorphARM<NEON>();
+
 }  // namespace vvenc
 
 #endif  // TARGET_SIMD_ARM && ENABLE_SIMD_OPT_FGA
