@@ -146,7 +146,7 @@ private:
 class Morph
 {
 public:
-  Morph();
+  Morph( bool enableOpt = true );
   ~Morph();
 
   void init ( uint32_t width,
@@ -166,6 +166,11 @@ public:
   void initFGAMorphX86();
   template <X86_VEXT vext>
   void _initFGAMorphX86();
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  void initFGAMorphARM();
+  template <ARM_VEXT vext>
+  void _initFGAMorphARM();
 #endif
 
   PelStorage* m_dilationBuf = nullptr;
@@ -344,6 +349,14 @@ private:
 };
 
 } // namespace vvenc
+
+// Scalar reference for Morph::dilation. Global (not vvenc::) because this
+// header's .cpp only does "using namespace vvenc;" rather than wrapping its
+// definitions in the namespace. SIMD dilation implementations that need a
+// fallback for widths their vectorized path can't handle delegate to it
+// directly instead of duplicating the 3x3 test.
+int dilation_core( vvenc::PelStorage* buff, vvenc::PelStorage* Wbuf, uint32_t bitDepth, vvenc::ComponentID compID,
+                   int numIter, int iter, vvenc::Pel Value );
 
 #endif // __SEIFILMGRAINANALYZER__
 

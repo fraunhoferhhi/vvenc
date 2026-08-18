@@ -263,6 +263,15 @@ void FGAnalyzer::initFGAnalyzerARM()
     _initFGAnalyzerARM<NEON>();
   }
 }
+
+void Morph::initFGAMorphARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initFGAMorphARM<NEON>();
+  }
+}
 #endif  // ENABLE_SIMD_OPT_FGA
 
 #endif  // TARGET_SIMD_ARM

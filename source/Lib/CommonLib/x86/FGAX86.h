@@ -639,6 +639,20 @@ int dilation_SIMD ( PelStorage *buff,
   unsigned int windowSize = KERNELSIZE;
   unsigned int padding    = windowSize / 2;
 
+  // The vectorized path below requires width to be a multiple of eight and
+  // strictly greater than sixteen: at exactly 16, the AVX2 branch's 16-wide
+  // main loop runs zero times, leaving its tail write to read an
+  // uninitialized column -1 (width 16 is fine under SSE alone, but it's not
+  // worth special-casing vext for a single width, so it's excluded either
+  // way). It also assumes at least two rows: at height == 1 the y == 0 case
+  // makes p_buf_down point past the single row, an out-of-bounds read.
+  // Anything outside those bounds falls back to the scalar reference, which
+  // handles all remaining iterations itself.
+  if( width <= 16 || ( width % 8 ) != 0 || height == 1 )
+  {
+    return dilation_core( buff, Wbuf, bitDepth, compID, numIter, iter, Value );
+  }
+
   Wbuf->bufs[0].copyFrom( buff->get(compID) );
 
   Pel* p_buf;

@@ -530,13 +530,20 @@ int dilation_core ( PelStorage *buff,
 
 }
 
-Morph::Morph()
+Morph::Morph( bool enableOpt )
 {
   // init();
   dilation=dilation_core;
+
+  if( enableOpt )
+  {
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  initFGAMorphX86();
+    initFGAMorphX86();
 #endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+    initFGAMorphARM();
+#endif
+  }
 }
 
 Morph::~Morph()
@@ -610,6 +617,7 @@ int calcMeanCore ( const Pel* org,
 // Film Grain Analysis Functions
 // ====================================================================================================================
 FGAnalyzer::FGAnalyzer( bool enableOpt )
+  : m_morphOperation( enableOpt )
 {
   calcVar     = calcVarCore;
   calcMean    = calcMeanCore;
