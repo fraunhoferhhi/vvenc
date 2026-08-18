@@ -1,0 +1,90 @@
+/* -----------------------------------------------------------------------------
+The copyright in this software is being made available under the Clear BSD
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
+the Software are granted under this license.
+
+The Clear BSD License
+
+Copyright (c) 2019-2026, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
+
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
+/**
+ * \file Quant_neon.cpp
+ * \brief Neon implementation of quantization functions for AArch64.
+ */
+// ====================================================================================================================
+// Includes
+// ====================================================================================================================
+
+#include <arm_neon.h>
+
+#include "CommonDefARM.h"
+#include "CommonLib/CommonDef.h"
+#include "CommonLib/Quant.h"
+
+//! \ingroup CommonLib
+//! \{
+
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+
+namespace vvenc
+{
+
+// Dispatch-only placeholder for M0: scalar-equivalent, to be replaced by
+// the real Neon implementation in M1.
+static bool needRdoqNeon( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
+{
+  for( int uiBlockPos = 0; uiBlockPos < (int)numCoeff; uiBlockPos++ )
+  {
+    const TCoeff  iLevel   = pCoeff[uiBlockPos];
+    const int64_t tmpLevel = ( int64_t ) std::abs( iLevel ) * quantCoeff;
+    if( TCoeff( ( tmpLevel + offset ) >> shift ) != 0 )
+      return true;
+  }
+  return false;
+}
+
+template <ARM_VEXT vext>
+void Quant::_initQuantARM()
+{
+  xNeedRdoq = needRdoqNeon;
+}
+
+template void Quant::_initQuantARM<NEON>();
+
+}  // namespace vvenc
+
+#endif  // TARGET_SIMD_ARM && ENABLE_SIMD_OPT_QUANT
+
+//! \}

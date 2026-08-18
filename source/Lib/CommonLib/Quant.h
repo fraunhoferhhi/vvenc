@@ -105,7 +105,7 @@ public:
 class Quant
 {
 public:
-  Quant( const Quant* other, bool useScalingLists );
+  Quant( const Quant* other, bool useScalingLists, bool enableOpt = true );
   virtual ~Quant();
 
   // initialize class
@@ -148,13 +148,20 @@ private:
                                     const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
                                     const bool signHiding,
                                     const TCoeff m_thrVal );
-  bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift );
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
   void initQuantX86();
   template <X86_VEXT vext>
   void _initQuantX86();
 #endif
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+  void initQuantARM();
+  template <ARM_VEXT vext>
+  void _initQuantARM();
+#endif
+
+public:
+  bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift );
 
 protected:
   int      m_RDOQ;
