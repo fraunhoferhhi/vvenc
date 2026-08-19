@@ -3627,6 +3627,178 @@ static bool test_FGAnalyzer()
 
 #endif // ENABLE_SIMD_OPT_FGA
 
+#if ENABLE_SIMD_OPT_QUANT
+static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
+{
+  std::cout << "Testing Quant::needRdoq\n";
+
+  DimensionGenerator rng;
+  InputGenerator<TCoeff> coeffGen{ 16 }; // matches the real +-2^15 transform coefficient range
+
+  // g_quantScales values (Rom.cpp): always positive, always < 2^15.
+  static const std::vector<int> quantScales{ 10280, 11651, 13107, 14564, 16384, 18396, 20560, 23302, 26214 };
+
+  auto run_one = [&]( const std::vector<TCoeff>& coeff, int quantCoeff, int shift, int64_t offset,
+                       const std::string& label ) -> bool {
+    std::ostringstream sstm;
+    sstm << "Quant::needRdoq " << label << " numCoeff=" << coeff.size() << " quantCoeff=" << quantCoeff
+         << " shift=" << shift << " offset=" << offset;
+    bool r = ref->xNeedRdoq( coeff.data(), coeff.size(), quantCoeff, offset, shift );
+    bool o = opt->xNeedRdoq( coeff.data(), coeff.size(), quantCoeff, offset, shift );
+    return compare_value( sstm.str(), r, o );
+  };
+
+  bool passed = true;
+
+  // Random sweep, kept strictly inside the real call-site domain
+  // (Quant::xNeedRDOQ / Quant.cpp): numCoeff a multiple of four, shift in
+  // [13,29] (traced from getTransformShift() + iQBits -- 29 is reached by
+  // an 8- or 10-bit 4x4 block at QP 63), quantCoeff from the real
+  // g_quantScales table, offset following the real (171|256)<<(shift-9)
+  // construction.
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    unsigned numCoeff  = rng.get( 4, 2048, 4 );
+    int      quantCoeff = rng.getOneOf( quantScales );
+    int      shift      = (int)rng.get( 13, 29 );
+    int64_t  offset      = ( ( rand() & 1 ) ? 171LL : 256LL ) << ( shift - 9 );
+
+    std::vector<TCoeff> coeff( numCoeff );
+    std::generate( coeff.begin(), coeff.end(), coeffGen );
+
+    passed = run_one( coeff, quantCoeff, shift, offset, "random" ) && passed;
+  }
+
+  // Directed cases, still inside the real domain, asserted (a failure here
+  // is a real bug, not an out-of-domain artifact).
+  //
+  // Both offset factors are required, not just for coverage: 256<<(shift-9)
+  // is exactly 2^shift/2, so a coefficient's sign stops mattering once the
+  // raw (unabs'd) value would go negative -- an arithmetic right shift of a
+  // nonzero negative number never lands on exactly 0, so a missing-abs()
+  // bug always reports "true" for negative coefficients, and with the 256
+  // factor that happens to match the correct answer over most of the
+  // range. The 171 factor puts offset off-centre from 2^shift/2, which is
+  // what actually distinguishes "took abs() first" from "used the raw
+  // signed value".
+  for( unsigned numCoeff : { 4u, 8u, 12u, 16u, 2048u } ) // scalar-only tail, exact 8-chunk, 4-remainder, real max
+  {
+    for( int quantCoeff : { 10280, 26214 } ) // table extremes
+    {
+      for( int shift : { 13, 21, 29 } ) // real min, mid, real max (see comment above)
+      {
+        for( int64_t offsetFactor : { 171LL, 256LL } ) // both real rounding constants -- see note above
+        {
+          const int64_t offset = offsetFactor << ( shift - 9 );
+
+          // all-zero
+          {
+            std::vector<TCoeff> coeff( numCoeff, TCoeff( 0 ) );
+            passed = run_one( coeff, quantCoeff, shift, offset, "all-zero" ) && passed;
+          }
+
+          // single non-zero coefficient at the first / last / 8-chunk-boundary position
+          std::vector<unsigned> positions{ 0u, numCoeff - 1 };
+          if( numCoeff > 8 )
+            positions.push_back( 8u );
+          for( unsigned pos : positions )
+          {
+            for( TCoeff extreme : { TCoeff( 32767 ), TCoeff( -32768 ) } )
+            {
+              std::vector<TCoeff> coeff( numCoeff, TCoeff( 0 ) );
+              coeff[pos] = extreme;
+              passed = run_one( coeff, quantCoeff, shift, offset,
+                                "single-nonzero pos=" + std::to_string( pos ) + " val=" + std::to_string( extreme ) ) &&
+                       passed;
+            }
+          }
+
+          // every coefficient at the most negative representable value
+          {
+            std::vector<TCoeff> coeff( numCoeff, TCoeff( -32768 ) );
+            passed = run_one( coeff, quantCoeff, shift, offset, "all-negative-min" ) && passed;
+          }
+
+          // threshold precision, both signs: the smallest |coeff| that survives quantization
+          // and one below it, both filled uniformly and isolated in the last position. The
+          // negative-sign variants are what actually exercise abs() (see note above).
+          //
+          // m itself can exceed the real +-2^15 coefficient range for some
+          // (quantCoeff, shift, offsetFactor) combinations (e.g. quantCoeff=10280,
+          // shift=29, offsetFactor=171 gives m=34783): such a block can never
+          // actually survive quantization at real call sites, so skip the
+          // threshold cases there rather than asserting on a coefficient value
+          // no real transform coefficient could hold.
+          {
+            const int64_t m = ( ( 1LL << shift ) - offset + quantCoeff - 1 ) / quantCoeff; // ceil((2^shift-offset)/quantCoeff)
+            if( m > 32768 )
+              continue;
+            const TCoeff  mBelowPos = TCoeff( m > 0 ? m - 1 : 0 );
+            const TCoeff  mAtPos    = TCoeff( m );
+            const TCoeff  mBelowNeg = TCoeff( -(int64_t)mBelowPos );
+            const TCoeff  mAtNeg    = TCoeff( -(int64_t)mAtPos );
+
+            for( TCoeff mBelow : { mBelowPos, mBelowNeg } )
+            {
+              for( TCoeff mAt : { mAtPos, mAtNeg } )
+              {
+                const std::string sign = ( mBelow == mBelowNeg ) ? "neg" : "pos";
+
+                std::vector<TCoeff> below( numCoeff, mBelow );
+                std::vector<TCoeff> at( numCoeff, mAt );
+                std::vector<TCoeff> belowLast( numCoeff, TCoeff( 0 ) );
+                std::vector<TCoeff> atLast( numCoeff, TCoeff( 0 ) );
+                belowLast[numCoeff - 1] = mBelow;
+                atLast[numCoeff - 1]    = mAt;
+
+                passed = run_one( below,     quantCoeff, shift, offset, "threshold m-1 uniform " + sign ) && passed;
+                passed = run_one( at,        quantCoeff, shift, offset, "threshold m uniform " + sign )   && passed;
+                passed = run_one( belowLast, quantCoeff, shift, offset, "threshold m-1 last " + sign )    && passed;
+                passed = run_one( atLast,    quantCoeff, shift, offset, "threshold m last " + sign )      && passed;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Function-domain edge case, not a real call-site value (the real offset
+  // formula never reaches 2^shift): offset built in int64_t throughout to
+  // avoid 32-bit shift UB at shift>=31. Both implementations agree here
+  // (all-zero survives because offset alone reaches the threshold).
+  {
+    const unsigned numCoeff = 16;
+    const int      shift    = 29;
+    const int64_t  offset   = (int64_t)1 << shift;
+    std::vector<TCoeff> coeff( numCoeff, TCoeff( 0 ) );
+    passed = run_one( coeff, 26214, shift, offset, "offset==2^shift all-zero" ) && passed;
+  }
+
+  // Function-domain edge case: numCoeff not a multiple of four. Real call
+  // sites never pass one (efArea is always width * min(height,32), both
+  // powers of two), so this exercises the <4-remainder scalar tail
+  // (Quant_neon.cpp) that would otherwise never run under any case above.
+  for( unsigned numCoeff : { 3u, 7u, 13u } )
+  {
+    std::vector<TCoeff> coeff( numCoeff );
+    std::generate( coeff.begin(), coeff.end(), coeffGen );
+    passed = run_one( coeff, 13107, 21, 256LL << ( 21 - 9 ), "non-multiple-of-4 tail" ) && passed;
+  }
+
+  return passed;
+}
+
+static bool test_Quant()
+{
+  Quant ref( /*other=*/nullptr, /*useScalingLists=*/false, /*enableOpt=*/false );
+  Quant opt( /*other=*/nullptr, /*useScalingLists=*/false, /*enableOpt=*/true );
+
+  unsigned num_cases = NUM_CASES;
+  return check_needRdoq( &ref, &opt, num_cases );
+}
+#endif // ENABLE_SIMD_OPT_QUANT
+
 struct UnitTestEntry
 {
   std::string name;
@@ -3636,6 +3808,7 @@ struct UnitTestEntry
 static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT_QUANT
     { "DepQuant", test_DepQuant },
+    { "Quant", test_Quant },
 #endif
 #if ENABLE_SIMD_OPT_INTRAPRED
     { "IntraPred", test_IntraPred },
