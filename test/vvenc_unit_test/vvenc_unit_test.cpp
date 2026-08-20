@@ -3681,7 +3681,7 @@ static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
   // range. The 171 factor puts offset off-centre from 2^shift/2, which is
   // what actually distinguishes "took abs() first" from "used the raw
   // signed value".
-  for( unsigned numCoeff : { 4u, 8u, 12u, 16u, 2048u } ) // scalar-only tail, exact 8-chunk, 4-remainder, real max
+  for( unsigned numCoeff : { 4u, 8u, 12u, 16u, 2048u } ) // 4u: 4-wide remainder only; 8u: exact 8-chunk; 12u: 8-chunk + 4-wide remainder; 16u: two 8-chunks; 2048u: real max
   {
     for( int quantCoeff : { 10280, 26214 } ) // table extremes
     {
@@ -3738,24 +3738,23 @@ static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
             const TCoeff  mBelowNeg = TCoeff( -(int64_t)mBelowPos );
             const TCoeff  mAtNeg    = TCoeff( -(int64_t)mAtPos );
 
-            for( TCoeff mBelow : { mBelowPos, mBelowNeg } )
+            for( bool neg : { false, true } )
             {
-              for( TCoeff mAt : { mAtPos, mAtNeg } )
-              {
-                const std::string sign = ( mBelow == mBelowNeg ) ? "neg" : "pos";
+              const TCoeff      mBelow = neg ? mBelowNeg : mBelowPos;
+              const TCoeff      mAt    = neg ? mAtNeg    : mAtPos;
+              const std::string sign   = neg ? "neg" : "pos";
 
-                std::vector<TCoeff> below( numCoeff, mBelow );
-                std::vector<TCoeff> at( numCoeff, mAt );
-                std::vector<TCoeff> belowLast( numCoeff, TCoeff( 0 ) );
-                std::vector<TCoeff> atLast( numCoeff, TCoeff( 0 ) );
-                belowLast[numCoeff - 1] = mBelow;
-                atLast[numCoeff - 1]    = mAt;
+              std::vector<TCoeff> below( numCoeff, mBelow );
+              std::vector<TCoeff> at( numCoeff, mAt );
+              std::vector<TCoeff> belowLast( numCoeff, TCoeff( 0 ) );
+              std::vector<TCoeff> atLast( numCoeff, TCoeff( 0 ) );
+              belowLast[numCoeff - 1] = mBelow;
+              atLast[numCoeff - 1]    = mAt;
 
-                passed = run_one( below,     quantCoeff, shift, offset, "threshold m-1 uniform " + sign ) && passed;
-                passed = run_one( at,        quantCoeff, shift, offset, "threshold m uniform " + sign )   && passed;
-                passed = run_one( belowLast, quantCoeff, shift, offset, "threshold m-1 last " + sign )    && passed;
-                passed = run_one( atLast,    quantCoeff, shift, offset, "threshold m last " + sign )      && passed;
-              }
+              passed = run_one( below,     quantCoeff, shift, offset, "threshold m-1 uniform " + sign ) && passed;
+              passed = run_one( at,        quantCoeff, shift, offset, "threshold m uniform " + sign )   && passed;
+              passed = run_one( belowLast, quantCoeff, shift, offset, "threshold m-1 last " + sign )    && passed;
+              passed = run_one( atLast,    quantCoeff, shift, offset, "threshold m last " + sign )      && passed;
             }
           }
         }

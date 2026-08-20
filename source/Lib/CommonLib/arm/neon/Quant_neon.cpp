@@ -61,6 +61,20 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// Local any-lane-set reduction over a u32 all-ones/all-zeros compare
+// mask. vpmaxq_u32 is AArch64-only, so this follows the same
+// #if REAL_TARGET_AARCH64 workaround pattern as the pairwise_add_*
+// helpers in sum_neon.h for armv7.
+static inline bool any_lane_set_u32x4( const uint32x4_t v )
+{
+#if REAL_TARGET_AARCH64
+  return vgetq_lane_u64( vreinterpretq_u64_u32( vpmaxq_u32( v, v ) ), 0 ) != 0;
+#else
+  const uint32x2_t m = vorr_u32( vget_low_u32( v ), vget_high_u32( v ) );
+  return vget_lane_u64( vreinterpret_u64_u32( m ), 0 ) != 0;
+#endif
+}
+
 // Mirrors needRdoqCore (Quant.cpp): a reduction over the coefficient
 // buffer that returns true as soon as any coefficient survives
 // quantization. Real call sites always pass a numCoeff that is a
@@ -69,40 +83,47 @@ namespace vvenc
 // with a 4-wide remainder step; a smaller remainder falls through to a
 // plain scalar loop.
 //
-// abs(coeff)*quantCoeff + offset is always non-negative in the real call
-// domain (coeff is clipped to +-2^15, quantCoeff and offset are always
-// positive), so vshlq_s64's arithmetic right shift and a logical shift
-// would produce identical bits here.
+// The scalar test is ( abs(iLevel)*quantCoeff + offset ) >> shift != 0.
+// That sum is non-negative in the real call domain (coeff clipped to
+// +-2^15, quantCoeff and offset always positive), so it's non-zero iff
+// abs(iLevel)*quantCoeff >= (1<<shift) - offset =: rem, and since
+// quantCoeff is always a positive constant (g_quantScales), that's
+// abs(iLevel) >= ceil(rem/quantCoeff) =: levelThresh, i.e.
+//   iLevel >= levelThresh || iLevel <= -levelThresh.
+// levelThresh fits comfortably in int32 for the real shift range
+// [13,29] (max ~34800). The ceil via (rem+quantCoeff-1)/quantCoeff is
+// only proven correct here for rem>=0, which always holds in the real
+// domain.
+//
+// This does one scalar division per call, then two vector compares per
+// chunk. Comparing iLevel*quantCoeff against +-rem directly avoids the
+// division at the cost of a per-element multiply instead; not used here
+// because it is slower for the numCoeff values real call sites pass.
 static bool needRdoqNeon( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift )
 {
-  const int32x2_t vqnt   = vdup_n_s32( quantCoeff );
-  const int64x2_t voff   = vdupq_n_s64( offset );
-  const int64x2_t vshift = vdupq_n_s64( -(int64_t)shift );  // negative count -> right shift (SSHL)
+  const int64_t  rem         = ( ( int64_t )1 << shift ) - offset;
+  const int32_t  levelThresh = ( int32_t )( ( rem + quantCoeff - 1 ) / quantCoeff );
 
-  auto lane = [&]( int32x2_t c ) -> int64x2_t {
-    return vshlq_s64( vaddq_s64( vmull_s32( c, vqnt ), voff ), vshift );
+  const int32x4_t vposThresh = vdupq_n_s32( levelThresh );
+  const int32x4_t vnegThresh = vdupq_n_s32( -levelThresh );
+
+  auto survivors = [&]( int32x4_t c ) -> uint32x4_t {
+    return vorrq_u32( vcgeq_s32( c, vposThresh ), vcleq_s32( c, vnegThresh ) );
   };
 
   size_t i = 0;
   for( ; i + 8 <= numCoeff; i += 8 )
   {
-    const int32x4_t c0 = vabsq_s32( vld1q_s32( pCoeff + i ) );
-    const int32x4_t c1 = vabsq_s32( vld1q_s32( pCoeff + i + 4 ) );
+    const uint32x4_t s0 = survivors( vld1q_s32( pCoeff + i ) );
+    const uint32x4_t s1 = survivors( vld1q_s32( pCoeff + i + 4 ) );
 
-    const int64x2_t l0 = lane( vget_low_s32( c0 ) );
-    const int64x2_t l1 = lane( vget_high_s32( c0 ) );
-    const int64x2_t l2 = lane( vget_low_s32( c1 ) );
-    const int64x2_t l3 = lane( vget_high_s32( c1 ) );
-
-    const uint64x2_t any = vreinterpretq_u64_s64( vorrq_s64( vorrq_s64( l0, l1 ), vorrq_s64( l2, l3 ) ) );
-    if( vget_lane_u64( vorr_u64( vget_low_u64( any ), vget_high_u64( any ) ), 0 ) != 0 )
+    if( any_lane_set_u32x4( vorrq_u32( s0, s1 ) ) )
       return true;
   }
   if( i + 4 <= numCoeff )
   {
-    const int32x4_t c0 = vabsq_s32( vld1q_s32( pCoeff + i ) );
-    const uint64x2_t any = vreinterpretq_u64_s64( vorrq_s64( lane( vget_low_s32( c0 ) ), lane( vget_high_s32( c0 ) ) ) );
-    if( vget_lane_u64( vorr_u64( vget_low_u64( any ), vget_high_u64( any ) ), 0 ) != 0 )
+    const uint32x4_t s0 = survivors( vld1q_s32( pCoeff + i ) );
+    if( any_lane_set_u32x4( s0 ) )
       return true;
     i += 4;
   }
