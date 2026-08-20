@@ -105,10 +105,34 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
   if( ! picList.empty() && picList.back()->poc > m_lastPoc )
   {
     auto pic = picList.back();
+    pic->m_picShared->m_gopEntry.m_isForcedIdr = pic->m_picShared->m_isForcedIdr && !pic->m_picShared->isLeadTrail();
 
     // set gop entry
     m_gopCfg.getNextGopEntry( pic->m_picShared->m_gopEntry );
     CHECK( pic->m_picShared->m_gopEntry.m_POC != pic->poc, "invalid state" );
+    pic->gopEntry = &pic->m_picShared->m_gopEntry;
+
+    const int interruptedGopNum = pic->m_picShared->m_gopEntry.m_isForcedIdr ? pic->m_picShared->m_gopEntry.m_gopNum - 1 : -1;
+    if (interruptedGopNum >= 0)
+    {
+      Picture *interruptedGopStart = nullptr;
+      for (auto queuedPic : picList)
+      {
+        if (queuedPic->gopEntry && queuedPic->gopEntry->m_gopNum == interruptedGopNum)
+        {
+          queuedPic->m_picShared->m_gopEntry.m_allowsCodingGap = true;
+          if (interruptedGopStart == nullptr || queuedPic->gopEntry->m_codingNum < interruptedGopStart->gopEntry->m_codingNum)
+          {
+            interruptedGopStart = queuedPic;
+          }
+        }
+      }
+
+      if (interruptedGopNum == 0 && interruptedGopStart)
+      {
+        m_gopCfg.fixStartOfLastGop(interruptedGopStart->m_picShared->m_gopEntry);
+      }
+    }
 
     if( ! pic->m_picShared->isLeadTrail() )
     {

@@ -96,6 +96,7 @@ class GOPCfg
     int  m_minIntraDist;
     int  m_lastIntraPOC;
     bool m_adjustNoLPcodingOrder;
+    bool m_hadForcedIdr;
 
   public:
     GOPCfg( MsgLog& _m )
@@ -121,6 +122,7 @@ class GOPCfg
       , m_minIntraDist    ( -1 )
       , m_lastIntraPOC    ( -1 )
       , m_adjustNoLPcodingOrder( false )
+      , m_hadForcedIdr         ( false )
     {
     };
 
@@ -166,6 +168,7 @@ class GOPCfg
     int  xGetMaxTid          ( const GOPEntryList& gopList ) const;
     int  xGetMaxRefPics      ( const GOPEntry& gopEntry ) const;
     int  xGetMaxNumReorder   ( const GOPEntry& gopEntry, const GOPEntryList& gopList ) const;
+    void xSetIntraEntry(GOPEntry &gopEntry);
     void xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const;
 };
 

@@ -18,6 +18,7 @@ add_test( NAME Test_vvenclibtest-input_params            COMMAND vvenclibtest 3 
 add_test( NAME Test_vvenclibtest-sdk_default             COMMAND vvenclibtest 4 )
 add_test( NAME Test_vvenclibtest-sdk_stringapi_interface COMMAND vvenclibtest 5 )
 add_test( NAME Test_vvenclibtest-timestamps              COMMAND vvenclibtest 6 )
+add_test( NAME Test_vvenclibtest-forced_per_frame_idr    COMMAND vvenclibtest 7 )
 
 if( NOT BUILD_SHARED_LIBS )
   add_test( NAME Test_vvenc_unit_test COMMAND vvenc_unit_test --fast )
