@@ -137,13 +137,11 @@ static bool needRdoqNeon( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
   return false;
 }
 
-template <ARM_VEXT vext>
-void Quant::_initQuantARM()
+template<>
+void Quant::_initQuantARM<NEON>()
 {
   xNeedRdoq = needRdoqNeon;
 }
-
-template void Quant::_initQuantARM<NEON>();
 
 }  // namespace vvenc
 
