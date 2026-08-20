@@ -41,7 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 /**
  * \file Quant_neon.cpp
- * \brief Neon implementation of quantization functions for AArch64.
+ * \brief Neon implementation of quantization functions for Arm.
  */
 // ====================================================================================================================
 // Includes
