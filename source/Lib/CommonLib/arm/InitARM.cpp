@@ -123,6 +123,15 @@ void DepQuant::initDepQuantARM()
     _initDepQuantARM<NEON>();
   }
 }
+
+void Quant::initQuantARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initQuantARM<NEON>();
+  }
+}
 #endif // ENABLE_SIMD_OPT_QUANT
 
 #if ENABLE_SIMD_OPT_MCIF

@@ -278,16 +278,21 @@ static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
 }
 
 
-Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_dLambda( 0.0 )
+Quant::Quant( const Quant* other, bool useScalingLists, bool enableOpt ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other, useScalingLists );
   xDeQuant  = DeQuantCore;
   xQuant    = QuantCore;
   xNeedRdoq = needRdoqCore;
+  if( enableOpt )
+  {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
-  initQuantX86();
+    initQuantX86();
 #endif
-
+#if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_QUANT
+    initQuantARM();
+#endif
+  }
 }
 
 Quant::~Quant()
