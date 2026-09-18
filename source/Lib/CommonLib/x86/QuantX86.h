@@ -95,7 +95,13 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
     {
       for( int y = 0; y <= maxY; y++)
       {
-        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
+        // maxX==0 (width 1) reads/writes exactly one coefficient: a plain
+        // scalar load/store avoids the 6-byte input over-read and 12-byte
+        // output over-write that _vv_loadl_epi64/_mm_storeu_si128 would
+        // cause on a row that only owns 2/4 bytes.
+        __m128i v_level = maxX == 0 ? _mm_set1_epi16( piQCoef[y * piQCfStride] )
+                         : maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) )
+                         : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
         v_level = _mm_and_si128(v_level,vlevmask);
         v_level = _mm_max_epi16 (v_level, v_min);
         v_level = _mm_min_epi16 (v_level, v_max);
@@ -108,7 +114,9 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
 
         v_level = _mm_max_epi32 (v_level, v_Tmin);
         v_level = _mm_min_epi32 (v_level, v_Tmax);
-        if( maxX == 1 )
+        if( maxX == 0 )
+          piCoef[y * width] = _mm_cvtsi128_si32( v_level );
+        else if( maxX == 1 )
           _vv_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
         else
           _mm_storeu_si128( (__m128i*)(piCoef + y * width), v_level );
@@ -159,7 +167,12 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
     {
       for( int y = 0; y <= maxY; y++)
       {
-        __m128i v_level = maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) ) : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
+        // See the rightShift>0 branch above for why maxX==0 needs its own
+        // scalar load/store: the shared-with-maxX>=2 vector load/store
+        // would over-read/over-write a row that only owns 2/4 bytes.
+        __m128i v_level = maxX == 0 ? _mm_set1_epi16( piQCoef[y * piQCfStride] )
+                         : maxX == 1 ? _mm_set1_epi32( *( ( int const* ) & piQCoef[y * piQCfStride] ) )
+                         : _vv_loadl_epi64( ( __m128i const* ) &piQCoef[y * piQCfStride] );
         v_level = _mm_and_si128(v_level,vlevmask);
 
         v_level = _mm_max_epi16 (v_level, v_min);
@@ -173,7 +186,11 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
         v_level = _mm_max_epi32 (v_level, v_Tmin);
         v_level = _mm_min_epi32 (v_level, v_Tmax);
 
-        if( maxX == 1 )
+        if( maxX == 0 )
+        {
+          piCoef[y * width] = _mm_cvtsi128_si32( v_level );
+        }
+        else if( maxX == 1 )
         {
           _vv_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
         }
