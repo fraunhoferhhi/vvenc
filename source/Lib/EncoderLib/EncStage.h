@@ -71,6 +71,7 @@ public:
   uint8_t          m_minNoiseLevels[QPA_MAX_NOISE_LEVELS];
   std::vector<int> m_ctuBimQpOffset;
   int              m_picAuxQpOffset; // auxiliary QP offset per frame, for combination of RC and BIM (and possibly other tools)
+  bool m_isForcedIdr;
 
 private:
   PelStorage       m_origBuf;
@@ -154,6 +155,7 @@ public:
     m_gopEntry.setDefaultGOPEntry();
 #if VVENC_USE_UNSTABLE_API
     m_userData       = yuvInBuf->userData;
+    m_isForcedIdr = (yuvInBuf->picFlags & VVENC_PIC_FLAG_FORCE_IDR) != 0;
 #endif
   }
 
