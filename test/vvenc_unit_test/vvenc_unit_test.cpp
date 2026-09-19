@@ -4145,7 +4145,8 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
   DimensionGenerator rng;
   InputGenerator<TCoeff> coeffGen{ 16 }; // matches the real +-2^15 transform coefficient range
 
-  // g_quantScales values (Rom.cpp), row 0 (no sqrt-adjustment): always
+  // g_quantScales values (Rom.cpp): both rows (no-sqrt-adjustment and
+  // sqrt-adjustment) flattened into their 9 distinct values -- always
   // positive, always < 2^15.
   static const std::vector<int> quantScales{ 10280, 11651, 13107, 14564, 16384, 18396, 20560, 23302, 26214 };
 
@@ -4340,10 +4341,23 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
                      passed;
           }
 
-          // (b) last non-zero at CG-boundary-aware directed positions.
+          // (b) last non-zero at CG-boundary-aware directed positions:
+          // 0, the shape's own max, and (for shapes with more than one
+          // coding group) the end of the first group and the start of the
+          // second, using this shape's own group size -- not a hardcoded
+          // 15, which only applies to the common 16-coefficient group and
+          // would silently skip the boundary entirely for narrow shapes
+          // like 2x4/4x2 (4-coefficient groups).
           std::vector<int> positions{ 0, maxPos };
-          if( maxPos >= 15 )
-            positions.push_back( 15 );
+          {
+            TransformUnit      tuTmp( makeTU( w, h, compID, 0 ) );
+            CoeffCodingContext cctxTmp( tuTmp, compID, false );
+            const int          groupSize = 1 << cctxTmp.log2CGSize();
+            if( groupSize - 1 < maxPos )
+              positions.push_back( groupSize - 1 );
+            if( groupSize <= maxPos )
+              positions.push_back( groupSize );
+          }
           for( int p : positions )
           {
             std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );

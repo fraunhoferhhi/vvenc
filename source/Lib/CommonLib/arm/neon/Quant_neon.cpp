@@ -275,18 +275,35 @@ static void dequantNeon( const int maxX, const int maxY, const int scale, const 
 //   piQCoef  = clip(sign ? -q : q, entropyCodingMinimum, entropyCodingMaximum)
 //
 // vmull_u32 (unsigned, not vmull_s32) on the low/high halves of a loaded
-// int32x4_t row reproduces x86's _mm_mul_epu32 bit-for-bit over the full
-// int32 input range including INT_MIN, without needing x86's even/odd-lane
+// int32x4_t row reproduces x86's _mm_mul_epu32's multiplication bit-for-bit
+// over the full int32 input range including INT_MIN (both vabsq_s32 and
+// _mm_abs_epi32 leave INT_MIN as the bit pattern 0x80000000, and
+// reinterpreting that as unsigned gives the correct magnitude 2^31 to both
+// unsigned-multiply instructions), without needing x86's even/odd-lane
 // interleave-then-recombine dance: NEON's low half is already lanes 0,1 and
 // its high half is already lanes 2,3, so the two 2x64 halves are already in
 // natural coefficient order once narrowed back with vcombine_s32(vmovn_s64,
-// vmovn_s64) -- no reassembly needed. vshlq_s64 with a negative count is an
-// arithmetic right shift; since every intermediate here (p, p+iAdd, and
-// deltaU's p-(q<<iQBits), which is >= -iAdd > -2^31) is representable as
-// nonnegative-or-small-negative int64 well inside the range where
-// arithmetic and logical shifts agree in their low 32 bits (qBits8 <= 22,
-// see the plan's D5 derivation), this matches both x86's logical shift and
-// the scalar reference's int64 arithmetic `>>` exactly.
+// vmovn_s64) -- no reassembly needed. (This is a multiplication-bit-pattern
+// equivalence only; it says nothing about the scalar C++ reference, where
+// abs(INT_MIN) is itself undefined -- moot here since the real coefficient
+// domain never reaches INT_MIN.)
+//
+// vshlq_s64 with a negative count is an arithmetic right shift. For any
+// 64-bit value and a shift count k<=32, an arithmetic and a logical right
+// shift produce identical low 32 bits (they differ only in the sign-fill
+// bits above position 32-k, which fall entirely above the 32 bits kept by
+// the narrowing vmovn_s64 afterwards) -- so this matches x86's logical
+// shift for deltaU regardless of that value's sign. The largest reachable
+// qBits8 (= iQBits-8) is 21: the vector kernel only ever runs for w,h>=4
+// (is4x4sbb), which bounds iQBits at 29 (iQBits = 14 + QP_per + transform-
+// shift terms; QpParam clips QP_per to <= 10 at 8-bit / 12 at 10-bit, and
+// the smallest w,h>=4 shape's transform-shift term is the smallest
+// magnitude the formula can subtract, giving the largest iQBits). That's
+// comfortably under the k<=32 bound above, with room to spare. The
+// magnitude arguments this matches (p, p+iAdd, and deltaU's p-(q<<iQBits),
+// which is >= -iAdd > -2^31 for every iAdd this domain produces) are also
+// all representable, so the arithmetic itself -- not just its bit pattern
+// -- matches the scalar reference's int64 arithmetic `>>` exactly.
 // signHiding is loop-invariant across the whole CG loop below (it's a
 // per-call argument, not per-coefficient), so it's a template parameter
 // here rather than a branch re-evaluated on every row -- the same
