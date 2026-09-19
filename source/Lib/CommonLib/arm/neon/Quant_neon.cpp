@@ -287,11 +287,15 @@ static void dequantNeon( const int maxX, const int maxY, const int scale, const 
 // arithmetic and logical shifts agree in their low 32 bits (qBits8 <= 22,
 // see the plan's D5 derivation), this matches both x86's logical shift and
 // the scalar reference's int64 arithmetic `>>` exactly.
+// signHiding is loop-invariant across the whole CG loop below (it's a
+// per-call argument, not per-coefficient), so it's a template parameter
+// here rather than a branch re-evaluated on every row -- the same
+// loop-hoisting georges-arm asked for on the dequant Neon port (#725).
+template<bool SignHiding>
 static inline void quantCG4x4Neon( const CCoeffBuf& piCoef, CoeffSigBuf& piQCoef, TCoeff* deltaU, int uiBlockPos,
-                                    const int uiWidth, const int32x4_t vQuantCoeff, const int64x2_t vAdd,
-                                    const int64x2_t vQBits, const int64x2_t vNegQBits, const int64x2_t vNegQBits8,
-                                    const int32x4_t vMin, const int32x4_t vMax, int32x4_t& vAbsSum,
-                                    const bool signHiding )
+                                    const int32x4_t vQuantCoeff, const int64x2_t vAdd, const int64x2_t vQBits,
+                                    const int64x2_t vNegQBits, const int64x2_t vNegQBits8, const int32x4_t vMin,
+                                    const int32x4_t vMax, int32x4_t& vAbsSum )
 {
   const int32x4_t vLevel = vld1q_s32( &piCoef.buf[uiBlockPos] );
   const uint32x4_t vSign  = vcltq_s32( vLevel, vdupq_n_s32( 0 ) );
@@ -305,7 +309,7 @@ static inline void quantCG4x4Neon( const CCoeffBuf& piCoef, CoeffSigBuf& piQCoef
   const int64x2_t q0 = vshlq_s64( vaddq_s64( p0, vAdd ), vNegQBits );
   const int64x2_t q1 = vshlq_s64( vaddq_s64( p1, vAdd ), vNegQBits );
 
-  if( signHiding )
+  if( SignHiding )
   {
     const int64x2_t du0 = vshlq_s64( vsubq_s64( p0, vshlq_s64( q0, vQBits ) ), vNegQBits8 );
     const int64x2_t du1 = vshlq_s64( vsubq_s64( p1, vshlq_s64( q1, vQBits ) ), vNegQBits8 );
@@ -406,13 +410,28 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
     const int32x4_t vMax        = vdupq_n_s32( entropyCodingMaximum );
     int32x4_t       vAbsSum     = vdupq_n_s32( 0 );
 
-    for( subSetId = iScanPos >> log2CGSize; subSetId >= 0; subSetId-- )
+    if( signHiding )
     {
-      int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
-      for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
+      for( subSetId = iScanPos >> log2CGSize; subSetId >= 0; subSetId-- )
       {
-        quantCG4x4Neon( piCoef, piQCoef, deltaU, uiBlockPos, uiWidth, vQuantCoeff, vAdd, vQBits, vNegQBits,
-                        vNegQBits8, vMin, vMax, vAbsSum, signHiding );
+        int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
+        for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
+        {
+          quantCG4x4Neon<true>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQBits, vNegQBits,
+                                vNegQBits8, vMin, vMax, vAbsSum );
+        }
+      }
+    }
+    else
+    {
+      for( subSetId = iScanPos >> log2CGSize; subSetId >= 0; subSetId-- )
+      {
+        int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
+        for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
+        {
+          quantCG4x4Neon<false>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQBits, vNegQBits,
+                                 vNegQBits8, vMin, vMax, vAbsSum );
+        }
       }
     }
 
