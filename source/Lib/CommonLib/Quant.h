@@ -141,13 +141,6 @@ private:
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
   void    xSignBitHidingHDQ       ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int &lastPos, const int maxLog2TrDynamicRange);
   void    xInvResDPCM             ( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf& dstBuf ) const;
-  void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
-                                    const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
-                                    TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
-                                    const int defaultQuantisationCoefficient, const int iQBits, const int64_t iAdd,
-                                    const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
-                                    const bool signHiding,
-                                    const TCoeff m_thrVal );
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_QUANT
   void initQuantX86();
@@ -170,6 +163,13 @@ public:
   static void fwdResDPCMCore       ( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical );
   static void invResDPCMVerCore    ( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height );
   void    ( *xDeQuant )           ( const int maxX, const int maxY, const int scale, const TCoeffSig* const piQCoef, const size_t piQCfStride, TCoeff* const piCoef, const int rightShift, const int inputMaximum, const TCoeff transformMaximum );
+  void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
+                                    const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
+                                    TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
+                                    const int defaultQuantisationCoefficient, const int iQBits, const int64_t iAdd,
+                                    const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum,
+                                    const bool signHiding,
+                                    const TCoeff m_thrVal );
 
 protected:
   int      m_RDOQ;
