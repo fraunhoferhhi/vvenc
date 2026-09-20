@@ -4130,14 +4130,15 @@ static bool check_dequant( Quant* ref, Quant* opt, unsigned num_cases )
 
 // Quant::quant's !enableScalingLists path (xQuant) takes a TransformUnit by
 // value, so unlike check_dequant/check_needRdoq this can't be driven from
-// flat buffers alone. The minimal object graph CoeffCodingContext's
-// constructor actually needs (tu.block(compID), tu.cs->sps->getMaxLog2Tr-
-// DynamicRange(), tu.cu->lfnstIdx) -- see ContextModelling.cpp's
-// constructor -- is an SPS, a CodingStructure pointing at it, a CodingUnit
-// carrying lfnstIdx, and a TransformUnit built from a 1- or 3-CompArea
-// UnitArea. tu.idx/tu.prev are never read by xQuant but are copied along
-// with the rest of the by-value TU, so they're set explicitly rather than
-// left indeterminate (TransformUnit::initData() doesn't touch them).
+// flat buffers alone. The minimal object graph -- tu.block(compID) and
+// tu.cs->sps->getMaxLog2TrDynamicRange() are read by CoeffCodingContext's
+// constructor (ContextModelling.cpp), tu.cu->lfnstIdx directly by xQuant
+// itself (QuantCore/QuantCoreSIMD/quantNeon) -- is an SPS, a CodingStructure
+// pointing at it, a CodingUnit carrying lfnstIdx, and a TransformUnit built
+// from a 1- or 3-CompArea UnitArea. tu.idx/tu.prev are never read by xQuant
+// but are copied along with the rest of the by-value TU, so they're set
+// explicitly rather than left indeterminate (TransformUnit::initData()
+// doesn't touch them).
 static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
 {
   std::cout << "Testing Quant::quant\n";
@@ -4297,7 +4298,11 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
 
   // (b)/(d)/(e) Directed cases across a representative subset of shapes
   // (every shape x every iQBits x every signHiding would be prohibitively
-  // slow; the random sweep above already covers the full cross-product).
+  // slow; the random sweep above samples the full cross-product, though only
+  // stochastically over NUM_CASES draws with a time-based default seed --
+  // these directed cases use a real (not synthetic) scale so the extremes
+  // deterministically reach the entropy clip / narrowing-saturation path on
+  // every run, rather than depending on the random sweep to land there).
   static const std::vector<std::tuple<int, int, ComponentID>> directedShapes{
       { 4, 4, COMP_Y },  { 8, 8, COMP_Y },   { 16, 16, COMP_Y }, { 32, 32, COMP_Y },
       { 8, 4, COMP_Y },  { 4, 8, COMP_Y },   { 1, 16, COMP_Y },  { 16, 1, COMP_Y },
@@ -4319,19 +4324,21 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
           // (d) all-zero
           {
             std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
-            passed = run_one( w, h, compID, 0, 64, iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff, "all-zero" ) &&
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                              "all-zero" ) &&
                      passed;
           }
 
           // (e) extremes, all positions, both signs; and a distinguishable
           // alternating-small pattern (uniform/extreme buffers can hide a
           // lane/position mixup that clipping or saturation coincidentally
-          // masks).
+          // masks). Real (not synthetic) scale so the extremes actually
+          // reach the entropy clip / vqmovn_s32 narrowing-saturation path.
           for( TCoeff extreme : { TCoeff( 32767 ), TCoeff( -32768 ) } )
           {
             std::vector<TCoeff> coeff( (size_t)w * h, extreme );
             passed =
-                run_one( w, h, compID, 0, 64, iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
                         "all-extreme " + std::to_string( extreme ) ) &&
                 passed;
           }
@@ -4339,7 +4346,7 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
             std::vector<TCoeff> coeff( (size_t)w * h );
             for( size_t i = 0; i < coeff.size(); i++ )
               coeff[i] = TCoeff( ( i % 3 == 0 ) ? 0 : ( i & 1 ) ? -TCoeff( 100 + i ) : TCoeff( 100 + i ) );
-            passed = run_one( w, h, compID, 0, 64, iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
                               "distinguishable-small" ) &&
                      passed;
           }
@@ -4367,7 +4374,7 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
             TransformUnit       tu( makeTU( w, h, compID, 0 ) );
             CoeffCodingContext   cctx( tu, compID, signHiding );
             coeff[cctx.blockPos( p )] = TCoeff( 12345 );
-            passed = run_one( w, h, compID, 0, 64, iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
                               "last-nonzero pos=" + std::to_string( p ) ) &&
                      passed;
           }
@@ -4385,51 +4392,60 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
   // iQBits) on an active multi-CG shape -- the correct behaviour there is
   // zero skips, not "skip everything", since the first (highest) CG always
   // contains the last real non-zero coefficient found in scan 2 and so is
-  // never below a <=0 threshold.
+  // never below a <=0 threshold. Covers both a shape with few CGs (8x8) and
+  // one with many (32x32, several skipped groups above the found CG), and
+  // both signHiding states (the skip-then-quant sequence and the
+  // signHiding-gated deltaU write don't share code, but nothing rules out
+  // an interaction, so both are exercised here rather than assumed safe).
+  for( int w : { 8, 32 } )
   {
-    const int w = 8, h = 8, compID_i = COMP_Y;
+    const int h = w, compID_i = COMP_Y;
     for( int iQBits : { 13, 21, 28 } )
     {
       for( TCoeff thrVal : { TCoeff( 8 ), TCoeff( 0 ), TCoeff( 1 ), TCoeff( 16 ) } )
       {
-        const int scale        = 26214;
-        const TCoeff thres      = iQBits ? TCoeff( ( int64_t( thrVal ) << ( iQBits - 1 ) ) )
-                                          : TCoeff( ( int64_t( thrVal >> 1 ) << iQBits ) );
-        const TCoeff useThres   = thres / ( scale << 2 );
-
-        TransformUnit       tu( makeTU( w, h, COMP_Y, 0 ) );
-        CoeffCodingContext   cctx( tu, COMP_Y, false );
-        const int            groupSize = 1 << cctx.log2CGSize();
-
-        // Top two CGs at/under useThres (or, if useThres<=0, just small
-        // values -- the point of this case is confirming zero CGs actually
-        // get skipped when useThres<=0, not that these particular values
-        // would have been skipped at a positive threshold), then a real
-        // coefficient in the third CG from the top.
-        std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
-        const int maxPos = maxScanPosFor( w, h, COMP_Y, 0 );
-        const int topCG  = maxPos >> cctx.log2CGSize();
-        TCoeff fillVal   = useThres > 0 ? useThres : TCoeff( 1 );
-        if( topCG >= 1 )
-          for( int n = 0; n < groupSize; n++ )
-            coeff[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + n )] = fillVal;
-        if( topCG >= 2 )
-          coeff[cctx.blockPos( ( ( topCG - 1 ) << cctx.log2CGSize() ) )] = fillVal;
-        if( topCG >= 2 )
-          coeff[cctx.blockPos( ( ( topCG - 2 ) << cctx.log2CGSize() ) )] = TCoeff( 12345 );
-
-        passed = run_one( w, h, ComponentID( compID_i ), 0, scale, iQBits, false, false, thrVal, coeff,
-                          "threshold-skip useThres=" + std::to_string( useThres ) ) &&
-                 passed;
-
-        // per-row isolated: only the last row of the top CG exceeds
-        // useThres, forcing that specific row's SIMD load to be checked.
-        if( topCG >= 1 && useThres > 0 )
+        for( bool signHiding : { false, true } )
         {
-          std::vector<TCoeff> coeffRow( (size_t)w * h, TCoeff( 0 ) );
-          coeffRow[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + groupSize - 1 )] = TCoeff( useThres + 1 );
-          passed = run_one( w, h, COMP_Y, 0, scale, iQBits, false, false, thrVal, coeffRow, "threshold-skip-row" ) &&
+          const int scale        = 26214;
+          const TCoeff thres      = iQBits ? TCoeff( ( int64_t( thrVal ) << ( iQBits - 1 ) ) )
+                                            : TCoeff( ( int64_t( thrVal >> 1 ) << iQBits ) );
+          const TCoeff useThres   = thres / ( scale << 2 );
+
+          TransformUnit       tu( makeTU( w, h, COMP_Y, 0 ) );
+          CoeffCodingContext   cctx( tu, COMP_Y, signHiding );
+          const int            groupSize = 1 << cctx.log2CGSize();
+
+          // Top two CGs at/under useThres (or, if useThres<=0, just small
+          // values -- the point of this case is confirming zero CGs actually
+          // get skipped when useThres<=0, not that these particular values
+          // would have been skipped at a positive threshold), then a real
+          // coefficient in the third CG from the top.
+          std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
+          const int maxPos = maxScanPosFor( w, h, COMP_Y, 0 );
+          const int topCG  = maxPos >> cctx.log2CGSize();
+          TCoeff fillVal   = useThres > 0 ? useThres : TCoeff( 1 );
+          if( topCG >= 1 )
+            for( int n = 0; n < groupSize; n++ )
+              coeff[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + n )] = fillVal;
+          if( topCG >= 2 )
+            coeff[cctx.blockPos( ( ( topCG - 1 ) << cctx.log2CGSize() ) )] = fillVal;
+          if( topCG >= 2 )
+            coeff[cctx.blockPos( ( ( topCG - 2 ) << cctx.log2CGSize() ) )] = TCoeff( 12345 );
+
+          passed = run_one( w, h, ComponentID( compID_i ), 0, scale, iQBits, false, signHiding, thrVal, coeff,
+                            "threshold-skip useThres=" + std::to_string( useThres ) ) &&
                    passed;
+
+          // per-row isolated: only the last row of the top CG exceeds
+          // useThres, forcing that specific row's SIMD load to be checked.
+          if( topCG >= 1 && useThres > 0 )
+          {
+            std::vector<TCoeff> coeffRow( (size_t)w * h, TCoeff( 0 ) );
+            coeffRow[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + groupSize - 1 )] = TCoeff( useThres + 1 );
+            passed = run_one( w, h, COMP_Y, 0, scale, iQBits, false, signHiding, thrVal, coeffRow,
+                              "threshold-skip-row" ) &&
+                     passed;
+          }
         }
       }
     }

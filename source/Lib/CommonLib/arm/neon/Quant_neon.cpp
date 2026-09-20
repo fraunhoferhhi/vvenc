@@ -290,9 +290,10 @@ static void dequantNeon( const int maxX, const int maxY, const int scale, const 
 //
 // vshlq_s64 with a negative count is an arithmetic right shift. For any
 // 64-bit value and a shift count k<=32, an arithmetic and a logical right
-// shift produce identical low 32 bits (they differ only in the sign-fill
-// bits above position 32-k, which fall entirely above the 32 bits kept by
-// the narrowing vmovn_s64 afterwards) -- so this matches x86's logical
+// shift produce identical low 32 bits (they differ only in bits [64-k, 63],
+// the sign-fill bits, which -- since k<=32 puts 64-k>=32 -- fall entirely
+// above the 32 bits kept by the narrowing vmovn_s64 afterwards) -- so this
+// matches x86's logical
 // shift for deltaU regardless of that value's sign. The largest reachable
 // qBits8 (= iQBits-8) is 21: the vector kernel only ever runs for w,h>=4
 // (is4x4sbb), which bounds iQBits at 29 (iQBits = 14 + QP_per + transform-
