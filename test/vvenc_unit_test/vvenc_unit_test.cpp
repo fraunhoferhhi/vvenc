@@ -4150,12 +4150,15 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
   // positive, always < 2^15.
   static const std::vector<int> quantScales{ 10280, 11651, 13107, 14564, 16384, 18396, 20560, 23302, 26214 };
 
-  SPS sps;
+  // SPS carries fixed-size subpicture arrays sized by MAX_NUM_SUB_PICS
+  // (1<<16), making sizeof(SPS) ~1.2MB -- larger than Windows' default 1MB
+  // main-thread stack, so it must be heap-allocated rather than a local.
+  auto sps = std::make_unique<SPS>();
   XUCache xuCache;
   std::mutex csMutex;
   CodingStructure cs{ xuCache, &csMutex };
-  cs.sps = &sps;
-  CodingUnit cu;
+  cs.sps = sps.get();
+  CodingUnit cu{};
 
   auto makeTU = [&]( int w, int h, ComponentID compID, int lfnstIdx ) -> TransformUnit {
     cu.lfnstIdx = lfnstIdx;
