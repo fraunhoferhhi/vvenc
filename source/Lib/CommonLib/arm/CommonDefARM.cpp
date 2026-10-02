@@ -123,16 +123,18 @@ static ARM_VEXT _get_arm_extensions()
 
 #if TARGET_SIMD_ARM_SVE
 #if HAVE_ELF_AUX_INFO
-  unsigned long hwcap = 0;
-  elf_aux_info( AT_HWCAP, &hwcap, sizeof(hwcap) );
+  unsigned long hwcap;
+  if ( elf_aux_info( AT_HWCAP, &hwcap, sizeof(hwcap) ) != 0 )
+    hwcap = 0;
 #else
   unsigned long hwcap = getauxval( AT_HWCAP );
 #endif
 #endif
 #if TARGET_SIMD_ARM_SVE2
 #if HAVE_ELF_AUX_INFO
-  unsigned long hwcap2 = 0;
-  elf_aux_info( AT_HWCAP2, &hwcap2, sizeof(hwcap2) );
+  unsigned long hwcap2;
+  if ( elf_aux_info( AT_HWCAP2, &hwcap2, sizeof(hwcap2) ) != 0 )
+    hwcap2 = 0;
 #else
   unsigned long hwcap2 = getauxval( AT_HWCAP2 );
 #endif
