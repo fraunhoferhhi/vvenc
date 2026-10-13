@@ -612,18 +612,17 @@ namespace DQIntern
     {
       const unsigned   rasterPos = scan[scanIdx].idx;
       const TCoeffSig& level     = qCoeff[ rasterPos ];
-      if( level )
+      // zero levels are not skipped by a (often mispredicted) branch: their qIdx is 0, so they give the 0 of the memset
+      if (enableScalingLists)
+        invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
+      if (shift < 0 && level && (enableScalingLists || scanIdx == lastScanIdx))
       {
-        if (enableScalingLists)
-          invQScale = piDequantCoef[rasterPos];//scalingfactor*levelScale
-        if (shift < 0 && (enableScalingLists || scanIdx == lastScanIdx))
-        {
-          invQScale <<= -shift;
-        }
-        Intermediate_Int qIdx = 2 * level + (level > 0 ? -(state>>1) : (state>>1));
-        int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
-        tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
+        invQScale <<= -shift;
       }
+      const int        sign      = (level > 0) - (level < 0);   // -1, 0 or 1
+      Intermediate_Int qIdx      = 2 * level - sign * (state >> 1);
+      int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
+      tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
       state = ( 32040 >> ((state<<2)+((level&1)<<1)) ) & 3;   // the 16-bit value "32040" represent the state transition table
     }
   }
@@ -1255,7 +1254,9 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   {
     TCoeffSig absLevel = m_trellis[scanIdx][prevId >> 2].absLevel[prevId & 3];
     int32_t blkpos     = tuPars.m_scanId2BlkPos[scanIdx].idx;
-    qCoeff[ blkpos ]   = TCoeffSig( tCoeff[blkpos] < 0 ? -absLevel : absLevel );
+    // apply the coefficient's sign without a branch: (absLevel ^ m) - m is -absLevel for m = -1 and absLevel for m = 0
+    const int signMask = -int( tCoeff[blkpos] < 0 );
+    qCoeff[ blkpos ]   = TCoeffSig( ( absLevel ^ signMask ) - signMask );
     absSum            += absLevel;
     prevId             = m_trellis[scanIdx][prevId >> 2].prevId[prevId & 3];
   }
