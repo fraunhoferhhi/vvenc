@@ -179,7 +179,7 @@ public:
 
 private:
   double    xFindInterCUCost          ( CodingUnit &cu );
-  void      xPreCheckMTS              ( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
+  void      xPreCheckMTS              ( TransformUnit &tu, TrModeList *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
   void      xEstimateLumaRdModeList   ( int& numModesForFullRD,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,

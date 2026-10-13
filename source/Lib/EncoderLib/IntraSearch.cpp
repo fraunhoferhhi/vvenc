@@ -1552,7 +1552,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     }
 
 
-    std::vector<TrMode> trModes{ TrMode(0, true) };
+    TrModeList trModes{ TrMode(0, true) };
     if (tsAllowed)
     {
       trModes.push_back(TrMode(1, true));
@@ -2096,7 +2096,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           tsAllowed = false;
         }
         uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests       
-        std::vector<TrMode> trModes;
+        TrModeList trModes;
         if (nNumTransformCands > 1)
         {
           trModes.push_back(TrMode(0, true));   // DCT2
@@ -2322,7 +2322,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
             checkTSOnly = false;
           }
           uint8_t     numTransformCands = 1 + (tsAllowed && !(checkDCTOnly || checkTSOnly)? 1 : 0); // DCT + TS = 2 tests
-          std::vector<TrMode> trModes;
+          TrModeList trModes;
           if (numTransformCands > 1)
           {
             trModes.push_back(TrMode(0, true)); // DCT2
@@ -2610,7 +2610,7 @@ void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_v
   numModesForFullRD = int(candModeList.size());
 }
 
-void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *predBuf, const ComponentID& compID)
+void IntraSearch::xPreCheckMTS(TransformUnit &tu, TrModeList *trModes, const int maxCand, PelUnitBuf *predBuf, const ComponentID& compID)
 {
   if (compID == COMP_Y)
   {
