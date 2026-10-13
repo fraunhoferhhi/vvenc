@@ -218,8 +218,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
   bool satdChecked[NUM_INTRA_MODE] = { false };
 
-  unsigned mpmLst[NUM_MOST_PROBABLE_MODES];
-  CU::getIntraMPMs(cu, mpmLst);
+  const unsigned* mpmLst = m_searchMpmLst;   // derived for this CU in estIntraPredLumaQT
 
   const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
 
@@ -409,6 +408,18 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 }
 
 bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, double bestCost)
+{
+  CU::getIntraMPMs( cu, m_searchMpmLst );
+  m_searchMpmArea  = cu.Y();
+  m_searchMpmValid = true;
+
+  const bool validReturn = xEstIntraPredLumaQT( cu, partitioner, bestCost );
+
+  m_searchMpmValid = false;
+  return validReturn;
+}
+
+bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, double bestCost)
 {
   CodingStructure       &cs           = *cu.cs;
   const int             width         = partitioner.currArea().lwidth();
@@ -1021,7 +1032,16 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
       {
         m_CABACEstimator->pred_mode( cu );
       }
-      m_CABACEstimator->intra_luma_pred_mode( cu );
+      const bool searchedCu = m_searchMpmValid && m_searchMpmArea == cu.Y();
+#if defined( _DEBUG )
+      if( searchedCu )
+      {
+        unsigned mpmLst[NUM_MOST_PROBABLE_MODES];
+        CU::getIntraMPMs( cu, mpmLst );
+        CHECK( !std::equal( mpmLst, mpmLst + NUM_MOST_PROBABLE_MODES, m_searchMpmLst ), "MPM list of the searched CU is out of date" );
+      }
+#endif
+      m_CABACEstimator->intra_luma_pred_mode( cu, searchedCu ? m_searchMpmLst : nullptr );
     }
   }
   else //  if (chroma)
