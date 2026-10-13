@@ -257,6 +257,10 @@ public:
                                   unsigned cutoff,
                                   int      maxLog2TrDynamicRange    );
   void      align               ();
+  void      addEstFracBits      ( uint64_t fracBits )                 { m_EstFracBits += fracBits; }
+
+  // the number of bypass bins that encodeRemAbsEP() codes
+  static unsigned numRemAbsEPBins( unsigned bins, unsigned goRicePar, unsigned cutoff, int maxLog2TrDynamicRange );
 public:
   uint32_t  getNumBins          ()                                      { THROW("Not supported"); return 0; }
   bool      isEncoding          ()                                      { return false; }

@@ -174,6 +174,10 @@ private:
   void        exp_golomb_eqprob          ( unsigned symbol, unsigned count );
 
   void        xWriteTruncBinCode         ( uint32_t uiSymbol, uint32_t uiMaxSymbol);
+
+  // residual_coding_subblock with the bins coded by binCoder: m_BinEncoder, or a local bit estimate
+  template<class BinCoder>
+  void        residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state, BinCoder& binCoder );
 private:
   BinEncIf&          m_BinEncoder;
   OutputBitstream*   m_Bitstream;
