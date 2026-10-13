@@ -1643,18 +1643,193 @@ static uint32_t xCalcHAD4x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
   return sad;
 }
 
+#ifdef USE_AVX2
+// The helpers below compute SATDs of residuals of at most 12 bits (|value| <= 2047): 10-bit input gives 11 bits,
+// and bi-prediction motion estimation compares against 2 * org - pred, which is not clipped, so its residuals reach
+// +-2046. Each butterfly stage can double the values, so at most four stages run on 16-bit values
+// (16 * 2047 = 32752) and the others on 32-bit values.
+
+// Transposes the 8x8 block of 16-bit values in each 128-bit lane: afterwards register k holds column k of both blocks.
+static inline void xTranspose8x8Lanes_AVX2( __m256i r[8] )
+{
+  __m256i t[8];
+  t[0] = _mm256_unpacklo_epi16( r[0], r[1] );
+  t[1] = _mm256_unpacklo_epi16( r[2], r[3] );
+  t[2] = _mm256_unpacklo_epi16( r[4], r[5] );
+  t[3] = _mm256_unpacklo_epi16( r[6], r[7] );
+  t[4] = _mm256_unpackhi_epi16( r[0], r[1] );
+  t[5] = _mm256_unpackhi_epi16( r[2], r[3] );
+  t[6] = _mm256_unpackhi_epi16( r[4], r[5] );
+  t[7] = _mm256_unpackhi_epi16( r[6], r[7] );
+
+  r[0] = _mm256_unpacklo_epi32( t[0], t[1] );
+  r[1] = _mm256_unpackhi_epi32( t[0], t[1] );
+  r[2] = _mm256_unpacklo_epi32( t[2], t[3] );
+  r[3] = _mm256_unpackhi_epi32( t[2], t[3] );
+  r[4] = _mm256_unpacklo_epi32( t[4], t[5] );
+  r[5] = _mm256_unpackhi_epi32( t[4], t[5] );
+  r[6] = _mm256_unpacklo_epi32( t[6], t[7] );
+  r[7] = _mm256_unpackhi_epi32( t[6], t[7] );
+
+  t[0] = _mm256_unpacklo_epi64( r[0], r[2] );
+  t[1] = _mm256_unpackhi_epi64( r[0], r[2] );
+  t[2] = _mm256_unpacklo_epi64( r[1], r[3] );
+  t[3] = _mm256_unpackhi_epi64( r[1], r[3] );
+  t[4] = _mm256_unpacklo_epi64( r[4], r[6] );
+  t[5] = _mm256_unpackhi_epi64( r[4], r[6] );
+  t[6] = _mm256_unpacklo_epi64( r[5], r[7] );
+  t[7] = _mm256_unpackhi_epi64( r[5], r[7] );
+
+  for( int k = 0; k < 8; k++ )
+  {
+    r[k] = t[k];
+  }
+}
+
+// One butterfly stage of a Hadamard transform on 16-bit values: registers k and k + distance become their sum and
+// their difference, for every k that has no bit of distance set.
+static inline void xHadamardStage16_AVX2( __m256i r[8], const int distance )
+{
+  for( int k = 0; k < 8; k++ )
+  {
+    if( k & distance )
+    {
+      continue;
+    }
+    const __m256i sum  = _mm256_add_epi16( r[k], r[k + distance] );
+    const __m256i diff = _mm256_sub_epi16( r[k], r[k + distance] );
+    r[k]               = sum;
+    r[k + distance]    = diff;
+  }
+}
+
+// The same butterfly stage on 32-bit values.
+static inline void xHadamardStage32_AVX2( __m256i r[8], const int distance )
+{
+  for( int k = 0; k < 8; k++ )
+  {
+    if( k & distance )
+    {
+      continue;
+    }
+    const __m256i sum  = _mm256_add_epi32( r[k], r[k + distance] );
+    const __m256i diff = _mm256_sub_epi32( r[k], r[k + distance] );
+    r[k]               = sum;
+    r[k + distance]    = diff;
+  }
+}
+
+// Adds max( |a|, |b| ) of the 32-bit values of registers 0 and 1, 2 and 3, 4 and 5, 6 and 7 to sum. Twice that is the
+// sum of absolute values after a last butterfly stage between these registers, so that stage is never computed:
+// |a + b| + |a - b| = 2 * max( |a|, |b| ).
+static inline void xAddMaxAbsOfPairs32_AVX2( const __m256i r[8], __m256i& sum )
+{
+  for( int k = 0; k < 8; k += 2 )
+  {
+    sum = _mm256_add_epi32( sum, _mm256_max_epi32( _mm256_abs_epi32( r[k] ), _mm256_abs_epi32( r[k + 1] ) ) );
+  }
+}
+
+// The SATDs of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both), added up as the
+// 16x16 and 32x32 kernels do: ( SATD + 2 ) >> 2 per block.
+static inline uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
+{
+  // the vertical transform and the first horizontal stage on 16-bit values
+  xHadamardStage16_AVX2( rows, 4 );
+  xHadamardStage16_AVX2( rows, 2 );
+  xHadamardStage16_AVX2( rows, 1 );
+  xTranspose8x8Lanes_AVX2( rows );
+  xHadamardStage16_AVX2( rows, 4 );
+
+  // the rest on 32-bit values, each block staying in its lane: low[k] holds values 0 to 3 of both lanes of rows[k],
+  // high[k] values 4 to 7
+  __m256i low[8], high[8];
+  for( int k = 0; k < 8; k++ )
+  {
+    const __m256i sign = _mm256_srai_epi16( rows[k], 15 );
+    low[k]  = _mm256_unpacklo_epi16( rows[k], sign );
+    high[k] = _mm256_unpackhi_epi16( rows[k], sign );
+  }
+  xHadamardStage32_AVX2( low, 2 );
+  xHadamardStage32_AVX2( high, 2 );
+
+  // the DC coefficient of each block is the lane's first value of low[0] + low[1]
+  const __m256i dc       = _mm256_add_epi32( low[0], low[1] );
+  const uint32_t absDc[2] = { (uint32_t) abs( _mm256_extract_epi32( dc, 0 ) ), (uint32_t) abs( _mm256_extract_epi32( dc, 4 ) ) };
+
+  __m256i iSum = _mm256_setzero_si256();
+  xAddMaxAbsOfPairs32_AVX2( low, iSum );
+  xAddMaxAbsOfPairs32_AVX2( high, iSum );
+  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
+  iSum = _mm256_hadd_epi32( iSum, iSum );
+  iSum = _mm256_hadd_epi32( iSum, iSum );   // the sum of each block in the first value of its lane
+
+  uint32_t sad = 0;
+  for( int lane = 0; lane < 2; lane++ )
+  {
+    uint32_t tmp = lane ? _mm256_extract_epi32( iSum, 4 ) : _mm256_extract_epi32( iSum, 0 );
+    tmp -= absDc[lane];
+    tmp += absDc[lane] >> 2;
+    sad += ( tmp + 2 ) >> 2;
+  }
+  return sad;
+}
+
+// The SATD of a 16x8 or an 8x16 block. rows[] holds its residuals as two 8x8 blocks, one per 128-bit lane: for 16x8,
+// register k is row k, columns 0 to 7 in the low lane and 8 to 15 in the high lane; for 8x16, register k is row k in
+// the low lane and row k + 8 in the high lane. Either way the block's Hadamard transform is the 8x8 transform of each
+// lane plus one stage between the lanes, and the stages may run in any order.
+static inline uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
+{
+  // the vertical transform of both lanes and the first horizontal stage on 16-bit values
+  xHadamardStage16_AVX2( rows, 4 );
+  xHadamardStage16_AVX2( rows, 2 );
+  xHadamardStage16_AVX2( rows, 1 );
+  xTranspose8x8Lanes_AVX2( rows );
+  xHadamardStage16_AVX2( rows, 4 );
+
+  // the rest on 32-bit values, starting with the stage between the lanes: their sum and their difference
+  __m256i sum[8], dif[8];
+  for( int k = 0; k < 8; k++ )
+  {
+    const __m256i low  = _mm256_cvtepi16_epi32( _mm256_castsi256_si128   ( rows[k] ) );
+    const __m256i high = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( rows[k], 1 ) );
+    sum[k] = _mm256_add_epi32( low, high );
+    dif[k] = _mm256_sub_epi32( low, high );
+  }
+  xHadamardStage32_AVX2( sum, 2 );
+  xHadamardStage32_AVX2( dif, 2 );
+
+  // the DC coefficient is the first value of sum[0] + sum[1]
+  const uint32_t absDc = abs( _mm256_extract_epi32( sum[0], 0 ) + _mm256_extract_epi32( sum[1], 0 ) );
+
+  __m256i iSum = _mm256_setzero_si256();
+  xAddMaxAbsOfPairs32_AVX2( sum, iSum );
+  xAddMaxAbsOfPairs32_AVX2( dif, iSum );
+  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
+  iSum = _mm256_hadd_epi32( iSum, iSum );
+  iSum = _mm256_hadd_epi32( iSum, iSum );
+  iSum = _mm256_add_epi32( iSum, _mm256_permute2x128_si256( iSum, iSum, 0x11 ) );
+
+  uint32_t sad = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
+  sad -= absDc;
+  sad += absDc >> 2;
+  return (uint32_t)(sad / sqrt(16.0 * 8) * 2);
+}
+#endif //USE_AVX2
+
 static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
 {
   uint32_t sad = 0;
 
 #ifdef USE_AVX2
-  const int iLoops = 2;
-  __m256i m1[2][8], m2[2][8];
-
   CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
-  for( int l = 0; l < iLoops; l++ )
+  // The 32x32 block is subsampled to 16x16 by averaging 2x2 samples, and the SATD of the 16x16 block is the sum of
+  // its four 8x8 SATDs, two rows of two blocks.
+  for( int l = 0; l < 2; l++ )
   {
+    __m256i rows[8];
     for( int k = 0; k < 8; k++ )
     {
       __m256i r0 = _mm256_loadu_si256( ( __m256i* ) piOrg );
@@ -1682,153 +1857,11 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
       r0 = _mm256_srai_epi16( r0, 2 );
       r1 = _mm256_srai_epi16( r1, 2 );
 
-      m2[0][k] = _mm256_permute4x64_epi64( _mm256_sub_epi16( r0, r1 ), 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) ); // 11 bit
-      //m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
-      //m2[0][k] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128( m2[0][k] ) );
+      rows[k] = _mm256_permute4x64_epi64( _mm256_sub_epi16( r0, r1 ), 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
       piCur += iStrideCur * 2;
       piOrg += iStrideOrg * 2;
     }
-
-    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][4] );
-    m1[0][1] = _mm256_add_epi16( m2[0][1], m2[0][5] );
-    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][6] );
-    m1[0][3] = _mm256_add_epi16( m2[0][3], m2[0][7] );
-    m1[0][4] = _mm256_sub_epi16( m2[0][0], m2[0][4] );
-    m1[0][5] = _mm256_sub_epi16( m2[0][1], m2[0][5] );
-    m1[0][6] = _mm256_sub_epi16( m2[0][2], m2[0][6] );
-    m1[0][7] = _mm256_sub_epi16( m2[0][3], m2[0][7] ); // 12 bit
-
-    m2[0][0] = _mm256_add_epi16( m1[0][0], m1[0][2] );
-    m2[0][1] = _mm256_add_epi16( m1[0][1], m1[0][3] );
-    m2[0][2] = _mm256_sub_epi16( m1[0][0], m1[0][2] );
-    m2[0][3] = _mm256_sub_epi16( m1[0][1], m1[0][3] );
-    m2[0][4] = _mm256_add_epi16( m1[0][4], m1[0][6] );
-    m2[0][5] = _mm256_add_epi16( m1[0][5], m1[0][7] );
-    m2[0][6] = _mm256_sub_epi16( m1[0][4], m1[0][6] );
-    m2[0][7] = _mm256_sub_epi16( m1[0][5], m1[0][7] ); // 13 bit
-
-    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][1] );
-    m1[0][1] = _mm256_sub_epi16( m2[0][0], m2[0][1] );
-    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][3] );
-    m1[0][3] = _mm256_sub_epi16( m2[0][2], m2[0][3] );
-    m1[0][4] = _mm256_add_epi16( m2[0][4], m2[0][5] );
-    m1[0][5] = _mm256_sub_epi16( m2[0][4], m2[0][5] );
-    m1[0][6] = _mm256_add_epi16( m2[0][6], m2[0][7] );
-    m1[0][7] = _mm256_sub_epi16( m2[0][6], m2[0][7] ); // 14 bit
-
-    // transpose
-    // 8x8
-    m2[0][0] = _mm256_unpacklo_epi16( m1[0][0], m1[0][1] );
-    m2[0][1] = _mm256_unpacklo_epi16( m1[0][2], m1[0][3] );
-    m2[0][2] = _mm256_unpacklo_epi16( m1[0][4], m1[0][5] );
-    m2[0][3] = _mm256_unpacklo_epi16( m1[0][6], m1[0][7] );
-    m2[0][4] = _mm256_unpackhi_epi16( m1[0][0], m1[0][1] );
-    m2[0][5] = _mm256_unpackhi_epi16( m1[0][2], m1[0][3] );
-    m2[0][6] = _mm256_unpackhi_epi16( m1[0][4], m1[0][5] );
-    m2[0][7] = _mm256_unpackhi_epi16( m1[0][6], m1[0][7] );
-
-    m1[0][0] = _mm256_unpacklo_epi32( m2[0][0], m2[0][1] );
-    m1[0][1] = _mm256_unpackhi_epi32( m2[0][0], m2[0][1] );
-    m1[0][2] = _mm256_unpacklo_epi32( m2[0][2], m2[0][3] );
-    m1[0][3] = _mm256_unpackhi_epi32( m2[0][2], m2[0][3] );
-    m1[0][4] = _mm256_unpacklo_epi32( m2[0][4], m2[0][5] );
-    m1[0][5] = _mm256_unpackhi_epi32( m2[0][4], m2[0][5] );
-    m1[0][6] = _mm256_unpacklo_epi32( m2[0][6], m2[0][7] );
-    m1[0][7] = _mm256_unpackhi_epi32( m2[0][6], m2[0][7] );
-
-    m2[0][0] = _mm256_unpacklo_epi64( m1[0][0], m1[0][2] );
-    m2[0][1] = _mm256_unpackhi_epi64( m1[0][0], m1[0][2] );
-    m2[0][2] = _mm256_unpacklo_epi64( m1[0][1], m1[0][3] );
-    m2[0][3] = _mm256_unpackhi_epi64( m1[0][1], m1[0][3] );
-    m2[0][4] = _mm256_unpacklo_epi64( m1[0][4], m1[0][6] );
-    m2[0][5] = _mm256_unpackhi_epi64( m1[0][4], m1[0][6] );
-    m2[0][6] = _mm256_unpacklo_epi64( m1[0][5], m1[0][7] );
-    m2[0][7] = _mm256_unpackhi_epi64( m1[0][5], m1[0][7] );
-
-    __m256i vzero = _mm256_setzero_si256();
-    __m256i vtmp;
-
-#define UNPACKX(x)                                        \
-    vtmp = _mm256_cmpgt_epi16( vzero, m2[0][x] );         \
-    m1[0][x] = _mm256_unpacklo_epi16( m2[0][x], vtmp );   \
-    m1[1][x] = _mm256_unpackhi_epi16( m2[0][x], vtmp );
-
-    UNPACKX( 0 );
-    UNPACKX( 1 );
-    UNPACKX( 2 );
-    UNPACKX( 3 );
-    UNPACKX( 4 );
-    UNPACKX( 5 );
-    UNPACKX( 6 );
-    UNPACKX( 7 );
-
-#undef UNPACKX
-
-    for( int i = 0; i < 2; i++ )
-    {
-      m2[i][0] = _mm256_add_epi32( m1[i][0], m1[i][4] );
-      m2[i][1] = _mm256_add_epi32( m1[i][1], m1[i][5] );
-      m2[i][2] = _mm256_add_epi32( m1[i][2], m1[i][6] );
-      m2[i][3] = _mm256_add_epi32( m1[i][3], m1[i][7] );
-      m2[i][4] = _mm256_sub_epi32( m1[i][0], m1[i][4] );
-      m2[i][5] = _mm256_sub_epi32( m1[i][1], m1[i][5] );
-      m2[i][6] = _mm256_sub_epi32( m1[i][2], m1[i][6] );
-      m2[i][7] = _mm256_sub_epi32( m1[i][3], m1[i][7] );
-
-      m1[i][0] = _mm256_add_epi32( m2[i][0], m2[i][2] );
-      m1[i][1] = _mm256_add_epi32( m2[i][1], m2[i][3] );
-      m1[i][2] = _mm256_sub_epi32( m2[i][0], m2[i][2] );
-      m1[i][3] = _mm256_sub_epi32( m2[i][1], m2[i][3] );
-      m1[i][4] = _mm256_add_epi32( m2[i][4], m2[i][6] );
-      m1[i][5] = _mm256_add_epi32( m2[i][5], m2[i][7] );
-      m1[i][6] = _mm256_sub_epi32( m2[i][4], m2[i][6] );
-      m1[i][7] = _mm256_sub_epi32( m2[i][5], m2[i][7] );
-
-      m2[i][0] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][0], m1[i][1] ) );
-      m2[i][1] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][0], m1[i][1] ) );
-      m2[i][2] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][2], m1[i][3] ) );
-      m2[i][3] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][2], m1[i][3] ) );
-      m2[i][4] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][4], m1[i][5] ) );
-      m2[i][5] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][4], m1[i][5] ) );
-      m2[i][6] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][6], m1[i][7] ) );
-      m2[i][7] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][6], m1[i][7] ) );
-    }
-
-    uint32_t absDc0 = _mm_cvtsi128_si32( _mm256_castsi256_si128( m2[0][0] ) );
-    uint32_t absDc1 = _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( m2[0][0], m2[0][0], 0x11 ) ) );
-
-    for( int i = 0; i < 8; i++ )
-    {
-      m1[0][i] = _mm256_add_epi32( m2[0][i], m2[1][i] );
-    }
-
-    m1[0][0] = _mm256_add_epi32( m1[0][0], m1[0][1] );
-    m1[0][2] = _mm256_add_epi32( m1[0][2], m1[0][3] );
-    m1[0][4] = _mm256_add_epi32( m1[0][4], m1[0][5] );
-    m1[0][6] = _mm256_add_epi32( m1[0][6], m1[0][7] );
-
-    m1[0][0] = _mm256_add_epi32( m1[0][0], m1[0][2] );
-    m1[0][4] = _mm256_add_epi32( m1[0][4], m1[0][6] );
-
-    __m256i iSum = _mm256_add_epi32( m1[0][0], m1[0][4] );
-
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-
-    uint32_t tmp;
-    tmp = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
-    // 16x16 block is done by adding together 4 8x8 SATDs
-    tmp -= absDc0;
-    tmp += absDc0 >> 2;
-    tmp = ( ( tmp + 2 ) >> 2 );
-    sad += tmp;
-
-    tmp = _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( iSum, iSum, 0x11 ) ) );
-    // 16x16 block is done by adding together 4 8x8 SATDs
-    tmp -= absDc1;
-    tmp += absDc1 >> 2;
-    tmp = ( ( tmp + 2 ) >> 2 );
-    sad += tmp;
+    sad += xCalcHAD8x8Pair_AVX2( rows );
   }
 
 #endif
@@ -1840,164 +1873,19 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
   uint32_t sad = 0;
 
 #ifdef USE_AVX2
-  const int iLoops = 2;
-  __m256i m1[2][8], m2[2][8];
-
   CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
-  for( int l = 0; l < iLoops; l++ )
+  // the SATD of a 16x16 block is the sum of its four 8x8 SATDs, two rows of two blocks
+  for( int l = 0; l < 2; l++ )
   {
+    __m256i rows[8];
     for( int k = 0; k < 8; k++ )
     {
-      __m256i r0 = _mm256_loadu_si256( ( __m256i* ) piOrg );
-      __m256i r1 = _mm256_loadu_si256( ( __m256i* ) piCur );
-      m2[0][k] = _mm256_sub_epi16( r0, r1 ); // 11 bit
-      //m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
-      //m2[0][k] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128( m2[0][k] ) );
+      rows[k] = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) piOrg ), _mm256_loadu_si256( ( const __m256i* ) piCur ) );
       piCur += iStrideCur;
       piOrg += iStrideOrg;
     }
-
-    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][4] );
-    m1[0][1] = _mm256_add_epi16( m2[0][1], m2[0][5] );
-    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][6] );
-    m1[0][3] = _mm256_add_epi16( m2[0][3], m2[0][7] );
-    m1[0][4] = _mm256_sub_epi16( m2[0][0], m2[0][4] );
-    m1[0][5] = _mm256_sub_epi16( m2[0][1], m2[0][5] );
-    m1[0][6] = _mm256_sub_epi16( m2[0][2], m2[0][6] );
-    m1[0][7] = _mm256_sub_epi16( m2[0][3], m2[0][7] ); // 12 bit
-
-    m2[0][0] = _mm256_add_epi16( m1[0][0], m1[0][2] );
-    m2[0][1] = _mm256_add_epi16( m1[0][1], m1[0][3] );
-    m2[0][2] = _mm256_sub_epi16( m1[0][0], m1[0][2] );
-    m2[0][3] = _mm256_sub_epi16( m1[0][1], m1[0][3] );
-    m2[0][4] = _mm256_add_epi16( m1[0][4], m1[0][6] );
-    m2[0][5] = _mm256_add_epi16( m1[0][5], m1[0][7] );
-    m2[0][6] = _mm256_sub_epi16( m1[0][4], m1[0][6] );
-    m2[0][7] = _mm256_sub_epi16( m1[0][5], m1[0][7] ); // 13 bit
-
-    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][1] );
-    m1[0][1] = _mm256_sub_epi16( m2[0][0], m2[0][1] );
-    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][3] );
-    m1[0][3] = _mm256_sub_epi16( m2[0][2], m2[0][3] );
-    m1[0][4] = _mm256_add_epi16( m2[0][4], m2[0][5] );
-    m1[0][5] = _mm256_sub_epi16( m2[0][4], m2[0][5] );
-    m1[0][6] = _mm256_add_epi16( m2[0][6], m2[0][7] );
-    m1[0][7] = _mm256_sub_epi16( m2[0][6], m2[0][7] ); // 14 bit
-
-    // transpose
-    // 8x8
-    m2[0][0] = _mm256_unpacklo_epi16( m1[0][0], m1[0][1] );
-    m2[0][1] = _mm256_unpacklo_epi16( m1[0][2], m1[0][3] );
-    m2[0][2] = _mm256_unpacklo_epi16( m1[0][4], m1[0][5] );
-    m2[0][3] = _mm256_unpacklo_epi16( m1[0][6], m1[0][7] );
-    m2[0][4] = _mm256_unpackhi_epi16( m1[0][0], m1[0][1] );
-    m2[0][5] = _mm256_unpackhi_epi16( m1[0][2], m1[0][3] );
-    m2[0][6] = _mm256_unpackhi_epi16( m1[0][4], m1[0][5] );
-    m2[0][7] = _mm256_unpackhi_epi16( m1[0][6], m1[0][7] );
-
-    m1[0][0] = _mm256_unpacklo_epi32( m2[0][0], m2[0][1] );
-    m1[0][1] = _mm256_unpackhi_epi32( m2[0][0], m2[0][1] );
-    m1[0][2] = _mm256_unpacklo_epi32( m2[0][2], m2[0][3] );
-    m1[0][3] = _mm256_unpackhi_epi32( m2[0][2], m2[0][3] );
-    m1[0][4] = _mm256_unpacklo_epi32( m2[0][4], m2[0][5] );
-    m1[0][5] = _mm256_unpackhi_epi32( m2[0][4], m2[0][5] );
-    m1[0][6] = _mm256_unpacklo_epi32( m2[0][6], m2[0][7] );
-    m1[0][7] = _mm256_unpackhi_epi32( m2[0][6], m2[0][7] );
-
-    m2[0][0] = _mm256_unpacklo_epi64( m1[0][0], m1[0][2] );
-    m2[0][1] = _mm256_unpackhi_epi64( m1[0][0], m1[0][2] );
-    m2[0][2] = _mm256_unpacklo_epi64( m1[0][1], m1[0][3] );
-    m2[0][3] = _mm256_unpackhi_epi64( m1[0][1], m1[0][3] );
-    m2[0][4] = _mm256_unpacklo_epi64( m1[0][4], m1[0][6] );
-    m2[0][5] = _mm256_unpackhi_epi64( m1[0][4], m1[0][6] );
-    m2[0][6] = _mm256_unpacklo_epi64( m1[0][5], m1[0][7] );
-    m2[0][7] = _mm256_unpackhi_epi64( m1[0][5], m1[0][7] );
-
-    __m256i vzero = _mm256_setzero_si256();
-    __m256i vtmp;
-
-#define UNPACKX(x)                                        \
-    vtmp = _mm256_cmpgt_epi16( vzero, m2[0][x] );         \
-    m1[0][x] = _mm256_unpacklo_epi16( m2[0][x], vtmp );   \
-    m1[1][x] = _mm256_unpackhi_epi16( m2[0][x], vtmp );
-
-    UNPACKX( 0 );
-    UNPACKX( 1 );
-    UNPACKX( 2 );
-    UNPACKX( 3 );
-    UNPACKX( 4 );
-    UNPACKX( 5 );
-    UNPACKX( 6 );
-    UNPACKX( 7 );
-
-#undef UNPACKX
-
-    for( int i = 0; i < 2; i++ )
-    {
-      m2[i][0] = _mm256_add_epi32( m1[i][0], m1[i][4] );
-      m2[i][1] = _mm256_add_epi32( m1[i][1], m1[i][5] );
-      m2[i][2] = _mm256_add_epi32( m1[i][2], m1[i][6] );
-      m2[i][3] = _mm256_add_epi32( m1[i][3], m1[i][7] );
-      m2[i][4] = _mm256_sub_epi32( m1[i][0], m1[i][4] );
-      m2[i][5] = _mm256_sub_epi32( m1[i][1], m1[i][5] );
-      m2[i][6] = _mm256_sub_epi32( m1[i][2], m1[i][6] );
-      m2[i][7] = _mm256_sub_epi32( m1[i][3], m1[i][7] );
-
-      m1[i][0] = _mm256_add_epi32( m2[i][0], m2[i][2] );
-      m1[i][1] = _mm256_add_epi32( m2[i][1], m2[i][3] );
-      m1[i][2] = _mm256_sub_epi32( m2[i][0], m2[i][2] );
-      m1[i][3] = _mm256_sub_epi32( m2[i][1], m2[i][3] );
-      m1[i][4] = _mm256_add_epi32( m2[i][4], m2[i][6] );
-      m1[i][5] = _mm256_add_epi32( m2[i][5], m2[i][7] );
-      m1[i][6] = _mm256_sub_epi32( m2[i][4], m2[i][6] );
-      m1[i][7] = _mm256_sub_epi32( m2[i][5], m2[i][7] );
-
-      m2[i][0] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][0], m1[i][1] ) );
-      m2[i][1] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][0], m1[i][1] ) );
-      m2[i][2] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][2], m1[i][3] ) );
-      m2[i][3] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][2], m1[i][3] ) );
-      m2[i][4] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][4], m1[i][5] ) );
-      m2[i][5] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][4], m1[i][5] ) );
-      m2[i][6] = _mm256_abs_epi32( _mm256_add_epi32( m1[i][6], m1[i][7] ) );
-      m2[i][7] = _mm256_abs_epi32( _mm256_sub_epi32( m1[i][6], m1[i][7] ) );
-    }
-
-    uint32_t absDc0 = _mm_cvtsi128_si32( _mm256_castsi256_si128( m2[0][0] ) );
-    uint32_t absDc1 = _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( m2[0][0], m2[0][0], 0x11 ) ) );
-
-    for( int i = 0; i < 8; i++ )
-    {
-      m1[0][i] = _mm256_add_epi32( m2[0][i], m2[1][i] );
-    }
-
-    m1[0][0] = _mm256_add_epi32( m1[0][0], m1[0][1] );
-    m1[0][2] = _mm256_add_epi32( m1[0][2], m1[0][3] );
-    m1[0][4] = _mm256_add_epi32( m1[0][4], m1[0][5] );
-    m1[0][6] = _mm256_add_epi32( m1[0][6], m1[0][7] );
-
-    m1[0][0] = _mm256_add_epi32( m1[0][0], m1[0][2] );
-    m1[0][4] = _mm256_add_epi32( m1[0][4], m1[0][6] );
-
-    __m256i iSum = _mm256_add_epi32( m1[0][0], m1[0][4] );
-
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-
-    uint32_t tmp;
-    tmp = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
-    // 16x16 block is done by adding together 4 8x8 SATDs
-    tmp -= absDc0;
-    tmp += absDc0 >> 2;
-    tmp = ( ( tmp + 2 ) >> 2 );
-    sad += tmp;
-
-    tmp = _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( iSum, iSum, 0x11 ) ) );
-    // 16x16 block is done by adding together 4 8x8 SATDs
-    tmp -= absDc1;
-    tmp += absDc1 >> 2;
-    tmp = ( ( tmp + 2 ) >> 2 );
-    sad += tmp;
+    sad += xCalcHAD8x8Pair_AVX2( rows );
   }
 
 #endif
@@ -2009,300 +1897,15 @@ static uint32_t xCalcHAD16x8_AVX2( const Torg *piOrg, const Tcur *piCur, const i
   uint32_t sad = 0;
 
 #ifdef USE_AVX2
-  __m256i m1[16], m2[16];
-
   CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
+  __m256i rows[8];
+  for( int k = 0; k < 8; k++ )
   {
-    for( int k = 0; k < 8; k++ )
-    {
-      __m256i r0 = _mm256_lddqu_si256( (__m256i*)piOrg );
-      __m256i r1 = _mm256_lddqu_si256( (__m256i*)piCur );
-      m1[k]   = _mm256_sub_epi16( r0, r1 ); // 11 bit
-      //m1[k+8] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m1[k], 1 ) );
-      //m1[k]   = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m1[k]    ) );
-      piCur += iStrideCur;
-      piOrg += iStrideOrg;
-    }
-
-    // vertical, first 8x8
-#if 0
-    m2[0] = _mm256_add_epi32( m1[0], m1[4] );
-    m2[1] = _mm256_add_epi32( m1[1], m1[5] );
-    m2[2] = _mm256_add_epi32( m1[2], m1[6] );
-    m2[3] = _mm256_add_epi32( m1[3], m1[7] );
-    m2[4] = _mm256_sub_epi32( m1[0], m1[4] );
-    m2[5] = _mm256_sub_epi32( m1[1], m1[5] );
-    m2[6] = _mm256_sub_epi32( m1[2], m1[6] );
-    m2[7] = _mm256_sub_epi32( m1[3], m1[7] );
-
-    m1[0] = _mm256_add_epi32( m2[0], m2[2] );
-    m1[1] = _mm256_add_epi32( m2[1], m2[3] );
-    m1[2] = _mm256_sub_epi32( m2[0], m2[2] );
-    m1[3] = _mm256_sub_epi32( m2[1], m2[3] );
-    m1[4] = _mm256_add_epi32( m2[4], m2[6] );
-    m1[5] = _mm256_add_epi32( m2[5], m2[7] );
-    m1[6] = _mm256_sub_epi32( m2[4], m2[6] );
-    m1[7] = _mm256_sub_epi32( m2[5], m2[7] );
-
-    m2[0] = _mm256_add_epi32( m1[0], m1[1] );
-    m2[1] = _mm256_sub_epi32( m1[0], m1[1] );
-    m2[2] = _mm256_add_epi32( m1[2], m1[3] );
-    m2[3] = _mm256_sub_epi32( m1[2], m1[3] );
-    m2[4] = _mm256_add_epi32( m1[4], m1[5] );
-    m2[5] = _mm256_sub_epi32( m1[4], m1[5] );
-    m2[6] = _mm256_add_epi32( m1[6], m1[7] );
-    m2[7] = _mm256_sub_epi32( m1[6], m1[7] );
-
-    // vertical, second 8x8
-    m2[8+0] = _mm256_add_epi32( m1[8+0], m1[8+4] );
-    m2[8+1] = _mm256_add_epi32( m1[8+1], m1[8+5] );
-    m2[8+2] = _mm256_add_epi32( m1[8+2], m1[8+6] );
-    m2[8+3] = _mm256_add_epi32( m1[8+3], m1[8+7] );
-    m2[8+4] = _mm256_sub_epi32( m1[8+0], m1[8+4] );
-    m2[8+5] = _mm256_sub_epi32( m1[8+1], m1[8+5] );
-    m2[8+6] = _mm256_sub_epi32( m1[8+2], m1[8+6] );
-    m2[8+7] = _mm256_sub_epi32( m1[8+3], m1[8+7] );
-
-    m1[8+0] = _mm256_add_epi32( m2[8+0], m2[8+2] );
-    m1[8+1] = _mm256_add_epi32( m2[8+1], m2[8+3] );
-    m1[8+2] = _mm256_sub_epi32( m2[8+0], m2[8+2] );
-    m1[8+3] = _mm256_sub_epi32( m2[8+1], m2[8+3] );
-    m1[8+4] = _mm256_add_epi32( m2[8+4], m2[8+6] );
-    m1[8+5] = _mm256_add_epi32( m2[8+5], m2[8+7] );
-    m1[8+6] = _mm256_sub_epi32( m2[8+4], m2[8+6] );
-    m1[8+7] = _mm256_sub_epi32( m2[8+5], m2[8+7] );
-
-    m2[8+0] = _mm256_add_epi32( m1[8+0], m1[8+1] );
-    m2[8+1] = _mm256_sub_epi32( m1[8+0], m1[8+1] );
-    m2[8+2] = _mm256_add_epi32( m1[8+2], m1[8+3] );
-    m2[8+3] = _mm256_sub_epi32( m1[8+2], m1[8+3] );
-    m2[8+4] = _mm256_add_epi32( m1[8+4], m1[8+5] );
-    m2[8+5] = _mm256_sub_epi32( m1[8+4], m1[8+5] );
-    m2[8+6] = _mm256_add_epi32( m1[8+6], m1[8+7] );
-    m2[8+7] = _mm256_sub_epi32( m1[8+6], m1[8+7] );
-
-    // transpose
-    constexpr int perm_unpacklo_epi128 = ( 0 << 0 ) + ( 2 << 4 );
-    constexpr int perm_unpackhi_epi128 = ( 1 << 0 ) + ( 3 << 4 );
-
-    m1[0] = _mm256_unpacklo_epi32( m2[0], m2[1] );
-    m1[1] = _mm256_unpacklo_epi32( m2[2], m2[3] );
-    m1[2] = _mm256_unpacklo_epi32( m2[4], m2[5] );
-    m1[3] = _mm256_unpacklo_epi32( m2[6], m2[7] );
-    m1[4] = _mm256_unpackhi_epi32( m2[0], m2[1] );
-    m1[5] = _mm256_unpackhi_epi32( m2[2], m2[3] );
-    m1[6] = _mm256_unpackhi_epi32( m2[4], m2[5] );
-    m1[7] = _mm256_unpackhi_epi32( m2[6], m2[7] );
-
-    m2[0] = _mm256_unpacklo_epi64( m1[0], m1[1] );
-    m2[1] = _mm256_unpackhi_epi64( m1[0], m1[1] );
-    m2[2] = _mm256_unpacklo_epi64( m1[2], m1[3] );
-    m2[3] = _mm256_unpackhi_epi64( m1[2], m1[3] );
-    m2[4] = _mm256_unpacklo_epi64( m1[4], m1[5] );
-    m2[5] = _mm256_unpackhi_epi64( m1[4], m1[5] );
-    m2[6] = _mm256_unpacklo_epi64( m1[6], m1[7] );
-    m2[7] = _mm256_unpackhi_epi64( m1[6], m1[7] );
-
-    m1[0] = _mm256_permute2x128_si256( m2[0], m2[2], perm_unpacklo_epi128 );
-    m1[1] = _mm256_permute2x128_si256( m2[0], m2[2], perm_unpackhi_epi128 );
-    m1[2] = _mm256_permute2x128_si256( m2[1], m2[3], perm_unpacklo_epi128 );
-    m1[3] = _mm256_permute2x128_si256( m2[1], m2[3], perm_unpackhi_epi128 );
-    m1[4] = _mm256_permute2x128_si256( m2[4], m2[6], perm_unpacklo_epi128 );
-    m1[5] = _mm256_permute2x128_si256( m2[4], m2[6], perm_unpackhi_epi128 );
-    m1[6] = _mm256_permute2x128_si256( m2[5], m2[7], perm_unpacklo_epi128 );
-    m1[7] = _mm256_permute2x128_si256( m2[5], m2[7], perm_unpackhi_epi128 );
-
-    m1[8+0] = _mm256_unpacklo_epi32( m2[8+0], m2[8+1] );
-    m1[8+1] = _mm256_unpacklo_epi32( m2[8+2], m2[8+3] );
-    m1[8+2] = _mm256_unpacklo_epi32( m2[8+4], m2[8+5] );
-    m1[8+3] = _mm256_unpacklo_epi32( m2[8+6], m2[8+7] );
-    m1[8+4] = _mm256_unpackhi_epi32( m2[8+0], m2[8+1] );
-    m1[8+5] = _mm256_unpackhi_epi32( m2[8+2], m2[8+3] );
-    m1[8+6] = _mm256_unpackhi_epi32( m2[8+4], m2[8+5] );
-    m1[8+7] = _mm256_unpackhi_epi32( m2[8+6], m2[8+7] );
-
-    m2[8+0] = _mm256_unpacklo_epi64( m1[8+0], m1[8+1] );
-    m2[8+1] = _mm256_unpackhi_epi64( m1[8+0], m1[8+1] );
-    m2[8+2] = _mm256_unpacklo_epi64( m1[8+2], m1[8+3] );
-    m2[8+3] = _mm256_unpackhi_epi64( m1[8+2], m1[8+3] );
-    m2[8+4] = _mm256_unpacklo_epi64( m1[8+4], m1[8+5] );
-    m2[8+5] = _mm256_unpackhi_epi64( m1[8+4], m1[8+5] );
-    m2[8+6] = _mm256_unpacklo_epi64( m1[8+6], m1[8+7] );
-    m2[8+7] = _mm256_unpackhi_epi64( m1[8+6], m1[8+7] );
-
-    m1[8+0] = _mm256_permute2x128_si256( m2[8+0], m2[8+2], perm_unpacklo_epi128 );
-    m1[8+1] = _mm256_permute2x128_si256( m2[8+0], m2[8+2], perm_unpackhi_epi128 );
-    m1[8+2] = _mm256_permute2x128_si256( m2[8+1], m2[8+3], perm_unpacklo_epi128 );
-    m1[8+3] = _mm256_permute2x128_si256( m2[8+1], m2[8+3], perm_unpackhi_epi128 );
-    m1[8+4] = _mm256_permute2x128_si256( m2[8+4], m2[8+6], perm_unpacklo_epi128 );
-    m1[8+5] = _mm256_permute2x128_si256( m2[8+4], m2[8+6], perm_unpackhi_epi128 );
-    m1[8+6] = _mm256_permute2x128_si256( m2[8+5], m2[8+7], perm_unpacklo_epi128 );
-    m1[8+7] = _mm256_permute2x128_si256( m2[8+5], m2[8+7], perm_unpackhi_epi128 );
-#else
-    m2[0] = _mm256_add_epi16( m1[0], m1[4] );
-    m2[1] = _mm256_add_epi16( m1[1], m1[5] );
-    m2[2] = _mm256_add_epi16( m1[2], m1[6] );
-    m2[3] = _mm256_add_epi16( m1[3], m1[7] );
-    m2[4] = _mm256_sub_epi16( m1[0], m1[4] );
-    m2[5] = _mm256_sub_epi16( m1[1], m1[5] );
-    m2[6] = _mm256_sub_epi16( m1[2], m1[6] );
-    m2[7] = _mm256_sub_epi16( m1[3], m1[7] ); // 12 bit
-
-    m1[0] = _mm256_add_epi16( m2[0], m2[2] );
-    m1[1] = _mm256_add_epi16( m2[1], m2[3] );
-    m1[2] = _mm256_sub_epi16( m2[0], m2[2] );
-    m1[3] = _mm256_sub_epi16( m2[1], m2[3] );
-    m1[4] = _mm256_add_epi16( m2[4], m2[6] );
-    m1[5] = _mm256_add_epi16( m2[5], m2[7] );
-    m1[6] = _mm256_sub_epi16( m2[4], m2[6] );
-    m1[7] = _mm256_sub_epi16( m2[5], m2[7] ); // 13 bit
-
-    m2[0] = _mm256_add_epi16( m1[0], m1[1] );
-    m2[1] = _mm256_sub_epi16( m1[0], m1[1] );
-    m2[2] = _mm256_add_epi16( m1[2], m1[3] );
-    m2[3] = _mm256_sub_epi16( m1[2], m1[3] );
-    m2[4] = _mm256_add_epi16( m1[4], m1[5] );
-    m2[5] = _mm256_sub_epi16( m1[4], m1[5] );
-    m2[6] = _mm256_add_epi16( m1[6], m1[7] );
-    m2[7] = _mm256_sub_epi16( m1[6], m1[7] ); // 14 bit
-
-    m1[0] = _mm256_unpacklo_epi16( m2[0], m2[1] );
-    m1[1] = _mm256_unpacklo_epi16( m2[2], m2[3] );
-    m1[2] = _mm256_unpacklo_epi16( m2[4], m2[5] );
-    m1[3] = _mm256_unpacklo_epi16( m2[6], m2[7] );
-    m1[4] = _mm256_unpackhi_epi16( m2[0], m2[1] );
-    m1[5] = _mm256_unpackhi_epi16( m2[2], m2[3] );
-    m1[6] = _mm256_unpackhi_epi16( m2[4], m2[5] );
-    m1[7] = _mm256_unpackhi_epi16( m2[6], m2[7] );
-
-    m2[0] = _mm256_unpacklo_epi32( m1[0], m1[1] );
-    m2[1] = _mm256_unpackhi_epi32( m1[0], m1[1] );
-    m2[2] = _mm256_unpacklo_epi32( m1[2], m1[3] );
-    m2[3] = _mm256_unpackhi_epi32( m1[2], m1[3] );
-    m2[4] = _mm256_unpacklo_epi32( m1[4], m1[5] );
-    m2[5] = _mm256_unpackhi_epi32( m1[4], m1[5] );
-    m2[6] = _mm256_unpacklo_epi32( m1[6], m1[7] );
-    m2[7] = _mm256_unpackhi_epi32( m1[6], m1[7] );
-
-    m1[0] = _mm256_unpacklo_epi64( m2[0], m2[2] );
-    m1[1] = _mm256_unpackhi_epi64( m2[0], m2[2] );
-    m1[2] = _mm256_unpacklo_epi64( m2[1], m2[3] );
-    m1[3] = _mm256_unpackhi_epi64( m2[1], m2[3] );
-    m1[4] = _mm256_unpacklo_epi64( m2[4], m2[6] );
-    m1[5] = _mm256_unpackhi_epi64( m2[4], m2[6] );
-    m1[6] = _mm256_unpacklo_epi64( m2[5], m2[7] );
-    m1[7] = _mm256_unpackhi_epi64( m2[5], m2[7] );
-    
-    for( int k = 0; k < 8; k++ )
-    {
-      m1[k+8] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m1[k], 1 ) );
-      m1[k]   = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m1[k]    ) );
-    }
-#endif
-
-    // horizontal
-    {
-      m2[ 0] = _mm256_add_epi32( m1[0], m1[ 8] );
-      m2[ 1] = _mm256_add_epi32( m1[1], m1[ 9] );
-      m2[ 2] = _mm256_add_epi32( m1[2], m1[10] );
-      m2[ 3] = _mm256_add_epi32( m1[3], m1[11] );
-      m2[ 4] = _mm256_add_epi32( m1[4], m1[12] );
-      m2[ 5] = _mm256_add_epi32( m1[5], m1[13] );
-      m2[ 6] = _mm256_add_epi32( m1[6], m1[14] );
-      m2[ 7] = _mm256_add_epi32( m1[7], m1[15] );
-      m2[ 8] = _mm256_sub_epi32( m1[0], m1[ 8] );
-      m2[ 9] = _mm256_sub_epi32( m1[1], m1[ 9] );
-      m2[10] = _mm256_sub_epi32( m1[2], m1[10] );
-      m2[11] = _mm256_sub_epi32( m1[3], m1[11] );
-      m2[12] = _mm256_sub_epi32( m1[4], m1[12] );
-      m2[13] = _mm256_sub_epi32( m1[5], m1[13] );
-      m2[14] = _mm256_sub_epi32( m1[6], m1[14] );
-      m2[15] = _mm256_sub_epi32( m1[7], m1[15] );
-
-      m1[ 0] = _mm256_add_epi32( m2[ 0], m2[ 4] );
-      m1[ 1] = _mm256_add_epi32( m2[ 1], m2[ 5] );
-      m1[ 2] = _mm256_add_epi32( m2[ 2], m2[ 6] );
-      m1[ 3] = _mm256_add_epi32( m2[ 3], m2[ 7] );
-      m1[ 4] = _mm256_sub_epi32( m2[ 0], m2[ 4] );
-      m1[ 5] = _mm256_sub_epi32( m2[ 1], m2[ 5] );
-      m1[ 6] = _mm256_sub_epi32( m2[ 2], m2[ 6] );
-      m1[ 7] = _mm256_sub_epi32( m2[ 3], m2[ 7] );
-      m1[ 8] = _mm256_add_epi32( m2[ 8], m2[12] );
-      m1[ 9] = _mm256_add_epi32( m2[ 9], m2[13] );
-      m1[10] = _mm256_add_epi32( m2[10], m2[14] );
-      m1[11] = _mm256_add_epi32( m2[11], m2[15] );
-      m1[12] = _mm256_sub_epi32( m2[ 8], m2[12] );
-      m1[13] = _mm256_sub_epi32( m2[ 9], m2[13] );
-      m1[14] = _mm256_sub_epi32( m2[10], m2[14] );
-      m1[15] = _mm256_sub_epi32( m2[11], m2[15] );
-
-      m2[ 0] = _mm256_add_epi32( m1[ 0], m1[ 2] );
-      m2[ 1] = _mm256_add_epi32( m1[ 1], m1[ 3] );
-      m2[ 2] = _mm256_sub_epi32( m1[ 0], m1[ 2] );
-      m2[ 3] = _mm256_sub_epi32( m1[ 1], m1[ 3] );
-      m2[ 4] = _mm256_add_epi32( m1[ 4], m1[ 6] );
-      m2[ 5] = _mm256_add_epi32( m1[ 5], m1[ 7] );
-      m2[ 6] = _mm256_sub_epi32( m1[ 4], m1[ 6] );
-      m2[ 7] = _mm256_sub_epi32( m1[ 5], m1[ 7] );
-      m2[ 8] = _mm256_add_epi32( m1[ 8], m1[10] );
-      m2[ 9] = _mm256_add_epi32( m1[ 9], m1[11] );
-      m2[10] = _mm256_sub_epi32( m1[ 8], m1[10] );
-      m2[11] = _mm256_sub_epi32( m1[ 9], m1[11] );
-      m2[12] = _mm256_add_epi32( m1[12], m1[14] );
-      m2[13] = _mm256_add_epi32( m1[13], m1[15] );
-      m2[14] = _mm256_sub_epi32( m1[12], m1[14] );
-      m2[15] = _mm256_sub_epi32( m1[13], m1[15] );
-
-      m1[ 0] = _mm256_abs_epi32( _mm256_add_epi32( m2[ 0], m2[ 1] ) );
-      m1[ 1] = _mm256_abs_epi32( _mm256_sub_epi32( m2[ 0], m2[ 1] ) );
-      m1[ 2] = _mm256_abs_epi32( _mm256_add_epi32( m2[ 2], m2[ 3] ) );
-      m1[ 3] = _mm256_abs_epi32( _mm256_sub_epi32( m2[ 2], m2[ 3] ) );
-      m1[ 4] = _mm256_abs_epi32( _mm256_add_epi32( m2[ 4], m2[ 5] ) );
-      m1[ 5] = _mm256_abs_epi32( _mm256_sub_epi32( m2[ 4], m2[ 5] ) );
-      m1[ 6] = _mm256_abs_epi32( _mm256_add_epi32( m2[ 6], m2[ 7] ) );
-      m1[ 7] = _mm256_abs_epi32( _mm256_sub_epi32( m2[ 6], m2[ 7] ) );
-      m1[ 8] = _mm256_abs_epi32( _mm256_add_epi32( m2[ 8], m2[ 9] ) );
-      m1[ 9] = _mm256_abs_epi32( _mm256_sub_epi32( m2[ 8], m2[ 9] ) );
-      m1[10] = _mm256_abs_epi32( _mm256_add_epi32( m2[10], m2[11] ) );
-      m1[11] = _mm256_abs_epi32( _mm256_sub_epi32( m2[10], m2[11] ) );
-      m1[12] = _mm256_abs_epi32( _mm256_add_epi32( m2[12], m2[13] ) );
-      m1[13] = _mm256_abs_epi32( _mm256_sub_epi32( m2[12], m2[13] ) );
-      m1[14] = _mm256_abs_epi32( _mm256_add_epi32( m2[14], m2[15] ) );
-      m1[15] = _mm256_abs_epi32( _mm256_sub_epi32( m2[14], m2[15] ) );
-    }
-
-    uint32_t absDc = _mm_cvtsi128_si32( _mm256_castsi256_si128( m1[0] ) );
-
-    // sum up
-    m1[ 0] = _mm256_add_epi32( m1[ 0], m1[ 1] );
-    m1[ 2] = _mm256_add_epi32( m1[ 2], m1[ 3] );
-    m1[ 4] = _mm256_add_epi32( m1[ 4], m1[ 5] );
-    m1[ 6] = _mm256_add_epi32( m1[ 6], m1[ 7] );
-    m1[ 8] = _mm256_add_epi32( m1[ 8], m1[ 9] );
-    m1[10] = _mm256_add_epi32( m1[10], m1[11] );
-    m1[12] = _mm256_add_epi32( m1[12], m1[13] );
-    m1[14] = _mm256_add_epi32( m1[14], m1[15] );
-
-    m1[ 0] = _mm256_add_epi32( m1[ 0], m1[ 2] );
-    m1[ 4] = _mm256_add_epi32( m1[ 4], m1[ 6] );
-    m1[ 8] = _mm256_add_epi32( m1[ 8], m1[10] );
-    m1[12] = _mm256_add_epi32( m1[12], m1[14] );
-
-    m1[0] = _mm256_add_epi32( m1[0], m1[ 4] );
-    m1[8] = _mm256_add_epi32( m1[8], m1[12] );
-
-    __m256i iSum = _mm256_add_epi32( m1[0], m1[8] );
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_add_epi32( iSum, _mm256_permute2x128_si256( iSum, iSum, 0x11 ) );
-
-    sad = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
-    
-    sad -= absDc;
-    sad += absDc >> 2;
-    sad = (uint32_t)(sad / sqrt(16.0 * 8) * 2);
+    rows[k] = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) &piOrg[k * iStrideOrg] ),
+                                _mm256_loadu_si256( ( const __m256i* ) &piCur[k * iStrideCur] ) );
   }
+  sad = xCalcHAD16x8Lanes_AVX2( rows );
 
 #endif //USE_AVX2
 
@@ -2314,240 +1917,19 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
   uint32_t sad = 0;
 
 #ifdef USE_AVX2
-  __m256i m1[16], m2[16];
+  CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
+  __m256i rows[8];
+  for( int k = 0; k < 8; k++ )
   {
-    {
-      for( int k = 0; k < 16; k++ )
-      {
-        __m256i r0 = _mm256_cvtepi16_epi32( _mm_loadu_si128( (__m128i*)piOrg ) );
-        __m256i r1 = _mm256_cvtepi16_epi32( _mm_loadu_si128( (__m128i*)piCur ) );
-        m1[k] = _mm256_sub_epi32( r0, r1 );
-        piCur += iStrideCur;
-        piOrg += iStrideOrg;
-      }
-    }
-
-    // vertical
-
-    m2[ 0] = _mm256_add_epi32( m1[0], m1[ 8] );
-    m2[ 1] = _mm256_add_epi32( m1[1], m1[ 9] );
-    m2[ 2] = _mm256_add_epi32( m1[2], m1[10] );
-    m2[ 3] = _mm256_add_epi32( m1[3], m1[11] );
-    m2[ 4] = _mm256_add_epi32( m1[4], m1[12] );
-    m2[ 5] = _mm256_add_epi32( m1[5], m1[13] );
-    m2[ 6] = _mm256_add_epi32( m1[6], m1[14] );
-    m2[ 7] = _mm256_add_epi32( m1[7], m1[15] );
-    m2[ 8] = _mm256_sub_epi32( m1[0], m1[ 8] );
-    m2[ 9] = _mm256_sub_epi32( m1[1], m1[ 9] );
-    m2[10] = _mm256_sub_epi32( m1[2], m1[10] );
-    m2[11] = _mm256_sub_epi32( m1[3], m1[11] );
-    m2[12] = _mm256_sub_epi32( m1[4], m1[12] );
-    m2[13] = _mm256_sub_epi32( m1[5], m1[13] );
-    m2[14] = _mm256_sub_epi32( m1[6], m1[14] );
-    m2[15] = _mm256_sub_epi32( m1[7], m1[15] );
-
-    m1[ 0] = _mm256_add_epi32( m2[ 0], m2[ 4] );
-    m1[ 1] = _mm256_add_epi32( m2[ 1], m2[ 5] );
-    m1[ 2] = _mm256_add_epi32( m2[ 2], m2[ 6] );
-    m1[ 3] = _mm256_add_epi32( m2[ 3], m2[ 7] );
-    m1[ 4] = _mm256_sub_epi32( m2[ 0], m2[ 4] );
-    m1[ 5] = _mm256_sub_epi32( m2[ 1], m2[ 5] );
-    m1[ 6] = _mm256_sub_epi32( m2[ 2], m2[ 6] );
-    m1[ 7] = _mm256_sub_epi32( m2[ 3], m2[ 7] );
-    m1[ 8] = _mm256_add_epi32( m2[ 8], m2[12] );
-    m1[ 9] = _mm256_add_epi32( m2[ 9], m2[13] );
-    m1[10] = _mm256_add_epi32( m2[10], m2[14] );
-    m1[11] = _mm256_add_epi32( m2[11], m2[15] );
-    m1[12] = _mm256_sub_epi32( m2[ 8], m2[12] );
-    m1[13] = _mm256_sub_epi32( m2[ 9], m2[13] );
-    m1[14] = _mm256_sub_epi32( m2[10], m2[14] );
-    m1[15] = _mm256_sub_epi32( m2[11], m2[15] );
-
-    m2[ 0] = _mm256_add_epi32( m1[ 0], m1[ 2] );
-    m2[ 1] = _mm256_add_epi32( m1[ 1], m1[ 3] );
-    m2[ 2] = _mm256_sub_epi32( m1[ 0], m1[ 2] );
-    m2[ 3] = _mm256_sub_epi32( m1[ 1], m1[ 3] );
-    m2[ 4] = _mm256_add_epi32( m1[ 4], m1[ 6] );
-    m2[ 5] = _mm256_add_epi32( m1[ 5], m1[ 7] );
-    m2[ 6] = _mm256_sub_epi32( m1[ 4], m1[ 6] );
-    m2[ 7] = _mm256_sub_epi32( m1[ 5], m1[ 7] );
-    m2[ 8] = _mm256_add_epi32( m1[ 8], m1[10] );
-    m2[ 9] = _mm256_add_epi32( m1[ 9], m1[11] );
-    m2[10] = _mm256_sub_epi32( m1[ 8], m1[10] );
-    m2[11] = _mm256_sub_epi32( m1[ 9], m1[11] );
-    m2[12] = _mm256_add_epi32( m1[12], m1[14] );
-    m2[13] = _mm256_add_epi32( m1[13], m1[15] );
-    m2[14] = _mm256_sub_epi32( m1[12], m1[14] );
-    m2[15] = _mm256_sub_epi32( m1[13], m1[15] );
-
-    m1[ 0] = _mm256_add_epi32( m2[ 0], m2[ 1] );
-    m1[ 1] = _mm256_sub_epi32( m2[ 0], m2[ 1] );
-    m1[ 2] = _mm256_add_epi32( m2[ 2], m2[ 3] );
-    m1[ 3] = _mm256_sub_epi32( m2[ 2], m2[ 3] );
-    m1[ 4] = _mm256_add_epi32( m2[ 4], m2[ 5] );
-    m1[ 5] = _mm256_sub_epi32( m2[ 4], m2[ 5] );
-    m1[ 6] = _mm256_add_epi32( m2[ 6], m2[ 7] );
-    m1[ 7] = _mm256_sub_epi32( m2[ 6], m2[ 7] );
-    m1[ 8] = _mm256_add_epi32( m2[ 8], m2[ 9] );
-    m1[ 9] = _mm256_sub_epi32( m2[ 8], m2[ 9] );
-    m1[10] = _mm256_add_epi32( m2[10], m2[11] );
-    m1[11] = _mm256_sub_epi32( m2[10], m2[11] );
-    m1[12] = _mm256_add_epi32( m2[12], m2[13] );
-    m1[13] = _mm256_sub_epi32( m2[12], m2[13] );
-    m1[14] = _mm256_add_epi32( m2[14], m2[15] );
-    m1[15] = _mm256_sub_epi32( m2[14], m2[15] );
-
-    // transpose
-    #define perm_unpacklo_epi128 ( ( 0 << 0 ) + ( 2 << 4 ) )
-    #define perm_unpackhi_epi128 ( ( 1 << 0 ) + ( 3 << 4 ) )
-
-    // 1. 8x8
-    m2[0] = _mm256_unpacklo_epi32( m1[0], m1[1] );
-    m2[1] = _mm256_unpacklo_epi32( m1[2], m1[3] );
-    m2[2] = _mm256_unpacklo_epi32( m1[4], m1[5] );
-    m2[3] = _mm256_unpacklo_epi32( m1[6], m1[7] );
-    m2[4] = _mm256_unpackhi_epi32( m1[0], m1[1] );
-    m2[5] = _mm256_unpackhi_epi32( m1[2], m1[3] );
-    m2[6] = _mm256_unpackhi_epi32( m1[4], m1[5] );
-    m2[7] = _mm256_unpackhi_epi32( m1[6], m1[7] );
-
-    m1[0] = _mm256_unpacklo_epi64( m2[0], m2[1] );
-    m1[1] = _mm256_unpackhi_epi64( m2[0], m2[1] );
-    m1[2] = _mm256_unpacklo_epi64( m2[2], m2[3] );
-    m1[3] = _mm256_unpackhi_epi64( m2[2], m2[3] );
-    m1[4] = _mm256_unpacklo_epi64( m2[4], m2[5] );
-    m1[5] = _mm256_unpackhi_epi64( m2[4], m2[5] );
-    m1[6] = _mm256_unpacklo_epi64( m2[6], m2[7] );
-    m1[7] = _mm256_unpackhi_epi64( m2[6], m2[7] );
-
-    m2[0] = _mm256_permute2x128_si256( m1[0], m1[2], perm_unpacklo_epi128 );
-    m2[1] = _mm256_permute2x128_si256( m1[0], m1[2], perm_unpackhi_epi128 );
-    m2[2] = _mm256_permute2x128_si256( m1[1], m1[3], perm_unpacklo_epi128 );
-    m2[3] = _mm256_permute2x128_si256( m1[1], m1[3], perm_unpackhi_epi128 );
-    m2[4] = _mm256_permute2x128_si256( m1[4], m1[6], perm_unpacklo_epi128 );
-    m2[5] = _mm256_permute2x128_si256( m1[4], m1[6], perm_unpackhi_epi128 );
-    m2[6] = _mm256_permute2x128_si256( m1[5], m1[7], perm_unpacklo_epi128 );
-    m2[7] = _mm256_permute2x128_si256( m1[5], m1[7], perm_unpackhi_epi128 );
-
-    // 2. 8x8
-    m2[0+8] = _mm256_unpacklo_epi32( m1[0+8], m1[1+8] );
-    m2[1+8] = _mm256_unpacklo_epi32( m1[2+8], m1[3+8] );
-    m2[2+8] = _mm256_unpacklo_epi32( m1[4+8], m1[5+8] );
-    m2[3+8] = _mm256_unpacklo_epi32( m1[6+8], m1[7+8] );
-    m2[4+8] = _mm256_unpackhi_epi32( m1[0+8], m1[1+8] );
-    m2[5+8] = _mm256_unpackhi_epi32( m1[2+8], m1[3+8] );
-    m2[6+8] = _mm256_unpackhi_epi32( m1[4+8], m1[5+8] );
-    m2[7+8] = _mm256_unpackhi_epi32( m1[6+8], m1[7+8] );
-
-    m1[0+8] = _mm256_unpacklo_epi64( m2[0+8], m2[1+8] );
-    m1[1+8] = _mm256_unpackhi_epi64( m2[0+8], m2[1+8] );
-    m1[2+8] = _mm256_unpacklo_epi64( m2[2+8], m2[3+8] );
-    m1[3+8] = _mm256_unpackhi_epi64( m2[2+8], m2[3+8] );
-    m1[4+8] = _mm256_unpacklo_epi64( m2[4+8], m2[5+8] );
-    m1[5+8] = _mm256_unpackhi_epi64( m2[4+8], m2[5+8] );
-    m1[6+8] = _mm256_unpacklo_epi64( m2[6+8], m2[7+8] );
-    m1[7+8] = _mm256_unpackhi_epi64( m2[6+8], m2[7+8] );
-
-    m2[0+8] = _mm256_permute2x128_si256( m1[0+8], m1[2+8], perm_unpacklo_epi128 );
-    m2[1+8] = _mm256_permute2x128_si256( m1[0+8], m1[2+8], perm_unpackhi_epi128 );
-    m2[2+8] = _mm256_permute2x128_si256( m1[1+8], m1[3+8], perm_unpacklo_epi128 );
-    m2[3+8] = _mm256_permute2x128_si256( m1[1+8], m1[3+8], perm_unpackhi_epi128 );
-    m2[4+8] = _mm256_permute2x128_si256( m1[4+8], m1[6+8], perm_unpacklo_epi128 );
-    m2[5+8] = _mm256_permute2x128_si256( m1[4+8], m1[6+8], perm_unpackhi_epi128 );
-    m2[6+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpacklo_epi128 );
-    m2[7+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpackhi_epi128 );
-    
-    #undef perm_unpacklo_epi128    
-    #undef perm_unpackhi_epi128
-
-    // horizontal
-    m1[0] = _mm256_add_epi32( m2[0], m2[4] );
-    m1[1] = _mm256_add_epi32( m2[1], m2[5] );
-    m1[2] = _mm256_add_epi32( m2[2], m2[6] );
-    m1[3] = _mm256_add_epi32( m2[3], m2[7] );
-    m1[4] = _mm256_sub_epi32( m2[0], m2[4] );
-    m1[5] = _mm256_sub_epi32( m2[1], m2[5] );
-    m1[6] = _mm256_sub_epi32( m2[2], m2[6] );
-    m1[7] = _mm256_sub_epi32( m2[3], m2[7] );
-
-    m2[0] = _mm256_add_epi32( m1[0], m1[2] );
-    m2[1] = _mm256_add_epi32( m1[1], m1[3] );
-    m2[2] = _mm256_sub_epi32( m1[0], m1[2] );
-    m2[3] = _mm256_sub_epi32( m1[1], m1[3] );
-    m2[4] = _mm256_add_epi32( m1[4], m1[6] );
-    m2[5] = _mm256_add_epi32( m1[5], m1[7] );
-    m2[6] = _mm256_sub_epi32( m1[4], m1[6] );
-    m2[7] = _mm256_sub_epi32( m1[5], m1[7] );
-
-    m1[0] = _mm256_abs_epi32( _mm256_add_epi32( m2[0], m2[1] ) );
-    m1[1] = _mm256_abs_epi32( _mm256_sub_epi32( m2[0], m2[1] ) );
-    m1[2] = _mm256_abs_epi32( _mm256_add_epi32( m2[2], m2[3] ) );
-    m1[3] = _mm256_abs_epi32( _mm256_sub_epi32( m2[2], m2[3] ) );
-    m1[4] = _mm256_abs_epi32( _mm256_add_epi32( m2[4], m2[5] ) );
-    m1[5] = _mm256_abs_epi32( _mm256_sub_epi32( m2[4], m2[5] ) );
-    m1[6] = _mm256_abs_epi32( _mm256_add_epi32( m2[6], m2[7] ) );
-    m1[7] = _mm256_abs_epi32( _mm256_sub_epi32( m2[6], m2[7] ) );
-
-    int absDc = _mm_cvtsi128_si32( _mm256_castsi256_si128( m1[0] ) );
-
-    m1[0 + 8] = _mm256_add_epi32( m2[0 + 8], m2[4 + 8] );
-    m1[1 + 8] = _mm256_add_epi32( m2[1 + 8], m2[5 + 8] );
-    m1[2 + 8] = _mm256_add_epi32( m2[2 + 8], m2[6 + 8] );
-    m1[3 + 8] = _mm256_add_epi32( m2[3 + 8], m2[7 + 8] );
-    m1[4 + 8] = _mm256_sub_epi32( m2[0 + 8], m2[4 + 8] );
-    m1[5 + 8] = _mm256_sub_epi32( m2[1 + 8], m2[5 + 8] );
-    m1[6 + 8] = _mm256_sub_epi32( m2[2 + 8], m2[6 + 8] );
-    m1[7 + 8] = _mm256_sub_epi32( m2[3 + 8], m2[7 + 8] );
-
-    m2[0 + 8] = _mm256_add_epi32( m1[0 + 8], m1[2 + 8] );
-    m2[1 + 8] = _mm256_add_epi32( m1[1 + 8], m1[3 + 8] );
-    m2[2 + 8] = _mm256_sub_epi32( m1[0 + 8], m1[2 + 8] );
-    m2[3 + 8] = _mm256_sub_epi32( m1[1 + 8], m1[3 + 8] );
-    m2[4 + 8] = _mm256_add_epi32( m1[4 + 8], m1[6 + 8] );
-    m2[5 + 8] = _mm256_add_epi32( m1[5 + 8], m1[7 + 8] );
-    m2[6 + 8] = _mm256_sub_epi32( m1[4 + 8], m1[6 + 8] );
-    m2[7 + 8] = _mm256_sub_epi32( m1[5 + 8], m1[7 + 8] );
-
-    m1[0 + 8] = _mm256_abs_epi32( _mm256_add_epi32( m2[0 + 8], m2[1 + 8] ) );
-    m1[1 + 8] = _mm256_abs_epi32( _mm256_sub_epi32( m2[0 + 8], m2[1 + 8] ) );
-    m1[2 + 8] = _mm256_abs_epi32( _mm256_add_epi32( m2[2 + 8], m2[3 + 8] ) );
-    m1[3 + 8] = _mm256_abs_epi32( _mm256_sub_epi32( m2[2 + 8], m2[3 + 8] ) );
-    m1[4 + 8] = _mm256_abs_epi32( _mm256_add_epi32( m2[4 + 8], m2[5 + 8] ) );
-    m1[5 + 8] = _mm256_abs_epi32( _mm256_sub_epi32( m2[4 + 8], m2[5 + 8] ) );
-    m1[6 + 8] = _mm256_abs_epi32( _mm256_add_epi32( m2[6 + 8], m2[7 + 8] ) );
-    m1[7 + 8] = _mm256_abs_epi32( _mm256_sub_epi32( m2[6 + 8], m2[7 + 8] ) );
-
-    // sum up
-    m1[0] = _mm256_add_epi32( m1[0], m1[1] );
-    m1[1] = _mm256_add_epi32( m1[2], m1[3] );
-    m1[2] = _mm256_add_epi32( m1[4], m1[5] );
-    m1[3] = _mm256_add_epi32( m1[6], m1[7] );
-    m1[4] = _mm256_add_epi32( m1[8], m1[9] );
-    m1[5] = _mm256_add_epi32( m1[10], m1[11] );
-    m1[6] = _mm256_add_epi32( m1[12], m1[13] );
-    m1[7] = _mm256_add_epi32( m1[14], m1[15] );
-
-    // sum up
-    m1[ 0] = _mm256_add_epi32( m1[ 0], m1[ 1] );
-    m1[ 1] = _mm256_add_epi32( m1[ 2], m1[ 3] );
-    m1[ 2] = _mm256_add_epi32( m1[ 4], m1[ 5] );
-    m1[ 3] = _mm256_add_epi32( m1[ 6], m1[ 7] );
-
-    m1[ 0] = _mm256_add_epi32( m1[ 0], m1[ 1] );
-    m1[ 1] = _mm256_add_epi32( m1[ 2], m1[ 3] );
-
-    __m256i iSum = _mm256_add_epi32( m1[0], m1[1] );
-
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_hadd_epi32( iSum, iSum );
-    iSum = _mm256_add_epi32( iSum, _mm256_permute2x128_si256( iSum, iSum, 0x11 ) );
-
-    int sad2 = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
-    sad2 -= absDc;
-    sad2 += absDc >> 2;
-    sad = (uint32_t)(sad2 / sqrt(16.0 * 8) * 2);
+    const __m128i orgK  = _mm_loadu_si128( ( const __m128i* ) &piOrg[ k      * iStrideOrg] );
+    const __m128i orgK8 = _mm_loadu_si128( ( const __m128i* ) &piOrg[( k + 8 ) * iStrideOrg] );
+    const __m128i curK  = _mm_loadu_si128( ( const __m128i* ) &piCur[ k      * iStrideCur] );
+    const __m128i curK8 = _mm_loadu_si128( ( const __m128i* ) &piCur[( k + 8 ) * iStrideCur] );
+    rows[k] = _mm256_sub_epi16( _mm256_inserti128_si256( _mm256_castsi128_si256( orgK ), orgK8, 1 ),
+                                _mm256_inserti128_si256( _mm256_castsi128_si256( curK ), curK8, 1 ) );
   }
+  sad = xCalcHAD16x8Lanes_AVX2( rows );
 
 #endif //USE_AVX2
 
