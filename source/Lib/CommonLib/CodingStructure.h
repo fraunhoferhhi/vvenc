@@ -115,6 +115,7 @@ public:
   void destroyMotionBuf();
 
   void allocateVectorsAtPicLevel();
+  void releaseVectorsAtPicLevel();
 
   // ---------------------------------------------------------------------------
   // global accessors

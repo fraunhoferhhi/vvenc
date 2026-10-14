@@ -90,6 +90,10 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.encTime.startTimer();
 
   pic.createEncodingBuffers();
+  // Reserve the picture-level CU and TU lists for one unit per 4x4 block, which avoids growing them
+  // while the CTU results are appended. They are only needed while the picture is encoded, and
+  // finalizePicture releases them.
+  pic.cs->allocateVectorsAtPicLevel();
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
@@ -167,6 +171,7 @@ void EncPicture::finalizePicture( Picture& pic )
 
   // cleanup
   pic.cs->releaseIntermediateData();
+  pic.cs->releaseVectorsAtPicLevel();
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
   pic.destroyTempBuffers();

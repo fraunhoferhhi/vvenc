@@ -503,6 +503,16 @@ void CodingStructure::allocateVectorsAtPicLevel()
   tus.reserve( allocSize );
 }
 
+void CodingStructure::releaseVectorsAtPicLevel()
+{
+  CHECKD( !cus.empty() || !tus.empty(), "Clearing non-empty CU/TU vectors, risking a memory leak!" );
+
+  // clear() keeps the capacity, which is one pointer per 4x4 block of the picture, so swap the
+  // lists with empty ones to return it.
+  std::vector<CodingUnit*>().swap( cus );
+  std::vector<TransformUnit*>().swap( tus );
+}
+
 
 
 void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const Area& _area )

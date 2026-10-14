@@ -2139,7 +2139,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   CHECK( slice->TLayer != 0 && slice->sliceType == VVENC_I_SLICE, "Unspecified error" );
 
   pic.cs->slice = slice;
-  pic.cs->allocateVectorsAtPicLevel();
   pic.isReferenced = true;
 
   pic.picApsMap.clearActive();
