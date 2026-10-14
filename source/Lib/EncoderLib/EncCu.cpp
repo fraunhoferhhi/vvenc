@@ -2308,7 +2308,6 @@ void EncCu::addRegularCandsToPruningList( const MergeCtx &mergeCtx, const UnitAr
     pu.interDir             = mergeCtx.interDirNeighbours[uiMergeCand];
     pu.BcwIdx               = pu.interDir == 3 ? mergeCtx.BcwIdx[uiMergeCand] : BCW_DEFAULT;
     pu.imv                  = mergeCtx.useAltHpelIf[uiMergeCand] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo      ( pu );
 
     MergeItem *regularMerge = m_mergeItemList.allocateNewMergeItem();
     regularMerge->importMergeInfo( mergeCtx, uiMergeCand, MergeItem::MergeItemType::REGULAR, pu );
@@ -2356,7 +2355,6 @@ void EncCu::addCiipCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     pu.interDir               = mergeCtx.interDirNeighbours[uiMergeCand];
     pu.BcwIdx                 = pu.interDir == 3 ? mergeCtx.BcwIdx[uiMergeCand] : BCW_DEFAULT;
     pu.imv                    = mergeCtx.useAltHpelIf[uiMergeCand] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo        ( pu );
 
     MergeItem* ciipMerge      = m_mergeItemList.allocateNewMergeItem();
     ciipMerge->importMergeInfo( mergeCtx, uiMergeCand, MergeItem::MergeItemType::CIIP, pu );
@@ -2449,7 +2447,6 @@ void EncCu::addMmvdCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     pu.interDir               = mergeCtx.interDirNeighbours[mmvdIdx.pos.baseIdx];
     pu.BcwIdx                 = pu.interDir == 3 ? mergeCtx.BcwIdx[mmvdIdx.pos.baseIdx] : BCW_DEFAULT;
     pu.imv                    = mergeCtx.useAltHpelIf[mmvdIdx.pos.baseIdx] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo        ( pu );
 
     MergeItem *mmvdMerge      = m_mergeItemList.allocateNewMergeItem();
     mmvdMerge->importMergeInfo( mergeCtx, mmvdIdx.val, MergeItem::MergeItemType::MMVD, pu );
@@ -2709,7 +2706,6 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
     }
 
     mergeCtx.setMergeInfo            ( pu, mergeCand );
-    CU::spanMotionInfo               ( pu );
     m_cInterSearch.motionCompensation( pu, geoBuffer[mergeCand], REF_PIC_LIST_X );
 
     g_pelBufOP.roundGeo( geoBuffer[mergeCand].Y().buf, geoTempBuf[mergeCand].Y().buf, numSamples, rshift, offset, lclpRng );
@@ -4282,7 +4278,12 @@ void MergeItem::importMergeInfo(const MergeCtx& mergeCtx, int _mergeIdx, MergeIt
     THROW( "Wrong merge item type" );
   }
 
-  getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
+  // Regular, CIIP and MMVD candidates have one motion for the whole CU, which mvField holds. Only
+  // GPM candidates need the motion buffer copied; exportMergeInfo regenerates the others.
+  if( mergeItemType == MergeItemType::GPM )
+  {
+    getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
+  }
 }
 
 void MergeItem::importMergeInfo( const AffineMergeCtx &mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& pu )
@@ -4408,7 +4409,14 @@ bool MergeItem::exportMergeInfo( CodingUnit &pu, bool forceNoResidual ) const
     THROW( "Wrong merge item type" );
   }
 
-  pu.getMotionBuf().copyFrom( getMvBuf( pu ) );
+  if( updatedType == MergeItemType::REGULAR || updatedType == MergeItemType::CIIP || updatedType == MergeItemType::MMVD )
+  {
+    CU::spanMotionInfo( pu );
+  }
+  else
+  {
+    pu.getMotionBuf().copyFrom( getMvBuf( pu ) );
+  }
 
   return resetCiip2Regular;
 }
