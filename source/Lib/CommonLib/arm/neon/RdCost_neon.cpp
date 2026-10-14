@@ -65,14 +65,35 @@ namespace vvenc
 // 2 * org - pred, which is not clipped (-1023..2046 at 10 bits). Each butterfly stage adds a bit, so 16-bit lanes hold
 // four stages, and the absolute values of a fifth as 16-bit unsigned values; further stages need 32-bit lanes.
 
-// Applies the 8-point Hadamard butterflies within each of the four vectors `row[0..3]` and returns, in four lanes, half
+// Widening add and subtract of the high halves, in one instruction on AArch64 (GCC does not always fold vget_high_s16
+// into vaddl_s16 there).
+static inline int32x4_t vvenc_vaddl_high_s16( const int16x8_t a, const int16x8_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vaddl_high_s16( a, b );
+#else
+  return vaddl_s16( vget_high_s16( a ), vget_high_s16( b ) );
+#endif
+}
+
+static inline int32x4_t vvenc_vsubl_high_s16( const int16x8_t a, const int16x8_t b )
+{
+#if REAL_TARGET_AARCH64
+  return vsubl_high_s16( a, b );
+#else
+  return vsubl_s16( vget_high_s16( a ), vget_high_s16( b ) );
+#endif
+}
+
+// Applies the 8-point Hadamard butterflies within each of the four vectors row0..row3 and returns, in four lanes, half
 // the sum of the absolute values of the 32 results. The butterflies need up to 18 bits, so they run on 32-bit lanes,
 // after a transpose that puts the four rows in the lanes and the columns in separate vectors.
-static inline int32x4_t hadamard8x4RowsHalfAbs( const int16x8_t row[4] )
+static inline int32x4_t hadamard8x4RowsHalfAbs( const int16x8_t row0, const int16x8_t row1, const int16x8_t row2,
+                                                const int16x8_t row3 )
 {
   // col[j] = [ row0[j] row1[j] row2[j] row3[j] | row0[j+4] row1[j+4] row2[j+4] row3[j+4] ], for j = 0..3.
-  const int16x8x2_t t01  = vtrnq_s16( row[0], row[1] );
-  const int16x8x2_t t23  = vtrnq_s16( row[2], row[3] );
+  const int16x8x2_t t01  = vtrnq_s16( row0, row1 );
+  const int16x8x2_t t23  = vtrnq_s16( row2, row3 );
   const int32x4x2_t c02  = vtrnq_s32( vreinterpretq_s32_s16( t01.val[0] ), vreinterpretq_s32_s16( t23.val[0] ) );
   const int32x4x2_t c13  = vtrnq_s32( vreinterpretq_s32_s16( t01.val[1] ), vreinterpretq_s32_s16( t23.val[1] ) );
   const int16x8_t   col0 = vreinterpretq_s16_s32( c02.val[0] );
@@ -82,13 +103,13 @@ static inline int32x4_t hadamard8x4RowsHalfAbs( const int16x8_t row[4] )
 
   // Columns 1 apart, widened to 32 bits. The Lo results cover columns 0..3, the Hi results columns 4..7.
   const int32x4_t sum01Lo = vaddl_s16( vget_low_s16( col0 ), vget_low_s16( col1 ) );
-  const int32x4_t sum01Hi = vaddl_s16( vget_high_s16( col0 ), vget_high_s16( col1 ) );
+  const int32x4_t sum01Hi = vvenc_vaddl_high_s16( col0, col1 );
   const int32x4_t dif01Lo = vsubl_s16( vget_low_s16( col0 ), vget_low_s16( col1 ) );
-  const int32x4_t dif01Hi = vsubl_s16( vget_high_s16( col0 ), vget_high_s16( col1 ) );
+  const int32x4_t dif01Hi = vvenc_vsubl_high_s16( col0, col1 );
   const int32x4_t sum23Lo = vaddl_s16( vget_low_s16( col2 ), vget_low_s16( col3 ) );
-  const int32x4_t sum23Hi = vaddl_s16( vget_high_s16( col2 ), vget_high_s16( col3 ) );
+  const int32x4_t sum23Hi = vvenc_vaddl_high_s16( col2, col3 );
   const int32x4_t dif23Lo = vsubl_s16( vget_low_s16( col2 ), vget_low_s16( col3 ) );
-  const int32x4_t dif23Hi = vsubl_s16( vget_high_s16( col2 ), vget_high_s16( col3 ) );
+  const int32x4_t dif23Hi = vvenc_vsubl_high_s16( col2, col3 );
 
   // Columns 2 apart, as absolute values.
   const int32x4_t absLo0 = vabsq_s32( vaddq_s32( sum01Lo, sum23Lo ) );
@@ -436,12 +457,11 @@ Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_
 
   const uint32_t absDC = std::abs( horizontal_add_long_s16x8( m1[0] ) );
 
-  // The remaining horizontal butterflies, within each vector.
-  int32x4_t sum = vdupq_n_s32( 0 );
-  for( int k = 0; k < 16; k += 4 )
-  {
-    sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( &m1[k] ) );
-  }
+  // The remaining horizontal butterflies, within each vector, four vectors at a time.
+  int32x4_t sum = hadamard8x4RowsHalfAbs( m1[0], m1[1], m1[2], m1[3] );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[4], m1[5], m1[6], m1[7] ) );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[8], m1[9], m1[10], m1[11] ) );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[12], m1[13], m1[14], m1[15] ) );
 
   uint32_t sad = ( uint32_t )horizontal_add_s32x4( sum );
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
@@ -540,12 +560,11 @@ Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_
 
   const uint32_t absDC = std::abs( horizontal_add_long_s16x8( m1[0] ) );
 
-  // Horizontal.
-  int32x4_t sum = vdupq_n_s32( 0 );
-  for( int k = 0; k < 16; k += 4 )
-  {
-    sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( &m1[k] ) );
-  }
+  // Horizontal, four vectors at a time.
+  int32x4_t sum = hadamard8x4RowsHalfAbs( m1[0], m1[1], m1[2], m1[3] );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[4], m1[5], m1[6], m1[7] ) );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[8], m1[9], m1[10], m1[11] ) );
+  sum = vaddq_s32( sum, hadamard8x4RowsHalfAbs( m1[12], m1[13], m1[14], m1[15] ) );
 
   uint32_t sad = ( uint32_t )horizontal_add_s32x4( sum );
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
