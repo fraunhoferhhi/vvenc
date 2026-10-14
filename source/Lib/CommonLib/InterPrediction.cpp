@@ -718,6 +718,13 @@ void InterPredInterpolation::init( bool enableOpt )
 
       for( uint32_t j = 0; j < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL; j++ )
       {
+        // Only the fractional luma motion search reads the quarter-sample filtered blocks, so the
+        // chroma ones are not allocated. That saves 32 blocks of about 39 KB per encoder thread.
+        if( c != COMP_Y )
+        {
+          m_filteredBlock[i][j][c] = nullptr;
+          continue;
+        }
         m_filteredBlock[i][j][c] = ( Pel* ) xMalloc( Pel, extWidth * extHeight );
         VALGRIND_MEMCLEAR( m_filteredBlock[i][j][c], sizeof( Pel ) * extWidth * extHeight );
       }

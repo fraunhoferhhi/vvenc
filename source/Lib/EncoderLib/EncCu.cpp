@@ -403,7 +403,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
     m_pBestCS[i]->createForSearch( chromaFormat, area );
 
     m_pOrgBuffer[i].create( chromaFormat, area );
-    m_pRspBuffer[i].create( CHROMA_400, area );
   }
 
   m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
@@ -455,7 +454,6 @@ void EncCu::destroy()
     }
 
     m_pOrgBuffer[i].destroy();
-    m_pRspBuffer[i].destroy();
   }
 
   m_pTempCS2->destroy();
@@ -579,11 +577,10 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_CurrCtx = m_CtxBuffer.data();
 
   PelStorage* orgBuffer = &m_pOrgBuffer[0];
-  PelStorage* rspBuffer = &m_pRspBuffer[0];
   CodingStructure *tempCS =  m_pTempCS [0];
   CodingStructure *bestCS =  m_pBestCS [0];
-  cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
-  cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
+  cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
+  cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_COMPRESS_CU, tempCS, CH_L );
 
   // copy the relevant area
@@ -615,8 +612,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
     partitioner->initCtu( area, CH_C, *cs.slice );
 
-    cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
-    cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
+    cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
+    cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
     tempCS->currQP[CH_C] = bestCS->currQP[CH_C] =
     tempCS->baseQP       = bestCS->baseQP       = cs.slice->sliceQp;
     tempCS->prevQP[CH_C] = bestCS->prevQP[CH_C] = prevQP[CH_C];
@@ -1421,14 +1418,13 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     if( tempCS->picture->Y().contains( subCUArea.lumaPos() ) )
     {
       PelStorage* orgBuffer =  &m_pOrgBuffer[partitioner.currDepth];
-      PelStorage* rspBuffer =  &m_pRspBuffer[partitioner.currDepth];
       CodingStructure *tempSubCS = m_pTempCS[partitioner.currDepth];
       CodingStructure *bestSubCS = m_pBestCS[partitioner.currDepth];
 
-      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
-      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer );
+      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer );
 
-      // copy org buffer, need to be done after initSubStructure because of reshaping!
+      // copy org buffer, need to be done after initSubStructure, which resizes the buffer to the sub-CU
       orgBuffer->copyFrom( tempCS->getOrgBuf( subCUArea ) );
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;

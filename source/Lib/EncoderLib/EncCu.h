@@ -268,7 +268,6 @@ private:
   CodingStructure*      m_pTempCS2;
   CodingStructure*      m_pBestCS2;
   PelStorage            m_pOrgBuffer[maxCuDepth];
-  PelStorage            m_pRspBuffer[maxCuDepth];
 
   int                   m_lumaLevelToDeltaQPLUT[LUMA_LEVEL_TO_DQP_LUT_MAXSIZE];
 
