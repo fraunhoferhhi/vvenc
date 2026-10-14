@@ -209,7 +209,7 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
 DistParam RdCost::setDistParam( const CPelBuf& org, const CPelBuf& cur, int bitDepth, DFunc dfunc )
 {
   int index = dfunc;
-  if( dfunc != DF_HAD && dfunc != DF_HAD_fast && dfunc != DF_HAD_2SAD )
+  if( dfunc != DF_HAD_2SAD )   // DF_HAD_2SAD has a single entry for all sizes
   {
     index += Log2(org.width);
   }

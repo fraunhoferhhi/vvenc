@@ -844,6 +844,8 @@ Distortion xCalcHAD4x8_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
   return sad;
 }
 
+// With fastHad, square blocks of 32x32 and larger use the subsampled 16x16 transform, like RdCost::xGetHADs<true>.
+template<bool fastHad>
 Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
 {
   const Pel* piOrg = rcDtParam.org.buf;
@@ -899,6 +901,19 @@ Distortion xGetHADs_generic_sve2( const DistParam& rcDtParam )
       piOrg += 8 * iStrideOrg;
       piCur += 8 * iStrideCur;
       iRows -= 8;
+    } while( iRows != 0 );
+  }
+  else if( fastHad && iCols % 32 == 0 && iRows == iCols )
+  {
+    do
+    {
+      for( int x = 0; x < iCols; x += 16 )
+      {
+        uiSum += xCalcHAD16x16_fast_sve2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+      }
+      piOrg += 16 * iStrideOrg;
+      piCur += 16 * iStrideCur;
+      iRows -= 16;
     } while( iRows != 0 );
   }
   else if( iCols % 8 == 0 && iRows == iCols )
@@ -1086,7 +1101,7 @@ Distortion xGetHADs_fast_sve2( const DistParam& rcDtParam )
 template<>
 void RdCost::_initRdCostARM<SVE2>()
 {
-  m_afpDistortFunc[0][DF_HAD] = xGetHADs_generic_sve2;
+  m_afpDistortFunc[0][DF_HAD] = xGetHADs_generic_sve2<false>;
   m_afpDistortFunc[0][DF_HAD2] = xGetHADs_sve2<2>;
   m_afpDistortFunc[0][DF_HAD4] = xGetHADs_sve2<4>;
   m_afpDistortFunc[0][DF_HAD8] = xGetHADs_sve2<8>;
@@ -1095,7 +1110,7 @@ void RdCost::_initRdCostARM<SVE2>()
   m_afpDistortFunc[0][DF_HAD64] = xGetHADs_sve2<64>;
   m_afpDistortFunc[0][DF_HAD128] = xGetHADs_sve2<128>;
 
-  m_afpDistortFunc[0][DF_HAD_fast] = xGetHADs_generic_sve2;
+  m_afpDistortFunc[0][DF_HAD_fast] = xGetHADs_generic_sve2<true>;
   m_afpDistortFunc[0][DF_HAD2_fast] = xGetHADs_sve2<2>;
   m_afpDistortFunc[0][DF_HAD4_fast] = xGetHADs_sve2<4>;
   m_afpDistortFunc[0][DF_HAD8_fast] = xGetHADs_sve2<8>;

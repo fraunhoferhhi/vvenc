@@ -2014,12 +2014,18 @@ static bool check_SADX5( RdCost* ref, RdCost* opt, unsigned num_cases, int width
   return passed;
 }
 
-static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast )
+// generic: test the general-size entry DF_HAD(_fast), which the encoder also calls for every block size, instead of the
+// entry for this width
+static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height, bool fast, bool generic )
 {
   std::ostringstream sstm;
   const char* fast_str = fast ? "_fast" : "";
-  sstm << "RdCost::m_afpDistortFunc[0][DF_HAD" << width << fast_str << "] "
-       << " w=" << width << " h=" << height;
+  sstm << "RdCost::m_afpDistortFunc[0][DF_HAD";
+  if( !generic )
+  {
+    sstm << width;
+  }
+  sstm << fast_str << "] " << " w=" << width << " h=" << height;
   printf( "Testing %s\n", sstm.str().c_str() );
 
   DimensionGenerator rng;
@@ -2046,7 +2052,7 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
     std::generate( orgBuf.begin(), orgBuf.end(), g10 );
     std::generate( curBuf.begin(), curBuf.end(), g10 );
 
-    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + log2( width );
+    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
@@ -2154,8 +2160,11 @@ static bool test_RdCost()
 
       if( w >= 2 )
       {
-        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true ) && passed;
-        passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false ) && passed;
+        for( bool generic : { false, true } )
+        {
+          passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, generic ) && passed;
+          passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/false, generic ) && passed;
+        }
       }
 
       if (w >= GEO_MIN_CU_SIZE && h >= GEO_MIN_CU_SIZE && w <= GEO_MAX_CU_SIZE && h <= GEO_MAX_CU_SIZE)
