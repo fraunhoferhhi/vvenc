@@ -358,6 +358,12 @@ private:
 int dilation_core( vvenc::PelStorage* buff, vvenc::PelStorage* Wbuf, uint32_t bitDepth, vvenc::ComponentID compID,
                    int numIter, int iter, vvenc::Pel Value );
 
+// Scalar reference for Canny::gradient, global for the same reason. The x86 SIMD gradient falls back to it for
+// widths its vectorized path can't handle.
+void gradient_core( vvenc::PelStorage* buff1, vvenc::PelStorage* buff2, vvenc::PelStorage* tmpBuf1,
+                    vvenc::PelStorage* tmpBuf2, uint32_t width, uint32_t height, uint32_t bitDepth,
+                    vvenc::ComponentID compID );
+
 #endif // __SEIFILMGRAINANALYZER__
 
 

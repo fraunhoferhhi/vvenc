@@ -113,6 +113,15 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
                     unsigned int width, unsigned int height,
                     unsigned int bitDepth, ComponentID compID)
 {
+  // The SSE path below needs more than eight columns: its loop bound x < width - 8 wraps around for narrower
+  // planes, and at exactly eight the loop never runs, which leaves the last column computed from vectors that were
+  // never loaded. Planes this narrow only occur for pictures narrower than 36 samples, in their quarter-size mask.
+  if( width <= 8 )
+  {
+    gradient_core( buff1, buff2, AccGxBuf, AccGyBuf, width, height, bitDepth, compID );
+    return;
+  }
+
   // buff1 - magnitude; buff2 - orientation (Only luma in buff2)
   const unsigned int convWidthS=CONV_WIDTH_S;
   const int maxClpRange = (1 << bitDepth) - 1;
