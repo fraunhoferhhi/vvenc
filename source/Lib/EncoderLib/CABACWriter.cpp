@@ -2539,10 +2539,10 @@ namespace
     CtxStore& m_ctx;
     uint64_t  m_fracBits = 0;
   };
-}
 
+// CABACWriter::residual_coding_subblock with the bins coded by binCoder: the writer's BinEncIf, or a LocalBitEstimate
 template<class BinCoder>
-void CABACWriter::residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state, BinCoder& binCoder )
+void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state, BinCoder& binCoder )
 {
   //===== init =====
   const int   minSubPos   = cctx.minSubPos();
@@ -2677,6 +2677,7 @@ void CABACWriter::residual_coding_subblock_bins( CoeffCodingContext& cctx, const
   }
   binCoder.encodeBinsEP( signPattern, numSigns );
 }
+}   // namespace
 
 void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state )
 {
