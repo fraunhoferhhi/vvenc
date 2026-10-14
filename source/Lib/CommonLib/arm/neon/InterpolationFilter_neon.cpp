@@ -1746,42 +1746,42 @@ void simdFilterCopy_noDMVR_neon( const ClpRng& clpRng, const Pel* src, int srcSt
   }
   else
   {
+    // The input is the output of a first filter pass: signed, and beyond the sample range at edges, so the result is
+    // clipped at both ends like ClipPel. The saturating addition keeps the sum in 16 bits; a sum that saturates is
+    // clipped to the maximum anyway. vqshluq_n_s16( sum, 2 ) clips negative sums to 0 and sums from 16384 up to
+    // 65535, and the logical shift right by shift + 2 then gives at most 65535 >> ( shift + 2 ), the maximum sample
+    // value.
     const int16_t shift = std::max<int>( 2, IF_INTERNAL_PREC - clpRng.bd );
-    const int16_t offset = ( 1 << ( shift - 1 ) ) + IF_INTERNAL_OFFS;
+    CHECK( ( UINT16_MAX >> ( shift + 2 ) ) != clpRng.max(), "Bit depth must be at most 12" );
+
+    const int16x8_t offset = vdupq_n_s16( ( 1 << ( shift - 1 ) ) + IF_INTERNAL_OFFS );
+    const int16x8_t invShift = vdupq_n_s16( -shift - 2 );
 
     do
     {
       int w;
       for( w = 0; w <= width - 16; w += 16 )
       {
-        int16x8_t s_lo = vld1q_s16( src + w + 0 );
-        int16x8_t s_hi = vld1q_s16( src + w + 8 );
-        s_lo = vaddq_s16( s_lo, vdupq_n_s16( offset ) );
-        s_hi = vaddq_s16( s_hi, vdupq_n_s16( offset ) );
-        s_lo = vshlq_s16( s_lo, vdupq_n_s16( -shift ) );
-        s_hi = vshlq_s16( s_hi, vdupq_n_s16( -shift ) );
-        s_lo = vminq_s16( s_lo, vdupq_n_s16( clpRng.max() ) );
-        s_hi = vminq_s16( s_hi, vdupq_n_s16( clpRng.max() ) );
-        vst1q_s16( dst + w + 0, s_lo );
-        vst1q_s16( dst + w + 8, s_hi );
+        int16x8_t s_lo = vqaddq_s16( vld1q_s16( src + w + 0 ), offset );
+        int16x8_t s_hi = vqaddq_s16( vld1q_s16( src + w + 8 ), offset );
+        uint16x8_t d_lo = vshlq_u16( vqshluq_n_s16( s_lo, 2 ), invShift );
+        uint16x8_t d_hi = vshlq_u16( vqshluq_n_s16( s_hi, 2 ), invShift );
+        vst1q_s16( dst + w + 0, vreinterpretq_s16_u16( d_lo ) );
+        vst1q_s16( dst + w + 8, vreinterpretq_s16_u16( d_hi ) );
       }
       if( width & 8 )
       {
-        int16x8_t s = vld1q_s16( src + w );
-        s = vaddq_s16( s, vdupq_n_s16( offset ) );
-        s = vshlq_s16( s, vdupq_n_s16( -shift ) );
-        s = vminq_s16( s, vdupq_n_s16( clpRng.max() ) );
-        vst1q_s16( dst + w, s );
+        int16x8_t s = vqaddq_s16( vld1q_s16( src + w ), offset );
+        uint16x8_t d = vshlq_u16( vqshluq_n_s16( s, 2 ), invShift );
+        vst1q_s16( dst + w, vreinterpretq_s16_u16( d ) );
 
         w += 8;
       }
       if( width & 4 )
       {
-        int16x4_t s = vld1_s16( src + w );
-        s = vadd_s16( s, vdup_n_s16( offset ) );
-        s = vshl_s16( s, vdup_n_s16( -shift ) );
-        s = vmin_s16( s, vdup_n_s16( clpRng.max() ) );
-        vst1_s16( dst + w, s );
+        int16x4_t s = vqadd_s16( vld1_s16( src + w ), vget_low_s16( offset ) );
+        uint16x4_t d = vshl_u16( vqshlu_n_s16( s, 2 ), vget_low_s16( invShift ) );
+        vst1_s16( dst + w, vreinterpret_s16_u16( d ) );
       }
 
       src += srcStride;

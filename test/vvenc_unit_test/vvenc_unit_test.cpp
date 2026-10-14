@@ -2499,7 +2499,6 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
   static constexpr unsigned bd = 10; // default bit-depth
   ClpRng clpRng{ ( int )bd };
   DimensionGenerator dim;
-  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
 
   // Max buffer size is ( height + 8 ) * srcStride.
   static constexpr unsigned BUF_SIZE = ( MAX_CU_SIZE + 8 ) * ( MAX_CU_SIZE + 8 );
@@ -2512,67 +2511,80 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
             << " width=" << width << " height=" << height;
   std::cout << "Testing " << sstm_test.str() << std::endl;
 
-  unsigned srcStride = dim.get( width, MAX_CU_SIZE + 8 );
-  unsigned dstStride = dim.get( width, MAX_CU_SIZE + 8 );
+  bool passed = true;
 
-  // Fill input buffers with unsigned data.
-  std::generate( src.begin(), src.end(), inp_gen );
-
-  // Clear output blocks.
-  std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-  std::fill( dst_opt.begin(), dst_opt.end(), 0 );
-
-  int cStride = isVertical ? srcStride : 1;
-  ptrdiff_t src_offset = ( N / 2 - 1 ) * cStride;
-
-  unsigned frac, tapIdx;
-  const TFilterCoeff* pCoeff;
-
-  if( N == 8 )
+  // A first pass reads samples: random ones, then 0 or the maximum. A second pass reads what a first pass outputs.
+  for( bool extremes : { false, true } )
   {
-    tapIdx = 0;
-    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
-    pCoeff = InterpolationFilter::m_lumaFilter[frac];
-  }
-  else if( N == 6 )
-  {
-    tapIdx = 3;
-    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
-    pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
-    src_offset += cStride; // some of the 6-tap filter impementations use 8-tap
-  }
-  else if( N == 4 )
-  {
-    tapIdx = 1;
-    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
-    pCoeff = InterpolationFilter::m_chromaFilter[frac << 1];
-  }
-  else // N == 2
-  {
-    tapIdx = 2;
-    frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
-    pCoeff = InterpolationFilter::m_bilinearFilterPrec4[frac];
+    unsigned srcStride = dim.get( width, MAX_CU_SIZE + 8 );
+    unsigned dstStride = dim.get( width, MAX_CU_SIZE + 8 );
+
+    if( isFirst && !extremes )
+      std::generate( src.begin(), src.end(), InputGenerator<Pel>{ bd, /*is_signed=*/false } );
+    else if( isFirst )
+      std::generate( src.begin(), src.end(), MinMaxGenerator<Pel>{ bd, /*is_signed=*/false } );
+    else
+      std::generate( src.begin(), src.end(), FirstPassGenerator{ bd, extremes } );
+
+    // Clear output blocks.
+    std::fill( dst_ref.begin(), dst_ref.end(), 0 );
+    std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+
+    int cStride = isVertical ? srcStride : 1;
+    ptrdiff_t src_offset = ( N / 2 - 1 ) * cStride;
+
+    unsigned frac, tapIdx;
+    const TFilterCoeff* pCoeff;
+
+    if( N == 8 )
+    {
+      tapIdx = 0;
+      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      pCoeff = InterpolationFilter::m_lumaFilter[frac];
+    }
+    else if( N == 6 )
+    {
+      tapIdx = 3;
+      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+      pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
+      src_offset += cStride; // some of the 6-tap filter impementations use 8-tap
+    }
+    else if( N == 4 )
+    {
+      tapIdx = 1;
+      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      pCoeff = InterpolationFilter::m_chromaFilter[frac << 1];
+    }
+    else // N == 2
+    {
+      tapIdx = 2;
+      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS - 1 );
+      pCoeff = InterpolationFilter::m_bilinearFilterPrec4[frac];
+    }
+
+    if( isVertical )
+    {
+      ref->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                                 ( int )dstStride, ( int )width, ( int )height, pCoeff );
+      opt->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                                 ( int )dstStride, ( int )width, ( int )height, pCoeff );
+    }
+    else // Horizontal
+    {
+      ref->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
+                                                 ( int )dstStride, ( int )width, ( int )height, pCoeff );
+      opt->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
+                                                 ( int )dstStride, ( int )width, ( int )height, pCoeff );
+    }
+
+    std::ostringstream sstm_subtest;
+    sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " frac=" << frac
+                 << " extremes=" << extremes;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride ) && passed;
   }
 
-  if( isVertical )
-  {
-    ref->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
-                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
-    opt->m_filterVer[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
-                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
-  }
-  else // Horizontal
-  {
-    ref->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_ref.data(),
-                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
-    opt->m_filterHor[tapIdx][isFirst][isLast]( clpRng, src.data() + src_offset, ( int )srcStride, dst_opt.data(),
-                                               ( int )dstStride, ( int )width, ( int )height, pCoeff );
-  }
-
-  std::ostringstream sstm_subtest;
-  sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " frac=" << frac;
-
-  return compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride );
+  return passed;
 }
 
 template<bool isLast, unsigned width>
@@ -2758,7 +2770,7 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
 
   bool passed = true;
 
-  // Test unsigned 8-bit and 10-bit.
+  // Test 8-bit and 10-bit.
   for( unsigned bd : { 8, 10 } )
   {
     ClpRng clpRng{ ( int )bd };
@@ -2776,8 +2788,12 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
       unsigned srcStride = dim.get( width, MAX_CU_SIZE );
       unsigned dstStride = dim.get( width, MAX_CU_SIZE );
 
-      // Fill input buffers with unsigned data.
-      std::generate( src.begin(), src.end(), inp_gen );
+      // filterCopy[0][1] reads what a first filter pass outputs, with overshoot in every other case. The other copies
+      // read samples ([0][0] is not used by the encoder).
+      if( isFirst || !isLast )
+        std::generate( src.begin(), src.end(), inp_gen );
+      else
+        std::generate( src.begin(), src.end(), FirstPassGenerator{ bd, ( n & 1 ) != 0 } );
 
       // Clear output blocks.
       std::fill( dst_ref.begin(), dst_ref.end(), 0 );
