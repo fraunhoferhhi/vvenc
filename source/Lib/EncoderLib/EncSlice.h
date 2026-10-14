@@ -89,6 +89,30 @@ enum TaskType {
 
 using ProcessCtuState = std::atomic<TaskType>;
 
+/// CU encoders and scratch buffers for CTU tasks, one set per worker thread.
+/// A worker runs one task at a time, so the slice encoders of all pictures that are encoded in
+/// parallel can share these sets instead of owning one each. A set takes about 12 MB with 128x128
+/// CTUs at the medium preset, and sharing saves one set per thread for every extra parallel frame.
+class ThreadRsrcPool
+{
+public:
+  ThreadRsrcPool() = default;
+  ~ThreadRsrcPool();
+
+  ThreadRsrcPool( const ThreadRsrcPool& )            = delete;
+  ThreadRsrcPool& operator=( const ThreadRsrcPool& ) = delete;
+
+  void           init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, std::vector<int>* const globalCtuQpVector, RateCtrl& rateCtrl, const int numSets );
+  PerThreadRsrc& get ( const int threadIdx )
+  {
+    CHECK( threadIdx < 0 || threadIdx >= ( int ) m_sets.size(), "no thread resources for this worker thread" );
+    return *m_sets[threadIdx];
+  }
+
+private:
+  std::vector<PerThreadRsrc*> m_sets;
+};
+
 /// slice encoder class
 class EncSlice
 {
@@ -96,7 +120,9 @@ private:
   // encoder configuration
   const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
 
-  std::vector<PerThreadRsrc*>  m_ThreadRsrc;
+  ThreadRsrcPool*              m_threadRsrc;
+  PicEncState                  m_picEncState;                        ///< state that worker threads apply to their CU encoders
+  std::vector<int>*            m_globalCtuQpVector;
   std::vector<TileLineEncRsrc*>m_TileLineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
   WaitCounter*                 m_ctuTasksDoneCounter;
@@ -135,6 +161,7 @@ public:
                                 EncAdaptiveLoopFilter& alf,
                                 RateCtrl& rateCtrl,
                                 NoMallocThreadPool* threadPool,
+                                ThreadRsrcPool& threadRsrc,
                                 WaitCounter* ctuTasksDoneCounter );
 
   void    initPic             ( Picture* pic );

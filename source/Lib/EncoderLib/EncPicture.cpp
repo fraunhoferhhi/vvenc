@@ -69,14 +69,15 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
-                       NoMallocThreadPool* threadPool )
+                       NoMallocThreadPool* threadPool,
+                       ThreadRsrcPool& threadRsrc )
 {
   m_pcEncCfg = &encCfg;
 
   if( encCfg.m_alf || encCfg.m_ccalf )
     m_ALF       .init( encCfg, pps, m_CABACEstimator, m_CtxCache, threadPool );
 
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, threadRsrc, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
 }
 

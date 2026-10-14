@@ -227,6 +227,18 @@ class EncPicture;
 
 using MergeBufVector = static_vector<PelUnitBuf, MRG_MAX_NUM_CANDS>;
 
+/// Per-picture state of the CU encoder. The slice encoder fills it in when it starts a picture.
+/// CU encoders belong to worker threads and serve all pictures that are encoded in parallel, so a
+/// worker applies this state to its CU encoder before the first CTU it encodes from the picture.
+struct PicEncState
+{
+  Picture* pic        = nullptr;
+  uint64_t id         = 0;        ///< unique for every picture start, also across slice encoders
+  double   lambda     = 0.0;      ///< picture lambda before CTU-level adaptation
+  int      qp         = 0;        ///< picture QP matching the lambda
+  Ctx*     syncPicCtx = nullptr;  ///< WPP context storage of the slice encoder that owns the picture
+};
+
 /// CU encoder class
 class EncCu
   : DecCu
@@ -289,6 +301,7 @@ private:
   double                m_sbtCostSave[2];
   // thread stuff
   Ctx*                  m_syncPicCtx;                        ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
+  uint64_t              m_boundPicId;                        ///< PicEncState::id of the picture whose state is applied
   PelStorage            m_dbBuffer;
   
   Partitioner           m_partitioner;
@@ -313,20 +326,26 @@ public:
   EncCu();
   virtual ~EncCu();
 
-  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
+  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl );
   void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
   void  destroy               ();
 
-  std::vector<int>* getQpPtr  () const { return m_globalCtuQpVector; }
+  // Applies the per-picture state unless this CU encoder already works on that picture.
+  void  bindToPicture         ( const PicEncState& picState );
 
+  // Derives the lambda of every component and the chroma distortion weights for a QP. The RD cost
+  // has a single lambda, so the chroma weights account for the chroma QP mapping and offsets.
+  static void deriveComponentLambdas( const VVEncCfg& encCfg, const Slice& slice, const double lambda, const int qp,
+                                      double lambdas[MAX_NUM_COMP], double weights[MAX_NUM_COMP] );
+
+  void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus );
+
+private:
   void  initPic               ( Picture* pic );
   void  initSlice             ( const Slice* slice );
   void  setUpLambda           ( Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted);
   void  updateLambda          ( const Slice& slice, const double ctuLambda, const int ctuQP, const int newQP, const bool saveUnadjusted);
 
-  void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus );
-
-private:
   void  xCompressCtu          ( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] );
 
   void xCalDebCost            ( CodingStructure& cs, Partitioner& partitioner );

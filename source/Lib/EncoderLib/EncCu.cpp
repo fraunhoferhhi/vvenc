@@ -237,7 +237,47 @@ EncCu::EncCu()
   , m_globalCtuQpVector ( nullptr )
   , m_wppMutex          ( nullptr )
   , m_CABACEstimator    ( nullptr )
+  , m_syncPicCtx        ( nullptr )
+  , m_boundPicId        ( 0 )
 {
+}
+
+void EncCu::bindToPicture( const PicEncState& picState )
+{
+  if( m_boundPicId == picState.id )
+  {
+    return;
+  }
+
+  // The picture lambda sets the chroma distortion weights and the unadjusted lambda. initSlice then
+  // sets the RD and quantizer lambdas from the slice lambdas, which the slice encoder derived from
+  // the same picture lambda when it started the picture.
+  m_boundPicId = picState.id;
+  m_syncPicCtx = picState.syncPicCtx;
+  Slice& slice = *picState.pic->cs->slice;
+  setUpLambda( slice, picState.lambda, picState.qp, false, true );
+  initPic    ( picState.pic );
+  initSlice  ( &slice );
+}
+
+void EncCu::deriveComponentLambdas( const VVEncCfg& encCfg, const Slice& slice, const double lambda, const int qp,
+                                    double lambdas[MAX_NUM_COMP], double weights[MAX_NUM_COMP] )
+{
+  lambdas[COMP_Y] = lambda;
+  weights[COMP_Y] = 1.0;
+  for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
+    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, qp) + chromaQPOffset;
+    double tmpWeight         = pow( 2.0, ( qp - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
+    if( encCfg.m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
+    {
+      tmpWeight *= ( encCfg.m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
+    }
+    weights[compIdx] = tmpWeight;
+    lambdas[compIdx] = lambda / tmpWeight;
+  }
 }
 
 void EncCu::initPic( Picture* pic )
@@ -268,19 +308,12 @@ void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, cons
 
   // for RDO
   // in RdCost there is only one lambda because the luma and chroma bits are not separated, instead we weight the distortion of chroma.
-  double dLambdas[MAX_NUM_COMP] = { dLambda };
+  double dLambdas[MAX_NUM_COMP];
+  double weights [MAX_NUM_COMP];
+  deriveComponentLambdas( *m_pcEncCfg, slice, dLambda, iQP, dLambdas, weights );
   for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    const ComponentID compID = ComponentID( compIdx );
-    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
-    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, iQP) + chromaQPOffset;
-    double tmpWeight         = pow( 2.0, ( iQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-    if( m_pcEncCfg->m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
-    {
-      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-    }
-    m_cRdCost.setDistortionWeight( compID, tmpWeight );
-    dLambdas[compIdx] = dLambda / tmpWeight;
+    m_cRdCost.setDistortionWeight( ComponentID( compIdx ), weights[compIdx] );
   }
 
   // for RDOQ
@@ -302,19 +335,12 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   const double  corrFactor = pow (2.0, double (newQP - ctuQP) / 3.0);
   const double  newLambda  = ctuLambda * corrFactor;
   
-  double newLambdas[MAX_NUM_COMP] = { newLambda };
+  double newLambdas[MAX_NUM_COMP];
+  double weights   [MAX_NUM_COMP];
+  deriveComponentLambdas( *m_pcEncCfg, slice, newLambda, newQP, newLambdas, weights );
   for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    const ComponentID compID = ComponentID( compIdx );
-    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
-    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, newQP) + chromaQPOffset;
-    double tmpWeight         = pow( 2.0, ( newQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-    if( m_pcEncCfg->m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
-    {
-      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-    }
-    m_cRdCost.setDistortionWeight( compID, tmpWeight );
-    newLambdas[compIdx] = newLambda / tmpWeight;
+    m_cRdCost.setDistortionWeight( ComponentID( compIdx ), weights[compIdx] );
   }
 
   m_cTrQuant.setLambdas ( newLambdas);
@@ -326,7 +352,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   }
 }
 
-void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
+void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
   m_cRdCost.create     ();
@@ -343,7 +369,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_cInterSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_modeCtrl, m_cIntraSearch.getSaveCSBuf() );
   m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, false, true, encCfg.m_quantThresholdVal );
 
-  m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
 
   // Initialise scaling lists: The encoder will only use the SPS scaling lists. The PPS will never be marked present.
