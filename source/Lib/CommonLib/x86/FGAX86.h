@@ -107,16 +107,58 @@ inline __m128 atan_avx_approximation(__m128 x) {
   return result;
 }
 
+// Sobel gradients of 8 samples with the sums of gradient_core: gx = down - up, gy = right - left. up, mid and down
+// point at the samples in the rows above, at and below them; the samples to their left and right must be readable.
+static inline void sobel8( const Pel* up, const Pel* mid, const Pel* down, Pel* gx, Pel* gy )
+{
+  const __m128i ul = _mm_loadu_si128( ( const __m128i* ) ( up - 1 ) );
+  const __m128i um = _mm_loadu_si128( ( const __m128i* ) up );
+  const __m128i ur = _mm_loadu_si128( ( const __m128i* ) ( up + 1 ) );
+  const __m128i ml = _mm_loadu_si128( ( const __m128i* ) ( mid - 1 ) );
+  const __m128i mr = _mm_loadu_si128( ( const __m128i* ) ( mid + 1 ) );
+  const __m128i dl = _mm_loadu_si128( ( const __m128i* ) ( down - 1 ) );
+  const __m128i dm = _mm_loadu_si128( ( const __m128i* ) down );
+  const __m128i dr = _mm_loadu_si128( ( const __m128i* ) ( down + 1 ) );
+
+  const __m128i accUp    = _mm_adds_epi16( _mm_adds_epi16( _mm_slli_epi16( um, 1 ), ul ), ur );
+  const __m128i accDown  = _mm_adds_epi16( _mm_adds_epi16( _mm_slli_epi16( dm, 1 ), dl ), dr );
+  const __m128i accLeft  = _mm_adds_epi16( _mm_adds_epi16( ul, dl ), _mm_slli_epi16( ml, 1 ) );
+  const __m128i accRight = _mm_adds_epi16( _mm_adds_epi16( ur, dr ), _mm_slli_epi16( mr, 1 ) );
+  _mm_storeu_si128( ( __m128i* ) gx, _mm_subs_epi16( accDown, accUp ) );
+  _mm_storeu_si128( ( __m128i* ) gy, _mm_subs_epi16( accRight, accLeft ) );
+}
+
+#ifdef USE_AVX2
+// sobel8 for 16 samples
+static inline void sobel16( const Pel* up, const Pel* mid, const Pel* down, Pel* gx, Pel* gy )
+{
+  const __m256i ul = _mm256_loadu_si256( ( const __m256i* ) ( up - 1 ) );
+  const __m256i um = _mm256_loadu_si256( ( const __m256i* ) up );
+  const __m256i ur = _mm256_loadu_si256( ( const __m256i* ) ( up + 1 ) );
+  const __m256i ml = _mm256_loadu_si256( ( const __m256i* ) ( mid - 1 ) );
+  const __m256i mr = _mm256_loadu_si256( ( const __m256i* ) ( mid + 1 ) );
+  const __m256i dl = _mm256_loadu_si256( ( const __m256i* ) ( down - 1 ) );
+  const __m256i dm = _mm256_loadu_si256( ( const __m256i* ) down );
+  const __m256i dr = _mm256_loadu_si256( ( const __m256i* ) ( down + 1 ) );
+
+  const __m256i accUp    = _mm256_adds_epi16( _mm256_adds_epi16( _mm256_slli_epi16( um, 1 ), ul ), ur );
+  const __m256i accDown  = _mm256_adds_epi16( _mm256_adds_epi16( _mm256_slli_epi16( dm, 1 ), dl ), dr );
+  const __m256i accLeft  = _mm256_adds_epi16( _mm256_adds_epi16( ul, dl ), _mm256_slli_epi16( ml, 1 ) );
+  const __m256i accRight = _mm256_adds_epi16( _mm256_adds_epi16( ur, dr ), _mm256_slli_epi16( mr, 1 ) );
+  _mm256_storeu_si256( ( __m256i* ) gx, _mm256_subs_epi16( accDown, accUp ) );
+  _mm256_storeu_si256( ( __m256i* ) gy, _mm256_subs_epi16( accRight, accLeft ) );
+}
+#endif
+
 template<X86_VEXT vext>
 void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
                     PelStorage *AccGxBuf, PelStorage *AccGyBuf,
                     unsigned int width, unsigned int height,
                     unsigned int bitDepth, ComponentID compID)
 {
-  // The SSE path below needs more than eight columns: its loop bound x < width - 8 wraps around for narrower
-  // planes, and at exactly eight the loop never runs, which leaves the last column computed from vectors that were
-  // never loaded. Planes this narrow only occur for pictures narrower than 36 samples, in their quarter-size mask.
-  if( width <= 8 )
+  // The vectors below hold at least 8 samples. Narrower planes only occur in the quarter-size mask of pictures
+  // under 32 samples wide.
+  if( width < 8 )
   {
     gradient_core( buff1, buff2, AccGxBuf, AccGyBuf, width, height, bitDepth, compID );
     return;
@@ -126,384 +168,99 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
   const unsigned int convWidthS=CONV_WIDTH_S;
   const int maxClpRange = (1 << bitDepth) - 1;
   const int padding     = convWidthS / 2;
-  Pel* p_buf1;
-  Pel* p_buf1_up;
-  Pel* p_buf1_down;
-  int stride  = buff1->Y().stride;
-  Pel* p_ACC = AccGxBuf->Y().buf;
+  PelBuf    plane       = buff1->get( compID );
+  const int stride      = plane.stride;
+
+  // Each row is processed in vectors of 16 (AVX2) or 8 samples. When the width is not a multiple of that, the last
+  // vector of a row starts at width - step and overlaps the one before it, which computes a few samples twice.
+  const bool useAVX2 = vext >= AVX2 && width >= 16;
+  const int  step    = useAVX2 ? 16 : 8;
+
+  // As in gradient_core, the border samples are repeated into the margin, so that the 3x3 neighbourhood of every
+  // sample is loaded as it is, also at the picture border.
+  plane.extendBorderPel( padding, padding );
+
+  Pel* p_ACC   = AccGxBuf->Y().buf;
   Pel* p_ACC_Y = AccGyBuf->Y().buf;
-
-  int res16 = width & 0xf;
-  // avoid compiler warnings
-  __m128i v0_mid =  _mm_set1_epi16 (0);
-  __m128i vold_down =  _mm_set1_epi16 (0);
-  __m128i vold_up =  _mm_set1_epi16 (0);
-  __m128i v0_down =  _mm_set1_epi16 (0);
-  __m128i v0_up =  _mm_set1_epi16 (0);
-  __m128i vold_mid =  _mm_set1_epi16 (0);
-
-  for (int y = 0; y < height; y++)
+  for( int y = 0; y < height; y++ )
   {
-    p_buf1=buff1->Y().buf + y*stride;
-    if (y==0)
+    const Pel* mid  = plane.bufAt( 0, y );
+    const Pel* up   = mid - stride;
+    const Pel* down = mid + stride;
+    for( int x = 0; x < width; x += step )
     {
-      p_buf1_up = p_buf1;
-      p_buf1_down = p_buf1_up+stride;
-    }
-    else if (y==height-1)
-    {
-      p_buf1_down = p_buf1;
-      p_buf1_up = p_buf1_down - stride;
-    }
-    else
-    {
-      p_buf1_up = p_buf1 - stride;  //starts at 1 now
-      p_buf1_down = p_buf1+stride;
-    }
-    if( vext >= AVX2 && !res16)
-    {
+      const int xv = std::min<int>( x, width - step );
 #ifdef USE_AVX2
-      __m256i  v0_up;
-      __m256i  v0_down;
-      __m256i  v0_mid;
-      int x;
-      for (x=0; x < width-16; x+=16)
+      if( useAVX2 )
       {
-        if (x==0)
-        {
-          v0_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up));
-          __m256i  vr_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+1));
-          v0_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down));
-          __m256i  vr_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+1));
-
-          __m256i  vl_up = _mm256_slli_si256 (v0_up,2);  // jeweils der unterste fehlt, aus vold holen
-          __m256i  tmp = _mm256_permute4x64_epi64 (v0_up,0x10);
-          tmp = _mm256_bsrli_epi128(tmp,6);
-          tmp = _mm256_inserti128_si256(tmp,_mm256_castsi256_si128 (v0_up),0);
-          vl_up = _mm256_blend_epi16(vl_up,tmp,1);
-          __m256i  vm_up = _mm256_slli_epi16 (v0_up,1);  // middle *2
-          __m256i  acc_up = _mm256_adds_epi16 (vm_up,vl_up);
-          acc_up = _mm256_adds_epi16 (acc_up,vr_up);
-
-          __m256i  vl_down = _mm256_slli_si256 (v0_down,2);  // jeweils der unterste fehlt, aus vold holen
-          tmp = _mm256_permute4x64_epi64 (v0_down,0x10);
-          tmp = _mm256_bsrli_epi128(tmp,6);
-          tmp = _mm256_inserti128_si256(tmp,_mm256_castsi256_si128 (v0_down),0);
-          vl_down = _mm256_blend_epi16(vl_down,tmp,1);
-          __m256i  vm_down = _mm256_slli_epi16 (v0_down,1);  // middle *2
-          __m256i  acc_down = _mm256_adds_epi16 (vm_down,vl_down);
-          acc_down = _mm256_adds_epi16 (acc_down,vr_down);
-
-          __m256i  acc = _mm256_subs_epi16 (acc_down,acc_up);
-          _mm256_storeu_si256((__m256i *)&p_ACC[0], acc);
-
-          // mid
-          v0_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1));
-          __m256i  vr_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+1));
-          __m256i  vl_mid = _mm256_slli_si256 (v0_mid,2);  // jeweils der unterste fehlt, aus vold holen
-          tmp = _mm256_permute4x64_epi64 (v0_mid,0x10);
-          tmp = _mm256_bsrli_epi128(tmp,6);
-          tmp = _mm256_inserti128_si256(tmp,_mm256_castsi256_si128 (v0_mid),0);
-          vl_mid = _mm256_blend_epi16(vl_mid,tmp,1);
-
-          __m256i acc_right = _mm256_adds_epi16 (vr_up,vr_down);
-          vr_mid = _mm256_slli_epi16 (vr_mid,1);  // middle *2
-          acc_right = _mm256_adds_epi16 (acc_right,vr_mid);
-
-          __m256i acc_left = _mm256_adds_epi16 (vl_up,vl_down);
-          vl_mid = _mm256_slli_epi16 (vl_mid,1);  // middle *2
-          acc_left = _mm256_adds_epi16 (acc_left,vl_mid);
-          acc = _mm256_subs_epi16 (acc_right,acc_left);
-          _mm256_storeu_si256((__m256i *)&p_ACC_Y[x], acc);
-        }
-        else
-        {
-          v0_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+x));
-          __m256i  vr_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+x+1));
-          __m256i  vl_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+x-1));
-
-          v0_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+x));
-          __m256i  vr_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+x+1));
-          __m256i  vl_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+x-1));
-
-          __m256i  vm_up = _mm256_slli_epi16 (v0_up,1);  // middle *2
-          __m256i  acc_up = _mm256_adds_epi16 (vm_up,vl_up);
-          acc_up = _mm256_adds_epi16 (acc_up,vr_up);
-
-          __m256i  vm_down = _mm256_slli_epi16 (v0_down,1);  // middle *2
-          __m256i  acc_down = _mm256_adds_epi16 (vm_down,vl_down);
-          acc_down = _mm256_adds_epi16 (acc_down,vr_down);
-
-          __m256i  acc = _mm256_subs_epi16 (acc_down,acc_up);
-          _mm256_storeu_si256((__m256i *)&p_ACC[x], acc);
-
-          // mid
-          v0_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+x));
-          __m256i  vr_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+x+1));
-          __m256i  vl_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+x-1));
-
-          __m256i acc_right = _mm256_adds_epi16 (vr_up,vr_down);
-          vr_mid = _mm256_slli_epi16 (vr_mid,1);  // middle *2
-          acc_right = _mm256_adds_epi16 (acc_right,vr_mid);
-
-          __m256i acc_left = _mm256_adds_epi16 (vl_up,vl_down);
-          vl_mid = _mm256_slli_epi16 (vl_mid,1);  // middle *2
-          acc_left = _mm256_adds_epi16 (acc_left,vl_mid);
-          acc = _mm256_subs_epi16 (acc_right,acc_left);
-          _mm256_storeu_si256((__m256i *)&p_ACC_Y[x], acc);
-        }
-      }  //for x
-      // last collum
-      {
-        v0_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+x));
-        __m256i  vl_up = _mm256_lddqu_si256((const __m256i *)(p_buf1_up+x-1));
-
-        v0_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+x));
-        __m256i  vl_down = _mm256_lddqu_si256((const __m256i *)(p_buf1_down+x-1));
-
-        __m256i  vr_up = _mm256_srli_si256 (v0_up,2);  // jeweils der oberste fehlt
-        vr_up = _mm256_insert_epi16 (vr_up,_mm256_extract_epi16 (v0_up,8), 7);
-        vr_up = _mm256_insert_epi16 (vr_up,_mm256_extract_epi16 (v0_up,15), 15);
-
-        __m256i  vr_down = _mm256_srli_si256 (v0_down,2);  // jeweils der oberste fehlt
-        vr_down = _mm256_insert_epi16 (vr_down,_mm256_extract_epi16 (v0_down,8), 7);
-        vr_down = _mm256_insert_epi16 (vr_down,_mm256_extract_epi16 (v0_down,15), 15);
-
-        __m256i  vm_up = _mm256_slli_epi16 (v0_up,1);  // middle *2
-        __m256i  acc_up = _mm256_adds_epi16 (vm_up,vl_up);
-        acc_up = _mm256_adds_epi16 (acc_up,vr_up);
-
-        __m256i  vm_down = _mm256_slli_epi16 (v0_down,1);  // middle *2
-        __m256i  acc_down = _mm256_adds_epi16 (vm_down,vl_down);
-        acc_down = _mm256_adds_epi16 (acc_down,vr_down);
-
-        __m256i  acc = _mm256_subs_epi16 (acc_down,acc_up);
-        _mm256_storeu_si256((__m256i *)&p_ACC[x], acc);
-
-        // mid
-        v0_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+x));
-        __m256i  vl_mid = _mm256_lddqu_si256((const __m256i *)(p_buf1+x-1));
-
-        __m256i  vr_mid = _mm256_srli_si256 (v0_mid,2);  // jeweils der oberste fehlt
-        vr_mid = _mm256_insert_epi16 (vr_mid,_mm256_extract_epi16 (v0_mid,8), 7);
-        vr_mid = _mm256_insert_epi16 (vr_mid,_mm256_extract_epi16 (v0_mid,15), 15);
-
-        __m256i acc_right = _mm256_adds_epi16 (vr_up,vr_down);
-        vr_mid = _mm256_slli_epi16 (vr_mid,1);  // middle *2
-        acc_right = _mm256_adds_epi16 (acc_right,vr_mid);
-
-        __m256i acc_left = _mm256_adds_epi16 (vl_up,vl_down);
-        vl_mid = _mm256_slli_epi16 (vl_mid,1);  // middle *2
-        acc_left = _mm256_adds_epi16 (acc_left,vl_mid);
-        acc = _mm256_subs_epi16 (acc_right,acc_left);
-        _mm256_storeu_si256((__m256i *)&p_ACC_Y[x], acc);
+        sobel16( up + xv, mid + xv, down + xv, p_ACC + xv, p_ACC_Y + xv );
+        continue;
       }
 #endif
-    }  //AVX2
-    else
-    {
-      __m128i v1_up;
-      __m128i v1_down;
-      __m128i v1_mid;
-      int x;
-      for (x=0; x < width-8; x+=8)
-      {
-        if (x==0)
-        {
-          v0_up = _mm_loadu_si128((const __m128i*)(p_buf1_up));
-          v1_up = _mm_loadu_si128((const __m128i*)(p_buf1_up+8));
-          v0_down = _mm_loadu_si128((const __m128i*)(p_buf1_down));
-          v1_down = _mm_loadu_si128((const __m128i*)(p_buf1_down+8));
-          v0_mid = _mm_loadu_si128((const __m128i*)(p_buf1));
-          v1_mid = _mm_loadu_si128((const __m128i*)(p_buf1+8));
-
-          __m128i vl_up = _mm_slli_si128 (v0_up,2);  // der unterste fehlt, aus vold holen
-          vl_up = _mm_blend_epi16 (vl_up,v0_up,1);
-          __m128i vr_up = _mm_srli_si128 (v0_up,2);  // der oberste fehlt, aus v1 holen
-          vr_up = _mm_blend_epi16 (vr_up,_mm_slli_si128 (v1_up,14),0x80);
-
-          __m128i vl_down = _mm_slli_si128 (v0_down,2);  // der unterste fehlt,
-          vl_down = _mm_blend_epi16 (vl_down,v0_down,1);
-          __m128i vr_down = _mm_srli_si128 (v0_down,2);  // der oberste fehlt, aus v1 holen
-          vr_down = _mm_blend_epi16 (vr_down,_mm_slli_si128 (v1_down,14),0x80);
-
-          __m128i vl_mid = _mm_slli_si128 (v0_mid,2);  // der unterste fehlt,
-          vl_mid = _mm_blend_epi16 (vl_mid,v0_mid,1);
-          __m128i vr_mid = _mm_srli_si128 (v0_mid,2);  // der oberste fehlt, aus v1 holen
-          vr_mid = _mm_blend_epi16 (vr_mid,_mm_slli_si128 (v1_mid,14),0x80);
-
-          __m128i vm_up = _mm_slli_epi16 (v0_up,1);  // middle *2
-          __m128i acc_up = _mm_adds_epi16 (vm_up,vl_up);
-          acc_up = _mm_adds_epi16 (acc_up,vr_up);
-
-          __m128i vm_down = _mm_slli_epi16 (v0_down,1);  // middle *2
-          __m128i acc_down = _mm_adds_epi16 (vm_down,vl_down);
-          acc_down = _mm_adds_epi16 (acc_down,vr_down);
-
-          __m128i acc = _mm_subs_epi16 (acc_down,acc_up);
-          _mm_storeu_si128((__m128i*)&p_ACC[x], acc);
-
-          __m128i acc_right = _mm_adds_epi16 (vr_up,vr_down);
-          vr_mid = _mm_slli_epi16 (vr_mid,1);  // middle *2
-          acc_right = _mm_adds_epi16 (acc_right,vr_mid);
-
-          __m128i acc_left = _mm_adds_epi16 (vl_up,vl_down);
-          vl_mid = _mm_slli_epi16 (vl_mid,1);  // middle *2
-          acc_left = _mm_adds_epi16 (acc_left,vl_mid);
-          acc = _mm_subs_epi16 (acc_right,acc_left);
-          _mm_storeu_si128((__m128i*)&p_ACC_Y[x], acc);
-        }
-        else
-        {
-          v1_up = _mm_loadu_si128((const __m128i*)(p_buf1_up+x+8));
-          v1_down = _mm_loadu_si128((const __m128i*)(p_buf1_down+x+8));
-          v1_mid = _mm_loadu_si128((const __m128i*)(p_buf1+x+8));
-
-          __m128i vl_up = _mm_slli_si128 (v0_up,2);  // der unterste fehlt, aus vold holen
-          vl_up = _mm_blend_epi16 (vl_up,_mm_srli_si128 (vold_up,14),1);
-          __m128i vr_up = _mm_srli_si128 (v0_up,2);  // der oberste fehlt, aus v1 holen
-          vr_up = _mm_blend_epi16 (vr_up,_mm_slli_si128 (v1_up,14),0x80);
-
-          __m128i vl_down = _mm_slli_si128 (v0_down,2);  // der unterste fehlt, aus vold holen
-          vl_down = _mm_blend_epi16 (vl_down,_mm_srli_si128 (vold_down,14),1);
-          __m128i vr_down = _mm_srli_si128 (v0_down,2);  // der oberste fehlt, aus v1 holen
-          vr_down = _mm_blend_epi16 (vr_down,_mm_slli_si128 (v1_down,14),0x80);
-
-          __m128i vl_mid = _mm_slli_si128 (v0_mid,2);  // der unterste fehlt, aus vold holen
-          vl_mid = _mm_blend_epi16 (vl_mid,_mm_srli_si128 (vold_mid,14),1);
-          __m128i vr_mid = _mm_srli_si128 (v0_mid,2);  // der oberste fehlt, aus v1 holen
-          vr_mid = _mm_blend_epi16 (vr_mid,_mm_slli_si128 (v1_mid,14),0x80);
-
-          __m128i vm_up = _mm_slli_epi16 (v0_up,1);  // middle *2
-          __m128i acc_up = _mm_adds_epi16 (vm_up,vl_up);
-          acc_up = _mm_adds_epi16 (acc_up,vr_up);
-
-          __m128i vm_down = _mm_slli_epi16 (v0_down,1);  // middle *2
-          __m128i acc_down = _mm_adds_epi16 (vm_down,vl_down);
-          acc_down = _mm_adds_epi16 (acc_down,vr_down);
-          __m128i acc = _mm_subs_epi16 (acc_down,acc_up);
-          _mm_storeu_si128((__m128i*)&p_ACC[x], acc);
-
-          __m128i acc_right = _mm_adds_epi16 (vr_up,vr_down);
-          vr_mid = _mm_slli_epi16 (vr_mid,1);  // middle *2
-          acc_right = _mm_adds_epi16 (acc_right,vr_mid);
-
-          __m128i acc_left = _mm_adds_epi16 (vl_up,vl_down);
-          vl_mid = _mm_slli_epi16 (vl_mid,1);  // middle *2
-          acc_left = _mm_adds_epi16 (acc_left,vl_mid);
-          acc = _mm_subs_epi16 (acc_right,acc_left);
-          _mm_storeu_si128((__m128i*)&p_ACC_Y[x], acc);
-        }
-        vold_up = v0_up;
-        vold_down = v0_down;
-        vold_mid = v0_mid;
-        v0_up = v1_up;
-        v0_down = v1_down;
-        v0_mid = v1_mid;
-      }  //for x
-      // last collum
-      {
-        __m128i vl_up = _mm_slli_si128 (v0_up,2);  // der unterste fehlt, aus vold holen
-        vl_up = _mm_blend_epi16 (vl_up,_mm_srli_si128 (vold_up,14),1);
-        __m128i vr_up = _mm_srli_si128 (v0_up,2);  // der oberste fehlt, aus v0 holen
-        vr_up = _mm_blend_epi16 (vr_up,v0_up,0x80);
-
-        __m128i vl_down = _mm_slli_si128 (v0_down,2);  // der unterste fehlt, aus vold holen
-        vl_down = _mm_blend_epi16 (vl_down,_mm_srli_si128 (vold_down,14),1);
-        __m128i vr_down = _mm_srli_si128 (v0_down,2);  // der oberste fehlt, aus v0 holen
-        vr_down = _mm_blend_epi16(vr_down,v0_down,0x80);
-
-        __m128i vl_mid = _mm_slli_si128 (v0_mid,2);  // der unterste fehlt, aus vold holen
-        vl_mid = _mm_blend_epi16 (vl_mid,_mm_srli_si128 (vold_mid,14),1);
-        __m128i vr_mid = _mm_srli_si128 (v0_mid,2);  // der oberste fehlt, aus v0 holen
-        vr_mid = _mm_blend_epi16 (vr_mid,v0_mid,0x80);
-
-        __m128i vm_up = _mm_slli_epi16 (v0_up,1);  // middle *2
-        __m128i acc_up = _mm_adds_epi16 (vm_up,vl_up);
-        acc_up = _mm_adds_epi16 (acc_up,vr_up);
-
-        __m128i vm_down = _mm_slli_epi16 (v0_down,1);  // middle *2
-        __m128i acc_down = _mm_adds_epi16 (vm_down,vl_down);
-        acc_down = _mm_adds_epi16 (acc_down,vr_down);
-
-        __m128i acc = _mm_subs_epi16 (acc_down,acc_up);
-        _mm_storeu_si128((__m128i*)&p_ACC[x], acc);
-
-        __m128i acc_right = _mm_adds_epi16 (vr_up,vr_down);
-        vr_mid = _mm_slli_epi16 (vr_mid,1);  // middle *2
-        acc_right = _mm_adds_epi16 (acc_right,vr_mid);
-
-        __m128i acc_left = _mm_adds_epi16 (vl_up,vl_down);
-        vl_mid = _mm_slli_epi16 (vl_mid,1);  // middle *2
-        acc_left = _mm_adds_epi16 (acc_left,vl_mid);
-        acc = _mm_subs_epi16 (acc_right,acc_left);
-        _mm_storeu_si128((__m128i*)&p_ACC_Y[x], acc);
-      }
+      sobel8( up + xv, mid + xv, down + xv, p_ACC + xv, p_ACC_Y + xv );
     }
-    p_ACC+=width;
-    p_ACC_Y+=width;
-  } // y
+    p_ACC   += width;
+    p_ACC_Y += width;
+  }
 
   // magnitude
-  p_ACC = AccGxBuf->Y().buf;
+  p_ACC   = AccGxBuf->Y().buf;
   p_ACC_Y = AccGyBuf->Y().buf;
 
   for (int y = 0; y < height; y++)
   {
-    p_buf1=buff1->Y().buf + y*stride;
+    Pel* p_buf1 = plane.bufAt( 0, y );
 
-    if( vext >= AVX2 && !res16)
+    if( useAVX2 )
     {
 #ifdef USE_AVX2
-      int x;
       __m256i vbdmax  = _mm256_set1_epi16   ( maxClpRange);
 
-      for (x=0; x < width; x+=16)
+      for( int x = 0; x < width; x += step )
       {
-        __m256i GX = _mm256_loadu_si256((const __m256i*)&p_ACC[x]);
-        __m256i GY = _mm256_loadu_si256((const __m256i*)&p_ACC_Y[x]);
+        const int xv = std::min<int>( x, width - step );
+        __m256i GX = _mm256_loadu_si256((const __m256i*)&p_ACC[xv]);
+        __m256i GY = _mm256_loadu_si256((const __m256i*)&p_ACC_Y[xv]);
         GX = _mm256_abs_epi16(GX);
         GY = _mm256_abs_epi16(GY);
         GX = _mm256_add_epi16(GX,GY);
         GX = _mm256_srli_epi16(GX,1);
         GX = _mm256_min_epi16 (GX,vbdmax);
-        _mm256_storeu_si256((__m256i*)&p_buf1[x], GX);
+        _mm256_storeu_si256((__m256i*)&p_buf1[xv], GX);
       }
 #endif
     }  //AVX2
     else
     {
-      int x;
       __m128i vbdmax  = _mm_set1_epi16   ( maxClpRange);
 
-      for (x=0; x < width; x+=8)
+      for( int x = 0; x < width; x += step )
       {
-        __m128i GX = _mm_loadu_si128((const __m128i*)&p_ACC[x]);
-        __m128i GY = _mm_loadu_si128((const __m128i*)&p_ACC_Y[x]);
+        const int xv = std::min<int>( x, width - step );
+        __m128i GX = _mm_loadu_si128((const __m128i*)&p_ACC[xv]);
+        __m128i GY = _mm_loadu_si128((const __m128i*)&p_ACC_Y[xv]);
         GX = _mm_abs_epi16(GX);
         GY = _mm_abs_epi16(GY);
         GX = _mm_add_epi16(GX,GY);
         GX = _mm_srli_epi16(GX,1);
         GX = _mm_min_epi16 (GX,vbdmax);
-        _mm_storeu_si128((__m128i*)&p_buf1[x], GX);
+        _mm_storeu_si128((__m128i*)&p_buf1[xv], GX);
       }
     }
     p_ACC+=width;
     p_ACC_Y+=width;
-    p_buf1+=stride;
   }
 
-  // Loop through each pixel
+  // Loop through each pixel. The gradients above were stored with a row pitch of width, which is less than the
+  // buffers' stride for the subsampled planes of FGAnalyzer::findMask, so they are read back with the same pitch.
   Pel* pX = AccGxBuf->Y().buf;
   Pel* pY = AccGyBuf->Y().buf;
-  int strideX = AccGxBuf->Y().stride;
-  int strideY = AccGyBuf->Y().stride;
 
   Pel* pQD = buff2->Y().buf;
 
   for (int y = 0; y < height; y++)
   {
-    if( vext >= AVX2 && !res16)
+    if( useAVX2 )
     {
 #ifdef USE_AVX2
       // Store pi and pi/2 as constants
@@ -517,12 +274,13 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
       const __m256 abs_mask = _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF));;
       const __m256 sign_mask = _mm256_castsi256_ps(_mm256_set1_epi32(0x80000000));
 
-      for (int x = 0; x < width; x+=16)
+      for( int x = 0; x < width; x += step )
       {
+        const int xv = std::min<int>( x, width - step );
         for (int n=0; n<16;n+=8)
         {
-          __m128i Ix = _mm_loadu_si128((const __m128i*)&pX[x+n]);
-          __m128i Iy = _mm_loadu_si128((const __m128i*)&pY[x+n]);
+          __m128i Ix = _mm_loadu_si128((const __m128i*)&pX[xv+n]);
+          __m128i Iy = _mm_loadu_si128((const __m128i*)&pY[xv+n]);
 
           __m256 vx = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(Ix));
           __m256 vy = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(Iy));
@@ -559,7 +317,7 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
           // integer 16 bit
           QD0I = _mm256_packus_epi32(QD0I,QD0I);
           QD0I = _mm256_permute4x64_epi64(QD0I,0x8);
-          _mm_storeu_si128((__m128i*)&pQD[x+n], _mm256_castsi256_si128(QD0I));
+          _mm_storeu_si128((__m128i*)&pQD[xv+n], _mm256_castsi256_si128(QD0I));
         }
       }
 #endif
@@ -577,12 +335,13 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
       const __m128 abs_mask = _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF));;
       const __m128 sign_mask = _mm_castsi128_ps(_mm_set1_epi32(0x80000000));
 
-      for (int x = 0; x < width; x+=8)
+      for( int x = 0; x < width; x += step )
       {
+        const int xv = std::min<int>( x, width - step );
         for (int n=0; n<8;n+=4)
         {
-          __m128i Ix = _mm_loadu_si128((const __m128i*)&pX[x+n]);
-          __m128i Iy = _mm_loadu_si128((const __m128i*)&pY[x+n]);
+          __m128i Ix = _mm_loadu_si128((const __m128i*)&pX[xv+n]);
+          __m128i Iy = _mm_loadu_si128((const __m128i*)&pY[xv+n]);
 
           __m128 vx = _mm_cvtepi32_ps(_mm_cvtepi16_epi32(Ix));
           __m128 vy = _mm_cvtepi32_ps(_mm_cvtepi16_epi32(Iy));
@@ -618,12 +377,12 @@ void gradient_SIMD (PelStorage *buff1, PelStorage *buff2,
           __m128i QD0I = _mm_cvtps_epi32(FQD);
           // integer 16 bit
           QD0I = _mm_packus_epi32(QD0I,QD0I);
-          _mm_storeu_si64((__m128i*)&pQD[x+n],QD0I);
+          _mm_storeu_si64((__m128i*)&pQD[xv+n],QD0I);
         }
       }
     }
-    pX+=strideX;
-    pY+=strideY;
+    pX+=width;
+    pY+=width;
     pQD+=buff2->Y().stride;;
   }
 

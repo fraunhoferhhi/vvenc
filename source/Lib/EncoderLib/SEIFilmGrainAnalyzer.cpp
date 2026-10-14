@@ -211,13 +211,17 @@ void gradient_core ( PelStorage *buff1,
 // Edge detection - Canny
 // ====================================================================================================================
 
-Canny::Canny()
+Canny::Canny( bool enableOpt )
 {
   // init();
   gradient=gradient_core;
+
+  if( enableOpt )
+  {
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  initFGACannyX86();
+    initFGACannyX86();
 #endif
+  }
 }
 
 Canny::~Canny()
@@ -617,7 +621,8 @@ int calcMeanCore ( const Pel* org,
 // Film Grain Analysis Functions
 // ====================================================================================================================
 FGAnalyzer::FGAnalyzer( bool enableOpt )
-  : m_morphOperation( enableOpt )
+  : m_edgeDetector( enableOpt )
+  , m_morphOperation( enableOpt )
 {
   calcVar     = calcVarCore;
   calcMean    = calcMeanCore;

@@ -83,7 +83,7 @@ static constexpr int      CONV_HEIGHT_S          = 3;
 class Canny
 {
 public:
-  Canny();
+  Canny( bool enableOpt = true );
   ~Canny();
 
   unsigned int      m_convWidthG = 5, m_convHeightG = 5;		  // Pixel's row and col positions for Gauss filtering
@@ -98,6 +98,17 @@ public:
                       PelStorage* dest,
                       unsigned int uiBitDepth,
                       ComponentID compID );
+
+  // Sobel gradient of a plane: the edge magnitude replaces the samples of buff1, and the quantized edge direction
+  // goes to buff2. tmpBuf1 and tmpBuf2 hold the two Sobel responses (Gx and Gy of gradient_core) meanwhile.
+  void (*gradient) ( PelStorage* buff1,
+                     PelStorage* buff2,
+                     PelStorage *tmpBuf1,
+                     PelStorage *tmpBuf2,
+                     unsigned int width,
+                     unsigned int height,
+                     unsigned int bitDepth,
+                     ComponentID compID);
 
 private:
   double            m_lowThresholdRatio   = 0.1;               // low threshold rato
@@ -126,15 +137,6 @@ private:
                       unsigned int windowHeight,
                       unsigned int bitDepth,
                       ComponentID compID );
-
-  void (*gradient) ( PelStorage* buff1,
-                     PelStorage* buff2,
-                     PelStorage *tmpBuf1,
-                     PelStorage *tmpBuf2,
-                     unsigned int width,
-                     unsigned int height,
-                     unsigned int bitDepth,
-                     ComponentID compID);
 
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
   void initFGACannyX86();
