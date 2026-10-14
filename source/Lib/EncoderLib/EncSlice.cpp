@@ -144,6 +144,7 @@ struct PerThreadRsrc
   CtxCache  m_CtxCache;
   EncCu     m_encCu;
   PelStorage m_alfTempCtuBuf;
+  PelStorage m_saoCtuBuf;      ///< pre-SAO samples of the CTU being filtered, see EncSampleAdaptiveOffset::loadCtuPreSao
 };
 
 ThreadRsrcPool::~ThreadRsrcPool()
@@ -166,6 +167,10 @@ void ThreadRsrcPool::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pp
     set = new PerThreadRsrc();
     set->m_encCu.init( encCfg, sps, globalCtuQpVector, &rateCtrl );
     set->m_alfTempCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1), pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1) ), pps.pcv->maxCUSize, MAX_ALF_PADDING_SIZE, 0, false );
+    if( encCfg.m_bUseSAO )
+    {
+      set->m_saoCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize, pps.pcv->maxCUSize ), 0, SAO_CTU_BUF_MARGIN, 0, false );
+    }
   }
 }
 
@@ -269,6 +274,10 @@ void EncSlice::init( const VVEncCfg& encCfg,
   const int sizeInCtus = pps.pcv->sizeInCtus;
   m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
   m_saoReconParams.resize( sizeInCtus );
+  if( encCfg.m_bUseSAO )
+  {
+    m_saoPreFilterEdges.create( pps.pcv->chrFormat, *pps.pcv );
+  }
 
   ::memset( m_saoDisabledRate, 0, sizeof( m_saoDisabledRate ) );
 
@@ -1096,8 +1105,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           PerThreadRsrc* taskRsrc         = &encSlice->m_threadRsrc->get( threadIdx );
           EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
 
-          encSao.setCtuEncRsrc( &lineEncRsrc->m_SaoCABACEstimator, &taskRsrc->m_CtxCache );
-          encSao.storeCtuReco( cs, ctuArea, ctuPosX, ctuPosY );
+          encSao.setCtuEncRsrc( &lineEncRsrc->m_SaoCABACEstimator, &taskRsrc->m_CtxCache, &taskRsrc->m_saoCtuBuf );
+          encSao.loadCtuPreSao( cs, ctuArea, ctuPosY, encSlice->m_saoPreFilterEdges );
           encSao.getCtuStatistics( cs, encSlice->m_saoStatData, ctuArea, ctuRsAddr );
           encSao.decideCtuParams( cs, encSlice->m_saoStatData, encSlice->m_saoEnabled, encSlice->m_saoAllDisabled, ctuArea, ctuRsAddr, &encSlice->m_saoReconParams[ 0 ], cs.picture->getSAO() );
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );

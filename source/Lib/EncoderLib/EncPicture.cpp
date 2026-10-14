@@ -94,7 +94,6 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   // while the CTU results are appended. They are only needed while the picture is encoded, and
   // finalizePicture releases them.
   pic.cs->allocateVectorsAtPicLevel();
-  pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
   pic.cs->initStructData( MAX_INT, false, nullptr );
@@ -174,7 +173,6 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.cs->releaseVectorsAtPicLevel();
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
-  pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
 }

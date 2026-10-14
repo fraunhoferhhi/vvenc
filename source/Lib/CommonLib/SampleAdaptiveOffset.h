@@ -122,7 +122,9 @@ protected:
   void invertQuantOffsets       (ComponentID compIdx, int typeIdc, int typeAuxInfo, int* dstOffsets, int* srcOffsets);
   void reconstructBlkSAOParam   (SAOBlkParam& recParam, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES]);
   int  getMergeList             (CodingStructure& cs, int ctuRsAddr, SAOBlkParam* blkParams, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES]);
-  void offsetCTU                (const UnitArea& area, const CPelUnitBuf& src, PelUnitBuf& res, SAOBlkParam& saoblkParam, CodingStructure& cs);
+  // srcCtu holds the pre-SAO samples of the CTU at area, starting at its first sample, with at least
+  // one sample of border around it.
+  void offsetCTU                (const UnitArea& area, const CPelUnitBuf& srcCtu, PelUnitBuf& res, SAOBlkParam& saoblkParam, CodingStructure& cs);
   void xReconstructBlkSAOParams (CodingStructure& cs, SAOBlkParam* saoBlkParams);
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_SAO

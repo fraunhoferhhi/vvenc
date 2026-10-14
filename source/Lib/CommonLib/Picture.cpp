@@ -319,23 +319,6 @@ void Picture::releaseSharedBuffers()
   m_sharedBufs[ PIC_FILT_ORIGINAL ] = nullptr;
 }
 
-void Picture::createTempBuffers( unsigned _maxCUSize )
-{
-  CHECK( !cs, "Coding structure is required a this point!" );
-
-  // SAO reads/writes +-1 sample, especially SIMD
-  m_picBufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 2, MEMORY_ALIGN_DEF_SIZE );
-
-  if( cs ) cs->rebindPicBufs();
-}
-
-void Picture::destroyTempBuffers()
-{
-  m_picBufs[PIC_SAO_TEMP].destroy();
-
-  if( cs ) cs->rebindPicBufs();
-}
-
 void Picture::createEncodingBuffers()
 {
   CHECK( !cs, "Coding structure is required at this point!" );
