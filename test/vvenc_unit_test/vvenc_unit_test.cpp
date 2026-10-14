@@ -201,6 +201,46 @@ private:
   T m_max;
 };
 
+// Produces what the first pass of a 2D luma interpolation outputs: the signed intermediate values that the second pass
+// and PelBufferOps::addAvg read. With 'extremes', most outputs come from samples that are 0 under the negative taps and
+// the maximum under the positive ones (or the other way round), so they reach the largest overshoot real edges give.
+class FirstPassGenerator
+{
+public:
+  FirstPassGenerator( unsigned bd, bool extremes ) : m_bd( bd ), m_extremes( extremes )
+  {
+  }
+
+  Pel operator()() const
+  {
+    const int maxVal = ( 1 << m_bd ) - 1;
+    const int shift  = IF_FILTER_PREC - ( IF_INTERNAL_PREC - ( int )m_bd );
+    const TFilterCoeff* coeff = InterpolationFilter::m_lumaFilter[rand() % LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS];
+    const bool up = rand() & 1;
+
+    int sum = 0;
+    for( int k = 0; k < NTAPS_LUMA; k++ )
+    {
+      int pel = rand() & maxVal;
+      if( m_extremes && ( rand() & 3 ) != 0 )
+      {
+        pel = ( ( coeff[k] > 0 ) == up ) ? maxVal : 0;
+      }
+      sum += coeff[k] * pel;
+    }
+    return ( Pel )( ( sum - ( IF_INTERNAL_OFFS << shift ) ) >> shift );
+  }
+
+  std::string input_type() const
+  {
+    return m_extremes ? "FirstPassExtremes" : "FirstPassRand";
+  }
+
+private:
+  unsigned m_bd;
+  bool m_extremes;
+};
+
 template<typename T>
 class ConstantGenerator
 {
@@ -2271,7 +2311,16 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
   static constexpr unsigned bd = 10;
   ClpRng clpRng{ bd };
   DimensionGenerator dim;
-  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false }; // unsigned 10-bit
+  // The inputs are unclipped predictions: signed, beyond the sample range at edges. Alternate first-pass outputs with
+  // overshoot and random values over the whole signed 16-bit range.
+  FirstPassGenerator first_pass_gen{ bd, /*extremes=*/true };
+  InputGenerator<Pel> int16_gen{ 16, /*is_signed=*/true };
+  auto fill = [&]( Pel* buf, size_t size, unsigned n ) {
+    if( n & 1 )
+      std::generate( buf, buf + size, int16_gen );
+    else
+      std::generate( buf, buf + size, first_pass_gen );
+  };
 
   const unsigned shiftNum = std::max<int>( 2, ( IF_INTERNAL_PREC - bd ) ) + 1;
   const int      offset   = ( 1 << ( shiftNum - 1 ) ) + 2 * IF_INTERNAL_OFFS;
@@ -2295,9 +2344,8 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
 
     for( unsigned n = 0; n < num_cases; n++ )
     {
-      // Fill input buffers with unsigned 10-bit data from generator.
-      std::generate( src0, src0 + buf_size, inp_gen );
-      std::generate( src1, src1 + buf_size, inp_gen );
+      fill( src0, buf_size, n );
+      fill( src1, buf_size, n );
 
       // Clear output blocks.
       memset( dest_ref, 0, buf_size * sizeof( Pel ) );
@@ -2326,9 +2374,8 @@ static bool check_addAvg( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cas
         const int src1Stride = dim.get( width, MAX_CU_SIZE );
         const int destStride = dim.get( width, MAX_CU_SIZE );
 
-        // Fill input buffers with unsigned 10-bit data from generator.
-        std::generate( src0, src0 + buf_size, inp_gen );
-        std::generate( src1, src1 + buf_size, inp_gen );
+        fill( src0, buf_size, n );
+        fill( src1, buf_size, n );
 
         // Clear output blocks.
         memset( dest_ref, 0, buf_size * sizeof( Pel ) );

@@ -494,10 +494,10 @@ void PelBufferOps::initPelBufOps( bool enableOpt )
   {
 #if ENABLE_SIMD_OPT_BUFFER
 #  if defined( TARGET_SIMD_X86 )
-    g_pelBufOP.initPelBufOpsX86();
+    initPelBufOpsX86();
 #  endif
 #  if defined( TARGET_SIMD_ARM )
-    g_pelBufOP.initPelBufOpsARM();
+    initPelBufOpsARM();
 #  endif
 #endif   // ENABLE_SIMD_OPT_BUFFER
   }
