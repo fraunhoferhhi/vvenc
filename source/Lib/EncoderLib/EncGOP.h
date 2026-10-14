@@ -108,6 +108,23 @@ struct RateCapParam {
   }
 };
 
+// ====================================================================================================================
+// film grain parameters estimated by the film grain analysis, as signalled in the FGC SEI
+struct FilmGrainParam {
+  int               log2ScaleFactor = 0;
+  SeiFgc::CompModel compModel[ MAX_NUM_COMP ];
+
+  FilmGrainParam() = default;
+  explicit FilmGrainParam( FGAnalyzer& fgAnalyzer )
+    : log2ScaleFactor( fgAnalyzer.getLog2scaleFactor() )
+  {
+    for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
+    {
+      compModel[ compIdx ] = fgAnalyzer.getCompModel( compIdx );
+    }
+  }
+};
+
 class EncGOP : public EncStage
 {
 private:
@@ -169,6 +186,8 @@ private:
   bool                      m_forceSCC;
 
   FGAnalyzer                m_fgAnalyzer;
+  std::deque<std::pair<int, FilmGrainParam>> m_fgaResults;  ///< analysis results by coding number, waiting for the analyzed picture's access unit
+  FilmGrainParam            m_fgcParam;                     ///< film grain parameters signalled in the access units being written
 
 public:
   EncGOP( MsgLog& msglog );
@@ -205,6 +224,7 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
   void xSetupPicAps                   ( Picture* pic );
+  void xAnalyzeFilmGrain              ( Picture& pic );
   void xInitPicsInCodingOrder         ( const PicList& picList );
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
   void xUpdateVAStartOfLastGop        ( Picture& keyPic ) const;
