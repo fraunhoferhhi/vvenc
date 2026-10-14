@@ -89,6 +89,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
   pic.encTime.startTimer();
 
+  pic.createEncodingBuffers();
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );

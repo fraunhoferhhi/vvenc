@@ -727,7 +727,12 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
   for( auto pic : picList )
   {
     if( ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) || allPicsDone )
+    {
+      // Nothing reads a released picture any more. Its buffers are allocated again when the
+      // picture object is reused and its next picture starts encoding.
+      pic->releaseEncodingBuffers();
       freeList.push_back( pic );
+    }
   }
 }
 

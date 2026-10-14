@@ -111,6 +111,8 @@ public:
   void rebindPicBufs();
   void createCoeffs();
   void destroyCoeffs();
+  void createMotionBuf();
+  void destroyMotionBuf();
 
   void allocateVectorsAtPicLevel();
 

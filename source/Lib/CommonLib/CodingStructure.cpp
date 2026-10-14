@@ -107,8 +107,7 @@ void CodingStructure::destroy()
   m_org = nullptr;
 
   destroyCoeffs();
-  delete[] m_motionBuf;
-  m_motionBuf = nullptr;
+  destroyMotionBuf();
 
   destroyTempBuffers();
 
@@ -543,15 +542,15 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   parent  = nullptr;
   lumaCS  = nullptr;
 
-  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
-  m_motionBuf = new MotionInfo[_lumaAreaScaled];
-
+  // The picture-level structure gets its motion field when the picture's encoding starts (see
+  // Picture::createEncodingBuffers), so pictures that wait in the GOP queue do not hold one.
   if( isTopLayer )
   {
     motionLutBuf.resize( pps->getNumTileLineIds() );
   }
   else
   {
+    createMotionBuf();
     createCoeffs();
     createTempBuffers( false );
     initStructData( MAX_INT, false, nullptr );
@@ -653,6 +652,20 @@ void CodingStructure::createCoeffs()
   {
     m_offsets[i] = 0;
   }
+}
+
+void CodingStructure::createMotionBuf()
+{
+  if( !m_motionBuf )
+  {
+    m_motionBuf = new MotionInfo[g_miScaling.scale( area.lumaSize() ).area()];
+  }
+}
+
+void CodingStructure::destroyMotionBuf()
+{
+  delete[] m_motionBuf;
+  m_motionBuf = nullptr;
 }
 
 void CodingStructure::destroyCoeffs()
