@@ -2043,8 +2043,27 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
     dtParam.bitDepth = 10;
     dtParam.applyWeight = 0; // applyWeight appears to be always zero.
 
-    std::generate( orgBuf.begin(), orgBuf.end(), g10 );
-    std::generate( curBuf.begin(), curBuf.end(), g10 );
+    if( i + 3 < num_cases )
+    {
+      std::generate( orgBuf.begin(), orgBuf.end(), g10 );
+      std::generate( curBuf.begin(), curBuf.end(), g10 );
+    }
+    else
+    {
+      // The last three cases have the largest residuals the kernels get, which give the transforms' largest values:
+      // bi-prediction motion estimation compares against 2 * org - pred, which is not clipped, so at 10 bits org
+      // ranges from -1023 to 2046 and residuals reach +-2046. All positive, all negative, and with random signs.
+      const unsigned signs = num_cases - 1 - i;   // 2: all positive, 1: all negative, 0: random
+      for( int y = 0; y < height; y++ )
+      {
+        for( int x = 0; x < width; x++ )
+        {
+          const bool positive = signs == 2 || ( signs == 0 && ( rand() & 1 ) );
+          orgBuf[y * org_stride + x] = positive ? 2046 : -1023;
+          curBuf[y * cur_stride + x] = positive ? 0 : 1023;
+        }
+      }
+    }
 
     const int index = ( fast ? DF_HAD_fast : DF_HAD ) + log2( width );
     Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
