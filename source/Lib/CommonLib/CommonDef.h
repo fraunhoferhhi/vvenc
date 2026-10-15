@@ -315,7 +315,7 @@ static constexpr int DM_CHROMA_IDX =                       NUM_INTRA_MODE; ///< 
 static constexpr int NUM_MOST_PROBABLE_MODES                          = 6;
 static constexpr int LM_SYMBOL_NUM                   = (1 + NUM_LMC_MODE);
 
-static constexpr uint32_t  NUM_TRAFO_MODES_MTS =                        6; ///< Max Intra CU size applying EMT, supported values: 8, 16, 32, 64, 128
+static constexpr uint32_t  NUM_TRAFO_MODES_MTS =                        6; ///< number of transform types (mtsIdx): DCT2, transform skip and four MTS combinations
 static constexpr uint32_t  MTS_INTRA_MAX_CU_SIZE =                     32; ///< Max Intra CU size applying EMT, supported values: 8, 16, 32, 64, 128
 static constexpr uint32_t  MTS_INTER_MAX_CU_SIZE =                     32; ///< Max Inter CU size applying EMT, supported values: 8, 16, 32, 64, 128
 

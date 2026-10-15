@@ -423,10 +423,15 @@ BitEstimatorBase::BitEstimatorBase( const BinProbModel* dummy )
 
 void BitEstimatorBase::encodeRemAbsEP(unsigned bins, unsigned goRicePar, unsigned cutoff, int maxLog2TrDynamicRange)
 {
+  m_EstFracBits += BinProbModelBase::estFracBitsEP( numRemAbsEPBins( bins, goRicePar, cutoff, maxLog2TrDynamicRange ) );
+}
+
+unsigned BitEstimatorBase::numRemAbsEPBins( unsigned bins, unsigned goRicePar, unsigned cutoff, int maxLog2TrDynamicRange )
+{
   const unsigned threshold = cutoff << goRicePar;
   if (bins < threshold)
   {
-    m_EstFracBits += BinProbModelBase::estFracBitsEP((bins >> goRicePar) + 1 + goRicePar);
+    return (bins >> goRicePar) + 1 + goRicePar;
   }
   else 
   {
@@ -447,7 +452,7 @@ void BitEstimatorBase::encodeRemAbsEP(unsigned bins, unsigned goRicePar, unsigne
       }
       suffixLength = prefixLength + goRicePar + 1; //+1 for the separator bit
     }
-    m_EstFracBits += BinProbModelBase::estFracBitsEP(cutoff + prefixLength + suffixLength);
+    return cutoff + prefixLength + suffixLength;
   }
 }
 

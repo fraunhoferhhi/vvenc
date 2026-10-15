@@ -1171,6 +1171,44 @@ void copyBufferSimd( const char* src, int srcStride, char* dst, int dstStride, i
   {
     memcpy( dst, src, width * height );
   }
+  // Rows that are whole vectors are copied with vector loads and stores: for the small blocks the encoder copies
+  // most, a memcpy call per row costs several times more than the copy itself.
+#if USE_AVX2
+  else if( vext >= AVX2 && ( width & 31 ) == 0 )
+  {
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 32 )
+      {
+        _mm256_storeu_si256( ( __m256i* ) &dst[x], _mm256_loadu_si256( ( const __m256i* ) &src[x] ) );
+      }
+      src += srcStride;
+      dst += dstStride;
+    }
+    _mm256_zeroupper();
+  }
+#endif
+  else if( ( width & 15 ) == 0 )
+  {
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 16 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[x], _mm_loadu_si128( ( const __m128i* ) &src[x] ) );
+      }
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
+  else if( width == 8 )
+  {
+    while( height-- )
+    {
+      _vv_storel_epi64( ( __m128i* ) dst, _vv_loadl_epi64( ( const __m128i* ) src ) );
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
   else
   {
     while( height-- )

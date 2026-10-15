@@ -3597,7 +3597,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         tsAllowed = false;
       }
       uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests
-      std::vector<TrMode> trModes;
+      TrModeList trModes;
 
       if (nNumTransformCands > 1)
       {
@@ -3816,7 +3816,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           checkTSOnly = false;
         }
         uint8_t     numTransformCands = 1 + (tsAllowed && (!(checkDCTOnly || checkTSOnly)) ? 1 : 0); // DCT + TS = 2 tests
-        std::vector<TrMode> trModes;
+        TrModeList trModes;
         if (numTransformCands > 1)
         {
           trModes.push_back(TrMode(0, true)); // DCT2

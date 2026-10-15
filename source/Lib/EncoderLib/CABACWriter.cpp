@@ -2516,7 +2516,33 @@ void CABACWriter::last_sig_coeff( CoeffCodingContext& cctx, const TransformUnit&
 }
 
 
-void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state )
+namespace
+{
+  // Estimates the bits of bins exactly like BitEstimator (same context updates, same bits per bin; keep the two in
+  // sync), but sums them in its own member. As a local object whose address never escapes, its sum can stay in a
+  // register, while BitEstimator's sum is read and written in memory for every bin.
+  class LocalBitEstimate
+  {
+  public:
+    explicit LocalBitEstimate( CtxStore& ctx ) : m_ctx( ctx ) {}
+
+    void encodeBin     ( unsigned bin, unsigned ctxId )        { m_ctx[ctxId].estFracBitsUpdate( bin, m_fracBits ); }
+    void encodeBinsEP  ( unsigned /*bins*/, unsigned numBins ) { m_fracBits += BinProbModelBase::estFracBitsEP( numBins ); }
+    void encodeRemAbsEP( unsigned bins, unsigned goRicePar, unsigned cutoff, int maxLog2TrDynamicRange )
+    {
+      m_fracBits += BinProbModelBase::estFracBitsEP( BitEstimatorBase::numRemAbsEPBins( bins, goRicePar, cutoff, maxLog2TrDynamicRange ) );
+    }
+
+    uint64_t fracBits() const { return m_fracBits; }
+
+  private:
+    CtxStore& m_ctx;
+    uint64_t  m_fracBits = 0;
+  };
+
+// CABACWriter::residual_coding_subblock with the bins coded by binCoder: the writer's BinEncIf, or a LocalBitEstimate
+template<class BinCoder>
+void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state, BinCoder& binCoder )
 {
   //===== init =====
   const int   minSubPos   = cctx.minSubPos();
@@ -2529,11 +2555,11 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
   {
     if( cctx.isSigGroup() )
     {
-      m_BinEncoder.encodeBin( 1, cctx.sigGroupCtxId() );
+      binCoder.encodeBin( 1, cctx.sigGroupCtxId() );
     }
     else
     {
-      m_BinEncoder.encodeBin( 0, cctx.sigGroupCtxId() );
+      binCoder.encodeBin( 0, cctx.sigGroupCtxId() );
       return;
     }
   }
@@ -2556,7 +2582,7 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
     if( numNonZero || nextSigPos != inferSigPos )
     {
       const unsigned sigCtxId = cctx.sigCtxIdAbsWithAcc( nextSigPos, state );
-      m_BinEncoder.encodeBin( sigFlag, sigCtxId );
+      binCoder.encodeBin( sigFlag, sigCtxId );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "sig_bin() bin=%d ctx=%d\n", sigFlag, sigCtxId );
       remRegBins--;
     }
@@ -2578,20 +2604,20 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
       if( Coeff < 0 )                        signPattern++;
 
       unsigned gt1 = !!remAbsLevel;
-      m_BinEncoder.encodeBin( gt1, cctx.greater1CtxIdAbs(ctxOff) );
+      binCoder.encodeBin( gt1, cctx.greater1CtxIdAbs(ctxOff) );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "gt1_flag() bin=%d ctx=%d\n", gt1, cctx.greater1CtxIdAbs(ctxOff) );
       remRegBins--;
 
       if( gt1 )
       {
         remAbsLevel  -= 1;
-        m_BinEncoder.encodeBin( remAbsLevel&1, cctx.parityCtxIdAbs( ctxOff ) );
+        binCoder.encodeBin( remAbsLevel&1, cctx.parityCtxIdAbs( ctxOff ) );
         DTRACE( g_trace_ctx, D_SYNTAX_RESI, "par_flag() bin=%d ctx=%d\n", remAbsLevel&1, cctx.parityCtxIdAbs( ctxOff ) );
         remAbsLevel >>= 1;
 
         remRegBins--;
         unsigned gt2 = !!remAbsLevel;
-        m_BinEncoder.encodeBin(gt2, cctx.greater2CtxIdAbs(ctxOff));
+        binCoder.encodeBin(gt2, cctx.greater2CtxIdAbs(ctxOff));
         DTRACE(g_trace_ctx, D_SYNTAX_RESI, "gt2_flag() bin=%d ctx=%d\n", gt2, cctx.greater2CtxIdAbs(ctxOff));
         remRegBins--;
       }
@@ -2615,7 +2641,7 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
       int      sumAll   = cctx.templateAbsSum( scanPos, coeff, 4 );
       unsigned ricePar  = g_auiGoRiceParsCoeff[sumAll];
       unsigned rem      = ( absLevel - 4 ) >> 1;
-      m_BinEncoder.encodeRemAbsEP( rem, ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
+      binCoder.encodeRemAbsEP( rem, ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "rem_val() bin=%d ctx=%d\n", rem, ricePar );
     }
   }
@@ -2629,7 +2655,7 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
     int       rice      = g_auiGoRiceParsCoeff[sumAll];
     int       pos0      = g_auiGoRicePosCoeff0(state, rice);
     unsigned  rem       = ( absLevel == 0 ? pos0 : absLevel <= pos0 ? absLevel-1 : absLevel );
-    m_BinEncoder.encodeRemAbsEP( rem, rice, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
+    binCoder.encodeRemAbsEP( rem, rice, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
     DTRACE( g_trace_ctx, D_SYNTAX_RESI, "rem_val() bin=%d ctx=%d\n", rem, rice );
     state = ( stateTransTable >> ((state<<2)+((absLevel&1)<<1)) ) & 3;
     if( absLevel )
@@ -2649,7 +2675,23 @@ void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoe
     numSigns    --;
     signPattern >>= 1;
   }
-  m_BinEncoder.encodeBinsEP( signPattern, numSigns );
+  binCoder.encodeBinsEP( signPattern, numSigns );
+}
+}   // namespace
+
+void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state )
+{
+  if( m_BinEncoder.isEncoding() )
+  {
+    residual_coding_subblock_bins( cctx, coeff, stateTransTable, state, m_BinEncoder );
+  }
+  else
+  {
+    // only estimating bits (m_BinEncoder is a BitEstimator): sum the subblock's bits locally, add them once
+    LocalBitEstimate estimate( static_cast<CtxStore&>( m_BinEncoder.getCtx() ) );
+    residual_coding_subblock_bins( cctx, coeff, stateTransTable, state, estimate );
+    static_cast<BitEstimatorBase&>( m_BinEncoder ).addEstFracBits( estimate.fracBits() );
+  }
 }
 
 

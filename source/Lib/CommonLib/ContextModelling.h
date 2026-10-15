@@ -155,7 +155,8 @@ public:
     return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
   }
 
-  unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
+  // sigCtxIdAbsWithAcc and absVal1stPass run for every coefficient position of residual coding
+  ALWAYS_INLINE unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
   {
     const auto scanEl       = m_scan[scanPos];
     const uint32_t posY     = scanEl.y;
@@ -177,7 +178,7 @@ public:
     return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
   }
 
-  void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
+  ALWAYS_INLINE void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
   {
     CHECKD( !absLevel1, "Shound not be called if '0'!" );
 

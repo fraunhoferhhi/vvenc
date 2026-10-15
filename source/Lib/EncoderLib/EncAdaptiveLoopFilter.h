@@ -354,6 +354,13 @@ private:
   ParameterSetMap<APS>*  m_apsMap;
   AlfCovariance          m_alfCovarianceMerged[MAX_NUM_ALF_CLASSES + 2];
   int                    m_alfClipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF];
+  struct AlfMergedPair   // mergeClasses: the result of merging a pair of classes
+  {
+    bool   isValid;
+    double error;                          // error of the filter derived for both classes together
+    int    clip[MAX_NUM_ALF_LUMA_COEFF];   // clipping indices chosen for that filter
+  };
+  AlfMergedPair          m_alfMergedPairs[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES];   // [i][j] for i < j
   CABACWriter*           m_CABACEstimator;
   CtxCache*              m_CtxCache;
   double                 m_lambda[MAX_NUM_COMP];

@@ -735,7 +735,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID compID)
+void TrQuant::checktransformsNxN( TransformUnit &tu, TrModeList *trModes, const int maxCand, const ComponentID compID)
 {
   CodingStructure &cs     = *tu.cs;
   const CompArea& rect    = tu.blocks[compID];
@@ -746,8 +746,8 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
 
   CHECK(cs.sps->getMaxTbSize() < width, "Unsupported transformation size");
   int                           pos = 0;
-  std::vector<TrCost>           trCosts;
-  std::vector<TrMode>::iterator it      = trModes->begin();
+  TrCostList                    trCosts;
+  TrModeList::iterator          it      = trModes->begin();
   const double                  facBB[] = { 1.2, 1.3, 1.3, 1.4, 1.5 };
   while (it != trModes->end())
   {
@@ -790,7 +790,7 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   }
 
   int                           numTests = 0;
-  std::vector<TrCost>::iterator itC      = trCosts.begin();
+  TrCostList::iterator          itC      = trCosts.begin();
   const double                  fac      = facBB[std::max(0, floorLog2(std::max(width, height)) - 2)];
   const double                  thr      = fac * trCosts.begin()->first;
   const double                  thrTS    = trCosts.begin()->first;

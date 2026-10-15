@@ -3072,7 +3072,6 @@ void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, alf_
 void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES] )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_MERGE );
-  int       tmpClip          [MAX_NUM_ALF_LUMA_COEFF];
   int       bestMergeClip    [MAX_NUM_ALF_LUMA_COEFF];
   double    err              [MAX_NUM_ALF_CLASSES];
   double    bestMergeErr     =MAX_DOUBLE;
@@ -3112,6 +3111,16 @@ void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCov
     }
   }
 
+  // A merge changes only the class that receives it, so the merged error of every other pair stays valid and is
+  // reused. The pairs are compared in the same order as before, so the same merges are chosen.
+  for( int i = 0; i < numClasses; i++ )
+  {
+    for( int j = i + 1; j < numClasses; j++ )
+    {
+      m_alfMergedPairs[i][j].isValid = false;
+    }
+  }
+
   while( numRemaining >= 2 )
   {
     double errorMin = std::numeric_limits<double>::max();
@@ -3125,21 +3134,25 @@ void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCov
         {
           if( availableClass[j] )
           {
-            double error1 = err[i];
-            double error2 = err[j];
+            AlfMergedPair& pair = m_alfMergedPairs[i][j];
 
-            tmpCov.add( covMerged[i], covMerged[j] );
-            for( int l = 0; l < MAX_NUM_ALF_LUMA_COEFF; ++l )
+            if( !pair.isValid )
             {
-              tmpClip[l] = (clipMerged[numRemaining-1][i][l] + clipMerged[numRemaining-1][j][l] + 1 ) >> 1;
+              tmpCov.add( covMerged[i], covMerged[j] );
+              for( int l = 0; l < MAX_NUM_ALF_LUMA_COEFF; ++l )
+              {
+                pair.clip[l] = (clipMerged[numRemaining-1][i][l] + clipMerged[numRemaining-1][j][l] + 1 ) >> 1;
+              }
+              pair.error   = m_alfParamTemp.nonLinearFlag[CH_L] ? tmpCov.optimizeFilterClip( alfShape, pair.clip ) : tmpCov.calculateError( pair.clip );
+              pair.isValid = true;
             }
-            double errorMerged = m_alfParamTemp.nonLinearFlag[CH_L] ? tmpCov.optimizeFilterClip( alfShape, tmpClip ) : tmpCov.calculateError( tmpClip );
-            double error = errorMerged - error1 - error2;
+
+            double error = pair.error - err[i] - err[j];
 
             if( error < errorMin )
             {
-              bestMergeErr = errorMerged;
-              memcpy(bestMergeClip, tmpClip, sizeof(bestMergeClip));
+              bestMergeErr = pair.error;
+              memcpy(bestMergeClip, pair.clip, sizeof(bestMergeClip));
               errorMin = error;
               bestToMergeIdx1 = i;
               bestToMergeIdx2 = j;
@@ -3154,6 +3167,15 @@ void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCov
     memcpy(clipMerged[numRemaining-2][bestToMergeIdx1], bestMergeClip, sizeof(bestMergeClip));
     err[bestToMergeIdx1] = bestMergeErr;
     availableClass[bestToMergeIdx2] = false;
+
+    // the class that received the merge has new statistics, so its pairs are evaluated again
+    for( int k = 0; k < numClasses; k++ )
+    {
+      if( k != bestToMergeIdx1 )
+      {
+        m_alfMergedPairs[std::min( k, bestToMergeIdx1 )][std::max( k, bestToMergeIdx1 )].isValid = false;
+      }
+    }
 
     for( int i = 0; i < numClasses; i++ )
     {

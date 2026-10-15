@@ -92,6 +92,13 @@ private:
   std::vector<ModeInfo>
                       m_parentCandList;
 
+  // The MPM list of the CU that estIntraPredLumaQT is searching, derived once when the search starts: it depends
+  // only on the CU's area and its neighbours, which do not change during the search. Valid only during the search,
+  // since the same area can have other neighbours in another partitioning.
+  unsigned            m_searchMpmLst[NUM_MOST_PROBABLE_MODES];
+  Area                m_searchMpmArea;
+  bool                m_searchMpmValid = false;
+
 protected:
   // interface to option
   const VVEncCfg* m_pcEncCfg;
@@ -178,8 +185,9 @@ public:
   void estIntraPredChromaQT       ( CodingUnit& cu, Partitioner& partitioner, const double maxCostAllowed );
 
 private:
+  bool      xEstIntraPredLumaQT       ( CodingUnit &cu, Partitioner &pm, double bestCost );
   double    xFindInterCUCost          ( CodingUnit &cu );
-  void      xPreCheckMTS              ( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
+  void      xPreCheckMTS              ( TransformUnit &tu, TrModeList *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
   void      xEstimateLumaRdModeList   ( int& numModesForFullRD,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
