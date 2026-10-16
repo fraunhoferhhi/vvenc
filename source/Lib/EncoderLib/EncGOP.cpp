@@ -724,14 +724,23 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
 void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
 {
   const bool allPicsDone = m_numPicsCoded >= m_picCount && ( picList.empty() || picList.back()->isFlush );
+  // Writing a picture reads its reconstruction only for the decoded picture hash SEI. Without it, a
+  // picture that no other picture references and that is not waiting for reconstruction output needs
+  // neither its reconstruction nor its motion field once it is reconstructed.
+  const bool writeReadsReco = m_pcEncCfg->m_decodedPictureHashSEIType != VVENC_HASHTYPE_NONE;
   for( auto pic : picList )
   {
-    if( ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) || allPicsDone )
+    const bool isUnused = ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0;
+    if( ( pic->isFinished && isUnused ) || allPicsDone )
     {
       // Nothing reads a released picture any more. Its buffers are allocated again when the
       // picture object is reused and its next picture starts encoding.
       pic->releaseEncodingBuffers();
       freeList.push_back( pic );
+    }
+    else if( pic->isReconstructed && isUnused && ! writeReadsReco )
+    {
+      pic->releaseEncodingBuffers();
     }
   }
 }
