@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "EncCu.h"
+#include "EncSampleAdaptiveOffset.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Picture.h"
 #include "InterSearch.h"
@@ -146,6 +147,7 @@ private:
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;
   std::vector<SAOStatData**>   m_saoStatData;
+  SaoPreFilterEdges            m_saoPreFilterEdges;
   std::vector<CtuEncParam>     ctuEncParams;
   std::vector<int>             m_ctuAddrMap;
 

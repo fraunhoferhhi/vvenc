@@ -87,6 +87,21 @@ struct SAOStatData //data structure for SAO statistics
   }
 };
 
+// SIMD SAO reads up to 16 samples past the right edge of a CTU whose width is not a multiple of 16.
+static constexpr int SAO_CTU_BUF_MARGIN = 16;
+
+// The pre-SAO samples a CTU reads from neighbours that SAO filters before it: the bottom row of the
+// CTU row above and the right column of the CTU to the left. One set per picture.
+struct SaoPreFilterEdges
+{
+  void create( const ChromaFormat chFmt, const PreCalcValues& pcv );
+
+  std::vector<Pel> bottomRows[MAX_NUM_COMP];   // a picture-wide line for every CTU row
+  std::vector<Pel> rightCols [MAX_NUM_COMP];   // a CTU-high column for every CTU row, rewritten along the row
+  int              width     [MAX_NUM_COMP] = { 0, };
+  int              ctuHeight [MAX_NUM_COMP] = { 0, };
+};
+
 class EncSampleAdaptiveOffset : public SampleAdaptiveOffset
 {
 public:
@@ -96,12 +111,12 @@ public:
   //interface
   void init                  ( const VVEncCfg& encCfg );
   void initSlice             ( const Slice* slice );
-  void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
+  void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, PelStorage* ctuPreSaoBuf );
 
   static void disabledRate   ( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
   static void decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
 
-  void storeCtuReco          ( CodingStructure& cs, const UnitArea& ctuArea, const int ctuX, const int ctuY );
+  void loadCtuPreSao         ( CodingStructure& cs, const UnitArea& ctuArea, const int ctuY, SaoPreFilterEdges& edges );
   void getCtuStatistics      ( CodingStructure& cs, std::vector<SAOStatData**>& saoStatistics, const UnitArea& ctuArea, const int ctuRsAddr );
   void decideCtuParams       ( CodingStructure& cs, const std::vector<SAOStatData**>& saoStatistics, const bool saoEnabled[ MAX_NUM_COMP ], const bool allBlksDisabled, const UnitArea& ctuArea, const int ctuRsAddr, SAOBlkParam* reconParams, SAOBlkParam* codedParams );
 
@@ -123,6 +138,7 @@ private:
   //for RDO
   CABACWriter*  m_CABACEstimator;
   CtxCache*     m_CtxCache;
+  PelStorage*   m_ctuPreSao;   ///< pre-SAO samples of the current CTU with one sample of border, see loadCtuPreSao
   double        m_lambda[ MAX_NUM_COMP ];
 };
 

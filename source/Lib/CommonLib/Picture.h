@@ -148,9 +148,6 @@ struct Picture : public UnitArea
   void releasePrevBuffers();
   void releaseSharedBuffers();
 
-  void createTempBuffers( unsigned _maxCUSize );
-  void destroyTempBuffers();
-
   // The reconstruction and the motion field are needed from the start of the picture's encoding
   // until the picture is released, not while it waits in the GOP queue.
   void createEncodingBuffers();
@@ -179,9 +176,6 @@ struct Picture : public UnitArea
   const CPelUnitBuf getRecoBuf()                                    const { return getPicBuf(        PIC_RECONSTRUCTION); }
          int        getRecoBufStride(const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].stride; }
   const  Pel*       getRecoBufPtr   (const ComponentID compID)      const { return m_picBufs[PIC_RECONSTRUCTION].bufs[compID].buf; }
-
-         PelUnitBuf getSaoBuf()                                           { return getPicBuf(        PIC_SAO_TEMP); }
-  const CPelUnitBuf getSaoBuf()                                     const { return getPicBuf(        PIC_SAO_TEMP); }
 
         PelStorage& getFilteredOrigBuffer()                               { return *m_sharedBufs[       PIC_FILT_ORIGINAL]; }
          PelUnitBuf getFiltOrigBuf()                                      { return getSharedBuf(        PIC_FILT_ORIGINAL); }

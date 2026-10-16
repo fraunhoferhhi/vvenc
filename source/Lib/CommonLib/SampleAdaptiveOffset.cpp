@@ -602,7 +602,7 @@ void SampleAdaptiveOffset::xReconstructBlkSAOParams(CodingStructure& cs, SAOBlkP
   }
 }
 
-void SampleAdaptiveOffset::offsetCTU( const UnitArea& area, const CPelUnitBuf& src, PelUnitBuf& res, SAOBlkParam& saoblkParam, CodingStructure& cs)
+void SampleAdaptiveOffset::offsetCTU( const UnitArea& area, const CPelUnitBuf& srcCtu, PelUnitBuf& res, SAOBlkParam& saoblkParam, CodingStructure& cs)
 {
   const uint32_t numberOfComponents = getNumberValidComponents( area.chromaFormat );
   bool bAllOff=true;
@@ -637,8 +637,8 @@ void SampleAdaptiveOffset::offsetCTU( const UnitArea& area, const CPelUnitBuf& s
 
     if(ctbOffset.modeIdc != SAO_MODE_OFF)
     {
-      int  srcStride    = src.get(compID).stride;
-      const Pel* srcBlk = src.get(compID).bufAt(compArea);
+      int  srcStride    = srcCtu.get(compID).stride;
+      const Pel* srcBlk = srcCtu.get(compID).buf;
       int  resStride    = res.get(compID).stride;
       Pel* resBlk       = res.get(compID).bufAt(compArea);
 

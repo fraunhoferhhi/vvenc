@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/CodingStructure.h"
 
+#include <memory>
 #include <typeinfo>
 #include <vector>
 
@@ -300,16 +301,55 @@ struct BestEncodingInfo
   double          costEDO;
 };
 
+// Hands out runs of T from chunks that are kept for reuse. Runs never move, so pointers into them
+// stay valid until reset() makes all chunks available again.
+template<typename T, size_t ChunkSize>
+class ReusableChunkArena
+{
+public:
+  T* take( const size_t n )
+  {
+    CHECK( n > ChunkSize, "Run larger than an arena chunk" );
+    if( m_current < 0 || m_used + n > ChunkSize )
+    {
+      m_current++;
+      if( m_current == ( int ) m_chunks.size() )
+      {
+        m_chunks.emplace_back( new T[ChunkSize] );
+      }
+      m_used = 0;
+    }
+    T* run  = m_chunks[m_current].get() + m_used;
+    m_used += n;
+    return run;
+  }
+
+  void reset()   { m_current = -1; m_used = 0; }
+  void release() { m_chunks.clear(); reset(); }
+
+private:
+  std::vector<std::unique_ptr<T[]>> m_chunks;
+  int    m_current = -1;
+  size_t m_used    = 0;
+};
+
 class BestEncInfoCache
 {
 private:
   const PreCalcValues* m_pcv;
+  // The stored result of every CU size and position inside the CTU being encoded, or null. A result
+  // only matches a CU of the same picture and position, so none outlives the CTU it was stored for,
+  // and init() empties the slots of the previous CTU and reuses their storage.
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
-  TCoeffSig*           m_pCoeff;
-  BestEncodingInfo*    m_encInfoBuf;
-  Mv*                  m_dmvrMvBuf;
+  std::vector<BestEncodingInfo**>           m_filledSlots;
+  ReusableChunkArena<BestEncodingInfo, 256> m_entryArena;
+  ReusableChunkArena<TCoeffSig, 131072>     m_coeffArena;
+  ReusableChunkArena<Mv, 4096>              m_dmvrMvArena;
+  ChromaFormat         m_chFmt;
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
+
+  BestEncodingInfo*    xNewEntry( const int wIdx, const int hIdx );
 
 protected:
   bool                 m_reuseCuResults;
@@ -317,7 +357,7 @@ protected:
   void destroy  ();
 
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_encInfoBuf( nullptr ), m_dmvrMvBuf( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_chFmt( CHROMA_420 ), m_dummyCS( m_dummyCache, nullptr ) {}
   ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );

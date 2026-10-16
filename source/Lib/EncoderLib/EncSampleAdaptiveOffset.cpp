@@ -77,9 +77,22 @@ inline double xRoundIbdi(int bitDepth, double x)
 }
 
 
+void SaoPreFilterEdges::create( const ChromaFormat chFmt, const PreCalcValues& pcv )
+{
+  for( int compIdx = 0; compIdx < getNumberValidComponents( chFmt ); compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    width    [compIdx] = pcv.lumaWidth >> getComponentScaleX( compID, chFmt );
+    ctuHeight[compIdx] = pcv.maxCUSize >> getComponentScaleY( compID, chFmt );
+    bottomRows[compIdx].resize( pcv.heightInCtus * width[compIdx] );
+    rightCols [compIdx].resize( pcv.heightInCtus * ctuHeight[compIdx] );
+  }
+}
+
 EncSampleAdaptiveOffset::EncSampleAdaptiveOffset()
   : m_CABACEstimator( nullptr )
   , m_CtxCache      ( nullptr )
+  , m_ctuPreSao     ( nullptr )
 {
 }
 
@@ -102,10 +115,11 @@ void EncSampleAdaptiveOffset::initSlice( const Slice* slice )
   memcpy( m_lambda, slice->getLambdas(), sizeof( m_lambda ) );
 }
 
-void EncSampleAdaptiveOffset::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache )
+void EncSampleAdaptiveOffset::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, PelStorage* ctuPreSaoBuf )
 {
   m_CABACEstimator = cabacEstimator;
   m_CtxCache       = ctxCache;
+  m_ctuPreSao      = ctuPreSaoBuf;
 }
 
 void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat )
@@ -194,46 +208,64 @@ void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double
   }
 }
 
-void EncSampleAdaptiveOffset::storeCtuReco( CodingStructure& cs, const UnitArea& ctuArea, const int ctuX, const int ctuY )
+void EncSampleAdaptiveOffset::loadCtuPreSao( CodingStructure& cs, const UnitArea& ctuArea, const int ctuY, SaoPreFilterEdges& edges )
 {
-  const int STORE_CTU_INCREASE = 8;
-  Position lPos( ctuArea.lx() + STORE_CTU_INCREASE, ctuArea.ly() + STORE_CTU_INCREASE );
-  Size    lSize( ctuArea.lwidth(), ctuArea.lheight() );
+  // SAO of a CTU reads the CTU and one sample around it, all as they were before SAO. CTUs are
+  // filtered row by row from the left, so the reconstruction still holds these samples for the CTU
+  // itself and for the neighbours right of and below it. The CTUs above and to the left are
+  // filtered already, and their edges come from the copies they saved here.
+  const PelUnitBuf reco = cs.picture->getRecoBuf();
 
-  const bool tileBdryClip = cs.pps->getNumTiles() > 1 && !cs.pps->loopFilterAcrossTilesEnabled;
-  int startX = 0;
-  int startY = 0;
-  if( tileBdryClip )  
+  for( int compIdx = 0; compIdx < getNumberValidComponents( ctuArea.chromaFormat ); compIdx++ )
   {
-    startX = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuX]] << cs.pcv->maxCUSizeLog2;
-    startY = cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuY]] << cs.pcv->maxCUSizeLog2;
-  }
+    const ComponentID compID = ComponentID( compIdx );
+    const CompArea&   area   = ctuArea.block( compID );
+    const CPelBuf     src    = reco.get( compID );
+    PelBuf            ctu    = m_ctuPreSao->get( compID );
 
-  if ( ctuArea.lx() == startX )
-  {
-    lPos.x       = ctuArea.lx();
-    lSize.width += STORE_CTU_INCREASE;
-  }
-  if ( ctuArea.ly() == startY )
-  {
-    lPos.y        = ctuArea.ly();
-    lSize.height += STORE_CTU_INCREASE;
-  }
+    const int x        = area.x;
+    const int y        = area.y;
+    const int w        = area.width;
+    const int h        = area.height;
+    const int colBegin = x > 0 ? -1 : 0;
+    const int colEnd   = x + w < ( int ) src.width ? w + 1 : w;
+    Pel* const savedRow = &edges.bottomRows[compIdx][ctuY * edges.width[compIdx]];
+    Pel* const savedCol = &edges.rightCols [compIdx][ctuY * edges.ctuHeight[compIdx]];
 
-  int clipX = cs.pcv->lumaWidth  - lPos.x;
-  int clipY = cs.pcv->lumaHeight - lPos.y;
-  if( tileBdryClip )  
-  {
-    clipX  = cs.pps->tileColBdRgt[cs.pps->ctuToTileCol[ctuX]] - lPos.x;
-    clipY  = cs.pps->tileRowBdBot[cs.pps->ctuToTileRow[ctuY]] - lPos.y;
-  }
-  lSize.clipSize( clipX, clipY );
+    // the row above, saved by the CTU row above
+    if( y > 0 )
+    {
+      const Pel* rowAbove = &edges.bottomRows[compIdx][( ctuY - 1 ) * edges.width[compIdx]];
+      std::copy( rowAbove + x + colBegin, rowAbove + x + colEnd, ctu.bufAt( colBegin, -1 ) );
+    }
+    // the CTU and the column right of it
+    for( int r = 0; r < h; r++ )
+    {
+      const Pel* line = src.bufAt( x, y + r );
+      std::copy( line, line + colEnd, ctu.bufAt( 0, r ) );
+    }
+    // the column left of it, saved by the CTU to the left
+    if( x > 0 )
+    {
+      for( int r = 0; r < h; r++ )
+      {
+        ctu.at( -1, r ) = savedCol[r];
+      }
+    }
+    // the row below
+    if( y + h < ( int ) src.height )
+    {
+      const Pel* line = src.bufAt( x, y + h );
+      std::copy( line + colBegin, line + colEnd, ctu.bufAt( colBegin, h ) );
+    }
 
-  const UnitArea relocArea( ctuArea.chromaFormat, Area( lPos, lSize ) );
-  Picture& pic       = *cs.picture;
-  PelUnitBuf recoYuv = pic.getRecoBuf().subBuf( relocArea );
-  PelUnitBuf tempYuv = pic.getSaoBuf().subBuf( relocArea );
-  tempYuv.copyFrom( recoYuv );
+    // save this CTU's bottom row and right column for the CTUs filtered after it
+    std::copy( ctu.bufAt( 0, h - 1 ), ctu.bufAt( 0, h - 1 ) + w, savedRow + x );
+    for( int r = 0; r < h; r++ )
+    {
+      savedCol[r] = ctu.at( w - 1, r );
+    }
+  }
 }
 
 void EncSampleAdaptiveOffset::getCtuStatistics( CodingStructure& cs, std::vector<SAOStatData**>& saoStatistics, const UnitArea& ctuArea, const int ctuRsAddr )
@@ -274,13 +306,13 @@ void EncSampleAdaptiveOffset::getCtuStatistics( CodingStructure& cs, std::vector
     const ComponentID compID = ComponentID( compIdx );
     const CompArea& compArea = ctuArea.block( compID );
 
-    PelBuf srcBuf = cs.picture->getSaoBuf().get( compID );
+    PelBuf srcBuf = m_ctuPreSao->get( compID );
     PelBuf orgBuf = cs.picture->getOrigBuf().get( compID );
 
     getBlkStats( compID,
                  cs.sps->bitDepths[ toChannelType( compID ) ],
                  saoStatistics[ ctuRsAddr ][ compID ],
-                 srcBuf.bufAt( compArea ),
+                 srcBuf.buf,
                  orgBuf.bufAt( compArea ),
                  srcBuf.stride,
                  orgBuf.stride,
@@ -414,8 +446,7 @@ void EncSampleAdaptiveOffset::decideCtuParams( CodingStructure& cs, const std::v
 
   reconstructBlkSAOParam( reconParams[ ctuRsAddr ], mergeList );
 
-  Picture& pic = *cs.picture;
-  offsetCTU( ctuArea, pic.getSaoBuf(), cs.getRecoBuf(), reconParams[ ctuRsAddr ], cs );
+  offsetCTU( ctuArea, *m_ctuPreSao, cs.getRecoBuf(), reconParams[ ctuRsAddr ], cs );
 }
 
 int64_t EncSampleAdaptiveOffset::getDistortion(const int channelBitDepth, int typeIdc, int typeAuxInfo, int* invQuantOffset, SAOStatData& statData)
