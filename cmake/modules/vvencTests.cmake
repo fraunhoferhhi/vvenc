@@ -74,6 +74,11 @@ add_vvenc_test( compare_output-medium_noqpa_0thr 30 NO_OUTPUT "${OUT_VVC};${OUTF
 
 add_vvenc_test( vvencFFapp-lowdelay_medium 30 OUTF_VVC  ""            vvencFFapp -c ${CFG_DIR}/experimental/lowdelay_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} --IntraPeriod=-1 -dph 1 -f 8 --Threads=-1 -b OUTPUT )
 
+# Film grain analysis used to crash when a luma or chroma plane is smaller than its 64x64 analysis window, and on
+# pictures narrower than 32 samples in the x86 SIMD edge detection. Reading the 80x44 clip as 24x44 pictures covers
+# both. With fewer than 8 frames the encode ends before the first picture the analysis looks at.
+add_vvenc_test( vvencapp-medium_fga_small 30 OUT_VVC   ""                     vvencapp --preset medium --fga 1 -s 24x44 -r 15 -i ${TEST_YUV} -ip 32 -f 9 --mtprofile 0 -o OUTPUT )
+
 add_vvenc_test( vvencapp-medium_rc2p       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 --Bitrate=10000 --Passes=2 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium_rc2p     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 --TargetBitrate=10000 --Passes=2 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-medium_rc2p 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )

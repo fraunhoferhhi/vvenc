@@ -211,13 +211,17 @@ void gradient_core ( PelStorage *buff1,
 // Edge detection - Canny
 // ====================================================================================================================
 
-Canny::Canny()
+Canny::Canny( bool enableOpt )
 {
   // init();
   gradient=gradient_core;
+
+  if( enableOpt )
+  {
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  initFGACannyX86();
+    initFGACannyX86();
 #endif
+  }
 }
 
 Canny::~Canny()
@@ -617,7 +621,8 @@ int calcMeanCore ( const Pel* org,
 // Film Grain Analysis Functions
 // ====================================================================================================================
 FGAnalyzer::FGAnalyzer( bool enableOpt )
-  : m_morphOperation( enableOpt )
+  : m_edgeDetector( enableOpt )
+  , m_morphOperation( enableOpt )
 {
   calcVar     = calcVarCore;
   calcMean    = calcMeanCore;
@@ -1127,9 +1132,11 @@ void FGAnalyzer::estimateGrainParameters ( Picture *pic )
     quantVec.clear();
     coeffs.clear();
 
-    for ( int i = 0; i <= width - windowSize; i += windowSize )
+    // Only whole windows are analyzed. The bounds add instead of subtract because width - windowSize is unsigned
+    // and wraps around for a plane smaller than the window, e.g. the 60-row chroma of a 208x120 4:2:0 picture.
+    for ( int i = 0; i + windowSize <= width; i += windowSize )
     { // loop over windowSize x windowSize blocks
-      for ( int j = 0; j <= height - windowSize; j += windowSize )
+      for ( int j = 0; j + windowSize <= height; j += windowSize )
       {
         if ( compID == COMP_Y )
         {

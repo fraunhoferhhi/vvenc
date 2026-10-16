@@ -3716,6 +3716,94 @@ static bool test_MorphDilation()
   return passed;
 }
 
+static bool test_CannyGradient()
+{
+  printf( "Testing Canny::gradient\n" );
+  vvenc::Canny ref{ /*enableOpt=*/false };
+  vvenc::Canny opt{ /*enableOpt=*/true };
+
+  bool     passed    = true;
+  unsigned num_cases = g_fastUnitTest ? 2 : NUM_CASES;
+
+  // FGAnalyzer::findMask runs the gradient on luma at full, half and quarter size, so widths need not be multiples
+  // of the vector size; narrow ones take the scalar path. As there, the plane has a margin of 2, while the direction
+  // and accumulator buffers are allocated at full size.
+  const int widths[]  = { 2, 6, 8, 12, 16, 20, 24, 36, 62, 64, 162, 324 };
+  const int heights[] = { 1, 2, 5, 16, 33 };
+  const int fullW     = 648;
+  const int fullH     = 66;
+  const int margin    = 2;
+  const int bitDepth  = 10;
+
+  for( unsigned c = 0; c < num_cases; ++c )
+  {
+    for( int w : widths )
+    {
+      for( int h : heights )
+      {
+        vvenc::PelStorage planeRef, planeOpt, dirRef, dirOpt, gxRef, gxOpt, gyRef, gyOpt;
+        planeRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, margin, 0, false );
+        planeOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, margin, 0, false );
+        for( vvenc::PelStorage* full : { &dirRef, &dirOpt, &gxRef, &gxOpt, &gyRef, &gyOpt } )
+        {
+          full->create( VVENC_CHROMA_400, Area( 0, 0, fullW, fullH ) );
+        }
+
+        // In the encoder the margin holds what an earlier frame left there, which must not matter: it gets
+        // different values for the two implementations, the plane itself the same ones.
+        InputGenerator<Pel> gen{ (unsigned)bitDepth, /*is_signed=*/false };
+        PelBuf bufRef = planeRef.getBuf( COMP_Y ), bufOpt = planeOpt.getBuf( COMP_Y );
+        for( int y = -margin; y < h + margin; y++ )
+        {
+          for( int x = -margin; x < w + margin; x++ )
+          {
+            const bool inside = x >= 0 && y >= 0 && x < w && y < h;
+            bufRef.at( x, y ) = gen();
+            bufOpt.at( x, y ) = inside ? bufRef.at( x, y ) : gen();
+          }
+        }
+
+        ref.gradient( &planeRef, &dirRef, &gxRef, &gyRef, w, h, bitDepth, COMP_Y );
+        opt.gradient( &planeOpt, &dirOpt, &gxOpt, &gyOpt, w, h, bitDepth, COMP_Y );
+
+        std::ostringstream ctx;
+        ctx << "Canny::gradient w=" << w << " h=" << h;
+        passed = compare_values_2d( ctx.str() + " magnitude", bufRef.bufAt( 0, 0 ), bufOpt.bufAt( 0, 0 ), h, w,
+                                    bufRef.stride ) && passed;
+
+        // The vector path quantizes the direction with a polynomial approximation of atan, so within a hair of a
+        // boundary between two directions it may round the other way. The scalar path leaves both Sobel responses
+        // in the accumulators, which give the exact angle.
+        for( int y = 0; y < h; y++ )
+        {
+          for( int x = 0; x < w; x++ )
+          {
+            const Pel dirR = dirRef.getBuf( COMP_Y ).at( x, y ), dirO = dirOpt.getBuf( COMP_Y ).at( x, y );
+            if( dirR == dirO )
+            {
+              continue;
+            }
+            const double theta      = std::fabs( std::atan2( (double)gyRef.getBuf( COMP_Y ).at( x, y ),
+                                                             (double)gxRef.getBuf( COMP_Y ).at( x, y ) ) );
+            bool         atBoundary = false;
+            const double pi         = std::acos( -1.0 );
+            for( double boundary : { pi / 8, 3 * pi / 8, 5 * pi / 8, 7 * pi / 8 } )
+            {
+              atBoundary = atBoundary || std::fabs( theta - boundary ) < 1e-4;
+            }
+            if( !atBoundary )
+            {
+              printf( "failed: %s direction at (%d,%d): ref %d, opt %d\n", ctx.str().c_str(), x, y, dirR, dirO );
+              passed = false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 #endif // ENABLE_SIMD_OPT_FGA
 
 #if ENABLE_SIMD_OPT_QUANT
@@ -4215,6 +4303,7 @@ static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },
     { "MorphDilation", test_MorphDilation },
+    { "CannyGradient", test_CannyGradient },
 #endif
 };
 

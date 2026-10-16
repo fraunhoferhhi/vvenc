@@ -199,6 +199,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight,
                        m_pcEncCfg->m_internChromaFormat, m_pcEncCfg->m_outputBitDepth,
                        m_pcEncCfg->m_fg.m_fgcSEICompModelPresent );
+    m_fgcParam = FilmGrainParam( m_fgAnalyzer );   // default parameters, until the first analysis
   }
 
   if( !m_pcEncCfg->m_poc0idr )
@@ -630,24 +631,6 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 
   // compress next picture
   picEncoder->compressPicture( *pic, *this );
-
-  if ( m_pcEncCfg->m_fga && !m_isPreAnalysis && m_pcRateCtrl->rcIsFinalPass )
-  {
-    /* It is mctf denoising for film grain analysis. Note:
-     * when mctf is used, it is different from mctf for encoding. */
-    int curFrameNum = pic->getPOC();
-    int gopSize = m_pcEncCfg->m_GOPSize;
-    int prevAnalysedPoc = m_fgAnalyzer.prevAnalysisPoc;
-    if ( ( prevAnalysedPoc == -1 ) || ( abs( curFrameNum - prevAnalysedPoc ) >= gopSize ) )
-    {
-      bool isFiltered = pic->getFilteredOrigBuffer().valid();
-      if ( isFiltered )
-      {
-        m_fgAnalyzer.estimateGrainParameters( pic );
-        m_fgAnalyzer.prevAnalysisPoc = curFrameNum;
-      }
-    }
-  }
 
   // finish picture encoding and cleanup
   if( m_pcEncCfg->m_numThreads > 0 )
@@ -1456,6 +1439,23 @@ void EncGOP::xSetupPicAps( Picture* pic )
   pic->refApsGlobal = refAps;
 }
 
+void EncGOP::xAnalyzeFilmGrain( Picture& pic )
+{
+  // Pictures come here in coding order. Analyzing them here rather than when their encoding starts keeps the choice
+  // of analyzed pictures, and the parameters each access unit signals, independent of the parallel encoding order.
+  // The analysis needs the MCTF-filtered picture and runs at most once per GOP size.
+  const int  prevAnalysisPoc    = m_fgAnalyzer.prevAnalysisPoc;
+  const bool isNearLastAnalysis = prevAnalysisPoc != -1 && abs( pic.getPOC() - prevAnalysisPoc ) < m_pcEncCfg->m_GOPSize;
+  if( isNearLastAnalysis || !pic.getFilteredOrigBuffer().valid() )
+  {
+    return;
+  }
+
+  m_fgAnalyzer.estimateGrainParameters( &pic );
+  m_fgAnalyzer.prevAnalysisPoc = pic.getPOC();
+  m_fgaResults.push_back( { pic.gopEntry->m_codingNum, FilmGrainParam( m_fgAnalyzer ) } );
+}
+
 void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 {
   CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
@@ -1512,6 +1512,11 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
     if( m_pcEncCfg->m_alf && m_pcEncCfg->m_alfTempPred )
     {
         xSetupPicAps( pic );
+    }
+
+    if( m_pcEncCfg->m_fga && !m_isPreAnalysis && m_pcRateCtrl->rcIsFinalPass )
+    {
+      xAnalyzeFilmGrain( *pic );
     }
 
     // continue with next picture
@@ -2497,14 +2502,22 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   // film grain SEI
   if ( m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI )
   {
+    // Access units are written in coding order. An analysis result takes effect with the access unit of the analyzed
+    // picture, however far ahead of the output the analysis ran.
+    while( !m_fgaResults.empty() && m_fgaResults.front().first <= pic.gopEntry->m_codingNum )
+    {
+      m_fgcParam = std::move( m_fgaResults.front().second );
+      m_fgaResults.pop_front();
+    }
+
     SeiFgc* sei = new SeiFgc;
     m_seiEncoder.initSeiFgc( sei );
-    sei->log2ScaleFactor = m_fgAnalyzer.getLog2scaleFactor();
+    sei->log2ScaleFactor = m_fgcParam.log2ScaleFactor;
     for ( int compIdx = 0; compIdx < getNumberValidComponents(pic.chromaFormat); compIdx++ )
     {
       if ( sei->compModel[compIdx].presentFlag )
       {  // higher importance of presentFlag is from cfg file
-        sei->compModel[compIdx] = m_fgAnalyzer.getCompModel( compIdx );
+        sei->compModel[compIdx] = m_fgcParam.compModel[compIdx];
       }
     }
     leadingSeiMessages.push_back( sei );
