@@ -64,7 +64,7 @@ namespace vvenc {
 class QuantRDOQ : public Quant
 {
 public:
-  QuantRDOQ( const Quant* other, bool useScalingLists );
+  QuantRDOQ( const Quant* other, bool useScalingLists, bool enableOpt );
   ~QuantRDOQ();
 
 public:

@@ -1058,7 +1058,8 @@ static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const Alf
                                          const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
 
 EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
-  : m_encCfg         ( nullptr )
+  : AdaptiveLoopFilter( enableOpt )
+  , m_encCfg         ( nullptr )
   , m_apsMap         ( nullptr )
   , m_CABACEstimator ( nullptr )
   , m_CtxCache       ( nullptr )

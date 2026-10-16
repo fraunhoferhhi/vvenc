@@ -85,7 +85,7 @@ struct coeffGroupRDStats
 
 //! \}
 
-QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists ) : QuantRDOQ( other, useScalingLists ), m_isErrScaleListOwner( false ), m_iLambda( 0 )
+QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists, bool enableOpt ) : QuantRDOQ( other, useScalingLists, enableOpt ), m_isErrScaleListOwner( false ), m_iLambda( 0 )
 {
   const QuantRDOQ2 *rdoq2 = dynamic_cast<const QuantRDOQ2*>( other );
   CHECK( other && !rdoq2, "The RDOQ cast must be successfull!" );
