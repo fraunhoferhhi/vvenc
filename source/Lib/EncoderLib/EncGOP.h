@@ -221,6 +221,7 @@ private:
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  int  xGetByteStreamBits             ( const AccessUnitList& au, const size_t firstNalu ) const;
   void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );

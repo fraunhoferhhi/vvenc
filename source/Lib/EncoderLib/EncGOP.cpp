@@ -2349,6 +2349,9 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     au.dtsValid = pic.ctsValid;
   }
 
+  const int    bitsCountedByRC = pic.actualTotalBits; // slice data bits if the rate control was updated before writing
+  const size_t numNalusBefore  = au.size();
+
   pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
   xWriteLeadingSEIs( pic, au );
   pic.actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
@@ -2357,8 +2360,36 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
+
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcRateCtrl->rcIsFinalPass && ! m_isPreAnalysis )
+  {
+    // the rate control counts parameter sets, slice headers, SEI and start codes only for some pictures
+    const int rcBits = bitsCountedByRC > 0 ? bitsCountedByRC : pic.actualTotalBits;
+    m_pcRateCtrl->addUncountedBits( xGetByteStreamBits( au, numNalusBefore ) - rcBits );
+  }
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
+}
+
+// Bits of the NAL units from index firstNalu on as written to the byte stream, with the start codes chosen in
+// VVEncImpl::xCopyAu (four bytes for the first NAL unit of the access unit and for parameter sets, else three).
+int EncGOP::xGetByteStreamBits( const AccessUnitList& au, const size_t firstNalu ) const
+{
+  size_t idx  = 0;
+  int    bits = 0;
+
+  for( const NALUnitEBSP* nalu : au )
+  {
+    if( idx >= firstNalu )
+    {
+      const bool longStartCode = idx == 0 || nalu->m_nalUnitType == VVENC_NAL_UNIT_DCI || nalu->m_nalUnitType == VVENC_NAL_UNIT_VPS
+                                 || nalu->m_nalUnitType == VVENC_NAL_UNIT_SPS || nalu->m_nalUnitType == VVENC_NAL_UNIT_PPS
+                                 || nalu->m_nalUnitType == VVENC_NAL_UNIT_PREFIX_APS || nalu->m_nalUnitType == VVENC_NAL_UNIT_SUFFIX_APS;
+      bits += int( nalu->m_nalUnitData.str().size() + ( longStartCode ? 4 : 3 ) ) * 8;
+    }
+    idx++;
+  }
+  return bits;
 }
 
 int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter )
