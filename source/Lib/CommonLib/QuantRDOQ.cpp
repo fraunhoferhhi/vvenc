@@ -87,7 +87,7 @@ struct coeffGroupRDStats
 // ====================================================================================================================
 
 
-QuantRDOQ::QuantRDOQ( const Quant* other, bool useScalingLists ) : Quant( other, useScalingLists )
+QuantRDOQ::QuantRDOQ( const Quant* other, bool useScalingLists, bool enableOpt ) : Quant( other, useScalingLists, enableOpt )
 {
 
   const QuantRDOQ *rdoq = dynamic_cast<const QuantRDOQ*>( other );
