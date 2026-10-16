@@ -161,11 +161,15 @@ void ThreadRsrcPool::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pp
 {
   CHECK( !m_sets.empty(), "thread resources are already initialized" );
 
+  // The quantizers of all sets share the read-only tables of the first set's quantizer.
+  TrQuant* firstTrQuant = nullptr;
+
   m_sets.resize( numSets, nullptr );
   for( PerThreadRsrc*& set : m_sets )
   {
     set = new PerThreadRsrc();
-    set->m_encCu.init( encCfg, sps, globalCtuQpVector, &rateCtrl );
+    set->m_encCu.init( encCfg, sps, globalCtuQpVector, &rateCtrl, firstTrQuant );
+    firstTrQuant = firstTrQuant ? firstTrQuant : &set->m_encCu.getTrQuant();
     set->m_alfTempCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1), pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1) ), pps.pcv->maxCUSize, MAX_ALF_PADDING_SIZE, 0, false );
     if( encCfg.m_bUseSAO )
     {

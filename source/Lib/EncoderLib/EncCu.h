@@ -325,7 +325,10 @@ public:
   EncCu();
   virtual ~EncCu();
 
-  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl );
+  // When otherTrQuant is given, the quantizer is created from that one's quantizer and shares its read-only
+  // tables, such as the dependent quantization scan tables (see DepQuant::DepQuant).
+  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl, TrQuant* otherTrQuant );
+  TrQuant& getTrQuant         ()                            { return m_cTrQuant; }
   void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
   void  destroy               ();
 
