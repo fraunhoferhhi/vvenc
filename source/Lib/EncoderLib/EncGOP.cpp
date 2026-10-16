@@ -207,11 +207,16 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
   }
   m_seiEncoder.init( encCfg, gopCfg, m_EncHRD );
 
+  // One CU encoder per worker thread is enough: a worker encodes one CTU at a time, whichever
+  // of the parallel pictures it belongs to.
+  const int numThreadRsrc = ( encCfg.m_numThreads > 0 && threadPool ) ? threadPool->numThreads() : 1;
+  m_threadRsrc.init( encCfg, sps0, pps0, &m_globalCtuQpVector, rateCtrl, numThreadRsrc );
+
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     EncPicture* picEncoder = new EncPicture;
-    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool );
+    picEncoder->init( encCfg, &m_globalCtuQpVector, sps0, pps0, rateCtrl, threadPool, m_threadRsrc );
     m_freePicEncoderList.push_back( picEncoder );
   }
 
@@ -722,7 +727,12 @@ void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList )
   for( auto pic : picList )
   {
     if( ( pic->isFinished && ! pic->isNeededForOutput && ! pic->isReferenced && pic->refCounter <= 0 ) || allPicsDone )
+    {
+      // Nothing reads a released picture any more. Its buffers are allocated again when the
+      // picture object is reused and its next picture starts encoding.
+      pic->releaseEncodingBuffers();
       freeList.push_back( pic );
+    }
   }
 }
 
@@ -2129,7 +2139,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   CHECK( slice->TLayer != 0 && slice->sliceType == VVENC_I_SLICE, "Unspecified error" );
 
   pic.cs->slice = slice;
-  pic.cs->allocateVectorsAtPicLevel();
   pic.isReferenced = true;
 
   pic.picApsMap.clearActive();

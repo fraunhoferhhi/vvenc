@@ -89,7 +89,8 @@ class EncPicture
                                   const SPS& sps,
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
-                                  NoMallocThreadPool* threadPool );
+                                  NoMallocThreadPool* threadPool,
+                                  ThreadRsrcPool& threadRsrc );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
     void finalizePicture        ( Picture& pic );
 

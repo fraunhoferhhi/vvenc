@@ -69,14 +69,15 @@ void EncPicture::init( const VVEncCfg& encCfg,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
-                       NoMallocThreadPool* threadPool )
+                       NoMallocThreadPool* threadPool,
+                       ThreadRsrcPool& threadRsrc )
 {
   m_pcEncCfg = &encCfg;
 
   if( encCfg.m_alf || encCfg.m_ccalf )
     m_ALF       .init( encCfg, pps, m_CABACEstimator, m_CtxCache, threadPool );
 
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, threadRsrc, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
 }
 
@@ -88,6 +89,11 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
   pic.encTime.startTimer();
 
+  pic.createEncodingBuffers();
+  // Reserve the picture-level CU and TU lists for one unit per 4x4 block, which avoids growing them
+  // while the CTU results are appended. They are only needed while the picture is encoded, and
+  // finalizePicture releases them.
+  pic.cs->allocateVectorsAtPicLevel();
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
@@ -165,6 +171,7 @@ void EncPicture::finalizePicture( Picture& pic )
 
   // cleanup
   pic.cs->releaseIntermediateData();
+  pic.cs->releaseVectorsAtPicLevel();
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
   pic.destroyTempBuffers();

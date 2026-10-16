@@ -158,6 +158,7 @@ private:
   vvencNalUnitType          m_associatedIRAPType;
   RateCapParam              m_rcap;
 
+  ThreadRsrcPool            m_threadRsrc;          ///< CU encoders of the worker threads, shared by all picture encoders
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListOutput;

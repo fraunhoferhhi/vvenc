@@ -146,6 +146,29 @@ struct PerThreadRsrc
   PelStorage m_alfTempCtuBuf;
 };
 
+ThreadRsrcPool::~ThreadRsrcPool()
+{
+  for( PerThreadRsrc* set : m_sets )
+  {
+    set->m_alfTempCtuBuf.destroy();
+    delete set;
+  }
+  m_sets.clear();
+}
+
+void ThreadRsrcPool::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, std::vector<int>* const globalCtuQpVector, RateCtrl& rateCtrl, const int numSets )
+{
+  CHECK( !m_sets.empty(), "thread resources are already initialized" );
+
+  m_sets.resize( numSets, nullptr );
+  for( PerThreadRsrc*& set : m_sets )
+  {
+    set = new PerThreadRsrc();
+    set->m_encCu.init( encCfg, sps, globalCtuQpVector, &rateCtrl );
+    set->m_alfTempCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1), pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1) ), pps.pcv->maxCUSize, MAX_ALF_PADDING_SIZE, 0, false );
+  }
+}
+
 struct CtuEncParam
 {
   Picture*  pic;
@@ -173,6 +196,8 @@ struct CtuEncParam
 
 EncSlice::EncSlice()
   : m_pcEncCfg           ( nullptr)
+  , m_threadRsrc         ( nullptr )
+  , m_globalCtuQpVector  ( nullptr )
   , m_threadPool         ( nullptr )
   , m_ctuTasksDoneCounter( nullptr )
   , m_ctuEncDelay        ( 1 )
@@ -192,13 +217,6 @@ EncSlice::~EncSlice()
     delete lnRsc;
   }
   m_TileLineEncRsrc.clear();
-
-  for( auto* taskRsc: m_ThreadRsrc )
-  {
-    taskRsc->m_alfTempCtuBuf.destroy();
-    delete taskRsc;
-  }
-  m_ThreadRsrc.clear();
 
   m_saoReconParams.clear();
 
@@ -221,6 +239,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
                      EncAdaptiveLoopFilter& alf,
                      RateCtrl& rateCtrl,
                      NoMallocThreadPool* threadPool,
+                     ThreadRsrcPool& threadRsrc,
                      WaitCounter* ctuTasksDoneCounter )
 {
   m_pcEncCfg            = &encCfg;
@@ -228,26 +247,15 @@ void EncSlice::init( const VVEncCfg& encCfg,
   m_pALF                = &alf;
   m_pcRateCtrl          = &rateCtrl;
   m_threadPool          = threadPool;
+  m_threadRsrc          = &threadRsrc;
+  m_globalCtuQpVector   = globalCtuQpVector;
   m_ctuTasksDoneCounter = ctuTasksDoneCounter;
   m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.getNumTileLineIds() : 0 );
 
   
   const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.getNumTileLineIds() : 1;
-  const int maxCtuEnc  = ( encCfg.m_numThreads > 0 && threadPool ) ? threadPool->numThreads() : 1;
 
-  m_ThreadRsrc.resize( maxCtuEnc,  nullptr );
   m_TileLineEncRsrc.resize( maxCntRscr, nullptr );
-
-  for( PerThreadRsrc*& taskRsc : m_ThreadRsrc )
-  {
-    taskRsc = new PerThreadRsrc();
-    taskRsc->m_encCu.init( encCfg,
-                           sps,
-                           globalCtuQpVector,
-                           m_syncPicCtx.data(),
-                           &rateCtrl );
-    taskRsc->m_alfTempCtuBuf.create( pps.pcv->chrFormat, Area( 0, 0, pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1), pps.pcv->maxCUSize + (MAX_ALF_PADDING_SIZE << 1) ), pps.pcv->maxCUSize, MAX_ALF_PADDING_SIZE, 0, false );
-  }
 
   for( TileLineEncRsrc*& lnRsc : m_TileLineEncRsrc )
   {
@@ -308,10 +316,12 @@ void EncSlice::initPic( Picture* pic )
   // set QP and lambda values
   xInitSliceLambdaQP( slice );
 
-  for( auto* thrRsc : m_ThreadRsrc )
-  {
-    thrRsc->m_encCu.initPic( pic );
-  }
+  // Worker threads apply this state to their CU encoders when they reach the picture's CTUs. The id
+  // tells pictures apart, also when this slice encoder is reused for the next picture.
+  static std::atomic<uint64_t> lastPicEncStateId{ 0 };
+  m_picEncState.pic        = pic;
+  m_picEncState.id         = ++lastPicEncStateId;
+  m_picEncState.syncPicCtx = m_syncPicCtx.data();
 
   for( auto* lnRsc : m_TileLineEncRsrc )
   {
@@ -350,7 +360,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     const uint32_t boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
     if ((iQP = BitAllocation::applyQPAdaptationSlice (slice, m_pcEncCfg, iQP, dLambda, &slice->pic->picVA.visAct, // updates pic->picInitialQP
-                                                      *m_ThreadRsrc[0]->m_encCu.getQpPtr(), m_pcRateCtrl->getIntraPQPAStats(),
+                                                      *m_globalCtuQpVector, m_pcRateCtrl->getIntraPQPAStats(),
                                                       (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
                                                       m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // QP OK?
     {
@@ -387,10 +397,14 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   slice->sliceChromaQpDelta[COMP_Cr] = Clip3 (-12, 12, crQP);
   slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = (slice->sps->jointCbCr ? Clip3 (-12, 12, cbCrQP) : 0);
 
-  for( auto& thrRsc : m_ThreadRsrc )
-  {
-    thrRsc->m_encCu.setUpLambda( *slice, dLambda, iQP, true, true );
-  }
+  // SAO and ALF use the slice lambdas. The CU encoders get the picture lambda when a worker
+  // thread binds them to this picture.
+  double dLambdas[MAX_NUM_COMP];
+  double weights [MAX_NUM_COMP];
+  EncCu::deriveComponentLambdas( *m_pcEncCfg, *slice, dLambda, iQP, dLambdas, weights );
+  slice->setLambdas( dLambdas );
+  m_picEncState.lambda = dLambda;
+  m_picEncState.qp     = iQP;
 
   slice->sliceQp            = iQP;
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen > 0;
@@ -548,11 +562,6 @@ void EncSlice::compressSlice( Picture* pic )
   if( startCtuTsAddr == 0 )
   {
     cs.initStructData( slice->sliceQp );
-  }
-
-  for( auto* thrRsrc : m_ThreadRsrc )
-  {
-    thrRsrc->m_encCu.initSlice( slice );
   }
 
   for( auto* lnRsrc : m_TileLineEncRsrc )
@@ -948,9 +957,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         ITT_TASKSTART( itt_domain_encode, itt_handle_ctuEncode );
 
         TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[ lineIdx ];
-        PerThreadRsrc* taskRsrc      = encSlice->m_ThreadRsrc[ threadIdx ];
+        PerThreadRsrc* taskRsrc      = &encSlice->m_threadRsrc->get( threadIdx );
         EncCu& encCu                 = taskRsrc->m_encCu;
 
+        encCu.bindToPicture( encSlice->m_picEncState );
         encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList, &lineEncRsrc->m_CachedBvs );
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
@@ -1083,7 +1093,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
         {
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_SAO, &cs, CH_L );
           TileLineEncRsrc* lineEncRsrc    = encSlice->m_TileLineEncRsrc[ lineIdx ];
-          PerThreadRsrc* taskRsrc         = encSlice->m_ThreadRsrc[ threadIdx ];
+          PerThreadRsrc* taskRsrc         = &encSlice->m_threadRsrc->get( threadIdx );
           EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
 
           encSao.setCtuEncRsrc( &lineEncRsrc->m_SaoCABACEstimator, &taskRsrc->m_CtxCache );
@@ -1153,7 +1163,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1207,7 +1217,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           {
             // in sync lines mode: derive/select filter for the remaining lines
             TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[ lineIdx ];
-            PerThreadRsrc*   taskRsrc    = encSlice->m_ThreadRsrc[ threadIdx ];
+            PerThreadRsrc*   taskRsrc    = &encSlice->m_threadRsrc->get( threadIdx );
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
             for(int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++)
             {
@@ -1247,7 +1257,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1275,8 +1285,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
@@ -1328,7 +1338,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           {
             // in sync lines mode: derive/select filter for the remaining lines
             TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[ lineIdx ];
-            PerThreadRsrc*   taskRsrc    = encSlice->m_ThreadRsrc[ threadIdx ];
+            PerThreadRsrc*   taskRsrc    = &encSlice->m_threadRsrc->get( threadIdx );
             const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
             encSlice->m_pALF->selectCcAlfFilterForCtuLine( cs, COMP_Cb, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, firstCtuInRow, ctuRsAddr );
             encSlice->m_pALF->selectCcAlfFilterForCtuLine( cs, COMP_Cr, cs.getRecoBuf(), &lineEncRsrc->m_AlfCABACEstimator, &taskRsrc->m_CtxCache, firstCtuInRow, ctuRsAddr );
@@ -1365,8 +1375,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
-            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu, encSlice->m_ThreadRsrc[ threadIdx ]->m_alfTempCtuBuf );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cb, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
+            encSlice->m_pALF->applyCcAlfFilterCTU( cs, COMP_Cr, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
           }
         }
 

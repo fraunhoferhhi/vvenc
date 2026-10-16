@@ -104,13 +104,10 @@ void CodingStructure::destroy()
   m_pred.destroy();
   m_resi.destroy();
   m_reco.destroy();
-  m_rspreco.destroy();
   m_org = nullptr;
-  m_filtorg = nullptr;
 
   destroyCoeffs();
-  delete[] m_motionBuf;
-  m_motionBuf = nullptr;
+  destroyMotionBuf();
 
   destroyTempBuffers();
 
@@ -506,6 +503,16 @@ void CodingStructure::allocateVectorsAtPicLevel()
   tus.reserve( allocSize );
 }
 
+void CodingStructure::releaseVectorsAtPicLevel()
+{
+  CHECKD( !cus.empty() || !tus.empty(), "Clearing non-empty CU/TU vectors, risking a memory leak!" );
+
+  // clear() keeps the capacity, which is one pointer per 4x4 block of the picture, so swap the
+  // lists with empty ones to return it.
+  std::vector<CodingUnit*>().swap( cus );
+  std::vector<TransformUnit*>().swap( tus );
+}
+
 
 
 void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const Area& _area )
@@ -515,7 +522,6 @@ void CodingStructure::createForSearch( const ChromaFormat _chromaFormat, const A
   m_reco.create( area );
   m_pred.create( area );
   m_resi.create( area );
-  m_rspreco.create( CHROMA_400, area.Y() );
 }
 
 void CodingStructure::createPicLevel( const UnitArea& _unit, const PreCalcValues* _pcv )
@@ -546,15 +552,15 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   parent  = nullptr;
   lumaCS  = nullptr;
 
-  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
-  m_motionBuf = new MotionInfo[_lumaAreaScaled];
-
+  // The picture-level structure gets its motion field when the picture's encoding starts (see
+  // Picture::createEncodingBuffers), so pictures that wait in the GOP queue do not hold one.
   if( isTopLayer )
   {
     motionLutBuf.resize( pps->getNumTileLineIds() );
   }
   else
   {
+    createMotionBuf();
     createCoeffs();
     createTempBuffers( false );
     initStructData( MAX_INT, false, nullptr );
@@ -658,6 +664,20 @@ void CodingStructure::createCoeffs()
   }
 }
 
+void CodingStructure::createMotionBuf()
+{
+  if( !m_motionBuf )
+  {
+    m_motionBuf = new MotionInfo[g_miScaling.scale( area.lumaSize() ).area()];
+  }
+}
+
+void CodingStructure::destroyMotionBuf()
+{
+  delete[] m_motionBuf;
+  m_motionBuf = nullptr;
+}
+
 void CodingStructure::destroyCoeffs()
 {
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
@@ -666,19 +686,15 @@ void CodingStructure::destroyCoeffs()
   }
 }
 
-void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer, PelStorage* pFiltOrgBuffer )
+void CodingStructure::initSubStructure( CodingStructure& subStruct, const ChannelType _chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer )
 {
   CHECK( this == &subStruct, "Trying to init self as sub-structure" );
 
   subStruct.parent = this;
 
   if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
-  UnitArea subAreaLuma = subArea;
-  subAreaLuma.blocks.resize( 1 );
-  if( pFiltOrgBuffer ) pFiltOrgBuffer->compactResize( subAreaLuma );
 
   subStruct.m_org    = (pOrgBuffer) ? pOrgBuffer : m_org;
-  subStruct.m_filtorg = (pFiltOrgBuffer) ? pFiltOrgBuffer : m_filtorg;
   subStruct.compactResize( subArea );
 
   subStruct.costDbOffset = 0;
@@ -918,13 +934,9 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
 
 void CodingStructure::compactResize( const UnitArea& _area )
 {
-  UnitArea areaLuma = _area;
-  areaLuma.blocks.resize( 1 );
-
   m_pred   .compactResize( _area );
   m_reco   .compactResize( _area );
   m_resi   .compactResize( _area );
-  m_rspreco.compactResize( areaLuma );
 
   for( uint32_t i = 0; i < _area.blocks.size(); i++ )
   {
@@ -1059,10 +1071,6 @@ PelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type )
   {
     buf = m_org;
   }
-  else if( type == PIC_FILT_ORIGINAL)
-  {
-    buf = m_filtorg;
-  }
 
   CHECK( !buf, "Unknown buffer requested" );
 
@@ -1093,10 +1101,6 @@ const CPelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType ty
   if (type == PIC_ORIGINAL)
   {
     buf = m_org;
-  }
-  else if( type == PIC_FILT_ORIGINAL)
-  {
-    buf = m_filtorg;
   }
 
   CHECK( !buf, "Unknown buffer requested" );

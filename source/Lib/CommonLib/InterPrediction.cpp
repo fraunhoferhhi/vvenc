@@ -343,14 +343,23 @@ void InterPrediction::xSubPuBDOF( const CodingUnit& cu, PelUnitBuf& predBuf, con
   const int  xEnd      = puPos.x + puSize.width;
   const int  dy        = std::min((int)MAX_BDOF_APPLICATION_REGION, (int)puSize.height);
   const int  dx        = std::min((int)MAX_BDOF_APPLICATION_REGION, (int)puSize.width);
+
+  // BDOF is only applied to CUs with one motion for the whole block, so every sub-block uses the
+  // motion of the CU. Taking it from the CU rather than from the motion buffer lets the merge search
+  // skip writing the buffer for every candidate it evaluates.
+  MotionInfo cuMotion;
+  for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
+  {
+    cuMotion.mv[i]       = cu.mv[i][0];
+    cuMotion.miRefIdx[i] = cu.refIdx[i];
+  }
+
   for (int y = puPos.y; y < yEnd; y += dy)
   {
     for (int x = puPos.x; x < xEnd; x += dx)
     {
-      const MotionInfo &curMi = cu.getMotionInfo(Position{ x, y });
-
       subCu.UnitArea::operator=(UnitArea(cu.chromaFormat, Area(x, y, dx, dy)));
-      subCu = curMi;
+      subCu = cuMotion;
       PelUnitBuf subPredBuf = predBuf.subBuf(UnitAreaRelative(cu, subCu));
 
       motionCompensation(subCu, subPredBuf, refPicList);
@@ -718,6 +727,13 @@ void InterPredInterpolation::init( bool enableOpt )
 
       for( uint32_t j = 0; j < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL; j++ )
       {
+        // Only the fractional luma motion search reads the quarter-sample filtered blocks, so the
+        // chroma ones are not allocated. That saves 32 blocks of about 39 KB per encoder thread.
+        if( c != COMP_Y )
+        {
+          m_filteredBlock[i][j][c] = nullptr;
+          continue;
+        }
         m_filteredBlock[i][j][c] = ( Pel* ) xMalloc( Pel, extWidth * extHeight );
         VALGRIND_MEMCLEAR( m_filteredBlock[i][j][c], sizeof( Pel ) * extWidth * extHeight );
       }

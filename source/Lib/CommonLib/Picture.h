@@ -151,6 +151,11 @@ struct Picture : public UnitArea
   void createTempBuffers( unsigned _maxCUSize );
   void destroyTempBuffers();
 
+  // The reconstruction and the motion field are needed from the start of the picture's encoding
+  // until the picture is released, not while it waits in the GOP queue.
+  void createEncodingBuffers();
+  void releaseEncodingBuffers();
+
   void extendPicBorder();
   void finalInit( const VPS& vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps );
   void setSccFlags( const VVEncCfg* encCfg );

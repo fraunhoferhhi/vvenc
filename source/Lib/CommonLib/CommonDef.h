@@ -517,7 +517,11 @@ static constexpr int PIC_CODE_CW_BINS =                              16;
 static constexpr int FP_PREC =                                       11;
 static constexpr int CSCALE_FP_PREC =                                11;
 
+// Border of the subsampled frames that MCTF searches on.
 static constexpr int MCTF_PADDING         = 128;
+// Replicated border around the input frames while MCTF is enabled. It covers the filter taps of most
+// reference blocks; MCTF copies blocks that reach further out with clamped coordinates.
+static constexpr int MCTF_FRAME_MARGIN    = 16;
 
 static constexpr int SCALE_RATIO_BITS =                              14;
 static constexpr int DELTA_QP_ACT[4] =                  { -5, 1, 3, 1 };

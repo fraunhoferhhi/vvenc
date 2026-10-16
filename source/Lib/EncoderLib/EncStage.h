@@ -124,7 +124,7 @@ public:
     m_maxFrames = maxFrames;
     m_refCount  = 0;
 
-    const int padding = useFilter ? MCTF_PADDING : 0;
+    const int padding = useFilter ? MCTF_FRAME_MARGIN : 0;
     m_origBuf.create( chromaFormat, Area( Position(), size ), 0, padding );
   }
 

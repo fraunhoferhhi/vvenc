@@ -607,7 +607,7 @@ void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* t
 
 void MCTF::initPicture( Picture* pic )
 {
-  pic->getOrigBuf().extendBorderPel( MCTF_PADDING, MCTF_PADDING );
+  pic->getOrigBuf().extendBorderPel( MCTF_FRAME_MARGIN, true );
   pic->setSccFlags( m_encCfg );
 }
 
@@ -694,17 +694,17 @@ void MCTF::motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSource
       Array2D<MotionVector> mv_m(width / (m_mctfUnitSize * 16) + 1, height / (m_mctfUnitSize * 16) + 1);
       PelStorage bufferSub8;
       subsampleLuma(bufferSub4, bufferSub8);
-      motionEstimationLuma(mv_m, origSubsampled8, bufferSub8, 2 * m_mctfUnitSize);
-      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize, &mv_m, 2);
+      motionEstimationLuma(mv_m, origSubsampled8, bufferSub8, m_padding, 2 * m_mctfUnitSize);
+      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, m_padding, 2 * m_mctfUnitSize, &mv_m, 2);
     }
     else
     {
-      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, 2 * m_mctfUnitSize);
+      motionEstimationLuma(mv_0, origSubsampled4, bufferSub4, m_padding, 2 * m_mctfUnitSize);
     }
-    motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, 2 * m_mctfUnitSize, &mv_0, 2);
-    motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, 2 * m_mctfUnitSize, &mv_1, 2);
+    motionEstimationLuma(mv_1, origSubsampled2, bufferSub2, m_padding, 2 * m_mctfUnitSize, &mv_0, 2);
+    motionEstimationLuma(mv_2, origBuf, srcPic.picBuffer, MCTF_FRAME_MARGIN, 2 * m_mctfUnitSize, &mv_1, 2);
 
-    motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, m_mctfUnitSize, &mv_2, 1, true);
+    motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, MCTF_FRAME_MARGIN, m_mctfUnitSize, &mv_2, 1, true);
 
     if (calcErr)
     {
@@ -862,7 +862,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     // filter
     if( pic->useMCTF )
     {
-      fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
+      fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
     }
 
@@ -962,7 +962,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           const bool doFilter = ( numZeroRMSCtus * 100 <= numCtu * 6 );
           if( doFilter )
           {
-            fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
+            fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
             bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
           }
         }
@@ -1096,8 +1096,71 @@ void MCTF::subsampleLuma(const PelStorage &input, PelStorage &output, const int 
   output.extendBorderPel(m_padding, m_padding);
 }
 
+// The interpolation kernels above read up to 2 samples before and 3 samples after a block. The
+// bounds below include one more sample on each side.
+static constexpr int REF_TAPS_BEFORE = 3;
+static constexpr int REF_TAPS_AFTER  = 4;
+static constexpr int REF_MAX_BLOCK   = 64;   // largest block width and height the kernels accept
+
+// Copies the w x h reference block at (x, y) with its filter taps into a per-thread buffer, clamping
+// the coordinates to the frame, and returns the block's first sample.
+static const Pel* copyClampedRefBlock( const CPelBuf& ref, const int x, const int y, const int w, const int h, ptrdiff_t& stride )
+{
+  CHECK( w > REF_MAX_BLOCK || h > REF_MAX_BLOCK, "MCTF reference block too large" );
+
+  // A thread uses one copied block at a time, so one buffer per thread suffices.
+  static thread_local Pel tmp[( REF_MAX_BLOCK + REF_TAPS_BEFORE + REF_TAPS_AFTER ) * ( REF_MAX_BLOCK + REF_TAPS_BEFORE + REF_TAPS_AFTER )];
+
+  const int left  = x - REF_TAPS_BEFORE;
+  const int top   = y - REF_TAPS_BEFORE;
+  const int cols  = w + REF_TAPS_BEFORE + REF_TAPS_AFTER;
+  const int rows  = h + REF_TAPS_BEFORE + REF_TAPS_AFTER;
+  const int width = ( int ) ref.width;
+
+  // Columns [inBegin, inEnd) of the copy lie inside the frame; those left of it repeat the first
+  // sample of the row and those right of it the last one.
+  const int inBegin = Clip3( 0, cols, -left );
+  const int inEnd   = Clip3( 0, cols, width - left );
+
+  for( int r = 0; r < rows; r++ )
+  {
+    const Pel* src = ref.buf + Clip3( 0, ( int ) ref.height - 1, top + r ) * ref.stride;
+    Pel*       dst = tmp + r * cols;
+    if( inBegin < inEnd )
+    {
+      std::fill_n( dst, inBegin, src[0] );
+      memcpy( dst + inBegin, src + left + inBegin, ( inEnd - inBegin ) * sizeof( Pel ) );
+      std::fill_n( dst + inEnd, cols - inEnd, src[width - 1] );
+    }
+    else
+    {
+      // The whole row of the copy lies right of the frame (inEnd == 0) or left of it.
+      std::fill_n( dst, cols, inEnd == 0 ? src[width - 1] : src[0] );
+    }
+  }
+
+  stride = cols;
+  return tmp + REF_TAPS_BEFORE * cols + REF_TAPS_BEFORE;
+}
+
+// Returns the samples of the w x h reference block at (x, y) and sets stride. The input frames only
+// keep MCTF_FRAME_MARGIN samples of replicated border, while the motion search reaches up to about
+// 100 samples outside the frame. A block whose filter taps leave the border is copied with clamped
+// coordinates, which gives the same samples as a wider replicated border.
+static inline const Pel* getRefBlock( const CPelBuf& ref, const int margin, const int x, const int y, const int w, const int h, ptrdiff_t& stride )
+{
+  if( x - REF_TAPS_BEFORE >= -margin && y - REF_TAPS_BEFORE >= -margin
+      && x + w + REF_TAPS_AFTER <= ( int ) ref.width + margin && y + h + REF_TAPS_AFTER <= ( int ) ref.height + margin )
+  {
+    stride = ref.stride;
+    return ref.buf + y * ref.stride + x;
+  }
+  return copyClampedRefBlock( ref, x, y, w, h, stride );
+}
+
 int MCTF::motionErrorLuma(const PelStorage &orig,
   const PelStorage &buffer,
+  const int refMargin,
   const int x,
   const int y,
   int dx,
@@ -1117,28 +1180,18 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 
   CHECK( !w || !h, "Incompatible sizes!" );
 
+  const int  origStride = orig.Y().stride;
+  const Pel* org        = orig.Y().buf + x + y * origStride;
+  // The motion vector is in 1/16 samples; the reference block starts at its integer part.
+  ptrdiff_t  buffStride = 0;
+  const Pel* buf        = getRefBlock( buffer.Y(), refMargin, x + ( dx >> 4 ), y + ( dy >> 4 ), w, h, buffStride );
+
   if( ( fx | fy ) == 0 )
   {
-    dx /= m_motionVectorFactor;
-    dy /= m_motionVectorFactor;
-
-    const int  origStride = orig.Y().stride;
-    const Pel* org        = orig.Y().buf + x + y * origStride;
-    const int  buffStride = buffer.Y().stride;
-    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
-
     return m_motionErrorLumaInt8( org, origStride, buf, buffStride, w, h, besterror );
   }
   else if( m_lowResFltSearch )
   {
-    dx >>= 4;
-    dy >>= 4;
-
-    const int  origStride = orig.Y().stride;
-    const Pel* org        = orig.Y().buf + x + y * origStride;
-    const int  buffStride = buffer.Y().stride;
-    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
-
     const int16_t *xFilter = m_interpolationFilter4[fx];
     const int16_t *yFilter = m_interpolationFilter4[fy];
 
@@ -1146,14 +1199,6 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
   }
   else
   {
-    dx >>= 4;
-    dy >>= 4;
-
-    const int  origStride = orig.Y().stride;
-    const Pel* org        = orig.Y().buf + x + y * origStride;
-    const int  buffStride = buffer.Y().stride;
-    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
-
     const int16_t *xFilter = m_interpolationFilter8[fx];
     const int16_t *yFilter = m_interpolationFilter8[fy];
 
@@ -1163,7 +1208,7 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
   return error;
 }
 
-bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
+bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize,
   const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY, int bitDepth ) const
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH );
@@ -1197,7 +1242,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
             if ((testx >= 0) && (testx < previous->w()) )
             {
               const MotionVector& old = previous->get(testx, testy);
-              int error = motionErrorLuma(orig, buffer, blockX, blockY, old.x * factor, old.y * factor, blockSize, best.error);
+              int error = motionErrorLuma(orig, buffer, refMargin, blockX, blockY, old.x * factor, old.y * factor, blockSize, best.error);
               if (error < best.error)
               {
                 best.set(old.x * factor, old.y * factor, error);
@@ -1207,7 +1252,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         }
       }
 
-      int error = motionErrorLuma( orig, buffer, blockX, blockY, 0, 0, blockSize, best.error );
+      int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, 0, 0, blockSize, best.error );
       if( error < best.error )
       {
         best.set( 0, 0, error );
@@ -1219,7 +1264,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     {
       for( int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2 += d )
       {
-        int error = motionErrorLuma( orig, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error );
+        int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, best.error );
         if( error < best.error )
         {
           best.set( x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, error );
@@ -1241,7 +1286,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         {
           if( x2 || y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
               best.set( prevBest.x + x2, prevBest.y + y2, error );
@@ -1259,7 +1304,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         {
           if( x2 || y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
               best.set( prevBest.x + x2, prevBest.y + y2, error );
@@ -1277,7 +1322,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         {
           if( x2 || y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
               best.set( prevBest.x + x2, prevBest.y + y2, error );
@@ -1289,7 +1334,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     if( blockY > 0 )
     {
       MotionVector aboveMV = mvs.get( blockX / stepSize, ( blockY - stepSize ) / stepSize );
-      int error = motionErrorLuma( orig, buffer, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, best.error );
+      int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, best.error );
       if( error < best.error )
       {
         best.set( aboveMV.x, aboveMV.y, error );
@@ -1298,7 +1343,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     if( blockX > 0 )
     {
       MotionVector leftMV = mvs.get( ( blockX - stepSize ) / stepSize, blockY / stepSize );
-      int error = motionErrorLuma( orig, buffer, blockX, blockY, leftMV.x, leftMV.y, blockSize, best.error );
+      int error = motionErrorLuma( orig, buffer, refMargin, blockX, blockY, leftMV.x, leftMV.y, blockSize, best.error );
       if( error < best.error )
       {
         best.set( leftMV.x, leftMV.y, error );
@@ -1326,7 +1371,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   return true;
 }
 
-void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize, const Array2D<MotionVector> *previous, const int factor, const bool doubleRes) const
+void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize, const Array2D<MotionVector> *previous, const int factor, const bool doubleRes) const
 {
   const int stepSize = blockSize;
   const int origHeight = orig.Y().height;
@@ -1341,6 +1386,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       Array2D<MotionVector> *mvs;
       const PelStorage* orig; 
       const PelStorage* buffer; 
+      int   refMargin;
       const Array2D<MotionVector> *previous; 
       int   blockSize; 
       int   factor; 
@@ -1361,7 +1407,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
         ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
 
         EstParams* params = static_cast<EstParams*>( task_param );
-        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
+        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->refMargin, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY, params->bitDepth );
 
         ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
         return ret;
@@ -1373,6 +1419,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       cEstParams.mvs = &mvs; 
       cEstParams.orig = &orig;
       cEstParams.buffer = &buffer; 
+      cEstParams.refMargin = refMargin;
       cEstParams.previous = previous;
       cEstParams.blockSize = blockSize; 
       cEstParams.factor = factor;
@@ -1390,7 +1437,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
     for( int blockY = 0; blockY + 8 <= origHeight; blockY += stepSize )
     {
       std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
-      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY, bitDepth );
+      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, refMargin, blockSize, previous, factor, doubleRes, blockY, bitDepth );
     }
 
   }
@@ -1420,6 +1467,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const int blkSizeY = m_mctfUnitSize >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
     const int blkSizeX = m_mctfUnitSize >> getComponentScaleX( compID, m_encCfg->m_internChromaFormat );
     const int yOut     = yStart         >> getComponentScaleY( compID, m_encCfg->m_internChromaFormat );
+    // The chroma border is scaled like the chroma planes; take the narrower direction.
+    const int refMargin = MCTF_FRAME_MARGIN >> std::max( getComponentScaleX( compID, m_encCfg->m_internChromaFormat ), getComponentScaleY( compID, m_encCfg->m_internChromaFormat ) );
 
     for( int by = yOut, yBlkAddr = yStart / m_mctfUnitSize; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++ )
     {
@@ -1439,9 +1488,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
         for( int i = 0; i < numRefs; i++, currDst += w * h )
         {
-          const Pel* srcImage = srcFrameInfo[i].picBuffer.bufs[compID].buf;
-          const int srcStride = srcFrameInfo[i].picBuffer.bufs[compID].stride;
-
                 Pel* dst      = currDst;
           const int dstStride = w;
           correctedPics[i]    = dst;
@@ -1452,9 +1498,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
           const int xInt = mv.x >> ( 4 + csx );
           const int yInt = mv.y >> ( 4 + csy );
 
-          const int yOffset = by + yInt;
-          const int xOffset = bx + xInt;
-          const Pel* src = srcImage + yOffset * srcStride + xOffset;
+          ptrdiff_t  srcStride = 0;
+          const Pel* src       = getRefBlock( srcFrameInfo[i].picBuffer.bufs[compID], refMargin, bx + xInt, by + yInt, w, h, srcStride );
 
           if( m_lowResFltApply ) // || isChroma( compID )
           {

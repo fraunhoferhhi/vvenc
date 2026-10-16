@@ -111,8 +111,11 @@ public:
   void rebindPicBufs();
   void createCoeffs();
   void destroyCoeffs();
+  void createMotionBuf();
+  void destroyMotionBuf();
 
   void allocateVectorsAtPicLevel();
+  void releaseVectorsAtPicLevel();
 
   // ---------------------------------------------------------------------------
   // global accessors
@@ -156,7 +159,7 @@ public:
   Distortion  interHad;
 
   void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = true, const UnitArea* area = nullptr );
-  void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pFiltOrgBuffer = nullptr);
+  void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr );
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
@@ -199,9 +202,7 @@ private:
   PelStorage  m_pred;
   PelStorage  m_resi;
   PelStorage  m_reco;
-  PelStorage  m_rspreco;
   PelStorage* m_org;
-  PelStorage* m_filtorg;
 
   TCoeffSig*  m_coeffs [MAX_NUM_COMP];
   int         m_offsets[MAX_NUM_COMP];
@@ -271,13 +272,7 @@ public:
          PelUnitBuf   getOrgBuf(const UnitArea& unit)           { return getBuf(unit, PIC_ORIGINAL); }
   const CPelUnitBuf   getOrgBuf(const UnitArea& unit)     const { return getBuf(unit, PIC_ORIGINAL); }
 
-         PelBuf       getFiltOrgBuf(const CompArea& blk)        { return getBuf(blk,  PIC_FILT_ORIGINAL); }
-  const CPelBuf       getFiltOrgBuf(const CompArea& blk)  const { return getBuf(blk,  PIC_FILT_ORIGINAL); }
-
          PelUnitBuf&  getRecoBufRef()                           { return m_reco; }
-
-         PelBuf&      getFiltOrgBuf()                           { return m_filtorg->Y(); }
-  const CPelBuf       getFiltOrgBuf()                     const { return m_filtorg->Y(); }
 
          PelBuf       getOrgBuf(const ComponentID compID)       { return m_org->get(compID); }
   const CPelBuf       getOrgBuf(const ComponentID compID) const { return m_org->get(compID); }

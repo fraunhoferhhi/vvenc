@@ -336,6 +336,28 @@ void Picture::destroyTempBuffers()
   if( cs ) cs->rebindPicBufs();
 }
 
+void Picture::createEncodingBuffers()
+{
+  CHECK( !cs, "Coding structure is required at this point!" );
+
+  if( !m_picBufs[PIC_RECONSTRUCTION].valid() )
+  {
+    m_picBufs[PIC_RECONSTRUCTION].create( chromaFormat, Area( lumaPos(), lumaSize() ), cs->sps->CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
+  }
+  cs->createMotionBuf();
+  cs->rebindPicBufs();
+}
+
+void Picture::releaseEncodingBuffers()
+{
+  m_picBufs[PIC_RECONSTRUCTION].destroy();
+  if( cs )
+  {
+    cs->destroyMotionBuf();
+    cs->rebindPicBufs();
+  }
+}
+
 const CPelBuf     Picture::getOrigBufPrev (const CompArea &blk, const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] && blk.valid() ? m_bufsOrigPrev[ type ]->getBuf (blk) : PelBuf()); }
 const CPelUnitBuf Picture::getOrigBufPrev (const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? *m_bufsOrigPrev[ type ] : PelUnitBuf()); }
 const CPelBuf     Picture::getOrigBufPrev (const ComponentID compID, const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? m_bufsOrigPrev[ type ]->getBuf (compID) : PelBuf()); }
@@ -386,10 +408,6 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   vps         = &_vps;
   dci         = nullptr;
 
-  if( !m_picBufs[PIC_RECONSTRUCTION].valid() )
-  {
-    m_picBufs[ PIC_RECONSTRUCTION ].create( chromaFormat, Area( lumaPos(), lumaSize() ), sps.CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
-  }
   if( !m_tileColsDone )
   {
     m_tileColsDone = new std::vector<std::atomic<int>> ( pps.pcv->heightInCtus );

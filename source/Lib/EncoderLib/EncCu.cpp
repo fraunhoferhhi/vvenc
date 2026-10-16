@@ -237,7 +237,47 @@ EncCu::EncCu()
   , m_globalCtuQpVector ( nullptr )
   , m_wppMutex          ( nullptr )
   , m_CABACEstimator    ( nullptr )
+  , m_syncPicCtx        ( nullptr )
+  , m_boundPicId        ( 0 )
 {
+}
+
+void EncCu::bindToPicture( const PicEncState& picState )
+{
+  if( m_boundPicId == picState.id )
+  {
+    return;
+  }
+
+  // The picture lambda sets the chroma distortion weights and the unadjusted lambda. initSlice then
+  // sets the RD and quantizer lambdas from the slice lambdas, which the slice encoder derived from
+  // the same picture lambda when it started the picture.
+  m_boundPicId = picState.id;
+  m_syncPicCtx = picState.syncPicCtx;
+  Slice& slice = *picState.pic->cs->slice;
+  setUpLambda( slice, picState.lambda, picState.qp, false, true );
+  initPic    ( picState.pic );
+  initSlice  ( &slice );
+}
+
+void EncCu::deriveComponentLambdas( const VVEncCfg& encCfg, const Slice& slice, const double lambda, const int qp,
+                                    double lambdas[MAX_NUM_COMP], double weights[MAX_NUM_COMP] )
+{
+  lambdas[COMP_Y] = lambda;
+  weights[COMP_Y] = 1.0;
+  for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
+    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, qp) + chromaQPOffset;
+    double tmpWeight         = pow( 2.0, ( qp - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
+    if( encCfg.m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
+    {
+      tmpWeight *= ( encCfg.m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
+    }
+    weights[compIdx] = tmpWeight;
+    lambdas[compIdx] = lambda / tmpWeight;
+  }
 }
 
 void EncCu::initPic( Picture* pic )
@@ -268,19 +308,12 @@ void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, cons
 
   // for RDO
   // in RdCost there is only one lambda because the luma and chroma bits are not separated, instead we weight the distortion of chroma.
-  double dLambdas[MAX_NUM_COMP] = { dLambda };
+  double dLambdas[MAX_NUM_COMP];
+  double weights [MAX_NUM_COMP];
+  deriveComponentLambdas( *m_pcEncCfg, slice, dLambda, iQP, dLambdas, weights );
   for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    const ComponentID compID = ComponentID( compIdx );
-    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
-    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, iQP) + chromaQPOffset;
-    double tmpWeight         = pow( 2.0, ( iQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-    if( m_pcEncCfg->m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
-    {
-      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-    }
-    m_cRdCost.setDistortionWeight( compID, tmpWeight );
-    dLambdas[compIdx] = dLambda / tmpWeight;
+    m_cRdCost.setDistortionWeight( ComponentID( compIdx ), weights[compIdx] );
   }
 
   // for RDOQ
@@ -302,19 +335,12 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   const double  corrFactor = pow (2.0, double (newQP - ctuQP) / 3.0);
   const double  newLambda  = ctuLambda * corrFactor;
   
-  double newLambdas[MAX_NUM_COMP] = { newLambda };
+  double newLambdas[MAX_NUM_COMP];
+  double weights   [MAX_NUM_COMP];
+  deriveComponentLambdas( *m_pcEncCfg, slice, newLambda, newQP, newLambdas, weights );
   for( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    const ComponentID compID = ComponentID( compIdx );
-    int chromaQPOffset       = slice.pps->chromaQpOffset[compID] + slice.sliceChromaQpDelta[ compID ];
-    int qpc = slice.sps->chromaQpMappingTable.getMappedChromaQpValue(compID, newQP) + chromaQPOffset;
-    double tmpWeight         = pow( 2.0, ( newQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-    if( m_pcEncCfg->m_DepQuantEnabled/* && !( m_pcEncCfg->getLFNST() ) */)
-    {
-      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1/3.0 ) : pow( 2.0, 0.2/3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-    }
-    m_cRdCost.setDistortionWeight( compID, tmpWeight );
-    newLambdas[compIdx] = newLambda / tmpWeight;
+    m_cRdCost.setDistortionWeight( ComponentID( compIdx ), weights[compIdx] );
   }
 
   m_cTrQuant.setLambdas ( newLambdas);
@@ -326,7 +352,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   }
 }
 
-void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
+void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
   m_cRdCost.create     ();
@@ -343,7 +369,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_cInterSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_modeCtrl, m_cIntraSearch.getSaveCSBuf() );
   m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, false, true, encCfg.m_quantThresholdVal );
 
-  m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
 
   // Initialise scaling lists: The encoder will only use the SPS scaling lists. The PPS will never be marked present.
@@ -378,7 +403,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
     m_pBestCS[i]->createForSearch( chromaFormat, area );
 
     m_pOrgBuffer[i].create( chromaFormat, area );
-    m_pRspBuffer[i].create( CHROMA_400, area );
   }
 
   m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
@@ -430,7 +454,6 @@ void EncCu::destroy()
     }
 
     m_pOrgBuffer[i].destroy();
-    m_pRspBuffer[i].destroy();
   }
 
   m_pTempCS2->destroy();
@@ -554,11 +577,10 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_CurrCtx = m_CtxBuffer.data();
 
   PelStorage* orgBuffer = &m_pOrgBuffer[0];
-  PelStorage* rspBuffer = &m_pRspBuffer[0];
   CodingStructure *tempCS =  m_pTempCS [0];
   CodingStructure *bestCS =  m_pBestCS [0];
-  cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
-  cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
+  cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
+  cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
   PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_COMPRESS_CU, tempCS, CH_L );
 
   // copy the relevant area
@@ -590,8 +612,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
     partitioner->initCtu( area, CH_C, *cs.slice );
 
-    cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
-    cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
+    cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
+    cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer );
     tempCS->currQP[CH_C] = bestCS->currQP[CH_C] =
     tempCS->baseQP       = bestCS->baseQP       = cs.slice->sliceQp;
     tempCS->prevQP[CH_C] = bestCS->prevQP[CH_C] = prevQP[CH_C];
@@ -1396,14 +1418,13 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     if( tempCS->picture->Y().contains( subCUArea.lumaPos() ) )
     {
       PelStorage* orgBuffer =  &m_pOrgBuffer[partitioner.currDepth];
-      PelStorage* rspBuffer =  &m_pRspBuffer[partitioner.currDepth];
       CodingStructure *tempSubCS = m_pTempCS[partitioner.currDepth];
       CodingStructure *bestSubCS = m_pBestCS[partitioner.currDepth];
 
-      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
-      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer );
+      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer );
 
-      // copy org buffer, need to be done after initSubStructure because of reshaping!
+      // copy org buffer, need to be done after initSubStructure, which resizes the buffer to the sub-CU
       orgBuffer->copyFrom( tempCS->getOrgBuf( subCUArea ) );
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;
@@ -2287,7 +2308,6 @@ void EncCu::addRegularCandsToPruningList( const MergeCtx &mergeCtx, const UnitAr
     pu.interDir             = mergeCtx.interDirNeighbours[uiMergeCand];
     pu.BcwIdx               = pu.interDir == 3 ? mergeCtx.BcwIdx[uiMergeCand] : BCW_DEFAULT;
     pu.imv                  = mergeCtx.useAltHpelIf[uiMergeCand] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo      ( pu );
 
     MergeItem *regularMerge = m_mergeItemList.allocateNewMergeItem();
     regularMerge->importMergeInfo( mergeCtx, uiMergeCand, MergeItem::MergeItemType::REGULAR, pu );
@@ -2335,7 +2355,6 @@ void EncCu::addCiipCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     pu.interDir               = mergeCtx.interDirNeighbours[uiMergeCand];
     pu.BcwIdx                 = pu.interDir == 3 ? mergeCtx.BcwIdx[uiMergeCand] : BCW_DEFAULT;
     pu.imv                    = mergeCtx.useAltHpelIf[uiMergeCand] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo        ( pu );
 
     MergeItem* ciipMerge      = m_mergeItemList.allocateNewMergeItem();
     ciipMerge->importMergeInfo( mergeCtx, uiMergeCand, MergeItem::MergeItemType::CIIP, pu );
@@ -2428,7 +2447,6 @@ void EncCu::addMmvdCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     pu.interDir               = mergeCtx.interDirNeighbours[mmvdIdx.pos.baseIdx];
     pu.BcwIdx                 = pu.interDir == 3 ? mergeCtx.BcwIdx[mmvdIdx.pos.baseIdx] : BCW_DEFAULT;
     pu.imv                    = mergeCtx.useAltHpelIf[mmvdIdx.pos.baseIdx] ? IMV_HPEL : IMV_OFF;
-    CU::spanMotionInfo        ( pu );
 
     MergeItem *mmvdMerge      = m_mergeItemList.allocateNewMergeItem();
     mmvdMerge->importMergeInfo( mergeCtx, mmvdIdx.val, MergeItem::MergeItemType::MMVD, pu );
@@ -2688,7 +2706,6 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
     }
 
     mergeCtx.setMergeInfo            ( pu, mergeCand );
-    CU::spanMotionInfo               ( pu );
     m_cInterSearch.motionCompensation( pu, geoBuffer[mergeCand], REF_PIC_LIST_X );
 
     g_pelBufOP.roundGeo( geoBuffer[mergeCand].Y().buf, geoTempBuf[mergeCand].Y().buf, numSamples, rshift, offset, lclpRng );
@@ -4261,7 +4278,12 @@ void MergeItem::importMergeInfo(const MergeCtx& mergeCtx, int _mergeIdx, MergeIt
     THROW( "Wrong merge item type" );
   }
 
-  getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
+  // Regular, CIIP and MMVD candidates have one motion for the whole CU, which mvField holds. Only
+  // GPM candidates need the motion buffer copied; exportMergeInfo regenerates the others.
+  if( mergeItemType == MergeItemType::GPM )
+  {
+    getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
+  }
 }
 
 void MergeItem::importMergeInfo( const AffineMergeCtx &mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& pu )
@@ -4387,7 +4409,14 @@ bool MergeItem::exportMergeInfo( CodingUnit &pu, bool forceNoResidual ) const
     THROW( "Wrong merge item type" );
   }
 
-  pu.getMotionBuf().copyFrom( getMvBuf( pu ) );
+  if( updatedType == MergeItemType::REGULAR || updatedType == MergeItemType::CIIP || updatedType == MergeItemType::MMVD )
+  {
+    CU::spanMotionInfo( pu );
+  }
+  else
+  {
+    pu.getMotionBuf().copyFrom( getMvBuf( pu ) );
+  }
 
   return resetCiip2Regular;
 }
