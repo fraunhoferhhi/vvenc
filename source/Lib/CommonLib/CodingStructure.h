@@ -112,6 +112,15 @@ public:
   void destroyCoeffs();
   void createMotionBuf();
   void destroyMotionBuf();
+  // Other pictures read the motion of a picture only for temporal motion vector prediction, on an 8x8
+  // grid (see CU::getColocatedMVP). When that prediction is enabled, each picture keeps its motion on
+  // that grid in a colocated motion field, which the CTU tasks fill (CS::setColocatedMotionCTU), so that
+  // the full motion field can be freed as soon as the picture is encoded.
+  void createColocatedMotionBuf();
+  void destroyFullMotionBuf()        { delete[] m_motionBuf; m_motionBuf = nullptr; }
+  bool hasColocatedMotionBuf() const { return m_colocatedMotion != nullptr; }
+  MotionInfo&       colocatedMotionInfo   ( const Position& pos );
+  const MotionInfo& getColocatedMotionInfo( const Position& pos ) const;
 
   void allocateVectorsAtPicLevel();
   void releaseVectorsAtPicLevel();
@@ -210,6 +219,8 @@ private:
   int               m_dmvrMvCacheOffset;
 
   MotionInfo*       m_motionBuf;
+  MotionInfo*       m_colocatedMotion;        ///< motion on the temporal prediction grid, see createColocatedMotionBuf
+  int               m_colocatedMotionStride;
 
   LoopFilterParam*  m_lfParam[NUM_EDGE_DIR];
 

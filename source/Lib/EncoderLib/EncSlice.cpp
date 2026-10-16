@@ -1130,10 +1130,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           encSlice->m_pALF->copyCTUforALF(cs, ctuPosX, ctuPosY);
         }
 
-        // DMVR refinement can be stored now
-        if( slice.sps->DMVR && !slice.picHeader->disDmvrFlag )
+        // The motion of the CTU is final, and so is its DMVR refinement, which only temporal motion vector
+        // prediction uses.
+        if( cs.hasColocatedMotionBuf() )
         {
-          CS::setRefinedMotionFieldCTU( cs, ctuPosX, ctuPosY );
+          CS::setColocatedMotionCTU( cs, ctuPosX, ctuPosY, slice.sps->DMVR && !slice.picHeader->disDmvrFlag );
         }
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );
 

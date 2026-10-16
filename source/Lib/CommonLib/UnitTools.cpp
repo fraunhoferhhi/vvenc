@@ -98,7 +98,9 @@ int CS::signalModeCons( const CodingStructure &cs, const UnitArea &currArea, con
                                                                                                 : LDT_MODE_TYPE_SIGNAL;
 }
 
-void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
+// Writes the DMVR-refined motion of the CU's sub-blocks into the colocated motion field. Only temporal
+// motion vector prediction uses the refined motion, and it reads it on the grid of that field.
+static void refineCU( const CodingUnit& cu, CodingStructure& cs )
 {
   const int dy = std::min<int>( cu.lumaSize().height, DMVR_SUBCU_SIZE );
   const int dx = std::min<int>( cu.lumaSize().width,  DMVR_SUBCU_SIZE );
@@ -127,10 +129,7 @@ void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
 
         for( ; x2 < x + dx; x2 += scale )
         {
-          const Position mbPos = g_miScaling.scale( Position{ x2, y2 } );
-          mb.buf = orgPtr + rsAddr( mbPos, mb.stride );
-
-          MotionInfo& mi = *mb.buf;
+          MotionInfo& mi = cs.colocatedMotionInfo( Position{ x2, y2 } );
 
           mi.mv[0] = subPuMv0;
           mi.mv[1] = subPuMv1;
@@ -140,36 +139,41 @@ void refineCU( const CodingUnit& cu, MotionBuf& mb, MotionInfo* orgPtr )
   }
 }
 
-void CS::setRefinedMotionFieldCTU( CodingStructure& cs, const int ctuX, const int ctuY )
+// Stores the motion of the CTU in the colocated motion field, which later pictures read for temporal
+// motion vector prediction, and applies the DMVR refinement of its CUs there.
+void CS::setColocatedMotionCTU( CodingStructure& cs, const int ctuX, const int ctuY, const bool applyDmvr )
 {
-  MotionBuf   mb     = cs.getMotionBuf();
-  MotionInfo* orgPtr = mb.buf;
+  static const int scale = 4 * std::max<int>( 1, 4 * AMVP_DECIMATION_FACTOR / 4 );
 
   const int xPos = ctuX << cs.pcv->maxCUSizeLog2;
   const int yPos = ctuY << cs.pcv->maxCUSizeLog2;
-  
+  const int xEnd = std::min<int>( xPos + cs.pcv->maxCUSize, cs.pcv->lumaWidth );
+  const int yEnd = std::min<int>( yPos + cs.pcv->maxCUSize, cs.pcv->lumaHeight );
+  for( int y = yPos; y < yEnd; y += scale )
+  {
+    for( int x = xPos; x < xEnd; x += scale )
+    {
+      cs.colocatedMotionInfo( Position( x, y ) ) = cs.getMotionInfo( Position( x, y ) );
+    }
+  }
+
+  if( !applyDmvr )
+  {
+    return;
+  }
+
   // first CU in CTU
   const CodingUnit *ptrCU = cs.getCU( Position( xPos, yPos ), CH_L, TREE_D );
   while( ptrCU )
   {
     const CodingUnit& cu = *ptrCU;
-    
+
     if( isLuma( cu.chType ) && cu.mvdL0SubPu && CU::checkDMVRCondition( cu ) )
     {
-      refineCU( cu, mb, orgPtr );
+      refineCU( cu, cs );
     }
 
     ptrCU = ptrCU->next;
-  }
-}
-void CS::setRefinedMotionField( CodingStructure& cs )
-{
-  for( int j = 0; j < cs.pcv->heightInCtus; j++ )
-  {
-    for( int i = 0; i < cs.pcv->widthInCtus; i++ )
-    {
-      CS::setRefinedMotionFieldCTU( cs, i, j );
-    }
   }
 }
 // CU tools
@@ -1442,7 +1446,7 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
 
   RefPicList eColRefPicList = slice.checkLDC ? refPicList : RefPicList(slice.colFromL0Flag);
 
-  const MotionInfo& mi = pColPic->cs->getMotionInfo( pos );
+  const MotionInfo& mi = pColPic->cs->getColocatedMotionInfo( pos );
 
   if( !mi.isInter() )
   {
@@ -2427,7 +2431,7 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, AffineMergeCtx& mrgCtx, c
   centerPos = Position{ PosType(centerPos.x & mask), PosType(centerPos.y & mask) };
 
   // derivation of center motion parameters from the collocated CU
-  const MotionInfo &mi = pColPic->cs->getMotionInfo(centerPos);
+  const MotionInfo &mi = pColPic->cs->getColocatedMotionInfo(centerPos);
 
   if (mi.isInter())
   {
@@ -2475,7 +2479,7 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, AffineMergeCtx& mrgCtx, c
 
       colPos = Position{ PosType(colPos.x & mask), PosType(colPos.y & mask) };
 
-      const MotionInfo &colMi = pColPic->cs->getMotionInfo(colPos);
+      const MotionInfo &colMi = pColPic->cs->getColocatedMotionInfo(colPos);
 
       MotionInfo mi;
 

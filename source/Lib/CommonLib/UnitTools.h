@@ -60,8 +60,7 @@ namespace CS
 {
   UnitArea  getArea                    (const CodingStructure &cs, const UnitArea& area, const ChannelType chType, const TreeType treeType);
   bool      isDualITree                (const CodingStructure &cs);
-  void      setRefinedMotionFieldCTU   (      CodingStructure &cs, const int ctuX, const int ctuY );
-  void      setRefinedMotionField      (      CodingStructure &cs);
+  void      setColocatedMotionCTU      (      CodingStructure &cs, const int ctuX, const int ctuY, const bool applyDmvr );
   int       signalModeCons             (const CodingStructure &cs, const UnitArea &currArea, const PartSplit split, const ModeType modeTypeParent);
 }
 

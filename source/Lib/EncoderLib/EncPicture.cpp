@@ -173,6 +173,8 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.cs->releaseVectorsAtPicLevel();
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
+  // Later pictures read only the colocated motion field of this one.
+  pic.cs->destroyFullMotionBuf();
 
   pic.encTime.stopTimer();
 }

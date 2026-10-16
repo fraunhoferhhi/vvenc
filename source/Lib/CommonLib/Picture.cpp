@@ -328,6 +328,10 @@ void Picture::createEncodingBuffers()
     m_picBufs[PIC_RECONSTRUCTION].create( chromaFormat, Area( lumaPos(), lumaSize() ), cs->sps->CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
   }
   cs->createMotionBuf();
+  if( cs->sps->temporalMVPEnabled )
+  {
+    cs->createColocatedMotionBuf();
+  }
   cs->rebindPicBufs();
 }
 

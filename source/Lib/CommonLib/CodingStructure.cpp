@@ -90,7 +90,9 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
     m_lfParam [ i ] = nullptr;
   }
 
-  m_motionBuf = nullptr;
+  m_motionBuf             = nullptr;
+  m_colocatedMotion       = nullptr;
+  m_colocatedMotionStride = 0;
 
   m_numTUs = m_numCUs = 0;
 }
@@ -674,8 +676,41 @@ void CodingStructure::createMotionBuf()
 
 void CodingStructure::destroyMotionBuf()
 {
-  delete[] m_motionBuf;
-  m_motionBuf = nullptr;
+  destroyFullMotionBuf();
+  delete[] m_colocatedMotion;
+  m_colocatedMotion = nullptr;
+}
+
+// Temporal motion vector prediction reads the motion of other pictures on this grid (see
+// CU::getColocatedMVP), so the colocated field holds one motion per grid cell.
+static constexpr int COL_MOTION_GRID_LOG2 = 3;
+static constexpr int COL_MOTION_GRID      = 1 << COL_MOTION_GRID_LOG2;
+static_assert( COL_MOTION_GRID == 4 * std::max<int>( 1, 4 * AMVP_DECIMATION_FACTOR / 4 ), "The grid must match CU::getColocatedMVP" );
+
+void CodingStructure::createColocatedMotionBuf()
+{
+  CHECK( parent, "Only the picture-level coding structure has a colocated motion field" );
+
+  m_colocatedMotionStride = ( area.lwidth() + COL_MOTION_GRID - 1 ) >> COL_MOTION_GRID_LOG2;
+  if( !m_colocatedMotion )
+  {
+    const int heightOnGrid = ( area.lheight() + COL_MOTION_GRID - 1 ) >> COL_MOTION_GRID_LOG2;
+    m_colocatedMotion = new MotionInfo[m_colocatedMotionStride * heightOnGrid];
+  }
+}
+
+MotionInfo& CodingStructure::colocatedMotionInfo( const Position& pos )
+{
+  CHECKD( ( pos.x | pos.y ) & ( COL_MOTION_GRID - 1 ), "Colocated motion lies on the grid only" );
+  return m_colocatedMotion[( pos.y >> COL_MOTION_GRID_LOG2 ) * m_colocatedMotionStride + ( pos.x >> COL_MOTION_GRID_LOG2 )];
+}
+
+const MotionInfo& CodingStructure::getColocatedMotionInfo( const Position& pos ) const
+{
+  CHECKD( parent, "Colocated motion is read through the picture-level coding structure only" );
+  CHECKD( ( pos.x | pos.y ) & ( COL_MOTION_GRID - 1 ), "Colocated motion is read on the grid only" );
+  CHECKD( !m_colocatedMotion, "Colocated motion is read only when temporal motion vector prediction is enabled" );
+  return m_colocatedMotion[( pos.y >> COL_MOTION_GRID_LOG2 ) * m_colocatedMotionStride + ( pos.x >> COL_MOTION_GRID_LOG2 )];
 }
 
 void CodingStructure::destroyCoeffs()
