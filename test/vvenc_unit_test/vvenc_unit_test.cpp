@@ -71,6 +71,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/CuTree.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
 #include "apputils/ParseArg.h"
@@ -4256,6 +4257,103 @@ static bool test_Quant()
 }
 #endif // ENABLE_SIMD_OPT_QUANT
 
+#if ENABLE_SIMD_OPT
+// The CU-tree look-ahead's TPL block coder: transform, quantization, distortion, bits and reconstruction.
+template<typename G>
+static bool check_tplCodeBlock( TplCodeBlockFn opt, unsigned num_cases, const G& residualGen )
+{
+  const int maxVal = 1023;
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  bool passed = true;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    Pel org[8 * 16], pred[8 * 8], reconRef[8 * 16], reconOpt[8 * 16];
+    for( int i = 0; i < 64; i++ )
+    {
+      pred[i] = pelGen();
+      org[( i / 8 ) * 16 + i % 8] = Pel( Clip3( 0, maxVal, pred[i] + residualGen() ) );
+    }
+    // steps from QP -12 to 63 at 10 bits, as CuTree's BlockCoder makes them
+    const double step = 8 * std::pow( 2.0, ( rand() % 76 - 16 ) / 6.0 ) * 4 / 2;
+    const TplQuant quant = { int32_t( std::lround( 65536.0 / step ) ), ( rand() & 1 ) ? 21845 : 10923, int32_t( std::lround( 16.0 * step ) ) };
+    const bool withRecon = rand() & 1;
+
+    int64_t distRef = 0, distOpt = 0;
+    int bitsRef = 0, bitsOpt = 0;
+    tplCodeBlockCore( org, 16, pred, withRecon ? reconRef : nullptr, 16, quant, maxVal, distRef, bitsRef );
+    opt             ( org, 16, pred, withRecon ? reconOpt : nullptr, 16, quant, maxVal, distOpt, bitsOpt );
+
+    std::ostringstream ctx;
+    ctx << "tplCodeBlock " << residualGen.input_type() << " step=" << step << " case=" << n;
+    passed = compare_value( ctx.str() + " dist", distRef, distOpt ) && passed;
+    passed = compare_value( ctx.str() + " bits", bitsRef, bitsOpt ) && passed;
+    if( withRecon )
+    {
+      passed = compare_values_2d( ctx.str() + " recon", reconRef, reconOpt, 8, 8, 16 ) && passed;
+    }
+  }
+  return passed;
+}
+
+// The CU-tree look-ahead's bilinear motion compensation of an 8x8 block.
+static bool check_tplPredBlock( TplPredBlockFn opt, unsigned num_cases )
+{
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  MinMaxGenerator<Pel> extremeGen( 10, /*is_signed=*/false );
+  bool passed = true;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    Pel src[9 * 24], dstRef[64], dstOpt[64];
+    for( int i = 0; i < 9 * 24; i++ )
+    {
+      src[i] = ( n & 1 ) ? extremeGen() : pelGen();
+    }
+    const int fx = rand() & 15, fy = rand() & 15;
+    tplPredBlockCore( src, 24, fx, fy, dstRef );
+    opt             ( src, 24, fx, fy, dstOpt );
+
+    std::ostringstream ctx;
+    ctx << "tplPredBlock fx=" << fx << " fy=" << fy << " case=" << n;
+    passed = compare_values_1d( ctx.str(), dstRef, dstOpt, 64 ) && passed;
+  }
+  return passed;
+}
+
+// The CU-tree look-ahead's 2x2 down-sampling of one row.
+static bool check_tplDownsampleRow( TplDownsampleRowFn opt, unsigned num_cases )
+{
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  bool passed = true;
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    const int width = 1 + rand() % 100;
+    std::vector<Pel> src( 2 * 2 * width ), dstRef( width ), dstOpt( width );
+    for( auto& v : src ) v = pelGen();
+    tplDownsampleRowCore( src.data(), 2 * width, dstRef.data(), width );
+    opt                 ( src.data(), 2 * width, dstOpt.data(), width );
+    passed = compare_values_1d( "tplDownsampleRow width=" + std::to_string( width ), dstRef.data(), dstOpt.data(), width ) && passed;
+  }
+  return passed;
+}
+
+static bool test_CuTree()
+{
+  CuTree cuTree;
+#if defined( TARGET_SIMD_X86 )
+  cuTree.initCuTree_X86();
+#endif
+  unsigned num_cases = NUM_CASES;
+  bool passed = check_tplCodeBlock( cuTree.m_codeBlock, num_cases, InputGenerator<int>( 11 ) );
+  passed      = check_tplCodeBlock( cuTree.m_codeBlock, num_cases, InputGenerator<int>( 4 ) ) && passed;
+  passed      = check_tplCodeBlock( cuTree.m_codeBlock, num_cases, MinMaxGenerator<int>( 11 ) ) && passed;
+  passed      = check_tplPredBlock( cuTree.m_predBlock, num_cases ) && passed;
+  passed      = check_tplDownsampleRow( cuTree.m_downsampleRow, num_cases ) && passed;
+  return passed;
+}
+#endif // ENABLE_SIMD_OPT
+
 struct UnitTestEntry
 {
   std::string name;
@@ -4304,6 +4402,9 @@ static const UnitTestEntry test_suites[] = {
     { "FGAnalyzer", test_FGAnalyzer },
     { "MorphDilation", test_MorphDilation },
     { "CannyGradient", test_CannyGradient },
+#endif
+#if ENABLE_SIMD_OPT
+    { "CuTree", test_CuTree },
 #endif
 };
 

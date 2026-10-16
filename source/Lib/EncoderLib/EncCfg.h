@@ -77,6 +77,9 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
+  // BIM and CU-tree both deliver per-CTU QP offsets through PicShared::m_ctuBimQpOffset and m_picAuxQpOffset.
+  bool hasBlockQpOffsets() const { return m_blockImportanceMapping || m_cuTree > 0; }
+
   bool      m_stageParallelProc;
   bool      m_salienceBasedOpt;
   bool      m_rateCap;

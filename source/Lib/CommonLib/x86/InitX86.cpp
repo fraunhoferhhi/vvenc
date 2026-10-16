@@ -63,6 +63,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "QuantRDOQ2.h"
 #include "SEIFilmGrainAnalyzer.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/CuTree.h"
 
 #ifdef TARGET_SIMD_X86
 
@@ -318,6 +319,21 @@ void IntraPrediction::initIntraPredictionX86()
 }
 
 #endif
+void CuTree::initCuTree_X86()
+{
+  switch( read_x86_extension_flags() )
+  {
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initCuTree_X86<AVX2>();
+#endif
+      break;
+    default:
+      break;  // the scalar block coder
+  }
+}
+
 #if ENABLE_SIMD_OPT_MCTF
 void MCTF::initMCTF_X86()
 {

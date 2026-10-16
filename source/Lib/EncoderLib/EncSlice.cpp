@@ -425,6 +425,35 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
 
 static const int highTL[6] = { -1, 0, 0, 2, 4, 5 };
 
+// The picture QP before block QP offsets: the base QP plus the offset of the picture's temporal layer.
+int EncSlice::getCascadeQP( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset )
+{
+  if (encCfg.m_usePerceptQPA)
+  {
+    const int tlayer = gopEntry.m_vtl;
+
+    qp = (isIntra ? std::min (qp, ((qp - std::min (3, floorLog2 (encCfg.m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[tlayer] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
+  }
+  else if( isIntra )
+  {
+    qp += encCfg.m_intraQPOffset;
+  }
+  else
+  {
+    if( qp != -lumaQpBDOffset )
+    {
+      // adjust QP according to the QP offset for the GOP entry.
+      qp += gopEntry.m_QPOffset;
+
+      // adjust QP according to QPOffsetModel for the GOP entry.
+      double dqpOffset = qp * gopEntry.m_QPOffsetModelScale + gopEntry.m_QPOffsetModelOffset + 0.5;
+      int qpOffset = (int)floor( Clip3<double>( 0.0, 3.0, dqpOffset ) );
+      qp += qpOffset;
+    }
+  }
+  return qp;
+}
+
 int EncSlice::xGetQPForPicture( const Slice* slice )
 {
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
@@ -436,34 +465,9 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
   }
   else
   {
-    qp = m_pcEncCfg->m_QP + slice->pic->gopAdaptedQP;
+    qp = getCascadeQP( *m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), m_pcEncCfg->m_QP + slice->pic->gopAdaptedQP, lumaQpBDOffset );
 
-    if (m_pcEncCfg->m_usePerceptQPA)
-    {
-      const int tlayer = slice->pic->gopEntry->m_vtl;
-
-      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[tlayer] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
-    }
-    else if( slice->isIntra() )
-    {
-      qp += m_pcEncCfg->m_intraQPOffset;
-    }
-    else
-    {
-      if( qp != -lumaQpBDOffset )
-      {
-        const GOPEntry &gopEntry = *(slice->pic->gopEntry);
-        // adjust QP according to the QP offset for the GOP entry.
-        qp += gopEntry.m_QPOffset;
-
-        // adjust QP according to QPOffsetModel for the GOP entry.
-        double dqpOffset = qp * gopEntry.m_QPOffsetModelScale + gopEntry.m_QPOffsetModelOffset + 0.5;
-        int qpOffset = (int)floor( Clip3<double>( 0.0, 3.0, dqpOffset ) );
-        qp += qpOffset;
-      }
-    }
-
-    if( m_pcEncCfg->m_blockImportanceMapping && !slice->pic->m_picShared->m_ctuBimQpOffset.empty() )
+    if( m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty() )
     {
       qp += slice->pic->m_picShared->m_picAuxQpOffset;
     }

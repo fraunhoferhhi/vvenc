@@ -639,6 +639,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
   c->m_blockImportanceMapping                  = true;
+  c->m_cuTree                                  = 0;
+  c->m_cuTreeStrength                          = 2.0;
 
   c->m_maxDeltaQP                              = -1;
 
@@ -1509,6 +1511,17 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP - 4.0 ) * 3.0 / 32.0 );
   }
 
+  // CU-tree replaces block importance mapping, a simpler estimate of the same block importance.
+  // Intra-only coding has no temporal prediction for CU-tree to measure.
+  if( c->m_cuTree && c->m_IntraPeriod == 1 )
+  {
+    c->m_cuTree = 0;
+  }
+  if( c->m_cuTree )
+  {
+    c->m_blockImportanceMapping = false;
+  }
+
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
 
@@ -1562,7 +1575,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter(c, c->m_maxDeltaQP < -2 || c->m_maxDeltaQP > vvenc::MAX_QP, "MaxDeltaQP must be in range of -2 - 63" );
-  if( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 )
+  if( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_cuTree || c->m_lumaLevelToDeltaQPEnabled == 1 )
   {
     if( c->m_maxDeltaQP == -1 )
     {
@@ -2106,7 +2119,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                           "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
 
-  vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA or BIM or LumaLevelToDeltaQPMode" );
+  vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_cuTree || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA, BIM, CU-tree or LumaLevelToDeltaQPMode" );
+  vvenc_confirmParameter(c, c->m_cuTree < 0 || c->m_cuTree > 1,                                                    "CuTree must be 0 or 1" );
+  vvenc_confirmParameter(c, c->m_cuTreeStrength < 0.0 || c->m_cuTreeStrength > 8.0,                                 "CuTreeStrength must be in range 0 - 8" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3343,6 +3358,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
     css << "BIM:" << c->m_blockImportanceMapping << " ";
+    css << "CuTree:" << (int)c->m_cuTree << " ";
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";

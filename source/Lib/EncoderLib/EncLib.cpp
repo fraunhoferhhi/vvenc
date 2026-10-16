@@ -55,6 +55,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/MsgLog.h"
 #include "EncStage.h"
 #include "PreProcess.h"
+#include "CuTree.h"
 #include "EncGOP.h"
 #include "CommonLib/x86/CommonDefX86.h"
 
@@ -78,6 +79,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_rateCtrl       ( nullptr )
   , m_preProcess     ( nullptr )
   , m_MCTF           ( nullptr )
+  , m_cuTree         ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
   , m_threadPool     ( nullptr )
@@ -257,6 +259,17 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
 
+  // CU-tree look-ahead, holds the pictures of a GOP until the next GOP has arrived
+  if( m_encCfg.m_cuTree )
+  {
+    m_cuTree = new CuTree();
+    m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
+    m_cuTree->init( m_encCfg, m_threadPool );
+    m_encStages.push_back( m_cuTree );
+    // a GOP and its look-ahead wait here, while the GOP encoder holds the previous GOP
+    m_maxNumPicShared += m_encCfg.m_GOPSize + CuTree::getNumLookAheadPics( m_encCfg );
+  }
+
   // pre analysis encoder
   if( m_encCfg.m_LookAhead )
   {
@@ -320,6 +333,11 @@ void EncLib::xUninitLib()
   {
     delete m_MCTF;
     m_MCTF = nullptr;
+  }
+  if( m_cuTree )
+  {
+    delete m_cuTree;
+    m_cuTree = nullptr;
   }
   if( m_preEncoder )
   {

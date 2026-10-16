@@ -52,6 +52,11 @@ add_vvenc_test( compare_output-tooltest 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${
 add_vvenc_test( vvencFFapp-tooltest-Scalar     70 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_tooltest.cfg -c ${CFG_DIR}/gop32.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --SIMD=SCALAR --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-tooltest-Scalar 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
+# CU-tree: the SIMD kernels of its look-ahead must give the scalar results
+add_vvenc_test( vvencFFapp-tooltest-CuTree        70 OUT_VVC   ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_tooltest.cfg -c ${CFG_DIR}/gop32.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 15 --CuTree=1 --Threads=-1 -b OUTPUT )
+add_vvenc_test( vvencFFapp-tooltest-CuTree-Scalar 70 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_tooltest.cfg -c ${CFG_DIR}/gop32.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 15 --CuTree=1 --SIMD=SCALAR --Threads=-1 -b OUTPUT )
+add_vvenc_test( compare_output-tooltest-CuTree    30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
+
 add_vvenc_test( vvencapp-faster       30 OUT_VVC   ""                       vvencapp --preset faster -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 11 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencFFapp-faster     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_faster.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 11 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-faster 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )

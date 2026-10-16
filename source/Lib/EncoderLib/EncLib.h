@@ -73,6 +73,7 @@ class MsgLog;
 class EncStage;
 class PreProcess;
 class MCTF;
+class CuTree;
 class EncGOP;
 class RateCtrl;
 class PicShared;
@@ -92,6 +93,7 @@ private:
   RateCtrl*                  m_rateCtrl;
   PreProcess*                m_preProcess;
   MCTF*                      m_MCTF;
+  CuTree*                    m_cuTree;
   EncGOP*                    m_preEncoder;
   EncGOP*                    m_gopEncoder;
   std::vector<EncStage*>     m_encStages;

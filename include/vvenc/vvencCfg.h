@@ -787,9 +787,11 @@ typedef struct vvenc_config
   int                 m_minIntraDist;
   int8_t              m_numParallelGOPs;
   int8_t              m_maxDeltaQP;
+  int8_t              m_cuTree;                                                          // CU-tree: lower the QP of blocks that later pictures predict from (TPL model, one GOP of look-ahead; replaces BIM; 0: off, 1: on)
 
-  int8_t              m_reservedInt8[2];
-  double              m_reservedDouble[8];
+  int8_t              m_reservedInt8[1];
+  double              m_cuTreeStrength;                                                  // CU-tree: scale of its QP offsets (default 2.0)
+  double              m_reservedDouble[7];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

@@ -182,6 +182,9 @@ private:
   static bool xProcessCtuTask ( int taskIdx, void* taskParam );
 
   int     xGetQPForPicture    ( const Slice* slice );
+
+public:
+  static int getCascadeQP     ( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset );
 };
 
 } // namespace vvenc
