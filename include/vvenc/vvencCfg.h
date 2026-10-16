@@ -436,7 +436,7 @@ typedef struct vvenc_config
 
   int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, <5K 2880p 8threads, else 12threads (limited to available cores))
 
-  int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
+  int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32), integer part when m_QPFraction is set
   int                 m_RCTargetBitrate;                                                 // target bitrate in bps (default: 0 (RC disabled))
 
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity level
@@ -789,7 +789,8 @@ typedef struct vvenc_config
   int8_t              m_maxDeltaQP;
 
   int8_t              m_reservedInt8[2];
-  double              m_reservedDouble[8];
+  double              m_QPFraction;                                                      // fractional part of the QP in constant-QP mode (0 <= value < 1, default: 0), the effective QP is m_QP + m_QPFraction
+  double              m_reservedDouble[7];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )
