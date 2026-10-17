@@ -4846,6 +4846,49 @@ static bool check_dequant( Quant* ref, Quant* opt, unsigned num_cases )
   return passed;
 }
 
+// The BDPCM residuals: the forward residual in place in both directions and the vertical inverse, with any 16-bit
+// values (wrap-around and saturation), widths 2 to 32 (2 uses the C version) and padded strides; the whole buffers are
+// compared, so that writes beyond the block are found.
+static bool check_resDPCM( Quant* ref, Quant* opt, unsigned num_cases )
+{
+  printf( "Testing Quant::xFwdResDPCM, xInvResDPCMVer\n" );
+  DimensionGenerator rng;
+  auto anyCoeff = []() { return TCoeffSig( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = 1 << rng.get( 1, 5 );
+    const int height = rng.get( 1, 32 );
+    const int stride = width + rng.get( 0, 8 );
+    std::vector<TCoeffSig> coef( stride * height );
+    std::generate( coef.begin(), coef.end(), anyCoeff );
+
+    for( bool vertical : { false, true } )
+    {
+      std::ostringstream sstm;
+      sstm << ( vertical ? " vertical " : " horizontal " ) << width << "x" << height << " stride=" << stride;
+      std::vector<TCoeffSig> fwdRef( coef ), fwdOpt( coef );
+      ref->xFwdResDPCM( fwdRef.data(), stride, width, height, vertical );
+      opt->xFwdResDPCM( fwdOpt.data(), stride, width, height, vertical );
+      if( !compare_values_1d( "xFwdResDPCM" + sstm.str(), fwdRef.data(), fwdOpt.data(), stride * height ) )
+      {
+        return false;
+      }
+    }
+
+    std::vector<TCoeffSig> invRef( stride * height, 0x5a5a ), invOpt( stride * height, 0x5a5a );
+    ref->xInvResDPCMVer( coef.data(), stride, invRef.data(), stride, width, height );
+    opt->xInvResDPCMVer( coef.data(), stride, invOpt.data(), stride, width, height );
+    std::ostringstream sstm;
+    sstm << "xInvResDPCMVer " << width << "x" << height << " stride=" << stride;
+    if( !compare_values_1d( sstm.str(), invRef.data(), invOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_Quant()
 {
   Quant ref( /*other=*/nullptr, /*useScalingLists=*/false, /*enableOpt=*/false );
@@ -4854,6 +4897,7 @@ static bool test_Quant()
   unsigned num_cases = NUM_CASES;
   bool     passed    = check_needRdoq( &ref, &opt, num_cases );
   passed             = check_dequant( &ref, &opt, num_cases ) && passed;
+  passed             = check_resDPCM( &ref, &opt, num_cases ) && passed;
   return passed;
 }
 #endif // ENABLE_SIMD_OPT_QUANT

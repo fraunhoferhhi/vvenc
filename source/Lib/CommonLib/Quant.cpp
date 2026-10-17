@@ -278,12 +278,61 @@ static bool needRdoqCore( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
 }
 
 
+void Quant::fwdResDPCMCore( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical )
+{
+  if( !vertical )
+  {
+    for( int y = 0; y < height; y++ )
+    {
+      for( int x = width - 1; x > 0; x-- )
+      {
+        coef[x] -= coef[x - 1];
+      }
+      coef += stride;
+    }
+  }
+  else
+  {
+    coef += stride * (height - 1);
+    for( int y = 0; y < height - 1; y++ )
+    {
+      for ( int x = 0; x < width; x++ )
+      {
+        coef[x] -= coef[x - stride];
+      }
+      coef -= stride;
+    }
+  }
+}
+
+void Quant::invResDPCMVerCore( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height )
+{
+  const TCoeff inputMinimum = std::numeric_limits<TCoeffSig>::min();
+  const TCoeff inputMaximum = std::numeric_limits<TCoeffSig>::max();
+
+  for( int x = 0; x < width; x++ )
+  {
+    dst[x] = coef[x];
+  }
+  for( int y = 0; y < height - 1; y++ )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      dst[dstStride + x] = Clip3(inputMinimum, inputMaximum, TCoeff( dst[x] ) + TCoeff( coef[coefStride + x] ));
+    }
+    coef += coefStride;
+    dst += dstStride;
+  }
+}
+
 Quant::Quant( const Quant* other, bool useScalingLists, bool enableOpt ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other, useScalingLists );
-  xDeQuant  = DeQuantCore;
-  xQuant    = QuantCore;
-  xNeedRdoq = needRdoqCore;
+  xDeQuant       = DeQuantCore;
+  xQuant         = QuantCore;
+  xNeedRdoq      = needRdoqCore;
+  xFwdResDPCM    = fwdResDPCMCore;
+  xInvResDPCMVer = invResDPCMVerCore;
   if( enableOpt )
   {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
@@ -300,7 +349,7 @@ Quant::~Quant()
   xDestroyScalingList();
 }
 
-void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf& dstBuf )
+void Quant::xInvResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf& dstBuf ) const
 {
   const CompArea&    rect   = tu.blocks[compID];
   const int          wdt    = rect.width;
@@ -316,6 +365,7 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf&
 
   if ( tu.cu->bdpcmM[toChannelType(compID)] == 1)
   {
+    // a running sum along each row, clipped at every step: sequential
     for( int y = 0; y < hgt; y++ )
     {
       dst[0] = coef[0];
@@ -329,52 +379,8 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf&
   }
   else
   {
-    for( int x = 0; x < wdt; x++ )
-    {
-      dst[x] = coef[x];
-    }
-    for( int y = 0; y < hgt - 1; y++ )
-    {
-      for( int x = 0; x < wdt; x++ )
-      {
-        dst[dstBuf.stride + x] = Clip3(inputMinimum, inputMaximum, TCoeff( dst[x] ) + TCoeff( coef[coeffs.stride + x] ));
-      }
-      coef += coeffs.stride;
-      dst += dstBuf.stride;
-    }
-  }
-}
-
-void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
-{
-  const CompArea& rect   = tu.blocks[compID];
-  const int       wdt    = rect.width;
-  const int       hgt    = rect.height;
-  CoeffSigBuf     coeffs = tu.getCoeffs(compID);
-
-  TCoeffSig* coef = &coeffs.buf[0];
-  if (tu.cu->bdpcmM[toChannelType(compID)] == 1)
-  {
-    for( int y = 0; y < hgt; y++ )
-    {
-      for( int x = wdt - 1; x > 0; x-- )
-      {
-        coef[x] -= coef[x - 1];
-      }
-      coef += coeffs.stride;
-    }
-  }
-  else
-  {
-    coef += coeffs.stride * (hgt - 1);
-    for( int y = 0; y < hgt - 1; y++ )
-    {
-      for ( int x = 0; x < wdt; x++ )
-      {
-        coef[x] -= coef[x - coeffs.stride];
-      }
-      coef -= coeffs.stride;
-    }
+    CHECKD( maxLog2TrDynamicRange != 15, "the vertical inverse clips to the 16-bit range" );
+    xInvResDPCMVer( coef, coeffs.stride, dst, dstBuf.stride, wdt, hgt );
   }
 }
 
@@ -548,7 +554,7 @@ void Quant::dequant(const TransformUnit& tu,
   if( tu.cu->bdpcmM[toChannelType( compID )] )
   {
     CoeffSigBuf coefBuf( m_tmpBdpcm, uiWidth, uiHeight );
-    invResDPCM( tu, compID, coefBuf );
+    xInvResDPCM( tu, compID, coefBuf );
     coef      = m_tmpBdpcm;
   }
 
@@ -808,7 +814,8 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     }
     if (tu.cu->bdpcmM[toChannelType(compID)])
     {
-      fwdResDPCM( tu, compID );
+      CoeffSigBuf coeffs = tu.getCoeffs( compID );
+      xFwdResDPCM( coeffs.buf, coeffs.stride, uiWidth, uiHeight, tu.cu->bdpcmM[toChannelType( compID )] != 1 );
     }
 
     if( uiAbsSum )
