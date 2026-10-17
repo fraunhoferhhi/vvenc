@@ -71,6 +71,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/BvSearchOps.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
 #include "apputils/ParseArg.h"
@@ -4717,6 +4718,41 @@ static bool test_Quant()
 }
 #endif // ENABLE_SIMD_OPT_QUANT
 
+#if ENABLE_SIMD_OPT
+// BvSearchOps::containsMv on block vector lists of up to 2 * IBC_NUM_CANDIDATES entries with few distinct values, so
+// that most keys are found, at varying positions; also keys that equal a list entry in one component only.
+static bool test_BvSearchOps()
+{
+  BvSearchOps ref( /*enableOpt=*/false );
+  BvSearchOps opt( /*enableOpt=*/true );
+
+  printf( "Testing BvSearchOps::containsMv\n" );
+  DimensionGenerator rng;
+  std::vector<Mv> list( 2 * IBC_NUM_CANDIDATES );
+
+  for( unsigned i = 0; i < 10 * NUM_CASES; i++ )
+  {
+    const int range = rng.get( 1, 8 );
+    for( Mv& mv : list )
+    {
+      mv = Mv( int( rng.get( 0, 2 * range ) ) - range, int( rng.get( 0, 2 * range ) ) - range );
+    }
+    const unsigned n     = rng.get( 0, unsigned( list.size() ) );
+    const Mv       entry = list[rng.get( 0, unsigned( list.size() ) - 1 )];
+    for( const Mv& key : { entry, Mv( entry.hor, entry.ver + 1 ), Mv( entry.hor + 1, entry.ver ) } )
+    {
+      std::ostringstream sstm;
+      sstm << "containsMv n=" << n << " key=(" << key.hor << "," << key.ver << ")";
+      if( !compare_value( sstm.str(), ref.containsMv( list.data(), n, key ), opt.containsMv( list.data(), n, key ) ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+#endif // ENABLE_SIMD_OPT
+
 struct UnitTestEntry
 {
   std::string name;
@@ -4760,6 +4796,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+#endif
+#if ENABLE_SIMD_OPT
+    { "BvSearch", test_BvSearchOps },
 #endif
 #if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },
