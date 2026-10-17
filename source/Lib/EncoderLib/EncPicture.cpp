@@ -204,17 +204,7 @@ uint64_t findDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t
   }
   else
   {
-    uiTotalDiff = 0;
-    for (int y = 0; y < pic0.height; y++)
-    {
-      for (int x = 0; x < pic0.width; x++)
-      {
-        Intermediate_Int iTemp = pSrc0[x] - pSrc1[x];
-        uiTotalDiff += uint64_t(iTemp * iTemp);
-      }
-      pSrc0 += pic0.stride;
-      pSrc1 += pic1.stride;
-    }
+    uiTotalDiff = g_pelBufOP.sumSquaredError( pSrc0, pic0.stride, pSrc1, pic1.stride, pic0.width, pic0.height );
   }
 
   return uiTotalDiff;

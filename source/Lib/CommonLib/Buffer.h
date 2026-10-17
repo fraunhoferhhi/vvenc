@@ -126,6 +126,14 @@ struct PelBufferOps
   uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
   uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
   uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
+  // block statistics; the sums of squares are exact for samples in 0 ... 2^15 - 1
+  uint64_t ( *sumSquaredError )  ( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height );
+  int64_t  ( *sum )              ( const Pel* src, const ptrdiff_t stride, const int width, const int height );
+  void     ( *sumAndSumSquares ) ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares );
+  // replicates the first / last sample of each row into the marginLeft / marginRight samples before / after the row
+  void     ( *padHorizontal )    ( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft, const int marginRight );
+  // dst = ( sum of the 2x2 source samples + 2 ) >> 2
+  void     ( *downsample2x2 )    ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight );
 
 private:
   bool isInitSIMDDone = false;
@@ -313,6 +321,9 @@ T AreaBuf <T> ::getAvg() const
 
   return T ((acc + (area() >> 1)) / area());
 }
+
+template<> Pel AreaBuf<Pel>::getAvg() const;
+template<> const Pel AreaBuf<const Pel>::getAvg() const;
 
 template<>
 void AreaBuf<MotionInfo>::fill( const MotionInfo& val );
@@ -587,6 +598,10 @@ void AreaBuf<T>::extendBorderPel(unsigned marginX, unsigned marginY)
     ::memcpy(p - (y + 1) * s, p, sizeof(T) * (w + (marginX << 1)));
   }
 }
+
+template<> void AreaBuf<Pel>::extendBorderPelLft( int y, int size, int margin );
+template<> void AreaBuf<Pel>::extendBorderPelRgt( int y, int size, int margin );
+template<> void AreaBuf<Pel>::extendBorderPel( unsigned marginX, unsigned marginY );
 
 template<typename T>
 void AreaBuf<T>::padBorderPel( unsigned marginX, unsigned marginY, int dir )

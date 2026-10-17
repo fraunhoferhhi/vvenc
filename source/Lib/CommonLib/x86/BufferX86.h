@@ -2524,6 +2524,257 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
   return taAct ;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Picture and block statistics, border padding and 2x2 downsampling.
+// The sums of squares use madd on 16-bit values: for sample values in 0 ... 2^15 - 1 the differences fit 16 bit and
+// the pair sums of squares are below 2^31, so they are exact; they are widened to 64 bit before they are accumulated.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// adds the four non-negative 32-bit lanes of v to the two 64-bit lanes of acc
+static inline __m128i _vv_addUnsigned32To64( __m128i acc, __m128i v )
+{
+  return _mm_add_epi64( acc, _mm_add_epi64( _mm_unpacklo_epi32( v, _mm_setzero_si128() ), _mm_unpackhi_epi32( v, _mm_setzero_si128() ) ) );
+}
+
+// adds the four signed 32-bit lanes of v to the two 64-bit lanes of acc
+static inline __m128i _vv_addSigned32To64( __m128i acc, __m128i v )
+{
+  return _mm_add_epi64( acc, _mm_add_epi64( _mm_cvtepi32_epi64( v ), _mm_cvtepi32_epi64( _mm_unpackhi_epi64( v, v ) ) ) );
+}
+
+static inline int64_t _vv_sum_epi64( __m128i v )
+{
+  int64_t lanes[2];
+  _mm_storeu_si128( ( __m128i* ) lanes, v );
+  return lanes[0] + lanes[1];
+}
+
+#if USE_AVX2
+static inline __m256i _vv_addUnsigned32To64( __m256i acc, __m256i v )
+{
+  return _mm256_add_epi64( acc, _mm256_add_epi64( _mm256_unpacklo_epi32( v, _mm256_setzero_si256() ), _mm256_unpackhi_epi32( v, _mm256_setzero_si256() ) ) );
+}
+
+static inline __m128i _vv_fold_epi64( __m256i v )
+{
+  return _mm_add_epi64( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+}
+#endif
+
+// sum over the block of ( src0 - src1 )^2, for samples in 0 ... 2^15 - 1
+template<X86_VEXT vext>
+uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
+{
+  uint64_t sum = 0;
+  __m128i  acc = _mm_setzero_si128();
+#if USE_AVX2
+  __m256i  acc256 = _mm256_setzero_si256();
+#endif
+
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 16 <= width; x += 16 )
+      {
+        const __m256i diff = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) &src0[x] ), _mm256_loadu_si256( ( const __m256i* ) &src1[x] ) );
+        acc256 = _vv_addUnsigned32To64( acc256, _mm256_madd_epi16( diff, diff ) );
+      }
+    }
+#endif
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i diff = _mm_sub_epi16( _mm_loadu_si128( ( const __m128i* ) &src0[x] ), _mm_loadu_si128( ( const __m128i* ) &src1[x] ) );
+      acc = _vv_addUnsigned32To64( acc, _mm_madd_epi16( diff, diff ) );
+    }
+    if( x + 4 <= width )
+    {
+      const __m128i diff = _mm_sub_epi16( _vv_loadl_epi64( ( const __m128i* ) &src0[x] ), _vv_loadl_epi64( ( const __m128i* ) &src1[x] ) );
+      acc = _vv_addUnsigned32To64( acc, _mm_madd_epi16( diff, diff ) );
+      x += 4;
+    }
+    for( ; x < width; x++ )
+    {
+      const int diff = src0[x] - src1[x];
+      sum += uint64_t( diff * diff );
+    }
+  }
+#if USE_AVX2
+  acc = _mm_add_epi64( acc, _vv_fold_epi64( acc256 ) );
+#endif
+  return sum + uint64_t( _vv_sum_epi64( acc ) );
+}
+
+// sum of the samples of a block and, if sumSquares is not null, of their squares
+template<X86_VEXT vext, bool withSquares>
+static inline void sumBlock_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares )
+{
+  const __m128i ones  = _mm_set1_epi16( 1 );
+  __m128i       accSum = _mm_setzero_si128();
+  __m128i       accSq  = _mm_setzero_si128();
+  int64_t       tail   = 0, tailSq = 0;
+
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    // per row, the 32-bit pair sums cannot overflow: |sum| <= width * 2^15
+    __m128i rowSum = _mm_setzero_si128();
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i v = _mm_loadu_si128( ( const __m128i* ) &src[x] );
+      rowSum = _mm_add_epi32( rowSum, _mm_madd_epi16( v, ones ) );
+      if( withSquares )
+      {
+        // the pair sums of squares are at most 2^31, i.e. unsigned 32 bit
+        accSq = _vv_addUnsigned32To64( accSq, _mm_madd_epi16( v, v ) );
+      }
+    }
+    if( x + 4 <= width )
+    {
+      const __m128i v = _vv_loadl_epi64( ( const __m128i* ) &src[x] );
+      rowSum = _mm_add_epi32( rowSum, _mm_madd_epi16( v, ones ) );
+      if( withSquares )
+      {
+        accSq = _vv_addUnsigned32To64( accSq, _mm_madd_epi16( v, v ) );
+      }
+      x += 4;
+    }
+    accSum = _vv_addSigned32To64( accSum, rowSum );
+    for( ; x < width; x++ )
+    {
+      tail   += src[x];
+      tailSq += src[x] * src[x];
+    }
+  }
+  sum = tail + _vv_sum_epi64( accSum );
+  if( withSquares )
+  {
+    sumSquares = tailSq + _vv_sum_epi64( accSq );
+  }
+}
+
+template<X86_VEXT vext>
+int64_t sum_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height )
+{
+  int64_t sum = 0, unused = 0;
+  sumBlock_SIMD<vext, false>( src, stride, width, height, sum, unused );
+  return sum;
+}
+
+template<X86_VEXT vext>
+void sumAndSumSquares_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares )
+{
+  sumBlock_SIMD<vext, true>( src, stride, width, height, sum, sumSquares );
+}
+
+// sets n samples to value
+template<X86_VEXT vext>
+static inline void fillRun_SIMD( Pel* dst, const int n, const Pel value )
+{
+  if( n < 8 )
+  {
+    // short runs (e.g. the ALF padding): one 64-bit store of four samples instead of a vector broadcast
+    const uint64_t four = uint64_t( uint16_t( value ) ) * 0x0001000100010001ull;
+    int x = 0;
+    if( n >= 4 )
+    {
+      memcpy( dst, &four, sizeof( four ) );
+      x = 4;
+    }
+    for( ; x < n; x++ )
+    {
+      dst[x] = value;
+    }
+    return;
+  }
+
+  int x = 0;
+#if USE_AVX2
+  if( vext >= AVX2 && n >= 16 )
+  {
+    const __m256i v = _mm256_set1_epi16( value );
+    for( ; x + 16 <= n; x += 16 )
+    {
+      _mm256_storeu_si256( ( __m256i* ) &dst[x], v );
+    }
+  }
+#endif
+  const __m128i v = _mm_set1_epi16( value );
+  for( ; x + 8 <= n; x += 8 )
+  {
+    _mm_storeu_si128( ( __m128i* ) &dst[x], v );
+  }
+  if( x + 4 <= n )
+  {
+    _vv_storel_epi64( ( __m128i* ) &dst[x], v );
+    x += 4;
+  }
+  for( ; x < n; x++ )
+  {
+    dst[x] = value;
+  }
+}
+
+// replicates the first / last sample of each row into marginLeft / marginRight samples left / right of the row
+template<X86_VEXT vext>
+void padHorizontal_SIMD( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft, const int marginRight )
+{
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    fillRun_SIMD<vext>( src - marginLeft, marginLeft, src[0] );
+    fillRun_SIMD<vext>( src + width, marginRight, src[width - 1] );
+  }
+}
+
+// dst = ( sum of the 2x2 source samples + 2 ) >> 2
+template<X86_VEXT vext>
+void downsample2x2_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight )
+{
+  const __m128i ones = _mm_set1_epi16( 1 );
+  const __m128i vrnd = _mm_set1_epi32( 2 );
+
+  for( int y = 0; y < dstHeight; y++, src += 2 * srcStride, dst += dstStride )
+  {
+    const Pel* below = src + srcStride;
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      const __m256i ones256 = _mm256_set1_epi16( 1 );
+      const __m256i vrnd256 = _mm256_set1_epi32( 2 );
+      for( ; x + 16 <= dstWidth; x += 16 )
+      {
+        // madd with ones adds the horizontal pairs
+        __m256i lo = _mm256_add_epi32( _mm256_madd_epi16( _mm256_loadu_si256( ( const __m256i* ) &src  [2 * x] ), ones256 ),
+                                       _mm256_madd_epi16( _mm256_loadu_si256( ( const __m256i* ) &below[2 * x] ), ones256 ) );
+        __m256i hi = _mm256_add_epi32( _mm256_madd_epi16( _mm256_loadu_si256( ( const __m256i* ) &src  [2 * x + 16] ), ones256 ),
+                                       _mm256_madd_epi16( _mm256_loadu_si256( ( const __m256i* ) &below[2 * x + 16] ), ones256 ) );
+        lo = _mm256_srai_epi32( _mm256_add_epi32( lo, vrnd256 ), 2 );
+        hi = _mm256_srai_epi32( _mm256_add_epi32( hi, vrnd256 ), 2 );
+        // packs works per 128-bit lane: reorder the 64-bit quarters to restore the sample order
+        _mm256_storeu_si256( ( __m256i* ) &dst[x], _mm256_permute4x64_epi64( _mm256_packs_epi32( lo, hi ), 0xD8 ) );
+      }
+    }
+#endif
+    for( ; x + 8 <= dstWidth; x += 8 )
+    {
+      __m128i lo = _mm_add_epi32( _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &src  [2 * x] ), ones ),
+                                  _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &below[2 * x] ), ones ) );
+      __m128i hi = _mm_add_epi32( _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &src  [2 * x + 8] ), ones ),
+                                  _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &below[2 * x + 8] ), ones ) );
+      lo = _mm_srai_epi32( _mm_add_epi32( lo, vrnd ), 2 );
+      hi = _mm_srai_epi32( _mm_add_epi32( hi, vrnd ), 2 );
+      _mm_storeu_si128( ( __m128i* ) &dst[x], _mm_packs_epi32( lo, hi ) );
+    }
+    for( ; x < dstWidth; x++ )
+    {
+      dst[x] = Pel( ( src[2 * x] + below[2 * x] + src[2 * x + 1] + below[2 * x + 1] + 2 ) >> 2 );
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -2576,6 +2827,12 @@ void PelBufferOps::_initPelBufOpsX86()
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2nd_SIMD<vext>;
   HDHighPass = HDHighPass_SIMD<vext>;
   HDHighPass2 = HDHighPass2_SIMD<vext>;
+
+  sumSquaredError  = sumSquaredError_SIMD<vext>;
+  sum              = sum_SIMD<vext>;
+  sumAndSumSquares = sumAndSumSquares_SIMD<vext>;
+  padHorizontal    = padHorizontal_SIMD<vext>;
+  downsample2x2    = downsample2x2_SIMD<vext>;
 }
 
 template void PelBufferOps::_initPelBufOpsX86<SIMDX86>();

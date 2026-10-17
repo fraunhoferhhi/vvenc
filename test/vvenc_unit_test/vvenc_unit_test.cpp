@@ -82,6 +82,7 @@ namespace po = apputils::program_options;
 #define NUM_CASES 100
 
 static bool g_fastUnitTest = false;
+static std::string g_simdExtension;   // the SIMD extension the tests run with, e.g. "AVX2" or "SCALAR"
 
 template<typename T, typename U>
 static inline U abs_diff( const T value1, const T value2 )
@@ -2451,6 +2452,125 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return passed;
 }
 
+// Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
+// 15 bit (the documented range of the SIMD sums of squares), and signed 16-bit values for the sums.
+static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sumSquaredError, sum, sumAndSumSquares\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 15, /*is_signed=*/false };
+  // any Pel value (RAND_MAX may be only 2^15 - 1)
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  MinMaxGenerator<Pel> extremePixels{ 15, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = rng.get( 1, 160 );
+    const int height = rng.get( 1, 70 );
+    const int stride = width + rng.get( 0, 40 );
+    std::vector<Pel> a( stride * height ), b( stride * height );
+    if( i % 3 == 2 )
+    {
+      std::generate( a.begin(), a.end(), extremePixels );
+      std::generate( b.begin(), b.end(), extremePixels );
+    }
+    else
+    {
+      std::generate( a.begin(), a.end(), pixels );
+      std::generate( b.begin(), b.end(), pixels );
+    }
+
+    std::ostringstream sstm;
+    sstm << "w=" << width << " h=" << height << " stride=" << stride;
+
+    bool ok = compare_value( "sumSquaredError " + sstm.str(), ref->sumSquaredError( a.data(), stride, b.data(), stride, width, height ),
+                                                              opt->sumSquaredError( a.data(), stride, b.data(), stride, width, height ) );
+
+    int64_t sumRef = 0, sumSqRef = 0, sumOpt = 0, sumSqOpt = 0;
+    ref->sumAndSumSquares( a.data(), stride, width, height, sumRef, sumSqRef );
+    opt->sumAndSumSquares( a.data(), stride, width, height, sumOpt, sumSqOpt );
+    ok = ok && compare_value( "sumAndSumSquares sum " + sstm.str(), sumRef, sumOpt )
+            && compare_value( "sumAndSumSquares squares " + sstm.str(), sumSqRef, sumSqOpt );
+
+    // the plain sum is exact for any Pel
+    std::generate( a.begin(), a.end(), anyPel );
+    ok = ok && compare_value( "sum " + sstm.str(), ref->sum( a.data(), stride, width, height ), opt->sum( a.data(), stride, width, height ) );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// padHorizontal: the whole buffer is compared, so writes outside the margins are caught as well
+static bool check_padHorizontal( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::padHorizontal\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width       = rng.get( 1, 128 );
+    const int height      = rng.get( 1, 20 );
+    const int marginLeft  = rng.get( 0, 160 );
+    const int marginRight = rng.get( 0, 160 );
+    const int stride      = marginLeft + width + marginRight + rng.get( 0, 8 );
+    std::vector<Pel> bufRef( stride * height );
+    std::generate( bufRef.begin(), bufRef.end(), pixels );
+    std::vector<Pel> bufOpt( bufRef );
+
+    ref->padHorizontal( bufRef.data() + marginLeft, stride, width, height, marginLeft, marginRight );
+    opt->padHorizontal( bufOpt.data() + marginLeft, stride, width, height, marginLeft, marginRight );
+
+    std::ostringstream sstm;
+    sstm << "padHorizontal w=" << width << " h=" << height << " margins=" << marginLeft << "," << marginRight;
+    if( !compare_values_1d( sstm.str(), bufRef.data(), bufOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool check_downsample2x2( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::downsample2x2\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  MinMaxGenerator<Pel> extremes{ 16, /*is_signed=*/true };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int dstWidth  = rng.get( 1, 100 );
+    const int dstHeight = rng.get( 1, 20 );
+    const int srcStride = 2 * dstWidth + rng.get( 0, 16 );
+    const int dstStride = dstWidth + rng.get( 0, 16 );
+    std::vector<Pel> src( srcStride * 2 * dstHeight );
+    if( i & 1 )
+    {
+      std::generate( src.begin(), src.end(), extremes );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), anyPel );
+    }
+    std::vector<Pel> dstRef( dstStride * dstHeight, 0x5a5a ), dstOpt( dstStride * dstHeight, 0x5a5a );
+
+    ref->downsample2x2( src.data(), srcStride, dstRef.data(), dstStride, dstWidth, dstHeight );
+    opt->downsample2x2( src.data(), srcStride, dstOpt.data(), dstStride, dstWidth, dstHeight );
+
+    std::ostringstream sstm;
+    sstm << "downsample2x2 " << dstWidth << "x" << dstHeight;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), dstStride * dstHeight ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2459,11 +2579,21 @@ static bool test_PelBufferOps()
   ref.initPelBufOps( /*enableOpt=*/false );
   opt.initPelBufOps( /*enableOpt=*/true  );
 
+  // initPelBufOps() has to set up the object it is called on, else the checks below compare the C code with itself
+  if( g_simdExtension != "SCALAR" && opt.addAvg == ref.addAvg )
+  {
+    printf( "failed: PelBufferOps::initPelBufOps did not install the SIMD functions in the object\n" );
+    return false;
+  }
+
   unsigned num_cases = NUM_CASES;
   bool passed = true;
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
+  passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
+  passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }
@@ -4372,6 +4502,7 @@ int main( int argc, char* argv[] )
     std::cout << args.simd << " is not supported!\n\n";
     exit( EXIT_FAILURE );
   }
+  g_simdExtension = simd;
 
   srand( args.seed );
   std::cout << "Running unit tests with seed=" << args.seed << " SIMD=" << simd << ".\n\n";
