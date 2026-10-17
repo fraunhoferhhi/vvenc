@@ -693,15 +693,18 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub2              = subsCore<Pel>;
   sub4              = subsCore<Pel>;
   sub8              = subsCore<Pel>;
 
   wghtAvg4          = addWeightedAvgCore<Pel>;
   wghtAvg8          = addWeightedAvgCore<Pel>;
 
+  copyClip2         = copyClipCore<Pel>;
   copyClip4         = copyClipCore<Pel>;
   copyClip8         = copyClipCore<Pel>;
 
+  reco2             = reconstructCore<Pel>;
   reco4             = reconstructCore<Pel>;
   reco8             = reconstructCore<Pel>;
 
@@ -923,6 +926,10 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
   {
     g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
   }
+  else if( width == 2 )
+  {
+    g_pelBufOP.sub2( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
   else
 #endif
   {
@@ -996,15 +1003,22 @@ void AreaBuf<Pel>::copyClip( const AreaBuf<const Pel>& src, const ClpRng& clpRng
   {
     g_pelBufOP.copyClip4(srcp, srcStride, dest, destStride, width, height, clpRng);
   }
+  else if( height >= 8 )
+  {
+    CHECKD( width != 2, "Expecting width to be '2'!" );
+    g_pelBufOP.copyClip2( srcp, srcStride, dest, destStride, width, height, clpRng );
+  }
   else
   {
+    // for fewer rows this loop is faster than the call of copyClip2
+    CHECKD( width != 2, "Expecting width to be '2'!" );
     for( int y = 0; y < height; y++ )
     {
-      dest[0] = ClipPel( srcp[0], clpRng);
-      dest[1] = ClipPel( srcp[1], clpRng);
+      dest[0] = ClipPel( srcp[0], clpRng );
+      dest[1] = ClipPel( srcp[1], clpRng );
       srcp += srcStride;
       dest += destStride;
-    }                                                         \
+    }
   }
 }
 
@@ -1030,16 +1044,21 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   {
     g_pelBufOP.reco4( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
   }
+  else if( width == 2 && height >= 8 )
+  {
+    g_pelBufOP.reco2( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
+  }
   else if( ( width & 1 ) == 0 )
   {
+    // for fewer rows this loop is faster than the call of reco2
     for( int y = 0; y < height; y++ )
     {
-      dest[0] = ClipPel( src1[0] + src2[0], clpRng);
-      dest[1] = ClipPel( src1[1] + src2[1], clpRng);
+      dest[0] = ClipPel( src1[0] + src2[0], clpRng );
+      dest[1] = ClipPel( src1[1] + src2[1], clpRng );
       src1 += src1Stride;
       src2 += src2Stride;
       dest += destStride;
-    }                        
+    }
   }
   else
   {
