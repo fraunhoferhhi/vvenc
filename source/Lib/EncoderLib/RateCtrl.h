@@ -96,6 +96,8 @@ namespace vvenc {
     double    frameInGopRatio                         { 0.0 };
     int       targetBits                              { 0 };
     bool      addedToList                             { false };
+    bool      isStartedInFinalPass                    { false };
+    int       twoPassGop                              { -1 }; // index into RateCtrl::m_twoPassGops, -1: not rate capped
   };
 
   class EncRCSeq
@@ -151,6 +153,9 @@ namespace vvenc {
     int     poc;
     bool    refreshParams;
     uint16_t visActSteady;
+    double  predictedBits; // two-pass mode: bits expected at the chosen QP, counted as spent until the picture is done
+    int     twoPassGop;    // two-pass mode with a maximum bitrate: index of the rate-capped GOP, else -1
+    int     twoPassGroup;  // two-pass mode: first-pass QP * TWO_PASS_CLASSES + picture class
 
   protected:
     EncRCSeq* encRCSeq;
@@ -176,6 +181,7 @@ namespace vvenc {
     void setRCRateSavingState( const int maxRate );
     void processFirstPassData( const bool flush, const int poc = -1 );
     void updateAfterPicEncRC( const Picture* pic );
+    void addUncountedBits( const int bits );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
@@ -210,8 +216,47 @@ namespace vvenc {
     void readStatsFile();
 #endif
     void adjustStatsDownsample();
+    // With a maximum bitrate, a GOP gets a smaller shift than the sequence when its predicted bits would exceed its limit.
+    struct TwoPassGop
+    {
+      std::vector<const TRCPassStats*> pics;
+      double maxBits      = 0.0;  // bit limit derived from the maximum bitrate
+      double budget       = 0.0;  // maxBits minus the overshoot of the previous GOP, set when the GOP starts
+      double actualBits   = 0.0;  // bits of the finished pictures
+      double inFlightBits = 0.0;  // predicted bits of the started but unfinished pictures
+      double startShift   = 0.0;  // shift at which the whole GOP was predicted to fit its budget when it started
+      bool   isStarted    = false;
+    };
+    void initTwoPassQPShift();
+    double getTwoPassQPShift( const double bitsLeft, std::list<TRCPassStats>::const_iterator next, const std::list<TRCPassStats>::const_iterator end ) const;
+    void initTwoPassRateControlPic( EncRCPic* encRcPic, std::list<TRCPassStats>::iterator stats, int& qp, double& lambda );
+    double getTwoPassGroupRatio( const int qp, const int picClass ) const;
+    void initTwoPassGops();
+    void startTwoPassGop( const int gopIdx, const double shift, const double recentRatio );
+    double getTwoPassCapSavings( const double shift ) const;
+    double getTwoPassGopShift( const TwoPassGop& gop, const double seqShift, const double recentRatio, const double minShift ) const;
 
   private:
+    // Two-pass mode encodes like constant-QP mode: every picture gets its first-pass QP minus one sequence-wide shift,
+    // weighted per picture class as the constant-QP hierarchy scales with the base QP. The shift is solved per picture
+    // so that the predicted bits of all pictures not yet started fill the remaining budget.
+    static const int TWO_PASS_CLASSES = 4; // I-pictures and B-pictures in temporal layer 0, 1, and 2 or above
+    // Pictures are grouped by first-pass QP and class. As QPA raises the first-pass QP of detailed content, a group holds
+    // similar content, so the prediction error of the rate model is learned per group.
+    double                  m_twoPassBitsLeft[ MAX_QP + 1 ][ TWO_PASS_CLASSES ]; // first-pass bits of pictures not yet started
+    double                  m_twoPassFirstPassBits[ MAX_QP + 1 ][ TWO_PASS_CLASSES ]; // first-pass bits of all pictures
+    double                  m_twoPassActualBits[ MAX_QP + 1 ][ TWO_PASS_CLASSES ];    // actual and predicted bits of the
+    double                  m_twoPassPredictedBits[ MAX_QP + 1 ][ TWO_PASS_CLASSES ]; // finished pictures
+    double                  m_twoPassCountedBits;  // actual bits of all finished pictures as seen by updateAfterPicEncRC
+    double                  m_twoPassLastShift;    // the sequence shift of the last picture
+    double                  m_twoPassTotalBits;    // bit budget of the whole sequence
+    double                  m_twoPassInFlightBits; // predicted bits of started but unfinished pictures
+    double                  m_twoPassUncountedBits; // written bits that updateAfterPicEncRC did not see
+    double                  m_twoPassRecentActual; // decaying sums of actual and predicted bits of finished pictures,
+    double                  m_twoPassRecentPredicted; // their ratio corrects the prediction of the next pictures
+    bool                    m_twoPassQPShiftMode;
+    std::vector<TwoPassGop> m_twoPassGops;
+    double                  m_twoPassCapSavings;   // predicted bits that the limits save in GOPs not yet started
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
