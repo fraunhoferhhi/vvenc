@@ -61,6 +61,8 @@ namespace vvenc {
 
 static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixedWeight );
 
+static void bvBitsLineCore( const Mv* predictors, const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits );
+
 RdCost::RdCost()
   : m_afpDistortFunc{ { nullptr, }, { nullptr, } }
 {
@@ -126,6 +128,7 @@ void RdCost::create( bool enableOpt )
   memcpy( m_afpDistortFunc[1], m_afpDistortFunc[0], sizeof(m_afpDistortFunc)/2);
 
   m_fxdWtdPredPtr = fixWeightedSSE_Core;
+  m_bvBitsLineIBC = bvBitsLineCore;
 
   m_afpDistortFuncX5[0] = RdCost::xGetSAD8X5;
   m_afpDistortFuncX5[1] = RdCost::xGetSAD16X5;
@@ -2094,7 +2097,7 @@ Distortion RdCost::xGetSADwMask(const DistParam &rcDtParam)
 
 Distortion RdCost::getBvCostMultiplePredsIBC(int x, int y, bool useIMV)
 {
-  return Distortion(m_dCostIBC * getBitsMultiplePredsIBC(x, y, useIMV));
+  return getBvCostIBC( getBitsMultiplePredsIBC( x, y, useIMV ) );
 }
 
 static inline unsigned getIComponentBitsIBC( int val )
@@ -2106,15 +2109,16 @@ static inline unsigned getIComponentBitsIBC( int val )
   return (l2 << 1) + 1;
 }
 
-unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
+// the bits of the block vector ( x, y ) with the cheaper of the two predictors, as estimated by the IBC search
+static unsigned bvBitsMultiplePreds( const Mv* predictors, const int x, const int y, const bool useIMV )
 {
   int rmvH[2];
   int rmvV[2];
-  rmvH[0] = x - m_bvPredictors[0].hor;
-  rmvH[1] = x - m_bvPredictors[1].hor;
+  rmvH[0] = x - predictors[0].hor;
+  rmvH[1] = x - predictors[1].hor;
 
-  rmvV[0] = y - m_bvPredictors[0].ver;
-  rmvV[1] = y - m_bvPredictors[1].ver;
+  rmvV[0] = y - predictors[0].ver;
+  rmvV[1] = y - predictors[1].ver;
   int absCand[2];
   absCand[0] = abs(rmvH[0]) + abs(rmvV[0]);
   absCand[1] = abs(rmvH[1]) + abs(rmvV[1]);
@@ -2127,10 +2131,10 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
     int imvShift = 2;
     int offset = 1 << (imvShift - 1);
 
-    rmvHQP[0] = (x >> 2) - ((m_bvPredictors[0].hor + offset) >> 2);
-    rmvHQP[1] = (x >> 2) - ((m_bvPredictors[1].hor + offset) >> 2);
-    rmvVQP[0] = (y >> 2) - ((m_bvPredictors[0].ver + offset) >> 2);
-    rmvVQP[1] = (y >> 2) - ((m_bvPredictors[1].ver + offset) >> 2);
+    rmvHQP[0] = (x >> 2) - ((predictors[0].hor + offset) >> 2);
+    rmvHQP[1] = (x >> 2) - ((predictors[1].hor + offset) >> 2);
+    rmvVQP[0] = (y >> 2) - ((predictors[0].ver + offset) >> 2);
+    rmvVQP[1] = (y >> 2) - ((predictors[1].ver + offset) >> 2);
 
     int absCandQP[2];
     absCandQP[0] = abs(rmvHQP[0]) + abs(rmvVQP[0]);
@@ -2175,6 +2179,19 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
     {
       return getIComponentBitsIBC(rmvH[1]) + getIComponentBitsIBC(rmvV[1]);
     }
+  }
+}
+
+unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
+{
+  return bvBitsMultiplePreds( m_bvPredictors, x, y, useIMV );
+}
+
+static void bvBitsLineCore( const Mv* predictors, const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits )
+{
+  for( int i = 0; i < count; i++ )
+  {
+    bits[i] = bvBitsMultiplePreds( predictors, x0 + i * xStep, y, useIMV );
   }
 }
 

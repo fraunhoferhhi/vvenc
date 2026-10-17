@@ -2294,6 +2294,56 @@ static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int wi
   return passed;
 }
 
+// The IBC block vector bits of a line of search positions: the SIMD line against the C line, and the column (whose
+// predictors and coordinates are transposed) against getBitsMultiplePredsIBC per vector. The predictors and positions
+// cover the 18 bits of an Mv component, multiples of 4 for the sample-precision candidates, and both orders of the two
+// predictor costs.
+static bool check_bvBitsLineIBC( RdCost* ref, RdCost* opt, unsigned num_cases )
+{
+  printf( "Testing RdCost::m_bvBitsLineIBC\n" );
+  DimensionGenerator rng;
+  auto anyComponent = [&rng]( const int range ) { return int( rng.get( 0, 2 * range ) ) - range; };
+  std::vector<unsigned> bitsRef( 300 ), bitsOpt( 300 );
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int range = rng.getOneOf<int>( { 8, 64, 1 << 12, ( 1 << 17 ) - 1 } );
+    Mv predictors[2] = { Mv( anyComponent( range ), anyComponent( range ) ), Mv( anyComponent( range ), anyComponent( range ) ) };
+    if( i & 1 )
+    {
+      predictors[0] = Mv( predictors[0].hor & ~3, predictors[0].ver & ~3 );
+    }
+    ref->setPredictorsIBC( predictors );
+    opt->setPredictorsIBC( predictors );
+
+    const int  count  = rng.get( 1, unsigned( bitsRef.size() ) );
+    const int  step   = rng.getOneOf<int>( { 1, -1, 2, 4, -4, 8 } );
+    const int  x0     = anyComponent( range );
+    const int  y      = i % 3 ? anyComponent( range ) & ~3 : anyComponent( range );
+    const bool useIMV = i % 4 != 0;
+
+    std::ostringstream sstm;
+    sstm << "bvBitsLine x0=" << x0 << " step=" << step << " count=" << count << " y=" << y << " imv=" << useIMV;
+    ref->getBvBitsRowIBC( x0, step, count, y, useIMV, bitsRef.data() );
+    opt->getBvBitsRowIBC( x0, step, count, y, useIMV, bitsOpt.data() );
+    if( !compare_values_1d( sstm.str() + " row", bitsRef.data(), bitsOpt.data(), count ) )
+    {
+      return false;
+    }
+
+    opt->getBvBitsColumnIBC( y, x0, step, count, useIMV, bitsOpt.data() );
+    for( int k = 0; k < count; k++ )
+    {
+      bitsRef[k] = ref->getBitsMultiplePredsIBC( y, x0 + k * step, useIMV );
+    }
+    if( !compare_values_1d( sstm.str() + " column", bitsRef.data(), bitsOpt.data(), count ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_RdCost()
 {
   RdCost ref;
@@ -2303,6 +2353,7 @@ static bool test_RdCost()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+  passed = check_bvBitsLineIBC( &ref, &opt, 10 * num_cases ) && passed;
   std::array<int, 8> widths = { 1, 2, 4, 8, 16, 32, 64, 128 };
   std::array<int, 7> heights = { 2, 4, 8, 16, 32, 64, 128 };
 
