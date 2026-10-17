@@ -1495,7 +1495,6 @@ void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsample
 
   const int16_t* src = yuvPlaneIn.ptr;
   const int instride = yuvPlaneIn.stride;
-  const int width = yuvPlaneIn.width;
   int n = 0;
   for (int j = 0; j < heightd; j++)
   {
@@ -1505,7 +1504,7 @@ void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsample
       long int b = 0;
       for (int r = 0; r < downsampleStep; r++)
       {
-        int posr = width * r;
+        int posr = instride * r;
         for (int n = 0; n < downsampleStep; n++)
         {
           b += src[posr + n];
@@ -1516,9 +1515,7 @@ void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsample
       n++;
     }
     n += difStride;
-    src = src - downsampleStep * i + width;
-
-    src += (instride * (downsampleStep - 1));
+    src = src - downsampleStep * i + instride * downsampleStep;
   }
 }
 

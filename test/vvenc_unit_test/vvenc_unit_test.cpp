@@ -2643,6 +2643,53 @@ static bool check_downsample2x2( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// copyPadToPelUnitBuf into a smaller destination, as for the subsampled first pass of two-pass rate control: each
+// destination sample is the rounded mean of a 2x2 block of the input plane, also for planes with a stride above their
+// width.
+static bool check_copyPadDownsampling( unsigned num_cases )
+{
+  printf( "Testing copyPadToPelUnitBuf with 2:1 downsampling\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int srcWidth  = rng.get( 2, 200 );
+    const int srcHeight = rng.get( 2, 40 );
+    const int srcStride = srcWidth + ( i % 2 ? rng.get( 1, 32 ) : 0 );
+    const int dstWidth  = rng.get( 1, srcWidth / 2 );
+    const int dstHeight = rng.get( 1, srcHeight / 2 );
+    std::vector<Pel> src( srcStride * srcHeight );
+    std::generate( src.begin(), src.end(), pixels );
+
+    vvencYUVBuffer yuvIn;
+    vvenc_YUVBuffer_default( &yuvIn );
+    yuvIn.planes[0] = { src.data(), srcWidth, srcHeight, srcStride };
+    PelStorage dst;
+    dst.create( CHROMA_400, Area( 0, 0, dstWidth, dstHeight ) );
+    copyPadToPelUnitBuf( dst, yuvIn, CHROMA_400 );
+
+    const PelBuf& out = dst.bufs[COMP_Y];
+    for( int y = 0; y < dstHeight; y++ )
+    {
+      const Pel* top    = &src[2 * y * srcStride];
+      const Pel* bottom = top + srcStride;
+      for( int x = 0; x < dstWidth; x++ )
+      {
+        const Pel expected = Pel( ( top[2 * x] + top[2 * x + 1] + bottom[2 * x] + bottom[2 * x + 1] + 2 ) >> 2 );
+        if( out.at( x, y ) != expected )
+        {
+          std::ostringstream sstm;
+          sstm << "copyPadToPelUnitBuf " << srcWidth << "x" << srcHeight << " stride=" << srcStride << " to "
+               << dstWidth << "x" << dstHeight << " at " << x << "," << y;
+          return compare_value( sstm.str(), expected, out.at( x, y ) );
+        }
+      }
+    }
+  }
+  return true;
+}
+
 // MIP upsampling: all reduced sizes and factors, 12-bit samples (the documented range of the SIMD version). The
 // vertical pass is also run in place, with its source rows inside the destination as in MatrixIntraPrediction::predBlock.
 static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -2857,6 +2904,7 @@ static bool test_PelBufferOps()
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
+  passed = check_copyPadDownsampling( num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
