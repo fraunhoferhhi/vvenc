@@ -248,6 +248,26 @@ void IntraPredAngleChroma_Core(Pel* pDstBuf,const ptrdiff_t dstStride,int16_t* p
 // Constructor / destructor / initialize
 // ====================================================================================================================
 
+static void LMLumaDownsample420_Core( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const bool leftAvailable )
+{
+  for( int y = 0; y < height; y++, src += 2 * srcStride, dst += dstStride )
+  {
+    for( int i = 0; i < width; i++ )
+    {
+      const int left = ( i == 0 && !leftAvailable ) ? 0 : 1;
+
+      int s = 4;
+      s += src[2 * i] * 2;
+      s += src[2 * i + 1];
+      s += src[2 * i - left];
+      s += src[2 * i + srcStride] * 2;
+      s += src[2 * i + 1 + srcStride];
+      s += src[2 * i + srcStride - left];
+      dst[i] = s >> 3;
+    }
+  }
+}
+
 IntraPrediction::IntraPrediction( bool enableOpt )
 :  m_pMdlmTemp( nullptr )
 ,  m_currChromaFormat( NUM_CHROMA_FORMAT )
@@ -258,6 +278,7 @@ IntraPrediction::IntraPrediction( bool enableOpt )
   IntraHorVerPDPC       = IntraHorVerPDPC_Core;
   IntraPredSampleFilter = IntraPredSampleFilter_Core;
   xPredIntraPlanar      = xPredIntraPlanar_Core;
+  LMLumaDownsample420   = LMLumaDownsample420_Core;
 
 #if ENABLE_SIMD_OPT_INTRAPRED
   if( enableOpt )
@@ -1248,52 +1269,48 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
     {
       addedAboveRight = avaiAboveRightUnits*chromaUnitWidth;
     }
-    for (int i = 0; i < uiCWidth + addedAboveRight; i++)
+    if( cu.chromaFormat == CHROMA_420 && !isFirstRowOfCtu && !cu.cs->sps->verCollocatedChroma )
     {
-      const bool leftPadding = i == 0 && !leftIsAvailable;
-      if (cu.chromaFormat == CHROMA_444)
+      LMLumaDownsample420( pRecSrc0 - iRecStride2, iRecStride, pDst, 0, uiCWidth + addedAboveRight, 1, leftIsAvailable );
+    }
+    else
+    {
+      for (int i = 0; i < uiCWidth + addedAboveRight; i++)
       {
-        piSrc = pRecSrc0 - iRecStride;
-        pDst[i] = piSrc[i];
-      }
-      else if (isFirstRowOfCtu)
-      {
-        piSrc   = pRecSrc0 - iRecStride;
-        pDst[i] = (piSrc[2 * i] * 2 + piSrc[2 * i - (leftPadding ? 0 : 1)] + piSrc[2 * i + 1] + 2) >> 2;
-      }
-      else if (cu.chromaFormat == CHROMA_422)
-      {
-        piSrc = pRecSrc0 - iRecStride2;
+        const bool leftPadding = i == 0 && !leftIsAvailable;
+        if (cu.chromaFormat == CHROMA_444)
+        {
+          piSrc = pRecSrc0 - iRecStride;
+          pDst[i] = piSrc[i];
+        }
+        else if (isFirstRowOfCtu)
+        {
+          piSrc   = pRecSrc0 - iRecStride;
+          pDst[i] = (piSrc[2 * i] * 2 + piSrc[2 * i - (leftPadding ? 0 : 1)] + piSrc[2 * i + 1] + 2) >> 2;
+        }
+        else if (cu.chromaFormat == CHROMA_422)
+        {
+          piSrc = pRecSrc0 - iRecStride2;
 
-        int s = 2;
-        s += piSrc[2 * i] * 2;
-        s += piSrc[2 * i - (leftPadding ? 0 : 1)];
-        s += piSrc[2 * i + 1];
-        pDst[i] = s >> 2;
-      }
-      else if (cu.cs->sps->verCollocatedChroma )
-      {
-        piSrc = pRecSrc0 - iRecStride2;
+          int s = 2;
+          s += piSrc[2 * i] * 2;
+          s += piSrc[2 * i - (leftPadding ? 0 : 1)];
+          s += piSrc[2 * i + 1];
+          pDst[i] = s >> 2;
+        }
+        else
+        {
+          CHECKD( !cu.cs->sps->verCollocatedChroma, "the 4:2:0 6-tap case is handled by LMLumaDownsample420" );
+          piSrc = pRecSrc0 - iRecStride2;
 
-        int s = 4;
-        s += piSrc[2 * i - iRecStride];
-        s += piSrc[2 * i] * 4;
-        s += piSrc[2 * i - (leftPadding ? 0 : 1)];
-        s += piSrc[2 * i + 1];
-        s += piSrc[2 * i + iRecStride];
-        pDst[i] = s >> 3;
-      }
-      else
-      {
-        piSrc = pRecSrc0 - iRecStride2;
-        int s = 4;
-        s += piSrc[2 * i] * 2;
-        s += piSrc[2 * i + 1];
-        s += piSrc[2 * i - (leftPadding ? 0 : 1)];
-        s += piSrc[2 * i + iRecStride] * 2;
-        s += piSrc[2 * i + 1 + iRecStride];
-        s += piSrc[2 * i + iRecStride - (leftPadding ? 0 : 1)];
-        pDst[i] = s >> 3;
+          int s = 4;
+          s += piSrc[2 * i - iRecStride];
+          s += piSrc[2 * i] * 4;
+          s += piSrc[2 * i - (leftPadding ? 0 : 1)];
+          s += piSrc[2 * i + 1];
+          s += piSrc[2 * i + iRecStride];
+          pDst[i] = s >> 3;
+        }
       }
     }
   }
@@ -1353,55 +1370,49 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
   }
 
   // inner part from reconstructed picture buffer
-  for( int j = 0; j < uiCHeight; j++ )
+  if( cu.chromaFormat == CHROMA_420 && !cu.cs->sps->verCollocatedChroma )
   {
-    for( int i = 0; i < uiCWidth; i++ )
+    LMLumaDownsample420( pRecSrc0, iRecStride, pDst0, iDstStride, uiCWidth, uiCHeight, leftIsAvailable );
+  }
+  else
+  {
+    for( int j = 0; j < uiCHeight; j++ )
     {
-      if (cu.chromaFormat == CHROMA_444)
+      for( int i = 0; i < uiCWidth; i++ )
       {
-        pDst0[i] = pRecSrc0[i];
-      }
-      else if (cu.chromaFormat == CHROMA_422)
-      {
-        const bool leftPadding  = i == 0 && !leftIsAvailable;
+        if (cu.chromaFormat == CHROMA_444)
+        {
+          pDst0[i] = pRecSrc0[i];
+        }
+        else if (cu.chromaFormat == CHROMA_422)
+        {
+          const bool leftPadding  = i == 0 && !leftIsAvailable;
 
-        int s = 2;
-        s += pRecSrc0[2 * i] * 2;
-        s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
-        s += pRecSrc0[2 * i + 1];
-        pDst0[i] = s >> 2;
-      }
-      else if (cu.cs->sps->verCollocatedChroma)
-      {
-        const bool leftPadding  = i == 0 && !leftIsAvailable;
-        const bool abovePadding = j == 0 && !aboveIsAvailable;
+          int s = 2;
+          s += pRecSrc0[2 * i] * 2;
+          s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
+          s += pRecSrc0[2 * i + 1];
+          pDst0[i] = s >> 2;
+        }
+        else
+        {
+          CHECKD( !cu.cs->sps->verCollocatedChroma, "the 4:2:0 6-tap case is handled by LMLumaDownsample420" );
+          const bool leftPadding  = i == 0 && !leftIsAvailable;
+          const bool abovePadding = j == 0 && !aboveIsAvailable;
 
-        int s = 4;
-        s += pRecSrc0[2 * i - (abovePadding ? 0 : iRecStride)];
-        s += pRecSrc0[2 * i] * 4;
-        s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
-        s += pRecSrc0[2 * i + 1];
-        s += pRecSrc0[2 * i + iRecStride];
-        pDst0[i] = s >> 3;
+          int s = 4;
+          s += pRecSrc0[2 * i - (abovePadding ? 0 : iRecStride)];
+          s += pRecSrc0[2 * i] * 4;
+          s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
+          s += pRecSrc0[2 * i + 1];
+          s += pRecSrc0[2 * i + iRecStride];
+          pDst0[i] = s >> 3;
+        }
       }
-      else
-      {
-        CHECK(cu.chromaFormat != CHROMA_420, "Chroma format must be 4:2:0 for vertical filtering");
-        const bool leftPadding = i == 0 && !leftIsAvailable;
 
-        int s = 4;
-        s += pRecSrc0[2 * i] * 2;
-        s += pRecSrc0[2 * i + 1];
-        s += pRecSrc0[2 * i - (leftPadding ? 0 : 1)];
-        s += pRecSrc0[2 * i + iRecStride] * 2;
-        s += pRecSrc0[2 * i + 1 + iRecStride];
-        s += pRecSrc0[2 * i + iRecStride - (leftPadding ? 0 : 1)];
-        pDst0[i] = s >> 3;
-      }
+      pDst0    += iDstStride;
+      pRecSrc0 += iRecStride2;
     }
-
-    pDst0    += iDstStride;
-    pRecSrc0 += iRecStride2;
   }
 }
 

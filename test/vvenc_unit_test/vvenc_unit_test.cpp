@@ -896,6 +896,49 @@ static bool check_IntraPredAngleLuma( IntraPrediction* ref, IntraPrediction* opt
   return passed;
 }
 
+// CCLM luma downsampling: random sizes (the above row is one chroma row of up to twice the block width), strides and
+// left availability; the source has a left margin because the SIMD code reads it also when the left neighbour is
+// not available. The whole destination is compared.
+static bool check_LMLumaDownsample420( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  printf( "Testing IntraPrediction::LMLumaDownsample420\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 10, /*is_signed=*/false };
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int  width         = rng.get( 1, 128 );
+    const int  height        = rng.get( 1, 32 );
+    const int  margin        = 8;
+    const int  srcStride     = margin + 2 * width + rng.get( 1, 16 );
+    const int  dstStride     = width + rng.get( 0, 16 );
+    const bool leftAvailable = rng.get( 0, 1 );
+
+    std::vector<Pel> src( srcStride * 2 * height );
+    if( i & 1 )
+    {
+      std::generate( src.begin(), src.end(), anyPel );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), pixels );
+    }
+    std::vector<Pel> dstRef( dstStride * height, 0x5a5a ), dstOpt( dstStride * height, 0x5a5a );
+
+    ref->LMLumaDownsample420( src.data() + margin, srcStride, dstRef.data(), dstStride, width, height, leftAvailable );
+    opt->LMLumaDownsample420( src.data() + margin, srcStride, dstOpt.data(), dstStride, width, height, leftAvailable );
+
+    std::ostringstream sstm;
+    sstm << "LMLumaDownsample420 " << width << "x" << height << " leftAvailable=" << leftAvailable;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), dstStride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_IntraPred()
 {
   IntraPrediction ref{ /*enableOpt=*/false };
@@ -905,6 +948,7 @@ static bool test_IntraPred()
   bool passed        = true;
 
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
+  passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

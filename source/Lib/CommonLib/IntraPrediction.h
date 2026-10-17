@@ -193,6 +193,9 @@ public:
   void ( *IntraHorVerPDPC )       ( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height, int scale, const Pel* refMain, const ClpRng& clpRng );
   void ( *IntraPredSampleFilter ) ( PelBuf& piPred, const CPelBuf& pSrc );
   void ( *xPredIntraPlanar )      ( PelBuf& pDst, const CPelBuf& pSrc );
+  // CCLM: 4:2:0 luma downsampling with the 6-tap filter (no vertical collocation), height chroma rows from src rows
+  // 2 * y and 2 * y + 1; without a left neighbour the samples left of the block are replaced by the first column
+  void ( *LMLumaDownsample420 )   ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const bool leftAvailable );
 };
 
 } // namespace vvenc
