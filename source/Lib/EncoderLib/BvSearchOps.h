@@ -65,6 +65,8 @@ struct BvSearchOps
 
   // true if mv is one of the first n entries of list; used to merge the block vector candidate lists
   bool ( *containsMv )( const Mv* list, const unsigned n, const Mv& mv );
+  // sum over the block of ( |org - cur| >> shift ), the chroma cost of the block vector candidates
+  Distortion ( *sumAbsDiffShifted )( const Pel* org, const ptrdiff_t orgStride, const Pel* cur, const ptrdiff_t curStride, const int width, const int height, const int shift );
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
   void initBvSearchOpsX86();

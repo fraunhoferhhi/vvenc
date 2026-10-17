@@ -104,10 +104,72 @@ static bool containsMv_SIMD( const Mv* list, const unsigned n, const Mv& mv )
   return i < n && list[i] == mv;
 }
 
+// sum over the block of ( |org - cur| >> shift ), for samples in 0 ... 2^15 - 1: the differences fit 16 bits, and the
+// 32-bit lane sums cannot overflow for blocks of up to 2^16 samples
+template<X86_VEXT vext>
+static Distortion sumAbsDiffShifted_SIMD( const Pel* org, const ptrdiff_t orgStride, const Pel* cur, const ptrdiff_t curStride, const int width, const int height, const int shift )
+{
+  CHECKD( width * height > ( 1 << 16 ), "block too large for 32-bit lane sums" );
+
+  const __m128i ones   = _mm_set1_epi16( 1 );
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+  __m128i       acc    = _mm_setzero_si128();
+  auto addTerms = [&]( const __m128i o, const __m128i c )
+  {
+    acc = _mm_add_epi32( acc, _mm_madd_epi16( _mm_srl_epi16( _mm_abs_epi16( _mm_sub_epi16( c, o ) ), vshift ), ones ) );
+  };
+  // the samples of up to four 2-wide or two 4-wide rows in one vector; the lanes of missing rows are zero
+  auto loadRows = []( const Pel* p, const ptrdiff_t stride, const int rowWidth, const int numRows )
+  {
+    if( rowWidth == 4 )
+    {
+      const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
+      return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
+    }
+    __m128i r[4];
+    for( int i = 0; i < 4; i++ )
+    {
+      r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
+    }
+    return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
+  };
+
+  Distortion tail = 0;
+  if( width == 2 || width == 4 )
+  {
+    const int rowsPerVector = 8 / width;
+    for( int y = 0; y < height; y += rowsPerVector, org += rowsPerVector * orgStride, cur += rowsPerVector * curStride )
+    {
+      const int numRows = std::min( rowsPerVector, height - y );
+      addTerms( loadRows( org, orgStride, width, numRows ), loadRows( cur, curStride, width, numRows ) );
+    }
+  }
+  else
+  {
+    for( int y = 0; y < height; y++, org += orgStride, cur += curStride )
+    {
+      int x = 0;
+      for( ; x + 8 <= width; x += 8 )
+      {
+        addTerms( _mm_loadu_si128( ( const __m128i* ) &org[x] ), _mm_loadu_si128( ( const __m128i* ) &cur[x] ) );
+      }
+      for( ; x < width; x++ )
+      {
+        tail += abs( cur[x] - org[x] ) >> shift;
+      }
+    }
+  }
+
+  acc = _mm_add_epi32( acc, _mm_unpackhi_epi64( acc, acc ) );
+  acc = _mm_add_epi32( acc, _mm_shuffle_epi32( acc, 1 ) );
+  return tail + Distortion( _mm_cvtsi128_si32( acc ) );
+}
+
 template<X86_VEXT vext>
 void BvSearchOps::_initBvSearchOpsX86()
 {
-  containsMv = containsMv_SIMD<vext>;
+  containsMv        = containsMv_SIMD<vext>;
+  sumAbsDiffShifted = sumAbsDiffShifted_SIMD<vext>;
 }
 
 template void BvSearchOps::_initBvSearchOpsX86<SIMDX86>();
