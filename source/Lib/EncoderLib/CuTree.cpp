@@ -51,7 +51,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/NoMallocThreadPool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
 #include <vector>
 
 //! \ingroup EncoderLib
@@ -386,36 +390,59 @@ void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_lambdaLeaf    = qpToLambda( leafQp, encCfg.m_internalBitDepth[CH_L] );
 }
 
-// Runs fn( row ) for rows 0 .. numRows - 1, spread over the thread pool when there is one.
-void CuTree::xForEachRow( int numRows, const std::function<void( int )>& fn ) const
+// The rows of one xForEachRow call, shared by the stage thread and the helper tasks. A helper that starts after
+// the call has returned still holds them and finds no row left.
+struct CuTreeRows
 {
-  if( ! m_threadPool )
+  std::atomic<int>                  next{ 0 };
+  int                               done    = 0;   // rows finished, guarded by mutex
+  int                               numRows = 0;
+  const std::function<void( int )>* fn      = nullptr;
+  std::mutex                        mutex;
+  std::condition_variable           allDone;
+
+  void work()
   {
-    for( int row = 0; row < numRows; row++ )
+    for( int row = next++; row < numRows; row = next++ )
     {
-      fn( row );
+      ( *fn )( row );
+      std::lock_guard<std::mutex> lock( mutex );
+      if( ++done == numRows )
+      {
+        allDone.notify_one();
+      }
     }
-    return;
   }
 
-  struct RowTask
+  void waitAllDone()
   {
-    const std::function<void( int )>* fn;
-    int row;
-  };
-  std::vector<RowTask> tasks( numRows );
-  WaitCounter counter;
-  for( int row = 0; row < numRows; row++ )
+    std::unique_lock<std::mutex> lock( mutex );
+    allDone.wait( lock, [this] { return done == numRows; } );
+  }
+};
+
+// Runs fn( row ) for rows 0 .. numRows - 1. The stage thread works through the rows itself and workers of the
+// thread pool join in when they are free. Waiting for row tasks instead stalled the stage thread, and with it the
+// stages before the encoder, behind the encoder's queued CTU tasks. Rows write disjoint data, so the result does
+// not depend on which thread runs which row.
+void CuTree::xForEachRow( int numRows, const std::function<void( int )>& fn ) const
+{
+  auto rows     = std::make_shared<CuTreeRows>();
+  rows->numRows = numRows;
+  rows->fn      = &fn;
+
+  const int numHelpers = m_threadPool ? std::min( m_threadPool->numThreads(), numRows - 1 ) : 0;
+  for( int i = 0; i < numHelpers; i++ )
   {
-    tasks[row] = { &fn, row };
     m_threadPool->addBarrierTask( []( int, void* param )
     {
-      const RowTask* task = static_cast<const RowTask*>( param );
-      ( *task->fn )( task->row );
+      std::unique_ptr<std::shared_ptr<CuTreeRows>> held( static_cast<std::shared_ptr<CuTreeRows>*>( param ) );
+      ( *held )->work();
       return true;
-    }, &tasks[row], &counter );
+    }, new std::shared_ptr<CuTreeRows>( rows ) );
   }
-  counter.wait();
+  rows->work();
+  rows->waitAllDone(); // for the rows helpers took and still run
 }
 
 // Halves the luma resolution with 2x2 averages and pads the result.
@@ -726,8 +753,38 @@ void CuTree::xEstimateMotion( const Frame& cur, const Frame& ref, Array2D<Motion
   xSearchFractional( cur, ref, integerMvs[0], mvs );
 }
 
+// The positions one block's motion search has checked. Checking a position again cannot change the result: its error
+// is the same, and only a smaller error replaces the best. Neighbouring blocks often share a vector, and the
+// refinement steps come back to positions checked before, so the searches skip them.
+class CheckedPositions
+{
+public:
+  // Records the position; false when it was checked before.
+  bool add( int x, int y )
+  {
+    for( int i = 0; i < m_num; i++ )
+    {
+      if( m_x[i] == x && m_y[i] == y )
+      {
+        return false;
+      }
+    }
+    if( m_num < CAPACITY ) // more positions than any search checks, see xSearchInteger
+    {
+      m_x[m_num]   = x;
+      m_y[m_num++] = y;
+    }
+    return true;
+  }
+
+private:
+  static constexpr int CAPACITY = 48;
+  int m_x[CAPACITY], m_y[CAPACITY];
+  int m_num = 0;
+};
+
 // Integer motion of the 16x16 blocks of a level from the coarser level: the best of the parent's and its
-// neighbours' vectors (doubled) and zero, refined by a small diamond search.
+// neighbours' vectors (doubled) and zero, refined by a small diamond search; at most 1 + 9 + 8 * 4 positions.
 void CuTree::xSearchInteger( const PelStorage& curPic, const PelStorage& refPic, const Array2D<MotionVector>& coarse, Array2D<MotionVector>& mvs ) const
 {
   const int     bs     = 2 * BLK_SIZE;
@@ -751,11 +808,16 @@ void CuTree::xSearchInteger( const PelStorage& curPic, const PelStorage& refPic,
       // keep the displaced block inside the padded reference
       const int  minX = -LOWRES_PAD - x, maxX = int( refBuf.width )  + LOWRES_PAD - bw - x;
       const int  minY = -LOWRES_PAD - y, maxY = int( refBuf.height ) + LOWRES_PAD - bh - y;
-      MotionVector best;
+      MotionVector     best;
+      CheckedPositions checked;
       auto check = [&]( int dx, int dy )
       {
         dx = Clip3( minX, maxX, dx );
         dy = Clip3( minY, maxY, dy );
+        if( ! checked.add( dx, dy ) )
+        {
+          return;
+        }
         const Pel* refBlk = refBuf.buf + ( y + dy ) * refBuf.stride + x + dx;
         const int  error  = m_motionSearch.m_motionErrorLumaInt8( orgBlk, org.stride, refBlk, refBuf.stride, bw, bh, best.error );
         if( error < best.error )
@@ -809,9 +871,14 @@ void CuTree::xSearchFractional( const Frame& cur, const Frame& ref, const Array2
     {
       const int  x      = bx * BLK_SIZE, y = by * BLK_SIZE;
       const Pel* orgBlk = org.buf + y * org.stride + x;
-      MotionVector best;
+      MotionVector     best;
+      CheckedPositions checked;
       auto check = [&]( int mvx, int mvy )
       {
+        if( ! checked.add( mvx, mvy ) )
+        {
+          return;
+        }
         MotionVector mv;
         mv.set( mvx, mvy, 0 );
         predictBlock( m_predBlock, refBuf, x, y, mv, pred );
