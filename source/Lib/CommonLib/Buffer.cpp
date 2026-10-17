@@ -620,6 +620,31 @@ int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const 
   return sum;
 }
 
+void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev )
+{
+  for( int b = 0; b < numBlocks; b++, src += 4 )
+  {
+    int s = 0;
+    for( int h = 0; h < 4; h++ )
+    {
+      for( int w = 0; w < 4; w++ )
+      {
+        s += src[h * stride + w];
+      }
+    }
+    int d = 0;
+    for( int h = 0; h < 4; h++ )
+    {
+      for( int w = 0; w < 4; w++ )
+      {
+        d += abs( s - ( int( src[h * stride + w] ) << 4 ) );
+      }
+    }
+    sum[b]    = s;
+    absDev[b] = d;
+  }
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
@@ -674,6 +699,7 @@ PelBufferOps::PelBufferOps()
   padHorizontal    = padHorizontalCore;
   downsample2x2    = downsample2x2Core;
   highPassCorrelation = highPassCorrelationCore;
+  blockStats4x4       = blockStats4x4Core;
 }
 
 void PelBufferOps::initPelBufOps( bool enableOpt )

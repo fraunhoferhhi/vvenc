@@ -2981,6 +2981,75 @@ int64_t highPassCorrelation_SIMD( const Pel* cb, const ptrdiff_t cbStride, const
   return sum + _vv_sum_epi64( acc );
 }
 
+// Statistics of a row of 4x4 blocks for the screen content detection (PreProcess::xDetectScc): per block the sample
+// sum s and the absolute deviation sum( | s - 16 * p | ). For samples of up to 10 bits all values fit 16 bits; the
+// deviations are added in 32 bit. Higher bit depths use the C code.
+template<X86_VEXT vext>
+void blockStats4x4_SIMD( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev )
+{
+  if( bitDepth > 10 )
+  {
+    blockStats4x4Core( src, stride, numBlocks, bitDepth, sum, absDev );
+    return;
+  }
+
+  int b = 0;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i ones = _mm256_set1_epi16( 1 );
+    for( ; b + 4 <= numBlocks; b += 4, src += 16 )
+    {
+      __m256i rows[4];
+      for( int h = 0; h < 4; h++ )
+      {
+        rows[h] = _mm256_loadu_si256( ( const __m256i* ) &src[h * stride] );
+      }
+      const __m256i cols  = _mm256_add_epi16( _mm256_add_epi16( rows[0], rows[1] ), _mm256_add_epi16( rows[2], rows[3] ) );
+      const __m256i pairs = _mm256_madd_epi16( cols, ones );
+      const __m256i sums  = _mm256_hadd_epi32( pairs, pairs ); // [ s0 s1 s0 s1 | s2 s3 s2 s3 ]
+      // the sum of each block in its four lanes
+      __m256i s16 = _mm256_packs_epi32( sums, sums );
+      s16         = _mm256_unpacklo_epi16( s16, s16 );
+      s16         = _mm256_unpacklo_epi32( s16, s16 );
+      __m256i dev = _mm256_setzero_si256();
+      for( int h = 0; h < 4; h++ )
+      {
+        dev = _mm256_add_epi32( dev, _mm256_madd_epi16( _mm256_abs_epi16( _mm256_sub_epi16( s16, _mm256_slli_epi16( rows[h], 4 ) ) ), ones ) );
+      }
+      dev = _mm256_hadd_epi32( dev, dev ); // [ d0 d1 d0 d1 | d2 d3 d2 d3 ]
+      const __m128i s = _mm_unpacklo_epi64( _mm256_castsi256_si128( sums ), _mm256_extracti128_si256( sums, 1 ) );
+      const __m128i d = _mm_unpacklo_epi64( _mm256_castsi256_si128( dev ), _mm256_extracti128_si256( dev, 1 ) );
+      _mm_storeu_si128( ( __m128i* ) &sum[b], s );
+      _mm_storeu_si128( ( __m128i* ) &absDev[b], d );
+    }
+  }
+#endif
+  const __m128i ones = _mm_set1_epi16( 1 );
+  for( ; b + 2 <= numBlocks; b += 2, src += 8 )
+  {
+    __m128i rows[4];
+    for( int h = 0; h < 4; h++ )
+    {
+      rows[h] = _mm_loadu_si128( ( const __m128i* ) &src[h * stride] );
+    }
+    const __m128i cols  = _mm_add_epi16( _mm_add_epi16( rows[0], rows[1] ), _mm_add_epi16( rows[2], rows[3] ) );
+    const __m128i sums  = _mm_hadd_epi32( _mm_madd_epi16( cols, ones ), _mm_setzero_si128() ); // [ s0 s1 0 0 ]
+    __m128i s16 = _mm_packs_epi32( sums, sums );
+    s16         = _mm_unpacklo_epi16( s16, s16 );
+    s16         = _mm_unpacklo_epi32( s16, s16 );
+    __m128i dev = _mm_setzero_si128();
+    for( int h = 0; h < 4; h++ )
+    {
+      dev = _mm_add_epi32( dev, _mm_madd_epi16( _mm_abs_epi16( _mm_sub_epi16( s16, _mm_slli_epi16( rows[h], 4 ) ) ), ones ) );
+    }
+    dev = _mm_hadd_epi32( dev, dev );
+    _vv_storel_epi64( ( __m128i* ) &sum[b], sums );
+    _vv_storel_epi64( ( __m128i* ) &absDev[b], dev );
+  }
+  blockStats4x4Core( src, stride, numBlocks - b, bitDepth, sum + b, absDev + b );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3025,6 +3094,7 @@ void PelBufferOps::_initPelBufOpsX86()
   mipUpsampleHor   = mipUpsampleHor_SIMD<vext>;
   mipUpsampleVer   = mipUpsampleVer_SIMD<vext>;
   highPassCorrelation = highPassCorrelation_SIMD<vext>;
+  blockStats4x4       = blockStats4x4_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 

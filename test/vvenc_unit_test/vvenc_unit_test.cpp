@@ -2736,6 +2736,45 @@ static bool check_highPassCorrelation( PelBufferOps* ref, PelBufferOps* opt, uns
   return true;
 }
 
+// 4x4 block statistics of the screen content detection: random block counts and strides, 10-bit samples (the SIMD
+// range, including extreme values) and 12-bit samples (the C fallback).
+static bool check_blockStats4x4( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::blockStats4x4\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int bitDepth  = i % 3 == 2 ? 12 : 10;
+    InputGenerator<Pel> pixels{ unsigned( bitDepth ), /*is_signed=*/false };
+    MinMaxGenerator<Pel> extremes{ unsigned( bitDepth ), /*is_signed=*/false };
+    const int numBlocks = rng.get( 1, 64 );
+    const int stride    = 4 * numBlocks + rng.get( 0, 16 );
+    std::vector<Pel> src( 4 * stride );
+    if( i % 3 == 1 )
+    {
+      std::generate( src.begin(), src.end(), extremes );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), pixels );
+    }
+
+    std::vector<int> sumRef( numBlocks + 1, -1 ), devRef( numBlocks + 1, -1 ), sumOpt( numBlocks + 1, -1 ), devOpt( numBlocks + 1, -1 );
+    ref->blockStats4x4( src.data(), stride, numBlocks, bitDepth, sumRef.data(), devRef.data() );
+    opt->blockStats4x4( src.data(), stride, numBlocks, bitDepth, sumOpt.data(), devOpt.data() );
+
+    std::ostringstream sstm;
+    sstm << "blockStats4x4 numBlocks=" << numBlocks << " bitDepth=" << bitDepth;
+    if( !compare_values_1d( sstm.str() + " sum", sumRef.data(), sumOpt.data(), numBlocks + 1 )
+     || !compare_values_1d( sstm.str() + " absDev", devRef.data(), devOpt.data(), numBlocks + 1 ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2761,6 +2800,7 @@ static bool test_PelBufferOps()
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
+  passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

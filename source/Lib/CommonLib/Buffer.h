@@ -139,6 +139,8 @@ struct PelBufferOps
   void     ( *downsample2x2 )    ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight );
   // sum of the products of the 3x3 high-pass filtered samples of two planes (the joint Cb-Cr sign decision)
   int64_t  ( *highPassCorrelation )( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
+  // per 4x4 block of a row of numBlocks blocks: the sample sum s and the absolute deviation sum( | s - 16 * p | )
+  void     ( *blockStats4x4 )    ( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
 
 private:
   bool isInitSIMDDone = false;
@@ -161,6 +163,9 @@ extern PelBufferOps g_pelBufOP;
 // the C version of PelBufferOps::highPassCorrelation, also used by the SIMD versions for the last columns and for
 // bit depths above 10
 int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
+// the C version of PelBufferOps::blockStats4x4, also used by the SIMD versions for the last blocks and for bit depths
+// above 10
+void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
 
 template<typename T>
 struct AreaBuf : public Size
