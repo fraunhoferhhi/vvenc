@@ -1564,6 +1564,353 @@ void fastFwd1D_SIMD( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, uns
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Joint Cb-Cr residual transforms (fwdTransformCbCr / invTransformCbCr in TrQuant.cpp).
+// The forward transform computes the combined residual c and the distortion of reconstructing both components from it.
+// For |ICT mode| 1 and 3, c = ( 4 * a +- 2 * b ) / 5, for |mode| 2, c = ( a +- b ) / 2 (C integer division), where a is
+// the component the residual is derived from (Cb for 1, 2 and Cr for 3) and b the other one. The division by 5 is done
+// in single precision: |4 * a +- 2 * b| < 2^24 is exact in float, the quotient is correctly rounded and either exact or
+// at least 0.2 away from the next integer, so the truncation matches the integer division. The squared errors are
+// accumulated in 64 bit as in the scalar code.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// ( -v ) >> 1 for 16-bit v without the overflow of -v: -( ( v >> 1 ) + ( v & 1 ) )
+static inline __m128i _vv_negHalf_epi16( __m128i v )
+{
+  return _mm_sub_epi16( _mm_setzero_si128(), _mm_add_epi16( _mm_srai_epi16( v, 1 ), _mm_and_si128( v, _mm_set1_epi16( 1 ) ) ) );
+}
+
+// sign-extends the low 16 bits of each 32-bit lane, i.e. the value after the conversion to Pel
+static inline __m128i _vv_truncPel_epi32( __m128i v )
+{
+  return _mm_srai_epi32( _mm_slli_epi32( v, 16 ), 16 );
+}
+
+// adds the squares of the four 32-bit lanes of d to the two 64-bit lanes of acc
+static inline __m128i _vv_addSquares_epi64( __m128i acc, __m128i d )
+{
+  acc = _mm_add_epi64( acc, _mm_mul_epi32( d, d ) );
+  const __m128i odd = _mm_srli_epi64( d, 32 );
+  return _mm_add_epi64( acc, _mm_mul_epi32( odd, odd ) );
+}
+
+#if USE_AVX2
+static inline __m256i _vv_negHalf_epi16( __m256i v )
+{
+  return _mm256_sub_epi16( _mm256_setzero_si256(), _mm256_add_epi16( _mm256_srai_epi16( v, 1 ), _mm256_and_si256( v, _mm256_set1_epi16( 1 ) ) ) );
+}
+
+static inline __m256i _vv_truncPel_epi32( __m256i v )
+{
+  return _mm256_srai_epi32( _mm256_slli_epi32( v, 16 ), 16 );
+}
+
+static inline __m256i _vv_addSquares_epi64( __m256i acc, __m256i d )
+{
+  acc = _mm256_add_epi64( acc, _mm256_mul_epi32( d, d ) );
+  const __m256i odd = _mm256_srli_epi64( d, 32 );
+  return _mm256_add_epi64( acc, _mm256_mul_epi32( odd, odd ) );
+}
+#endif
+
+static inline int64_t _vv_hsum_epi64( __m128i v )
+{
+  int64_t lanes[2];
+  _mm_storeu_si128( ( __m128i* ) lanes, v );
+  return lanes[0] + lanes[1];
+}
+
+// adds the madd results (unsigned 32-bit pair sums of squares) of v to the two 64-bit lanes of acc;
+// a^2 + b^2 <= 2^31 fits an unsigned 32-bit lane
+static inline __m128i _vv_addPairSquares_epi64( __m128i acc, __m128i v )
+{
+  const __m128i sq = _mm_madd_epi16( v, v );
+  return _mm_add_epi64( acc, _mm_add_epi64( _mm_cvtepu32_epi64( sq ), _mm_cvtepu32_epi64( _mm_unpackhi_epi64( sq, sq ) ) ) );
+}
+
+// sum of the squared samples of a block
+template<X86_VEXT vext>
+static inline int64_t sumOfSquares_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height )
+{
+  __m128i acc = _mm_setzero_si128();
+#if USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    __m256i acc256 = _mm256_setzero_si256();
+    for( int y = 0; y < height; y++, src += stride )
+    {
+      for( int x = 0; x < width; x += 16 )
+      {
+        const __m256i v  = _mm256_loadu_si256( ( const __m256i* ) &src[x] );
+        const __m256i sq = _mm256_madd_epi16( v, v );
+        acc256 = _mm256_add_epi64( acc256, _mm256_add_epi64( _mm256_unpacklo_epi32( sq, _mm256_setzero_si256() ),
+                                                             _mm256_unpackhi_epi32( sq, _mm256_setzero_si256() ) ) );
+      }
+    }
+    acc = _mm_add_epi64( _mm256_castsi256_si128( acc256 ), _mm256_extracti128_si256( acc256, 1 ) );
+    return _vv_hsum_epi64( acc );
+  }
+#endif
+  if( ( width & 7 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += stride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        acc = _vv_addPairSquares_epi64( acc, _mm_loadu_si128( ( const __m128i* ) &src[x] ) );
+      }
+    }
+    return _vv_hsum_epi64( acc );
+  }
+
+  int64_t sum = 0;
+  int y = 0;
+  if( width == 4 )
+  {
+    // two rows per vector
+    for( ; y + 2 <= height; y += 2, src += 2 * stride )
+    {
+      acc = _vv_addPairSquares_epi64( acc, _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src ), _vv_loadl_epi64( ( const __m128i* ) &src[stride] ) ) );
+    }
+  }
+  for( ; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum += int64_t( src[x] ) * src[x];
+    }
+  }
+  return sum + _vv_hsum_epi64( acc );
+}
+
+// scalar reference of one sample, used for the remaining columns; returns the squared error, writes the residual to c
+template<int signedMode>
+static inline int64_t fwdIctSample( int a, int b, Pel& c )
+{
+  const int absMode = signedMode < 0 ? -signedMode : signedMode;
+  const int sign    = signedMode < 0 ? -1 : 1;
+  if( absMode == 2 )
+  {
+    c = Pel( ( a + sign * b ) / 2 );
+    const int64_t ea = a - c, eb = b - sign * c;
+    return ea * ea + eb * eb;
+  }
+  c = Pel( ( 4 * a + sign * 2 * b ) / 5 );
+  const int64_t ea = a - c, eb = b - ( ( sign * c ) >> 1 );
+  return ea * ea + eb * eb;
+}
+
+// one vector of samples: a, b are the sign-extended 16-bit residuals, returns c (32-bit lanes, before the
+// truncation to Pel) and adds the squared errors to dist
+template<int signedMode>
+static inline __m128i fwdIctVec( __m128i a, __m128i b, __m128i& dist )
+{
+  const bool    neg = signedMode < 0;
+  __m128i c, eb;
+  if( signedMode == 2 || signedMode == -2 )
+  {
+    __m128i n = neg ? _mm_sub_epi32( a, b ) : _mm_add_epi32( a, b );
+    n  = _mm_srai_epi32( _mm_sub_epi32( n, _mm_srai_epi32( n, 31 ) ), 1 ); // C division by 2 (rounds towards zero)
+    c  = _vv_truncPel_epi32( n );
+    eb = neg ? _mm_add_epi32( b, c ) : _mm_sub_epi32( b, c );
+  }
+  else
+  {
+    const __m128i a4 = _mm_slli_epi32( a, 2 ), b2 = _mm_slli_epi32( b, 1 );
+    const __m128 n   = _mm_cvtepi32_ps( neg ? _mm_sub_epi32( a4, b2 ) : _mm_add_epi32( a4, b2 ) );
+    c  = _vv_truncPel_epi32( _mm_cvttps_epi32( _mm_div_ps( n, _mm_set1_ps( 5.0f ) ) ) );
+    eb = _mm_sub_epi32( b, _mm_srai_epi32( neg ? _mm_sub_epi32( _mm_setzero_si128(), c ) : c, 1 ) );
+  }
+  dist = _vv_addSquares_epi64( dist, _mm_sub_epi32( a, c ) );
+  dist = _vv_addSquares_epi64( dist, eb );
+  return c;
+}
+
+#if USE_AVX2
+template<int signedMode>
+static inline __m256i fwdIctVec( __m256i a, __m256i b, __m256i& dist )
+{
+  const bool    neg = signedMode < 0;
+  __m256i c, eb;
+  if( signedMode == 2 || signedMode == -2 )
+  {
+    __m256i n = neg ? _mm256_sub_epi32( a, b ) : _mm256_add_epi32( a, b );
+    n  = _mm256_srai_epi32( _mm256_sub_epi32( n, _mm256_srai_epi32( n, 31 ) ), 1 );
+    c  = _vv_truncPel_epi32( n );
+    eb = neg ? _mm256_add_epi32( b, c ) : _mm256_sub_epi32( b, c );
+  }
+  else
+  {
+    const __m256i a4 = _mm256_slli_epi32( a, 2 ), b2 = _mm256_slli_epi32( b, 1 );
+    const __m256 n   = _mm256_cvtepi32_ps( neg ? _mm256_sub_epi32( a4, b2 ) : _mm256_add_epi32( a4, b2 ) );
+    c  = _vv_truncPel_epi32( _mm256_cvttps_epi32( _mm256_div_ps( n, _mm256_set1_ps( 5.0f ) ) ) );
+    eb = _mm256_sub_epi32( b, _mm256_srai_epi32( neg ? _mm256_sub_epi32( _mm256_setzero_si256(), c ) : c, 1 ) );
+  }
+  dist = _vv_addSquares_epi64( dist, _mm256_sub_epi32( a, c ) );
+  dist = _vv_addSquares_epi64( dist, eb );
+  return c;
+}
+#endif
+
+template<X86_VEXT vext, int signedMode>
+std::pair<int64_t, int64_t> fwdTransformCbCr_SIMD( const PelBuf& resCb, const PelBuf& resCr, PelBuf& resC1, PelBuf& resC2 )
+{
+  const int  width  = resCb.width;
+  const int  height = resCb.height;
+  const bool fromCr = signedMode == 3 || signedMode == -3;
+  // a: the component the joint residual is derived from, b: the other one
+  const Pel* a      = fromCr ? resCr.buf : resCb.buf;
+  const Pel* b      = fromCr ? resCb.buf : resCr.buf;
+  const ptrdiff_t aStride = fromCr ? resCr.stride : resCb.stride;
+  const ptrdiff_t bStride = fromCr ? resCb.stride : resCr.stride;
+  Pel*       c      = fromCr ? resC2.buf : resC1.buf;
+  const ptrdiff_t cStride = fromCr ? resC2.stride : resC1.stride;
+
+  if( signedMode == 0 )
+  {
+    // no joint coding: the distortions of zero residuals
+    return std::make_pair( sumOfSquares_SIMD<vext>( resCb.buf, resCb.stride, width, height ),
+                           sumOfSquares_SIMD<vext>( resCr.buf, resCr.stride, width, height ) );
+  }
+
+  int64_t dist = 0;
+#if USE_AVX2
+  __m256i dist256 = _mm256_setzero_si256();
+#endif
+  __m128i dist128 = _mm_setzero_si128();
+
+  for( int y = 0; y < height; y++, a += aStride, b += bStride, c += cStride )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 8 <= width; x += 8 )
+      {
+        const __m256i va = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) &a[x] ) );
+        const __m256i vb = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) &b[x] ) );
+        const __m256i vc = fwdIctVec<signedMode>( va, vb, dist256 );
+        const __m256i pk = _mm256_packs_epi32( vc, vc ); // vc is sign-extended from 16 bit, so no saturation
+        _mm_storeu_si128( ( __m128i* ) &c[x], _mm_unpacklo_epi64( _mm256_castsi256_si128( pk ), _mm256_extracti128_si256( pk, 1 ) ) );
+      }
+    }
+#endif
+    for( ; x + 4 <= width; x += 4 )
+    {
+      const __m128i va = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &a[x] ) );
+      const __m128i vb = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &b[x] ) );
+      const __m128i vc = fwdIctVec<signedMode>( va, vb, dist128 );
+      _vv_storel_epi64( ( __m128i* ) &c[x], _mm_packs_epi32( vc, vc ) );
+    }
+    for( ; x < width; x++ )
+    {
+      dist += fwdIctSample<signedMode>( a[x], b[x], c[x] );
+    }
+  }
+
+#if USE_AVX2
+  dist128 = _mm_add_epi64( dist128, _mm_add_epi64( _mm256_castsi256_si128( dist256 ), _mm256_extracti128_si256( dist256, 1 ) ) );
+#endif
+  dist += _vv_hsum_epi64( dist128 );
+  return std::make_pair( dist, int64_t( 0 ) );
+}
+
+// derived residual of the inverse joint Cb-Cr transform: +-v (|ICT mode| 2) or +-v >> 1 (|ICT mode| 1, 3)
+template<int signedMode>
+static inline __m128i invIctVec( __m128i v )
+{
+  const bool half = signedMode != 2 && signedMode != -2;
+  if( signedMode < 0 )
+  {
+    return half ? _vv_negHalf_epi16( v ) : _mm_sub_epi16( _mm_setzero_si128(), v );
+  }
+  return half ? _mm_srai_epi16( v, 1 ) : v;
+}
+
+#if USE_AVX2
+template<int signedMode>
+static inline __m256i invIctVec( __m256i v )
+{
+  const bool half = signedMode != 2 && signedMode != -2;
+  if( signedMode < 0 )
+  {
+    return half ? _vv_negHalf_epi16( v ) : _mm256_sub_epi16( _mm256_setzero_si256(), v );
+  }
+  return half ? _mm256_srai_epi16( v, 1 ) : v;
+}
+#endif
+
+template<X86_VEXT vext, int signedMode>
+void invTransformCbCr_SIMD( PelBuf& resCb, PelBuf& resCr )
+{
+  if( signedMode == 0 )
+  {
+    return;
+  }
+
+  // the joint residual is in src, the derived residual is written to dst
+  const bool      toCb      = signedMode == 3 || signedMode == -3;
+  const Pel*      src       = toCb ? resCr.buf    : resCb.buf;
+  Pel*            dst       = toCb ? resCb.buf    : resCr.buf;
+  const ptrdiff_t srcStride = toCb ? resCr.stride : resCb.stride;
+  const ptrdiff_t dstStride = toCb ? resCb.stride : resCr.stride;
+  const int       width     = resCb.width;
+  const int       height    = resCb.height;
+
+  // the loops are selected per block, so that the per-row work is only the vector operations
+#if USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 16 )
+      {
+        _mm256_storeu_si256( ( __m256i* ) &dst[x], invIctVec<signedMode>( _mm256_loadu_si256( ( const __m256i* ) &src[x] ) ) );
+      }
+    }
+    return;
+  }
+#endif
+  if( ( width & 7 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[x], invIctVec<signedMode>( _mm_loadu_si128( ( const __m128i* ) &src[x] ) ) );
+      }
+    }
+  }
+  else if( width == 4 )
+  {
+    // two rows per vector
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src += 2 * srcStride, dst += 2 * dstStride )
+    {
+      const __m128i v = _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src ), _vv_loadl_epi64( ( const __m128i* ) &src[srcStride] ) );
+      const __m128i r = invIctVec<signedMode>( v );
+      _vv_storel_epi64( ( __m128i* ) dst, r );
+      _vv_storel_epi64( ( __m128i* ) &dst[dstStride], _mm_unpackhi_epi64( r, r ) );
+    }
+    if( y < height )
+    {
+      _vv_storel_epi64( ( __m128i* ) dst, invIctVec<signedMode>( _vv_loadl_epi64( ( const __m128i* ) src ) ) );
+    }
+  }
+  else
+  {
+    const bool half = signedMode != 2 && signedMode != -2;
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x++ )
+      {
+        const int v = signedMode < 0 ? -src[x] : src[x];
+        dst[x] = Pel( half ? v >> 1 : v );
+      }
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void TCoeffOps::_initTCoeffOpsX86()
 {
@@ -1606,6 +1953,20 @@ void TrQuant::_initTrQuantX86()
 {
   m_invLfnstNxN = simdInvLfnstNxN<vext>;
   m_fwdLfnstNxN  = simdFwdLfnstNxN<vext>;
+
+  m_invICT[ 1]   = invTransformCbCr_SIMD<vext,  1>;
+  m_invICT[-1]   = invTransformCbCr_SIMD<vext, -1>;
+  m_invICT[ 2]   = invTransformCbCr_SIMD<vext,  2>;
+  m_invICT[-2]   = invTransformCbCr_SIMD<vext, -2>;
+  m_invICT[ 3]   = invTransformCbCr_SIMD<vext,  3>;
+  m_invICT[-3]   = invTransformCbCr_SIMD<vext, -3>;
+  m_fwdICT[ 0]   = fwdTransformCbCr_SIMD<vext,  0>;
+  m_fwdICT[ 1]   = fwdTransformCbCr_SIMD<vext,  1>;
+  m_fwdICT[-1]   = fwdTransformCbCr_SIMD<vext, -1>;
+  m_fwdICT[ 2]   = fwdTransformCbCr_SIMD<vext,  2>;
+  m_fwdICT[-2]   = fwdTransformCbCr_SIMD<vext, -2>;
+  m_fwdICT[ 3]   = fwdTransformCbCr_SIMD<vext,  3>;
+  m_fwdICT[-3]   = fwdTransformCbCr_SIMD<vext, -3>;
 }
 
 template void TCoeffOps::_initTCoeffOpsX86<SIMDX86>();
