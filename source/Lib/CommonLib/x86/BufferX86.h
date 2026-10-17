@@ -69,6 +69,33 @@ template<bool isAligned> static inline __m128i load_aligned       ( const void* 
 template<>                      inline __m128i load_aligned<true> ( const void* addr ) { return _mm_load_si128 ( (const __m128i *) addr );}
 template<>                      inline __m128i load_aligned<false>( const void* addr ) { return _mm_loadu_si128( (const __m128i *) addr );}
 
+// the two samples of each of up to four rows in one vector; the lanes of missing rows are zero
+static inline __m128i _vv_loadWidth2Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  __m128i r[4];
+  for( int i = 0; i < 4; i++ )
+  {
+    r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
+  }
+  return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
+}
+
+// the four samples of each of up to two rows in one vector; the lanes of a missing row are zero
+static inline __m128i _vv_loadWidth4Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
+  return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
+}
+
+// stores the two samples of each of up to four rows from one vector in the layout of _vv_loadWidth2Rows
+static inline void _vv_storeWidth2Rows( Pel* p, const ptrdiff_t stride, const int numRows, __m128i v )
+{
+  for( int i = 0; i < numRows; i++, v = _mm_srli_si128( v, 4 ) )
+  {
+    _mm_storeu_si32( &p[i * stride], v );
+  }
+}
+
 template< X86_VEXT vext >
 void weightCiip_SSE( Pel* res, const Pel* src, const int numSamples, int numIntra )
 {
@@ -1543,6 +1570,49 @@ void copyClip_SSE( const int16_t* src, int srcStride, int16_t* dst, int dstStrid
 #endif
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Blocks 2 wide (the chroma of 4xN blocks), four rows per vector. reco2 adds with 16-bit saturation before clipping to
+// the sample range, sub2 subtracts with 16-bit wrap-around: both equal the C versions for every Pel.
+// ---------------------------------------------------------------------------------------------------------------------
+
+template<X86_VEXT vext>
+void reco2_SIMD( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const __m128i vmin = _mm_set1_epi16( clpRng.min() );
+  const __m128i vmax = _mm_set1_epi16( clpRng.max() );
+  for( int y = 0; y < height; y += 4, src0 += 4 * src0Stride, src1 += 4 * src1Stride, dst += 4 * dstStride )
+  {
+    const int     numRows = std::min( 4, height - y );
+    const __m128i sum     = _mm_adds_epi16( _vv_loadWidth2Rows( src0, src0Stride, numRows ), _vv_loadWidth2Rows( src1, src1Stride, numRows ) );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_min_epi16( vmax, _mm_max_epi16( vmin, sum ) ) );
+  }
+}
+
+template<X86_VEXT vext>
+void sub2_SIMD( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  for( int y = 0; y < height; y += 4, src0 += 4 * src0Stride, src1 += 4 * src1Stride, dst += 4 * dstStride )
+  {
+    const int numRows = std::min( 4, height - y );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_sub_epi16( _vv_loadWidth2Rows( src0, src0Stride, numRows ), _vv_loadWidth2Rows( src1, src1Stride, numRows ) ) );
+  }
+}
+
+template<X86_VEXT vext>
+void copyClip2_SIMD( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const __m128i vmin = _mm_set1_epi16( clpRng.min() );
+  const __m128i vmax = _mm_set1_epi16( clpRng.max() );
+  for( int y = 0; y < height; y += 4, src += 4 * srcStride, dst += 4 * dstStride )
+  {
+    const int numRows = std::min( 4, height - y );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_min_epi16( vmax, _mm_max_epi16( vmin, _vv_loadWidth2Rows( src, srcStride, numRows ) ) ) );
+  }
+}
+
 template<X86_VEXT vext, int W>
 void transposeNxN_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride )
 {
@@ -2561,24 +2631,6 @@ static inline __m128i _vv_fold_epi64( __m256i v )
 }
 #endif
 
-// the two samples of each of up to four rows in one vector; the lanes of missing rows are zero
-static inline __m128i _vv_loadWidth2Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
-{
-  __m128i r[4];
-  for( int i = 0; i < 4; i++ )
-  {
-    r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
-  }
-  return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
-}
-
-// the four samples of each of up to two rows in one vector; the lanes of a missing row are zero
-static inline __m128i _vv_loadWidth4Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
-{
-  const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
-  return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
-}
-
 // sum over the block of ( src0 - src1 )^2, for samples in 0 ... 2^15 - 1
 template<X86_VEXT vext>
 uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
@@ -3263,12 +3315,15 @@ void PelBufferOps::_initPelBufOpsX86()
   addAvg8  = addAvg_SSE<vext, 8>;
   addAvg16 = addAvg_SSE<vext, 16>;
 
+  sub2 = sub2_SIMD<vext>;
   sub4 = sub_SSE<vext, 4>;
   sub8 = sub_SSE<vext, 8>;
 
+  copyClip2 = copyClip2_SIMD<vext>;
   copyClip4 = copyClip_SSE<vext, 4>;
   copyClip8 = copyClip_SSE<vext, 8>;
 
+  reco2 = reco2_SIMD<vext>;
   reco4 = reco_SSE<vext, 4>;
   reco8 = reco_SSE<vext, 8>;
 

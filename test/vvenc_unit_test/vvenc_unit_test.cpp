@@ -2638,6 +2638,46 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return passed;
 }
 
+// reco2, sub2 and copyClip2 on blocks 2 wide with any Pel values (the SIMD versions equal C for all of them), heights
+// 1 to 64 and padded strides; the whole destination is compared, so that writes beyond the block are found
+static bool check_width2Ops( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::reco2, sub2, copyClip2\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int    height = rng.get( 1, 64 );
+    const int    stride = 2 + rng.get( 0, 6 );
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10 } ) ) };
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+
+    std::ostringstream sstm;
+    sstm << " 2x" << height << " stride=" << stride << " bd=" << clpRng.bd;
+
+    ref->reco2( src0.data(), stride, src1.data(), stride, dstRef.data(), stride, 2, height, clpRng );
+    opt->reco2( src0.data(), stride, src1.data(), stride, dstOpt.data(), stride, 2, height, clpRng );
+    bool ok = compare_values_1d( "reco2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ref->sub2( src0.data(), stride, src1.data(), stride, dstRef.data(), stride, 2, height );
+    opt->sub2( src0.data(), stride, src1.data(), stride, dstOpt.data(), stride, 2, height );
+    ok = ok && compare_values_1d( "sub2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ref->copyClip2( src0.data(), stride, dstRef.data(), stride, 2, height, clpRng );
+    opt->copyClip2( src0.data(), stride, dstOpt.data(), stride, 2, height, clpRng );
+    ok = ok && compare_values_1d( "copyClip2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
 // 15 bit (the documented range of the SIMD sums of squares), and signed 16-bit values for the sums.
 static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -3016,6 +3056,7 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;

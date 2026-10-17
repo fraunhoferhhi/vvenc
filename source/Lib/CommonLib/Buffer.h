@@ -99,12 +99,15 @@ struct PelBufferOps
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg8 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg16 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
+  void ( *sub2 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *sub4 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *sub8 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *wghtAvg4 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *wghtAvg8 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
+  void ( *copyClip2 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip4 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip8 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
+  void ( *reco2 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco4 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco8 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *linTf4 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
