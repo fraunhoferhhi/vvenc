@@ -141,6 +141,9 @@ struct PelBufferOps
   int64_t  ( *highPassCorrelation )( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
   // per 4x4 block of a row of numBlocks blocks: the sample sum s and the absolute deviation sum( | s - 16 * p | )
   void     ( *blockStats4x4 )    ( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
+  // sums of the absolute differences to the right, lower, lower-left and lower-right neighbours over the
+  // ( width - 1 ) x ( height - 1 ) top-left samples: sums[0] horizontal, [1] vertical, [2] and [3] the diagonals
+  void     ( *absGradientSums )  ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums );
 
 private:
   bool isInitSIMDDone = false;
@@ -166,6 +169,8 @@ int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const 
 // the C version of PelBufferOps::blockStats4x4, also used by the SIMD versions for the last blocks and for bit depths
 // above 10
 void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
+// the C version of PelBufferOps::absGradientSums, also used by the SIMD versions for narrow blocks
+void absGradientSumsCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums );
 
 template<typename T>
 struct AreaBuf : public Size

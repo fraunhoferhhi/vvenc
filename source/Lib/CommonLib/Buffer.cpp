@@ -645,6 +645,30 @@ void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlo
   }
 }
 
+void absGradientSumsCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums )
+{
+  Intermediate_Int horVal = 0;
+  Intermediate_Int verVal = 0;
+  Intermediate_Int dowVal = 0;
+  Intermediate_Int dupVal = 0;
+
+  for( int k = 0; k < height - 1; k++, src += stride )
+  {
+    const Pel* below = src + stride;
+    for( int j = 0; j < width - 1; j++ )
+    {
+      horVal += abs( src[j + 1]   - src[j] );
+      verVal += abs( below[j]     - src[j] );
+      dowVal += abs( src[j + 1]   - below[j] );
+      dupVal += abs( below[j + 1] - src[j] );
+    }
+  }
+  sums[0] = horVal;
+  sums[1] = verVal;
+  sums[2] = dowVal;
+  sums[3] = dupVal;
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
@@ -700,6 +724,7 @@ PelBufferOps::PelBufferOps()
   downsample2x2    = downsample2x2Core;
   highPassCorrelation = highPassCorrelationCore;
   blockStats4x4       = blockStats4x4Core;
+  absGradientSums     = absGradientSumsCore;
 }
 
 void PelBufferOps::initPelBufOps( bool enableOpt )

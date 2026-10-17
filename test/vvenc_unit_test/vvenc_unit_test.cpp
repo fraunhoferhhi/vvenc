@@ -2775,6 +2775,36 @@ static bool check_blockStats4x4( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// Directional gradient sums of the CU split decision: square and non-square sizes 2 ... 128 (the SIMD version starts
+// at width 16), random strides, 10-bit and 15-bit samples.
+static bool check_absGradientSums( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::absGradientSums\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    InputGenerator<Pel> pixels{ i & 1 ? 15u : 10u, /*is_signed=*/false };
+    const int width  = rng.get( 2, 128 );
+    const int height = rng.get( 2, 128 );
+    const int stride = width + rng.get( 0, 16 );
+    std::vector<Pel> src( stride * height );
+    std::generate( src.begin(), src.end(), pixels );
+
+    int sumsRef[4], sumsOpt[4];
+    ref->absGradientSums( src.data(), stride, width, height, sumsRef );
+    opt->absGradientSums( src.data(), stride, width, height, sumsOpt );
+
+    std::ostringstream sstm;
+    sstm << "absGradientSums " << width << "x" << height;
+    if( !compare_values_1d( sstm.str(), sumsRef, sumsOpt, 4 ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2801,6 +2831,7 @@ static bool test_PelBufferOps()
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
+  passed = check_absGradientSums( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

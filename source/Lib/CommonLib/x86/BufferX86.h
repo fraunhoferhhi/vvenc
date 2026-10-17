@@ -3050,6 +3050,95 @@ void blockStats4x4_SIMD( const Pel* src, const ptrdiff_t stride, const int numBl
   blockStats4x4Core( src, stride, numBlocks - b, bitDepth, sum + b, absDev + b );
 }
 
+// Sums of the absolute differences between neighbouring samples of a block in four directions (the content based
+// split decision of EncModeCtrl::initCULevel), over the ( width - 1 ) x ( height - 1 ) top-left positions:
+// sums[0] horizontal, sums[1] vertical, sums[2] down-left diagonal, sums[3] down-right diagonal. For samples in
+// 0 ... 2^15 - 1 the differences fit 16 bits; they are added in 32 bit with madd.
+template<typename V> static inline V _vv_absDiffPairSum( V a, V b );
+
+template<>
+inline __m128i _vv_absDiffPairSum<__m128i>( __m128i a, __m128i b )
+{
+  return _mm_madd_epi16( _mm_abs_epi16( _mm_sub_epi16( a, b ) ), _mm_set1_epi16( 1 ) );
+}
+
+#if USE_AVX2
+template<>
+inline __m256i _vv_absDiffPairSum<__m256i>( __m256i a, __m256i b )
+{
+  return _mm256_madd_epi16( _mm256_abs_epi16( _mm256_sub_epi16( a, b ) ), _mm256_set1_epi16( 1 ) );
+}
+#endif
+
+template<X86_VEXT vext>
+void absGradientSums_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums )
+{
+  if( width < 16 )
+  {
+    absGradientSumsCore( src, stride, width, height, sums );
+    return;
+  }
+
+  // the positions x = 0 ... width - 2 of each row: full vectors, then one vector ending at width - 2 with the lanes
+  // that the full vectors covered masked off
+  const int numPos = width - 1;
+  __m128i acc[4] = { _mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128() };
+#if USE_AVX2
+  __m256i acc256[4] = { _mm256_setzero_si256(), _mm256_setzero_si256(), _mm256_setzero_si256(), _mm256_setzero_si256() };
+#endif
+
+  const __m128i allLanes = _mm_set1_epi16( -1 );
+
+  for( int y = 0; y < height - 1; y++, src += stride )
+  {
+    const Pel* below = src + stride;
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 16 <= numPos; x += 16 )
+      {
+        const __m256i a0 = _mm256_loadu_si256( ( const __m256i* ) &src[x] ),   a1 = _mm256_loadu_si256( ( const __m256i* ) &src[x + 1] );
+        const __m256i b0 = _mm256_loadu_si256( ( const __m256i* ) &below[x] ), b1 = _mm256_loadu_si256( ( const __m256i* ) &below[x + 1] );
+        acc256[0] = _mm256_add_epi32( acc256[0], _vv_absDiffPairSum( a1, a0 ) );
+        acc256[1] = _mm256_add_epi32( acc256[1], _vv_absDiffPairSum( b0, a0 ) );
+        acc256[2] = _mm256_add_epi32( acc256[2], _vv_absDiffPairSum( a1, b0 ) );
+        acc256[3] = _mm256_add_epi32( acc256[3], _vv_absDiffPairSum( b1, a0 ) );
+      }
+    }
+#endif
+    auto accumulate = [&]( const int pos, const __m128i laneMask )
+    {
+      const __m128i a0 = _mm_and_si128( _mm_loadu_si128( ( const __m128i* ) &src[pos] ),       laneMask );
+      const __m128i a1 = _mm_and_si128( _mm_loadu_si128( ( const __m128i* ) &src[pos + 1] ),   laneMask );
+      const __m128i b0 = _mm_and_si128( _mm_loadu_si128( ( const __m128i* ) &below[pos] ),     laneMask );
+      const __m128i b1 = _mm_and_si128( _mm_loadu_si128( ( const __m128i* ) &below[pos + 1] ), laneMask );
+      acc[0] = _mm_add_epi32( acc[0], _vv_absDiffPairSum( a1, a0 ) );
+      acc[1] = _mm_add_epi32( acc[1], _vv_absDiffPairSum( b0, a0 ) );
+      acc[2] = _mm_add_epi32( acc[2], _vv_absDiffPairSum( a1, b0 ) );
+      acc[3] = _mm_add_epi32( acc[3], _vv_absDiffPairSum( b1, a0 ) );
+    };
+    for( ; x + 8 <= numPos; x += 8 )
+    {
+      accumulate( x, allLanes );
+    }
+    if( x < numPos )
+    {
+      // the last vector: positions numPos - 8 ... numPos - 1, without the lanes before x that are already counted
+      const int counted = x - ( numPos - 8 );
+      accumulate( numPos - 8, _mm_cmpgt_epi16( _mm_setr_epi16( 0, 1, 2, 3, 4, 5, 6, 7 ), _mm_set1_epi16( counted - 1 ) ) );
+    }
+  }
+
+#if USE_AVX2
+  for( int d = 0; d < 4; d++ )
+  {
+    acc[d] = _mm_add_epi32( acc[d], _mm_add_epi32( _mm256_castsi256_si128( acc256[d] ), _mm256_extracti128_si256( acc256[d], 1 ) ) );
+  }
+#endif
+  _mm_storeu_si128( ( __m128i* ) sums, _mm_hadd_epi32( _mm_hadd_epi32( acc[0], acc[1] ), _mm_hadd_epi32( acc[2], acc[3] ) ) );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3095,6 +3184,7 @@ void PelBufferOps::_initPelBufOpsX86()
   mipUpsampleVer   = mipUpsampleVer_SIMD<vext>;
   highPassCorrelation = highPassCorrelation_SIMD<vext>;
   blockStats4x4       = blockStats4x4_SIMD<vext>;
+  absGradientSums     = absGradientSums_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 

@@ -551,28 +551,13 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
     {
       const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
 
-      Intermediate_Int horVal = 0;
-      Intermediate_Int verVal = 0;
-      Intermediate_Int dupVal = 0;
-      Intermediate_Int dowVal = 0;
+      int grad[4];
+      g_pelBufOP.absGradientSums( bufCurrArea.buf, bufCurrArea.stride, cuWidth, cuHeight, grad );
 
-      unsigned j, k;
-
-      for( k = 0; k < cuHeight - 1; k++ )
-      {
-        for( j = 0; j < cuWidth - 1; j++ )
-        {
-          horVal += abs( bufCurrArea.at( j + 1, k     ) - bufCurrArea.at( j, k ) );
-          verVal += abs( bufCurrArea.at( j    , k + 1 ) - bufCurrArea.at( j, k ) );
-          dowVal += abs( bufCurrArea.at( j + 1, k )     - bufCurrArea.at( j, k + 1 ) );
-          dupVal += abs( bufCurrArea.at( j + 1, k + 1 ) - bufCurrArea.at( j, k ) );
-        }
-      }
-
-      cuECtx.grad_horVal = (double)horVal;
-      cuECtx.grad_verVal = (double)verVal;
-      cuECtx.grad_dowVal = (double)dowVal;
-      cuECtx.grad_dupVal = (double)dupVal;
+      cuECtx.grad_horVal = (double)grad[0];
+      cuECtx.grad_verVal = (double)grad[1];
+      cuECtx.grad_dowVal = (double)grad[2];
+      cuECtx.grad_dupVal = (double)grad[3];
     }
   }
 }
