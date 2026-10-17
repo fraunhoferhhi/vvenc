@@ -2571,6 +2571,69 @@ static bool check_downsample2x2( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// MIP upsampling: all reduced sizes and factors, 12-bit samples (the documented range of the SIMD version). The
+// vertical pass is also run in place, with its source rows inside the destination as in MatrixIntraPrediction::predBlock.
+static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::mipUpsampleHor, mipUpsampleVer\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> samples{ 12, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const SizeType predSize   = rng.getOneOf<SizeType>( { 4, 8 } );
+    const unsigned log2Factor = rng.get( 1, 3 );
+    const SizeType factor     = 1 << log2Factor;
+
+    // horizontal
+    {
+      const SizeType dstStride = predSize * factor + rng.get( 0, 16 );
+      const SizeType bndryStep = rng.get( 1, 4 );
+      std::vector<Pel> src( predSize * predSize ), bndry( bndryStep * predSize );
+      std::generate( src.begin(), src.end(), samples );
+      std::generate( bndry.begin(), bndry.end(), samples );
+      std::vector<Pel> dstRef( dstStride * predSize, 0x5a5a ), dstOpt( dstStride * predSize, 0x5a5a );
+      ref->mipUpsampleHor( dstRef.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
+      opt->mipUpsampleHor( dstOpt.data(), src.data(), bndry.data(), dstStride, bndryStep, predSize, log2Factor );
+
+      std::ostringstream sstm;
+      sstm << "mipUpsampleHor predSize=" << predSize << " factor=" << factor << " dstStride=" << dstStride;
+      if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), dstStride * predSize ) )
+      {
+        return false;
+      }
+    }
+
+    // vertical, from a separate source and in place
+    for( bool inPlace : { false, true } )
+    {
+      const SizeType outWidth  = rng.getOneOf<SizeType>( { 4, 8, 16, 32, 64 } );
+      const SizeType outHeight = predSize * factor;
+      std::vector<Pel> bndry( outWidth ), src( outWidth * outHeight );
+      std::generate( bndry.begin(), bndry.end(), samples );
+      std::generate( src.begin(), src.end(), samples );
+      std::vector<Pel> dstRef( outWidth * outHeight ), dstOpt( outWidth * outHeight );
+      std::generate( dstRef.begin(), dstRef.end(), samples );
+      dstOpt = dstRef;
+
+      // in place: the source rows are the output rows k * factor + factor - 1
+      const SizeType srcStep = inPlace ? outWidth * factor : outWidth;
+      const Pel* srcRef = inPlace ? dstRef.data() + ( factor - 1 ) * outWidth : src.data();
+      const Pel* srcOpt = inPlace ? dstOpt.data() + ( factor - 1 ) * outWidth : src.data();
+      ref->mipUpsampleVer( dstRef.data(), srcRef, bndry.data(), outWidth, srcStep, predSize, log2Factor );
+      opt->mipUpsampleVer( dstOpt.data(), srcOpt, bndry.data(), outWidth, srcStep, predSize, log2Factor );
+
+      std::ostringstream sstm;
+      sstm << "mipUpsampleVer inHeight=" << predSize << " factor=" << factor << " outWidth=" << outWidth << ( inPlace ? " in place" : "" );
+      if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), outWidth * outHeight ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2594,6 +2657,7 @@ static bool test_PelBufferOps()
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
+  passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

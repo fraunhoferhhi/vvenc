@@ -118,6 +118,9 @@ struct PelBufferOps
   void ( *mipMatrixMul_4_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_8)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
+  // MIP upsampling of the predSize x predSize reduced prediction by 1 << log2Factor (MatrixIntraPrediction::predBlock)
+  void ( *mipUpsampleHor )( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor );
+  void ( *mipUpsampleVer )( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor );
   void ( *weightCiip)     ( Pel* res, const Pel* intra, const int numSamples, int numIntra );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
   uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);

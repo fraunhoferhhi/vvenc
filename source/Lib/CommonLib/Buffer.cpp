@@ -80,6 +80,109 @@ void weightCiipCore( Pel* res, const Pel* src, const int numSamples, int numIntr
   }
 }
 
+template< SizeType predPredSize, unsigned log2UpsmpFactor>
+static void mipUpsampleHorCore(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType dstStride, const SizeType bndryStep )
+{
+  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
+  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
+
+        Pel* dstLine   = dst;
+  const Pel* srcLine   = src;
+  const Pel* bndryLine = bndry + bndryStep - 1;
+
+  for( SizeType idxOrthDim = 0; idxOrthDim < predPredSize; idxOrthDim++ )
+  {
+    const Pel* before  = bndryLine;
+    const Pel* behind  = srcLine;
+          Pel* currDst = dstLine;
+    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < predPredSize; idxUpsmpDim++ )
+    {
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
+      for( SizeType pos = 0; pos < upsmpFactor; pos++)
+      {
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
+        currDst++;
+      }
+      before = behind;
+      behind ++;
+    }
+
+    srcLine   += predPredSize;
+    dstLine   += dstStride;
+    bndryLine += bndryStep;
+  }
+}
+
+template< SizeType inHeight, unsigned log2UpsmpFactor>
+static void mipUpsampleVerCore(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType outWidth, const SizeType srcStep  )
+{
+  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
+  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
+
+        Pel* dstLine   = dst;
+  const Pel* srcLine   = src;
+  const Pel* bndryLine = bndry;
+
+  for( SizeType idxOrthDim = 0; idxOrthDim < outWidth; idxOrthDim++ )
+  {
+    const Pel* before  = bndryLine;
+    const Pel* behind  = srcLine;
+          Pel* currDst = dstLine;
+    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < inHeight; idxUpsmpDim++ )
+    {
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
+
+      for( SizeType pos = 0; pos < upsmpFactor; pos++)
+      {
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
+        currDst += outWidth;
+      }
+      before = behind;
+      behind += srcStep;
+    }
+
+    srcLine ++;
+    dstLine ++;
+    bndryLine ++;
+  }
+}
+
+static void mipUpsampleHorCore( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor )
+{
+  if( predSize == 4 )
+  {
+    if     ( log2Factor == 1 ) mipUpsampleHorCore<4, 1>( dst, src, bndry, dstStride, bndryStep );
+    else if( log2Factor == 2 ) mipUpsampleHorCore<4, 2>( dst, src, bndry, dstStride, bndryStep );
+    else                       mipUpsampleHorCore<4, 3>( dst, src, bndry, dstStride, bndryStep );
+  }
+  else
+  {
+    if     ( log2Factor == 1 ) mipUpsampleHorCore<8, 1>( dst, src, bndry, dstStride, bndryStep );
+    else if( log2Factor == 2 ) mipUpsampleHorCore<8, 2>( dst, src, bndry, dstStride, bndryStep );
+    else                       mipUpsampleHorCore<8, 3>( dst, src, bndry, dstStride, bndryStep );
+  }
+}
+
+static void mipUpsampleVerCore( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor )
+{
+  if( inHeight == 4 )
+  {
+    if     ( log2Factor == 1 ) mipUpsampleVerCore<4, 1>( dst, src, bndry, outWidth, srcStep );
+    else if( log2Factor == 2 ) mipUpsampleVerCore<4, 2>( dst, src, bndry, outWidth, srcStep );
+    else                       mipUpsampleVerCore<4, 3>( dst, src, bndry, outWidth, srcStep );
+  }
+  else
+  {
+    if     ( log2Factor == 1 ) mipUpsampleVerCore<8, 1>( dst, src, bndry, outWidth, srcStep );
+    else if( log2Factor == 2 ) mipUpsampleVerCore<8, 2>( dst, src, bndry, outWidth, srcStep );
+    else                       mipUpsampleVerCore<8, 3>( dst, src, bndry, outWidth, srcStep );
+  }
+}
+
 template< unsigned inputSize, unsigned outputSize >
 void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int inputOffset, bool transpose )
 {
@@ -538,6 +641,8 @@ PelBufferOps::PelBufferOps()
   mipMatrixMul_4_4  = mipMatrixMulCore<4,4>;
   mipMatrixMul_8_4  = mipMatrixMulCore<8,4>;
   mipMatrixMul_8_8  = mipMatrixMulCore<8,8>;
+  mipUpsampleHor    = mipUpsampleHorCore;
+  mipUpsampleVer    = mipUpsampleVerCore;
   weightCiip        = weightCiipCore;
   roundIntVector    = nullptr;
 

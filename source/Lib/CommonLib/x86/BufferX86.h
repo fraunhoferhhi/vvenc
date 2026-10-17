@@ -2775,6 +2775,140 @@ void downsample2x2_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, co
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// MIP upsampling (MatrixIntraPrediction::predBlock): linear interpolation between the reduced prediction and the
+// boundary, out = ( ( before << log2Factor ) + rounding + ( pos + 1 ) * ( behind - before ) ) >> log2Factor.
+// For sample values in 0 ... 2^12 - 1 every intermediate value is in 0 ... 2^15 - 1, so 16-bit lanes are exact.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// the upsampling factor values of one vector of "before" / "behind" samples, phase p in out[p]
+template<unsigned log2Factor>
+static inline void mipInterpolate_SSE( const __m128i before, const __m128i behind, __m128i* out )
+{
+  const __m128i diff = _mm_sub_epi16( behind, before );
+  __m128i scaled     = _mm_add_epi16( _mm_slli_epi16( before, log2Factor ), _mm_set1_epi16( 1 << ( log2Factor - 1 ) ) );
+  for( int p = 0; p < ( 1 << log2Factor ); p++ )
+  {
+    scaled = _mm_add_epi16( scaled, diff );
+    out[p] = _mm_srai_epi16( scaled, log2Factor );
+  }
+}
+
+// vertical upsampling: each input row k gives the output rows k * factor ... k * factor + factor - 1; the lanes run
+// over the columns
+template<unsigned log2Factor>
+static void mipUpsampleVer_SSE( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight )
+{
+  const int factor = 1 << log2Factor;
+  CHECKD( outWidth & 3, "MIP blocks are at least 4 samples wide" );
+
+  for( SizeType x = 0; x < outWidth; x += 8 )
+  {
+    // 4 or 8 columns
+    const bool four = x + 8 > outWidth;
+    auto load  = [four]( const Pel* p ) { return four ? _vv_loadl_epi64( ( const __m128i* ) p ) : _mm_loadu_si128( ( const __m128i* ) p ); };
+    auto store = [four]( Pel* p, __m128i v ) { if( four ) _vv_storel_epi64( ( __m128i* ) p, v ); else _mm_storeu_si128( ( __m128i* ) p, v ); };
+
+    __m128i before = load( bndry + x );
+    for( SizeType k = 0; k < inHeight; k++ )
+    {
+      // the source rows can be the output rows k * factor + factor - 1 (in-place upsampling), so load before storing
+      const __m128i behind = load( src + k * srcStep + x );
+      __m128i out[8];
+      mipInterpolate_SSE<log2Factor>( before, behind, out );
+      for( int p = 0; p < factor; p++ )
+      {
+        store( dst + ( k * factor + p ) * outWidth + x, out[p] );
+      }
+      before = behind;
+    }
+  }
+}
+
+// horizontal upsampling of predSize (4 or 8) rows of predSize samples; "before" of the first sample of a row is the
+// left boundary sample of the row
+template<unsigned log2Factor>
+static void mipUpsampleHor_SSE( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize )
+{
+  CHECKD( predSize != 4 && predSize != 8, "MIP reduced prediction is 4x4 or 8x8" );
+  const Pel* bndryLine = bndry + bndryStep - 1;
+
+  for( SizeType row = 0; row < predSize; row++, src += predSize, dst += dstStride, bndryLine += bndryStep )
+  {
+    const __m128i behind = predSize == 8 ? _mm_loadu_si128( ( const __m128i* ) src ) : _vv_loadl_epi64( ( const __m128i* ) src );
+    const __m128i before = _mm_insert_epi16( _mm_slli_si128( behind, 2 ), *bndryLine, 0 );
+    __m128i v[8];
+    mipInterpolate_SSE<log2Factor>( before, behind, v );
+
+    // interleave the phases: out[i * factor + p] = v[p][i]
+    if( log2Factor == 1 )
+    {
+      _mm_storeu_si128( ( __m128i* ) dst, _mm_unpacklo_epi16( v[0], v[1] ) );
+      if( predSize == 8 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[8], _mm_unpackhi_epi16( v[0], v[1] ) );
+      }
+    }
+    else if( log2Factor == 2 )
+    {
+      const __m128i lo01 = _mm_unpacklo_epi16( v[0], v[1] ), lo23 = _mm_unpacklo_epi16( v[2], v[3] );
+      _mm_storeu_si128( ( __m128i* ) &dst[0], _mm_unpacklo_epi32( lo01, lo23 ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[8], _mm_unpackhi_epi32( lo01, lo23 ) );
+      if( predSize == 8 )
+      {
+        const __m128i hi01 = _mm_unpackhi_epi16( v[0], v[1] ), hi23 = _mm_unpackhi_epi16( v[2], v[3] );
+        _mm_storeu_si128( ( __m128i* ) &dst[16], _mm_unpacklo_epi32( hi01, hi23 ) );
+        _mm_storeu_si128( ( __m128i* ) &dst[24], _mm_unpackhi_epi32( hi01, hi23 ) );
+      }
+    }
+    else
+    {
+      // 8x8 transpose of 16-bit values: output vector i holds the 8 phases of sample i
+      const __m128i a0 = _mm_unpacklo_epi16( v[0], v[1] ), a1 = _mm_unpacklo_epi16( v[2], v[3] );
+      const __m128i a2 = _mm_unpacklo_epi16( v[4], v[5] ), a3 = _mm_unpacklo_epi16( v[6], v[7] );
+      const __m128i a4 = _mm_unpackhi_epi16( v[0], v[1] ), a5 = _mm_unpackhi_epi16( v[2], v[3] );
+      const __m128i a6 = _mm_unpackhi_epi16( v[4], v[5] ), a7 = _mm_unpackhi_epi16( v[6], v[7] );
+      const __m128i b0 = _mm_unpacklo_epi32( a0, a1 ), b1 = _mm_unpackhi_epi32( a0, a1 );
+      const __m128i b2 = _mm_unpacklo_epi32( a2, a3 ), b3 = _mm_unpackhi_epi32( a2, a3 );
+      const __m128i b4 = _mm_unpacklo_epi32( a4, a5 ), b5 = _mm_unpackhi_epi32( a4, a5 );
+      const __m128i b6 = _mm_unpacklo_epi32( a6, a7 ), b7 = _mm_unpackhi_epi32( a6, a7 );
+      _mm_storeu_si128( ( __m128i* ) &dst[ 0], _mm_unpacklo_epi64( b0, b2 ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[ 8], _mm_unpackhi_epi64( b0, b2 ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[16], _mm_unpacklo_epi64( b1, b3 ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[24], _mm_unpackhi_epi64( b1, b3 ) );
+      if( predSize == 8 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[32], _mm_unpacklo_epi64( b4, b6 ) );
+        _mm_storeu_si128( ( __m128i* ) &dst[40], _mm_unpackhi_epi64( b4, b6 ) );
+        _mm_storeu_si128( ( __m128i* ) &dst[48], _mm_unpacklo_epi64( b5, b7 ) );
+        _mm_storeu_si128( ( __m128i* ) &dst[56], _mm_unpackhi_epi64( b5, b7 ) );
+      }
+    }
+  }
+}
+
+template<X86_VEXT vext>
+void mipUpsampleHor_SIMD( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleHor_SSE<1>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  case 2:  mipUpsampleHor_SSE<2>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  default: mipUpsampleHor_SSE<3>( dst, src, bndry, dstStride, bndryStep, predSize ); break;
+  }
+}
+
+template<X86_VEXT vext>
+void mipUpsampleVer_SIMD( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor )
+{
+  switch( log2Factor )
+  {
+  case 1:  mipUpsampleVer_SSE<1>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  case 2:  mipUpsampleVer_SSE<2>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  default: mipUpsampleVer_SSE<3>( dst, src, bndry, outWidth, srcStep, inHeight ); break;
+  }
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -2816,6 +2950,8 @@ void PelBufferOps::_initPelBufOpsX86()
   mipMatrixMul_4_4 = mipMatrixMul_SSE<vext, 4, 4>;
   mipMatrixMul_8_4 = mipMatrixMul_SSE<vext, 8, 4>;
   mipMatrixMul_8_8 = mipMatrixMul_SSE<vext, 8, 8>;
+  mipUpsampleHor   = mipUpsampleHor_SIMD<vext>;
+  mipUpsampleVer   = mipUpsampleVer_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 
