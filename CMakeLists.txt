@@ -461,6 +461,7 @@ add_subdirectory( "test/vvencinterfacetest" )
 
 if( NOT BUILD_SHARED_LIBS )
   add_subdirectory( "test/vvenc_unit_test" )
+  add_subdirectory( "test/vvenc_simd_bench" )
 endif()
 
 include( cmake/modules/vvencTests.cmake )
