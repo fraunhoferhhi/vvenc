@@ -1051,6 +1051,68 @@ static bool check_cpyCoeff( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
   return passed;
 }
 
+// The residual copies of the inverse transforms and of transform skip: the coefficients are within 16 bit, where the
+// saturating SIMD versions equal the C cast. The destination is compared including the columns beyond the block.
+static bool check_cpyResi( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
+{
+  DimensionGenerator dim;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers for x86.
+  TCoeff *src     = ( TCoeff* )xMalloc( TCoeff, buf_size );
+  Pel    *dst_ref = ( Pel*    )xMalloc( Pel,    buf_size );
+  Pel    *dst_opt = ( Pel*    )xMalloc( Pel,    buf_size );
+
+  bool passed = true;
+
+  // any 16-bit value (RAND_MAX may be only 2^15 - 1)
+  auto inp_gen = []() { return TCoeff( Pel( ( rand() << 8 ) ^ rand() ) ); };
+
+  std::ostringstream sstm_test;
+  sstm_test << "TCoeffOps::cpyResi";
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    // Set height and width to powers of two: 4 to 128 (MAX_CU_SIZE).
+    unsigned height = 1 << dim.get( 2, 7 );
+    unsigned width = 1 << dim.get( 2, 7 );
+    const unsigned dstStride = dim.get( width, MAX_CU_SIZE );
+
+    std::generate( src, src + buf_size, inp_gen );
+    std::fill( dst_ref, dst_ref + buf_size, Pel( 0x5a5a ) );
+    std::fill( dst_opt, dst_opt + buf_size, Pel( 0x5a5a ) );
+
+    std::ostringstream sstm_subtest;
+
+    if( width % 8 == 0 )
+    {
+      ref->cpyResi8( src, dst_ref, dstStride, width, height );
+      opt->cpyResi8( src, dst_opt, dstStride, width, height );
+
+      sstm_subtest << sstm_test.str() << "8";
+    }
+    else
+    {
+      ref->cpyResi4( src, dst_ref, dstStride, width, height );
+      opt->cpyResi4( src, dst_opt, dstStride, width, height );
+
+      sstm_subtest << sstm_test.str() << "4";
+    }
+
+    sstm_subtest << " dstStride=" << dstStride << " w=" << width << " h=" << height;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, dstStride ) && passed;
+  }
+
+  xFree( src );
+  xFree( dst_ref );
+  xFree( dst_opt );
+
+  return passed;
+}
+
 template<int W>
 static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
 {
@@ -1256,6 +1318,7 @@ static bool test_TCoeffOps()
   bool passed        = true;
 
   passed = check_cpyCoeff( &ref, &opt, num_cases ) && passed;
+  passed = check_cpyResi( &ref, &opt, num_cases ) && passed;
 
   for( unsigned h : { 1, 2, 4, 8, 16, 32, 64 } )
   {
