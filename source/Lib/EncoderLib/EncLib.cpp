@@ -281,6 +281,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_maxNumPicShared += 3;
   // increase number of picture buffers for GOP parallel processing
   m_maxNumPicShared += m_encCfg.m_numParallelGOPs ? (m_encCfg.m_GOPSize + 1) * m_encCfg.m_numParallelGOPs: 0;
+  // read GOPs ahead when frame parallel encoding may start pictures of later GOPs (trades RAM for speed)
+  m_maxNumPicShared += xCanStartLaterGops() ? xNumReadAheadGops() * m_encCfg.m_GOPSize : 0;
 
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -527,6 +529,28 @@ int EncLib::getCurPass() const
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
+
+// Without IFP, rate control or rate capping, the GOP encoder may start any queued picture whose
+// references are reconstructed, also from later GOPs. The first picture of a GOP in coding
+// order is its last one in input order, so a later GOP can only start early when all of its
+// pictures fit into the picture pool while the current GOP is still being encoded. Every GOP
+// read ahead costs one input frame per picture, so ReadAhead trades RAM for speed.
+bool EncLib::xCanStartLaterGops() const
+{
+  return m_encCfg.m_stageParallelProc
+      && m_encCfg.m_maxParallelFrames > 1
+      && m_encCfg.m_ifpLines == 0
+      && m_encCfg.m_numParallelGOPs == 0
+      && m_encCfg.m_RCTargetBitrate == 0
+      && ! m_encCfg.m_rateCap;
+}
+
+// ReadAhead levels 0 to 2 read that many GOPs ahead. The top level reads four, which keeps
+// all frame encoders busy across GOP boundaries in most configurations.
+int EncLib::xNumReadAheadGops() const
+{
+  return m_encCfg.m_readAhead == 3 ? 4 : m_encCfg.m_readAhead;
+}
 
 PicShared* EncLib::xGetFreePicShared()
 {

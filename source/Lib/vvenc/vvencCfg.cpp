@@ -656,6 +656,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ifp                                     = -1;
   c->m_mtProfile                               =  0;
   c->m_numParallelGOPs                         =  0;
+  c->m_readAhead                               =  3;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -2185,6 +2186,8 @@ static bool checkCfgParameter( vvenc_config *c )
     }
   }
 
+  vvenc_confirmParameter(c, c->m_readAhead < 0 || c->m_readAhead > 3, "ReadAhead must be in range of 0 - 3" );
+
   if( c->m_numParallelGOPs )
   {
     vvenc_confirmParameter(c, (c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX) || c->m_RCTargetBitrate > 0, "No support for GOP parallel processing in rate control mode" );
@@ -3428,6 +3431,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
     css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
     css << "NumParallelGOPs:" << (int) c->m_numParallelGOPs << " ";
+    css << "ReadAhead:" << (int) c->m_readAhead << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

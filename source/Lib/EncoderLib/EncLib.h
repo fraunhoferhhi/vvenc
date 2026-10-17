@@ -123,6 +123,8 @@ public:
 private:
   void     xUninitLib          ();
   void     xInitRCCfg          ();
+  bool     xCanStartLaterGops  () const;
+  int      xNumReadAheadGops   () const;
 
   PicShared* xGetFreePicShared();
  };
