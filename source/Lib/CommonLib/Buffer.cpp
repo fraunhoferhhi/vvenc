@@ -551,6 +551,24 @@ uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pe
   return sum;
 }
 
+static uint32_t pictureChecksumCore( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes )
+{
+  uint32_t checksum = 0;
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ ( y & 0xff ) ^ ( x >> 8 ) ^ ( y >> 8 );
+      checksum += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        checksum += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+  return checksum;
+}
+
 static int64_t sumCore( const Pel* src, const ptrdiff_t stride, const int width, const int height )
 {
   int64_t sum = 0;
@@ -736,6 +754,7 @@ PelBufferOps::PelBufferOps()
   sumSquaredError  = sumSquaredErrorCore;
   sum              = sumCore;
   sumAndSumSquares = sumAndSumSquaresCore;
+  pictureChecksum  = pictureChecksumCore;
   padHorizontal    = padHorizontalCore;
   downsample2x2    = downsample2x2Core;
   highPassCorrelation = highPassCorrelationCore;

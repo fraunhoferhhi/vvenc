@@ -2638,6 +2638,37 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return passed;
 }
 
+// The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
+// positions enter the mask, any Pel values (the arithmetic shift of negative values) and both sample sizes.
+static bool check_pictureChecksum( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::pictureChecksum\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const bool tall   = i % 4 == 0;
+    const int  width  = tall ? rng.get( 1, 40 ) : rng.get( 1, 600 );
+    const int  height = tall ? rng.get( 250, 600 ) : rng.get( 1, 20 );
+    const int  stride = width + rng.get( 0, 16 );
+    std::vector<Pel> plane( stride * height );
+    std::generate( plane.begin(), plane.end(), anyPel );
+
+    for( bool twoBytes : { false, true } )
+    {
+      std::ostringstream sstm;
+      sstm << "pictureChecksum " << width << "x" << height << " stride=" << stride << " twoBytes=" << twoBytes;
+      if( !compare_value( sstm.str(), ref->pictureChecksum( plane.data(), stride, width, height, twoBytes ),
+                                      opt->pictureChecksum( plane.data(), stride, width, height, twoBytes ) ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // reco2, sub2 and copyClip2 on blocks 2 wide with any Pel values (the SIMD versions equal C for all of them), heights
 // 1 to 64 and padded strides; the whole destination is compared, so that writes beyond the block are found
 static bool check_width2Ops( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -3057,6 +3088,7 @@ static bool test_PelBufferOps()
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
+  passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;

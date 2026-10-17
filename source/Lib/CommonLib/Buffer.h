@@ -113,6 +113,9 @@ struct PelBufferOps
   void ( *linTf4 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
+  // the checksum of the decoded picture hash SEI for one plane: the sum, modulo 2^32, of ( p & 0xff ) ^ m and, with
+  // twoBytes, ( p >> 8 ) ^ m, where m = ( x & 0xff ) ^ ( y & 0xff ) ^ ( x >> 8 ) ^ ( y >> 8 )
+  uint32_t ( *pictureChecksum ) ( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes );
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );

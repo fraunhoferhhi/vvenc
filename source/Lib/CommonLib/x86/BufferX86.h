@@ -3303,6 +3303,79 @@ uint32_t sumAbsDeviation_SIMD( const Pel* src, const ptrdiff_t stride, const int
   return sum + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// The plane checksum of the decoded picture hash SEI (PelBufferOps::pictureChecksum). Per sample, the terms
+// ( p & 0xff ) ^ m and ( p >> 8 ) ^ m (arithmetic shift) are in -256 ... 255, so their sum fits 16 bits; the 32-bit
+// lane sums wrap around modulo 2^32 like the C sum. The positions x and y are below 2^16, so each byte of the mask is
+// below 2^8 and the mask needs no truncation to 8 bits.
+// ---------------------------------------------------------------------------------------------------------------------
+
+template<X86_VEXT vext>
+uint32_t pictureChecksum_SIMD( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes )
+{
+  CHECKD( width > 0xffff || height > 0xffff, "the positions of the mask have to fit 16 bits" );
+
+  uint32_t tail = 0;
+  __m128i  acc  = _mm_setzero_si128();
+#if USE_AVX2
+  __m256i  acc256 = _mm256_setzero_si256();
+#endif
+
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    const int yMask = ( y & 0xff ) ^ ( y >> 8 );
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      const __m256i low   = _mm256_set1_epi16( 0xff );
+      const __m256i ym    = _mm256_set1_epi16( yMask );
+      __m256i       xs    = _mm256_setr_epi16( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+      for( ; x + 16 <= width; x += 16, xs = _mm256_add_epi16( xs, _mm256_set1_epi16( 16 ) ) )
+      {
+        const __m256i mask = _mm256_xor_si256( _mm256_xor_si256( _mm256_and_si256( xs, low ), _mm256_srli_epi16( xs, 8 ) ), ym );
+        const __m256i p    = _mm256_loadu_si256( ( const __m256i* ) &plane[x] );
+        __m256i       terms = _mm256_xor_si256( _mm256_and_si256( p, low ), mask );
+        if( twoBytes )
+        {
+          terms = _mm256_add_epi16( terms, _mm256_xor_si256( _mm256_srai_epi16( p, 8 ), mask ) );
+        }
+        acc256 = _mm256_add_epi32( acc256, _mm256_madd_epi16( terms, _mm256_set1_epi16( 1 ) ) );
+      }
+    }
+#endif
+    const __m128i low = _mm_set1_epi16( 0xff );
+    const __m128i ym  = _mm_set1_epi16( yMask );
+    __m128i       xs  = _mm_add_epi16( _mm_set1_epi16( x ), _mm_setr_epi16( 0, 1, 2, 3, 4, 5, 6, 7 ) );
+    for( ; x + 8 <= width; x += 8, xs = _mm_add_epi16( xs, _mm_set1_epi16( 8 ) ) )
+    {
+      const __m128i mask  = _mm_xor_si128( _mm_xor_si128( _mm_and_si128( xs, low ), _mm_srli_epi16( xs, 8 ) ), ym );
+      const __m128i p     = _mm_loadu_si128( ( const __m128i* ) &plane[x] );
+      __m128i       terms = _mm_xor_si128( _mm_and_si128( p, low ), mask );
+      if( twoBytes )
+      {
+        terms = _mm_add_epi16( terms, _mm_xor_si128( _mm_srai_epi16( p, 8 ), mask ) );
+      }
+      acc = _mm_add_epi32( acc, _mm_madd_epi16( terms, _mm_set1_epi16( 1 ) ) );
+    }
+    for( ; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ yMask ^ ( x >> 8 );
+      tail += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        tail += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+
+#if USE_AVX2
+  acc = _mm_add_epi32( acc, _mm_add_epi32( _mm256_castsi256_si128( acc256 ), _mm256_extracti128_si256( acc256, 1 ) ) );
+#endif
+  acc = _mm_hadd_epi32( acc, acc );
+  return tail + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3353,6 +3426,7 @@ void PelBufferOps::_initPelBufOpsX86()
   blockStats4x4       = blockStats4x4_SIMD<vext>;
   absGradientSums     = absGradientSums_SIMD<vext>;
   sumAbsDeviation     = sumAbsDeviation_SIMD<vext>;
+  pictureChecksum     = pictureChecksum_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 
