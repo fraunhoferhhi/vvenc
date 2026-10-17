@@ -605,6 +605,21 @@ static void downsample2x2Core( const Pel* src, const ptrdiff_t srcStride, Pel* d
   }
 }
 
+int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth )
+{
+  int64_t sum = 0;
+  for( int y = 0; y < height; y++, cb += cbStride, cr += crStride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      const int hpCb = ( 12*(int)cb[x] - 2*((int)cb[x-1] + (int)cb[x+1] + (int)cb[x-cbStride] + (int)cb[x+cbStride]) - ((int)cb[x-1-cbStride] + (int)cb[x+1-cbStride] + (int)cb[x-1+cbStride] + (int)cb[x+1+cbStride]) );
+      const int hpCr = ( 12*(int)cr[x] - 2*((int)cr[x-1] + (int)cr[x+1] + (int)cr[x-crStride] + (int)cr[x+crStride]) - ((int)cr[x-1-crStride] + (int)cr[x+1-crStride] + (int)cr[x-1+crStride] + (int)cr[x+1+crStride]) );
+      sum += hpCb * hpCr;
+    }
+  }
+  return sum;
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
@@ -658,6 +673,7 @@ PelBufferOps::PelBufferOps()
   sumAndSumSquares = sumAndSumSquaresCore;
   padHorizontal    = padHorizontalCore;
   downsample2x2    = downsample2x2Core;
+  highPassCorrelation = highPassCorrelationCore;
 }
 
 void PelBufferOps::initPelBufOps( bool enableOpt )

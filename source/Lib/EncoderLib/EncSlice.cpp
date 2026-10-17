@@ -617,20 +617,11 @@ void setJointCbCrModes( CodingStructure& cs, const Position topLeftLuma, const S
     const int       y1      = ( cbArea.y + cbArea.height < cs.picture->Cb().height ? cbArea.height : cbArea.height - 1 );
     const int       cbs     = orgCb.stride;
     const int       crs     = orgCr.stride;
-    const Pel*      pCb     = orgCb.buf + y0 * cbs;
-    const Pel*      pCr     = orgCr.buf + y0 * crs;
-    int64_t         sumCbCr = 0;
+    const Pel*      pCb     = orgCb.buf + y0 * cbs + x0;
+    const Pel*      pCr     = orgCr.buf + y0 * crs + x0;
 
     // determine inter-chroma transform sign from correlation between high-pass filtered (i.e., zero-mean) Cb and Cr planes
-    for( int y = y0; y < y1; y++, pCb += cbs, pCr += crs )
-    {
-      for( int x = x0; x < x1; x++ )
-      {
-        int cb = ( 12*(int)pCb[x] - 2*((int)pCb[x-1] + (int)pCb[x+1] + (int)pCb[x-cbs] + (int)pCb[x+cbs]) - ((int)pCb[x-1-cbs] + (int)pCb[x+1-cbs] + (int)pCb[x-1+cbs] + (int)pCb[x+1+cbs]) );
-        int cr = ( 12*(int)pCr[x] - 2*((int)pCr[x-1] + (int)pCr[x+1] + (int)pCr[x-crs] + (int)pCr[x+crs]) - ((int)pCr[x-1-crs] + (int)pCr[x+1-crs] + (int)pCr[x-1+crs] + (int)pCr[x+1+crs]) );
-        sumCbCr += cb*cr;
-      }
-    }
+    const int64_t   sumCbCr = g_pelBufOP.highPassCorrelation( pCb, cbs, pCr, crs, x1 - x0, y1 - y0, cs.sps->bitDepths[CH_C] );
 
     sgnFlag = ( sumCbCr < 0 );
   }

@@ -2909,6 +2909,78 @@ void mipUpsampleVer_SIMD( Pel* dst, const Pel* src, const Pel* bndry, const Size
   }
 }
 
+// Sum over the block of hp( cb ) * hp( cr ) with the 3x3 high-pass hp = 12 * c - 2 * ( 4 direct neighbours ) - ( 4
+// diagonal neighbours ), which decides the joint Cb-Cr sign of a picture (setJointCbCrModes). For samples of up to
+// 10 bits |hp| <= 24 * 1023 fits 16 bits and a pair of products fits the 32-bit lanes of madd; the sums are
+// accumulated in 64 bit. Higher bit depths use the C code.
+template<typename V>
+static inline V highPass3x3_SIMD( const Pel* p, const ptrdiff_t stride );
+
+template<>
+inline __m128i highPass3x3_SIMD<__m128i>( const Pel* p, const ptrdiff_t stride )
+{
+  auto ld = [&]( ptrdiff_t off ) { return _mm_loadu_si128( ( const __m128i* ) ( p + off ) ); };
+  const __m128i c       = ld( 0 );
+  const __m128i direct  = _mm_add_epi16( _mm_add_epi16( ld( -1 ), ld( 1 ) ), _mm_add_epi16( ld( -stride ), ld( stride ) ) );
+  const __m128i diag    = _mm_add_epi16( _mm_add_epi16( ld( -1 - stride ), ld( 1 - stride ) ), _mm_add_epi16( ld( -1 + stride ), ld( 1 + stride ) ) );
+  const __m128i c12     = _mm_add_epi16( _mm_slli_epi16( c, 3 ), _mm_slli_epi16( c, 2 ) );
+  return _mm_sub_epi16( _mm_sub_epi16( c12, _mm_slli_epi16( direct, 1 ) ), diag );
+}
+
+#if USE_AVX2
+template<>
+inline __m256i highPass3x3_SIMD<__m256i>( const Pel* p, const ptrdiff_t stride )
+{
+  auto ld = [&]( ptrdiff_t off ) { return _mm256_loadu_si256( ( const __m256i* ) ( p + off ) ); };
+  const __m256i c       = ld( 0 );
+  const __m256i direct  = _mm256_add_epi16( _mm256_add_epi16( ld( -1 ), ld( 1 ) ), _mm256_add_epi16( ld( -stride ), ld( stride ) ) );
+  const __m256i diag    = _mm256_add_epi16( _mm256_add_epi16( ld( -1 - stride ), ld( 1 - stride ) ), _mm256_add_epi16( ld( -1 + stride ), ld( 1 + stride ) ) );
+  const __m256i c12     = _mm256_add_epi16( _mm256_slli_epi16( c, 3 ), _mm256_slli_epi16( c, 2 ) );
+  return _mm256_sub_epi16( _mm256_sub_epi16( c12, _mm256_slli_epi16( direct, 1 ) ), diag );
+}
+#endif
+
+template<X86_VEXT vext>
+int64_t highPassCorrelation_SIMD( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth )
+{
+  if( bitDepth > 10 )
+  {
+    return highPassCorrelationCore( cb, cbStride, cr, crStride, width, height, bitDepth );
+  }
+
+  int64_t sum = 0;
+  __m128i acc = _mm_setzero_si128();
+#if USE_AVX2
+  __m256i acc256 = _mm256_setzero_si256();
+#endif
+
+  for( int y = 0; y < height; y++, cb += cbStride, cr += crStride )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 16 <= width; x += 16 )
+      {
+        const __m256i prod = _mm256_madd_epi16( highPass3x3_SIMD<__m256i>( cb + x, cbStride ), highPass3x3_SIMD<__m256i>( cr + x, crStride ) );
+        acc256 = _mm256_add_epi64( acc256, _mm256_add_epi64( _mm256_cvtepi32_epi64( _mm256_castsi256_si128( prod ) ), _mm256_cvtepi32_epi64( _mm256_extracti128_si256( prod, 1 ) ) ) );
+      }
+    }
+#endif
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i prod = _mm_madd_epi16( highPass3x3_SIMD<__m128i>( cb + x, cbStride ), highPass3x3_SIMD<__m128i>( cr + x, crStride ) );
+      acc = _mm_add_epi64( acc, _mm_add_epi64( _mm_cvtepi32_epi64( prod ), _mm_cvtepi32_epi64( _mm_unpackhi_epi64( prod, prod ) ) ) );
+    }
+    sum += highPassCorrelationCore( cb + x, cbStride, cr + x, crStride, width - x, 1, bitDepth );
+  }
+
+#if USE_AVX2
+  acc = _mm_add_epi64( acc, _vv_fold_epi64( acc256 ) );
+#endif
+  return sum + _vv_sum_epi64( acc );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -2952,6 +3024,7 @@ void PelBufferOps::_initPelBufOpsX86()
   mipMatrixMul_8_8 = mipMatrixMul_SSE<vext, 8, 8>;
   mipUpsampleHor   = mipUpsampleHor_SIMD<vext>;
   mipUpsampleVer   = mipUpsampleVer_SIMD<vext>;
+  highPassCorrelation = highPassCorrelation_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 

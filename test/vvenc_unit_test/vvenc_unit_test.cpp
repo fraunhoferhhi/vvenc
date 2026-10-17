@@ -2705,6 +2705,37 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// High-pass correlation of the joint Cb-Cr sign decision: random sizes and strides, 10-bit samples (the SIMD range)
+// and 12-bit samples (the C fallback); the 3x3 filter reads one sample around the block.
+static bool check_highPassCorrelation( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::highPassCorrelation\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int bitDepth = i & 1 ? 12 : 10;
+    InputGenerator<Pel> pixels{ unsigned( bitDepth ), /*is_signed=*/false };
+    const int width  = rng.get( 1, 100 );
+    const int height = rng.get( 1, 20 );
+    const int stride = width + 2 + rng.get( 0, 16 );
+    std::vector<Pel> cb( stride * ( height + 2 ) ), cr( stride * ( height + 2 ) );
+    std::generate( cb.begin(), cb.end(), pixels );
+    std::generate( cr.begin(), cr.end(), pixels );
+
+    const Pel* pCb = cb.data() + stride + 1;
+    const Pel* pCr = cr.data() + stride + 1;
+    std::ostringstream sstm;
+    sstm << "highPassCorrelation " << width << "x" << height << " bitDepth=" << bitDepth;
+    if( !compare_value( sstm.str(), ref->highPassCorrelation( pCb, stride, pCr, stride, width, height, bitDepth ),
+                                    opt->highPassCorrelation( pCb, stride, pCr, stride, width, height, bitDepth ) ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2729,6 +2760,7 @@ static bool test_PelBufferOps()
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
+  passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

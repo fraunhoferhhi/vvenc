@@ -137,6 +137,8 @@ struct PelBufferOps
   void     ( *padHorizontal )    ( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft, const int marginRight );
   // dst = ( sum of the 2x2 source samples + 2 ) >> 2
   void     ( *downsample2x2 )    ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight );
+  // sum of the products of the 3x3 high-pass filtered samples of two planes (the joint Cb-Cr sign decision)
+  int64_t  ( *highPassCorrelation )( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
 
 private:
   bool isInitSIMDDone = false;
@@ -155,6 +157,10 @@ private:
 };
 
 extern PelBufferOps g_pelBufOP;
+
+// the C version of PelBufferOps::highPassCorrelation, also used by the SIMD versions for the last columns and for
+// bit depths above 10
+int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
 
 template<typename T>
 struct AreaBuf : public Size
