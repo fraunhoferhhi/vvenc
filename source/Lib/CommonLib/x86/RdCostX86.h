@@ -2755,6 +2755,152 @@ void RdCost::xGetSADX5_16xN_SIMD_X86(const DistParam& rcDtParam, Distortion* cos
     xGetSADX5_16xN_SIMDImp_X86<vext, false>(rcDtParam, cost);
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// IBC block vector bits (RdCost::getBitsMultiplePredsIBC) for a line of vectors ( x0 + i * xStep, y ). The bits of a
+// vector difference component val are 2 * floorLog2( u ) + 1 with u = val > 0 ? 2 * val : 1 - 2 * val. floorLog2 is
+// read from the exponent of the float conversion of u, which is exact for u < 2^24, i.e. for differences of up to 22
+// bits, more than the 18 bits of an Mv component.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// internal linkage: this header is compiled once per instruction set, and the copies must not be merged by the linker
+namespace
+{
+// the 32-bit lane operations of the block vector bits, for 4 and 8 lanes
+struct BvOps128
+{
+  typedef __m128i V;
+  static const int lanes = 4;
+  static V    set1  ( int v )                     { return _mm_set1_epi32( v ); }
+  static V    lane  ()                            { return _mm_setr_epi32( 0, 1, 2, 3 ); }
+  static V    add   ( V a, V b )                  { return _mm_add_epi32( a, b ); }
+  static V    sub   ( V a, V b )                  { return _mm_sub_epi32( a, b ); }
+  static V    mul   ( V a, V b )                  { return _mm_mullo_epi32( a, b ); }
+  static V    abs   ( V a )                       { return _mm_abs_epi32( a ); }
+  static V    gt    ( V a, V b )                  { return _mm_cmpgt_epi32( a, b ); }
+  static V    eq    ( V a, V b )                  { return _mm_cmpeq_epi32( a, b ); }
+  static V    andV  ( V a, V b )                  { return _mm_and_si128( a, b ); }
+  static V    minU  ( V a, V b )                  { return _mm_min_epu32( a, b ); }
+  static V    sra2  ( V a )                       { return _mm_srai_epi32( a, 2 ); }
+  static V    select( V mask, V ifSet, V ifNot )  { return _mm_blendv_epi8( ifNot, ifSet, mask ); }
+  static V    floatExponent( V u )                { return _mm_srli_epi32( _mm_castps_si128( _mm_cvtepi32_ps( u ) ), 23 ); }
+  static void store ( unsigned* p, V a )          { _mm_storeu_si128( ( __m128i* ) p, a ); }
+};
+
+#if USE_AVX2
+struct BvOps256
+{
+  typedef __m256i V;
+  static const int lanes = 8;
+  static V    set1  ( int v )                     { return _mm256_set1_epi32( v ); }
+  static V    lane  ()                            { return _mm256_setr_epi32( 0, 1, 2, 3, 4, 5, 6, 7 ); }
+  static V    add   ( V a, V b )                  { return _mm256_add_epi32( a, b ); }
+  static V    sub   ( V a, V b )                  { return _mm256_sub_epi32( a, b ); }
+  static V    mul   ( V a, V b )                  { return _mm256_mullo_epi32( a, b ); }
+  static V    abs   ( V a )                       { return _mm256_abs_epi32( a ); }
+  static V    gt    ( V a, V b )                  { return _mm256_cmpgt_epi32( a, b ); }
+  static V    eq    ( V a, V b )                  { return _mm256_cmpeq_epi32( a, b ); }
+  static V    andV  ( V a, V b )                  { return _mm256_and_si256( a, b ); }
+  static V    minU  ( V a, V b )                  { return _mm256_min_epu32( a, b ); }
+  static V    sra2  ( V a )                       { return _mm256_srai_epi32( a, 2 ); }
+  static V    select( V mask, V ifSet, V ifNot )  { return _mm256_blendv_epi8( ifNot, ifSet, mask ); }
+  static V    floatExponent( V u )                { return _mm256_srli_epi32( _mm256_castps_si256( _mm256_cvtepi32_ps( u ) ), 23 ); }
+  static void store ( unsigned* p, V a )          { _mm256_storeu_si256( ( __m256i* ) p, a ); }
+};
+#endif
+
+template<typename Ops>
+static inline typename Ops::V bvComponentBits( const typename Ops::V val )
+{
+  const typename Ops::V twice = Ops::add( val, val );
+  const typename Ops::V u     = Ops::select( Ops::gt( val, Ops::set1( 0 ) ), twice, Ops::sub( Ops::set1( 1 ), twice ) );
+  const typename Ops::V log2  = Ops::sub( Ops::floatExponent( u ), Ops::set1( 127 ) );
+  return Ops::add( Ops::add( log2, log2 ), Ops::set1( 1 ) );
+}
+
+// the bits of the cheaper of two predictors for the horizontal differences rmvH0 / rmvH1 of all lanes and a vertical
+// difference that is the same in all lanes; the first predictor is used if its sum of absolute differences is smaller
+template<typename Ops>
+struct BvVerticalPart
+{
+  typedef typename Ops::V V;
+  V absDiff[2];
+  V bits[2];
+
+  BvVerticalPart( const int rmvV0, const int rmvV1 )
+  {
+    const int rmvV[2] = { rmvV0, rmvV1 };
+    for( int k = 0; k < 2; k++ )
+    {
+      absDiff[k] = Ops::set1( std::abs( rmvV[k] ) );
+      bits   [k] = bvComponentBits<Ops>( Ops::set1( rmvV[k] ) );
+    }
+  }
+
+  V selectBits( const V rmvH0, const V rmvH1 ) const
+  {
+    const V abs0  = Ops::add( Ops::abs( rmvH0 ), absDiff[0] );
+    const V abs1  = Ops::add( Ops::abs( rmvH1 ), absDiff[1] );
+    const V bits0 = Ops::add( bvComponentBits<Ops>( rmvH0 ), bits[0] );
+    const V bits1 = Ops::add( bvComponentBits<Ops>( rmvH1 ), bits[1] );
+    return Ops::select( Ops::gt( abs1, abs0 ), bits0, bits1 );
+  }
+};
+
+template<typename Ops>
+static void bvBitsLine( const Mv* predictors, const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits )
+{
+  typedef typename Ops::V V;
+
+  // with useIMV, vectors of whole samples ( x and y multiples of 4 ) may also be coded in sample precision
+  const bool                samplePrecRow = useIMV && ( y & 3 ) == 0;
+  const BvVerticalPart<Ops> vert          ( y - predictors[0].ver, y - predictors[1].ver );
+  const BvVerticalPart<Ops> vertSamplePrec( ( y >> 2 ) - ( ( predictors[0].ver + 2 ) >> 2 ), ( y >> 2 ) - ( ( predictors[1].ver + 2 ) >> 2 ) );
+  const V                   predH0        = Ops::set1( predictors[0].hor );
+  const V                   predH1        = Ops::set1( predictors[1].hor );
+  const V                   predH0Sample  = Ops::set1( ( predictors[0].hor + 2 ) >> 2 );
+  const V                   predH1Sample  = Ops::set1( ( predictors[1].hor + 2 ) >> 2 );
+
+  V       xs        = Ops::add( Ops::set1( x0 ), Ops::mul( Ops::lane(), Ops::set1( xStep ) ) );
+  const V lanesStep = Ops::set1( Ops::lanes * xStep );
+
+  for( int i = 0; i < count; i += Ops::lanes, xs = Ops::add( xs, lanesStep ) )
+  {
+    V result = vert.selectBits( Ops::sub( xs, predH0 ), Ops::sub( xs, predH1 ) );
+    if( samplePrecRow )
+    {
+      const V xSample    = Ops::sra2( xs );
+      const V sampleBits = vertSamplePrec.selectBits( Ops::sub( xSample, predH0Sample ), Ops::sub( xSample, predH1Sample ) );
+      const V wholeX     = Ops::eq( Ops::andV( xs, Ops::set1( 3 ) ), Ops::set1( 0 ) );
+      result = Ops::select( wholeX, Ops::minU( result, sampleBits ), result );
+    }
+
+    if( i + Ops::lanes <= count )
+    {
+      Ops::store( &bits[i], result );
+    }
+    else
+    {
+      unsigned last[Ops::lanes];
+      Ops::store( last, result );
+      std::copy( last, last + count - i, &bits[i] );
+    }
+  }
+}
+} // namespace
+
+template<X86_VEXT vext>
+static void bvBitsLine_SIMD( const Mv* predictors, const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits )
+{
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    bvBitsLine<BvOps256>( predictors, x0, xStep, count, y, useIMV, bits );
+    return;
+  }
+#endif
+  bvBitsLine<BvOps128>( predictors, x0, xStep, count, y, useIMV, bits );
+}
+
 template <X86_VEXT vext>
 void RdCost::_initRdCostX86()
 {
@@ -2801,6 +2947,7 @@ void RdCost::_initRdCostX86()
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_SIMD<vext>;
 
   m_fxdWtdPredPtr = fixWeightedSSE_SIMD <vext>;
+  m_bvBitsLineIBC = bvBitsLine_SIMD<vext>;
 
   m_afpDistortFuncX5[0] = xGetSADX5_8xN_SIMD <vext>;
   m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD_X86<vext>;

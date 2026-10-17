@@ -5858,6 +5858,28 @@ unsigned InterSearch::xMergeCandLists( Mv* dst, unsigned dn, const unsigned dstT
   return dn;
 }
 
+const unsigned* InterSearch::xGetBvBitsRow( const int x0, const int xStep, const int count, const int y, const bool useIMV )
+{
+  if( count <= 0 )
+  {
+    return nullptr;
+  }
+  m_bvBits.resize( std::max<size_t>( m_bvBits.size(), count ) );
+  m_pcRdCost->getBvBitsRowIBC( x0, xStep, count, y, useIMV, m_bvBits.data() );
+  return m_bvBits.data();
+}
+
+const unsigned* InterSearch::xGetBvBitsColumn( const int x, const int y0, const int yStep, const int count, const bool useIMV )
+{
+  if( count <= 0 )
+  {
+    return nullptr;
+  }
+  m_bvBits.resize( std::max<size_t>( m_bvBits.size(), count ) );
+  m_pcRdCost->getBvBitsColumnIBC( x, y0, yStep, count, useIMV, m_bvBits.data() );
+  return m_bvBits.data();
+}
+
 void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* pcMvSrchRngLT, Mv* pcMvSrchRngRB, Mv* pcMvPred)
 {
   const int   srchRngHorLeft = pcMvSrchRngLT->hor;
@@ -5942,14 +5964,16 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
     sadBest = sadBestCand[0];
 
     const int boundY = (0 - roiHeight - puPelOffsetY);
-    for (int y = std::max(srchRngVerTop, 0 - cuPelY); y <= boundY; ++y)
+    const int aboveStartY = std::max(srchRngVerTop, 0 - cuPelY);
+    const unsigned* bvBitsAbove = xGetBvBitsColumn( 0, aboveStartY, 1, boundY - aboveStartY + 1, useAmvr );
+    for (int y = aboveStartY; y <= boundY; ++y)
     {
       if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, 0, y, lcuWidth))
       {
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePredsIBC(0, y, useAmvr);
+      sad = m_pcRdCost->getBvCostIBC( bvBitsAbove[y - aboveStartY] );
       m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -5967,14 +5991,16 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
     }
 
     const int boundX = std::max(srchRngHorLeft, -cuPelX);
-    for (int x = 0 - roiWidth - puPelOffsetX; x >= boundX; --x)
+    const int leftStartX = 0 - roiWidth - puPelOffsetX;
+    const unsigned* bvBitsLeft = xGetBvBitsRow( leftStartX, -1, leftStartX - boundX + 1, 0, useAmvr );
+    for (int x = leftStartX; x >= boundX; --x)
     {
       if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, 0, lcuWidth))
       {
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, 0, useAmvr);
+      sad = m_pcRdCost->getBvCostIBC( bvBitsLeft[leftStartX - x] );
       m_cDistParam.cur.buf = piRefSrch + x;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6054,7 +6080,8 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
             continue;
           bool firstX = true;
           int stepSx = searchStep ? stepS : 1;
-          for (int x = startX; x <= endX; firstX = false, x += stepSx)
+          const unsigned* bvBitsRow = xGetBvBitsRow( startX, stepSx, ( endX - startX ) / stepSx + 1, y, useAmvr );
+          for (int x = startX, k = 0; x <= endX; firstX = false, x += stepSx, k++)
           {
             if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
               continue;
@@ -6074,7 +6101,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
             }
             lastDec = true;
 
-            sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
+            sad = m_pcRdCost->getBvCostIBC( bvBitsRow[k] );
             m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
             sad += m_cDistParam.distFunc(m_cDistParam);
 
