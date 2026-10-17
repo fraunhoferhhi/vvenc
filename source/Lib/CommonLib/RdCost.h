@@ -115,6 +115,8 @@ class RdCost
 {
 public:
   Distortion ( *m_fxdWtdPredPtr )( const DistParam& dp, uint32_t fixedWeight );
+  // the bits of getBitsMultiplePredsIBC( x0 + i * xStep, y ) for i = 0 ... count - 1, with the given predictors
+  void       ( *m_bvBitsLineIBC )( const Mv* predictors, const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits );
 
   // for distortion
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
@@ -213,6 +215,19 @@ public:
   }
   void           getMotionCostIBC(int add) { m_dCostIBC = m_dLambdaMotionSAD + add; }
   Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
+  Distortion     getBvCostIBC         ( const unsigned bits ) const { return Distortion( m_dCostIBC * bits ); }
+  // the bits of the block vectors ( x0 + i * xStep, y ), i = 0 ... count - 1, as getBitsMultiplePredsIBC
+  void           getBvBitsRowIBC      ( const int x0, const int xStep, const int count, const int y, const bool useIMV, unsigned* bits ) const
+  {
+    m_bvBitsLineIBC( m_bvPredictors, x0, xStep, count, y, useIMV, bits );
+  }
+  // the bits of the block vectors ( x, y0 + i * yStep ): the estimate is symmetric in the two components, so this is
+  // the row of the transposed vectors
+  void           getBvBitsColumnIBC   ( const int x, const int y0, const int yStep, const int count, const bool useIMV, unsigned* bits ) const
+  {
+    const Mv transposed[2] = { Mv( m_bvPredictors[0].ver, m_bvPredictors[0].hor ), Mv( m_bvPredictors[1].ver, m_bvPredictors[1].hor ) };
+    m_bvBitsLineIBC( transposed, y0, yStep, count, x, useIMV, bits );
+  }
 	
   static Distortion xGetSAD8          ( const DistParam& pcDtParam );
   static Distortion xGetSAD16         ( const DistParam& pcDtParam ); // needs to be public for xGetSAD_MxN_SIMD ( NOTE: they are all public in vvenc )

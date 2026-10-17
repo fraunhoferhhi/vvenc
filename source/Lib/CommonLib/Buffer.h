@@ -99,17 +99,23 @@ struct PelBufferOps
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg8 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg16 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
+  void ( *sub2 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *sub4 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *sub8 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *wghtAvg4 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *wghtAvg8 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
+  void ( *copyClip2 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip4 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip8 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
+  void ( *reco2 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco4 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco8 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *linTf4 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
+  // the checksum of the decoded picture hash SEI for one plane: the sum, modulo 2^32, of ( p & 0xff ) ^ m and, with
+  // twoBytes, ( p >> 8 ) ^ m, where m = ( x & 0xff ) ^ ( y & 0xff ) ^ ( x >> 8 ) ^ ( y >> 8 )
+  uint32_t ( *pictureChecksum ) ( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes );
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
@@ -118,6 +124,9 @@ struct PelBufferOps
   void ( *mipMatrixMul_4_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_8)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
+  // MIP upsampling of the predSize x predSize reduced prediction by 1 << log2Factor (MatrixIntraPrediction::predBlock)
+  void ( *mipUpsampleHor )( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor );
+  void ( *mipUpsampleVer )( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor );
   void ( *weightCiip)     ( Pel* res, const Pel* intra, const int numSamples, int numIntra );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
   uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
@@ -126,6 +135,23 @@ struct PelBufferOps
   uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
   uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
   uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
+  // block statistics; the sums of squares are exact for samples in 0 ... 2^15 - 1
+  uint64_t ( *sumSquaredError )  ( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height );
+  int64_t  ( *sum )              ( const Pel* src, const ptrdiff_t stride, const int width, const int height );
+  void     ( *sumAndSumSquares ) ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares );
+  // replicates the first / last sample of each row into the marginLeft / marginRight samples before / after the row
+  void     ( *padHorizontal )    ( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft, const int marginRight );
+  // dst = ( sum of the 2x2 source samples + 2 ) >> 2
+  void     ( *downsample2x2 )    ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight );
+  // sum of the products of the 3x3 high-pass filtered samples of two planes (the joint Cb-Cr sign decision)
+  int64_t  ( *highPassCorrelation )( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
+  // per 4x4 block of a row of numBlocks blocks: the sample sum s and the absolute deviation sum( | s - 16 * p | )
+  void     ( *blockStats4x4 )    ( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
+  // sums of the absolute differences to the right, lower, lower-left and lower-right neighbours over the
+  // ( width - 1 ) x ( height - 1 ) top-left samples: sums[0] horizontal, [1] vertical, [2] and [3] the diagonals
+  void     ( *absGradientSums )  ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums );
+  // sum( | p - value | ) over the block
+  uint32_t ( *sumAbsDeviation )  ( const Pel* src, const ptrdiff_t stride, const int width, const int height, const int value );
 
 private:
   bool isInitSIMDDone = false;
@@ -144,6 +170,17 @@ private:
 };
 
 extern PelBufferOps g_pelBufOP;
+
+// the C version of PelBufferOps::sumSquaredError, also used by the SIMD versions for the widths 1 and 3
+uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height );
+// the C version of PelBufferOps::highPassCorrelation, also used by the SIMD versions for the last columns and for
+// bit depths above 10
+int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );
+// the C version of PelBufferOps::blockStats4x4, also used by the SIMD versions for the last blocks and for bit depths
+// above 10
+void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev );
+// the C version of PelBufferOps::absGradientSums, also used by the SIMD versions for narrow blocks
+void absGradientSumsCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums );
 
 template<typename T>
 struct AreaBuf : public Size
@@ -313,6 +350,9 @@ T AreaBuf <T> ::getAvg() const
 
   return T ((acc + (area() >> 1)) / area());
 }
+
+template<> Pel AreaBuf<Pel>::getAvg() const;
+template<> const Pel AreaBuf<const Pel>::getAvg() const;
 
 template<>
 void AreaBuf<MotionInfo>::fill( const MotionInfo& val );
@@ -587,6 +627,10 @@ void AreaBuf<T>::extendBorderPel(unsigned marginX, unsigned marginY)
     ::memcpy(p - (y + 1) * s, p, sizeof(T) * (w + (marginX << 1)));
   }
 }
+
+template<> void AreaBuf<Pel>::extendBorderPelLft( int y, int size, int margin );
+template<> void AreaBuf<Pel>::extendBorderPelRgt( int y, int size, int margin );
+template<> void AreaBuf<Pel>::extendBorderPel( unsigned marginX, unsigned marginY );
 
 template<typename T>
 void AreaBuf<T>::padBorderPel( unsigned marginX, unsigned marginY, int dir )

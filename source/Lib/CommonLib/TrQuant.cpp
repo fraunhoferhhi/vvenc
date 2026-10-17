@@ -665,6 +665,16 @@ void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
   const int width = area.width;
   const int height = area.height;
 
+#if ENABLE_SIMD_TRAFO
+  if( ( width & 3 ) == 0 )
+  {
+    // the dequantized coefficients are within 16 bit, where the saturation of the SIMD copies equals the cast below
+    CHECKD( pCoeff.stride != width, "the coefficients have to be stored without padding" );
+    ( width & 7 ? g_tCoeffOps.cpyResi4 : g_tCoeffOps.cpyResi8 )( pCoeff.buf, pResidual.buf, pResidual.stride, width, height );
+    return;
+  }
+#endif
+
   for (uint32_t y = 0; y < height; y++)
   {
     for (uint32_t x = 0; x < width; x++)
@@ -1052,6 +1062,14 @@ void TrQuant::xTransformSkip(const TransformUnit& tu, const ComponentID& compID,
   const CompArea& rect = tu.blocks[compID];
   const uint32_t width = rect.width;
   const uint32_t height = rect.height;
+
+#if ENABLE_SIMD_TRAFO
+  if( ( width & 3 ) == 0 )
+  {
+    ( width & 7 ? g_tCoeffOps.cpyCoeff4 : g_tCoeffOps.cpyCoeff8 )( resi.buf, resi.stride, psCoeff, width, height );
+    return;
+  }
+#endif
 
   for (uint32_t y = 0, coefficientIndex = 0; y < height; y++)
   {

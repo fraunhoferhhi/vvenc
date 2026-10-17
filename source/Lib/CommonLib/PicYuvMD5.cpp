@@ -155,22 +155,7 @@ uint32_t calcCRC(const CPelUnitBuf& pic, PictureHash &digest, const BitDepths &b
 
 uint32_t compChecksum(int bitdepth, const Pel* plane, uint32_t width, uint32_t height, uint32_t stride, PictureHash &digest, const BitDepths &/*bitDepths*/)
 {
-  uint32_t checksum = 0;
-  uint8_t xor_mask;
-
-  for (uint32_t y = 0; y < height; y++)
-  {
-    for (uint32_t x = 0; x < width; x++)
-    {
-      xor_mask = (x & 0xff) ^ (y & 0xff) ^ (x >> 8) ^ (y >> 8);
-      checksum = (checksum + ((plane[y*stride+x] & 0xff) ^ xor_mask)) & 0xffffffff;
-
-      if(bitdepth > 8)
-      {
-        checksum = (checksum + ((plane[y*stride+x]>>8) ^ xor_mask)) & 0xffffffff;
-      }
-    }
-  }
+  const uint32_t checksum = g_pelBufOP.pictureChecksum( plane, stride, width, height, bitdepth > 8 );
 
   digest.hash.push_back((checksum>>24) & 0xff);
   digest.hash.push_back((checksum>>16) & 0xff);

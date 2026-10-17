@@ -80,6 +80,109 @@ void weightCiipCore( Pel* res, const Pel* src, const int numSamples, int numIntr
   }
 }
 
+template< SizeType predPredSize, unsigned log2UpsmpFactor>
+static void mipUpsampleHorCore(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType dstStride, const SizeType bndryStep )
+{
+  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
+  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
+
+        Pel* dstLine   = dst;
+  const Pel* srcLine   = src;
+  const Pel* bndryLine = bndry + bndryStep - 1;
+
+  for( SizeType idxOrthDim = 0; idxOrthDim < predPredSize; idxOrthDim++ )
+  {
+    const Pel* before  = bndryLine;
+    const Pel* behind  = srcLine;
+          Pel* currDst = dstLine;
+    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < predPredSize; idxUpsmpDim++ )
+    {
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
+      for( SizeType pos = 0; pos < upsmpFactor; pos++)
+      {
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
+        currDst++;
+      }
+      before = behind;
+      behind ++;
+    }
+
+    srcLine   += predPredSize;
+    dstLine   += dstStride;
+    bndryLine += bndryStep;
+  }
+}
+
+template< SizeType inHeight, unsigned log2UpsmpFactor>
+static void mipUpsampleVerCore(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType outWidth, const SizeType srcStep  )
+{
+  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
+  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
+
+        Pel* dstLine   = dst;
+  const Pel* srcLine   = src;
+  const Pel* bndryLine = bndry;
+
+  for( SizeType idxOrthDim = 0; idxOrthDim < outWidth; idxOrthDim++ )
+  {
+    const Pel* before  = bndryLine;
+    const Pel* behind  = srcLine;
+          Pel* currDst = dstLine;
+    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < inHeight; idxUpsmpDim++ )
+    {
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
+
+      for( SizeType pos = 0; pos < upsmpFactor; pos++)
+      {
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
+        currDst += outWidth;
+      }
+      before = behind;
+      behind += srcStep;
+    }
+
+    srcLine ++;
+    dstLine ++;
+    bndryLine ++;
+  }
+}
+
+static void mipUpsampleHorCore( Pel* dst, const Pel* src, const Pel* bndry, const SizeType dstStride, const SizeType bndryStep, const SizeType predSize, const unsigned log2Factor )
+{
+  if( predSize == 4 )
+  {
+    if     ( log2Factor == 1 ) mipUpsampleHorCore<4, 1>( dst, src, bndry, dstStride, bndryStep );
+    else if( log2Factor == 2 ) mipUpsampleHorCore<4, 2>( dst, src, bndry, dstStride, bndryStep );
+    else                       mipUpsampleHorCore<4, 3>( dst, src, bndry, dstStride, bndryStep );
+  }
+  else
+  {
+    if     ( log2Factor == 1 ) mipUpsampleHorCore<8, 1>( dst, src, bndry, dstStride, bndryStep );
+    else if( log2Factor == 2 ) mipUpsampleHorCore<8, 2>( dst, src, bndry, dstStride, bndryStep );
+    else                       mipUpsampleHorCore<8, 3>( dst, src, bndry, dstStride, bndryStep );
+  }
+}
+
+static void mipUpsampleVerCore( Pel* dst, const Pel* src, const Pel* bndry, const SizeType outWidth, const SizeType srcStep, const SizeType inHeight, const unsigned log2Factor )
+{
+  if( inHeight == 4 )
+  {
+    if     ( log2Factor == 1 ) mipUpsampleVerCore<4, 1>( dst, src, bndry, outWidth, srcStep );
+    else if( log2Factor == 2 ) mipUpsampleVerCore<4, 2>( dst, src, bndry, outWidth, srcStep );
+    else                       mipUpsampleVerCore<4, 3>( dst, src, bndry, outWidth, srcStep );
+  }
+  else
+  {
+    if     ( log2Factor == 1 ) mipUpsampleVerCore<8, 1>( dst, src, bndry, outWidth, srcStep );
+    else if( log2Factor == 2 ) mipUpsampleVerCore<8, 2>( dst, src, bndry, outWidth, srcStep );
+    else                       mipUpsampleVerCore<8, 3>( dst, src, bndry, outWidth, srcStep );
+  }
+}
+
 template< unsigned inputSize, unsigned outputSize >
 void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int inputOffset, bool transpose )
 {
@@ -434,6 +537,169 @@ uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int heigh
   return (taAct);
 }
 
+uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
+{
+  uint64_t sum = 0;
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      const Intermediate_Int diff = src0[x] - src1[x];
+      sum += uint64_t( diff * diff );
+    }
+  }
+  return sum;
+}
+
+static uint32_t pictureChecksumCore( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes )
+{
+  uint32_t checksum = 0;
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ ( y & 0xff ) ^ ( x >> 8 ) ^ ( y >> 8 );
+      checksum += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        checksum += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+  return checksum;
+}
+
+static int64_t sumCore( const Pel* src, const ptrdiff_t stride, const int width, const int height )
+{
+  int64_t sum = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum += src[x];
+    }
+  }
+  return sum;
+}
+
+static void sumAndSumSquaresCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares )
+{
+  sum        = 0;
+  sumSquares = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum        += src[x];
+      sumSquares += src[x] * src[x];
+    }
+  }
+}
+
+static void padHorizontalCore( Pel* src, const ptrdiff_t stride, const int width, const int height, const int marginLeft, const int marginRight )
+{
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < marginLeft; x++ )
+    {
+      src[x - marginLeft] = src[0];
+    }
+    for( int x = 0; x < marginRight; x++ )
+    {
+      src[width + x] = src[width - 1];
+    }
+  }
+}
+
+static void downsample2x2Core( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight )
+{
+  for( int y = 0; y < dstHeight; y++, src += 2 * srcStride, dst += dstStride )
+  {
+    const Pel* below = src + srcStride;
+    for( int x = 0; x < dstWidth; x++ )
+    {
+      dst[x] = Pel( ( src[2 * x] + below[2 * x] + src[2 * x + 1] + below[2 * x + 1] + 2 ) >> 2 );
+    }
+  }
+}
+
+int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth )
+{
+  int64_t sum = 0;
+  for( int y = 0; y < height; y++, cb += cbStride, cr += crStride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      const int hpCb = ( 12*(int)cb[x] - 2*((int)cb[x-1] + (int)cb[x+1] + (int)cb[x-cbStride] + (int)cb[x+cbStride]) - ((int)cb[x-1-cbStride] + (int)cb[x+1-cbStride] + (int)cb[x-1+cbStride] + (int)cb[x+1+cbStride]) );
+      const int hpCr = ( 12*(int)cr[x] - 2*((int)cr[x-1] + (int)cr[x+1] + (int)cr[x-crStride] + (int)cr[x+crStride]) - ((int)cr[x-1-crStride] + (int)cr[x+1-crStride] + (int)cr[x-1+crStride] + (int)cr[x+1+crStride]) );
+      sum += hpCb * hpCr;
+    }
+  }
+  return sum;
+}
+
+void blockStats4x4Core( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum, int* absDev )
+{
+  for( int b = 0; b < numBlocks; b++, src += 4 )
+  {
+    int s = 0;
+    for( int h = 0; h < 4; h++ )
+    {
+      for( int w = 0; w < 4; w++ )
+      {
+        s += src[h * stride + w];
+      }
+    }
+    int d = 0;
+    for( int h = 0; h < 4; h++ )
+    {
+      for( int w = 0; w < 4; w++ )
+      {
+        d += abs( s - ( int( src[h * stride + w] ) << 4 ) );
+      }
+    }
+    sum[b]    = s;
+    absDev[b] = d;
+  }
+}
+
+void absGradientSumsCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums )
+{
+  Intermediate_Int horVal = 0;
+  Intermediate_Int verVal = 0;
+  Intermediate_Int dowVal = 0;
+  Intermediate_Int dupVal = 0;
+
+  for( int k = 0; k < height - 1; k++, src += stride )
+  {
+    const Pel* below = src + stride;
+    for( int j = 0; j < width - 1; j++ )
+    {
+      horVal += abs( src[j + 1]   - src[j] );
+      verVal += abs( below[j]     - src[j] );
+      dowVal += abs( src[j + 1]   - below[j] );
+      dupVal += abs( below[j + 1] - src[j] );
+    }
+  }
+  sums[0] = horVal;
+  sums[1] = verVal;
+  sums[2] = dowVal;
+  sums[3] = dupVal;
+}
+
+static uint32_t sumAbsDeviationCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, const int value )
+{
+  uint32_t sum = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum += uint32_t( abs( src[x] - value ) );
+    }
+  }
+  return sum;
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
@@ -445,15 +711,18 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub2              = subsCore<Pel>;
   sub4              = subsCore<Pel>;
   sub8              = subsCore<Pel>;
 
   wghtAvg4          = addWeightedAvgCore<Pel>;
   wghtAvg8          = addWeightedAvgCore<Pel>;
 
+  copyClip2         = copyClipCore<Pel>;
   copyClip4         = copyClipCore<Pel>;
   copyClip8         = copyClipCore<Pel>;
 
+  reco2             = reconstructCore<Pel>;
   reco4             = reconstructCore<Pel>;
   reco8             = reconstructCore<Pel>;
 
@@ -470,6 +739,8 @@ PelBufferOps::PelBufferOps()
   mipMatrixMul_4_4  = mipMatrixMulCore<4,4>;
   mipMatrixMul_8_4  = mipMatrixMulCore<8,4>;
   mipMatrixMul_8_8  = mipMatrixMulCore<8,8>;
+  mipUpsampleHor    = mipUpsampleHorCore;
+  mipUpsampleVer    = mipUpsampleVerCore;
   weightCiip        = weightCiipCore;
   roundIntVector    = nullptr;
 
@@ -480,6 +751,16 @@ PelBufferOps::PelBufferOps()
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
   HDHighPass = HDHighPassCore;
   HDHighPass2 = HDHighPass2Core;
+  sumSquaredError  = sumSquaredErrorCore;
+  sum              = sumCore;
+  sumAndSumSquares = sumAndSumSquaresCore;
+  pictureChecksum  = pictureChecksumCore;
+  padHorizontal    = padHorizontalCore;
+  downsample2x2    = downsample2x2Core;
+  highPassCorrelation = highPassCorrelationCore;
+  blockStats4x4       = blockStats4x4Core;
+  absGradientSums     = absGradientSumsCore;
+  sumAbsDeviation     = sumAbsDeviationCore;
 }
 
 void PelBufferOps::initPelBufOps( bool enableOpt )
@@ -494,16 +775,62 @@ void PelBufferOps::initPelBufOps( bool enableOpt )
   {
 #if ENABLE_SIMD_OPT_BUFFER
 #  if defined( TARGET_SIMD_X86 )
-    g_pelBufOP.initPelBufOpsX86();
+    initPelBufOpsX86();
 #  endif
 #  if defined( TARGET_SIMD_ARM )
-    g_pelBufOP.initPelBufOpsARM();
+    initPelBufOpsARM();
 #  endif
 #endif   // ENABLE_SIMD_OPT_BUFFER
   }
 }
 
 PelBufferOps g_pelBufOP = PelBufferOps();
+
+template<>
+Pel AreaBuf<Pel>::getAvg() const
+{
+  return Pel( ( g_pelBufOP.sum( buf, stride, width, height ) + ( area() >> 1 ) ) / area() );
+}
+
+template<>
+const Pel AreaBuf<const Pel>::getAvg() const
+{
+  return Pel( ( g_pelBufOP.sum( buf, stride, width, height ) + ( area() >> 1 ) ) / area() );
+}
+
+template<>
+void AreaBuf<Pel>::extendBorderPelLft( int y, int size, int margin )
+{
+  g_pelBufOP.padHorizontal( buf + y * stride, stride, width, size, margin, 0 );
+}
+
+template<>
+void AreaBuf<Pel>::extendBorderPelRgt( int y, int size, int margin )
+{
+  g_pelBufOP.padHorizontal( buf + y * stride, stride, width, size, 0, margin );
+}
+
+template<>
+void AreaBuf<Pel>::extendBorderPel( unsigned marginX, unsigned marginY )
+{
+  CHECK( ( width + 2 * marginX ) > stride, "Size of buffer too small to extend" );
+
+  // left and right margins
+  g_pelBufOP.padHorizontal( buf, stride, width, height, marginX, marginX );
+
+  // top and bottom margins, copied from the extended first and last row
+  Pel* firstRow = buf - marginX;
+  Pel* lastRow  = buf - marginX + ( height - 1 ) * stride;
+  const size_t rowSize = sizeof( Pel ) * ( width + ( marginX << 1 ) );
+  for( unsigned y = 0; y < marginY; y++ )
+  {
+    ::memcpy( lastRow + ( y + 1 ) * stride, lastRow, rowSize );
+  }
+  for( unsigned y = 0; y < marginY; y++ )
+  {
+    ::memcpy( firstRow - ( y + 1 ) * stride, firstRow, rowSize );
+  }
+}
 
 template<>
 void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng, const int8_t BcwIdx)
@@ -618,6 +945,10 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
   {
     g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
   }
+  else if( width == 2 )
+  {
+    g_pelBufOP.sub2( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
   else
 #endif
   {
@@ -640,28 +971,16 @@ void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const
 {
   CHECK( Org.width != Org.height, "Incompatible size!" );
   int stride = Org.stride;
-  const Pel* src;
-  Pel data;
   double variance=0;
   double mean=0;
   int64_t sum[4]={0,0,0,0};
   int64_t sum_sqr[4]={0,0,0,0};
   uint32_t halfsize =size>>1;
   uint32_t off[4]={0,halfsize,size*halfsize,size*halfsize+halfsize};
-  int n,x,y;
 
-  for( n = 0; n < 4; n++)
+  for( int n = 0; n < 4; n++ )
   {
-    src = Org.buf+off[n];
-    for( y = 0; y < halfsize; y++)
-    {
-      for(x = 0; x < halfsize; x++)
-      {
-        data=src[y*stride+x];
-        sum[n]+=data;
-        sum_sqr[n]+= data*data;
-      }
-    }
+    g_pelBufOP.sumAndSumSquares( Org.buf + off[n], stride, halfsize, halfsize, sum[n], sum_sqr[n] );
   }
   int num=size*(size>>1);
   // varhu
@@ -703,15 +1022,22 @@ void AreaBuf<Pel>::copyClip( const AreaBuf<const Pel>& src, const ClpRng& clpRng
   {
     g_pelBufOP.copyClip4(srcp, srcStride, dest, destStride, width, height, clpRng);
   }
+  else if( height >= 8 )
+  {
+    CHECKD( width != 2, "Expecting width to be '2'!" );
+    g_pelBufOP.copyClip2( srcp, srcStride, dest, destStride, width, height, clpRng );
+  }
   else
   {
+    // for fewer rows this loop is faster than the call of copyClip2
+    CHECKD( width != 2, "Expecting width to be '2'!" );
     for( int y = 0; y < height; y++ )
     {
-      dest[0] = ClipPel( srcp[0], clpRng);
-      dest[1] = ClipPel( srcp[1], clpRng);
+      dest[0] = ClipPel( srcp[0], clpRng );
+      dest[1] = ClipPel( srcp[1], clpRng );
       srcp += srcStride;
       dest += destStride;
-    }                                                         \
+    }
   }
 }
 
@@ -737,16 +1063,21 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   {
     g_pelBufOP.reco4( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
   }
+  else if( width == 2 && height >= 8 )
+  {
+    g_pelBufOP.reco2( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
+  }
   else if( ( width & 1 ) == 0 )
   {
+    // for fewer rows this loop is faster than the call of reco2
     for( int y = 0; y < height; y++ )
     {
-      dest[0] = ClipPel( src1[0] + src2[0], clpRng);
-      dest[1] = ClipPel( src1[1] + src2[1], clpRng);
+      dest[0] = ClipPel( src1[0] + src2[0], clpRng );
+      dest[1] = ClipPel( src1[1] + src2[1], clpRng );
       src1 += src1Stride;
       src2 += src2Stride;
       dest += destStride;
-    }                        
+    }
   }
   else
   {

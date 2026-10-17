@@ -160,52 +160,21 @@ void MatrixIntraPrediction::predBlock(Pel* const result, const int modeIdx, cons
     const Pel* verSrc   = reducedPred;
     SizeType verSrcStep = m_blockSize.width;
 
+    // upsampling factors 2, 4 or 8: MIP blocks are at most 64x64 with an aspect ratio of at most 4
+    auto log2Factor = []( unsigned factor ) { return factor == 2 ? 1u : factor == 4 ? 2u : 3u; };
+
     if( m_upsmpFactorHor > 1 )
     {
       Pel* const horDst = result + (m_upsmpFactorVer - 1) * m_blockSize.width;
       verSrc = horDst;
       verSrcStep *= m_upsmpFactorVer;
 
-      if( m_reducedPredSize == 4)
-      {
-        if( m_upsmpFactorHor == 2 )
-          predictionUpsampling1DHor<4,1>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-        else if( m_upsmpFactorHor == 4 )
-          predictionUpsampling1DHor<4,2>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-        else
-          predictionUpsampling1DHor<4,3>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-      }
-      else
-      {
-        if( m_upsmpFactorHor == 2 )
-          predictionUpsampling1DHor<8,1>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-        else if( m_upsmpFactorHor == 4 )
-          predictionUpsampling1DHor<8,2>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-        else
-          predictionUpsampling1DHor<8,3>( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer );
-      }
+      g_pelBufOP.mipUpsampleHor( horDst, reducedPred, &m_refSamplesLeft[0], verSrcStep, m_upsmpFactorVer, m_reducedPredSize, log2Factor( m_upsmpFactorHor ) );
     }
 
     if( m_upsmpFactorVer > 1 )
     {
-      if( m_reducedPredSize == 4)
-      {
-        if( m_upsmpFactorVer == 2 )
-          predictionUpsampling1DVer<4,1>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-        else if( m_upsmpFactorVer == 4 )
-          predictionUpsampling1DVer<4,2>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-        else
-          predictionUpsampling1DVer<4,3>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-      }
-      else
-      {
-        if( m_upsmpFactorVer == 2 )
-          predictionUpsampling1DVer<8,1>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-        else if( m_upsmpFactorVer == 4 )
-          predictionUpsampling1DVer<8,2>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-        else
-          predictionUpsampling1DVer<8,3>( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep );
-      }
+      g_pelBufOP.mipUpsampleVer( result, verSrc, &m_refSamplesTop[0], m_blockSize.width, verSrcStep, m_reducedPredSize, log2Factor( m_upsmpFactorVer ) );
     }
   }
 }
@@ -260,76 +229,6 @@ void MatrixIntraPrediction::boundaryDownsampling1D(Pel* reducedDst, const Pel* c
   }
 }
 
-template< SizeType predPredSize, unsigned log2UpsmpFactor>
-void MatrixIntraPrediction::predictionUpsampling1DHor(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType dstStride, const SizeType bndryStep )
-{
-  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
-  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
-
-        Pel* dstLine   = dst;
-  const Pel* srcLine   = src;
-  const Pel* bndryLine = bndry + bndryStep - 1;
-
-  for( SizeType idxOrthDim = 0; idxOrthDim < predPredSize; idxOrthDim++ )
-  {
-    const Pel* before  = bndryLine;
-    const Pel* behind  = srcLine;
-          Pel* currDst = dstLine;
-    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < predPredSize; idxUpsmpDim++ )
-    {
-      const int valDiff   = *behind - *before;
-            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
-      for( SizeType pos = 0; pos < upsmpFactor; pos++)
-      {
-        scaledVal += valDiff;
-        *currDst   = scaledVal >> log2UpsmpFactor;
-        currDst++;
-      }
-      before = behind;
-      behind ++;
-    }
-
-    srcLine   += predPredSize;
-    dstLine   += dstStride;
-    bndryLine += bndryStep;
-  }
-}
-
-template< SizeType inHeight, unsigned log2UpsmpFactor>
-void MatrixIntraPrediction::predictionUpsampling1DVer(Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType outWidth, const SizeType srcStep  )
-{
-  const int roundingOffset   = 1 << (log2UpsmpFactor - 1);
-  const SizeType upsmpFactor = 1 << log2UpsmpFactor;
-
-        Pel* dstLine   = dst;
-  const Pel* srcLine   = src;
-  const Pel* bndryLine = bndry;
-
-  for( SizeType idxOrthDim = 0; idxOrthDim < outWidth; idxOrthDim++ )
-  {
-    const Pel* before  = bndryLine;
-    const Pel* behind  = srcLine;
-          Pel* currDst = dstLine;
-    for( SizeType idxUpsmpDim = 0; idxUpsmpDim < inHeight; idxUpsmpDim++ )
-    {
-      const int valDiff   = *behind - *before;
-            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
-
-      for( SizeType pos = 0; pos < upsmpFactor; pos++)
-      {
-        scaledVal += valDiff;
-        *currDst   = scaledVal >> log2UpsmpFactor;
-        currDst += outWidth;
-      }
-      before = behind;
-      behind += srcStep;
-    }
-
-    srcLine ++;
-    dstLine ++;
-    bndryLine ++;
-  }
-}
 
 
 } // namespace vvenc
