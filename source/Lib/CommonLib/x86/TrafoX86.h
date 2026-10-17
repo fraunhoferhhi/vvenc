@@ -1007,7 +1007,10 @@ static inline void _vv_load_lines4x8( const TCoeff* src, __m256i& s0, __m256i& s
 #endif
 
 // Element-wise int32 operations, so that each butterfly is written once and used for 4 lanes, 8 lanes and the
-// scalar tail.
+// scalar tail. They have internal linkage: this header is compiled once per instruction set, and the copies must not
+// be merged by the linker.
+namespace
+{
 struct Int32x4Ops
 {
   static inline __m128i set1( int v )                  { return _mm_set1_epi32( v ); }
@@ -1036,6 +1039,7 @@ struct Int32x8Ops
   static inline __m256i shl6( __m256i a )              { return _mm256_slli_epi32( a, 6 ); }
 };
 #endif
+} // namespace
 
 // inverse 2-pt DCT-II butterfly, d0/d1 before rounding
 template<typename V, typename OPS>
