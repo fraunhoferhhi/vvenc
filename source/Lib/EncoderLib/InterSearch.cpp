@@ -5824,15 +5824,7 @@ int InterSearch::xIBCSearchMVChromaRefine(CodingUnit& cu,
       refStride = tmpPatternRef.stride;
 
 
-      for (int row = 0; row < height; row++)
-      {
-        for (int col = 0; col < width; col++)
-        {
-          tempSad += ((abs(pRef[col] - pOrg[col])) >> (cu.cs->sps->bitDepths[CH_C] - 8));
-        }
-        pRef += refStride;
-        pOrg += orgStride;
-      }
+      tempSad += m_bvSearchOps.sumAbsDiffShifted( pOrg, orgStride, pRef, refStride, width, height, cu.cs->sps->bitDepths[CH_C] - 8 );
     }
 
     if (tempSad < sadBest)

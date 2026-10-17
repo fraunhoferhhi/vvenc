@@ -4848,6 +4848,37 @@ static bool test_BvSearchOps()
       }
     }
   }
+
+  // the chroma cost of the candidates: block widths of 1 to 40 (2 to 32 in the encoder), samples of up to 15 bits
+  printf( "Testing BvSearchOps::sumAbsDiffShifted\n" );
+  InputGenerator<Pel> pixels10{ 10, /*is_signed=*/false };
+  MinMaxGenerator<Pel> extremes{ 15, /*is_signed=*/false };
+  for( unsigned i = 0; i < NUM_CASES; i++ )
+  {
+    const int width  = i % 2 ? 1 << rng.get( 1, 5 ) : rng.get( 1, 40 );
+    const int height = rng.get( 1, 32 );
+    const int stride = width + rng.get( 0, 8 );
+    const int shift  = rng.get( 0, 4 );
+    std::vector<Pel> org( stride * height ), cur( stride * height );
+    if( i % 3 == 2 )
+    {
+      std::generate( org.begin(), org.end(), extremes );
+      std::generate( cur.begin(), cur.end(), extremes );
+    }
+    else
+    {
+      std::generate( org.begin(), org.end(), pixels10 );
+      std::generate( cur.begin(), cur.end(), pixels10 );
+    }
+
+    std::ostringstream sstm;
+    sstm << "sumAbsDiffShifted " << width << "x" << height << " stride=" << stride << " shift=" << shift;
+    if( !compare_value( sstm.str(), ref.sumAbsDiffShifted( org.data(), stride, cur.data(), stride, width, height, shift ),
+                                    opt.sumAbsDiffShifted( org.data(), stride, cur.data(), stride, width, height, shift ) ) )
+    {
+      return false;
+    }
+  }
   return true;
 }
 #endif // ENABLE_SIMD_OPT
