@@ -526,8 +526,20 @@ void PreProcess::xDetectScc( Picture* pic ) const
   int sR[4] = { 0, 0, 0, 0 }; // strong SCC data
   int zR[4] = { 0, 0, 0, 0 }; // zero input data
 
+  // sums and absolute deviations of the 4x4 blocks of the two block rows of an 8x8 block row
+  static_assert( SIZE_BL == 4 && accM == 4, "blockStats4x4 computes 4x4 block sums and deviations from 16 * sample" );
+  const int numBlocks = uiWidth / SIZE_BL;
+  std::vector<int> blkSum[2] = { std::vector<int>( numBlocks ), std::vector<int>( numBlocks ) };
+  std::vector<int> blkDev[2] = { std::vector<int>( numBlocks ), std::vector<int>( numBlocks ) };
+  const int bitDepth = m_encCfg->m_internalBitDepth[CH_L];
+
   for( int hh = 0; hh < uiHeight; hh += SizeS )
   {
+    for( int r = 0; r < 2; r++ )
+    {
+      g_pelBufOP.blockStats4x4( &piSrc[( hh + r * SIZE_BL ) * uiStride], uiStride, numBlocks, bitDepth, blkSum[r].data(), blkDev[r].data() );
+    }
+
     for( int ww = 0; ww < uiWidth; ww += SizeS )
     {
       int Rx = ww >= ( uiWidth  >> 1 ) ? 1 : 0;
@@ -537,34 +549,12 @@ void PreProcess::xDetectScc( Picture* pic ) const
       int n = 0;
       int Var[4];
 
-      for( int j = hh; j < hh + SizeS; j += SIZE_BL )
+      for( int j = 0; j < 2; j++ )
       {
-        for( int i = ww; i < ww + SizeS; i += SIZE_BL )
+        for( int i = ( ww / SIZE_BL ); i < ( ww / SIZE_BL ) + 2; i++ )
         {
-          const Pel *p0 = &piSrc[j * uiStride + i];
-
-          int Mit = 0;
-          int V   = 0;
-
-          for( int h = 0; h < SIZE_BL; h++, p0 += uiStride )
-          {
-            for( int w = 0; w < SIZE_BL; w++ )
-            {
-              Mit += p0[w];
-            }
-          }
-
-          Mit = ( Mit + addM ) >> shfM;
-
-          p0 = &piSrc[j * uiStride + i];
-
-          for( int h = 0; h < SIZE_BL; h++, p0 += uiStride )
-          {
-            for( int w = 0; w < SIZE_BL; w++ )
-            {
-              V += abs( Mit - ( int( p0[w] ) << accM ) );
-            }
-          }
+          const int Mit = ( blkSum[j][i] + addM ) >> shfM;
+          const int V   = blkDev[j][i];
 
           // if variance is lower than 1 and mean is lower/equal to minLevel
           if( V < ( 1 << ( accM + 4 ) ) && Mit <= ( minLevel << accM ) )

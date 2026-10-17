@@ -887,17 +887,8 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   if (slice == nullptr || !slice->pps->useDQP || ctuPumpRedQP.size() <= ctuRsAddr) return 0;
 
   const int32_t avgOrig = origY.getAvg();
-  uint32_t sumAbsZmOrig = 0; // zero-mean
-  const Pel* src = origY.buf;
-
-  for (SizeType y = 0; y < origY.height; y++) // sum up the zero-mean absolute values
-  {
-    for (SizeType x = 0; x < origY.width; x++)
-    {
-      sumAbsZmOrig += (uint32_t) abs (src[x] - avgOrig);
-    }
-    src += origY.stride;
-  }
+  // sum up the zero-mean absolute values
+  const uint32_t sumAbsZmOrig = g_pelBufOP.sumAbsDeviation (origY.buf, origY.stride, origY.width, origY.height, avgOrig);
 
   const double sumAbsRatio = double (uiSadBestForQPA * 3 /*TODO: or 4? fine-tune!*/) / double (sumAbsZmOrig == 0 ? 1 : sumAbsZmOrig);
   const int pumpingReducQP = ((isBIM ? -1 : 0) + int (log (Clip3 (0.25, 4.0, sumAbsRatio)) / log (2.0) + (sumAbsRatio < 1.0 ? -0.5 : 0.5))) >> (baseQP >= 38/*MAX_QP_PERCEPT_QPA*/ ? 1 : 0);
