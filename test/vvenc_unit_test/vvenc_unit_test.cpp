@@ -939,6 +939,32 @@ static bool check_LMLumaDownsample420( IntraPrediction* ref, IntraPrediction* op
   return true;
 }
 
+// Reference sample smoothing, samples up to 14 bit (the documented range of the SIMD version)
+static bool check_IntraFilterRefSamples( IntraPrediction* ref, IntraPrediction* opt, unsigned num_cases )
+{
+  printf( "Testing IntraPrediction::IntraFilterRefSamples\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> pixels{ 14, /*is_signed=*/false };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int length = rng.get( 1, 260 );
+    std::vector<Pel> src( length + 1 );
+    std::generate( src.begin(), src.end(), pixels );
+    std::vector<Pel> dstRef( length + 1, 0x5a5a ), dstOpt( length + 1, 0x5a5a );
+    ref->IntraFilterRefSamples( src.data(), dstRef.data(), length );
+    opt->IntraFilterRefSamples( src.data(), dstOpt.data(), length );
+
+    std::ostringstream sstm;
+    sstm << "IntraFilterRefSamples length=" << length;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), length + 1 ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_IntraPred()
 {
   IntraPrediction ref{ /*enableOpt=*/false };
@@ -949,6 +975,7 @@ static bool test_IntraPred()
 
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
   passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
+  passed = check_IntraFilterRefSamples( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

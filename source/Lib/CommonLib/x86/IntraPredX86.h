@@ -1442,6 +1442,51 @@ void LMLumaDownsample420_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* d
   }
 }
 
+// [1 2 1] smoothing of the reference samples (IntraPrediction::xFilterReferenceSamples):
+// dst[i] = ( src[i - 1] + 2 * src[i] + src[i + 1] + 2 ) >> 2 for 0 < i < length. The sums are computed as unsigned
+// 16 bit, which is exact for samples in 0 ... 2^14 - 1.
+template<X86_VEXT vext>
+void IntraFilterRefSamples_SIMD( const Pel* src, Pel* dst, const int length )
+{
+  const __m128i vrnd = _mm_set1_epi16( 2 );
+  int i = 1;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vrnd256 = _mm256_set1_epi16( 2 );
+    for( ; i + 16 <= length; i += 16 )
+    {
+      const __m256i l = _mm256_loadu_si256( ( const __m256i* ) &src[i - 1] );
+      const __m256i c = _mm256_loadu_si256( ( const __m256i* ) &src[i] );
+      const __m256i r = _mm256_loadu_si256( ( const __m256i* ) &src[i + 1] );
+      const __m256i s = _mm256_add_epi16( _mm256_add_epi16( l, r ), _mm256_add_epi16( _mm256_slli_epi16( c, 1 ), vrnd256 ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[i], _mm256_srli_epi16( s, 2 ) );
+    }
+  }
+#endif
+  for( ; i + 8 <= length; i += 8 )
+  {
+    const __m128i l = _mm_loadu_si128( ( const __m128i* ) &src[i - 1] );
+    const __m128i c = _mm_loadu_si128( ( const __m128i* ) &src[i] );
+    const __m128i r = _mm_loadu_si128( ( const __m128i* ) &src[i + 1] );
+    const __m128i s = _mm_add_epi16( _mm_add_epi16( l, r ), _mm_add_epi16( _mm_slli_epi16( c, 1 ), vrnd ) );
+    _mm_storeu_si128( ( __m128i* ) &dst[i], _mm_srli_epi16( s, 2 ) );
+  }
+  if( i + 4 <= length )
+  {
+    const __m128i l = _vv_loadl_epi64( ( const __m128i* ) &src[i - 1] );
+    const __m128i c = _vv_loadl_epi64( ( const __m128i* ) &src[i] );
+    const __m128i r = _vv_loadl_epi64( ( const __m128i* ) &src[i + 1] );
+    const __m128i s = _mm_add_epi16( _mm_add_epi16( l, r ), _mm_add_epi16( _mm_slli_epi16( c, 1 ), vrnd ) );
+    _vv_storel_epi64( ( __m128i* ) &dst[i], _mm_srli_epi16( s, 2 ) );
+    i += 4;
+  }
+  for( ; i < length; i++ )
+  {
+    dst[i] = ( src[i - 1] + 2 * src[i] + src[i + 1] + 2 ) >> 2;
+  }
+}
+
 template<X86_VEXT vext>
 void IntraPrediction::_initIntraPredictionX86()
 {
@@ -1452,6 +1497,7 @@ void IntraPrediction::_initIntraPredictionX86()
   IntraPredSampleFilter = IntraPredSampleFilter_SIMD<vext>;
   xPredIntraPlanar      = xPredIntraPlanar_SIMD<vext>;
   LMLumaDownsample420   = LMLumaDownsample420_SIMD<vext>;
+  IntraFilterRefSamples = IntraFilterRefSamples_SIMD<vext>;
 }
 template void IntraPrediction::_initIntraPredictionX86<SIMDX86>();
 

@@ -248,6 +248,14 @@ void IntraPredAngleChroma_Core(Pel* pDstBuf,const ptrdiff_t dstStride,int16_t* p
 // Constructor / destructor / initialize
 // ====================================================================================================================
 
+static void IntraFilterRefSamples_Core( const Pel* src, Pel* dst, const int length )
+{
+  for( int i = 1; i < length; i++ )
+  {
+    dst[i] = ( src[i - 1] + 2 * src[i] + src[i + 1] + 2 ) >> 2;
+  }
+}
+
 static void LMLumaDownsample420_Core( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const bool leftAvailable )
 {
   for( int y = 0; y < height; y++, src += 2 * srcStride, dst += dstStride )
@@ -279,6 +287,7 @@ IntraPrediction::IntraPrediction( bool enableOpt )
   IntraPredSampleFilter = IntraPredSampleFilter_Core;
   xPredIntraPlanar      = xPredIntraPlanar_Core;
   LMLumaDownsample420   = LMLumaDownsample420_Core;
+  IntraFilterRefSamples = IntraFilterRefSamples_Core;
 
 #if ENABLE_SIMD_OPT_INTRAPRED
   if( enableOpt )
@@ -1032,10 +1041,7 @@ void IntraPrediction::xFilterReferenceSamples( const Pel* refBufUnfiltered, Pel*
 
   refBufFiltered[0] = topLeft;
 
-  for (int i = 1; i < predSize; i++)
-  {
-    refBufFiltered[i] = (refBufUnfiltered[i - 1] + 2 * refBufUnfiltered[i] + refBufUnfiltered[i + 1] + 2) >> 2;
-  }
+  IntraFilterRefSamples( refBufUnfiltered, refBufFiltered, predSize );
   refBufFiltered[predSize] = refBufUnfiltered[predSize];
 
   refBufFiltered += predStride;
@@ -1043,10 +1049,7 @@ void IntraPrediction::xFilterReferenceSamples( const Pel* refBufUnfiltered, Pel*
 
   refBufFiltered[0] = topLeft;
 
-  for (int i = 1; i < predHSize; i++)
-  {
-    refBufFiltered[i] = (refBufUnfiltered[i - 1] + 2 * refBufUnfiltered[i] + refBufUnfiltered[i + 1] + 2) >> 2;
-  }
+  IntraFilterRefSamples( refBufUnfiltered, refBufFiltered, predHSize );
   refBufFiltered[predHSize] = refBufUnfiltered[predHSize];
 }
 
