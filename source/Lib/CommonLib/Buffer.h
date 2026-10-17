@@ -165,6 +165,8 @@ private:
 
 extern PelBufferOps g_pelBufOP;
 
+// the C version of PelBufferOps::sumSquaredError, also used by the SIMD versions for the widths 1 and 3
+uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height );
 // the C version of PelBufferOps::highPassCorrelation, also used by the SIMD versions for the last columns and for
 // bit depths above 10
 int64_t highPassCorrelationCore( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride, const int width, const int height, const int bitDepth );

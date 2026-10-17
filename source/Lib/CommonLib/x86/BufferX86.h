@@ -2565,45 +2565,98 @@ static inline __m128i _vv_fold_epi64( __m256i v )
 template<X86_VEXT vext>
 uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
 {
-  uint64_t sum = 0;
-  __m128i  acc = _mm_setzero_si128();
-#if USE_AVX2
-  __m256i  acc256 = _mm256_setzero_si256();
-#endif
-
-  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  if( width != 2 && width < 4 )
   {
-    int x = 0;
-#if USE_AVX2
-    if( vext >= AVX2 )
+    return sumSquaredErrorCore( src0, stride0, src1, stride1, width, height );
+  }
+
+  uint64_t sum = 0;
+  __m128i acc = _mm_setzero_si128();
+  auto addSquares = [&acc]( const __m128i a, const __m128i b )
+  {
+    const __m128i diff = _mm_sub_epi16( a, b );
+    acc = _vv_addUnsigned32To64( acc, _mm_madd_epi16( diff, diff ) );
+  };
+
+  if( width == 2 )
+  {
+    // the two samples of up to four rows per vector
+    auto loadRows = []( const Pel* p, const ptrdiff_t stride, const int numRows )
     {
+      __m128i r[4];
+      for( int i = 0; i < 4; i++ )
+      {
+        r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
+      }
+      return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
+    };
+    for( int y = 0; y < height; y += 4, src0 += 4 * stride0, src1 += 4 * stride1 )
+    {
+      const int numRows = std::min( 4, height - y );
+      addSquares( loadRows( src0, stride0, numRows ), loadRows( src1, stride1, numRows ) );
+    }
+    return uint64_t( _vv_sum_epi64( acc ) );
+  }
+
+  if( width == 4 )
+  {
+    // two rows per vector
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    {
+      addSquares( _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src0 ), _vv_loadl_epi64( ( const __m128i* ) &src0[stride0] ) ),
+                  _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src1 ), _vv_loadl_epi64( ( const __m128i* ) &src1[stride1] ) ) );
+    }
+    if( y < height )
+    {
+      addSquares( _vv_loadl_epi64( ( const __m128i* ) src0 ), _vv_loadl_epi64( ( const __m128i* ) src1 ) );
+    }
+    return uint64_t( _vv_sum_epi64( acc ) );
+  }
+
+  // the columns from x to the end of the row
+  auto addRowTail = [&]( const Pel* row0, const Pel* row1, int x )
+  {
+    for( ; x + 8 <= width; x += 8 )
+    {
+      addSquares( _mm_loadu_si128( ( const __m128i* ) &row0[x] ), _mm_loadu_si128( ( const __m128i* ) &row1[x] ) );
+    }
+    if( x + 4 <= width )
+    {
+      addSquares( _vv_loadl_epi64( ( const __m128i* ) &row0[x] ), _vv_loadl_epi64( ( const __m128i* ) &row1[x] ) );
+      x += 4;
+    }
+    for( ; x < width; x++ )
+    {
+      const int diff = row0[x] - row1[x];
+      sum += uint64_t( diff * diff );
+    }
+  };
+
+#if USE_AVX2
+  // below 32 columns the 128-bit loop is faster
+  if( vext >= AVX2 && width >= 32 )
+  {
+    __m256i acc256 = _mm256_setzero_si256();
+    for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+    {
+      int x = 0;
       for( ; x + 16 <= width; x += 16 )
       {
         const __m256i diff = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) &src0[x] ), _mm256_loadu_si256( ( const __m256i* ) &src1[x] ) );
         acc256 = _vv_addUnsigned32To64( acc256, _mm256_madd_epi16( diff, diff ) );
       }
+      addRowTail( src0, src1, x );
     }
-#endif
-    for( ; x + 8 <= width; x += 8 )
-    {
-      const __m128i diff = _mm_sub_epi16( _mm_loadu_si128( ( const __m128i* ) &src0[x] ), _mm_loadu_si128( ( const __m128i* ) &src1[x] ) );
-      acc = _vv_addUnsigned32To64( acc, _mm_madd_epi16( diff, diff ) );
-    }
-    if( x + 4 <= width )
-    {
-      const __m128i diff = _mm_sub_epi16( _vv_loadl_epi64( ( const __m128i* ) &src0[x] ), _vv_loadl_epi64( ( const __m128i* ) &src1[x] ) );
-      acc = _vv_addUnsigned32To64( acc, _mm_madd_epi16( diff, diff ) );
-      x += 4;
-    }
-    for( ; x < width; x++ )
-    {
-      const int diff = src0[x] - src1[x];
-      sum += uint64_t( diff * diff );
-    }
+    acc = _mm_add_epi64( acc, _vv_fold_epi64( acc256 ) );
+    return sum + uint64_t( _vv_sum_epi64( acc ) );
   }
-#if USE_AVX2
-  acc = _mm_add_epi64( acc, _vv_fold_epi64( acc256 ) );
 #endif
+
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    addRowTail( src0, src1, 0 );
+  }
   return sum + uint64_t( _vv_sum_epi64( acc ) );
 }
 

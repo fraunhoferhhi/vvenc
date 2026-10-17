@@ -537,7 +537,7 @@ uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int heigh
   return (taAct);
 }
 
-static uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
+uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
 {
   uint64_t sum = 0;
   for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
