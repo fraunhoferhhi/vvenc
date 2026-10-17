@@ -1487,38 +1487,6 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
-void downsampleYuv(PelBuf& dest, const vvencYUVPlane& yuvPlaneIn, int downsampleStep)
-{
-  const int widthd = dest.width;
-  const int heightd = dest.height;
-  int difStride = dest.stride - dest.width;
-
-  const int16_t* src = yuvPlaneIn.ptr;
-  const int instride = yuvPlaneIn.stride;
-  int n = 0;
-  for (int j = 0; j < heightd; j++)
-  {
-    int i = 0;
-    for (i = 0; i < widthd; i++)
-    {
-      long int b = 0;
-      for (int r = 0; r < downsampleStep; r++)
-      {
-        int posr = instride * r;
-        for (int n = 0; n < downsampleStep; n++)
-        {
-          b += src[posr + n];
-        }
-      }
-      src += downsampleStep;
-      dest.buf[n] = (int16_t)((b + 2) / (downsampleStep << 1));
-      n++;
-    }
-    n += difStride;
-    src = src - downsampleStep * i + instride * downsampleStep;
-  }
-}
-
 void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
@@ -1533,7 +1501,9 @@ void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer
 
     if (dest.width < src.width)
     {
-      downsampleYuv(dest, src, 2);
+      // the input of the subsampled first rate control pass: means of 2x2 blocks
+      CHECK( 2 * dest.width > src.width || 2 * dest.height > src.height, "destination too large for 2:1 subsampling" );
+      g_pelBufOP.downsample2x2( src.ptr, src.stride, dest.buf, dest.stride, dest.width, dest.height );
     }
     else
     {
