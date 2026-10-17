@@ -1172,6 +1172,122 @@ static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_c
   return true;
 }
 
+typedef void InvTrFn( const TCoeff*, TCoeff*, int, int, int, int, const TCoeff, const TCoeff );
+typedef void FwdTrFn( const TCoeff*, TCoeff*, int, int, int, int );
+
+// Partial-butterfly 1D transforms: the whole destination (incl. the zeroed skip lines) must match; both destinations are
+// prefilled with the same marker so that writes outside the block are caught as well.
+template<typename G>
+static bool check_one_butterfly( const std::string& name, InvTrFn* refInv, InvTrFn* optInv, FwdTrFn* refFwd, FwdTrFn* optFwd,
+                                 unsigned trSize, unsigned line, unsigned skipLine, int shift, G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << name << " trSize=" << trSize << " line=" << line << " skipLine=" << skipLine << " shift=" << shift << " input=" << input_generator.input_type();
+
+  const unsigned size  = trSize * line;
+  const unsigned guard = 16;
+  std::vector<TCoeff> src( size + guard );
+  std::vector<TCoeff> dst0( size + guard, 0x5a5a5a5a );
+  std::vector<TCoeff> dst1( size + guard, 0x5a5a5a5a );
+  std::generate( src.begin(), src.end(), input_generator );
+
+  if( refInv )
+  {
+    const TCoeff clipMin = -( 1 << 15 ), clipMax = ( 1 << 15 ) - 1;
+    refInv( src.data(), dst0.data(), shift, line, skipLine, 0, clipMin, clipMax );
+    optInv( src.data(), dst1.data(), shift, line, skipLine, 0, clipMin, clipMax );
+  }
+  else
+  {
+    refFwd( src.data(), dst0.data(), shift, line, skipLine, 0 );
+    optFwd( src.data(), dst1.data(), shift, line, skipLine, 0 );
+  }
+  return compare_values_1d( sstm.str(), dst0.data(), dst1.data(), size + guard );
+}
+
+static bool check_butterflies( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
+{
+  printf( "Testing TCoeffOps partial butterflies (fastInvDCT2, fastFwdDCT2, fastFwdDST7_4, fastFwdDCT8_4)\n" );
+  DimensionGenerator rng;
+  InputGenerator<TCoeff> g16{ 16 };
+  InputGenerator<TCoeff> g11{ 11 };
+  MinMaxGenerator<TCoeff> gmm16{ 16 };
+  MinMaxGenerator<TCoeff> gmm11{ 11 };
+
+  // minShift: the inverse transforms and the DCT-VIII code compute 1 << ( shift - 1 ) unconditionally
+  struct Kernel { const char* name; InvTrFn* refInv; InvTrFn* optInv; FwdTrFn* refFwd; FwdTrFn* optFwd; unsigned trSize; int minShift; };
+  const Kernel kernels[] = {
+    { "fastInvDCT2_B2", ref->fastInvDCT2[0], opt->fastInvDCT2[0], nullptr, nullptr, 2, 1 },
+    { "fastInvDCT2_B4", ref->fastInvDCT2[1], opt->fastInvDCT2[1], nullptr, nullptr, 4, 1 },
+    { "fastInvDCT2_B8", ref->fastInvDCT2[2], opt->fastInvDCT2[2], nullptr, nullptr, 8, 1 },
+    { "fastFwdDCT2_B2", nullptr, nullptr, ref->fastFwdDCT2[0], opt->fastFwdDCT2[0], 2, 0 },
+    { "fastFwdDCT2_B4", nullptr, nullptr, ref->fastFwdDCT2[1], opt->fastFwdDCT2[1], 4, 0 },
+    { "fastFwdDST7_4",  nullptr, nullptr, ref->fastFwdDST7_4,  opt->fastFwdDST7_4,  4, 0 },
+    { "fastFwdDCT8_4",  nullptr, nullptr, ref->fastFwdDCT8_4,  opt->fastFwdDCT8_4,  4, 1 },
+  };
+
+  for( const auto& k : kernels )
+  {
+    for( unsigned i = 0; i < num_cases; ++i )
+    {
+      const unsigned line     = 1 << rng.get( 0, 6 );
+      // zero-out of the high-frequency lines: 0, or keep 4/8/16/32 lines as the encoder does
+      const unsigned keep     = line <= 4 ? line : rng.getOneOf<unsigned>( { line, line, 4, 8, 16, 32 } );
+      const unsigned skipLine = keep >= line ? 0 : line - keep;
+      const bool     isInv    = k.refInv != nullptr;
+      const int      shift    = rng.get( k.minShift, 12 );
+      bool ok = isInv ? check_one_butterfly( k.name, k.refInv, k.optInv, nullptr, nullptr, k.trSize, line, skipLine, shift, g16 )
+                      : check_one_butterfly( k.name, nullptr, nullptr, k.refFwd, k.optFwd, k.trSize, line, skipLine, shift, g11 );
+      ok = ok && ( isInv ? check_one_butterfly( k.name, k.refInv, k.optInv, nullptr, nullptr, k.trSize, line, skipLine, shift, gmm16 )
+                         : check_one_butterfly( k.name, nullptr, nullptr, k.refFwd, k.optFwd, k.trSize, line, skipLine, shift, gmm11 ) );
+      if( !ok )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool check_fastFwdCore_1D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastFwdCore_1D trSize=%d\n", trSize );
+  InputGenerator<TCoeff> g{ 11 };
+  MinMaxGenerator<TCoeff> gmm{ 11 };
+  TrafoGenerator<TMatrixCoeff> t{ 8 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const unsigned cutoff = rng.get( 1, trSize );
+    const unsigned shift  = rng.get( 1, 16 );
+    std::vector<TMatrixCoeff> tc( trSize * trSize );
+    std::vector<TCoeff> src( trSize );
+    std::vector<TCoeff> dst0( trSize, 0x5a5a5a5a );
+    std::vector<TCoeff> dst1( trSize, 0x5a5a5a5a );
+    std::generate( tc.begin(), tc.end(), t );
+    if( i & 1 )
+    {
+      std::generate( src.begin(), src.end(), gmm );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), g );
+    }
+
+    ref->fastFwdCore_1D[idx]( tc.data(), src.data(), dst0.data(), 1, 1, cutoff, shift );
+    opt->fastFwdCore_1D[idx]( tc.data(), src.data(), dst1.data(), 1, 1, cutoff, shift );
+
+    std::ostringstream sstm;
+    sstm << "fastFwdCore_1D trSize=" << trSize << " cutoff=" << cutoff << " shift=" << shift;
+    if( !compare_values_1d( sstm.str(), dst0.data(), dst1.data(), trSize ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_TCoeffOps()
 {
   TCoeffOps ref;
@@ -1206,6 +1322,14 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 2, 16 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 3, 32 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 4, 64 ) && passed;
+
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 2, 16 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 3, 32 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 4, 64 ) && passed;
+
+  passed = check_butterflies( &ref, &opt, num_cases ) && passed;
   return passed;
 }
 #endif // ENABLE_SIMD_TRAFO
