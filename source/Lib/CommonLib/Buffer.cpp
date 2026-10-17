@@ -669,6 +669,19 @@ void absGradientSumsCore( const Pel* src, const ptrdiff_t stride, const int widt
   sums[3] = dupVal;
 }
 
+static uint32_t sumAbsDeviationCore( const Pel* src, const ptrdiff_t stride, const int width, const int height, const int value )
+{
+  uint32_t sum = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum += uint32_t( abs( src[x] - value ) );
+    }
+  }
+  return sum;
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
@@ -725,6 +738,7 @@ PelBufferOps::PelBufferOps()
   highPassCorrelation = highPassCorrelationCore;
   blockStats4x4       = blockStats4x4Core;
   absGradientSums     = absGradientSumsCore;
+  sumAbsDeviation     = sumAbsDeviationCore;
 }
 
 void PelBufferOps::initPelBufOps( bool enableOpt )

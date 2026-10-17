@@ -2805,6 +2805,34 @@ static bool check_absGradientSums( PelBufferOps* ref, PelBufferOps* opt, unsigne
   return true;
 }
 
+// Sum of absolute deviations from a value: random sizes, strides, 10-bit and 15-bit samples and values
+static bool check_sumAbsDeviation( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sumAbsDeviation\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const unsigned bits = i & 1 ? 15 : 10;
+    InputGenerator<Pel> pixels{ bits, /*is_signed=*/false };
+    const int width  = rng.get( 1, 128 );
+    const int height = rng.get( 1, 64 );
+    const int stride = width + rng.get( 0, 16 );
+    const int value  = pixels();
+    std::vector<Pel> src( stride * height );
+    std::generate( src.begin(), src.end(), pixels );
+
+    std::ostringstream sstm;
+    sstm << "sumAbsDeviation " << width << "x" << height << " value=" << value;
+    if( !compare_value( sstm.str(), ref->sumAbsDeviation( src.data(), stride, width, height, value ),
+                                    opt->sumAbsDeviation( src.data(), stride, width, height, value ) ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -2832,6 +2860,7 @@ static bool test_PelBufferOps()
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
   passed = check_absGradientSums( &ref, &opt, num_cases ) && passed;
+  passed = check_sumAbsDeviation( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }

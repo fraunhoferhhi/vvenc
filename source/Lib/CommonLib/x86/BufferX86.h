@@ -3139,6 +3139,48 @@ void absGradientSums_SIMD( const Pel* src, const ptrdiff_t stride, const int wid
   _mm_storeu_si128( ( __m128i* ) sums, _mm_hadd_epi32( _mm_hadd_epi32( acc[0], acc[1] ), _mm_hadd_epi32( acc[2], acc[3] ) ) );
 }
 
+// sum( | p - value | ) over a block (the CTU pumping reduction of the perceptual QP adaptation). For samples and value
+// in 0 ... 2^15 - 1 the differences fit 16 bits; they are added with madd in 32 bit.
+template<X86_VEXT vext>
+uint32_t sumAbsDeviation_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, const int value )
+{
+  uint32_t sum = 0;
+  __m128i acc  = _mm_setzero_si128();
+#if USE_AVX2
+  __m256i acc256 = _mm256_setzero_si256();
+#endif
+
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      const __m256i v = _mm256_set1_epi16( value );
+      for( ; x + 16 <= width; x += 16 )
+      {
+        acc256 = _mm256_add_epi32( acc256, _vv_absDiffPairSum( _mm256_loadu_si256( ( const __m256i* ) &src[x] ), v ) );
+      }
+    }
+#endif
+    const __m128i v = _mm_set1_epi16( value );
+    for( ; x + 8 <= width; x += 8 )
+    {
+      acc = _mm_add_epi32( acc, _vv_absDiffPairSum( _mm_loadu_si128( ( const __m128i* ) &src[x] ), v ) );
+    }
+    for( ; x < width; x++ )
+    {
+      sum += uint32_t( abs( src[x] - value ) );
+    }
+  }
+
+#if USE_AVX2
+  acc = _mm_add_epi32( acc, _mm_add_epi32( _mm256_castsi256_si128( acc256 ), _mm256_extracti128_si256( acc256, 1 ) ) );
+#endif
+  acc = _mm_hadd_epi32( acc, acc );
+  return sum + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3185,6 +3227,7 @@ void PelBufferOps::_initPelBufOpsX86()
   highPassCorrelation = highPassCorrelation_SIMD<vext>;
   blockStats4x4       = blockStats4x4_SIMD<vext>;
   absGradientSums     = absGradientSums_SIMD<vext>;
+  sumAbsDeviation     = sumAbsDeviation_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 

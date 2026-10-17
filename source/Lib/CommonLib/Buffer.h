@@ -144,6 +144,8 @@ struct PelBufferOps
   // sums of the absolute differences to the right, lower, lower-left and lower-right neighbours over the
   // ( width - 1 ) x ( height - 1 ) top-left samples: sums[0] horizontal, [1] vertical, [2] and [3] the diagonals
   void     ( *absGradientSums )  ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums );
+  // sum( | p - value | ) over the block
+  uint32_t ( *sumAbsDeviation )  ( const Pel* src, const ptrdiff_t stride, const int width, const int height, const int value );
 
 private:
   bool isInitSIMDDone = false;
