@@ -1954,10 +1954,51 @@ static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, 
     std::generate( orgBuf.begin(), orgBuf.end(), g10 );
     std::generate( curBuf.begin(), curBuf.end(), g10 );
 
+    // only the generic C function, which DF_SAD2 replaces, stops early; the fixed-width ones always sum all rows
+    if( width == 2 && ( i & 1 ) )
+    {
+      dtParam.maximumDistortionForEarlyExit = rng.get( 0, 2 * 1023 * height );
+    }
+
     const int index = DF_SAD + log2( width );
     Distortion sum_ref = ref->m_afpDistortFunc[0][index]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][index]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
+  return passed;
+}
+
+static bool check_SSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  std::ostringstream sstm;
+  sstm << "RdCost::m_afpDistortFunc[0][DF_SSE" << width << "] "
+       << " w=" << width << " h=" << height;
+  printf( "Testing %s\n", sstm.str().c_str() );
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int org_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    const int cur_stride = rng.get( width, g_fastUnitTest ? 256 : 1024 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( cur_stride * height );
+    std::generate( orgBuf.begin(), orgBuf.end(), g10 );
+    std::generate( curBuf.begin(), curBuf.end(), g10 );
+
+    DistParam dtParam;
+    dtParam.org.buf    = orgBuf.data();
+    dtParam.org.stride = org_stride;
+    dtParam.cur.buf    = curBuf.data();
+    dtParam.cur.stride = cur_stride;
+    dtParam.org.width  = width;
+    dtParam.org.height = height;
+    dtParam.bitDepth   = 10;
+
+    const int index = DF_SSE + log2( width );
+    passed = compare_value( sstm.str(), ref->m_afpDistortFunc[0][index]( dtParam ), opt->m_afpDistortFunc[0][index]( dtParam ) ) && passed;
   }
   return passed;
 }
@@ -2179,6 +2220,8 @@ static bool test_RdCost()
 
       if( w >= 2 )
       {
+        passed = check_SSE( &ref, &opt, num_cases, w, h ) && passed;
+
         for( bool generic : { false, true } )
         {
           passed = check_HADs( &ref, &opt, num_cases, w, h, /*fast=*/true, generic ) && passed;
