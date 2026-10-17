@@ -181,7 +181,8 @@ private:
   template<bool checkReadyState=false>
   static bool xProcessCtuTask ( int taskIdx, void* taskParam );
 
-  int     xGetQPForPicture    ( const Slice* slice );
+  double  xGetQPForPicture    ( const Slice* slice );
+  int     xGetQPForPicture    ( const Slice* slice, const int baseQP );
 };
 
 } // namespace vvenc

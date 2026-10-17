@@ -366,6 +366,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numThreads                              = 0;             ///< number of worker threads
 
   c->m_QP                                      = VVENC_DEFAULT_QP;
+  c->m_QPFraction                              = 0.0;
   c->m_RCTargetBitrate                         = VVENC_RC_OFF;
   c->m_RCMaxBitrate                            = 0;
   c->m_RCInitialQP                             = 0;
@@ -827,10 +828,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       msg.log( VVENC_WARNING, "Configuration warning: Rate control is enabled since a target bitrate is specified, ignoring QP value\n\n" );
     c->m_QP = VVENC_AUTO_QP;
   }
+  if( c->m_RCTargetBitrate != VVENC_RC_OFF )
+  {
+    c->m_QPFraction = 0.0; // rate control chooses its own QPs, a fractional constant QP does not apply
+  }
 
   if( c->m_QP == VVENC_AUTO_QP ) c->m_QP = ( c->m_RCTargetBitrate != VVENC_RC_OFF ? rcQP : VVENC_DEFAULT_QP );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QPFraction < 0.0 || c->m_QPFraction >= 1.0, "QPFraction must be at least 0 and less than 1" );
+  vvenc_confirmParameter( c, c->m_QPFraction > 0.0 && c->m_QP >= vvenc::MAX_QP, "Fractional QP exceeds supported range (0 to 63)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
@@ -1504,9 +1511,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
     {
       c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
-      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
+      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP + c->m_QPFraction - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
     }
-    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP - 4.0 ) * 3.0 / 32.0 );
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFraction - 4.0 ) * 3.0 / 32.0 );
   }
 
   vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
@@ -2544,6 +2551,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_internalBitDepth[0] = 10;                       // internal bitdepth
 
   c->m_QP                  = qp;                       // quantization parameter 0-63
+  c->m_QPFraction          = 0.0;                      // integer QP
   c->m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
   c->m_RCTargetBitrate     = targetbitrate;            // target bitrate for rate ctrl. in bps
@@ -3198,7 +3206,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
     {
-      css << "QP " << c->m_QP;
+      css << "QP " << c->m_QP + c->m_QPFraction;
     }
     if( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
     {
@@ -3246,7 +3254,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << loglvl << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
     css << loglvl << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
     css << loglvl << "Motion search range                    : " << c->m_SearchRange << "\n";
-    css << loglvl << "QP                                     : " << c->m_QP << "\n";
+    css << loglvl << "QP                                     : " << c->m_QP + c->m_QPFraction << "\n";
     css << loglvl << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
     css << loglvl << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
     css << loglvl << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
@@ -3409,7 +3417,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
     {
-      css << "QP:" << c->m_QP << " ";
+      css << "QP:" << c->m_QP + c->m_QPFraction << " ";
     }
     if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
     {

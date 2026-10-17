@@ -292,6 +292,8 @@ int testLibParameterRanges()
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );
+  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, std::vector<double>{ 0.0,0.25,0.5,0.75 } );
+  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, std::vector<double>{ -0.25,1.0,1.5 }, true );
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
@@ -865,6 +867,27 @@ int checkSDKStringApiDefault()
   return 0;
 }
 
+int checkSDKStringApiFractionalQP()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 0, 32, vvencPresetMode::VVENC_FASTER );
+
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.5" ) != 0 || c.m_QP != 27 || c.m_QPFraction != 0.5 )
+  {
+    return -1;
+  }
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "28" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0.0 )
+  {
+    return -1;
+  }
+  // a negative QP with a fraction would collide with VVENC_AUTO_QP and is rejected
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "-0.5" ) == 0 )
+  {
+    return -1;
+  }
+  return 0;
+}
+
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
@@ -1179,6 +1202,7 @@ int testSDKDefaultBehaviour()
 int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
+  testfunc( "checkSDKStringApiFractionalQP", &checkSDKStringApiFractionalQP, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
 
   return 0;
