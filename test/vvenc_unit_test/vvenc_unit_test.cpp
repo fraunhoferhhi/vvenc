@@ -66,6 +66,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/MCTF.h"
 #include "CommonLib/RdCost.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "CommonLib/TrQuant.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
@@ -1332,6 +1333,77 @@ static bool test_TCoeffOps()
   passed = check_butterflies( &ref, &opt, num_cases ) && passed;
   return passed;
 }
+// Joint Cb-Cr residual transforms: the derived residual, the untouched other buffer and the returned distortions must
+// match. The buffers are larger than the block (stride > width), so writes outside the block are caught as well.
+template<typename G>
+static bool check_one_ict( TrQuant& ref, TrQuant& opt, int mode, unsigned width, unsigned height, unsigned stride,
+                           G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << "ICT mode=" << mode << " " << width << "x" << height << " stride=" << stride << " input=" << input_generator.input_type();
+
+  const unsigned size = stride * height;
+  std::vector<Pel> cb( size ), cr( size );
+  std::generate( cb.begin(), cb.end(), input_generator );
+  std::generate( cr.begin(), cr.end(), input_generator );
+
+  // forward: Cb and Cr are the inputs, the joint residual goes to C1 (modes 1, 2) or C2 (mode 3)
+  std::vector<Pel> c1Ref( size, 0x5a5a ), c2Ref( size, 0x5a5a ), c1Opt( size, 0x5a5a ), c2Opt( size, 0x5a5a );
+  const PelBuf bufCb( cb.data(), stride, width, height ), bufCr( cr.data(), stride, width, height );
+  PelBuf bufC1Ref( c1Ref.data(), stride, width, height ), bufC2Ref( c2Ref.data(), stride, width, height );
+  PelBuf bufC1Opt( c1Opt.data(), stride, width, height ), bufC2Opt( c2Opt.data(), stride, width, height );
+
+  const std::pair<int64_t, int64_t> distRef = ref.m_fwdICT[mode]( bufCb, bufCr, bufC1Ref, bufC2Ref );
+  const std::pair<int64_t, int64_t> distOpt = opt.m_fwdICT[mode]( bufCb, bufCr, bufC1Opt, bufC2Opt );
+
+  bool ok = compare_value( sstm.str() + " fwd dist1", distRef.first, distOpt.first )
+         && compare_value( sstm.str() + " fwd dist2", distRef.second, distOpt.second )
+         && compare_values_1d( sstm.str() + " fwd c1", c1Ref.data(), c1Opt.data(), size )
+         && compare_values_1d( sstm.str() + " fwd c2", c2Ref.data(), c2Opt.data(), size );
+
+  // inverse: in place, Cr is derived from Cb (modes 1, 2) or Cb from Cr (mode 3)
+  std::vector<Pel> cbRef( cb ), crRef( cr ), cbOpt( cb ), crOpt( cr );
+  PelBuf bufCbRef( cbRef.data(), stride, width, height ), bufCrRef( crRef.data(), stride, width, height );
+  PelBuf bufCbOpt( cbOpt.data(), stride, width, height ), bufCrOpt( crOpt.data(), stride, width, height );
+  ref.m_invICT[mode]( bufCbRef, bufCrRef );
+  opt.m_invICT[mode]( bufCbOpt, bufCrOpt );
+
+  return ok && compare_values_1d( sstm.str() + " inv cb", cbRef.data(), cbOpt.data(), size )
+            && compare_values_1d( sstm.str() + " inv cr", crRef.data(), crOpt.data(), size );
+}
+
+static bool check_ict( TrQuant& ref, TrQuant& opt, unsigned num_cases )
+{
+  printf( "Testing TrQuant::m_fwdICT and m_invICT\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> residual{ 12 };    // 11-bit residuals as with 10-bit video, signed
+  MinMaxGenerator<Pel> extremes{ 16 };   // the whole Pel range
+
+  for( int mode = -3; mode <= 3; mode++ )
+  {
+    for( unsigned i = 0; i < num_cases; i++ )
+    {
+      const unsigned width  = 1 << rng.get( 1, 5 );
+      const unsigned height = 1 << rng.get( 1, 5 );
+      const unsigned stride = width + rng.get( 0, 8 );
+      if( !check_one_ict( ref, opt, mode, width, height, stride, residual )
+       || !check_one_ict( ref, opt, mode, width, height, stride, extremes ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool test_TrQuant()
+{
+  TrQuant ref( /*enableOpt=*/false );
+  TrQuant opt( /*enableOpt=*/true );
+
+  return check_ict( ref, opt, NUM_CASES );
+}
+
 #endif // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_MCTF
@@ -4396,6 +4468,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_TRAFO
     { "TCoeffOps", test_TCoeffOps },
+    { "TrQuant", test_TrQuant },
 #endif
 #if ENABLE_SIMD_OPT_MCTF
     { "MCTF", test_MCTF },
