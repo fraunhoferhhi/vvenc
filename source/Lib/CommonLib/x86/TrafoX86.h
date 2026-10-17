@@ -918,6 +918,999 @@ void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t in
   ::memset( out, 0, ( trSize - zeroOutSize ) * sizeof( int ) );
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Partial-butterfly 1D transforms (DCT-II 2/4/8-pt inverse, DCT-II 2/4-pt and DST-VII/DCT-VIII 4-pt forward) and the
+// 1D (single line) matrix-multiplication forward core. The lanes run over the transform lines. Every vector expression
+// mirrors the scalar expression tree in TrQuant_EMT.cpp, so the 32-bit results are identical to the scalar code.
+// The DCT-II coefficients of the even-even part are +-64 by definition (g_trCoreDCT2P*); 64 * a + 64 * b and
+// 64 * a - 64 * b are computed as ( a << 6 ) +- ( b << 6 ), which is the same modulo 2^32.
+// ---------------------------------------------------------------------------------------------------------------------
+
+static inline void _vv_transpose4x4_epi32( __m128i& r0, __m128i& r1, __m128i& r2, __m128i& r3 )
+{
+  const __m128i t0 = _mm_unpacklo_epi32( r0, r1 );
+  const __m128i t1 = _mm_unpacklo_epi32( r2, r3 );
+  const __m128i t2 = _mm_unpackhi_epi32( r0, r1 );
+  const __m128i t3 = _mm_unpackhi_epi32( r2, r3 );
+  r0 = _mm_unpacklo_epi64( t0, t1 );
+  r1 = _mm_unpackhi_epi64( t0, t1 );
+  r2 = _mm_unpacklo_epi64( t2, t3 );
+  r3 = _mm_unpackhi_epi64( t2, t3 );
+}
+
+static inline __m128i _vv_roundClip_epi32( __m128i v, __m128i vadd, __m128i vshift, __m128i vmin, __m128i vmax )
+{
+  return _mm_min_epi32( vmax, _mm_max_epi32( vmin, _mm_sra_epi32( _mm_add_epi32( v, vadd ), vshift ) ) );
+}
+
+static inline void _vv_store_lines4x4( TCoeff* dst, __m128i d0, __m128i d1, __m128i d2, __m128i d3 )
+{
+  _vv_transpose4x4_epi32( d0, d1, d2, d3 );
+  _mm_storeu_si128( ( __m128i* ) &dst[ 0], d0 );
+  _mm_storeu_si128( ( __m128i* ) &dst[ 4], d1 );
+  _mm_storeu_si128( ( __m128i* ) &dst[ 8], d2 );
+  _mm_storeu_si128( ( __m128i* ) &dst[12], d3 );
+}
+
+static inline void _vv_load_lines4x4( const TCoeff* src, __m128i& s0, __m128i& s1, __m128i& s2, __m128i& s3 )
+{
+  s0 = _mm_loadu_si128( ( const __m128i* ) &src[ 0] );
+  s1 = _mm_loadu_si128( ( const __m128i* ) &src[ 4] );
+  s2 = _mm_loadu_si128( ( const __m128i* ) &src[ 8] );
+  s3 = _mm_loadu_si128( ( const __m128i* ) &src[12] );
+  _vv_transpose4x4_epi32( s0, s1, s2, s3 );
+}
+
+#if USE_AVX2
+// transposes the 4x4 blocks in both 128-bit lanes
+static inline void _vv_transpose4x4x2_epi32( __m256i& r0, __m256i& r1, __m256i& r2, __m256i& r3 )
+{
+  const __m256i t0 = _mm256_unpacklo_epi32( r0, r1 );
+  const __m256i t1 = _mm256_unpacklo_epi32( r2, r3 );
+  const __m256i t2 = _mm256_unpackhi_epi32( r0, r1 );
+  const __m256i t3 = _mm256_unpackhi_epi32( r2, r3 );
+  r0 = _mm256_unpacklo_epi64( t0, t1 );
+  r1 = _mm256_unpackhi_epi64( t0, t1 );
+  r2 = _mm256_unpacklo_epi64( t2, t3 );
+  r3 = _mm256_unpackhi_epi64( t2, t3 );
+}
+
+static inline __m256i _vv_roundClip_epi32( __m256i v, __m256i vadd, __m128i vshift, __m256i vmin, __m256i vmax )
+{
+  return _mm256_min_epi32( vmax, _mm256_max_epi32( vmin, _mm256_sra_epi32( _mm256_add_epi32( v, vadd ), vshift ) ) );
+}
+
+// stores d0..d3 (lane j = line j) as 8 consecutive lines of 4 values
+static inline void _vv_store_lines4x8( TCoeff* dst, __m256i d0, __m256i d1, __m256i d2, __m256i d3 )
+{
+  _vv_transpose4x4x2_epi32( d0, d1, d2, d3 );
+  _mm256_storeu_si256( ( __m256i* ) &dst[ 0], _mm256_permute2x128_si256( d0, d1, 0x20 ) );
+  _mm256_storeu_si256( ( __m256i* ) &dst[ 8], _mm256_permute2x128_si256( d2, d3, 0x20 ) );
+  _mm256_storeu_si256( ( __m256i* ) &dst[16], _mm256_permute2x128_si256( d0, d1, 0x31 ) );
+  _mm256_storeu_si256( ( __m256i* ) &dst[24], _mm256_permute2x128_si256( d2, d3, 0x31 ) );
+}
+
+// loads 8 consecutive lines of 4 values and returns them transposed (s_k lane j = value k of line j)
+static inline void _vv_load_lines4x8( const TCoeff* src, __m256i& s0, __m256i& s1, __m256i& s2, __m256i& s3 )
+{
+  const __m256i v0 = _mm256_loadu_si256( ( const __m256i* ) &src[ 0] );
+  const __m256i v1 = _mm256_loadu_si256( ( const __m256i* ) &src[ 8] );
+  const __m256i v2 = _mm256_loadu_si256( ( const __m256i* ) &src[16] );
+  const __m256i v3 = _mm256_loadu_si256( ( const __m256i* ) &src[24] );
+  s0 = _mm256_permute2x128_si256( v0, v2, 0x20 );
+  s1 = _mm256_permute2x128_si256( v0, v2, 0x31 );
+  s2 = _mm256_permute2x128_si256( v1, v3, 0x20 );
+  s3 = _mm256_permute2x128_si256( v1, v3, 0x31 );
+  _vv_transpose4x4x2_epi32( s0, s1, s2, s3 );
+}
+
+#endif
+
+// Element-wise int32 operations, so that each butterfly is written once and used for 4 lanes, 8 lanes and the
+// scalar tail.
+struct Int32x4Ops
+{
+  static inline __m128i set1( int v )                  { return _mm_set1_epi32( v ); }
+  static inline __m128i add ( __m128i a, __m128i b )   { return _mm_add_epi32( a, b ); }
+  static inline __m128i sub ( __m128i a, __m128i b )   { return _mm_sub_epi32( a, b ); }
+  static inline __m128i mul ( __m128i a, __m128i b )   { return _mm_mullo_epi32( a, b ); }
+  static inline __m128i shl6( __m128i a )              { return _mm_slli_epi32( a, 6 ); }
+};
+
+struct Int32Ops
+{
+  static inline int set1( int v )                      { return v; }
+  static inline int add ( int a, int b )               { return a + b; }
+  static inline int sub ( int a, int b )               { return a - b; }
+  static inline int mul ( int a, int b )               { return a * b; }
+  static inline int shl6( int a )                      { return int( unsigned( a ) << 6 ); }
+};
+
+#if USE_AVX2
+struct Int32x8Ops
+{
+  static inline __m256i set1( int v )                  { return _mm256_set1_epi32( v ); }
+  static inline __m256i add ( __m256i a, __m256i b )   { return _mm256_add_epi32( a, b ); }
+  static inline __m256i sub ( __m256i a, __m256i b )   { return _mm256_sub_epi32( a, b ); }
+  static inline __m256i mul ( __m256i a, __m256i b )   { return _mm256_mullo_epi32( a, b ); }
+  static inline __m256i shl6( __m256i a )              { return _mm256_slli_epi32( a, 6 ); }
+};
+#endif
+
+// inverse 2-pt DCT-II butterfly, d0/d1 before rounding
+template<typename V, typename OPS>
+static inline void invButterflyDCT2_2( const TMatrixCoeff* iT, const V& s0, const V& s1, V& d0, V& d1 )
+{
+  CHECKD( iT[0] != 64 || iT[2] != 64, "unexpected DCT-II coefficients" );
+  d0 = OPS::shl6( OPS::add( s0, s1 ) );
+  d1 = OPS::shl6( OPS::sub( s0, s1 ) );
+}
+
+// inverse 4-pt DCT-II butterfly, d0..d3 before rounding
+template<typename V, typename OPS>
+static inline void invButterflyDCT2_4( const TMatrixCoeff* iT, const V* s, V* d )
+{
+  const V O0 = OPS::add( OPS::mul( OPS::set1( iT[1 * 4 + 0] ), s[1] ), OPS::mul( OPS::set1( iT[3 * 4 + 0] ), s[3] ) );
+  const V O1 = OPS::add( OPS::mul( OPS::set1( iT[1 * 4 + 1] ), s[1] ), OPS::mul( OPS::set1( iT[3 * 4 + 1] ), s[3] ) );
+  CHECKD( iT[0 * 4 + 0] != 64 || iT[2 * 4 + 0] != 64 || iT[0 * 4 + 1] != 64 || iT[2 * 4 + 1] != -64, "unexpected DCT-II coefficients" );
+  const V E0 = OPS::add( OPS::shl6( s[0] ), OPS::shl6( s[2] ) );
+  const V E1 = OPS::sub( OPS::shl6( s[0] ), OPS::shl6( s[2] ) );
+  d[0] = OPS::add( E0, O0 );
+  d[1] = OPS::add( E1, O1 );
+  d[2] = OPS::sub( E1, O1 );
+  d[3] = OPS::sub( E0, O0 );
+}
+
+// inverse 8-pt DCT-II butterfly, d0..d7 before rounding
+template<typename V, typename OPS>
+static inline void invButterflyDCT2_8( const TMatrixCoeff* iT, const V* s, V* d )
+{
+  V O[4], E[4];
+  for( int k = 0; k < 4; k++ )
+  {
+    O[k] = OPS::add( OPS::add( OPS::add( OPS::mul( OPS::set1( iT[1 * 8 + k] ), s[1] ),
+                                         OPS::mul( OPS::set1( iT[3 * 8 + k] ), s[3] ) ),
+                                         OPS::mul( OPS::set1( iT[5 * 8 + k] ), s[5] ) ),
+                                         OPS::mul( OPS::set1( iT[7 * 8 + k] ), s[7] ) );
+  }
+  const V EO0 = OPS::add( OPS::mul( OPS::set1( iT[2 * 8 + 0] ), s[2] ), OPS::mul( OPS::set1( iT[6 * 8 + 0] ), s[6] ) );
+  const V EO1 = OPS::add( OPS::mul( OPS::set1( iT[2 * 8 + 1] ), s[2] ), OPS::mul( OPS::set1( iT[6 * 8 + 1] ), s[6] ) );
+  CHECKD( iT[0 * 8 + 0] != 64 || iT[4 * 8 + 0] != 64 || iT[0 * 8 + 1] != 64 || iT[4 * 8 + 1] != -64, "unexpected DCT-II coefficients" );
+  const V EE0 = OPS::add( OPS::shl6( s[0] ), OPS::shl6( s[4] ) );
+  const V EE1 = OPS::sub( OPS::shl6( s[0] ), OPS::shl6( s[4] ) );
+  E[0] = OPS::add( EE0, EO0 );
+  E[3] = OPS::sub( EE0, EO0 );
+  E[1] = OPS::add( EE1, EO1 );
+  E[2] = OPS::sub( EE1, EO1 );
+  for( int k = 0; k < 4; k++ )
+  {
+    d[k    ] = OPS::add( E[    k], O[    k] );
+    d[k + 4] = OPS::sub( E[3 - k], O[3 - k] );
+  }
+}
+
+template<X86_VEXT vext>
+void fastInverseDCT2_B2_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  const TMatrixCoeff *iT = g_trCoreDCT2P2[TRANSFORM_INVERSE][0];
+  const int add          = 1 << ( shift - 1 );
+  const int reducedLine  = line - iSkipLine;
+  const __m128i vshift   = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+    const __m256i vmin = _mm256_set1_epi32( outputMinimum );
+    const __m256i vmax = _mm256_set1_epi32( outputMaximum );
+
+    for( ; j + 8 <= reducedLine; j += 8 )
+    {
+      const __m256i s0 = _mm256_loadu_si256( ( const __m256i* ) &src[       j] );
+      const __m256i s1 = _mm256_loadu_si256( ( const __m256i* ) &src[line + j] );
+      __m256i e, o;
+      invButterflyDCT2_2<__m256i, Int32x8Ops>( iT, s0, s1, e, o );
+      e = _vv_roundClip_epi32( e, vadd, vshift, vmin, vmax );
+      o = _vv_roundClip_epi32( o, vadd, vshift, vmin, vmax );
+      const __m256i lo = _mm256_unpacklo_epi32( e, o );
+      const __m256i hi = _mm256_unpackhi_epi32( e, o );
+      _mm256_storeu_si256( ( __m256i* ) &dst[2 * j    ], _mm256_permute2x128_si256( lo, hi, 0x20 ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[2 * j + 8], _mm256_permute2x128_si256( lo, hi, 0x31 ) );
+    }
+  }
+#endif
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+    const __m128i vmin = _mm_set1_epi32( outputMinimum );
+    const __m128i vmax = _mm_set1_epi32( outputMaximum );
+
+    for( ; j + 4 <= reducedLine; j += 4 )
+    {
+      const __m128i s0 = _mm_loadu_si128( ( const __m128i* ) &src[       j] );
+      const __m128i s1 = _mm_loadu_si128( ( const __m128i* ) &src[line + j] );
+      __m128i e, o;
+      invButterflyDCT2_2<__m128i, Int32x4Ops>( iT, s0, s1, e, o );
+      e = _vv_roundClip_epi32( e, vadd, vshift, vmin, vmax );
+      o = _vv_roundClip_epi32( o, vadd, vshift, vmin, vmax );
+      _mm_storeu_si128( ( __m128i* ) &dst[2 * j    ], _mm_unpacklo_epi32( e, o ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[2 * j + 4], _mm_unpackhi_epi32( e, o ) );
+    }
+  }
+
+  for( ; j < reducedLine; j++ )
+  {
+    int E, O;
+    invButterflyDCT2_2<int, Int32Ops>( iT, src[j], src[line + j], E, O );
+    dst[2 * j    ] = Clip3( outputMinimum, outputMaximum, ( E + add ) >> shift );
+    dst[2 * j + 1] = Clip3( outputMinimum, outputMaximum, ( O + add ) >> shift );
+  }
+
+  if( iSkipLine )
+  {
+    memset( dst + 2 * reducedLine, 0, ( iSkipLine << 1 ) * sizeof( TCoeff ) );
+  }
+}
+
+template<X86_VEXT vext>
+void fastInverseDCT2_B4_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  const TMatrixCoeff *iT = g_trCoreDCT2P4[TRANSFORM_INVERSE][0];
+  const int add          = 1 << ( shift - 1 );
+  const int reducedLine  = line - iSkipLine;
+  const __m128i vshift   = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+    const __m256i vmin = _mm256_set1_epi32( outputMinimum );
+    const __m256i vmax = _mm256_set1_epi32( outputMaximum );
+
+    for( ; j + 8 <= reducedLine; j += 8 )
+    {
+      __m256i s[4], d[4];
+      for( int r = 0; r < 4; r++ )
+      {
+        s[r] = _mm256_loadu_si256( ( const __m256i* ) &src[r * line + j] );
+      }
+      invButterflyDCT2_4<__m256i, Int32x8Ops>( iT, s, d );
+      for( int r = 0; r < 4; r++ )
+      {
+        d[r] = _vv_roundClip_epi32( d[r], vadd, vshift, vmin, vmax );
+      }
+      _vv_store_lines4x8( &dst[4 * j], d[0], d[1], d[2], d[3] );
+    }
+  }
+#endif
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+    const __m128i vmin = _mm_set1_epi32( outputMinimum );
+    const __m128i vmax = _mm_set1_epi32( outputMaximum );
+
+    for( ; j + 4 <= reducedLine; j += 4 )
+    {
+      __m128i s[4], d[4];
+      for( int r = 0; r < 4; r++ )
+      {
+        s[r] = _mm_loadu_si128( ( const __m128i* ) &src[r * line + j] );
+      }
+      invButterflyDCT2_4<__m128i, Int32x4Ops>( iT, s, d );
+      for( int r = 0; r < 4; r++ )
+      {
+        d[r] = _vv_roundClip_epi32( d[r], vadd, vshift, vmin, vmax );
+      }
+      _vv_store_lines4x4( &dst[4 * j], d[0], d[1], d[2], d[3] );
+    }
+  }
+
+  for( ; j < reducedLine; j++ )
+  {
+    int s[4], d[4];
+    for( int r = 0; r < 4; r++ )
+    {
+      s[r] = src[r * line + j];
+    }
+    invButterflyDCT2_4<int, Int32Ops>( iT, s, d );
+    for( int r = 0; r < 4; r++ )
+    {
+      dst[4 * j + r] = Clip3( outputMinimum, outputMaximum, ( d[r] + add ) >> shift );
+    }
+  }
+
+  if( iSkipLine )
+  {
+    memset( dst + 4 * reducedLine, 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
+  }
+}
+
+template<X86_VEXT vext>
+void fastInverseDCT2_B8_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  const TMatrixCoeff *iT = g_trCoreDCT2P8[TRANSFORM_INVERSE][0];
+  const int add          = 1 << ( shift - 1 );
+  const int reducedLine  = line - iSkipLine;
+  const __m128i vshift   = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+    const __m256i vmin = _mm256_set1_epi32( outputMinimum );
+    const __m256i vmax = _mm256_set1_epi32( outputMaximum );
+
+    for( ; j + 8 <= reducedLine; j += 8 )
+    {
+      __m256i s[8], d[8];
+      for( int r = 0; r < 8; r++ )
+      {
+        s[r] = _mm256_loadu_si256( ( const __m256i* ) &src[r * line + j] );
+      }
+      invButterflyDCT2_8<__m256i, Int32x8Ops>( iT, s, d );
+      for( int r = 0; r < 8; r++ )
+      {
+        d[r] = _vv_roundClip_epi32( d[r], vadd, vshift, vmin, vmax );
+      }
+
+      // 8x8 transpose: lane r of d[n] goes to dst[( j + r ) * 8 + n]
+      __m256i t[8], u[8];
+      t[0] = _mm256_unpacklo_epi32( d[0], d[1] ); t[1] = _mm256_unpackhi_epi32( d[0], d[1] );
+      t[2] = _mm256_unpacklo_epi32( d[2], d[3] ); t[3] = _mm256_unpackhi_epi32( d[2], d[3] );
+      t[4] = _mm256_unpacklo_epi32( d[4], d[5] ); t[5] = _mm256_unpackhi_epi32( d[4], d[5] );
+      t[6] = _mm256_unpacklo_epi32( d[6], d[7] ); t[7] = _mm256_unpackhi_epi32( d[6], d[7] );
+      u[0] = _mm256_unpacklo_epi64( t[0], t[2] ); u[1] = _mm256_unpackhi_epi64( t[0], t[2] );
+      u[2] = _mm256_unpacklo_epi64( t[1], t[3] ); u[3] = _mm256_unpackhi_epi64( t[1], t[3] );
+      u[4] = _mm256_unpacklo_epi64( t[4], t[6] ); u[5] = _mm256_unpackhi_epi64( t[4], t[6] );
+      u[6] = _mm256_unpacklo_epi64( t[5], t[7] ); u[7] = _mm256_unpackhi_epi64( t[5], t[7] );
+
+      TCoeff* dd = &dst[8 * j];
+      for( int r = 0; r < 4; r++ )
+      {
+        _mm256_storeu_si256( ( __m256i* ) &dd[8 * r     ], _mm256_permute2x128_si256( u[r], u[r + 4], 0x20 ) );
+        _mm256_storeu_si256( ( __m256i* ) &dd[8 * r + 32], _mm256_permute2x128_si256( u[r], u[r + 4], 0x31 ) );
+      }
+    }
+  }
+#endif
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+    const __m128i vmin = _mm_set1_epi32( outputMinimum );
+    const __m128i vmax = _mm_set1_epi32( outputMaximum );
+
+    for( ; j + 4 <= reducedLine; j += 4 )
+    {
+      __m128i s[8], d[8];
+      for( int r = 0; r < 8; r++ )
+      {
+        s[r] = _mm_loadu_si128( ( const __m128i* ) &src[r * line + j] );
+      }
+      invButterflyDCT2_8<__m128i, Int32x4Ops>( iT, s, d );
+      for( int r = 0; r < 8; r++ )
+      {
+        d[r] = _vv_roundClip_epi32( d[r], vadd, vshift, vmin, vmax );
+      }
+
+      _vv_transpose4x4_epi32( d[0], d[1], d[2], d[3] );
+      _vv_transpose4x4_epi32( d[4], d[5], d[6], d[7] );
+
+      TCoeff* dd = &dst[8 * j];
+      for( int r = 0; r < 4; r++ )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dd[8 * r    ], d[r    ] );
+        _mm_storeu_si128( ( __m128i* ) &dd[8 * r + 4], d[r + 4] );
+      }
+    }
+  }
+
+  for( ; j < reducedLine; j++ )
+  {
+    int s[8], d[8];
+    for( int r = 0; r < 8; r++ )
+    {
+      s[r] = src[r * line + j];
+    }
+    invButterflyDCT2_8<int, Int32Ops>( iT, s, d );
+    for( int r = 0; r < 8; r++ )
+    {
+      dst[8 * j + r] = Clip3( outputMinimum, outputMaximum, ( d[r] + add ) >> shift );
+    }
+  }
+
+  if( iSkipLine )
+  {
+    memset( dst + 8 * reducedLine, 0, ( iSkipLine << 3 ) * sizeof( TCoeff ) );
+  }
+}
+
+template<X86_VEXT vext>
+void fastForwardDCT2_B2_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+{
+  const TMatrixCoeff *iT = g_trCoreDCT2P2[TRANSFORM_FORWARD][0];
+  const TCoeff add       = ( shift > 0 ) ? ( 1 << ( shift - 1 ) ) : 0;
+  CHECKD( iT[0] != 64 || iT[2] != 64, "unexpected DCT-II coefficients" );
+  const int reducedLine  = line - iSkipLine;
+  const __m128i vshift   = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+
+    for( ; j + 8 <= reducedLine; j += 8 )
+    {
+      // [s0 s1] pairs of 8 lines -> s0 of the 8 lines, s1 of the 8 lines
+      const __m256i a  = _mm256_shuffle_epi32( _mm256_loadu_si256( ( const __m256i* ) &src[2 * j    ] ), 0xD8 );
+      const __m256i b  = _mm256_shuffle_epi32( _mm256_loadu_si256( ( const __m256i* ) &src[2 * j + 8] ), 0xD8 );
+      const __m256i s0 = _mm256_permute4x64_epi64( _mm256_unpacklo_epi64( a, b ), 0xD8 );
+      const __m256i s1 = _mm256_permute4x64_epi64( _mm256_unpackhi_epi64( a, b ), 0xD8 );
+      const __m256i E  = _mm256_add_epi32( s0, s1 );
+      const __m256i O  = _mm256_sub_epi32( s0, s1 );
+      _mm256_storeu_si256( ( __m256i* ) &dst[       j], _mm256_sra_epi32( _mm256_add_epi32( Int32x8Ops::shl6( E ), vadd ), vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[line + j], _mm256_sra_epi32( _mm256_add_epi32( Int32x8Ops::shl6( O ), vadd ), vshift ) );
+    }
+  }
+#endif
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+
+    for( ; j + 4 <= reducedLine; j += 4 )
+    {
+      const __m128i a  = _mm_shuffle_epi32( _mm_loadu_si128( ( const __m128i* ) &src[2 * j    ] ), 0xD8 );
+      const __m128i b  = _mm_shuffle_epi32( _mm_loadu_si128( ( const __m128i* ) &src[2 * j + 4] ), 0xD8 );
+      const __m128i s0 = _mm_unpacklo_epi64( a, b );
+      const __m128i s1 = _mm_unpackhi_epi64( a, b );
+      const __m128i E  = _mm_add_epi32( s0, s1 );
+      const __m128i O  = _mm_sub_epi32( s0, s1 );
+      _mm_storeu_si128( ( __m128i* ) &dst[       j], _mm_sra_epi32( _mm_add_epi32( Int32x4Ops::shl6( E ), vadd ), vshift ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[line + j], _mm_sra_epi32( _mm_add_epi32( Int32x4Ops::shl6( O ), vadd ), vshift ) );
+    }
+  }
+
+  for( ; j < reducedLine; j++ )
+  {
+    const int E = src[2 * j] + src[2 * j + 1];
+    const int O = src[2 * j] - src[2 * j + 1];
+    dst[       j] = ( iT[0] * E + add ) >> shift;
+    dst[line + j] = ( iT[2] * O + add ) >> shift;
+  }
+
+  if( iSkipLine )
+  {
+    for( int k = 0; k < 2; k++ )
+    {
+      memset( dst + k * line + reducedLine, 0, sizeof( TCoeff ) * iSkipLine );
+    }
+  }
+}
+
+// 4-pt forward butterflies of TrQuant_EMT.cpp (trType: DCT2, DST7 or DCT8), d0..d3 before the shift
+template<int trType, typename V, typename OPS>
+static inline void fwdButterfly4( const TMatrixCoeff* iT, const V& s0, const V& s1, const V& s2, const V& s3, const V& vadd, V& d0, V& d1, V& d2, V& d3 )
+{
+  if( trType == DCT2 )
+  {
+    const V E0 = OPS::add( s0, s3 ), O0 = OPS::sub( s0, s3 );
+    const V E1 = OPS::add( s1, s2 ), O1 = OPS::sub( s1, s2 );
+    CHECKD( iT[0] != 64 || iT[1] != 64 || iT[8] != 64 || iT[9] != -64, "unexpected DCT-II coefficients" );
+    d0 = OPS::add( OPS::add( OPS::shl6( E0 ), OPS::shl6( E1 ) ), vadd );
+    d2 = OPS::add( OPS::sub( OPS::shl6( E0 ), OPS::shl6( E1 ) ), vadd );
+    d1 = OPS::add( OPS::add( OPS::mul( OPS::set1( iT[ 4] ), O0 ), OPS::mul( OPS::set1( iT[ 5] ), O1 ) ), vadd );
+    d3 = OPS::add( OPS::add( OPS::mul( OPS::set1( iT[12] ), O0 ), OPS::mul( OPS::set1( iT[13] ), O1 ) ), vadd );
+  }
+  else if( trType == DST7 )
+  {
+    const V c0 = OPS::add( s0, s3 );
+    const V c1 = OPS::add( s1, s3 );
+    const V c2 = OPS::sub( s0, s1 );
+    const V c3 = OPS::mul( OPS::set1( iT[2] ), s2 );
+    d0 = OPS::add( OPS::add( OPS::add( OPS::mul( OPS::set1( iT[0] ), c0 ), OPS::mul( OPS::set1( iT[1] ), c1 ) ), c3 ), vadd );
+    d1 = OPS::add( OPS::mul( OPS::set1( iT[2] ), OPS::sub( OPS::add( s0, s1 ), s3 ) ), vadd );
+    d2 = OPS::add( OPS::sub( OPS::add( OPS::mul( OPS::set1( iT[0] ), c2 ), OPS::mul( OPS::set1( iT[1] ), c0 ) ), c3 ), vadd );
+    d3 = OPS::add( OPS::add( OPS::sub( OPS::mul( OPS::set1( iT[1] ), c2 ), OPS::mul( OPS::set1( iT[0] ), c1 ) ), c3 ), vadd );
+  }
+  else
+  {
+    const V c0 = OPS::add( s0, s3 );
+    const V c1 = OPS::add( s2, s0 );
+    const V c2 = OPS::sub( s3, s2 );
+    const V c3 = OPS::mul( OPS::set1( iT[1] ), s1 );
+    d0 = OPS::add( OPS::add( OPS::add( OPS::mul( OPS::set1( iT[3] ), c0 ), OPS::mul( OPS::set1( iT[2] ), c1 ) ), c3 ), vadd );
+    d1 = OPS::add( OPS::mul( OPS::set1( iT[1] ), OPS::sub( OPS::sub( s0, s2 ), s3 ) ), vadd );
+    d2 = OPS::add( OPS::sub( OPS::add( OPS::mul( OPS::set1( iT[3] ), c2 ), OPS::mul( OPS::set1( iT[2] ), c0 ) ), c3 ), vadd );
+    d3 = OPS::add( OPS::sub( OPS::sub( OPS::mul( OPS::set1( iT[3] ), c1 ), OPS::mul( OPS::set1( iT[2] ), c2 ) ), c3 ), vadd );
+  }
+}
+
+template<X86_VEXT vext, int trType>
+void fastForward4_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+{
+  const TMatrixCoeff *iT = trType == DCT2 ? g_trCoreDCT2P4[TRANSFORM_FORWARD][0] : trType == DST7 ? g_trCoreDST7P4[TRANSFORM_FORWARD][0] : g_trCoreDCT8P4[TRANSFORM_FORWARD][0];
+  // same rounding offset as the scalar code (the DCT-VIII code does not check for shift == 0)
+  const TCoeff add       = trType == DCT8 ? ( 1 << ( shift - 1 ) ) : ( shift > 0 ) ? ( 1 << ( shift - 1 ) ) : 0;
+  const int reducedLine  = line - iSkipLine;
+  const __m128i vshift   = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+
+    for( ; j + 8 <= reducedLine; j += 8 )
+    {
+      __m256i s0, s1, s2, s3, d0, d1, d2, d3;
+      _vv_load_lines4x8( &src[4 * j], s0, s1, s2, s3 );
+      fwdButterfly4<trType, __m256i, Int32x8Ops>( iT, s0, s1, s2, s3, vadd, d0, d1, d2, d3 );
+      _mm256_storeu_si256( ( __m256i* ) &dst[           j], _mm256_sra_epi32( d0, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[    line + j], _mm256_sra_epi32( d1, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[2 * line + j], _mm256_sra_epi32( d2, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[3 * line + j], _mm256_sra_epi32( d3, vshift ) );
+    }
+  }
+#endif
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+
+    for( ; j + 4 <= reducedLine; j += 4 )
+    {
+      __m128i s0, s1, s2, s3, d0, d1, d2, d3;
+      _vv_load_lines4x4( &src[4 * j], s0, s1, s2, s3 );
+      fwdButterfly4<trType, __m128i, Int32x4Ops>( iT, s0, s1, s2, s3, vadd, d0, d1, d2, d3 );
+      _mm_storeu_si128( ( __m128i* ) &dst[           j], _mm_sra_epi32( d0, vshift ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[    line + j], _mm_sra_epi32( d1, vshift ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[2 * line + j], _mm_sra_epi32( d2, vshift ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[3 * line + j], _mm_sra_epi32( d3, vshift ) );
+    }
+  }
+
+  for( ; j < reducedLine; j++ )
+  {
+    const TCoeff* s = &src[4 * j];
+    int d0, d1, d2, d3;
+    fwdButterfly4<trType, int, Int32Ops>( iT, s[0], s[1], s[2], s[3], add, d0, d1, d2, d3 );
+    dst[           j] = d0 >> shift;
+    dst[    line + j] = d1 >> shift;
+    dst[2 * line + j] = d2 >> shift;
+    dst[3 * line + j] = d3 >> shift;
+  }
+
+  if( iSkipLine )
+  {
+    for( int k = 0; k < 4; k++ )
+    {
+      memset( dst + k * line + reducedLine, 0, sizeof( TCoeff ) * iSkipLine );
+    }
+  }
+}
+
+// forward matrix multiplication for a single line (1D transforms of 1xN / Nx1 blocks)
+template<X86_VEXT vext, unsigned trSize>
+void fastFwd1D_SIMD( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
+{
+  const int rnd_factor = 1 << ( shift - 1 );
+
+  for( unsigned i = 0; i < reducedLine; i++ )
+  {
+    const TMatrixCoeff* iT = tc;
+    unsigned j = 0;
+
+    for( ; j + 4 <= cutoff; j += 4 )
+    {
+      __m128i vsum;
+#if USE_AVX2
+      if( vext >= AVX2 && trSize >= 8 )
+      {
+        __m256i acc[4];
+        for( int r = 0; r < 4; r++ )
+        {
+          acc[r] = _mm256_setzero_si256();
+          for( unsigned k = 0; k < trSize; k += 8 )
+          {
+            const __m256i vs = _mm256_loadu_si256( ( const __m256i* ) &src[k] );
+            const __m256i vt = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) &iT[r * trSize + k] ) );
+            acc[r] = _mm256_add_epi32( acc[r], _mm256_mullo_epi32( vs, vt ) );
+          }
+        }
+        const __m256i h = _mm256_hadd_epi32( _mm256_hadd_epi32( acc[0], acc[1] ), _mm256_hadd_epi32( acc[2], acc[3] ) );
+        vsum = _mm_add_epi32( _mm256_castsi256_si128( h ), _mm256_extracti128_si256( h, 1 ) );
+      }
+      else
+#endif
+      {
+        __m128i acc[4];
+        for( int r = 0; r < 4; r++ )
+        {
+          acc[r] = _mm_setzero_si128();
+          for( unsigned k = 0; k < trSize; k += 4 )
+          {
+            const __m128i vs = _mm_loadu_si128( ( const __m128i* ) &src[k] );
+            const __m128i vt = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &iT[r * trSize + k] ) );
+            acc[r] = _mm_add_epi32( acc[r], _mm_mullo_epi32( vs, vt ) );
+          }
+        }
+        vsum = _mm_hadd_epi32( _mm_hadd_epi32( acc[0], acc[1] ), _mm_hadd_epi32( acc[2], acc[3] ) );
+      }
+      vsum = _mm_sra_epi32( _mm_add_epi32( vsum, _mm_set1_epi32( rnd_factor ) ), _mm_cvtsi32_si128( shift ) );
+
+      if( line == 1 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[j], vsum );
+      }
+      else
+      {
+        dst[( j + 0 ) * line + i] = _mm_extract_epi32( vsum, 0 );
+        dst[( j + 1 ) * line + i] = _mm_extract_epi32( vsum, 1 );
+        dst[( j + 2 ) * line + i] = _mm_extract_epi32( vsum, 2 );
+        dst[( j + 3 ) * line + i] = _mm_extract_epi32( vsum, 3 );
+      }
+      iT += 4 * trSize;
+    }
+
+    for( ; j < cutoff; j++ )
+    {
+      int sum = 0;
+      for( unsigned k = 0; k < trSize; k++ )
+      {
+        sum += src[k] * iT[k];
+      }
+      dst[j * line + i] = ( sum + rnd_factor ) >> shift;
+      iT += trSize;
+    }
+
+    src += trSize;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Joint Cb-Cr residual transforms (fwdTransformCbCr / invTransformCbCr in TrQuant.cpp).
+// The forward transform computes the combined residual c and the distortion of reconstructing both components from it.
+// For |ICT mode| 1 and 3, c = ( 4 * a +- 2 * b ) / 5, for |mode| 2, c = ( a +- b ) / 2 (C integer division), where a is
+// the component the residual is derived from (Cb for 1, 2 and Cr for 3) and b the other one. The division by 5 is done
+// in single precision: |4 * a +- 2 * b| < 2^24 is exact in float, the quotient is correctly rounded and either exact or
+// at least 0.2 away from the next integer, so the truncation matches the integer division. The squared errors are
+// accumulated in 64 bit as in the scalar code.
+// ---------------------------------------------------------------------------------------------------------------------
+
+// ( -v ) >> 1 for 16-bit v without the overflow of -v: -( ( v >> 1 ) + ( v & 1 ) )
+static inline __m128i _vv_negHalf_epi16( __m128i v )
+{
+  return _mm_sub_epi16( _mm_setzero_si128(), _mm_add_epi16( _mm_srai_epi16( v, 1 ), _mm_and_si128( v, _mm_set1_epi16( 1 ) ) ) );
+}
+
+// sign-extends the low 16 bits of each 32-bit lane, i.e. the value after the conversion to Pel
+static inline __m128i _vv_truncPel_epi32( __m128i v )
+{
+  return _mm_srai_epi32( _mm_slli_epi32( v, 16 ), 16 );
+}
+
+// adds the squares of the four 32-bit lanes of d to the two 64-bit lanes of acc
+static inline __m128i _vv_addSquares_epi64( __m128i acc, __m128i d )
+{
+  acc = _mm_add_epi64( acc, _mm_mul_epi32( d, d ) );
+  const __m128i odd = _mm_srli_epi64( d, 32 );
+  return _mm_add_epi64( acc, _mm_mul_epi32( odd, odd ) );
+}
+
+#if USE_AVX2
+static inline __m256i _vv_negHalf_epi16( __m256i v )
+{
+  return _mm256_sub_epi16( _mm256_setzero_si256(), _mm256_add_epi16( _mm256_srai_epi16( v, 1 ), _mm256_and_si256( v, _mm256_set1_epi16( 1 ) ) ) );
+}
+
+static inline __m256i _vv_truncPel_epi32( __m256i v )
+{
+  return _mm256_srai_epi32( _mm256_slli_epi32( v, 16 ), 16 );
+}
+
+static inline __m256i _vv_addSquares_epi64( __m256i acc, __m256i d )
+{
+  acc = _mm256_add_epi64( acc, _mm256_mul_epi32( d, d ) );
+  const __m256i odd = _mm256_srli_epi64( d, 32 );
+  return _mm256_add_epi64( acc, _mm256_mul_epi32( odd, odd ) );
+}
+#endif
+
+static inline int64_t _vv_hsum_epi64( __m128i v )
+{
+  int64_t lanes[2];
+  _mm_storeu_si128( ( __m128i* ) lanes, v );
+  return lanes[0] + lanes[1];
+}
+
+// adds the madd results (unsigned 32-bit pair sums of squares) of v to the two 64-bit lanes of acc;
+// a^2 + b^2 <= 2^31 fits an unsigned 32-bit lane
+static inline __m128i _vv_addPairSquares_epi64( __m128i acc, __m128i v )
+{
+  const __m128i sq = _mm_madd_epi16( v, v );
+  return _mm_add_epi64( acc, _mm_add_epi64( _mm_cvtepu32_epi64( sq ), _mm_cvtepu32_epi64( _mm_unpackhi_epi64( sq, sq ) ) ) );
+}
+
+// sum of the squared samples of a block
+template<X86_VEXT vext>
+static inline int64_t sumOfSquares_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height )
+{
+  __m128i acc = _mm_setzero_si128();
+#if USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    __m256i acc256 = _mm256_setzero_si256();
+    for( int y = 0; y < height; y++, src += stride )
+    {
+      for( int x = 0; x < width; x += 16 )
+      {
+        const __m256i v  = _mm256_loadu_si256( ( const __m256i* ) &src[x] );
+        const __m256i sq = _mm256_madd_epi16( v, v );
+        acc256 = _mm256_add_epi64( acc256, _mm256_add_epi64( _mm256_unpacklo_epi32( sq, _mm256_setzero_si256() ),
+                                                             _mm256_unpackhi_epi32( sq, _mm256_setzero_si256() ) ) );
+      }
+    }
+    acc = _mm_add_epi64( _mm256_castsi256_si128( acc256 ), _mm256_extracti128_si256( acc256, 1 ) );
+    return _vv_hsum_epi64( acc );
+  }
+#endif
+  if( ( width & 7 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += stride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        acc = _vv_addPairSquares_epi64( acc, _mm_loadu_si128( ( const __m128i* ) &src[x] ) );
+      }
+    }
+    return _vv_hsum_epi64( acc );
+  }
+
+  int64_t sum = 0;
+  int y = 0;
+  if( width == 4 )
+  {
+    // two rows per vector
+    for( ; y + 2 <= height; y += 2, src += 2 * stride )
+    {
+      acc = _vv_addPairSquares_epi64( acc, _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src ), _vv_loadl_epi64( ( const __m128i* ) &src[stride] ) ) );
+    }
+  }
+  for( ; y < height; y++, src += stride )
+  {
+    for( int x = 0; x < width; x++ )
+    {
+      sum += int64_t( src[x] ) * src[x];
+    }
+  }
+  return sum + _vv_hsum_epi64( acc );
+}
+
+// scalar reference of one sample, used for the remaining columns; returns the squared error, writes the residual to c
+template<int signedMode>
+static inline int64_t fwdIctSample( int a, int b, Pel& c )
+{
+  const int absMode = signedMode < 0 ? -signedMode : signedMode;
+  const int sign    = signedMode < 0 ? -1 : 1;
+  if( absMode == 2 )
+  {
+    c = Pel( ( a + sign * b ) / 2 );
+    const int64_t ea = a - c, eb = b - sign * c;
+    return ea * ea + eb * eb;
+  }
+  c = Pel( ( 4 * a + sign * 2 * b ) / 5 );
+  const int64_t ea = a - c, eb = b - ( ( sign * c ) >> 1 );
+  return ea * ea + eb * eb;
+}
+
+// one vector of samples: a, b are the sign-extended 16-bit residuals, returns c (32-bit lanes, before the
+// truncation to Pel) and adds the squared errors to dist
+template<int signedMode>
+static inline __m128i fwdIctVec( __m128i a, __m128i b, __m128i& dist )
+{
+  const bool    neg = signedMode < 0;
+  __m128i c, eb;
+  if( signedMode == 2 || signedMode == -2 )
+  {
+    __m128i n = neg ? _mm_sub_epi32( a, b ) : _mm_add_epi32( a, b );
+    n  = _mm_srai_epi32( _mm_sub_epi32( n, _mm_srai_epi32( n, 31 ) ), 1 ); // C division by 2 (rounds towards zero)
+    c  = _vv_truncPel_epi32( n );
+    eb = neg ? _mm_add_epi32( b, c ) : _mm_sub_epi32( b, c );
+  }
+  else
+  {
+    const __m128i a4 = _mm_slli_epi32( a, 2 ), b2 = _mm_slli_epi32( b, 1 );
+    const __m128 n   = _mm_cvtepi32_ps( neg ? _mm_sub_epi32( a4, b2 ) : _mm_add_epi32( a4, b2 ) );
+    c  = _vv_truncPel_epi32( _mm_cvttps_epi32( _mm_div_ps( n, _mm_set1_ps( 5.0f ) ) ) );
+    eb = _mm_sub_epi32( b, _mm_srai_epi32( neg ? _mm_sub_epi32( _mm_setzero_si128(), c ) : c, 1 ) );
+  }
+  dist = _vv_addSquares_epi64( dist, _mm_sub_epi32( a, c ) );
+  dist = _vv_addSquares_epi64( dist, eb );
+  return c;
+}
+
+#if USE_AVX2
+template<int signedMode>
+static inline __m256i fwdIctVec( __m256i a, __m256i b, __m256i& dist )
+{
+  const bool    neg = signedMode < 0;
+  __m256i c, eb;
+  if( signedMode == 2 || signedMode == -2 )
+  {
+    __m256i n = neg ? _mm256_sub_epi32( a, b ) : _mm256_add_epi32( a, b );
+    n  = _mm256_srai_epi32( _mm256_sub_epi32( n, _mm256_srai_epi32( n, 31 ) ), 1 );
+    c  = _vv_truncPel_epi32( n );
+    eb = neg ? _mm256_add_epi32( b, c ) : _mm256_sub_epi32( b, c );
+  }
+  else
+  {
+    const __m256i a4 = _mm256_slli_epi32( a, 2 ), b2 = _mm256_slli_epi32( b, 1 );
+    const __m256 n   = _mm256_cvtepi32_ps( neg ? _mm256_sub_epi32( a4, b2 ) : _mm256_add_epi32( a4, b2 ) );
+    c  = _vv_truncPel_epi32( _mm256_cvttps_epi32( _mm256_div_ps( n, _mm256_set1_ps( 5.0f ) ) ) );
+    eb = _mm256_sub_epi32( b, _mm256_srai_epi32( neg ? _mm256_sub_epi32( _mm256_setzero_si256(), c ) : c, 1 ) );
+  }
+  dist = _vv_addSquares_epi64( dist, _mm256_sub_epi32( a, c ) );
+  dist = _vv_addSquares_epi64( dist, eb );
+  return c;
+}
+#endif
+
+template<X86_VEXT vext, int signedMode>
+std::pair<int64_t, int64_t> fwdTransformCbCr_SIMD( const PelBuf& resCb, const PelBuf& resCr, PelBuf& resC1, PelBuf& resC2 )
+{
+  const int  width  = resCb.width;
+  const int  height = resCb.height;
+  const bool fromCr = signedMode == 3 || signedMode == -3;
+  // a: the component the joint residual is derived from, b: the other one
+  const Pel* a      = fromCr ? resCr.buf : resCb.buf;
+  const Pel* b      = fromCr ? resCb.buf : resCr.buf;
+  const ptrdiff_t aStride = fromCr ? resCr.stride : resCb.stride;
+  const ptrdiff_t bStride = fromCr ? resCb.stride : resCr.stride;
+  Pel*       c      = fromCr ? resC2.buf : resC1.buf;
+  const ptrdiff_t cStride = fromCr ? resC2.stride : resC1.stride;
+
+  if( signedMode == 0 )
+  {
+    // no joint coding: the distortions of zero residuals
+    return std::make_pair( sumOfSquares_SIMD<vext>( resCb.buf, resCb.stride, width, height ),
+                           sumOfSquares_SIMD<vext>( resCr.buf, resCr.stride, width, height ) );
+  }
+
+  int64_t dist = 0;
+#if USE_AVX2
+  __m256i dist256 = _mm256_setzero_si256();
+#endif
+  __m128i dist128 = _mm_setzero_si128();
+
+  for( int y = 0; y < height; y++, a += aStride, b += bStride, c += cStride )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 8 <= width; x += 8 )
+      {
+        const __m256i va = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) &a[x] ) );
+        const __m256i vb = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) &b[x] ) );
+        const __m256i vc = fwdIctVec<signedMode>( va, vb, dist256 );
+        const __m256i pk = _mm256_packs_epi32( vc, vc ); // vc is sign-extended from 16 bit, so no saturation
+        _mm_storeu_si128( ( __m128i* ) &c[x], _mm_unpacklo_epi64( _mm256_castsi256_si128( pk ), _mm256_extracti128_si256( pk, 1 ) ) );
+      }
+    }
+#endif
+    for( ; x + 4 <= width; x += 4 )
+    {
+      const __m128i va = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &a[x] ) );
+      const __m128i vb = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( const __m128i* ) &b[x] ) );
+      const __m128i vc = fwdIctVec<signedMode>( va, vb, dist128 );
+      _vv_storel_epi64( ( __m128i* ) &c[x], _mm_packs_epi32( vc, vc ) );
+    }
+    for( ; x < width; x++ )
+    {
+      dist += fwdIctSample<signedMode>( a[x], b[x], c[x] );
+    }
+  }
+
+#if USE_AVX2
+  dist128 = _mm_add_epi64( dist128, _mm_add_epi64( _mm256_castsi256_si128( dist256 ), _mm256_extracti128_si256( dist256, 1 ) ) );
+#endif
+  dist += _vv_hsum_epi64( dist128 );
+  return std::make_pair( dist, int64_t( 0 ) );
+}
+
+// derived residual of the inverse joint Cb-Cr transform: +-v (|ICT mode| 2) or +-v >> 1 (|ICT mode| 1, 3)
+template<int signedMode>
+static inline __m128i invIctVec( __m128i v )
+{
+  const bool half = signedMode != 2 && signedMode != -2;
+  if( signedMode < 0 )
+  {
+    return half ? _vv_negHalf_epi16( v ) : _mm_sub_epi16( _mm_setzero_si128(), v );
+  }
+  return half ? _mm_srai_epi16( v, 1 ) : v;
+}
+
+#if USE_AVX2
+template<int signedMode>
+static inline __m256i invIctVec( __m256i v )
+{
+  const bool half = signedMode != 2 && signedMode != -2;
+  if( signedMode < 0 )
+  {
+    return half ? _vv_negHalf_epi16( v ) : _mm256_sub_epi16( _mm256_setzero_si256(), v );
+  }
+  return half ? _mm256_srai_epi16( v, 1 ) : v;
+}
+#endif
+
+template<X86_VEXT vext, int signedMode>
+void invTransformCbCr_SIMD( PelBuf& resCb, PelBuf& resCr )
+{
+  if( signedMode == 0 )
+  {
+    return;
+  }
+
+  // the joint residual is in src, the derived residual is written to dst
+  const bool      toCb      = signedMode == 3 || signedMode == -3;
+  const Pel*      src       = toCb ? resCr.buf    : resCb.buf;
+  Pel*            dst       = toCb ? resCb.buf    : resCr.buf;
+  const ptrdiff_t srcStride = toCb ? resCr.stride : resCb.stride;
+  const ptrdiff_t dstStride = toCb ? resCb.stride : resCr.stride;
+  const int       width     = resCb.width;
+  const int       height    = resCb.height;
+
+  // the loops are selected per block, so that the per-row work is only the vector operations
+#if USE_AVX2
+  if( vext >= AVX2 && ( width & 15 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 16 )
+      {
+        _mm256_storeu_si256( ( __m256i* ) &dst[x], invIctVec<signedMode>( _mm256_loadu_si256( ( const __m256i* ) &src[x] ) ) );
+      }
+    }
+    return;
+  }
+#endif
+  if( ( width & 7 ) == 0 )
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        _mm_storeu_si128( ( __m128i* ) &dst[x], invIctVec<signedMode>( _mm_loadu_si128( ( const __m128i* ) &src[x] ) ) );
+      }
+    }
+  }
+  else if( width == 4 )
+  {
+    // two rows per vector
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src += 2 * srcStride, dst += 2 * dstStride )
+    {
+      const __m128i v = _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src ), _vv_loadl_epi64( ( const __m128i* ) &src[srcStride] ) );
+      const __m128i r = invIctVec<signedMode>( v );
+      _vv_storel_epi64( ( __m128i* ) dst, r );
+      _vv_storel_epi64( ( __m128i* ) &dst[dstStride], _mm_unpackhi_epi64( r, r ) );
+    }
+    if( y < height )
+    {
+      _vv_storel_epi64( ( __m128i* ) dst, invIctVec<signedMode>( _vv_loadl_epi64( ( const __m128i* ) src ) ) );
+    }
+  }
+  else
+  {
+    const bool half = signedMode != 2 && signedMode != -2;
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x++ )
+      {
+        const int v = signedMode < 0 ? -src[x] : src[x];
+        dst[x] = Pel( half ? v >> 1 : v );
+      }
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void TCoeffOps::_initTCoeffOpsX86()
 {
@@ -939,6 +1932,20 @@ void TCoeffOps::_initTCoeffOpsX86()
   fastFwdCore_2D[2] = fastFwd_SSE<vext, 16>;
   fastFwdCore_2D[3] = fastFwd_SSE<vext, 32>;
   fastFwdCore_2D[4] = fastFwd_SSE<vext, 64>;
+
+  fastFwdCore_1D[0] = fastFwd1D_SIMD<vext,  4>;
+  fastFwdCore_1D[1] = fastFwd1D_SIMD<vext,  8>;
+  fastFwdCore_1D[2] = fastFwd1D_SIMD<vext, 16>;
+  fastFwdCore_1D[3] = fastFwd1D_SIMD<vext, 32>;
+  fastFwdCore_1D[4] = fastFwd1D_SIMD<vext, 64>;
+
+  fastInvDCT2[0] = fastInverseDCT2_B2_SIMD<vext>;
+  fastInvDCT2[1] = fastInverseDCT2_B4_SIMD<vext>;
+  fastInvDCT2[2] = fastInverseDCT2_B8_SIMD<vext>;
+  fastFwdDCT2[0] = fastForwardDCT2_B2_SIMD<vext>;
+  fastFwdDCT2[1] = fastForward4_SIMD<vext, DCT2>;
+  fastFwdDST7_4  = fastForward4_SIMD<vext, DST7>;
+  fastFwdDCT8_4  = fastForward4_SIMD<vext, DCT8>;
 }
 
 template<X86_VEXT vext>
@@ -946,6 +1953,20 @@ void TrQuant::_initTrQuantX86()
 {
   m_invLfnstNxN = simdInvLfnstNxN<vext>;
   m_fwdLfnstNxN  = simdFwdLfnstNxN<vext>;
+
+  m_invICT[ 1]   = invTransformCbCr_SIMD<vext,  1>;
+  m_invICT[-1]   = invTransformCbCr_SIMD<vext, -1>;
+  m_invICT[ 2]   = invTransformCbCr_SIMD<vext,  2>;
+  m_invICT[-2]   = invTransformCbCr_SIMD<vext, -2>;
+  m_invICT[ 3]   = invTransformCbCr_SIMD<vext,  3>;
+  m_invICT[-3]   = invTransformCbCr_SIMD<vext, -3>;
+  m_fwdICT[ 0]   = fwdTransformCbCr_SIMD<vext,  0>;
+  m_fwdICT[ 1]   = fwdTransformCbCr_SIMD<vext,  1>;
+  m_fwdICT[-1]   = fwdTransformCbCr_SIMD<vext, -1>;
+  m_fwdICT[ 2]   = fwdTransformCbCr_SIMD<vext,  2>;
+  m_fwdICT[-2]   = fwdTransformCbCr_SIMD<vext, -2>;
+  m_fwdICT[ 3]   = fwdTransformCbCr_SIMD<vext,  3>;
+  m_fwdICT[-3]   = fwdTransformCbCr_SIMD<vext, -3>;
 }
 
 template void TCoeffOps::_initTCoeffOpsX86<SIMDX86>();

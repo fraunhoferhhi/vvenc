@@ -66,6 +66,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/MCTF.h"
 #include "CommonLib/RdCost.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "CommonLib/TrQuant.h"
 #include "CommonLib/TrQuant_EMT.h"
 #include "CommonLib/TypeDef.h"
 #include "CommonLib/Unit.h"
@@ -1172,6 +1173,122 @@ static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_c
   return true;
 }
 
+typedef void InvTrFn( const TCoeff*, TCoeff*, int, int, int, int, const TCoeff, const TCoeff );
+typedef void FwdTrFn( const TCoeff*, TCoeff*, int, int, int, int );
+
+// Partial-butterfly 1D transforms: the whole destination (incl. the zeroed skip lines) must match; both destinations are
+// prefilled with the same marker so that writes outside the block are caught as well.
+template<typename G>
+static bool check_one_butterfly( const std::string& name, InvTrFn* refInv, InvTrFn* optInv, FwdTrFn* refFwd, FwdTrFn* optFwd,
+                                 unsigned trSize, unsigned line, unsigned skipLine, int shift, G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << name << " trSize=" << trSize << " line=" << line << " skipLine=" << skipLine << " shift=" << shift << " input=" << input_generator.input_type();
+
+  const unsigned size  = trSize * line;
+  const unsigned guard = 16;
+  std::vector<TCoeff> src( size + guard );
+  std::vector<TCoeff> dst0( size + guard, 0x5a5a5a5a );
+  std::vector<TCoeff> dst1( size + guard, 0x5a5a5a5a );
+  std::generate( src.begin(), src.end(), input_generator );
+
+  if( refInv )
+  {
+    const TCoeff clipMin = -( 1 << 15 ), clipMax = ( 1 << 15 ) - 1;
+    refInv( src.data(), dst0.data(), shift, line, skipLine, 0, clipMin, clipMax );
+    optInv( src.data(), dst1.data(), shift, line, skipLine, 0, clipMin, clipMax );
+  }
+  else
+  {
+    refFwd( src.data(), dst0.data(), shift, line, skipLine, 0 );
+    optFwd( src.data(), dst1.data(), shift, line, skipLine, 0 );
+  }
+  return compare_values_1d( sstm.str(), dst0.data(), dst1.data(), size + guard );
+}
+
+static bool check_butterflies( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
+{
+  printf( "Testing TCoeffOps partial butterflies (fastInvDCT2, fastFwdDCT2, fastFwdDST7_4, fastFwdDCT8_4)\n" );
+  DimensionGenerator rng;
+  InputGenerator<TCoeff> g16{ 16 };
+  InputGenerator<TCoeff> g11{ 11 };
+  MinMaxGenerator<TCoeff> gmm16{ 16 };
+  MinMaxGenerator<TCoeff> gmm11{ 11 };
+
+  // minShift: the inverse transforms and the DCT-VIII code compute 1 << ( shift - 1 ) unconditionally
+  struct Kernel { const char* name; InvTrFn* refInv; InvTrFn* optInv; FwdTrFn* refFwd; FwdTrFn* optFwd; unsigned trSize; int minShift; };
+  const Kernel kernels[] = {
+    { "fastInvDCT2_B2", ref->fastInvDCT2[0], opt->fastInvDCT2[0], nullptr, nullptr, 2, 1 },
+    { "fastInvDCT2_B4", ref->fastInvDCT2[1], opt->fastInvDCT2[1], nullptr, nullptr, 4, 1 },
+    { "fastInvDCT2_B8", ref->fastInvDCT2[2], opt->fastInvDCT2[2], nullptr, nullptr, 8, 1 },
+    { "fastFwdDCT2_B2", nullptr, nullptr, ref->fastFwdDCT2[0], opt->fastFwdDCT2[0], 2, 0 },
+    { "fastFwdDCT2_B4", nullptr, nullptr, ref->fastFwdDCT2[1], opt->fastFwdDCT2[1], 4, 0 },
+    { "fastFwdDST7_4",  nullptr, nullptr, ref->fastFwdDST7_4,  opt->fastFwdDST7_4,  4, 0 },
+    { "fastFwdDCT8_4",  nullptr, nullptr, ref->fastFwdDCT8_4,  opt->fastFwdDCT8_4,  4, 1 },
+  };
+
+  for( const auto& k : kernels )
+  {
+    for( unsigned i = 0; i < num_cases; ++i )
+    {
+      const unsigned line     = 1 << rng.get( 0, 6 );
+      // zero-out of the high-frequency lines: 0, or keep 4/8/16/32 lines as the encoder does
+      const unsigned keep     = line <= 4 ? line : rng.getOneOf<unsigned>( { line, line, 4, 8, 16, 32 } );
+      const unsigned skipLine = keep >= line ? 0 : line - keep;
+      const bool     isInv    = k.refInv != nullptr;
+      const int      shift    = rng.get( k.minShift, 12 );
+      bool ok = isInv ? check_one_butterfly( k.name, k.refInv, k.optInv, nullptr, nullptr, k.trSize, line, skipLine, shift, g16 )
+                      : check_one_butterfly( k.name, nullptr, nullptr, k.refFwd, k.optFwd, k.trSize, line, skipLine, shift, g11 );
+      ok = ok && ( isInv ? check_one_butterfly( k.name, k.refInv, k.optInv, nullptr, nullptr, k.trSize, line, skipLine, shift, gmm16 )
+                         : check_one_butterfly( k.name, nullptr, nullptr, k.refFwd, k.optFwd, k.trSize, line, skipLine, shift, gmm11 ) );
+      if( !ok )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool check_fastFwdCore_1D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastFwdCore_1D trSize=%d\n", trSize );
+  InputGenerator<TCoeff> g{ 11 };
+  MinMaxGenerator<TCoeff> gmm{ 11 };
+  TrafoGenerator<TMatrixCoeff> t{ 8 };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const unsigned cutoff = rng.get( 1, trSize );
+    const unsigned shift  = rng.get( 1, 16 );
+    std::vector<TMatrixCoeff> tc( trSize * trSize );
+    std::vector<TCoeff> src( trSize );
+    std::vector<TCoeff> dst0( trSize, 0x5a5a5a5a );
+    std::vector<TCoeff> dst1( trSize, 0x5a5a5a5a );
+    std::generate( tc.begin(), tc.end(), t );
+    if( i & 1 )
+    {
+      std::generate( src.begin(), src.end(), gmm );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), g );
+    }
+
+    ref->fastFwdCore_1D[idx]( tc.data(), src.data(), dst0.data(), 1, 1, cutoff, shift );
+    opt->fastFwdCore_1D[idx]( tc.data(), src.data(), dst1.data(), 1, 1, cutoff, shift );
+
+    std::ostringstream sstm;
+    sstm << "fastFwdCore_1D trSize=" << trSize << " cutoff=" << cutoff << " shift=" << shift;
+    if( !compare_values_1d( sstm.str(), dst0.data(), dst1.data(), trSize ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_TCoeffOps()
 {
   TCoeffOps ref;
@@ -1206,8 +1323,87 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 2, 16 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 3, 32 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 4, 64 ) && passed;
+
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 2, 16 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 3, 32 ) && passed;
+  passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 4, 64 ) && passed;
+
+  passed = check_butterflies( &ref, &opt, num_cases ) && passed;
   return passed;
 }
+// Joint Cb-Cr residual transforms: the derived residual, the untouched other buffer and the returned distortions must
+// match. The buffers are larger than the block (stride > width), so writes outside the block are caught as well.
+template<typename G>
+static bool check_one_ict( TrQuant& ref, TrQuant& opt, int mode, unsigned width, unsigned height, unsigned stride,
+                           G input_generator )
+{
+  std::ostringstream sstm;
+  sstm << "ICT mode=" << mode << " " << width << "x" << height << " stride=" << stride << " input=" << input_generator.input_type();
+
+  const unsigned size = stride * height;
+  std::vector<Pel> cb( size ), cr( size );
+  std::generate( cb.begin(), cb.end(), input_generator );
+  std::generate( cr.begin(), cr.end(), input_generator );
+
+  // forward: Cb and Cr are the inputs, the joint residual goes to C1 (modes 1, 2) or C2 (mode 3)
+  std::vector<Pel> c1Ref( size, 0x5a5a ), c2Ref( size, 0x5a5a ), c1Opt( size, 0x5a5a ), c2Opt( size, 0x5a5a );
+  const PelBuf bufCb( cb.data(), stride, width, height ), bufCr( cr.data(), stride, width, height );
+  PelBuf bufC1Ref( c1Ref.data(), stride, width, height ), bufC2Ref( c2Ref.data(), stride, width, height );
+  PelBuf bufC1Opt( c1Opt.data(), stride, width, height ), bufC2Opt( c2Opt.data(), stride, width, height );
+
+  const std::pair<int64_t, int64_t> distRef = ref.m_fwdICT[mode]( bufCb, bufCr, bufC1Ref, bufC2Ref );
+  const std::pair<int64_t, int64_t> distOpt = opt.m_fwdICT[mode]( bufCb, bufCr, bufC1Opt, bufC2Opt );
+
+  bool ok = compare_value( sstm.str() + " fwd dist1", distRef.first, distOpt.first )
+         && compare_value( sstm.str() + " fwd dist2", distRef.second, distOpt.second )
+         && compare_values_1d( sstm.str() + " fwd c1", c1Ref.data(), c1Opt.data(), size )
+         && compare_values_1d( sstm.str() + " fwd c2", c2Ref.data(), c2Opt.data(), size );
+
+  // inverse: in place, Cr is derived from Cb (modes 1, 2) or Cb from Cr (mode 3)
+  std::vector<Pel> cbRef( cb ), crRef( cr ), cbOpt( cb ), crOpt( cr );
+  PelBuf bufCbRef( cbRef.data(), stride, width, height ), bufCrRef( crRef.data(), stride, width, height );
+  PelBuf bufCbOpt( cbOpt.data(), stride, width, height ), bufCrOpt( crOpt.data(), stride, width, height );
+  ref.m_invICT[mode]( bufCbRef, bufCrRef );
+  opt.m_invICT[mode]( bufCbOpt, bufCrOpt );
+
+  return ok && compare_values_1d( sstm.str() + " inv cb", cbRef.data(), cbOpt.data(), size )
+            && compare_values_1d( sstm.str() + " inv cr", crRef.data(), crOpt.data(), size );
+}
+
+static bool check_ict( TrQuant& ref, TrQuant& opt, unsigned num_cases )
+{
+  printf( "Testing TrQuant::m_fwdICT and m_invICT\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> residual{ 12 };    // 11-bit residuals as with 10-bit video, signed
+  MinMaxGenerator<Pel> extremes{ 16 };   // the whole Pel range
+
+  for( int mode = -3; mode <= 3; mode++ )
+  {
+    for( unsigned i = 0; i < num_cases; i++ )
+    {
+      const unsigned width  = 1 << rng.get( 1, 5 );
+      const unsigned height = 1 << rng.get( 1, 5 );
+      const unsigned stride = width + rng.get( 0, 8 );
+      if( !check_one_ict( ref, opt, mode, width, height, stride, residual )
+       || !check_one_ict( ref, opt, mode, width, height, stride, extremes ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool test_TrQuant()
+{
+  TrQuant ref( /*enableOpt=*/false );
+  TrQuant opt( /*enableOpt=*/true );
+
+  return check_ict( ref, opt, NUM_CASES );
+}
+
 #endif // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_MCTF
@@ -4272,6 +4468,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_TRAFO
     { "TCoeffOps", test_TCoeffOps },
+    { "TrQuant", test_TrQuant },
 #endif
 #if ENABLE_SIMD_OPT_MCTF
     { "MCTF", test_MCTF },
