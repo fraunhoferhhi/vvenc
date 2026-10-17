@@ -2561,6 +2561,24 @@ static inline __m128i _vv_fold_epi64( __m256i v )
 }
 #endif
 
+// the two samples of each of up to four rows in one vector; the lanes of missing rows are zero
+static inline __m128i _vv_loadWidth2Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  __m128i r[4];
+  for( int i = 0; i < 4; i++ )
+  {
+    r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
+  }
+  return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
+}
+
+// the four samples of each of up to two rows in one vector; the lanes of a missing row are zero
+static inline __m128i _vv_loadWidth4Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
+  return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
+}
+
 // sum over the block of ( src0 - src1 )^2, for samples in 0 ... 2^15 - 1
 template<X86_VEXT vext>
 uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
@@ -2580,36 +2598,20 @@ uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const P
 
   if( width == 2 )
   {
-    // the two samples of up to four rows per vector
-    auto loadRows = []( const Pel* p, const ptrdiff_t stride, const int numRows )
-    {
-      __m128i r[4];
-      for( int i = 0; i < 4; i++ )
-      {
-        r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
-      }
-      return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
-    };
     for( int y = 0; y < height; y += 4, src0 += 4 * stride0, src1 += 4 * stride1 )
     {
       const int numRows = std::min( 4, height - y );
-      addSquares( loadRows( src0, stride0, numRows ), loadRows( src1, stride1, numRows ) );
+      addSquares( _vv_loadWidth2Rows( src0, stride0, numRows ), _vv_loadWidth2Rows( src1, stride1, numRows ) );
     }
     return uint64_t( _vv_sum_epi64( acc ) );
   }
 
   if( width == 4 )
   {
-    // two rows per vector
-    int y = 0;
-    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    for( int y = 0; y < height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
     {
-      addSquares( _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src0 ), _vv_loadl_epi64( ( const __m128i* ) &src0[stride0] ) ),
-                  _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) src1 ), _vv_loadl_epi64( ( const __m128i* ) &src1[stride1] ) ) );
-    }
-    if( y < height )
-    {
-      addSquares( _vv_loadl_epi64( ( const __m128i* ) src0 ), _vv_loadl_epi64( ( const __m128i* ) src1 ) );
+      const int numRows = std::min( 2, height - y );
+      addSquares( _vv_loadWidth4Rows( src0, stride0, numRows ), _vv_loadWidth4Rows( src1, stride1, numRows ) );
     }
     return uint64_t( _vv_sum_epi64( acc ) );
   }
@@ -2660,47 +2662,62 @@ uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const P
   return sum + uint64_t( _vv_sum_epi64( acc ) );
 }
 
-// sum of the samples of a block and, if sumSquares is not null, of their squares
+// sum of the samples of a block and, if withSquares, of their squares
 template<X86_VEXT vext, bool withSquares>
 static inline void sumBlock_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares )
 {
-  const __m128i ones  = _mm_set1_epi16( 1 );
+  const __m128i ones   = _mm_set1_epi16( 1 );
   __m128i       accSum = _mm_setzero_si128();
   __m128i       accSq  = _mm_setzero_si128();
   int64_t       tail   = 0, tailSq = 0;
 
-  for( int y = 0; y < height; y++, src += stride )
+  // adds the 32-bit pair sums of v to pairSums and the pair sums of its squares, at most 2^31, to accSq
+  auto addSamples = [&]( __m128i& pairSums, const __m128i v )
   {
-    // per row, the 32-bit pair sums cannot overflow: |sum| <= width * 2^15
-    __m128i rowSum = _mm_setzero_si128();
-    int x = 0;
-    for( ; x + 8 <= width; x += 8 )
+    pairSums = _mm_add_epi32( pairSums, _mm_madd_epi16( v, ones ) );
+    if( withSquares )
     {
-      const __m128i v = _mm_loadu_si128( ( const __m128i* ) &src[x] );
-      rowSum = _mm_add_epi32( rowSum, _mm_madd_epi16( v, ones ) );
-      if( withSquares )
-      {
-        // the pair sums of squares are at most 2^31, i.e. unsigned 32 bit
-        accSq = _vv_addUnsigned32To64( accSq, _mm_madd_epi16( v, v ) );
-      }
+      accSq = _vv_addUnsigned32To64( accSq, _mm_madd_epi16( v, v ) );
     }
-    if( x + 4 <= width )
+  };
+
+  if( width == 2 || width == 4 )
+  {
+    // four rows of width 2 or two rows of width 4 per vector
+    const int rowsPerVector = 8 / width;
+    for( int y = 0; y < height; y += rowsPerVector, src += rowsPerVector * stride )
     {
-      const __m128i v = _vv_loadl_epi64( ( const __m128i* ) &src[x] );
-      rowSum = _mm_add_epi32( rowSum, _mm_madd_epi16( v, ones ) );
-      if( withSquares )
-      {
-        accSq = _vv_addUnsigned32To64( accSq, _mm_madd_epi16( v, v ) );
-      }
-      x += 4;
-    }
-    accSum = _vv_addSigned32To64( accSum, rowSum );
-    for( ; x < width; x++ )
-    {
-      tail   += src[x];
-      tailSq += src[x] * src[x];
+      const int numRows  = std::min( rowsPerVector, height - y );
+      __m128i   pairSums = _mm_setzero_si128();
+      addSamples( pairSums, width == 2 ? _vv_loadWidth2Rows( src, stride, numRows ) : _vv_loadWidth4Rows( src, stride, numRows ) );
+      accSum = _vv_addSigned32To64( accSum, pairSums );
     }
   }
+  else
+  {
+    for( int y = 0; y < height; y++, src += stride )
+    {
+      // per row, the 32-bit pair sums cannot overflow: |sum| <= width * 2^15
+      __m128i rowSum = _mm_setzero_si128();
+      int x = 0;
+      for( ; x + 8 <= width; x += 8 )
+      {
+        addSamples( rowSum, _mm_loadu_si128( ( const __m128i* ) &src[x] ) );
+      }
+      if( x + 4 <= width )
+      {
+        addSamples( rowSum, _vv_loadl_epi64( ( const __m128i* ) &src[x] ) );
+        x += 4;
+      }
+      accSum = _vv_addSigned32To64( accSum, rowSum );
+      for( ; x < width; x++ )
+      {
+        tail   += src[x];
+        tailSq += src[x] * src[x];
+      }
+    }
+  }
+
   sum = tail + _vv_sum_epi64( accSum );
   if( withSquares )
   {

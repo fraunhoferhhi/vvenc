@@ -2536,7 +2536,8 @@ static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigne
 
   for( unsigned i = 0; i < num_cases; i++ )
   {
-    const int width  = rng.get( 1, 160 );
+    // half of the cases are up to 8 wide, where the SIMD versions pack several rows per vector or use C
+    const int width  = i % 2 ? rng.get( 1, 160 ) : rng.get( 1, 8 );
     const int height = rng.get( 1, 70 );
     const int stride = width + rng.get( 0, 40 );
     std::vector<Pel> a( stride * height ), b( stride * height );
