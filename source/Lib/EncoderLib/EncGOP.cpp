@@ -148,6 +148,7 @@ EncGOP::EncGOP( MsgLog& logger )
 
 EncGOP::~EncGOP()
 {
+  xWaitFgaTasks();
   freePicList();
 
   for( auto& picEncoder : m_freePicEncoderList )
@@ -159,11 +160,6 @@ EncGOP::~EncGOP()
   }
   m_freePicEncoderList.clear();
   m_threadPool = nullptr;
-
-  if ( m_pcEncCfg->m_fga )
-  {
-    m_fgAnalyzer.destroy();
-  }
 
   // cleanup parameter sets
   m_spsMap.clearMap();
@@ -196,10 +192,9 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
 
   if ( encCfg.m_fga )
   {
-    m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight,
-                       m_pcEncCfg->m_internChromaFormat, m_pcEncCfg->m_outputBitDepth,
-                       m_pcEncCfg->m_fg.m_fgcSEICompModelPresent );
-    m_fgcParam = FilmGrainParam( m_fgAnalyzer );   // default parameters, until the first analysis
+    m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_internChromaFormat,
+                         m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent );
+    m_fgcParam = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
   }
 
   if( !m_pcEncCfg->m_poc0idr )
@@ -513,6 +508,14 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
 
   if( ! m_isPreAnalysis )
   {
+    // a film grain analysis may still read the filtered picture
+    for( auto& task : m_fgaTasks )
+    {
+      if( task->pic == outPic )
+      {
+        task->counter.wait();
+      }
+    }
     outPic->getFilteredOrigBuffer().destroy();
   }
 
@@ -1443,17 +1446,56 @@ void EncGOP::xAnalyzeFilmGrain( Picture& pic )
 {
   // Pictures come here in coding order. Analyzing them here rather than when their encoding starts keeps the choice
   // of analyzed pictures, and the parameters each access unit signals, independent of the parallel encoding order.
-  // The analysis needs the MCTF-filtered picture and runs at most once per GOP size.
-  const int  prevAnalysisPoc    = m_fgAnalyzer.prevAnalysisPoc;
-  const bool isNearLastAnalysis = prevAnalysisPoc != -1 && abs( pic.getPOC() - prevAnalysisPoc ) < m_pcEncCfg->m_GOPSize;
-  if( isNearLastAnalysis || !pic.getFilteredOrigBuffer().valid() )
+  // The analysis looks at the first picture of every GOP, which MCTF filtered for it.
+  if( !pic.m_picShared->getFgaFilteredBuf().valid() && !pic.m_picShared->fgaUsesFilteredBuf() )
   {
     return;
   }
+  m_fgaTasks.emplace_back( new FgaTask );
+  FgaTask* task  = m_fgaTasks.back().get();
+  task->gop        = this;
+  task->pic        = &pic;
+  task->codingNum  = pic.gopEntry->m_codingNum;
+  const Barrier* previous = m_fgaLast ? &m_fgaLast->counter.done : nullptr;
+  m_fgaLast = task;
 
-  m_fgAnalyzer.estimateGrainParameters( &pic );
-  m_fgAnalyzer.prevAnalysisPoc = pic.getPOC();
-  m_fgaResults.push_back( { pic.gopEntry->m_codingNum, FilmGrainParam( m_fgAnalyzer ) } );
+  static auto runTask = []( int, void* param )
+  {
+    FgaTask* t = static_cast<FgaTask*>( param );
+    t->gop->xRunFgaTask( *t );
+    return true;
+  };
+  if( m_threadPool )
+  {
+    // off the encoding path: the result is only needed when the access unit of the picture is written
+    m_threadPool->addBarrierTask( runTask, task, &task->counter, nullptr, { previous } );
+  }
+  else
+  {
+    runTask( 0, task );
+  }
+}
+
+void EncGOP::xRunFgaTask( FgaTask& task )
+{
+  PicShared* shared         = task.pic->m_picShared;
+  PelStorage& fgaBuf        = shared->getFgaFilteredBuf();
+  const bool ownBuf         = fgaBuf.valid();
+  const CPelUnitBuf denoised = ownBuf ? CPelUnitBuf( fgaBuf ) : CPelUnitBuf( task.pic->getFilteredOrigBuffer() );
+  m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised );
+  if( ownBuf )
+  {
+    fgaBuf.destroy();
+  }
+  task.result = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );
+}
+
+void EncGOP::xWaitFgaTasks()
+{
+  for( auto& task : m_fgaTasks )
+  {
+    task->counter.wait();
+  }
 }
 
 void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
@@ -2504,10 +2546,13 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   {
     // Access units are written in coding order. An analysis result takes effect with the access unit of the analyzed
     // picture, however far ahead of the output the analysis ran.
-    while( !m_fgaResults.empty() && m_fgaResults.front().first <= pic.gopEntry->m_codingNum )
+    while( !m_fgaTasks.empty() && m_fgaTasks.front()->codingNum <= pic.gopEntry->m_codingNum )
     {
-      m_fgcParam = std::move( m_fgaResults.front().second );
-      m_fgaResults.pop_front();
+      m_fgaTasks.front()->counter.wait();
+      m_fgcParam = m_fgaTasks.front()->result;
+      // the consumed task has run, so the task after it no longer looks at its barrier once that one has run too
+      m_fgaConsumed = std::move( m_fgaTasks.front() );
+      m_fgaTasks.pop_front();
     }
 
     SeiFgc* sei = new SeiFgc;
@@ -2519,6 +2564,20 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
       {  // higher importance of presentFlag is from cfg file
         sei->compModel[compIdx] = m_fgcParam.compModel[compIdx];
       }
+      SeiFgc::CompModel& cm = sei->compModel[ compIdx ];
+      if( m_pcEncCfg->m_fga && !cm.presentFlag && m_fgcCompSignalled[ compIdx ] )
+      {
+        // vvdec keeps synthesizing the grain of a component that a later SEI marks as absent (fixed by its pull
+        // request 414, open in October 2026), so a component that had grain gets one interval with scaling factor 0.
+        cm.presentFlag           = true;
+        cm.numIntensityIntervals = 1;
+        cm.numModelValues        = 1;
+        cm.intensityValues.resize( 1 );
+        cm.intensityValues[ 0 ].intensityIntervalLowerBound = 0;
+        cm.intensityValues[ 0 ].intensityIntervalUpperBound = 255;
+        cm.intensityValues[ 0 ].compModelValue.assign( 1, 0 );
+      }
+      m_fgcCompSignalled[ compIdx ] = m_fgcCompSignalled[ compIdx ] || cm.presentFlag;
     }
     leadingSeiMessages.push_back( sei );
   }

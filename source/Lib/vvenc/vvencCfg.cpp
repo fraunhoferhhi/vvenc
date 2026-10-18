@@ -695,6 +695,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPQPA                                  = -1;
 
   c->m_fga                                     = false;
+  c->m_fgaStrength                             = 100.0;
 
   memset( c->m_reservedInt8, 0, sizeof(c->m_reservedInt8) );
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
@@ -1790,6 +1791,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  vvenc_confirmParameter( c, c->m_fgaStrength < 0.0 || c->m_fgaStrength > 400.0, "Film grain strength (fgastrength) must be in the range 0 to 400!");
   if (c->m_fga)
   {
     vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
@@ -3294,6 +3296,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
     css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << "\n";
+    if( c->m_fga )
+      css << loglvl << "Film grain strength                    : " << c->m_fgaStrength << " %\n";
     }
 
   if( eMsgLevel >= VVENC_VERBOSE )

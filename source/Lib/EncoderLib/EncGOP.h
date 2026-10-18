@@ -115,12 +115,18 @@ struct FilmGrainParam {
   SeiFgc::CompModel compModel[ MAX_NUM_COMP ];
 
   FilmGrainParam() = default;
-  explicit FilmGrainParam( FGAnalyzer& fgAnalyzer )
-    : log2ScaleFactor( fgAnalyzer.getLog2scaleFactor() )
+  // The parameters of the analysis, with the grain strength set to strength percent of the analysed grain.
+  FilmGrainParam( const FGAnalyzer& fgAnalyzer, double strength )
   {
-    for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
+    fgAnalyzer.getSignalledParameters( strength, log2ScaleFactor, compModel );
+    for( auto& cm : compModel )
     {
-      compModel[ compIdx ] = fgAnalyzer.getCompModel( compIdx );
+      // only the signalled intervals and model values, as the SEI writer expects
+      cm.intensityValues.resize( cm.numIntensityIntervals );
+      for( auto& iv : cm.intensityValues )
+      {
+        iv.compModelValue.resize( cm.numModelValues );
+      }
     }
   }
 };
@@ -186,9 +192,23 @@ private:
   std::vector<int>          m_globalCtuQpVector;
   bool                      m_forceSCC;
 
-  FGAnalyzer                m_fgAnalyzer;
-  std::deque<std::pair<int, FilmGrainParam>> m_fgaResults;  ///< analysis results by coding number, waiting for the analyzed picture's access unit
+  FGAnalyzer              m_fgAnalyzer;                 ///< film grain analysis (--fga)
+
+  // An analysis, run as a thread pool task. The tasks run one after the other in coding order (each waits
+  // for the previous one), because every analysis adds to the statistics of the previous ones.
+  struct FgaTask
+  {
+    EncGOP*        gop       = nullptr;
+    Picture*       pic       = nullptr;
+    int            codingNum = 0;
+    FilmGrainParam result;
+    WaitCounter    counter;
+  };
+  std::deque<std::unique_ptr<FgaTask>> m_fgaTasks;      ///< analyses whose access unit is not written yet
+  std::unique_ptr<FgaTask>             m_fgaConsumed;   ///< the last consumed task, kept until the next one has run
+  FgaTask*                             m_fgaLast = nullptr;   ///< the last submitted task
   FilmGrainParam            m_fgcParam;                     ///< film grain parameters signalled in the access units being written
+  bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components signalled as present so far
 
 public:
   EncGOP( MsgLog& msglog );
@@ -226,6 +246,8 @@ private:
 
   void xSetupPicAps                   ( Picture* pic );
   void xAnalyzeFilmGrain              ( Picture& pic );
+  void xRunFgaTask                  ( FgaTask& task );
+  void xWaitFgaTasks                ();
   void xInitPicsInCodingOrder         ( const PicList& picList );
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
   void xUpdateVAStartOfLastGop        ( Picture& keyPic ) const;
