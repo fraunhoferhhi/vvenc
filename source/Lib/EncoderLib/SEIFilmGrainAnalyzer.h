@@ -110,6 +110,13 @@ public:
                      unsigned int bitDepth,
                      ComponentID compID);
 
+  // the non-maximum suppression of the gradient magnitudes mag: each direction in dir (0, 45, 90 or 135 degrees) is
+  // replaced by the magnitude, or by 0 where a neighbour along that direction has a larger magnitude
+  void (*suppressNonMaxPlane) ( const Pel* mag, const ptrdiff_t magStride, Pel* dir, const ptrdiff_t dirStride, const int width, const int height );
+  // the double threshold of the suppressed magnitudes in buf: above the high threshold strong, above the low
+  // threshold weak, else 0; the thresholds derive from the largest magnitude
+  void (*doubleThresholdPlane) ( Pel* buf, const ptrdiff_t stride, const int width, const int height, const int bitDepth, const double lowThresholdRatio, const int highThresholdRatio );
+
 private:
   double            m_lowThresholdRatio   = 0.1;               // low threshold rato
   int               m_highThresholdRatio  = 3;                 // high threshold rato

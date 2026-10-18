@@ -3716,6 +3716,57 @@ static bool test_MorphDilation()
   return passed;
 }
 
+// The non-maximum suppression and the double threshold of the Canny edge detector: any Pel magnitudes (the compares
+// are signed), directions 0, 45, 90 and 135, widths 1 to 100 including the scalar tails, a margin of 1 for the
+// neighbours, 8 and 10 bits and the default as well as random threshold ratios. Both work in place.
+static bool test_CannyEdges()
+{
+  printf( "Testing Canny::suppressNonMaxPlane, doubleThresholdPlane\n" );
+  vvenc::Canny ref{ /*enableOpt=*/false };
+  vvenc::Canny opt{ /*enableOpt=*/true };
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  const Pel directions[] = { 0, 45, 90, 135 };
+
+  for( unsigned i = 0; i < NUM_CASES; i++ )
+  {
+    const int width  = rng.get( 1, 100 );
+    const int height = rng.get( 1, 20 );
+    const int stride = width + 2 + rng.get( 0, 6 );
+    std::vector<Pel> mag( stride * ( height + 2 ) );
+    std::generate( mag.begin(), mag.end(), anyPel );
+    std::vector<Pel> dirRef( stride * height ), dirOpt;
+    for( Pel& d : dirRef )
+    {
+      d = directions[rng.get( 0, 3 )];
+    }
+    dirOpt = dirRef;
+
+    const Pel* plane = &mag[stride + 1];
+    ref.suppressNonMaxPlane( plane, stride, dirRef.data(), stride, width, height );
+    opt.suppressNonMaxPlane( plane, stride, dirOpt.data(), stride, width, height );
+    std::ostringstream sstm;
+    sstm << " " << width << "x" << height << " stride=" << stride;
+    if( !compare_values_1d( "suppressNonMaxPlane" + sstm.str(), dirRef.data(), dirOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+
+    // the suppressed magnitudes are the input of the double threshold
+    const int    bitDepth  = rng.getOneOf<int>( { 8, 10 } );
+    const double lowRatio  = i % 2 ? 0.1 : rng.get( 1, 99 ) / 100.0;
+    const int    highRatio = i % 2 ? 3 : rng.get( 1, 4 );
+    ref.doubleThresholdPlane( dirRef.data(), stride, width, height, bitDepth, lowRatio, highRatio );
+    opt.doubleThresholdPlane( dirOpt.data(), stride, width, height, bitDepth, lowRatio, highRatio );
+    sstm << " bd=" << bitDepth << " ratios=" << lowRatio << "," << highRatio;
+    if( !compare_values_1d( "doubleThresholdPlane" + sstm.str(), dirRef.data(), dirOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_CannyGradient()
 {
   printf( "Testing Canny::gradient\n" );
@@ -4304,6 +4355,7 @@ static const UnitTestEntry test_suites[] = {
     { "FGAnalyzer", test_FGAnalyzer },
     { "MorphDilation", test_MorphDilation },
     { "CannyGradient", test_CannyGradient },
+    { "CannyEdges", test_CannyEdges },
 #endif
 };
 

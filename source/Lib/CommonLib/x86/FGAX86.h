@@ -741,11 +741,131 @@ int calcMeanSSE ( const Pel* org, const ptrdiff_t origStride, const int w, const
   return avg;
 }
 
+// Canny::suppressNonMaxPlane: eight samples per step; the four neighbour pairs of the directions 0, 45, 90 and 135
+// degrees are all compared, and the direction of each sample selects its pair
+template<X86_VEXT vext>
+static void suppressNonMax_SIMD( const Pel* mag, const ptrdiff_t magStride, Pel* dir, const ptrdiff_t dirStride, const int width, const int height )
+{
+  auto suppressOne = [&]( const Pel* m, Pel& d )
+  {
+    int dx = 0, dy = 0;
+    switch( d )
+    {
+    case 0:   dx =  1; dy = 0; break;
+    case 45:  dx =  1; dy = 1; break;
+    case 90:  dx =  0; dy = 1; break;
+    case 135: dx = -1; dy = 1; break;
+    default: THROW( "Unsupported gradient direction." ); break;
+    }
+    d = ( m[0] < m[dy * magStride + dx] || m[0] < m[-dy * magStride - dx] ) ? 0 : m[0];
+  };
+
+  const __m128i d0   = _mm_setzero_si128();
+  const __m128i d45  = _mm_set1_epi16( 45 );
+  const __m128i d90  = _mm_set1_epi16( 90 );
+  const __m128i d135 = _mm_set1_epi16( 135 );
+
+  for( int y = 0; y < height; y++, mag += magStride, dir += dirStride )
+  {
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const Pel* m    = &mag[x];
+      const __m128i cur  = _mm_loadu_si128( ( const __m128i* ) m );
+      const __m128i lft  = _mm_loadu_si128( ( const __m128i* ) &m[-1] );
+      const __m128i rgt  = _mm_loadu_si128( ( const __m128i* ) &m[1] );
+      const __m128i upL  = _mm_loadu_si128( ( const __m128i* ) &m[-magStride - 1] );
+      const __m128i up   = _mm_loadu_si128( ( const __m128i* ) &m[-magStride] );
+      const __m128i upR  = _mm_loadu_si128( ( const __m128i* ) &m[-magStride + 1] );
+      const __m128i dnL  = _mm_loadu_si128( ( const __m128i* ) &m[magStride - 1] );
+      const __m128i dn   = _mm_loadu_si128( ( const __m128i* ) &m[magStride] );
+      const __m128i dnR  = _mm_loadu_si128( ( const __m128i* ) &m[magStride + 1] );
+      const __m128i dirs = _mm_loadu_si128( ( const __m128i* ) &dir[x] );
+
+      const __m128i is0   = _mm_cmpeq_epi16( dirs, d0 );
+      const __m128i is45  = _mm_cmpeq_epi16( dirs, d45 );
+      const __m128i is90  = _mm_cmpeq_epi16( dirs, d90 );
+      const __m128i is135 = _mm_cmpeq_epi16( dirs, d135 );
+      const __m128i valid = _mm_or_si128( _mm_or_si128( is0, is45 ), _mm_or_si128( is90, is135 ) );
+      if( _mm_movemask_epi8( valid ) != 0xffff )
+      {
+        THROW( "Unsupported gradient direction." );
+      }
+
+      // a neighbour along the direction is larger: ( x + 1, y ) / ( x - 1, y ) for 0, ( x + 1, y + 1 ) / ( x - 1, y - 1 )
+      // for 45, ( x, y + 1 ) / ( x, y - 1 ) for 90 and ( x - 1, y + 1 ) / ( x + 1, y - 1 ) for 135 degrees
+      auto larger = [&cur]( const __m128i a, const __m128i b ) { return _mm_or_si128( _mm_cmpgt_epi16( a, cur ), _mm_cmpgt_epi16( b, cur ) ); };
+      const __m128i suppress = _mm_or_si128( _mm_or_si128( _mm_and_si128( is0,  larger( rgt, lft ) ), _mm_and_si128( is45,  larger( dnR, upL ) ) ),
+                                             _mm_or_si128( _mm_and_si128( is90, larger( dn,  up  ) ), _mm_and_si128( is135, larger( dnL, upR ) ) ) );
+      _mm_storeu_si128( ( __m128i* ) &dir[x], _mm_andnot_si128( suppress, cur ) );
+    }
+    for( ; x < width; x++ )
+    {
+      suppressOne( &mag[x], dir[x] );
+    }
+  }
+}
+
+// Canny::doubleThresholdPlane: the largest magnitude and the classification of the samples, eight per step
+template<X86_VEXT vext>
+static void doubleThreshold_SIMD( Pel* buf, const ptrdiff_t stride, const int width, const int height, const int bitDepth, const double lowThresholdRatio, const int highThresholdRatio )
+{
+  const Pel strongPel = ( static_cast<Pel>( 1 ) << bitDepth ) - 1;
+  const Pel weakPel   = ( static_cast<Pel>( 1 ) << ( bitDepth - 1 ) ) - 1;
+
+  __m128i vmax    = _mm_setzero_si128();
+  Pel     maxTail = 0;
+  for( int y = 0; y < height; y++ )
+  {
+    const Pel* row = &buf[y * stride];
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      vmax = _mm_max_epi16( vmax, _mm_loadu_si128( ( const __m128i* ) &row[x] ) );
+    }
+    for( ; x < width; x++ )
+    {
+      maxTail = std::max<Pel>( maxTail, row[x] );
+    }
+  }
+  vmax = _mm_max_epi16( vmax, _mm_shuffle_epi32( vmax, 0x4e ) );
+  vmax = _mm_max_epi16( vmax, _mm_shuffle_epi32( vmax, 0xb1 ) );
+  vmax = _mm_max_epi16( vmax, _mm_shufflelo_epi16( vmax, 0xb1 ) );
+  const Pel highest = std::max<Pel>( maxTail, Pel( _mm_extract_epi16( vmax, 0 ) ) );
+
+  // the thresholds as in the C version
+  const Pel lowThreshold  = static_cast<Pel>( lowThresholdRatio * highest );
+  const Pel highThreshold = Clip3( 0, ( 1 << bitDepth ) - 1, highThresholdRatio * lowThreshold );
+
+  const __m128i vlow    = _mm_set1_epi16( lowThreshold );
+  const __m128i vhigh   = _mm_set1_epi16( highThreshold );
+  const __m128i vstrong = _mm_set1_epi16( strongPel );
+  const __m128i vweak   = _mm_set1_epi16( weakPel );
+  for( int y = 0; y < height; y++ )
+  {
+    Pel* row = &buf[y * stride];
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i v      = _mm_loadu_si128( ( const __m128i* ) &row[x] );
+      const __m128i weak   = _mm_and_si128( _mm_cmpgt_epi16( v, vlow ), vweak );
+      const __m128i result = _mm_blendv_epi8( weak, vstrong, _mm_cmpgt_epi16( v, vhigh ) );
+      _mm_storeu_si128( ( __m128i* ) &row[x], result );
+    }
+    for( ; x < width; x++ )
+    {
+      row[x] = row[x] > highThreshold ? strongPel : row[x] > lowThreshold ? weakPel : 0;
+    }
+  }
+}
+
 #if ENABLE_SIMD_OPT_FGA
 template<X86_VEXT vext>
 void Canny::_initFGACannyX86()
 {
-  gradient  = gradient_SIMD<vext>;
+  gradient             = gradient_SIMD<vext>;
+  suppressNonMaxPlane  = suppressNonMax_SIMD<vext>;
+  doubleThresholdPlane = doubleThreshold_SIMD<vext>;
 }
 template void Canny::_initFGACannyX86<SIMDX86>();
 

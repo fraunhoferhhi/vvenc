@@ -211,10 +211,15 @@ void gradient_core ( PelStorage *buff1,
 // Edge detection - Canny
 // ====================================================================================================================
 
+static void suppressNonMaxCore( const Pel* mag, const ptrdiff_t magStride, Pel* dir, const ptrdiff_t dirStride, const int width, const int height );
+static void doubleThresholdCore( Pel* buf, const ptrdiff_t stride, const int width, const int height, const int bitDepth, const double lowThresholdRatio, const int highThresholdRatio );
+
 Canny::Canny( bool enableOpt )
 {
   // init();
-  gradient=gradient_core;
+  gradient             = gradient_core;
+  suppressNonMaxPlane  = suppressNonMaxCore;
+  doubleThresholdPlane = doubleThresholdCore;
 
   if( enableOpt )
   {
@@ -279,18 +284,16 @@ void Canny::destroy()
   }
 }
 
-void Canny::suppressNonMax ( PelStorage *buff1,
-                             PelStorage *buff2,
-                             uint32_t width,
-                             uint32_t height,
-                             ComponentID compID )
+// the non-maximum suppression of the gradient magnitudes mag: each direction in dir (0, 45, 90 or 135 degrees) is
+// replaced by the magnitude, or by 0 where a neighbour along that direction has a larger magnitude
+static void suppressNonMaxCore( const Pel* mag, const ptrdiff_t magStride, Pel* dir, const ptrdiff_t dirStride, const int width, const int height )
 {
   for ( int i = 0; i < width; i++ )
   {
     for ( int j = 0; j < height; j++ )
     {
       int rowShift = 0, colShift = 0;
-      switch ( buff2->get( ComponentID(0) ).at( i, j ) )
+      switch ( dir[j * dirStride + i] )
       {
       case 0:
         rowShift = 1;
@@ -311,27 +314,24 @@ void Canny::suppressNonMax ( PelStorage *buff1,
       default: THROW("Unsupported gradient direction."); break;
       }
 
-      Pel pelCurrent             = buff1->get(compID).at( i, j );
-      Pel pelEdgeDirectionTop    = buff1->get(compID).at( i + rowShift, j + colShift );
-      Pel pelEdgeDirectionBottom = buff1->get(compID).at( i - rowShift, j - colShift );
+      Pel pelCurrent             = mag[j * magStride + i];
+      Pel pelEdgeDirectionTop    = mag[( j + colShift ) * magStride + i + rowShift];
+      Pel pelEdgeDirectionBottom = mag[( j - colShift ) * magStride + i - rowShift];
       if (( pelCurrent < pelEdgeDirectionTop ) || ( pelCurrent < pelEdgeDirectionBottom ))
       {
-        buff2->get(ComponentID(0)).at( i, j ) = 0;   // supress
+        dir[j * dirStride + i] = 0;   // supress
       }
       else
       {
-        buff2->get(ComponentID(0)).at( i, j ) = buff1->get(compID).at( i, j );   // keep
+        dir[j * dirStride + i] = pelCurrent;   // keep
       }
     }
   }
-  buff1->get(compID).copyFrom( buff2->get( ComponentID(0) ) );
 }
 
-void Canny::doubleThreshold ( PelStorage *buff,
-                              uint32_t width,
-                              uint32_t height,
-                              uint32_t bitDepth,
-                              ComponentID compID )
+// the double threshold of the suppressed magnitudes in buf: above the high threshold strong, above the low threshold
+// weak, else 0; the thresholds derive from the largest magnitude
+static void doubleThresholdCore( Pel* buf, const ptrdiff_t stride, const int width, const int height, const int bitDepth, const double lowThresholdRatio, const int highThresholdRatio )
 {
   Pel strongPel = ( static_cast<Pel>( 1 ) << bitDepth) - 1;
   Pel weekPel   = ( static_cast<Pel>( 1 ) << (bitDepth - 1)) - 1;
@@ -343,35 +343,58 @@ void Canny::doubleThreshold ( PelStorage *buff,
     for ( int j = 0; j < height; j++ )
     {
       highThreshold = std::max<Pel>( highThreshold,
-                                     buff->get(compID).at( i, j ) );
+                                     buf[j * stride + i] );
     }
   }
 
   // global low and high threshold
-  lowThreshold = static_cast<Pel>( m_lowThresholdRatio * highThreshold );
+  lowThreshold = static_cast<Pel>( lowThresholdRatio * highThreshold );
   highThreshold = Clip3( 0,
                          (1 << bitDepth) - 1,
-                         m_highThresholdRatio * lowThreshold);   // Canny recommended a upper:lower ratio between 2:1 and 3:1.
+                         highThresholdRatio * lowThreshold);   // Canny recommended a upper:lower ratio between 2:1 and 3:1.
 
   // strong, week, supressed
   for ( int i = 0; i < width; i++ )
   {
     for ( int j = 0; j < height; j++ )
     {
-      if ( buff->get(compID).at( i, j ) > highThreshold )
+      Pel& pel = buf[j * stride + i];
+      if ( pel > highThreshold )
       {
-        buff->get(compID).at( i, j ) = strongPel;
+        pel = strongPel;
       }
-      else if ( buff->get(compID).at( i, j ) <= highThreshold && buff->get(compID).at( i, j ) > lowThreshold )
+      else if ( pel <= highThreshold && pel > lowThreshold )
       {
-        buff->get(compID).at( i, j ) = weekPel;
+        pel = weekPel;
       }
       else
       {
-        buff->get(compID).at( i, j ) = 0;
+        pel = 0;
       }
     }
   }
+}
+
+void Canny::suppressNonMax ( PelStorage *buff1,
+                             PelStorage *buff2,
+                             uint32_t width,
+                             uint32_t height,
+                             ComponentID compID )
+{
+  const PelBuf mag = buff1->get( compID );
+  PelBuf       dir = buff2->get( ComponentID( 0 ) );
+  suppressNonMaxPlane( mag.buf, mag.stride, dir.buf, dir.stride, width, height );
+  buff1->get(compID).copyFrom( buff2->get( ComponentID(0) ) );
+}
+
+void Canny::doubleThreshold ( PelStorage *buff,
+                              uint32_t width,
+                              uint32_t height,
+                              uint32_t bitDepth,
+                              ComponentID compID )
+{
+  PelBuf plane = buff->get( compID );
+  doubleThresholdPlane( plane.buf, plane.stride, width, height, bitDepth, m_lowThresholdRatio, m_highThresholdRatio );
 
   buff->get(compID).extendBorderPel ( 1, 1 );   // extend one pixel on each side for the next step
 }
