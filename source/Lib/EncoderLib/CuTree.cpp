@@ -1071,7 +1071,7 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
       const double alphaCtu = dep / std::max( dist, 1.0 );
       const double beta     = ( 1.0 + alphaCtu ) / ( 1.0 + alphaPic );
       const double damping  = beta < 1.0 || frame.isIntra ? 0.5 : 0.25;
-      picShared->m_ctuBimQpOffset[cy * widthInCtus + cx] = int( std::lround( -m_encCfg->m_cuTreeStrength * damping * std::log2( beta ) ) );
+      picShared->m_ctuBimQpOffset[cy * widthInCtus + cx] = int( std::lround( -m_encCfg->m_cuTreeScale * damping * std::log2( beta ) ) );
     }
   }
 }

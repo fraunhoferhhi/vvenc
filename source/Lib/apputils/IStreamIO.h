@@ -276,6 +276,52 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToInt8& toInt8
 }
 
 // ====================================================================================================================
+// string (decimal number) <-> uint8_t fixed point value
+// ====================================================================================================================
+
+// Lets the apps take a decimal value for a config field that stores it with a few fractional bits,
+// so the field needs only one byte of the config struct.
+class IStreamToFixedPointU8
+{
+  public:
+    IStreamToFixedPointU8( uint8_t* d, int fracBits )
+      : dstVal  ( d )
+      , fracBits( fracBits )
+    {
+    }
+
+    friend std::ostream& operator << ( std::ostream& os, const IStreamToFixedPointU8& toFixed );
+
+    friend std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFixed );
+
+  private:
+    uint8_t* dstVal;
+    int      fracBits;
+};
+
+inline std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFixed )
+{
+  std::string str;
+  in >> str;
+  const double value = std::stod( str );
+  const double fixed = value * ( 1 << toFixed.fracBits ) + 0.5;
+  // written so that NaN fails as well
+  if( !( value >= 0.0 && fixed < 256.0 ) )
+  {
+    in.setstate( std::ios::failbit );
+    return in;
+  }
+  *toFixed.dstVal = (uint8_t)fixed;
+  return in;
+}
+
+inline std::ostream& operator << ( std::ostream& os, const IStreamToFixedPointU8& toFixed )
+{
+  os << *toFixed.dstVal / double( 1 << toFixed.fracBits );
+  return os;
+}
+
+// ====================================================================================================================
 // string <-> function
 // ====================================================================================================================
 

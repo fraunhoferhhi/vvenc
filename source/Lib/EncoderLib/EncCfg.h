@@ -98,6 +98,7 @@ struct VVEncCfg : public vvenc_config
   vvencFG   m_fg;
   int       m_internalUsePerceptQPATempFiltISlice;
   bool      m_disableForce2ndOderFilter;
+  double    m_cuTreeScale;      // scale of CU-tree's QP offsets, decoded from the 5-bit fixed point m_cuTreeStrength
 
 private:
   void xInitCfgMembers();

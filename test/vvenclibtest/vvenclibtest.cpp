@@ -307,6 +307,18 @@ int testLibParameterRanges()
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
+  // CU-tree is an alternative to BIM, and it needs inter pictures
+  const bool savedBim = vvencParams.m_blockImportanceMapping;
+  vvencParams.m_blockImportanceMapping = false;
+  testParamList( "BIM=0, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { 0,1 } );
+  testParamList( "BIM=0, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { -1,2 }, true );
+  vvencParams.m_IntraPeriod = 1;
+  testParamList( "BIM=0, IntraPeriod=1, CuTree",           vvencParams.m_cuTree,                     vvencParams, { 1 }, true );
+  vvencParams.m_IntraPeriod = 32;
+  vvencParams.m_blockImportanceMapping = true;
+  testParamList( "BIM=1, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { 1 }, true );
+  vvencParams.m_blockImportanceMapping = savedBim;
+
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
 
