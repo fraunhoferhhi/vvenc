@@ -323,6 +323,67 @@ static void fgaSquaredDct16_neon( const Pel* src, int stride, int maxRange, doub
   }
 }
 
+// 4x downsampling: the four rows are added in 16 bits (at most 4 * 4095), then groups of four samples by two pairwise
+// additions.
+static void fgaDownsample4_neon( const Pel* src, int stride, int n, Pel* dst )
+{
+  int x = 0;
+  for( ; x + 4 <= n; x += 4 )
+  {
+    const Pel* s = src + 4 * x;
+    int16x8_t a = vld1q_s16( s ), b = vld1q_s16( s + 8 );
+    for( int y = 1; y < 4; y++ )
+    {
+      a = vaddq_s16( a, vld1q_s16( s + y * stride ) );
+      b = vaddq_s16( b, vld1q_s16( s + y * stride + 8 ) );
+    }
+    const int32x4_t q = pairwise_add_s32x4( vpaddlq_s16( a ), vpaddlq_s16( b ) );
+    vst1_s16( dst + x, vqmovn_s32( vrshrq_n_s32( q, 4 ) ) );   // ( sum + 8 ) >> 4
+  }
+  fgaDownsample4Core( src + 4 * x, stride, n - x, dst + x );
+}
+
+// SAD of 4x4 blocks: absolute differences of four rows added in 16 bits (at most 4 * 4095), then groups of four
+// samples by two pairwise additions.
+static void fgaSad4x4Row_neon( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad )
+{
+  int b = 0;
+  for( ; b + 4 <= n; b += 4 )
+  {
+    int16x8_t lo = vdupq_n_s16( 0 ), hi = vdupq_n_s16( 0 );
+    for( int y = 0; y < 4; y++ )
+    {
+      const Pel* c = cur + y * curStride + 4 * b;
+      const Pel* r = ref + y * refStride + 4 * b;
+      lo = vaddq_s16( lo, vabdq_s16( vld1q_s16( c ), vld1q_s16( r ) ) );
+      hi = vaddq_s16( hi, vabdq_s16( vld1q_s16( c + 8 ), vld1q_s16( r + 8 ) ) );
+    }
+    vst1q_s32( sad + b, pairwise_add_s32x4( vpaddlq_s16( lo ), vpaddlq_s16( hi ) ) );
+  }
+  fgaSad4x4RowCore( cur + 4 * b, curStride, ref + 4 * b, refStride, n - b, sad + b );
+}
+
+static void fgaResidualRow_neon( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst )
+{
+  int x = 0;
+  if( next )
+  {
+    for( ; x + 8 <= n; x += 8 )
+    {
+      const int16x8_t c = vld1q_s16( cur + x );
+      vst1q_s16( dst + x, vsubq_s16( vsubq_s16( vaddq_s16( c, c ), vld1q_s16( prev + x ) ), vld1q_s16( next + x ) ) );
+    }
+  }
+  else
+  {
+    for( ; x + 8 <= n; x += 8 )
+    {
+      vst1q_s16( dst + x, vsubq_s16( vld1q_s16( cur + x ), vld1q_s16( prev + x ) ) );
+    }
+  }
+  fgaResidualRowCore( cur + x, prev + x, next ? next + x : nullptr, n - x, dst + x );
+}
+
 template<>
 void FGAnalyzer::_initFGAnalyzerARM<NEON>( FgaRowKernels& k )
 {
@@ -336,6 +397,9 @@ void FGAnalyzer::_initFGAnalyzerARM<NEON>( FgaRowKernels& k )
   k.isZeroBlock  = fgaIsZeroBlock_neon;
   k.blockSums    = fgaBlockSums_neon;
   k.squaredDct16 = fgaSquaredDct16_neon;
+  k.downsample4  = fgaDownsample4_neon;
+  k.sad4x4Row    = fgaSad4x4Row_neon;
+  k.residualRow  = fgaResidualRow_neon;
 }
 
 } // namespace vvenc

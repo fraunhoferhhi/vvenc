@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/Unit.h"
 #include "EncoderLib/EncStage.h"
+#include "EncoderLib/SEIFilmGrainAnalyzer.h"
 #include <sstream>
 #include <map>
 #include <deque>
@@ -190,6 +191,7 @@ private:
   bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
   int                   m_searchPttrn     = 0;
   int                   m_mctfUnitSize;
+  FgaTemporalResidual   m_fgaResidual;      // grain measurement of the improved film grain analysis (--fga 2)
 
   void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
 

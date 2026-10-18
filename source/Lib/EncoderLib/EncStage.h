@@ -77,6 +77,8 @@ private:
   PelStorage       m_filteredBuf;
   PelStorage       m_fgaFilteredBuf;   // temporally filtered picture for the film grain analysis, until analysed
   bool             m_fgaUsesFilteredBuf = false;   // the encoding filtered picture is the analysis picture
+  PelStorage       m_fgaResidualBuf;   // temporal residual for the improved film grain analysis, until analysed
+  int              m_fgaResidualWeight = 0;        // its variance relative to the grain variance, 0 without residual
   uint64_t         m_cts;
   int              m_maxFrames;
   int              m_poc;
@@ -119,6 +121,8 @@ public:
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
   PelStorage&  getFgaFilteredBuf()     { return m_fgaFilteredBuf; }
   bool&        fgaUsesFilteredBuf()    { return m_fgaUsesFilteredBuf; }
+  PelStorage&  getFgaResidualBuf()     { return m_fgaResidualBuf; }
+  int&         fgaResidualWeight()     { return m_fgaResidualWeight; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
 
   void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter )
@@ -140,6 +144,8 @@ public:
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
     m_fgaFilteredBuf.destroy();
     m_fgaUsesFilteredBuf = false;
+    m_fgaResidualBuf.destroy();
+    m_fgaResidualWeight = 0;
 
     m_picVA.reset();
     m_isSccWeak    = false;

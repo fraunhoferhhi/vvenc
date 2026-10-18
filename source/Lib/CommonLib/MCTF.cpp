@@ -883,6 +883,23 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         fgaBuf.create( m_encCfg->m_internChromaFormat, m_area );
         bilateralFilter( origBuf, srcFrameInfo, fgaBuf, FGA_FILTER_STRENGTH );
       }
+
+      // The filtered picture gives the flat areas. With the improvements (--fga 2) the grain itself is measured from the
+      // temporal residual of the picture and its neighbours, which are only available here.
+      Picture* prevPic = nullptr;
+      Picture* nextPic = nullptr;
+      if( m_encCfg->m_fga >= 2 )
+      {
+        for( Picture* p : picFifo )
+        {
+          prevPic = p->poc == pic->poc - 1 ? p : prevPic;
+          nextPic = p->poc == pic->poc + 1 ? p : nextPic;
+        }
+      }
+      const CPelUnitBuf prevBuf = prevPic ? CPelUnitBuf( prevPic->getOrigBuffer() ) : CPelUnitBuf();
+      const CPelUnitBuf nextBuf = nextPic ? CPelUnitBuf( nextPic->getOrigBuffer() ) : CPelUnitBuf();
+      pic->m_picShared->fgaResidualWeight() = m_fgaResidual.compute( origBuf, prevPic ? &prevBuf : nullptr, nextPic ? &nextBuf : nullptr,
+                                                                     pic->m_picShared->getFgaResidualBuf() );
     }
 
     if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )

@@ -4587,10 +4587,28 @@ static bool test_FGAnalyzerKernels()
         const int e2 = k.findEqual( c.data(), w, c[ w / 2 ], p2.data() );
         bad += e1 != e2 || p1 != p2;
 
+        // temporal residual: 4x downsampling and 4x4 SADs of w / 4 blocks over four rows, residual rows
+        const int n = w / 4 + 1, stride = 4 * n + 8;
+        auto s4 = randomRow( 4 * stride, mode ), r4 = randomRow( 4 * stride + 3, mode );
+        std::vector<Pel> q1( n + 16, -1 ), q2( n + 16, -1 );
+        vvenc::fgaDownsample4Core( s4.data(), stride, n, q1.data() );
+        k.downsample4( s4.data(), stride, n, q2.data() );
+        bad += q1 != q2;
+        std::vector<int> sad1( n + 16, -1 ), sad2( n + 16, -1 );
+        vvenc::fgaSad4x4RowCore( s4.data(), stride, r4.data(), stride + 1, n, sad1.data() );
+        k.sad4x4Row( s4.data(), stride, r4.data(), stride + 1, n, sad2.data() );
+        bad += sad1 != sad2;
+        for( bool two : { true, false } )
+        {
+          std::vector<Pel> e1r( w + 32, -1 ), e2r( w + 32, -1 );
+          vvenc::fgaResidualRowCore( c.data(), a.data(), two ? b.data() : nullptr, w, e1r.data() );
+          k.residualRow( c.data(), a.data(), two ? b.data() : nullptr, w, e2r.data() );
+          bad += e1r != e2r;
+        }
       }
     }
 
-    // 16x16 block kernels, on grain-like blocks of up to +-3 * maxVal and on special blocks
+    // 16x16 block kernels, on grain-like blocks of +-3 * maxVal (the temporal residual) and on special blocks
     for( int rep = 0; rep < ( g_fastUnitTest ? 100 : 1000 ); rep++ )
     {
       const int stride = 16 + rep % 37;
