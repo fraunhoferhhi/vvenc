@@ -1487,6 +1487,79 @@ double calcVarSse( const Pel* org, const ptrdiff_t origStride, const int w, cons
   return _mm_cvtsi128_si64( xvar ) / 256.0;
 }
 
+// One strip of W (8 or 4) columns of applyFrac4tap_SIMD.
+template<int W>
+static void applyFrac4tapColumns( const Pel* srcCol, const ptrdiff_t origStride, Pel* dstCol, const ptrdiff_t buffStride, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  static_assert( W == 8 || W == 4, "4 or 8 columns per vector" );
+
+  const __m128i xfilt01 = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[0] ), _mm_set1_epi16( xFilter[1] ) );
+  const __m128i xfilt23 = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[2] ), _mm_set1_epi16( xFilter[3] ) );
+  const __m128i yfilt01 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[0] ), _mm_set1_epi16( yFilter[1] ) );
+  const __m128i yfilt23 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[2] ), _mm_set1_epi16( yFilter[3] ) );
+  const __m128i vrnd    = _mm_set1_epi32( 1 << 5 );
+  const __m128i vmax    = _mm_set1_epi16( ( 1 << bitDepth ) - 1 );
+  const __m128i vmin    = _mm_setzero_si128();
+
+  auto load = []( const Pel* p ) { return W == 8 ? _mm_loadu_si128( ( const __m128i* ) p ) : _vv_loadl_epi64( ( const __m128i* ) p ); };
+  // ( sum( a[i] * f[i] ) + 32 ) >> 6 over the 4 taps, for W samples
+  auto filter = [&]( __m128i a0, __m128i a1, __m128i a2, __m128i a3, __m128i f01, __m128i f23 )
+  {
+    __m128i lo = _mm_add_epi32( vrnd, _mm_madd_epi16( _mm_unpacklo_epi16( a0, a1 ), f01 ) );
+    lo         = _mm_srai_epi32( _mm_add_epi32( lo, _mm_madd_epi16( _mm_unpacklo_epi16( a2, a3 ), f23 ) ), 6 );
+    if( W == 4 )
+    {
+      return _mm_packs_epi32( lo, lo );
+    }
+    __m128i hi = _mm_add_epi32( vrnd, _mm_madd_epi16( _mm_unpackhi_epi16( a0, a1 ), f01 ) );
+    hi         = _mm_srai_epi32( _mm_add_epi32( hi, _mm_madd_epi16( _mm_unpackhi_epi16( a2, a3 ), f23 ) ), 6 );
+    return _mm_packs_epi32( lo, hi );
+  };
+
+  auto filterRow = [&]( const Pel* p ) { return filter( load( p ), load( p + 1 ), load( p + 2 ), load( p + 3 ), xfilt01, xfilt23 ); };
+
+  // the last 4 horizontally filtered rows
+  __m128i rows[4] = { filterRow( srcCol ), filterRow( srcCol + origStride ), filterRow( srcCol + 2 * origStride ), vmin };
+  srcCol += 3 * origStride;
+
+  for( int y = 0; y < bsy; y++, srcCol += origStride, dstCol += buffStride )
+  {
+    rows[3] = filterRow( srcCol );
+    const __m128i ver = _mm_min_epi16( vmax, _mm_max_epi16( vmin, filter( rows[0], rows[1], rows[2], rows[3], yfilt01, yfilt23 ) ) );
+    if( W == 8 )
+    {
+      _mm_storeu_si128( ( __m128i* ) dstCol, ver );
+    }
+    else
+    {
+      _vv_storel_epi64( ( __m128i* ) dstCol, ver );
+    }
+    rows[0] = rows[1];
+    rows[1] = rows[2];
+    rows[2] = rows[3];
+  }
+}
+
+// 4-tap filter for the low-resolution MCTF (MCTF::m_lowResFltApply), same arithmetic as applyFrac8Core_4Tap: horizontal
+// pass to 16 bit with rounding, vertical pass with rounding and clipping
+template<X86_VEXT vext>
+void applyFrac4tap_SIMD( const Pel* org, const ptrdiff_t origStride, Pel* buf, const ptrdiff_t buffStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  CHECK( bsx & 3, "SIMD blockSizeX needs to be a multiple of 4" );
+
+  // the taps cover the samples -1 ... 2 around each position, horizontally and vertically
+  const Pel* src = org - 1 - origStride;
+  int x = 0;
+  for( ; x + 8 <= bsx; x += 8 )
+  {
+    applyFrac4tapColumns<8>( src + x, origStride, buf + x, buffStride, bsy, xFilter, yFilter, bitDepth );
+  }
+  if( x < bsx )
+  {
+    applyFrac4tapColumns<4>( src + x, origStride, buf + x, buffStride, bsy, xFilter, yFilter, bitDepth );
+  }
+}
+
 template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
 {
@@ -1496,6 +1569,8 @@ void MCTF::_initMCTF_X86()
 
   m_applyFrac[0][0] = applyFrac6tap_SIMD_8x<vext>;
   m_applyFrac[1][0] = applyFrac6tap_SIMD_4x<vext>;
+  m_applyFrac[0][1] = applyFrac4tap_SIMD<vext>;
+  m_applyFrac[1][1] = applyFrac4tap_SIMD<vext>;
 
   m_applyPlanarCorrection = applyPlanarCorrectionSIMD<vext>;
   m_applyBlock            = applyBlockSIMD<vext>;

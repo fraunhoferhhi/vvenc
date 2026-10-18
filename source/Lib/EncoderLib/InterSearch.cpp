@@ -3301,10 +3301,7 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
     const CPelBuf predPel = cs.getPredBuf( compArea );
     int lengthX = compArea.width / numPartX;
     int lengthY = compArea.height / numPartY;
-    int strideOrg  = orgPel.stride;
-    int stridePred = predPel.stride;
-    uint32_t   uiShift = DISTORTION_PRECISION_ADJUSTMENT( ( *cs.sps.bitDepths[ toChannelType( compID ) ] - 8 ) << 1 );
-    Intermediate_Int iTemp;
+    static_assert( DISTORTION_PRECISION_ADJUSTMENT( 2 ) == 0, "the squared errors of the sub parts are not scaled" );
 
     //calc distY of 16 sub parts
     for( int j = 0; j < numPartY; j++ )
@@ -3313,19 +3310,7 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
       {
         int posX = i * lengthX;
         int posY = j * lengthY;
-        const Pel* ptrOrg  = orgPel.bufAt( posX, posY );
-        const Pel* ptrPred = predPel.bufAt( posX, posY );
-        Distortion uiSum = 0;
-        for( int n = 0; n < lengthY; n++ )
-        {
-          for( int m = 0; m < lengthX; m++ )
-          {
-            iTemp = ptrOrg[m] - ptrPred[m];
-            uiSum += Distortion( ( iTemp * iTemp ) >> uiShift );
-          }
-          ptrOrg += strideOrg;
-          ptrPred += stridePred;
-        }
+        Distortion uiSum = g_pelBufOP.sumSquaredError( orgPel.bufAt( posX, posY ), orgPel.stride, predPel.bufAt( posX, posY ), predPel.stride, lengthX, lengthY );
         if( isChroma( compID ) )
         {
           uiSum = (Distortion)( uiSum * m_pcRdCost->getChromaWeight() );

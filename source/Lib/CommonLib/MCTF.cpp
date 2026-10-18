@@ -1075,24 +1075,8 @@ void MCTF::subsampleLuma(const PelStorage &input, PelStorage &output, const int 
   const int newHeight = input.Y().height / factor;
   output.create(CHROMA_400, Area(0, 0, newWidth, newHeight), 0, m_padding);
 
-  const Pel* srcRow = input.Y().buf;
-  const int srcStride = input.Y().stride;
-  Pel* dstRow = output.Y().buf;
-  const int dstStride = output.Y().stride;
-
-  for (int y = 0; y < newHeight; y++, srcRow+=factor*srcStride, dstRow+=dstStride)
-  {
-    const Pel* inRow      = srcRow;
-    const Pel* inRowBelow = srcRow+srcStride;
-    Pel* target     = dstRow;
-
-    for (int x = 0; x < newWidth; x++)
-    {
-      target[x] = (inRow[0] + inRowBelow[0] + inRow[1] + inRowBelow[1] + 2) >> 2;
-      inRow += 2;
-      inRowBelow += 2;
-    }
-  }
+  CHECK( factor != 2, "Only 2x2 subsampling is supported" );
+  g_pelBufOP.downsample2x2( input.Y().buf, input.Y().stride, output.Y().buf, output.Y().stride, newWidth, newHeight );
   output.extendBorderPel(m_padding, m_padding);
 }
 
