@@ -230,6 +230,11 @@ public:
   void (*suppressLowIntensityPlane) ( const Pel* intensity, const ptrdiff_t intensityStride, Pel* mask, const ptrdiff_t maskStride, const int width, const int height, const Pel threshold, const Pel value );
   // replicates each sample of src into a factor x factor block of dst
   void (*upsamplePlane) ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const int factor );
+  // the subsampling of the analysis: each dst sample is the rounded mean of the first 2x2 samples of a factor x factor
+  // block of src
+  void (*subsamplePlane) ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight, const int factor );
+  // the C version of subsamplePlane, also used by the SIMD versions for factors other than 2 and 4
+  static void subsampleCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight, const int factor );
   // the C version of upsamplePlane, also used by the SIMD versions for factors other than 2 and 4
   static void upsampleCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const int factor );
   // mask |= other

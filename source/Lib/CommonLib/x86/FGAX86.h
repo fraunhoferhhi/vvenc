@@ -981,6 +981,57 @@ static void upsample_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, 
   }
 }
 
+// FGAnalyzer::subsamplePlane for the factors 2 and 4, eight results per step: madd adds the column pairs of both
+// rows, for factor 4 only every other pair is kept. The means of four Pel fit 16 bits, so the packing does not
+// saturate. The loads stay within factor * dstWidth columns.
+template<X86_VEXT vext>
+static void subsample_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight, const int factor )
+{
+  if( factor != 2 && factor != 4 )
+  {
+    FGAnalyzer::subsampleCore( src, srcStride, dst, dstStride, dstWidth, dstHeight, factor );
+    return;
+  }
+
+  const __m128i ones  = _mm_set1_epi16( 1 );
+  const __m128i round = _mm_set1_epi32( 2 );
+  // the sums of the column pairs of the two rows, at column x of the source
+  auto pairSums = [&]( const Pel* row, const int x )
+  {
+    return _mm_add_epi32( _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &row[x] ), ones ),
+                          _mm_madd_epi16( _mm_loadu_si128( ( const __m128i* ) &row[x + srcStride] ), ones ) );
+  };
+
+  for( int y = 0; y < dstHeight; y++, src += factor * srcStride, dst += dstStride )
+  {
+    int x = 0;
+    for( ; x + 8 <= dstWidth; x += 8 )
+    {
+      __m128i lo, hi;
+      if( factor == 2 )
+      {
+        lo = pairSums( src, 2 * x );
+        hi = pairSums( src, 2 * x + 8 );
+      }
+      else
+      {
+        // the pairs 0 and 2 of each vector of four
+        auto keepEven = [&]( const int col ) { return _mm_shuffle_epi32( pairSums( src, col ), 0xd8 ); };
+        lo = _mm_unpacklo_epi64( keepEven( 4 * x ),      keepEven( 4 * x + 8 ) );
+        hi = _mm_unpacklo_epi64( keepEven( 4 * x + 16 ), keepEven( 4 * x + 24 ) );
+      }
+      lo = _mm_srai_epi32( _mm_add_epi32( lo, round ), 2 );
+      hi = _mm_srai_epi32( _mm_add_epi32( hi, round ), 2 );
+      _mm_storeu_si128( ( __m128i* ) &dst[x], _mm_packs_epi32( lo, hi ) );
+    }
+    for( ; x < dstWidth; x++ )
+    {
+      const Pel* in = &src[factor * x];
+      dst[x] = ( in[0] + in[srcStride] + in[1] + in[srcStride + 1] + 2 ) >> 2;
+    }
+  }
+}
+
 // FGAnalyzer::combineMasksPlane: eight samples per step
 template<X86_VEXT vext>
 static void combineMasks_SIMD( Pel* mask, const ptrdiff_t maskStride, const Pel* other, const ptrdiff_t otherStride, const int width, const int height )
@@ -1007,6 +1058,7 @@ void FGAnalyzer::_initFGAnalyzerX86()
   calcMean = calcMeanSSE<vext>;
 #endif
   suppressLowIntensityPlane = suppressLowIntensity_SIMD<vext>;
+  subsamplePlane            = subsample_SIMD<vext>;
   upsamplePlane             = upsample_SIMD<vext>;
   combineMasksPlane         = combineMasks_SIMD<vext>;
 }

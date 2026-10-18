@@ -655,6 +655,24 @@ static void suppressLowIntensityCore( const Pel* intensity, const ptrdiff_t inte
   }
 }
 
+// the subsampling of the analysis: each dst sample is the rounded mean of the first 2x2 samples of a factor x factor
+// block of src
+void FGAnalyzer::subsampleCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int dstWidth, const int dstHeight, const int factor )
+{
+  for ( int y = 0; y < dstHeight; y++, src += factor * srcStride, dst += dstStride )
+  {
+    const Pel *inRow      = src;
+    const Pel *inRowBelow = src + srcStride;
+
+    for ( int x = 0; x < dstWidth; x++ )
+    {
+      dst[x] = ( inRow[0] + inRowBelow[0] + inRow[1] + inRowBelow[1] + 2 ) >> 2;
+      inRow += factor;
+      inRowBelow += factor;
+    }
+  }
+}
+
 void FGAnalyzer::upsampleCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const int factor )
 {
   for ( int i = 0; i < width; i++ )
@@ -697,6 +715,7 @@ FGAnalyzer::FGAnalyzer( bool enableOpt )
   calcMean                  = calcMeanCore;
   fastDCT2_64               = fastForwardDCT2_B64;
   suppressLowIntensityPlane = suppressLowIntensityCore;
+  subsamplePlane            = subsampleCore;
   upsamplePlane             = upsampleCore;
   combineMasksPlane         = combineMasksCore;
 
@@ -1069,24 +1088,9 @@ void FGAnalyzer::subsample ( PelStorage &output,
   const int newWidth  = m_workingBuf->get( compId ).width / factor;
   const int newHeight = m_workingBuf->get( compId ).height / factor;
 
-  const Pel *srcRow    = m_workingBuf->get( compId ).buf;
-  const ptrdiff_t srcStride = m_workingBuf->get( compId ).stride;
-  Pel *dstRow    = output.get( compId ).buf;   // output is tmp buffer with only one component for binary mask
-  const ptrdiff_t dstStride = output.get( compId ).stride;
-
-  for ( int y = 0; y < newHeight; y++, srcRow += factor * srcStride, dstRow += dstStride )
-  {
-    const Pel *inRow      = srcRow;
-    const Pel *inRowBelow = srcRow + srcStride;
-    Pel *      target     = dstRow;
-
-    for ( int x = 0; x < newWidth; x++ )
-    {
-      target[x] = ( inRow[0] + inRowBelow[0] + inRow[1] + inRowBelow[1] + 2 ) >> 2;
-      inRow += factor;
-      inRowBelow += factor;
-    }
-  }
+  const CPelBuf src = m_workingBuf->get( compId );
+  PelBuf        dst = output.get( compId );   // output is tmp buffer with only one component for binary mask
+  subsamplePlane( src.buf, src.stride, dst.buf, dst.stride, newWidth, newHeight, factor );
 
   if ( padding )
   {

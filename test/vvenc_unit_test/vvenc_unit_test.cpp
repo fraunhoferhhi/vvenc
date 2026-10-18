@@ -3615,10 +3615,10 @@ static bool test_LoopFilterPandQ()
 #if ENABLE_SIMD_OPT_FGA
 
 // The mask operations of the film grain analysis with any Pel values, widths 1 to 100 including the scalar tails,
-// padded strides and the upsampling factors 2, 4 and 3 (the C version); whole buffers are compared.
+// padded strides and the sampling factors 2, 4 and 3 (the C version); whole buffers are compared.
 static bool test_FGAMasks()
 {
-  printf( "Testing FGAnalyzer::suppressLowIntensityPlane, upsamplePlane, combineMasksPlane\n" );
+  printf( "Testing FGAnalyzer::suppressLowIntensityPlane, subsamplePlane, upsamplePlane, combineMasksPlane\n" );
   vvenc::FGAnalyzer ref{ /*enableOpt=*/false };
   vvenc::FGAnalyzer opt{ /*enableOpt=*/true };
   DimensionGenerator rng;
@@ -3647,6 +3647,15 @@ static bool test_FGAMasks()
 
     for( int factor : { 2, 4, 3 } )
     {
+      // subsample a plane of factor * width x factor * height into width x height
+      const int srcStride = factor * width + rng.get( 0, 8 );
+      std::vector<Pel> big( srcStride * factor * height );
+      std::generate( big.begin(), big.end(), anyPel );
+      std::vector<Pel> subRef( stride * height, 0x5a5a ), subOpt( subRef );
+      ref.subsamplePlane( big.data(), srcStride, subRef.data(), stride, width, height, factor );
+      opt.subsamplePlane( big.data(), srcStride, subOpt.data(), stride, width, height, factor );
+      ok = ok && compare_values_1d( "subsamplePlane factor=" + std::to_string( factor ) + sstm.str(), subRef.data(), subOpt.data(), stride * height );
+
       const int dstStride = factor * width + rng.get( 0, 8 );
       std::vector<Pel> upRef( dstStride * factor * height, 0x5a5a ), upOpt( upRef );
       ref.upsamplePlane( a.data(), stride, upRef.data(), dstStride, width, height, factor );
