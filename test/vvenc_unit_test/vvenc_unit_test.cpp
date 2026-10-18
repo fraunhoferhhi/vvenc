@@ -3614,6 +3614,53 @@ static bool test_LoopFilterPandQ()
 
 #if ENABLE_SIMD_OPT_FGA
 
+// The mask operations of the film grain analysis with any Pel values, widths 1 to 100 including the scalar tails,
+// padded strides and the upsampling factors 2, 4 and 3 (the C version); whole buffers are compared.
+static bool test_FGAMasks()
+{
+  printf( "Testing FGAnalyzer::suppressLowIntensityPlane, upsamplePlane, combineMasksPlane\n" );
+  vvenc::FGAnalyzer ref{ /*enableOpt=*/false };
+  vvenc::FGAnalyzer opt{ /*enableOpt=*/true };
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < NUM_CASES; i++ )
+  {
+    const int width  = rng.get( 1, 100 );
+    const int height = rng.get( 1, 20 );
+    const int stride = width + rng.get( 0, 8 );
+    std::vector<Pel> a( stride * height ), b( stride * height );
+    std::generate( a.begin(), a.end(), anyPel );
+    std::generate( b.begin(), b.end(), anyPel );
+    std::ostringstream sstm;
+    sstm << " " << width << "x" << height << " stride=" << stride;
+
+    const Pel threshold = anyPel(), value = anyPel();
+    std::vector<Pel> maskRef( b ), maskOpt( b );
+    ref.suppressLowIntensityPlane( a.data(), stride, maskRef.data(), stride, width, height, threshold, value );
+    opt.suppressLowIntensityPlane( a.data(), stride, maskOpt.data(), stride, width, height, threshold, value );
+    bool ok = compare_values_1d( "suppressLowIntensityPlane" + sstm.str(), maskRef.data(), maskOpt.data(), stride * height );
+
+    ref.combineMasksPlane( maskRef.data(), stride, a.data(), stride, width, height );
+    opt.combineMasksPlane( maskOpt.data(), stride, a.data(), stride, width, height );
+    ok = ok && compare_values_1d( "combineMasksPlane" + sstm.str(), maskRef.data(), maskOpt.data(), stride * height );
+
+    for( int factor : { 2, 4, 3 } )
+    {
+      const int dstStride = factor * width + rng.get( 0, 8 );
+      std::vector<Pel> upRef( dstStride * factor * height, 0x5a5a ), upOpt( upRef );
+      ref.upsamplePlane( a.data(), stride, upRef.data(), dstStride, width, height, factor );
+      opt.upsamplePlane( a.data(), stride, upOpt.data(), dstStride, width, height, factor );
+      ok = ok && compare_values_1d( "upsamplePlane factor=" + std::to_string( factor ) + sstm.str(), upRef.data(), upOpt.data(), dstStride * factor * height );
+    }
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_FGAnalyzer()
 {
   printf( "Testing FGAnalyzer::calcVar / calcMean\n" );
@@ -4353,6 +4400,7 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },
+    { "FGAMasks", test_FGAMasks },
     { "MorphDilation", test_MorphDilation },
     { "CannyGradient", test_CannyGradient },
     { "CannyEdges", test_CannyEdges },

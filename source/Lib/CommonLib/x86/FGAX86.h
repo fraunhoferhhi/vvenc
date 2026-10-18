@@ -877,6 +877,128 @@ void Morph::_initFGAMorphX86()
 template void Morph::_initFGAMorphX86<SIMDX86>();
 
 
+// FGAnalyzer::suppressLowIntensityPlane: eight samples per step
+template<X86_VEXT vext>
+static void suppressLowIntensity_SIMD( const Pel* intensity, const ptrdiff_t intensityStride, Pel* mask, const ptrdiff_t maskStride, const int width, const int height, const Pel threshold, const Pel value )
+{
+  const __m128i vthreshold = _mm_set1_epi16( threshold );
+  const __m128i vvalue     = _mm_set1_epi16( value );
+  for( int y = 0; y < height; y++, intensity += intensityStride, mask += maskStride )
+  {
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i low = _mm_cmpgt_epi16( vthreshold, _mm_loadu_si128( ( const __m128i* ) &intensity[x] ) );
+      _mm_storeu_si128( ( __m128i* ) &mask[x], _mm_blendv_epi8( _mm_loadu_si128( ( const __m128i* ) &mask[x] ), vvalue, low ) );
+    }
+    for( ; x < width; x++ )
+    {
+      if( intensity[x] < threshold )
+      {
+        mask[x] = value;
+      }
+    }
+  }
+}
+
+// FGAnalyzer::upsamplePlane for the factors 2 and 4 (the ones of the analysis): each source sample is repeated by
+// 16-bit unpacks and stored to the factor rows of its block; other factors use the C version
+template<X86_VEXT vext, int factor>
+static void upsampleFactor_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height )
+{
+  for( int y = 0; y < height; y++, src += srcStride, dst += factor * dstStride )
+  {
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 && factor == 2 )
+    {
+      // unpacks work per 128-bit lane: the permutations restore the sample order
+      for( ; x + 16 <= width; x += 16 )
+      {
+        const __m256i v   = _mm256_loadu_si256( ( const __m256i* ) &src[x] );
+        const __m256i lo  = _mm256_unpacklo_epi16( v, v );
+        const __m256i hi  = _mm256_unpackhi_epi16( v, v );
+        const __m256i out0 = _mm256_permute2x128_si256( lo, hi, 0x20 );
+        const __m256i out1 = _mm256_permute2x128_si256( lo, hi, 0x31 );
+        for( int row = 0; row < factor; row++ )
+        {
+          _mm256_storeu_si256( ( __m256i* ) &dst[row * dstStride + 2 * x],      out0 );
+          _mm256_storeu_si256( ( __m256i* ) &dst[row * dstStride + 2 * x + 16], out1 );
+        }
+      }
+    }
+#endif
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i v = _mm_loadu_si128( ( const __m128i* ) &src[x] );
+      __m128i out[4];
+      if( factor == 2 )
+      {
+        out[0] = _mm_unpacklo_epi16( v, v );
+        out[1] = _mm_unpackhi_epi16( v, v );
+      }
+      else
+      {
+        const __m128i lo = _mm_unpacklo_epi16( v, v );
+        const __m128i hi = _mm_unpackhi_epi16( v, v );
+        out[0] = _mm_unpacklo_epi32( lo, lo );
+        out[1] = _mm_unpackhi_epi32( lo, lo );
+        out[2] = _mm_unpacklo_epi32( hi, hi );
+        out[3] = _mm_unpackhi_epi32( hi, hi );
+      }
+      for( int row = 0; row < factor; row++ )
+      {
+        for( int k = 0; k < factor; k++ )
+        {
+          _mm_storeu_si128( ( __m128i* ) &dst[row * dstStride + factor * x + 8 * k], out[k] );
+        }
+      }
+    }
+    for( ; x < width; x++ )
+    {
+      for( int row = 0; row < factor; row++ )
+      {
+        std::fill_n( &dst[row * dstStride + factor * x], factor, src[x] );
+      }
+    }
+  }
+}
+
+template<X86_VEXT vext>
+static void upsample_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const int factor )
+{
+  if( factor == 2 )
+  {
+    upsampleFactor_SIMD<vext, 2>( src, srcStride, dst, dstStride, width, height );
+  }
+  else if( factor == 4 )
+  {
+    upsampleFactor_SIMD<vext, 4>( src, srcStride, dst, dstStride, width, height );
+  }
+  else
+  {
+    FGAnalyzer::upsampleCore( src, srcStride, dst, dstStride, width, height, factor );
+  }
+}
+
+// FGAnalyzer::combineMasksPlane: eight samples per step
+template<X86_VEXT vext>
+static void combineMasks_SIMD( Pel* mask, const ptrdiff_t maskStride, const Pel* other, const ptrdiff_t otherStride, const int width, const int height )
+{
+  for( int y = 0; y < height; y++, mask += maskStride, other += otherStride )
+  {
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      _mm_storeu_si128( ( __m128i* ) &mask[x], _mm_or_si128( _mm_loadu_si128( ( const __m128i* ) &mask[x] ), _mm_loadu_si128( ( const __m128i* ) &other[x] ) ) );
+    }
+    for( ; x < width; x++ )
+    {
+      mask[x] |= other[x];
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void FGAnalyzer::_initFGAnalyzerX86()
 {
@@ -884,6 +1006,9 @@ void FGAnalyzer::_initFGAnalyzerX86()
   calcVar  = calcVarSse<vext>;
   calcMean = calcMeanSSE<vext>;
 #endif
+  suppressLowIntensityPlane = suppressLowIntensity_SIMD<vext>;
+  upsamplePlane             = upsample_SIMD<vext>;
+  combineMasksPlane         = combineMasks_SIMD<vext>;
 }
 
 template void FGAnalyzer::_initFGAnalyzerX86<SIMDX86>();

@@ -640,6 +640,52 @@ int calcMeanCore ( const Pel* org,
   return avg;
 }
 
+// sets the mask to value where the intensity is below threshold
+static void suppressLowIntensityCore( const Pel* intensity, const ptrdiff_t intensityStride, Pel* mask, const ptrdiff_t maskStride, const int width, const int height, const Pel threshold, const Pel value )
+{
+  for ( int i = 0; i < width; i++ )
+  {
+    for ( int j = 0; j < height; j++ )
+    {
+      if ( intensity[j * intensityStride + i] < threshold )
+      {
+        mask[j * maskStride + i] = value;
+      }
+    }
+  }
+}
+
+void FGAnalyzer::upsampleCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, const int width, const int height, const int factor )
+{
+  for ( int i = 0; i < width; i++ )
+  {
+    for ( int j = 0; j < height; j++ )
+    {
+      Pel currentPel = src[j * srcStride + i];
+
+      for ( int x = 0; x < factor; x++ )
+      {
+        for ( int y = 0; y < factor; y++ )
+        {
+          dst[( j * factor + y ) * dstStride + i * factor + x] = currentPel;
+        }
+      }
+    }
+  }
+}
+
+// mask |= other
+static void combineMasksCore( Pel* mask, const ptrdiff_t maskStride, const Pel* other, const ptrdiff_t otherStride, const int width, const int height )
+{
+  for ( int i = 0; i < width; i++ )
+  {
+    for ( int j = 0; j < height; j++ )
+    {
+      mask[j * maskStride + i] = ( mask[j * maskStride + i] | other[j * otherStride + i] );
+    }
+  }
+}
+
 // ====================================================================================================================
 // Film Grain Analysis Functions
 // ====================================================================================================================
@@ -647,9 +693,12 @@ FGAnalyzer::FGAnalyzer( bool enableOpt )
   : m_edgeDetector( enableOpt )
   , m_morphOperation( enableOpt )
 {
-  calcVar     = calcVarCore;
-  calcMean    = calcMeanCore;
-  fastDCT2_64 = fastForwardDCT2_B64;
+  calcVar                   = calcVarCore;
+  calcMean                  = calcMeanCore;
+  fastDCT2_64               = fastForwardDCT2_B64;
+  suppressLowIntensityPlane = suppressLowIntensityCore;
+  upsamplePlane             = upsampleCore;
+  combineMasksPlane         = combineMasksCore;
 
   if( enableOpt )
   {
@@ -1006,19 +1055,10 @@ void FGAnalyzer::suppressLowIntensity ( const PelStorage &buff1,
   Pel maxIntensity          = static_cast <Pel>( 1 << bitDepth ) - 1;
   Pel lowIntensityThreshold = static_cast<Pel>( m_lowIntensityRatio * maxIntensity );
 
-  // strong, weak, supressed
-  for ( int i = 0; i < width; i++ )
-  {
-    for ( int j = 0; j < height; j++ )
-    {
-      // Check if the intensity is below the threshold
-      if ( buff1.get( compId ).at( i, j ) < lowIntensityThreshold )
-      {
-        // Set the corresponding mask value to maxIntensity
-        buff2.get( compId ).at( i, j ) = maxIntensity;
-      }
-    }
-  }
+  // set the mask where the intensity is below the threshold
+  const CPelBuf intensity = buff1.get( compId );
+  PelBuf        mask      = buff2.get( compId );
+  suppressLowIntensityPlane( intensity.buf, intensity.stride, mask.buf, mask.stride, width, height, lowIntensityThreshold, maxIntensity );
 }
 
 void FGAnalyzer::subsample ( PelStorage &output,
@@ -1064,24 +1104,9 @@ void FGAnalyzer::upsample ( const PelStorage &input,
   // binary mask upsampling
   // use simple replication of pixels
 
-  const int width  = input.get(compId).width;
-  const int height = input.get(compId).height;
-
-  for ( int i = 0; i < width; i++ )
-  {
-    for ( int j = 0; j < height; j++ )
-    {
-      Pel currentPel = input.get( compId ).at( i, j );
-
-      for ( int x = 0; x < factor; x++ )
-      {
-        for ( int y = 0; y < factor; y++ )
-        {
-          m_maskUpsampled->get( compId ).at( i * factor + x, j * factor + y ) = currentPel;
-        }
-      }
-    }
-  }
+  const CPelBuf src = input.get( compId );
+  PelBuf        dst = m_maskUpsampled->get( compId );
+  upsamplePlane( src.buf, src.stride, dst.buf, dst.stride, src.width, src.height, factor );
 
   if ( padding )
   {
@@ -1092,16 +1117,9 @@ void FGAnalyzer::upsample ( const PelStorage &input,
 
 void FGAnalyzer::combineMasks( ComponentID compId )
 {
-  const int width = m_maskBuf->get( compId ).width;
-  const int height = m_maskBuf->get( compId ).height;
-
-  for ( int i = 0; i < width; i++ )
-  {
-    for ( int j = 0; j < height; j++ )
-    {
-      m_maskBuf->get( compId ).at( i, j ) = ( m_maskBuf->get( compId ).at( i, j ) | m_maskUpsampled->get( compId ).at( i, j ) );
-    }
-  }
+  PelBuf        mask  = m_maskBuf->get( compId );
+  const CPelBuf other = m_maskUpsampled->get( compId );
+  combineMasksPlane( mask.buf, mask.stride, other.buf, other.stride, mask.width, mask.height );
 }
 
 // estimate cut-off frequencies and scaling factors for different intensity intervals
