@@ -445,6 +445,26 @@ void DepQuant::initDepQuantX86()
 
 #endif
 
+#if ENABLE_SIMD_OPT_FGA
+void FGAnalyzer::initFGAnalyzerX86( FgaRowKernels& k )
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initFGAnalyzerX86<AVX2>( k );
+      break;
+#endif
+    case SSE42:
+    case SSE41:
+      _initFGAnalyzerX86<SSE41>( k );
+      break;
+    default:
+      break;
+  }
+}
+#endif
 
 #if ENABLE_SIMD_OPT
 void BvSearchOps::initBvSearchOpsX86()

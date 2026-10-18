@@ -533,6 +533,12 @@ void FGAnalyzer::initKernels( FgaRowKernels& k )
   k.isZeroBlock  = fgaIsZeroBlockCore;
   k.blockSums    = fgaBlockSumsCore;
   k.squaredDct16 = fgaSquaredDct16Core;
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
+  initFGAnalyzerX86( k );
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  initFGAnalyzerARM( k );
+#endif
 }
 
 void FGAnalyzer::init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ] )

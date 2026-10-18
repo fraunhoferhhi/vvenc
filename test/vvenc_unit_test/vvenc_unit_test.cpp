@@ -4505,6 +4505,122 @@ static bool test_LoopFilterPandQ()
 
 #endif   // ENABLE_SIMD_DBLF
 
+#if ENABLE_SIMD_OPT_FGA
+
+// The row and block kernels of the film grain analysis, as FGAnalyzer::initKernels() selects them for this CPU,
+// against the scalar kernels, on random rows of widths 1..70 and two large widths, with extreme values. Nothing may be
+// written past the row.
+static bool test_FGAnalyzerKernels()
+{
+  printf( "Testing the film grain analysis kernels\n" );
+
+  vvenc::FgaRowKernels k;
+  vvenc::FGAnalyzer::initKernels( k );
+
+  std::mt19937 rng( 7 );
+  long long    bad = 0;
+  std::vector<int> widths;
+  for( int w = 1; w <= 70; w++ )
+  {
+    widths.push_back( w );
+  }
+  widths.push_back( 963 );
+  widths.push_back( 1920 );
+
+  for( int bd : { 8, 10 } )   // VVenC's internal bit depth is at most 10
+  {
+    const Pel maxVal = (Pel) ( ( 1 << bd ) - 1 );
+    std::uniform_int_distribution<int> d( 0, maxVal );
+    // random samples, or only 0 and maxVal, or values close to maxVal
+    auto randomRow = [&]( int n, int mode )
+    {
+      std::vector<Pel> r( n + 64 );
+      for( auto& v : r )
+      {
+        const int x = d( rng );
+        v = (Pel) ( mode == 0 ? x : mode == 1 ? ( x & 1 ? maxVal : 0 ) : maxVal - ( x & 7 ) );
+      }
+      return r;
+    };
+    for( int w : widths )
+    {
+      for( int rep = 0; rep < ( g_fastUnitTest ? 3 : 12 ); rep++ )
+      {
+        const int mode = rep % 3;
+        auto a = randomRow( w, mode ), c = randomRow( w, mode ), b = randomRow( w, mode );
+
+        // edge detection: Sobel and non-maximum suppression
+        std::vector<Pel> m1( w + 32, -1 ), d1( w + 32, -1 ), m2( w + 32, -1 ), d2( w + 32, -1 );
+        vvenc::fgaSobelCore( a.data(), c.data(), b.data(), w, 0, w, maxVal, m1.data(), d1.data() );
+        k.sobel( a.data(), c.data(), b.data(), w, maxVal, m2.data(), d2.data() );
+        bad += m1 != m2 || d1 != d2;
+        std::vector<Pel> dir( w );
+        for( auto& v : dir )
+        {
+          v = (Pel) ( 45 * ( d( rng ) & 3 ) );
+        }
+        std::vector<Pel> n1( w + 32, -1 ), n2( w + 32, -1 );
+        vvenc::fgaNonMaxCore( a.data(), c.data(), b.data(), dir.data(), w, 0, w, n1.data() );
+        k.nonMax( a.data(), c.data(), b.data(), dir.data(), w, n2.data() );
+        bad += n1 != n2;
+
+        // morphology
+        for( bool dilate : { true, false } )
+        {
+          std::vector<Pel> r1( w + 32, -1 ), r2( w + 32, -1 ), c1( w + 32, -1 ), c2( w + 32, -1 );
+          vvenc::fgaMorphRowCore( c.data(), w, 0, w, dilate, r1.data() );
+          k.morphRow( c.data(), w, dilate, r2.data() );
+          vvenc::fgaMorphColCore( a.data(), c.data(), b.data(), 0, w, dilate, c1.data() );
+          k.morphCol( a.data(), c.data(), b.data(), w, dilate, c2.data() );
+          bad += r1 != r2 || c1 != c2;
+        }
+
+        // row maximum, double threshold, positions of a value
+        bad += vvenc::fgaRowMaxCore( c.data(), w ) != k.rowMax( c.data(), w );
+        std::vector<Pel> t1 = c, t2 = c;
+        const Pel low = (Pel) ( d( rng ) / 2 ), high = (Pel) std::min<int>( maxVal, 3 * low );
+        vvenc::fgaClassifyCore( t1.data(), w, low, high, (Pel) ( maxVal >> 1 ), maxVal );
+        k.classify( t2.data(), w, low, high, (Pel) ( maxVal >> 1 ), maxVal );
+        bad += t1 != t2;
+        std::vector<int> p1( w + 1, -7 ), p2( w + 1, -7 );
+        const int e1 = vvenc::fgaFindEqualCore( c.data(), w, c[ w / 2 ], p1.data() );
+        const int e2 = k.findEqual( c.data(), w, c[ w / 2 ], p2.data() );
+        bad += e1 != e2 || p1 != p2;
+
+      }
+    }
+
+    // 16x16 block kernels, on grain-like blocks of up to +-3 * maxVal and on special blocks
+    for( int rep = 0; rep < ( g_fastUnitTest ? 100 : 1000 ); rep++ )
+    {
+      const int stride = 16 + rep % 37;
+      std::vector<Pel> blk( 16 * stride + 16 );
+      std::uniform_int_distribution<int> g( -3 * maxVal, 3 * maxVal );
+      const int mode = rep % 4;
+      for( auto& v : blk )
+      {
+        v = (Pel) ( mode == 0 ? g( rng ) : mode == 1 ? ( g( rng ) > 0 ? 3 * maxVal : -3 * maxVal ) : mode == 2 ? g( rng ) / 64 : 0 );
+      }
+      if( mode == 3 && rep % 8 == 3 )
+      {
+        blk[ ( rep % 16 ) * stride + ( rep / 16 ) % 16 ] = 1;   // a single non-zero sample
+      }
+      bad += vvenc::fgaIsZeroBlockCore( blk.data(), stride ) != k.isZeroBlock( blk.data(), stride );
+      int64_t s1, sq1, s2, sq2;
+      vvenc::fgaBlockSumsCore( blk.data(), stride, s1, sq1 );
+      k.blockSums( blk.data(), stride, s2, sq2 );
+      bad += s1 != s2 || sq1 != sq2;
+      std::vector<double> dct1( 256, 0.5 ), dct2( 256, 0.5 );
+      vvenc::fgaSquaredDct16Core( blk.data(), stride, ( 1 << ( bd + 4 ) ) - 1, dct1.data() );
+      k.squaredDct16( blk.data(), stride, ( 1 << ( bd + 4 ) ) - 1, dct2.data() );
+      bad += dct1 != dct2;
+    }
+  }
+  return compare_value( "film grain analysis kernels, mismatching cases", 0, (int) bad );
+}
+
+#endif // ENABLE_SIMD_OPT_FGA
+
 #if ENABLE_SIMD_OPT_QUANT
 static bool check_needRdoq( Quant* ref, Quant* opt, unsigned num_cases )
 {
@@ -5112,6 +5228,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_OPT
     { "BvSearch", test_BvSearchOps },
+#endif
+#if ENABLE_SIMD_OPT_FGA
+    { "FGAnalyzerKernels", test_FGAnalyzerKernels },
 #endif
 };
 

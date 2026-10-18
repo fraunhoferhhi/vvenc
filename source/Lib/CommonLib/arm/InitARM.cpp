@@ -185,6 +185,17 @@ void RdCost::initRdCostARM()
 }
 #endif
 
+#if ENABLE_SIMD_OPT_FGA
+void FGAnalyzer::initFGAnalyzerARM( FgaRowKernels& k )
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initFGAnalyzerARM<NEON>( k );
+  }
+}
+#endif // ENABLE_SIMD_OPT_FGA
+
 #if ENABLE_SIMD_OPT_MCTF
 void MCTF::initMCTF_ARM()
 {

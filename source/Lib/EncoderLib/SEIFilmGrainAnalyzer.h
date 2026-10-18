@@ -66,8 +66,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-// Row and block kernels of the analysis, called through pointers so that SIMD versions can replace them. A row is
-// processed from x = 0 to width - 1; neighbours outside the picture repeat the border sample.
+// Row and block kernels of the analysis, with SIMD versions in CommonLib/x86/FGAX86.h and
+// CommonLib/arm/neon/FGA_neon.cpp. A row is processed from x = 0 to width - 1; neighbours outside the picture repeat
+// the border sample.
 struct FgaRowKernels
 {
   // Sobel gradients of the row "cur": magnitude, (|gx| + |gy|) / 2 limited to maxVal, and edge direction (0, 45, 90
@@ -94,7 +95,7 @@ struct FgaRowKernels
 
 };
 
-// Scalar row kernels for x = xStart to xEnd - 1.
+// Scalar row kernels for x = xStart to xEnd - 1; the SIMD kernels use them at the picture borders.
 void fgaSobelCore   ( const Pel* above, const Pel* cur, const Pel* below, int width, int xStart, int xEnd, Pel maxVal, Pel* mag, Pel* dir );
 void fgaNonMaxCore  ( const Pel* magAbove, const Pel* mag, const Pel* magBelow, const Pel* dir, int width, int xStart, int xEnd, Pel* dst );
 void fgaMorphRowCore( const Pel* src, int width, int xStart, int xEnd, bool dilate, Pel* dst );
@@ -117,7 +118,7 @@ public:
   // estimated as denoised minus orig.
   void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised );
 
-  // Sets the row and block kernels.
+  // Sets the row kernels: the scalar ones, then the SIMD ones the CPU supports.
   static void initKernels( FgaRowKernels& k );
 
   // The parameters to signal in the FGC SEI, with the grain strength set to strength percent of the analysed grain:
@@ -213,6 +214,16 @@ private:
 
   FgaRowKernels     m_kernels;
 
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
+  static void initFGAnalyzerX86( FgaRowKernels& k );
+  template <x86_simd::X86_VEXT vext>
+  static void _initFGAnalyzerX86( FgaRowKernels& k );
+#endif
+#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
+  static void initFGAnalyzerARM( FgaRowKernels& k );
+  template <arm_simd::ARM_VEXT vext>
+  static void _initFGAnalyzerARM( FgaRowKernels& k );
+#endif
 };
 
 } // namespace vvenc
