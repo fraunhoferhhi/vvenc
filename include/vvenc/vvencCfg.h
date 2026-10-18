@@ -787,8 +787,11 @@ typedef struct vvenc_config
   int                 m_minIntraDist;
   int8_t              m_numParallelGOPs;
   int8_t              m_maxDeltaQP;
+  int8_t              m_readAheadGOPs;                                                   // number of GOPs of input read ahead, so that frame parallel encoding can start later GOPs early; trades RAM
+                                                                                         // for speed: 0 (least RAM) to 4 (fastest), -1: auto (default, 2 where frame parallel encoding can use it, else 0);
+                                                                                         // values above 0 need MaxParallelFrames > 1 without IFP, NumParallelGOPs, rate control or rate capping
 
-  int8_t              m_reservedInt8[2];
+  int8_t              m_reservedInt8[1];
   double              m_reservedDouble[8];
 
   // internal state variables

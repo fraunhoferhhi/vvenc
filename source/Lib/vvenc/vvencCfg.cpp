@@ -656,6 +656,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ifp                                     = -1;
   c->m_mtProfile                               =  0;
   c->m_numParallelGOPs                         =  0;
+  c->m_readAheadGOPs                           = -1;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -712,6 +713,21 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
 
   c->m_confirmFailed = true;
   return true;
+}
+
+// Without IFP, rate control or rate capping, the GOP encoder may start any queued picture whose
+// references are reconstructed, also from later GOPs. The first picture of a GOP in coding
+// order is its last one in input order, so a later GOP can only start early when all of its
+// pictures were read ahead while the current GOP is still being encoded.
+static bool canStartLaterGops( const vvenc_config *c )
+{
+  const bool rateCap = c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX && c->m_RCTargetBitrate == 0;
+  return c->m_numThreads > 0
+      && c->m_maxParallelFrames > 1
+      && c->m_ifpLines == 0
+      && c->m_numParallelGOPs == 0
+      && c->m_RCTargetBitrate == 0
+      && ! rateCap;
 }
 
 VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
@@ -1825,6 +1841,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  // read ahead two GOPs by default where frame parallel encoding can start later GOPs early
+  if( c->m_readAheadGOPs == -1 )
+  {
+    c->m_readAheadGOPs = canStartLaterGops( c ) ? 2 : 0;
+  }
+
   c->m_configDone = true;
 
   c->m_confirmFailed = checkCfgParameter(c);
@@ -2184,6 +2206,10 @@ static bool checkCfgParameter( vvenc_config *c )
       msg.log( VVENC_WARNING, "Using IFP at low number of threads (<%d) does not provide more speedup, consider disabling IFP.\n", minNumThreadsIfp );
     }
   }
+
+  vvenc_confirmParameter(c, c->m_readAheadGOPs < 0 || c->m_readAheadGOPs > 4, "ReadAheadGOPs must be in range of -1 - 4" );
+  vvenc_confirmParameter(c, c->m_readAheadGOPs > 0 && ! canStartLaterGops( c ),
+                         "ReadAheadGOPs > 0 requires MaxParallelFrames > 1 without IFP, NumParallelGOPs, rate control or rate capping" );
 
   if( c->m_numParallelGOPs )
   {
@@ -3428,6 +3454,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
     css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
     css << "NumParallelGOPs:" << (int) c->m_numParallelGOPs << " ";
+    css << "ReadAheadGOPs:" << (int) c->m_readAheadGOPs << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
