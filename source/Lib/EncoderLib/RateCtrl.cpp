@@ -304,6 +304,8 @@ RateCtrl::RateCtrl(MsgLog& logger)
   std::fill_n( &m_twoPassPredictedBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
   m_twoPassCountedBits     = 0.0;
   m_twoPassLastShift       = 0.0;
+  m_twoPassGopShift        = 0.0;
+  m_twoPassGopNum          = -1;
   m_twoPassTotalBits       = 0.0;
   m_twoPassInFlightBits    = 0.0;
   m_twoPassUncountedBits   = 0.0;
@@ -842,6 +844,9 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
 // two-pass QP shift is weighted the same way to keep the QP hierarchy of constant-QP encoding.
 static const double TWO_PASS_SHIFT_WEIGHT[ 4 ] = { 15.0 / 16.0, 1.0, 17.0 / 16.0, 18.0 / 16.0 };
 
+// Largest change of the two-pass QP shift from one GOP to the next (see initTwoPassRateControlPic).
+static const double TWO_PASS_MAX_SHIFT_STEP = 1.0;
+
 static int getTwoPassClass( const TRCPassStats& stats )
 {
   return stats.isIntra ? 0 : std::min( 3, stats.tempLayer ); // tempLayer is the temporal layer plus 1 for B-pictures
@@ -872,6 +877,8 @@ void RateCtrl::initTwoPassQPShift()
   std::copy_n( &m_twoPassBitsLeft[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, &m_twoPassFirstPassBits[ 0 ][ 0 ] );
   m_twoPassCountedBits = 0.0;
   m_twoPassLastShift   = 0.0;
+  m_twoPassGopShift    = 0.0;
+  m_twoPassGopNum      = -1;
 
   m_twoPassTotalBits       = (double) encRCSeq->targetRate * m_listRCFirstPassStats.size() / encRCSeq->frameRate;
   m_twoPassInFlightBits    = 0.0;
@@ -1077,7 +1084,20 @@ void RateCtrl::initTwoPassRateControlPic( EncRCPic* encRcPic, std::list<TRCPassS
   const int    picClass    = getTwoPassClass( *stats );
   const double recentRatio = getRecentBitRatio( m_twoPassRecentActual, m_twoPassRecentPredicted );
   const double bitsLeft    = m_twoPassTotalBits - encRCSeq->bitsUsed - m_twoPassUncountedBits - m_twoPassInFlightBits * recentRatio;
-  const double seqShift    = getTwoPassQPShift( bitsLeft, stats, encRCSeq->firstPassData.end() );
+  double       seqShift    = getTwoPassQPShift( bitsLeft, stats, encRCSeq->firstPassData.end() );
+
+  // The shift moves by at most TWO_PASS_MAX_SHIFT_STEP from one GOP to the next, and within a GOP by at most that
+  // much from the shift of its first picture. Solved freely for every picture, the shift chased the prediction error
+  // of the pictures in flight; as the pictures not yet started became few and small at the end of a sequence, it
+  // drifted far from the first-pass QPs, where the rate model under-predicts, and an overshoot then left the last
+  // pictures no budget at all (QP 63). Bounded, the QPs stay as steady as in constant-QP encoding, and the file ends
+  // a little above or below the target instead.
+  if( stats->gopNum != m_twoPassGopNum )
+  {
+    m_twoPassGopShift = m_twoPassGopNum < 0 ? seqShift : Clip3( m_twoPassGopShift - TWO_PASS_MAX_SHIFT_STEP, m_twoPassGopShift + TWO_PASS_MAX_SHIFT_STEP, seqShift );
+    m_twoPassGopNum   = stats->gopNum;
+  }
+  seqShift = Clip3( m_twoPassGopShift - TWO_PASS_MAX_SHIFT_STEP, m_twoPassGopShift + TWO_PASS_MAX_SHIFT_STEP, seqShift );
 
   m_twoPassLastShift = seqShift;
 
@@ -1088,7 +1108,9 @@ void RateCtrl::initTwoPassRateControlPic( EncRCPic* encRcPic, std::list<TRCPassS
     if( !gop.isStarted )
     {
       startTwoPassGop( stats->twoPassGop, seqShift, recentRatio );
-      gop.startShift = getTwoPassGopShift( gop, seqShift, recentRatio, -MAX_QP ); // the whole GOP fits its budget
+      // the whole GOP fits its budget, with QPs at most 12 above the sequence's level (the solver's lower limit,
+      // -MAX_QP, gave QPs up to 63 when the GOP could not fit at all)
+      gop.startShift = getTwoPassGopShift( gop, seqShift, recentRatio, seqShift - 12.0 );
     }
     // later pictures may raise the QP by at most 12 above the GOP's start level to correct prediction errors
     shift = getTwoPassGopShift( gop, seqShift, recentRatio, gop.startShift - 12.0 );

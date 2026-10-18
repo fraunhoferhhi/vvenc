@@ -239,7 +239,8 @@ namespace vvenc {
   private:
     // Two-pass mode encodes like constant-QP mode: every picture gets its first-pass QP minus one sequence-wide shift,
     // weighted per picture class as the constant-QP hierarchy scales with the base QP. The shift is solved per picture
-    // so that the predicted bits of all pictures not yet started fill the remaining budget.
+    // so that the predicted bits of all pictures not yet started fill the remaining budget, but moves by at most one
+    // step from one GOP to the next and within a GOP, so the file may end a little above or below the target.
     static const int TWO_PASS_CLASSES = 4; // I-pictures and B-pictures in temporal layer 0, 1, and 2 or above
     // Pictures are grouped by first-pass QP and class. As QPA raises the first-pass QP of detailed content, a group holds
     // similar content, so the prediction error of the rate model is learned per group.
@@ -249,6 +250,8 @@ namespace vvenc {
     double                  m_twoPassPredictedBits[ MAX_QP + 1 ][ TWO_PASS_CLASSES ]; // finished pictures
     double                  m_twoPassCountedBits;  // actual bits of all finished pictures as seen by updateAfterPicEncRC
     double                  m_twoPassLastShift;    // the sequence shift of the last picture
+    double                  m_twoPassGopShift;     // the bounded sequence shift at the start of the current GOP
+    int                     m_twoPassGopNum;       // the GOP of the last picture, -1 before the first one
     double                  m_twoPassTotalBits;    // bit budget of the whole sequence
     double                  m_twoPassInFlightBits; // predicted bits of started but unfinished pictures
     double                  m_twoPassUncountedBits; // written bits that updateAfterPicEncRC did not see
