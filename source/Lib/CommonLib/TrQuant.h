@@ -78,7 +78,7 @@ typedef static_vector<TrCost, NUM_TRAFO_MODES_MTS> TrCostList;
 class TrQuant
 {
 public:
-  TrQuant();
+  explicit TrQuant( bool enableOpt = true );
   ~TrQuant();
 
   // initialize class
@@ -107,6 +107,11 @@ public:
 
   DepQuant* getQuant ()                                       { return m_quant; }
 
+  // joint Cb-Cr residual transforms, indexed by the ICT mode -3..3 (public for the unit test)
+  static const int maxAbsIctMode = 3;
+  void                      (**m_invICT)(PelBuf&,PelBuf&);
+  std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
+
 protected:
   TCoeff*   m_plTempCoeff;
   bool      m_bEnc;
@@ -120,11 +125,8 @@ private:
   TCoeff    m_tempOutMatrix[48];
   TCoeff   *m_mtsCoeffs[NUM_TRAFO_MODES_MTS];
 
-  static const int maxAbsIctMode = 3;
   void                      (*m_invICTMem[1+2*maxAbsIctMode])(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(*m_fwdICTMem[1+2*maxAbsIctMode])(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
-  void                      (**m_invICT)(PelBuf&,PelBuf&);
-  std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
 
   void (*m_fwdLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
   void (*m_invLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
