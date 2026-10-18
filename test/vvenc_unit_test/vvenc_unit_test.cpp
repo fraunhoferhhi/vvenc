@@ -1954,16 +1954,20 @@ static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, 
     std::generate( orgBuf.begin(), orgBuf.end(), g10 );
     std::generate( curBuf.begin(), curBuf.end(), g10 );
 
-    // only the generic C function, which DF_SAD2 replaces, stops early; the fixed-width ones always sum all rows
-    if( width == 2 && ( i & 1 ) )
-    {
-      dtParam.maximumDistortionForEarlyExit = rng.get( 0, 2 * 1023 * height );
-    }
-
     const int index = DF_SAD + log2( width );
     Distortion sum_ref = ref->m_afpDistortFunc[0][index]( dtParam );
     Distortion sum_opt = opt->m_afpDistortFunc[0][index]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+
+    // only the generic C function, which DF_SAD2 replaces, stops early; the SIMD versions sum all rows. A result above
+    // the threshold has to stay above it, which is all the callers check.
+    if( width == 2 )
+    {
+      dtParam.maximumDistortionForEarlyExit = rng.get( 0, 2 * 1023 * height );
+      const bool exitRef = ref->m_afpDistortFunc[0][index]( dtParam ) > dtParam.maximumDistortionForEarlyExit;
+      const bool exitOpt = opt->m_afpDistortFunc[0][index]( dtParam ) > dtParam.maximumDistortionForEarlyExit;
+      passed = compare_value( sstm.str() + " above maximumDistortionForEarlyExit", exitRef, exitOpt ) && passed;
+    }
   }
   return passed;
 }

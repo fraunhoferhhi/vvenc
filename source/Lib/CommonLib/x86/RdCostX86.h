@@ -148,8 +148,10 @@ static inline __m128i _vv_load2x4( const Pel* src, const ptrdiff_t stride )
   return _mm_unpacklo_epi64( r01, r23 );
 }
 
-// The 2-wide case of RdCost::xGetSAD, including its early exit after each row: the absolute differences of four rows
-// are summed per row in one vector, then the row sums are added and checked one after the other.
+// The 2-wide case of RdCost::xGetSAD: the absolute differences of four rows per vector. Like xGetSAD_NxN_SIMD for
+// blocks below 64 wide, it sums all rows instead of stopping early once maximumDistortionForEarlyExit is exceeded: the
+// checks would cost more than they save, and every caller only compares the result with that threshold, which the
+// full sum exceeds whenever the partial one does.
 template<X86_VEXT vext>
 Distortion xGetSAD2_SIMD( const DistParam& rcDtParam )
 {
@@ -163,32 +165,22 @@ Distortion xGetSAD2_SIMD( const DistParam& rcDtParam )
   const ptrdiff_t curStride  = rcDtParam.cur.stride << subShift;
   const int       numRows    = rcDtParam.org.height >> subShift;
   const uint32_t  distShift  = DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
-  const Distortion maxDist   = rcDtParam.maximumDistortionForEarlyExit;
   const __m128i   ones       = _mm_set1_epi16( 1 );
 
-  Distortion sum = 0;
+  // the 32-bit lane sums cannot overflow: each adds at most 2 * 2^15 per four rows
+  __m128i acc = _mm_setzero_si128();
   int row = 0;
   for( ; row + 4 <= numRows; row += 4, org += 4 * orgStride, cur += 4 * curStride )
   {
     const __m128i absDiff = _mm_abs_epi16( _mm_sub_epi16( _vv_load2x4( org, orgStride ), _vv_load2x4( cur, curStride ) ) );
-    int32_t rowSums[4];
-    _mm_storeu_si128( ( __m128i* ) rowSums, _mm_madd_epi16( absDiff, ones ) );
-    for( int r = 0; r < 4; r++ )
-    {
-      sum += rowSums[r];
-      if( maxDist < ( sum >> distShift ) )
-      {
-        return sum >> distShift;
-      }
-    }
+    acc = _mm_add_epi32( acc, _mm_madd_epi16( absDiff, ones ) );
   }
+  acc = _mm_add_epi32( acc, _mm_unpackhi_epi64( acc, acc ) );
+  acc = _mm_add_epi32( acc, _mm_shuffle_epi32( acc, 1 ) );
+  Distortion sum = Distortion( _mm_cvtsi128_si32( acc ) );
   for( ; row < numRows; row++, org += orgStride, cur += curStride )
   {
     sum += abs( org[0] - cur[0] ) + abs( org[1] - cur[1] );
-    if( maxDist < ( sum >> distShift ) )
-    {
-      return sum >> distShift;
-    }
   }
 
   sum <<= subShift;
