@@ -78,12 +78,6 @@ private:
   void initPredBlockParams            (const Size& block);
 
   static void boundaryDownsampling1D  (Pel* reducedDst, const Pel* const fullSrc, const SizeType srcLen, const SizeType dstLen);
-
-  template< SizeType predPredSize, unsigned log2UpsmpFactor>
-  void predictionUpsampling1DHor       (Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType dstStride, const SizeType bndryStep );
-
-  template< SizeType inHeight, unsigned log2UpsmpFactor>
-  void predictionUpsampling1DVer       (Pel* const dst, const Pel* const src, const Pel* const bndry, const SizeType outWidth, const SizeType srcStep );
 };
 
 } // namespace vvenc
