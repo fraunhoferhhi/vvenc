@@ -402,6 +402,9 @@ void EncLib::xInitRCCfg()
     m_firstPassCfg.m_CTUSize       = m_encCfg.m_CTUSize;
   }
   m_firstPassCfg.m_vvencMCTF.MCTF  = m_encCfg.m_vvencMCTF.MCTF;
+  // the first pass measures the rates with the final pass's block importance mapping; the firstpass preset also
+  // leaves the CU-tree block size of the final pass
+  m_firstPassCfg.m_blockImportanceMapping = m_encCfg.m_blockImportanceMapping;
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;

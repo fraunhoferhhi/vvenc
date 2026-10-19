@@ -1124,7 +1124,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
     ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
     ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets (0 ... 7.97, in steps of 1/32)")
-    ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 above 1080 lines, else 16)")
+    ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )

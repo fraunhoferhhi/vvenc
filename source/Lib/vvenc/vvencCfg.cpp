@@ -1520,8 +1520,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_cuTreeBlockSize == -1 )
   {
-    // larger analysis blocks pay off above 1080 lines (4K: -0.4% BD-rate in PSNR and XPSNR), smaller ones below
-    c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) > 1080 ? 32 : 16;
+    // from 720p on, 32x32 blocks make the analysis much cheaper at a small quality cost (larger at 720p and 1080p
+    // than at 4K); below, 16x16 blocks
+    c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 16 : 32;
   }
 
   // BIM 2 derives the block importance from MCTF's motion error; BIM 1 (CU-tree) does its own analysis
@@ -2690,7 +2691,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree costs too much speed here
+      c->m_blockImportanceMapping          = 1;   // CU-tree; EncLib's first rate control pass takes the final pass's
+                                                  // BIM, and the preset leaves the CU-tree block size to the final pass
       c->m_RDOQ                            = 2;
       c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
@@ -2750,7 +2752,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree costs too much speed here
+      c->m_blockImportanceMapping          = 1;   // CU-tree
+      c->m_cuTreeBlockSize                 = -1;  // automatic, 32x32 blocks from 720p on for speed
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
@@ -2815,7 +2818,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 1;
       c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree costs too much speed here
+      c->m_blockImportanceMapping          = 1;   // CU-tree
+      c->m_cuTreeBlockSize                 = -1;  // automatic, 32x32 blocks from 720p on for speed
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_DepQuantEnabled                 = 1;
@@ -2885,6 +2889,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_blockImportanceMapping          = 1;   // CU-tree
+      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 0;
@@ -2979,6 +2984,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
       c->m_blockImportanceMapping          = 1;   // CU-tree
+      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3053,6 +3059,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
       c->m_blockImportanceMapping          = 1;   // CU-tree
+      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
