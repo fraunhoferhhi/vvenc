@@ -1285,11 +1285,16 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           tmpVal = updateQPstartModelVal() + log (sqrOfResRatio) / log (2.0); // GOP's QPstart
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
-          sliceQP = int( 0.5 + d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
+          const double qpCont = d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ];
+          sliceQP = int( 0.5 + qpCont );
+          const int unclippedQP = sliceQP;
 
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
                                   ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );
-          lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
+          // Only the signalled slice QP is rounded; lambda follows the continuous QP. When clipTargetQP has limited the
+          // QP change, lambda takes the clipped integer QP, so that it never goes beyond the limit.
+          const double lambdaQP = ( sliceQP == unclippedQP ? qpCont : (double) sliceQP );
+          lambda = it->lambda * pow( 2.0, ( lambdaQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRCSeq->minEstLambda, encRCSeq->maxEstLambda, lambda );
 
           if ( m_pcEncCfg->m_LookAhead ) // update frame bit ratios for bit budget calculation
