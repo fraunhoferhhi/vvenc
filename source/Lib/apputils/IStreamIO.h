@@ -280,11 +280,11 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToInt8& toInt8
 // string <-> QP with an optional fractional part
 // ====================================================================================================================
 
-// Reads a QP such as "27" or "27.5" into its integer part (m_QP) and its fractional part (m_QPFraction).
+// Reads a QP such as "27" or "27.5" into its integer part (m_QP) and its fractional part in 1/256 steps (m_QPFraction).
 class IStreamToQP
 {
   public:
-    IStreamToQP( int* qp, double* qpFraction )
+    IStreamToQP( int* qp, uint8_t* qpFraction )
       : dstQP      ( qp )
       , dstFraction( qpFraction )
     {
@@ -299,8 +299,8 @@ class IStreamToQP
     friend std::istream& operator >> ( std::istream& in, IStreamToQP& toQP );
 
   private:
-    int*    dstQP;
-    double* dstFraction;
+    int*     dstQP;
+    uint8_t* dstFraction;
 };
 
 inline std::istream& operator >> ( std::istream& in, IStreamToQP& toQP )
@@ -329,14 +329,22 @@ inline std::istream& operator >> ( std::istream& in, IStreamToQP& toQP )
     return in;
   }
 
-  *toQP.dstQP       = (int) intPart;
-  *toQP.dstFraction = value - intPart;
+  // The fraction is rounded to the nearest 1/256 step; a fraction that rounds up to a whole QP moves to the next integer.
+  int qp            = (int) intPart;
+  int fractionSteps = (int) std::floor( ( value - intPart ) * 256.0 + 0.5 );
+  if( fractionSteps == 256 )
+  {
+    qp++;
+    fractionSteps = 0;
+  }
+  *toQP.dstQP       = qp;
+  *toQP.dstFraction = (uint8_t) fractionSteps;
   return in;
 }
 
 inline std::ostream& operator << ( std::ostream& os, const IStreamToQP& toQP )
 {
-  os << *toQP.dstQP + *toQP.dstFraction;
+  os << *toQP.dstQP + *toQP.dstFraction / 256.0;
   return os;
 }
 

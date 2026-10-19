@@ -292,8 +292,11 @@ int testLibParameterRanges()
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );
-  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, std::vector<double>{ 0.0,0.25,0.5,0.75 } );
-  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, std::vector<double>{ -0.25,1.0,1.5 }, true );
+  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, { 0,64,128,255 } );
+  const int savedQP = vvencParams.m_QP;
+  vvencParams.m_QP = 63;
+  testParamList( "QP=63, QPFraction",                      vvencParams.m_QPFraction,                 vvencParams, { 1,128 }, true );
+  vvencParams.m_QP = savedQP;
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
@@ -872,11 +875,16 @@ int checkSDKStringApiFractionalQP()
   vvenc_config c;
   vvenc_init_default( &c, 176,144,60, 0, 32, vvencPresetMode::VVENC_FASTER );
 
-  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.5" ) != 0 || c.m_QP != 27 || c.m_QPFraction != 0.5 )
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.5" ) != 0 || c.m_QP != 27 || c.m_QPFraction != 128 )
   {
     return -1;
   }
-  if( vvenc_set_param( &c, VVENC_OPT_QP, "28" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0.0 )
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "28" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0 )
+  {
+    return -1;
+  }
+  // a fraction that rounds up to 256/256 becomes the next integer QP
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.999" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0 )
   {
     return -1;
   }

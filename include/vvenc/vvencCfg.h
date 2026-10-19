@@ -789,7 +789,9 @@ typedef struct vvenc_config
   int8_t              m_maxDeltaQP;
 
   int8_t              m_reservedInt8[2];
-  double              m_QPFraction;                                                      // fractional part of the QP in constant-QP mode (0 <= value < 1, default: 0), the effective QP is m_QP + m_QPFraction
+  uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
+  int8_t              m_reservedInt8_2[3];
+  int32_t             m_reservedInt32;
   double              m_reservedDouble[7];
 
   // internal state variables
