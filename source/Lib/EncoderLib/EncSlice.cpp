@@ -361,6 +361,23 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   const bool rcp = (m_pcEncCfg->m_RCTargetBitrate > 0 && slice->pic->picInitialQP >= 0); // 2nd pass
   int  iQP = Clip3 (-slice->sps->qpBDOffset[CH_L], MAX_QP, slice->pic->picInitialQP); // RC start QP
   double dQP     = (rcp ? (double) slice->pic->picInitialQP : xGetQPForPicture (slice));
+
+  // A fractional QP gives a fractional picture QP. Its integer part sets the slice QP and lambda as for an integer QP,
+  // and its fraction raises some blocks or pictures by one QP: with QPA, the CTUs whose activity-based QP lies closest
+  // to the next integer, see BitAllocation::applyQPAdaptationSlice; without QPA, a share of the pictures equal to the
+  // fraction. Each block keeps the lambda of its integer QP, so the RD trade-off stays consistent.
+  slice->pic->picQPFraction = dQP - floor (dQP);
+  dQP -= slice->pic->picQPFraction;
+  if (!m_pcEncCfg->m_usePerceptQPA)
+  {
+    // The thresholds come from the low-discrepancy sequence frac(POC * (sqrt(2) - 1)), whose values stay evenly
+    // spread also for the power-of-two POC spacing of one temporal layer, so every layer gets its share of raised QPs.
+    const double ditherPos = slice->poc * 0.41421356237309515;
+
+    if (slice->pic->picQPFraction > ditherPos - floor (ditherPos)) dQP += 1.0;
+    slice->pic->picQPFraction = 0.0;
+  }
+
   double dLambda = (rcp ? slice->pic->picInitialLambda : xCalculateLambda (slice, slice->TLayer, dQP, dQP, iQP));
   int sliceChromaQpOffsetIntraOrPeriodic[2] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[0], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[1] };
   const int lookAheadRCCQpOffset = 0;   // was (m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && CS::isDualITree (*slice->pic->cs) ? 1 : 0);
@@ -425,7 +442,23 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
 
 static const int highTL[6] = { -1, 0, 0, 2, 4, 5 };
 
-int EncSlice::xGetQPForPicture( const Slice* slice )
+double EncSlice::xGetQPForPicture( const Slice* slice )
+{
+  const int qp = xGetQPForPicture( slice, m_pcEncCfg->m_QP );
+
+  if( m_pcEncCfg->m_QPFractionReal <= 0.0 || m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
+  {
+    return qp;
+  }
+  // With a fractional QP, interpolate linearly between the picture QPs of the two neighbouring integer QPs. The
+  // per-picture QP rules (temporal layer scaling, offsets, clipping) are integer functions of the base QP, and the
+  // interpolation keeps the result between them, so the rate moves smoothly from one integer QP to the next.
+  const int qpNext = xGetQPForPicture( slice, m_pcEncCfg->m_QP + 1 );
+
+  return qp + m_pcEncCfg->m_QPFractionReal * ( qpNext - qp );
+}
+
+int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )
 {
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
   int qp;
@@ -436,7 +469,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
   }
   else
   {
-    qp = m_pcEncCfg->m_QP + slice->pic->gopAdaptedQP;
+    qp = baseQP + slice->pic->gopAdaptedQP;
 
     if (m_pcEncCfg->m_usePerceptQPA)
     {
