@@ -260,7 +260,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   // CU-tree look-ahead, holds the pictures of a GOP until the next GOP has arrived
-  if( m_encCfg.m_cuTree )
+  if( m_encCfg.useCuTree() )
   {
     m_cuTree = new CuTree();
     m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
@@ -452,7 +452,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
   // Without stage parallel processing, a buffer of that many access units covers the wait, so every call still
   // returns one; with it, the delayed output below already does.
-  const size_t auBuffer = ( m_encCfg.m_cuTree && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
+  const size_t auBuffer = ( m_encCfg.useCuTree() && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
 
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );

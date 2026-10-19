@@ -312,17 +312,9 @@ int testLibParameterRanges()
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
-  // CU-tree is an alternative to BIM, and it needs inter pictures
-  const bool savedBim = vvencParams.m_blockImportanceMapping;
-  vvencParams.m_blockImportanceMapping = false;
-  testParamList( "BIM=0, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { 0,1 } );
-  testParamList( "BIM=0, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { -1,2 }, true );
-  vvencParams.m_IntraPeriod = 1;
-  testParamList( "BIM=0, IntraPeriod=1, CuTree",           vvencParams.m_cuTree,                     vvencParams, { 1 }, true );
-  vvencParams.m_IntraPeriod = 32;
-  vvencParams.m_blockImportanceMapping = true;
-  testParamList( "BIM=1, CuTree",                          vvencParams.m_cuTree,                     vvencParams, { 1 }, true );
-  vvencParams.m_blockImportanceMapping = savedBim;
+  // block importance mapping: 0 (off), 1 (CU-tree) or 2 (from MCTF)
+  testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { 0,1,2 } );
+  testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { -1,3 }, true );
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
@@ -1305,8 +1297,7 @@ int checkCuTreeAccessUnits()
       c.m_GOPSize                = gopSize;
       c.m_FrameRate              = 24;
       c.m_IntraPeriod            = 24;
-      c.m_cuTree                 = 1;
-      c.m_blockImportanceMapping = false;
+      c.m_blockImportanceMapping = 1;   // CU-tree
       vvenc_init_config_parameter( &c );
       if( 0 != runEncoder( c, 100 ) )
       {

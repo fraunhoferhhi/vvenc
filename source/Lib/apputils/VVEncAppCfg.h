@@ -596,7 +596,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
-  IStreamToInt8                     toCuTree                      ( &c->m_cuTree );
+  IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFraction );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
@@ -689,7 +689,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
     ("qp,q",                                            toQP,                                                "quantization parameter, QP (0, 1, .. 63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
-    ("cutree",                                          toCuTree,                                            "CU-tree: lower the QP of blocks that later pictures predict from, with one GOP of look-ahead, instead of block importance mapping (0: off, 1: on)")
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("mtprofile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (none, cra, idr, rpsei: Recovery Point SEI, cra_cre: CRA, constrained RASL picture encoding, idr_no_radl: IDR w/o leading pictures, use for DASH, implies POC0IDR)")
@@ -1122,9 +1121,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
-    ("BIM",                                             c->m_blockImportanceMapping,                         "Block importance mapping (basic temporal RDO based on MCTF).")
-    ("CuTree",                                          toCuTree,                                            "CU-tree: lower the QP of blocks that later pictures predict from (TPL model, one GOP of look-ahead; needs BIM 0; 0: off, 1: on)")
-    ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree: scale of its QP offsets (0 ... 7.97, in steps of 1/32)")
+    ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
+    ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets (0 ... 7.97, in steps of 1/32)")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
     ("QtbttExtraFast",                                  c->m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -1347,13 +1345,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     if ( m_showVersion )
     {
       return 1;
-    }
-
-    // vvencapp has no BIM option, so its --cutree selects CU-tree instead of block importance mapping; the
-    // full-featured app sets both explicitly. Done after all options are read, as the preset turns BIM on.
-    if( m_easyMode && c->m_cuTree )
-    {
-      c->m_blockImportanceMapping = false;
     }
 
     // file check

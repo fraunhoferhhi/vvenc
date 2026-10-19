@@ -866,7 +866,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
     }
 
-    if( m_encCfg->m_blockImportanceMapping || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
+    if( m_encCfg->useMctfBim() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
     {
       const int ctuSize        = m_encCfg->m_bimCtuSize;
       const int widthInCtus    = ( m_area.width  + ctuSize - 1 ) / ctuSize;
@@ -996,7 +996,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         pic->m_picShared->m_forceSCC = forceSCC;
       }
 
-      if( !m_encCfg->m_blockImportanceMapping || !pic->useMCTF )
+      if( !m_encCfg->useMctfBim() || !pic->useMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
         return;

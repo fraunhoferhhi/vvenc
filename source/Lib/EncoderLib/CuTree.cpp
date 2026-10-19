@@ -43,6 +43,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /** \file     CuTree.cpp
     \brief    look-ahead stage for CU-tree adaptive quantization
+
+    Implements the temporal dependency model (TPL) of
+    J. Han, P. Wilkins, Y. Xu, J. Bankoski, "A quantitative approach to the temporal dependency in video coding",
+    arXiv:2108.11586, 2021 (https://arxiv.org/abs/2108.11586). The equation numbers in the comments refer to it.
 */
 
 #include "CuTree.h"

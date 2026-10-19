@@ -766,7 +766,8 @@ typedef struct vvenc_config
   bool                m_fga;                                                             // Film grain analysis configuration options, set to 0 to disable (default), or 1 to enable analysis.
   int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
-  bool                m_blockImportanceMapping;
+  int8_t              m_blockImportanceMapping;                                          // block importance mapping, the QP of blocks that later pictures predict from (0: off,
+                                                                                         // 1: CU-tree with the TPL model and one GOP of look-ahead, 2: from MCTF's motion error)
   bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
@@ -787,9 +788,9 @@ typedef struct vvenc_config
   int                 m_minIntraDist;
   int8_t              m_numParallelGOPs;
   int8_t              m_maxDeltaQP;
-  int8_t              m_cuTree;                                                          // CU-tree: lower the QP of blocks that later pictures predict from (TPL model, one GOP of look-ahead; needs BIM off; 0: off, 1: on)
+  int8_t              m_reservedInt8[1];
 #define VVENC_SET_CUTREE_STRENGTH(s) ((uint8_t)((s)*32+0.5))
-  uint8_t             m_cuTreeStrength;                                                  // CU-tree: scale of its QP offsets as a 5-bit fixed point value (0 ... 255, i.e. 0 ... 7.97; default 64, i.e. 2.0)
+  uint8_t             m_cuTreeStrength;                                                  // CU-tree (BIM 1): scale of its QP offsets as a 5-bit fixed point value (0 ... 255, i.e. 0 ... 7.97; default 64, i.e. 2.0)
                                                                                          // for convenience use VVENC_SET_CUTREE_STRENGTH, e.g. VVENC_SET_CUTREE_STRENGTH(2.0)
 
   uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256

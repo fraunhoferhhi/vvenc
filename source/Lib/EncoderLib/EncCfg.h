@@ -77,8 +77,11 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
-  // BIM and CU-tree both deliver per-CTU QP offsets through PicShared::m_ctuBimQpOffset and m_picAuxQpOffset.
-  bool hasBlockQpOffsets() const { return m_blockImportanceMapping || m_cuTree > 0; }
+  // Both kinds of block importance mapping deliver per-CTU QP offsets through PicShared::m_ctuBimQpOffset and
+  // m_picAuxQpOffset: CU-tree (BIM 1) from its own look-ahead, BIM 2 from MCTF.
+  bool hasBlockQpOffsets() const { return m_blockImportanceMapping > 0; }
+  bool useCuTree()         const { return m_blockImportanceMapping == 1; }
+  bool useMctfBim()        const { return m_blockImportanceMapping == 2; }
 
   bool      m_stageParallelProc;
   bool      m_salienceBasedOpt;
