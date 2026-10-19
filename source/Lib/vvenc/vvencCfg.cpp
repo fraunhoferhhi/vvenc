@@ -641,6 +641,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_blockImportanceMapping                  = 1;
   c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
+  c->m_cuTreeBlockSize                        = -1;
 
   c->m_maxDeltaQP                              = -1;
 
@@ -697,7 +698,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_fga                                     = false;
 
-  memset( c->m_reservedInt8, 0, sizeof(c->m_reservedInt8) );
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
@@ -1518,6 +1518,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFraction / 256.0 - 4.0 ) * 3.0 / 32.0 );
   }
 
+  if( c->m_cuTreeBlockSize == -1 )
+  {
+    // larger analysis blocks pay off above 1080 lines (4K: -0.4% BD-rate in PSNR and XPSNR), smaller ones below
+    c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) > 1080 ? 32 : 16;
+  }
+
   // BIM 2 derives the block importance from MCTF's motion error; BIM 1 (CU-tree) does its own analysis
   vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) 2 cannot be enabled when MCTF is disabled!" );
   vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM 2 is enabled!" );
@@ -2118,6 +2124,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA, BIM or LumaLevelToDeltaQPMode" );
   vvenc_confirmParameter(c, c->m_blockImportanceMapping < 0 || c->m_blockImportanceMapping > 2,                 "BIM must be 0 (off), 1 (CU-tree) or 2 (from MCTF)" );
+  vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3355,7 +3362,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
     css << "BIM:" << (int)c->m_blockImportanceMapping << " ";
-    if( c->m_blockImportanceMapping == 1 ) css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ") ";
+    if( c->m_blockImportanceMapping == 1 ) css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize << ") ";
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";

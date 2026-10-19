@@ -89,11 +89,11 @@ static inline void transpose8x8( __m256i* v )
   v[3] = _mm256_permute2x128_si256( u3, u7, 0x20 ); v[7] = _mm256_permute2x128_si256( u3, u7, 0x31 );
 }
 
-// AVX2 version of tplCodeBlockCore, identical results. The registers hold the transposed coefficients, which
+// AVX2 version of tplCodeBlockCore<8>, identical results. The registers hold the transposed coefficients, which
 // does not matter for the element-wise quantization and the sums, and is undone by the inverse transform.
 template<X86_VEXT vext>
-void tplCodeBlock_SIMD( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pel* recon, ptrdiff_t reconStride,
-                        const TplQuant& quant, int maxVal, int64_t& dist, int& bits )
+void tplCodeBlock8x8_SIMD( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pel* recon, ptrdiff_t reconStride,
+                           const TplQuant& quant, int maxVal, int64_t& dist, int& bits )
 {
   __m256i v[8];
   for( int y = 0; y < 8; y++ )
@@ -158,10 +158,10 @@ void tplCodeBlock_SIMD( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pe
   }
 }
 
-// AVX2 version of tplPredBlockCore, identical results: horizontal taps in 16 bits (at most 1023 * 16), the
+// AVX2 version of tplPredBlockCore<8>, identical results: horizontal taps in 16 bits (at most 1023 * 16), the
 // vertical taps as 32-bit multiply-adds of interleaved row pairs.
 template<X86_VEXT vext>
-void tplPredBlock_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst )
+void tplPredBlock8x8_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst )
 {
   const __m128i wx0 = _mm_set1_epi16( short( 16 - fx ) );
   const __m128i wx1 = _mm_set1_epi16( short( fx ) );
@@ -181,6 +181,139 @@ void tplPredBlock_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel
     const __m256i pairs = _mm256_set_m128i( _mm_unpackhi_epi16( rows[j], rows[j + 1] ), _mm_unpacklo_epi16( rows[j], rows[j + 1] ) );
     const __m256i sum   = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( pairs, wy ), rnd ), 8 );
     _mm_storeu_si128( ( __m128i* ) ( dst + j * 8 ), _mm_packs_epi32( _mm256_castsi256_si128( sum ), _mm256_extracti128_si256( sum, 1 ) ) );
+  }
+}
+
+// The 16-point Hadamard butterflies of the columns of a 16x16 block held as 8x8 quadrants, eight registers each:
+// one stage across the top and bottom quadrant, then the 8-point transform of each.
+static inline void hadamard16Columns( __m256i* top, __m256i* bottom )
+{
+  for( int i = 0; i < 8; i++ )
+  {
+    const __m256i a = top[i], b = bottom[i];
+    top[i]    = _mm256_add_epi32( a, b );
+    bottom[i] = _mm256_sub_epi32( a, b );
+  }
+  hadamard8x8Columns( top );
+  hadamard8x8Columns( bottom );
+}
+
+// The 2-D transform of a 16x16 block in quadrants q[0] top left, q[1] top right, q[2] bottom left, q[3] bottom right:
+// columns, transposition (each quadrant, with the off-diagonal quadrants swapped), columns again. The result is the
+// transposed coefficients; applying it twice gives 256 times the input in its original order.
+static inline void hadamard16x16( __m256i q[4][8] )
+{
+  hadamard16Columns( q[0], q[2] );
+  hadamard16Columns( q[1], q[3] );
+  for( int k = 0; k < 4; k++ ) transpose8x8( q[k] );
+  for( int i = 0; i < 8; i++ ) std::swap( q[1][i], q[2][i] );
+  hadamard16Columns( q[0], q[2] );
+  hadamard16Columns( q[1], q[3] );
+}
+
+// AVX2 version of tplCodeBlockCore<16>, identical results, with the coefficients transposed as in the 8x8 version.
+template<X86_VEXT vext>
+void tplCodeBlock16x16_SIMD( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pel* recon, ptrdiff_t reconStride,
+                             const TplQuant& quant, int maxVal, int64_t& dist, int& bits )
+{
+  __m256i q[4][8];
+  for( int y = 0; y < 16; y++ )
+  {
+    const __m256i o = _mm256_loadu_si256( ( const __m256i* ) ( org + y * orgStride ) );
+    const __m256i p = _mm256_loadu_si256( ( const __m256i* ) ( pred + y * 16 ) );
+    const __m256i r = _mm256_sub_epi16( o, p );   // residuals fit 16 bits
+    __m256i* left   = y < 8 ? q[0] : q[2];
+    __m256i* right  = y < 8 ? q[1] : q[3];
+    left [y & 7] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128( r ) );
+    right[y & 7] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( r, 1 ) );
+  }
+  hadamard16x16( q );
+
+  const __m256i scale   = _mm256_set1_epi32( quant.scale );
+  const __m256i round   = _mm256_set1_epi32( quant.round );
+  const __m256i deqStep = _mm256_set1_epi32( quant.deqStep );
+  const __m256i eight   = _mm256_set1_epi32( 8 );
+  const __m256i three   = _mm256_set1_epi32( 3 );
+  const __m256i bias    = _mm256_set1_epi32( 127 );
+  __m256i distSum = _mm256_setzero_si256();
+  __m256i bitSum  = _mm256_setzero_si256();
+
+  for( int k = 0; k < 4; k++ )
+  {
+    for( int i = 0; i < 8; i++ )
+    {
+      __m256i& v = q[k][i];
+      const __m256i absCoeff = _mm256_abs_epi32( v );
+      const __m256i level    = _mm256_srai_epi32( _mm256_add_epi32( _mm256_mullo_epi32( absCoeff, scale ), round ), 16 );
+      const __m256i absDeq   = _mm256_srai_epi32( _mm256_add_epi32( _mm256_mullo_epi32( level, deqStep ), eight ), 4 );
+      const __m256i err      = _mm256_sub_epi32( absCoeff, absDeq );
+      // squared errors as 64-bit sums: even lanes, then odd lanes shifted down
+      distSum = _mm256_add_epi64( distSum, _mm256_mul_epi32( err, err ) );
+      const __m256i errOdd = _mm256_srli_epi64( err, 32 );
+      distSum = _mm256_add_epi64( distSum, _mm256_mul_epi32( errOdd, errOdd ) );
+      // bits: 2 * floorLog2( level ) + 3 for non-zero levels, floorLog2 from the float exponent
+      const __m256i log2    = _mm256_sub_epi32( _mm256_srli_epi32( _mm256_castps_si256( _mm256_cvtepi32_ps( level ) ), 23 ), bias );
+      const __m256i nonZero = _mm256_cmpgt_epi32( level, _mm256_setzero_si256() );
+      bitSum = _mm256_add_epi32( bitSum, _mm256_and_si256( nonZero, _mm256_add_epi32( _mm256_add_epi32( log2, log2 ), three ) ) );
+      v = _mm256_sign_epi32( absDeq, v );
+    }
+  }
+
+  __m128i d = _mm_add_epi64( _mm256_castsi256_si128( distSum ), _mm256_extracti128_si256( distSum, 1 ) );
+  d = _mm_add_epi64( d, _mm_unpackhi_epi64( d, d ) );
+  dist = _mm_cvtsi128_si64( d );
+  __m128i b = _mm_add_epi32( _mm256_castsi256_si128( bitSum ), _mm256_extracti128_si256( bitSum, 1 ) );
+  b = _mm_hadd_epi32( b, b );
+  b = _mm_hadd_epi32( b, b );
+  bits = _mm_cvtsi128_si32( b );
+
+  if( recon )
+  {
+    hadamard16x16( q );
+    const __m256i r128 = _mm256_set1_epi32( 128 );
+    const __m256i vmax = _mm256_set1_epi16( ( short ) maxVal );
+    for( int y = 0; y < 16; y++ )
+    {
+      const __m256i* left  = y < 8 ? q[0] : q[2];
+      const __m256i* right = y < 8 ? q[1] : q[3];
+      const __m256i  p     = _mm256_loadu_si256( ( const __m256i* ) ( pred + y * 16 ) );
+      const __m256i  lo    = _mm256_srai_epi32( _mm256_add_epi32( left [y & 7], r128 ), 8 );
+      const __m256i  hi    = _mm256_srai_epi32( _mm256_add_epi32( right[y & 7], r128 ), 8 );
+      // packs works per 128-bit lane: reorder the 64-bit quarters back to sample order. The reconstructed
+      // residual is a sample difference plus at most half the unnormalised step, inside 16 bits even at QP 63,
+      // so neither the packing nor the addition saturates.
+      const __m256i  res   = _mm256_permute4x64_epi64( _mm256_packs_epi32( lo, hi ), 0xd8 );
+      const __m256i  sum   = _mm256_min_epi16( _mm256_max_epi16( _mm256_adds_epi16( p, res ), _mm256_setzero_si256() ), vmax );
+      _mm256_storeu_si256( ( __m256i* ) ( recon + y * reconStride ), sum );
+    }
+  }
+}
+
+// AVX2 version of tplPredBlockCore<16>, identical results: horizontal taps in 16 bits (at most 1023 * 16), one row of
+// 16 samples per register, the vertical taps as 32-bit multiply-adds of interleaved row pairs. The unpacking and the
+// packing both work per 128-bit lane, so the samples come out in order.
+template<X86_VEXT vext>
+void tplPredBlock16x16_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst )
+{
+  const __m256i wx0 = _mm256_set1_epi16( short( 16 - fx ) );
+  const __m256i wx1 = _mm256_set1_epi16( short( fx ) );
+  const __m256i wy  = _mm256_set1_epi32( ( fy << 16 ) | ( 16 - fy ) );
+  const __m256i rnd = _mm256_set1_epi32( 128 );
+
+  __m256i prev;
+  for( int j = 0; j <= 16; j++ )
+  {
+    const __m256i a   = _mm256_loadu_si256( ( const __m256i* ) ( src + j * srcStride ) );
+    const __m256i b   = _mm256_loadu_si256( ( const __m256i* ) ( src + j * srcStride + 1 ) );
+    const __m256i row = _mm256_add_epi16( _mm256_mullo_epi16( a, wx0 ), _mm256_mullo_epi16( b, wx1 ) );
+    if( j > 0 )
+    {
+      // ( top, bottom ) pairs, multiplied by ( 16 - fy, fy ) and summed in 32 bits
+      const __m256i lo = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpacklo_epi16( prev, row ), wy ), rnd ), 8 );
+      const __m256i hi = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpackhi_epi16( prev, row ), wy ), rnd ), 8 );
+      _mm256_storeu_si256( ( __m256i* ) ( dst + ( j - 1 ) * 16 ), _mm256_packs_epi32( lo, hi ) );
+    }
+    prev = row;
   }
 }
 
@@ -214,9 +347,11 @@ template<X86_VEXT vext>
 void CuTree::_initCuTree_X86()
 {
 #ifdef USE_AVX2
-  m_codeBlock = tplCodeBlock_SIMD<vext>;
-  m_predBlock = tplPredBlock_SIMD<vext>;
-  m_downsampleRow = tplDownsampleRow_SIMD<vext>;
+  m_codeBlock[TPL_BLK_8]  = tplCodeBlock8x8_SIMD<vext>;
+  m_codeBlock[TPL_BLK_16] = tplCodeBlock16x16_SIMD<vext>;
+  m_predBlock[TPL_BLK_8]  = tplPredBlock8x8_SIMD<vext>;
+  m_predBlock[TPL_BLK_16] = tplPredBlock16x16_SIMD<vext>;
+  m_downsampleRow         = tplDownsampleRow_SIMD<vext>;
 #endif
 }
 

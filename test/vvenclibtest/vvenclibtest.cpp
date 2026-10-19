@@ -315,6 +315,8 @@ int testLibParameterRanges()
   // block importance mapping: 0 (off), 1 (CU-tree) or 2 (from MCTF)
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { 0,1,2 } );
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { -1,3 }, true );
+  testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
+  testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );

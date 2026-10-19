@@ -788,7 +788,7 @@ typedef struct vvenc_config
   int                 m_minIntraDist;
   int8_t              m_numParallelGOPs;
   int8_t              m_maxDeltaQP;
-  int8_t              m_reservedInt8[1];
+  int8_t              m_cuTreeBlockSize;                                                 // CU-tree (BIM 1): side of its analysis blocks in luma samples, 16 or 32 (default -1: automatic, 32 above 1080 lines, else 16)
 #define VVENC_SET_CUTREE_STRENGTH(s) ((uint8_t)((s)*32+0.5))
   uint8_t             m_cuTreeStrength;                                                  // CU-tree (BIM 1): scale of its QP offsets as a 5-bit fixed point value (0 ... 255, i.e. 0 ... 7.97; default 64, i.e. 2.0)
                                                                                          // for convenience use VVENC_SET_CUTREE_STRENGTH, e.g. VVENC_SET_CUTREE_STRENGTH(2.0)

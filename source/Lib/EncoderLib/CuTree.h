@@ -63,7 +63,7 @@ namespace vvenc {
 
 class NoMallocThreadPool;
 
-// Quantizer of the block coder, in the unnormalised 8x8 Hadamard domain (8 times the orthonormal one):
+// Quantizer of the block coder, in the unnormalised N x N Hadamard domain (N times the orthonormal one):
 // level = ( |c| * scale + round ) >> 16, dequantised |c| = ( level * deqStep + 8 ) >> 4.
 struct TplQuant
 {
@@ -72,19 +72,26 @@ struct TplQuant
   int32_t deqStep;    // step, 2^4 units
 };
 
-// Codes the 8x8 residual org - pred: Hadamard transform, quantization, and when recon is given the inverse
-// transform added to pred. Returns the squared coefficient error in the unnormalised domain (64 times the error
-// in samples) and the estimated bits (Exp-Golomb length of each level plus sign and significance).
+// The analysis works on half-resolution luma in N x N blocks, N = 8 or 16 (16x16 or 32x32 at full resolution, set
+// by vvenc_config::m_cuTreeBlockSize). The block kernels come in one version per size, indexed by TplBlkSize.
+enum TplBlkSize { TPL_BLK_8 = 0, TPL_BLK_16 = 1, NUM_TPL_BLK_SIZES = 2 };
+static constexpr int tplBlkSide( int sizeIdx ) { return 8 << sizeIdx; }
+
+// Codes the N x N residual org - pred: Hadamard transform, quantization, and when recon is given the inverse
+// transform added to pred. Returns the squared coefficient error in the unnormalised domain (N^2 times the error in
+// samples) and the estimated bits (Exp-Golomb length of each level plus sign and significance).
 typedef void ( *TplCodeBlockFn )( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pel* recon, ptrdiff_t reconStride,
                                   const TplQuant& quant, int maxVal, int64_t& dist, int& bits );
 
+template<int N>
 void tplCodeBlockCore( const Pel* org, ptrdiff_t orgStride, const Pel* pred, Pel* recon, ptrdiff_t reconStride,
                        const TplQuant& quant, int maxVal, int64_t& dist, int& bits );
 
-// Bilinear prediction of an 8x8 block from the 9x9 reference samples at src, at the fractional position
+// Bilinear prediction of an N x N block from the ( N + 1 )^2 reference samples at src, at the fractional position
 // ( fx, fy ) in 1/16 sample.
 typedef void ( *TplPredBlockFn )( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst );
 
+template<int N>
 void tplPredBlockCore( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst );
 
 // One row of 2x2 averages, ( a + b + c + d + 2 ) >> 2.
@@ -103,7 +110,7 @@ void tplDownsampleRowCore( const Pel* src, ptrdiff_t srcStride, Pel* dst, int ds
 // TPL codes every block at its picture's QP from both the original and a reconstructed reference; the extra
 // distortion and rate caused by the reference's coding error is what propagates.
 //
-// The analysis runs on half-resolution luma in 8x8 blocks (16x16 at full resolution), in coding order. The stage
+// The analysis runs on half-resolution luma in 8x8 or 16x16 blocks (see TplBlkSize), in coding order. The stage
 // holds back the pictures of a GOP until the next GOP has arrived, because the GOP's key picture is also
 // referenced by the next one. The result is a QP offset per CTU, applied where QPA and the frame QP apply the
 // block importance mapping (BIM) offsets, which CU-tree replaces.
@@ -120,8 +127,8 @@ public:
   // number of pictures the stage holds in addition to the encoder's own GOP queue
   static int getNumLookAheadPics( const VVEncCfg& encCfg );
 
-  TplCodeBlockFn     m_codeBlock;       // kernels, SIMD where available
-  TplPredBlockFn     m_predBlock;
+  TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
+  TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
   TplDownsampleRowFn m_downsampleRow;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
@@ -143,6 +150,8 @@ private:
   RdCost                                m_rdCost;        // provides the SIMD Hadamard SATD
   FpDistFunc                            m_hadFunc;
   int                                   m_lookAheadPics;
+  int                                   m_blkSizeIdx;    // TplBlkSize of the analysis blocks
+  int                                   m_blkSize;       // their side at half resolution
   int                                   m_blkWidth;      // width and height of the picture in analysis blocks
   int                                   m_blkHeight;
   int                                   m_qpBDOffset;
