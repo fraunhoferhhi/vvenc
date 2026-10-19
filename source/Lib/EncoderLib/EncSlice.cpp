@@ -423,8 +423,8 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen > 0;
 }
 
-static const int highTL[6] = { -1, 0, 0, 2, 4, 5 };
-static const int highTLMaxIdx = (int) ( sizeof( highTL ) / sizeof( highTL[0] ) ) - 1; // deeper temporal layers (GOP 64) use the last offset
+static constexpr int MAX_DEF_TL_QP_OFFSET = 5; // deeper temporal layers (GOP 64) use the last offset
+static constexpr int highTL[MAX_DEF_TL_QP_OFFSET + 1] = { -1, 0, 0, 2, 4, 5 };
 
 int EncSlice::xGetQPForPicture( const Slice* slice )
 {
@@ -443,7 +443,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice )
     {
       const int tlayer = slice->pic->gopEntry->m_vtl;
 
-      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[std::min (tlayer, highTLMaxIdx)] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
+      qp = (slice->isIntra() ? std::min (qp, ((qp - std::min (3, floorLog2 (m_pcEncCfg->m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[std::min (tlayer, MAX_DEF_TL_QP_OFFSET)] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
     }
     else if( slice->isIntra() )
     {
