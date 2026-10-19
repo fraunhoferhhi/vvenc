@@ -24,3 +24,4 @@
 * Li Zhang, @lizhang-arm, Arm
 * Jeongkeun Kim, @kjg0724
 * Brian Zheng, @4KVCD
+* Andrew Johnston, @andrew-luumelabs, Luume Labs

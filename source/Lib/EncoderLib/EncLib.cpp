@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "EncLib.h"
+#include "MotionHints.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
@@ -146,6 +147,8 @@ void EncLib::initEncoderLib( const vvenc_config& encCfg )
 
 void EncLib::uninitEncoderLib()
 {
+  MotionHints::release( m_encCfg );
+
 #if ENABLE_TRACING
   if( g_trace_ctx )
   {

@@ -350,6 +350,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
   c->m_msgFnc                                  = nullptr;
   c->m_msgCtx                                  = nullptr;
+  c->m_motionHintFnc                           = nullptr;
+  c->m_motionHintCtx                           = nullptr;
+  c->m_motionHintRangeShift                    = 0;
 
   // core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
