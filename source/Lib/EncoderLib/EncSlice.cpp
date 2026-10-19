@@ -440,7 +440,8 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen > 0;
 }
 
-static const int highTL[6] = { -1, 0, 0, 2, 4, 5 };
+static constexpr int MAX_DEF_TL_QP_OFFSET = 5; // deeper temporal layers (GOP 64) use the last offset
+static constexpr int highTL[MAX_DEF_TL_QP_OFFSET + 1] = { -1, 0, 0, 2, 4, 5 };
 
 // The picture QP before block QP offsets: the base QP plus the offset of the picture's temporal layer.
 int EncSlice::getCascadeQP( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset )
@@ -449,7 +450,7 @@ int EncSlice::getCascadeQP( const VVEncCfg& encCfg, const GOPEntry& gopEntry, co
   {
     const int tlayer = gopEntry.m_vtl;
 
-    qp = (isIntra ? std::min (qp, ((qp - std::min (3, floorLog2 (encCfg.m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[tlayer] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
+    qp = (isIntra ? std::min (qp, ((qp - std::min (3, floorLog2 (encCfg.m_GOPSize) - 4/*TODO 3 with JVET-AC0149?*/)) * 15 + 3) >> 4) : highTL[std::min (tlayer, MAX_DEF_TL_QP_OFFSET)] + ((qp * (16 + std::min (2, tlayer))) >> 4) + 0/*TODO +-1?*/);
   }
   else if( isIntra )
   {
