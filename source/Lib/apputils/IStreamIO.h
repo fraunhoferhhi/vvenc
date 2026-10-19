@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 #include <limits>
 
 #include "VVEncAppCfg.h"
@@ -303,10 +304,21 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFi
 {
   std::string str;
   in >> str;
-  const double value = std::stod( str );
+
+  size_t parsedChars = 0;
+  double value       = 0.0;
+  try
+  {
+    value = std::stod( str, &parsedChars );
+  }
+  catch( ... )
+  {
+    parsedChars = 0;
+  }
+
   const double fixed = value * ( 1 << toFixed.fracBits ) + 0.5;
   // written so that NaN fails as well
-  if( !( value >= 0.0 && fixed < 256.0 ) )
+  if( parsedChars == 0 || parsedChars != str.size() || !( value >= 0.0 && fixed < 256.0 ) )
   {
     in.setstate( std::ios::failbit );
     return in;
@@ -318,6 +330,78 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFi
 inline std::ostream& operator << ( std::ostream& os, const IStreamToFixedPointU8& toFixed )
 {
   os << *toFixed.dstVal / double( 1 << toFixed.fracBits );
+  return os;
+}
+
+// ====================================================================================================================
+// string <-> QP with an optional fractional part
+// ====================================================================================================================
+
+// Reads a QP such as "27" or "27.5" into its integer part (m_QP) and its fractional part in 1/256 steps (m_QPFraction).
+class IStreamToQP
+{
+  public:
+    IStreamToQP( int* qp, uint8_t* qpFraction )
+      : dstQP      ( qp )
+      , dstFraction( qpFraction )
+    {
+    }
+
+    ~IStreamToQP()
+    {
+    }
+
+    friend std::ostream& operator << ( std::ostream& os, const IStreamToQP& toQP );
+
+    friend std::istream& operator >> ( std::istream& in, IStreamToQP& toQP );
+
+  private:
+    int*     dstQP;
+    uint8_t* dstFraction;
+};
+
+inline std::istream& operator >> ( std::istream& in, IStreamToQP& toQP )
+{
+  std::string str;
+  in >> str;
+
+  size_t parsedChars = 0;
+  double value       = 0.0;
+  try
+  {
+    value = std::stod( str, &parsedChars );
+  }
+  catch( ... )
+  {
+    parsedChars = 0;
+  }
+
+  const double intPart = std::floor( value );
+  // A negative QP with a fraction would turn into an integer part of -1 or less, which collides with
+  // VVENC_AUTO_QP, so fractions are only accepted for QPs of 0 and above.
+  const bool isFractional = value != intPart;
+  if( parsedChars == 0 || parsedChars != str.size() || std::abs( value ) > 1000.0 || ( isFractional && value < 0.0 ) )
+  {
+    in.setstate( std::ios::failbit );
+    return in;
+  }
+
+  // The fraction is rounded to the nearest 1/256 step; a fraction that rounds up to a whole QP moves to the next integer.
+  int qp            = (int) intPart;
+  int fractionSteps = (int) std::floor( ( value - intPart ) * 256.0 + 0.5 );
+  if( fractionSteps == 256 )
+  {
+    qp++;
+    fractionSteps = 0;
+  }
+  *toQP.dstQP       = qp;
+  *toQP.dstFraction = (uint8_t) fractionSteps;
+  return in;
+}
+
+inline std::ostream& operator << ( std::ostream& os, const IStreamToQP& toQP )
+{
+  os << *toQP.dstQP + *toQP.dstFraction / 256.0;
   return os;
 }
 

@@ -436,7 +436,7 @@ typedef struct vvenc_config
 
   int                 m_numThreads;                                                      // number of worker threads ( if <0: <720p 4threads, <5K 2880p 8threads, else 12threads (limited to available cores))
 
-  int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32)
+  int                 m_QP;                                                              // QP value of key-picture (0-63, default: 32), integer part when m_QPFraction is set
   int                 m_RCTargetBitrate;                                                 // target bitrate in bps (default: 0 (RC disabled))
 
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity level
@@ -792,7 +792,10 @@ typedef struct vvenc_config
   uint8_t             m_cuTreeStrength;                                                  // CU-tree: scale of its QP offsets as a 5-bit fixed point value (0 ... 255, i.e. 0 ... 7.97; default 64, i.e. 2.0)
                                                                                          // for convenience use VVENC_SET_CUTREE_STRENGTH, e.g. VVENC_SET_CUTREE_STRENGTH(2.0)
 
-  double              m_reservedDouble[8];
+  uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
+  int8_t              m_reservedInt8_2[3];
+  int32_t             m_reservedInt32;
+  double              m_reservedDouble[7];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

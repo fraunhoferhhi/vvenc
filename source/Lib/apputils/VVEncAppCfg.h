@@ -598,6 +598,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toCuTree                      ( &c->m_cuTree );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
+  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFraction );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
@@ -686,7 +687,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("passes,p",                                        c->m_RCNumPasses,                                    "number of encoding passes with rate control (1: single-pass, -1, 2: two-pass RC)")
     ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1: both, 1: first, 2: second pass)")
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
-    ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
+    ("qp,q",                                            toQP,                                                "quantization parameter, QP (0, 1, .. 63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("cutree",                                          toCuTree,                                            "CU-tree: lower the QP of blocks that later pictures predict from, with one GOP of look-ahead, instead of block importance mapping (0: off, 1: on)")
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
@@ -733,7 +734,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     opts.setSubSection("Quantization parameters");
     opts.addOptions()
-    ("QP,q",                                            c->m_QP,                                             "Qp value (0-63)")
+    ("QP,q",                                            toQP,                                                "Qp value (0-63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ;
   }
 

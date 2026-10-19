@@ -215,7 +215,7 @@ void xInvLfnstNxNCore(int *src, int *dst, const uint32_t mode, const uint32_t in
 // ====================================================================================================================
 // TrQuant class member functions
 // ====================================================================================================================
-TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
+TrQuant::TrQuant( bool enableOpt ) : m_scalingListEnabled(false), m_quant( nullptr )
 {
   // allocate temporary buffers
   m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
@@ -250,7 +250,10 @@ TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
   m_fwdLfnstNxN = xFwdLfnstNxNCore;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
-  initTrQuantX86();
+  if( enableOpt )
+  {
+    initTrQuantX86();
+  }
 #endif
 }
 
