@@ -1158,8 +1158,8 @@ void RateCtrl::addRCPassStats( const int poc,
 
 void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 {
-  const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
   EncRCPic* encRCPic = pic->encRCPic;
+  const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
 
   encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
