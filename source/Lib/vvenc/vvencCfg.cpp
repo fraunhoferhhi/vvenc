@@ -3461,7 +3461,7 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
   bool bError = false;
 
   std::string n(name);
-  std::string v(value);
+  std::string v;
   std::transform( n.begin(), n.end(), n.begin(), ::tolower );
 
   if ( name[0] == '-'  || name[1] == '-' ) // name prefix given - not supported
@@ -3475,14 +3475,11 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
     n.append(name);
   }
 
-  if (!value)
+  // without a value, v stays empty: the option parser switches boolean options on for an empty value
+  // and rejects it for all other options (VVENC_PARAM_BAD_VALUE)
+  if (value)
   {
-    v = "true";
-  }
-  else if (value[0] == '=')
-  {
-    value += 1;
-    v = value;
+    v = ( value[0] == '=' ) ? value + 1 : value;
   }
 
   if( n == "preset" )
