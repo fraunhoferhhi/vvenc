@@ -314,7 +314,7 @@ void PreProcess::xGetVisualActivity( Picture* pic, const PicList& picList ) cons
   VisAct va[ MAX_NUM_CH ];
   VisAct vaTL0;
 
-  const bool doChroma           = m_cappedCQF && pic->gopEntry->m_isStartOfGop;
+  const bool doChroma           = m_cappedCQF && pic->gopEntry->m_isStartOfGop && isChromaEnabled( pic->chromaFormat );
   // for the time being qpa activity done on ctu basis in applyQPAdaptationSlice(), which for now sums up luma activity
   const bool doVisAct           = m_doVisAct && !m_doVisActQpa;
   const bool doSpatAct          = pic->gopEntry->m_isStartOfGop && m_encCfg->m_GOPQPA;
