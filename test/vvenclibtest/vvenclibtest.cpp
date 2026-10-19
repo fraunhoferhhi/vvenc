@@ -907,6 +907,26 @@ int checkSDKStringApiInvalid()
   return ret;
 }
 
+int checkSDKStringApiNoValue()
+{
+  // a missing value switches a boolean option on and is rejected for all other options
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  c.m_alf = false;
+
+  if( 0 != vvenc_set_param( &c, "alf", nullptr ) || !c.m_alf )
+  {
+    return -1;
+  }
+
+  if( VVENC_PARAM_BAD_VALUE != vvenc_set_param( &c, VVENC_OPT_QP, nullptr ) )
+  {
+    return -1;
+  }
+
+  return 0;
+}
+
 static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMissingFrames = false ) 
 {
   int64_t ctsDiff   = (c.m_TicksPerSecond > 0) ? (int64_t)c.m_TicksPerSecond * (int64_t)c.m_FrameScale / (int64_t)c.m_FrameRate : 1;  // expected cts diff between frames
@@ -1180,6 +1200,7 @@ int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+  testfunc( "checkSDKStringApiNoValue", &checkSDKStringApiNoValue, false );
 
   return 0;
 }
