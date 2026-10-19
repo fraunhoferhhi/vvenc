@@ -803,6 +803,45 @@ fail:
   return -1;
 }
 
+int checkSDKHdrChromaQpMappingTables()
+{
+  // the chroma QP mapping tables signalled in the SPS must pass through the configured QpInVal/QpOutVal points
+  vvenc_config c;
+  vvenc_init_default( &c, 1920, 1080, 50, VVENC_RC_OFF, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  c.m_HdrMode = VVENC_HDR_PQ;   // separate tables for Cb, Cr and joint Cb-Cr
+
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+
+  const vvencChromaQpMappingTableParams& tables = c.m_chromaQpMappingTableParams;
+  const int* qpInVals [ 3 ] = { c.m_qpInValsCb,  c.m_qpInValsCr,  c.m_qpInValsCbCr  };
+  const int* qpOutVals[ 3 ] = { c.m_qpOutValsCb, c.m_qpOutValsCr, c.m_qpOutValsCbCr };
+
+  if( tables.m_numQpTables != 3 )
+  {
+    return -1;
+  }
+
+  for( int t = 0; t < tables.m_numQpTables; t++ )
+  {
+    int qpIn  = tables.m_qpTableStartMinus26[ t ] + 26;
+    int qpOut = qpIn;
+    for( int i = 0; i <= tables.m_numPtsInCQPTableMinus1[ t ]; i++ )
+    {
+      qpIn  += tables.m_deltaQpInValMinus1[ t ][ i ] + 1;
+      qpOut += tables.m_deltaQpOutVal[ t ][ i ];
+      if( qpIn != qpInVals[ t ][ i + 1 ] || qpOut != qpOutVals[ t ][ i + 1 ] )
+      {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
 int checkSDKStringApiDefault()
 {
   vvenc_config c;
@@ -1223,6 +1262,7 @@ int testLibCallingOrder()
 int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
   return 0;
 }
 

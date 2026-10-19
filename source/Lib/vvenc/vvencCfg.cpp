@@ -1310,7 +1310,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     for (size_t i = 0; i < qpInValsCbCr.size() - 1; i++)
     {
       c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i] - 1;
-      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i];
+      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = qpOutValsCbCr[i + 1] - qpOutValsCbCr[i];
     }
   }
 
