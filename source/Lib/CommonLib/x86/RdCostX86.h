@@ -140,6 +140,53 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
 }
 
 
+// four rows of two samples
+static inline __m128i _vv_load2x4( const Pel* src, const ptrdiff_t stride )
+{
+  const __m128i r01 = _mm_unpacklo_epi32( _mm_loadu_si32( src ),              _mm_loadu_si32( &src[    stride] ) );
+  const __m128i r23 = _mm_unpacklo_epi32( _mm_loadu_si32( &src[2 * stride] ), _mm_loadu_si32( &src[3 * stride] ) );
+  return _mm_unpacklo_epi64( r01, r23 );
+}
+
+// The 2-wide case of RdCost::xGetSAD: the absolute differences of four rows per vector. Like xGetSAD_NxN_SIMD for
+// blocks below 64 wide, it sums all rows instead of stopping early once maximumDistortionForEarlyExit is exceeded: the
+// checks would cost more than they save, and every caller only compares the result with that threshold, which the
+// full sum exceeds whenever the partial one does.
+template<X86_VEXT vext>
+Distortion xGetSAD2_SIMD( const DistParam& rcDtParam )
+{
+  CHECKD( rcDtParam.org.width != 2, "Invalid width" );
+  CHECKD( rcDtParam.applyWeight, "Weighted SAD is not supported" );
+
+  const Pel*      org        = rcDtParam.org.buf;
+  const Pel*      cur        = rcDtParam.cur.buf;
+  const int       subShift   = rcDtParam.subShift;
+  const ptrdiff_t orgStride  = rcDtParam.org.stride << subShift;
+  const ptrdiff_t curStride  = rcDtParam.cur.stride << subShift;
+  const int       numRows    = rcDtParam.org.height >> subShift;
+  const uint32_t  distShift  = DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+  const __m128i   ones       = _mm_set1_epi16( 1 );
+
+  // the 32-bit lane sums cannot overflow: each adds at most 2 * 2^15 per four rows
+  __m128i acc = _mm_setzero_si128();
+  int row = 0;
+  for( ; row + 4 <= numRows; row += 4, org += 4 * orgStride, cur += 4 * curStride )
+  {
+    const __m128i absDiff = _mm_abs_epi16( _mm_sub_epi16( _vv_load2x4( org, orgStride ), _vv_load2x4( cur, curStride ) ) );
+    acc = _mm_add_epi32( acc, _mm_madd_epi16( absDiff, ones ) );
+  }
+  acc = _mm_add_epi32( acc, _mm_unpackhi_epi64( acc, acc ) );
+  acc = _mm_add_epi32( acc, _mm_shuffle_epi32( acc, 1 ) );
+  Distortion sum = Distortion( _mm_cvtsi128_si32( acc ) );
+  for( ; row < numRows; row++, org += orgStride, cur += curStride )
+  {
+    sum += abs( org[0] - cur[0] ) + abs( org[1] - cur[1] );
+  }
+
+  sum <<= subShift;
+  return sum >> distShift;
+}
+
 template<int iWidth, X86_VEXT vext >
 Distortion RdCost::xGetSSE_NxN_SIMD( const DistParam &rcDtParam )
 {
@@ -152,7 +199,30 @@ Distortion RdCost::xGetSSE_NxN_SIMD( const DistParam &rcDtParam )
   const uint32_t uiShift = DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth) << 1;
   Distortion uiRet = 0;
 
-  if( 4 == iWidth )
+  if( 2 == iWidth )
+  {
+    // four rows per vector
+    __m128i Sum = _mm_setzero_si128();
+    int iY = 0;
+    for( ; iY + 4 <= iRows; iY += 4 )
+    {
+      __m128i Diff = _mm_sub_epi16( _vv_load2x4( pSrc1, iStrideSrc1 ), _vv_load2x4( pSrc2, iStrideSrc2 ) );
+      Sum = _mm_add_epi32( Sum, _mm_madd_epi16( Diff, Diff ) );
+      pSrc1 += 4 * iStrideSrc1;
+      pSrc2 += 4 * iStrideSrc2;
+    }
+    for( ; iY < iRows; iY++ )
+    {
+      const int iDiff0 = pSrc1[0] - pSrc2[0], iDiff1 = pSrc1[1] - pSrc2[1];
+      uiRet += iDiff0 * iDiff0 + iDiff1 * iDiff1;
+      pSrc1 += iStrideSrc1;
+      pSrc2 += iStrideSrc2;
+    }
+    Sum = _mm_hadd_epi32( Sum, Sum );
+    Sum = _mm_hadd_epi32( Sum, Sum );
+    uiRet = ( uiRet + _mm_cvtsi128_si32( Sum ) ) >> uiShift;
+  }
+  else if( 4 == iWidth )
   {
     __m128i Sum = _mm_setzero_si128();
     for( int iY = 0; iY < iRows; iY++ )
@@ -2762,7 +2832,7 @@ void RdCost::_initRdCostX86()
    * resulting in slightly different result compared to the scalar impl. */
 
   m_afpDistortFunc[0][DF_SSE    ] = xGetSSE_SIMD<vext>;
-//m_afpDistortFunc[0][DF_SSE2   ] = xGetSSE_SIMD<vext>;
+  m_afpDistortFunc[0][DF_SSE2   ] = xGetSSE_NxN_SIMD<2,  vext>;
   m_afpDistortFunc[0][DF_SSE4   ] = xGetSSE_NxN_SIMD<4,  vext>;
   m_afpDistortFunc[0][DF_SSE8   ] = xGetSSE_NxN_SIMD<8,  vext>;
   m_afpDistortFunc[0][DF_SSE16  ] = xGetSSE_NxN_SIMD<16, vext>;
@@ -2771,7 +2841,7 @@ void RdCost::_initRdCostX86()
   m_afpDistortFunc[0][DF_SSE128]  = xGetSSE_NxN_SIMD<128, vext>;
 
   m_afpDistortFunc[0][DF_SAD    ] = xGetSAD_SIMD<vext>;
-//m_afpDistortFunc[0][DF_SAD2   ] = xGetSAD_SIMD<vext>;
+  m_afpDistortFunc[0][DF_SAD2   ] = xGetSAD2_SIMD<vext>;
   m_afpDistortFunc[0][DF_SAD4   ] = xGetSAD_NxN_SIMD<4,  vext>;
   m_afpDistortFunc[0][DF_SAD8   ] = xGetSAD_NxN_SIMD<8,  vext>;
   m_afpDistortFunc[0][DF_SAD16  ] = xGetSAD_NxN_SIMD<16, vext>;

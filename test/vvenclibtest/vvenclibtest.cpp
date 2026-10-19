@@ -304,6 +304,11 @@ int testLibParameterRanges()
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { VVENC_AUTO_QP,0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -2,64 }, true );
+  testParamList( "QPFraction",                             vvencParams.m_QPFraction,                 vvencParams, { 0,64,128,255 } );
+  const int savedQP = vvencParams.m_QP;
+  vvencParams.m_QP = 63;
+  testParamList( "QP=63, QPFraction",                      vvencParams.m_QPFraction,                 vvencParams, { 1,128 }, true );
+  vvencParams.m_QP = savedQP;
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
@@ -877,6 +882,32 @@ int checkSDKStringApiDefault()
   return 0;
 }
 
+int checkSDKStringApiFractionalQP()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 0, 32, vvencPresetMode::VVENC_FASTER );
+
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.5" ) != 0 || c.m_QP != 27 || c.m_QPFraction != 128 )
+  {
+    return -1;
+  }
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "28" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0 )
+  {
+    return -1;
+  }
+  // a fraction that rounds up to 256/256 becomes the next integer QP
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "27.999" ) != 0 || c.m_QP != 28 || c.m_QPFraction != 0 )
+  {
+    return -1;
+  }
+  // a negative QP with a fraction would collide with VVENC_AUTO_QP and is rejected
+  if( vvenc_set_param( &c, VVENC_OPT_QP, "-0.5" ) == 0 )
+  {
+    return -1;
+  }
+  return 0;
+}
+
 int checkSDKStringApiInvalid()
 {
   vvenc_config c;
@@ -917,6 +948,26 @@ int checkSDKStringApiInvalid()
   }
 
   return ret;
+}
+
+int checkSDKStringApiNoValue()
+{
+  // a missing value switches a boolean option on and is rejected for all other options
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 500000, VVENC_AUTO_QP, vvencPresetMode::VVENC_MEDIUM );
+  c.m_alf = false;
+
+  if( 0 != vvenc_set_param( &c, "alf", nullptr ) || !c.m_alf )
+  {
+    return -1;
+  }
+
+  if( VVENC_PARAM_BAD_VALUE != vvenc_set_param( &c, VVENC_OPT_QP, nullptr ) )
+  {
+    return -1;
+  }
+
+  return 0;
 }
 
 static int runEncoder( vvenc_config& c, uint64_t framesToEncode, bool emulateMissingFrames = false ) 
@@ -1191,7 +1242,9 @@ int testSDKDefaultBehaviour()
 int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
+  testfunc( "checkSDKStringApiFractionalQP", &checkSDKStringApiFractionalQP, false );
   testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+  testfunc( "checkSDKStringApiNoValue", &checkSDKStringApiNoValue, false );
 
   return 0;
 }

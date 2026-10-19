@@ -259,6 +259,7 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   double                        picInitialLambda;
+  double                        picQPFraction; // fractional part of the picture QP with a fractional --qp, applied by QPA
   int16_t                       picMemorySTA;
   PicVisAct                     picVA;
   double                        psnr[MAX_NUM_COMP];

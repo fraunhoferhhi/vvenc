@@ -596,6 +596,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
+  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFraction );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
@@ -685,7 +686,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("passes,p",                                        c->m_RCNumPasses,                                    "number of encoding passes with rate control (1: single-pass, -1, 2: two-pass RC)")
     ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1: both, 1: first, 2: second pass)")
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file name")
-    ("qp,q",                                            c->m_QP,                                             "quantization parameter, QP (0, 1, .. 63)")
+    ("qp,q",                                            toQP,                                                "quantization parameter, QP (0, 1, .. 63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
     ("readahead",                                       toReadAheadGOPs,                                     "RAM for speed: number of GOPs of input read ahead so that frame parallel encoding can start later GOPs early (-1: auto, 0: least RAM, ... 4: fastest, most RAM)")
@@ -732,7 +733,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 
     opts.setSubSection("Quantization parameters");
     opts.addOptions()
-    ("QP,q",                                            c->m_QP,                                             "Qp value (0-63)")
+    ("QP,q",                                            toQP,                                                "Qp value (0-63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ;
   }
 

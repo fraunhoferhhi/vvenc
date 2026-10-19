@@ -69,6 +69,13 @@ static inline int apprI3Log2 (const double d, const bool isSccStrong) // rounded
   return d < dLimit ? -128 : int (floor (weight * log (d) / log (2.0) + 0.5));
 }
 
+// Activity scale that adds the picture's fractional QP to the rounded QP offsets apprI3Log2 derives from activities, so
+// that the blocks whose unrounded QP lies within the fraction below the next integer move up to that integer QP.
+static inline double fractionalQPActivityScale (const double picQPFraction, const bool isSccStrong)
+{
+  return picQPFraction > 0.0 ? pow (2.0, picQPFraction / (isSccStrong ? 2.0 : 3.0)) : 1.0;
+}
+
 static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bitDepth)
 {
   if (bitDepth > 16 || avgLumaValue >= (1u << bitDepth)) return 0;
@@ -533,6 +540,10 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
   const int  bitDepth         = slice->sps->bitDepths[CH_L];
   double hpEnerPicNorm        = 1.0 / getAveragePictureActivity (encCfg->m_SourceWidth, encCfg->m_SourceHeight, (encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back()),
                                                                  (encCfg->m_internalUsePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+  if (pic->picQPFraction > 0.0)
+  {
+    hpEnerPicNorm *= fractionalQPActivityScale (pic->picQPFraction, isSccStrongRC);
+  }
   const PreCalcValues& pcv    = *pic->cs->pcv;
 
   pic->picInitialQP = sliceQP;  // modified below and used in applyQPAdaptationSubCtu
@@ -838,8 +849,9 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const double hpEnerSubCTU   = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                                    picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, hpFrameRate,
                                                                    bitDepth, isHighResolution);
-  const double hpEnerPicNorm  = 1.0 / getAveragePictureActivity (encCfg->m_SourceWidth, encCfg->m_SourceHeight, 0,
-                                                                 (encCfg->m_internalUsePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
+  const double hpEnerPicNorm  = fractionalQPActivityScale (pic->picQPFraction, isSccStrongRC)
+                              / getAveragePictureActivity (encCfg->m_SourceWidth, encCfg->m_SourceHeight, 0,
+                                                           (encCfg->m_internalUsePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
   int adaptedSubCtuQP = Clip3 (0, MAX_QP, pic->picInitialQP + apprI3Log2 (hpEnerSubCTU * hpEnerPicNorm, isSccStrongRC));
 
   if (isChromaEnabled (pic->chromaFormat) && (adaptedSubCtuQP < MAX_QP))
@@ -887,17 +899,8 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   if (slice == nullptr || !slice->pps->useDQP || ctuPumpRedQP.size() <= ctuRsAddr) return 0;
 
   const int32_t avgOrig = origY.getAvg();
-  uint32_t sumAbsZmOrig = 0; // zero-mean
-  const Pel* src = origY.buf;
-
-  for (SizeType y = 0; y < origY.height; y++) // sum up the zero-mean absolute values
-  {
-    for (SizeType x = 0; x < origY.width; x++)
-    {
-      sumAbsZmOrig += (uint32_t) abs (src[x] - avgOrig);
-    }
-    src += origY.stride;
-  }
+  // sum up the zero-mean absolute values
+  const uint32_t sumAbsZmOrig = g_pelBufOP.sumAbsDeviation (origY.buf, origY.stride, origY.width, origY.height, avgOrig);
 
   const double sumAbsRatio = double (uiSadBestForQPA * 3 /*TODO: or 4? fine-tune!*/) / double (sumAbsZmOrig == 0 ? 1 : sumAbsZmOrig);
   const int pumpingReducQP = ((isBIM ? -1 : 0) + int (log (Clip3 (0.25, 4.0, sumAbsRatio)) / log (2.0) + (sumAbsRatio < 1.0 ? -0.5 : 0.5))) >> (baseQP >= 38/*MAX_QP_PERCEPT_QPA*/ ? 1 : 0);
