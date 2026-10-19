@@ -448,6 +448,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   //   4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
   //   5. Then we have to wait for the next available picture-unit, so the input frame can be passed to the 1.stage.
 
+  // CU-tree passes its pictures on a GOP at a time, and the GOP encoder only starts with a GOP and one picture queued.
+  // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
+  // Without stage parallel processing, a buffer of that many access units covers the wait, so every call still
+  // returns one; with it, the delayed output below already does.
+  const size_t auBuffer = ( m_encCfg.m_cuTree && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
+
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );
   while( true )
@@ -469,9 +475,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     // trigger stages
     isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );
+    bool progress = false;
     for( auto encStage : m_encStages )
     {
-      encStage->runStage( flush, au );
+      progress     |= encStage->runStage( flush, au );
       isQueueEmpty &= encStage->isStageDone();
     }
 
@@ -481,14 +488,21 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
       au.detachNalUnitList();
       au.clearAu();
-      // NOTE: delay AU output in stage parallel mode only
+      // NOTE: delay AU output in stage parallel mode, and by the CU-tree buffer without it
       if( !m_accessUnitOutputStarted )
-        m_accessUnitOutputStarted = !m_encCfg.m_stageParallelProc || m_AuList.size() > 4 || flush;
+        m_accessUnitOutputStarted = ( !m_encCfg.m_stageParallelProc && m_AuList.size() > auBuffer ) || m_AuList.size() > 4 || flush;
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
-    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
+    // (or, with the CU-tree buffer, until the buffer is full again)
+    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.size() <= auBuffer && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
+    {
+      break;
+    }
+    // With the CU-tree buffer (no stage parallel processing), nothing changes until a stage passes a picture on:
+    // return for more input rather than wait for an access unit that cannot come.
+    if( auBuffer && ! inputPending && ! progress )
     {
       break;
     }

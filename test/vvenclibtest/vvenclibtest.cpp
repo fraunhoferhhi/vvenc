@@ -1289,11 +1289,40 @@ int testStringApiInterface()
   return 0;
 }
 
+// CU-tree passes its pictures on a GOP at a time; the encoder must still finish and return an access unit for every
+// call after the first one, with and without threads, also when the intra period cuts GOPs short (24 at 24 fps, the
+// default intra period of one second).
+int checkCuTreeAccessUnits()
+{
+  for( int numThreads : { 0, 4 } )
+  {
+    for( int gopSize : { 16, 32 } )
+    {
+      vvenc_config c;
+      vvenc_config_default( &c );
+      fillEncoderParameters( c, false );
+      c.m_numThreads             = numThreads;
+      c.m_GOPSize                = gopSize;
+      c.m_FrameRate              = 24;
+      c.m_IntraPeriod            = 24;
+      c.m_cuTree                 = 1;
+      c.m_blockImportanceMapping = false;
+      vvenc_init_config_parameter( &c );
+      if( 0 != runEncoder( c, 100 ) )
+      {
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
 int testTimestamps()
 {
   testfunc( "checkTimestampsDefault", &checkTimestampsDefault, false );
   testfunc( "checkTimestampsDefaultInvalid", &checkTimestampsInvalid, true );
   testfunc( "checkDtsDefault", &checkDtsDefault, false );
+  testfunc( "checkCuTreeAccessUnits", &checkCuTreeAccessUnits, false );
 
   return 0;
 }
