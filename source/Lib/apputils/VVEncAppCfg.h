@@ -604,7 +604,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<int8_t>             toChromaLocInfo               ( &c->m_chromaLocInfoPresent,        &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toMtProfile                   ( &c->m_mtProfile,                   &MtAbrevToIntMap );
   IStreamToInt8                     toNumParallelGOPs             ( &c->m_numParallelGOPs );
-  IStreamToInt8                     toReadAheadGOPs               ( &c->m_readAheadGOPs );
 
   po::Options opts;
   if( m_easyMode )
@@ -689,7 +688,6 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("qp,q",                                            toQP,                                                "quantization parameter, QP (0, 1, .. 63), a fractional QP such as 27.5 encodes between QPs 27 and 28")
     ("qpa",                                             toQPA,                                               "enable perceptually motivated QP adaptation based on XPSNR model (0: off, 1: on)", true)
     ("threads,t",                                       c->m_numThreads,                                     "number of threads (multithreading; -1: resolution < 720p: 4, < 5K 2880p: 8, >= 5K 2880p: 12 threads)")
-    ("readahead",                                       toReadAheadGOPs,                                     "RAM for speed: number of GOPs of input read ahead so that frame parallel encoding can start later GOPs early (-1: auto, 0: least RAM, ... 4: fastest, most RAM)")
     ("mtprofile",                                       toMtProfile,                                         "set automatic multi-threading setting (-1: auto, 0: off, 1,2,3: on, enables tiles, IFP and WPP automatically depending on the number of threads)")
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (none, cra, idr, rpsei: Recovery Point SEI, cra_cre: CRA, constrained RASL picture encoding, idr_no_radl: IDR w/o leading pictures, use for DASH, implies POC0IDR)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "intra period/refresh in seconds")
@@ -1139,8 +1137,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FppLinesSynchro",                                 toIfpLines,                                          "(deprecated) Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
     ("IFPLines",                                        toIfpLines,                                          "Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
     ("IFP",                                             toUseIfp,                                            "Inter-Frame Parallelization(IFP) (-1: auto, 0: off, 1: on, with default setting of IFPLines)")
-    ("NumParallelGOPs",                                 toNumParallelGOPs,                                   "Number of additional GOPs processed in parallel")
-    ("ReadAheadGOPs",                                   toReadAheadGOPs,                                     "RAM for speed: number of GOPs of input read ahead so that frame parallel encoding can start later GOPs early (-1: auto, 0: least RAM, ... 4: fastest, most RAM)")
+    ("NumParallelGOPs",                                 toNumParallelGOPs,                                   "Number of additional GOPs processed in parallel (-1: auto). With IFP: GOP parallel processing (auto: 0). Without IFP: GOPs of input read ahead so that frame parallel encoding can start later GOPs early, RAM for speed (auto: 2)")
     ;
 
     opts.setSubSection("Coding tools");

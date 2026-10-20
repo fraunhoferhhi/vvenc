@@ -656,8 +656,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ifpLines                                = -1;
   c->m_ifp                                     = -1;
   c->m_mtProfile                               =  0;
-  c->m_numParallelGOPs                         =  0;
-  c->m_readAheadGOPs                           = -1;
+  c->m_numParallelGOPs                         = -1;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -728,7 +727,6 @@ static bool canStartLaterGops( const vvenc_config *c )
   return c->m_numThreads > 0
       && c->m_maxParallelFrames > 1
       && c->m_ifpLines == 0
-      && c->m_numParallelGOPs == 0
       && c->m_RCTargetBitrate == 0
       && ! rateCap;
 }
@@ -1849,10 +1847,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  // read ahead two GOPs by default where frame parallel encoding can start later GOPs early
-  if( c->m_readAheadGOPs == -1 )
+  // GOP parallel processing with IFP stays off by default. Without IFP, read two GOPs ahead
+  // by default where frame parallel encoding can start later GOPs early.
+  if( c->m_numParallelGOPs == -1 )
   {
-    c->m_readAheadGOPs = canStartLaterGops( c ) ? 2 : 0;
+    c->m_numParallelGOPs = canStartLaterGops( c ) ? 2 : 0;
   }
 
   c->m_configDone = true;
@@ -2215,20 +2214,17 @@ static bool checkCfgParameter( vvenc_config *c )
     }
   }
 
-  vvenc_confirmParameter(c, c->m_readAheadGOPs < 0 || c->m_readAheadGOPs > 4, "ReadAheadGOPs must be in range of -1 - 4" );
-  vvenc_confirmParameter(c, c->m_readAheadGOPs > 0 && ! canStartLaterGops( c ),
-                         "ReadAheadGOPs > 0 requires MaxParallelFrames > 1 without IFP, NumParallelGOPs, rate control or rate capping" );
+  vvenc_confirmParameter(c, c->m_numParallelGOPs < 0, "NumParallelGOPs must be -1 (auto) or 0 or more" );
 
   if( c->m_numParallelGOPs )
   {
     vvenc_confirmParameter(c, (c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX) || c->m_RCTargetBitrate > 0, "No support for GOP parallel processing in rate control mode" );
     vvenc_confirmParameter(c, c->m_numThreads == 0, "For GOP parallel processing, NumThreads > 0 is required" );
     vvenc_confirmParameter(c, c->m_maxParallelFrames == 0, "For GOP parallel processing MaxParallelFrames > 0 is required" );
-    vvenc_confirmParameter(c, c->m_ifpLines == 0, "For GOP parallel processing IFP > 0 is required" );
 
-    // GOP parallel profile
+    // GOP parallel profile, only with IFP; without IFP the GOPs are read ahead and help at any number of threads
     const int minNumThreadsGOPPP = getNumThreadsDefault( c ) * 2;
-    if( c->m_numThreads < minNumThreadsGOPPP )
+    if( c->m_ifpLines && c->m_numThreads < minNumThreadsGOPPP )
       msg.log( VVENC_WARNING, "Using NumParallelGOPs at low number of threads (<%d) does not provide more speedup, consider disabling NumParallelGOPs.\n", minNumThreadsGOPPP );
   }
 
@@ -3463,7 +3459,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
     css << "IFP:" << (c->m_ifp ? 1: 0) << " (IFPLines:" << (int)c->m_ifpLines << ")" << " ";
     css << "NumParallelGOPs:" << (int) c->m_numParallelGOPs << " ";
-    css << "ReadAheadGOPs:" << (int) c->m_readAheadGOPs << " ";
     if( c->m_picPartitionFlag )
     {
       css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";

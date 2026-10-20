@@ -279,11 +279,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   // additional pictures due to structural delay
   m_maxNumPicShared += m_preProcess->getGOPCfg()->getNumReorderPics()[ m_encCfg.m_maxTLayer ];
   m_maxNumPicShared += 3;
-  // increase number of picture buffers for GOP parallel processing
+  // increase number of picture buffers for GOP parallel processing (with IFP), or read GOPs ahead
+  // so that frame parallel encoding can start pictures of later GOPs early (without IFP)
   m_maxNumPicShared += m_encCfg.m_numParallelGOPs ? (m_encCfg.m_GOPSize + 1) * m_encCfg.m_numParallelGOPs: 0;
-  // read GOPs ahead, so that frame parallel encoding can start pictures of later GOPs early;
-  // every GOP costs one input frame per picture, so ReadAheadGOPs trades RAM for speed
-  m_maxNumPicShared += m_encCfg.m_readAheadGOPs * m_encCfg.m_GOPSize;
 
   if( m_rateCtrl->rcIsFinalPass )
   {
