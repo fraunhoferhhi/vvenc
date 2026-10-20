@@ -656,7 +656,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ifpLines                                = -1;
   c->m_ifp                                     = -1;
   c->m_mtProfile                               =  0;
-  c->m_numParallelGOPs                         =  0;
+  c->m_numParallelGOPs                         = -1;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -715,6 +715,20 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
 
   c->m_confirmFailed = true;
   return true;
+}
+
+// Without IFP, rate control or rate capping, the GOP encoder may start any queued picture whose
+// references are reconstructed, also from later GOPs. The first picture of a GOP in coding
+// order is its last one in input order, so a later GOP can only start early when all of its
+// pictures were read ahead while the current GOP is still being encoded.
+static bool canStartLaterGops( const vvenc_config *c )
+{
+  const bool rateCap = c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX && c->m_RCTargetBitrate == 0;
+  return c->m_numThreads > 0
+      && c->m_maxParallelFrames > 1
+      && c->m_ifpLines == 0
+      && c->m_RCTargetBitrate == 0
+      && ! rateCap;
 }
 
 VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
@@ -1833,6 +1847,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  // GOP parallel processing with IFP stays off by default. Without IFP, read two GOPs ahead
+  // by default where frame parallel encoding can start later GOPs early.
+  if( c->m_numParallelGOPs == -1 )
+  {
+    c->m_numParallelGOPs = canStartLaterGops( c ) ? 2 : 0;
+  }
+
   c->m_configDone = true;
 
   c->m_confirmFailed = checkCfgParameter(c);
@@ -2193,16 +2214,17 @@ static bool checkCfgParameter( vvenc_config *c )
     }
   }
 
+  vvenc_confirmParameter(c, c->m_numParallelGOPs < 0, "NumParallelGOPs must be -1 (auto) or 0 or more" );
+
   if( c->m_numParallelGOPs )
   {
     vvenc_confirmParameter(c, (c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX) || c->m_RCTargetBitrate > 0, "No support for GOP parallel processing in rate control mode" );
     vvenc_confirmParameter(c, c->m_numThreads == 0, "For GOP parallel processing, NumThreads > 0 is required" );
     vvenc_confirmParameter(c, c->m_maxParallelFrames == 0, "For GOP parallel processing MaxParallelFrames > 0 is required" );
-    vvenc_confirmParameter(c, c->m_ifpLines == 0, "For GOP parallel processing IFP > 0 is required" );
 
-    // GOP parallel profile
+    // GOP parallel profile, only with IFP; without IFP the GOPs are read ahead and help at any number of threads
     const int minNumThreadsGOPPP = getNumThreadsDefault( c ) * 2;
-    if( c->m_numThreads < minNumThreadsGOPPP )
+    if( c->m_ifpLines && c->m_numThreads < minNumThreadsGOPPP )
       msg.log( VVENC_WARNING, "Using NumParallelGOPs at low number of threads (<%d) does not provide more speedup, consider disabling NumParallelGOPs.\n", minNumThreadsGOPPP );
   }
 

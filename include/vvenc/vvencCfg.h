@@ -785,7 +785,9 @@ typedef struct vvenc_config
                                                                                          // IFP and WPP are all used. For 1 and 2, an optimal selection of tools is done based on resolution and CTU size.
   int8_t              m_GOPQPA;
   int                 m_minIntraDist;
-  int8_t              m_numParallelGOPs;
+  int8_t              m_numParallelGOPs;                                                 // additional GOPs processed in parallel, -1: auto (default). With IFP: GOP parallel processing (auto: 0).
+                                                                                         // Without IFP: GOPs of input read ahead, so that frame parallel encoding can start later GOPs early;
+                                                                                         // trades RAM for speed (auto: 2 where frame parallel encoding can use it, else 0)
   int8_t              m_maxDeltaQP;
 
   int8_t              m_reservedInt8[2];

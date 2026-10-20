@@ -274,6 +274,17 @@ int testLibParameterRanges()
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { -1,0,33,64,128 }, true ); //th is this intended
   vvencParams.m_poc0idr = -1;
 
+  // without threads there are no parallel GOPs, neither with IFP nor read ahead without it
+  testParamList( "NumParallelGOPs, no threads",            vvencParams.m_numParallelGOPs,            vvencParams, { -1,0 } );
+  testParamList( "NumParallelGOPs, no threads",            vvencParams.m_numParallelGOPs,            vvencParams, { 1,4 }, true );
+  vvencParams.m_numThreads = 4;
+  testParamList( "NumParallelGOPs, read ahead",            vvencParams.m_numParallelGOPs,            vvencParams, { -1,0,1,2,4 } );
+  testParamList( "NumParallelGOPs, read ahead",            vvencParams.m_numParallelGOPs,            vvencParams, { -2 }, true );
+  vvencParams.m_ifp = 1;
+  testParamList( "NumParallelGOPs, IFP",                   vvencParams.m_numParallelGOPs,            vvencParams, { -1,0,1,2 } );
+  vvencParams.m_ifp = -1;
+  vvencParams.m_numThreads = 0;
+
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { 320,1920,3840 } );
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { -1,0 }, true );
 

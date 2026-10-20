@@ -1137,7 +1137,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("FppLinesSynchro",                                 toIfpLines,                                          "(deprecated) Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
     ("IFPLines",                                        toIfpLines,                                          "Inter-Frame Parallelization(IFP) explicit CTU-lines synchronization offset (-1: default mode with two lines, 0: off)")
     ("IFP",                                             toUseIfp,                                            "Inter-Frame Parallelization(IFP) (-1: auto, 0: off, 1: on, with default setting of IFPLines)")
-    ("NumParallelGOPs",                                 toNumParallelGOPs,                                   "Number of additional GOPs processed in parallel")
+    ("NumParallelGOPs",                                 toNumParallelGOPs,                                   "Number of additional GOPs processed in parallel (-1: auto). With IFP: GOP parallel processing (auto: 0). Without IFP: GOPs of input read ahead so that frame parallel encoding can start later GOPs early, RAM for speed (auto: 2)")
     ;
 
     opts.setSubSection("Coding tools");
