@@ -64,6 +64,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "SEIFilmGrainAnalyzer.h"
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
 #include "EncoderLib/CuTree.h"
+#include "EncoderLib/BvSearchOps.h"
 
 #ifdef TARGET_SIMD_X86
 
@@ -511,6 +512,28 @@ void FGAnalyzer::initFGAnalyzerX86()
     case SSE42:
     case SSE41:
       _initFGAnalyzerX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+}
+#endif
+
+#if ENABLE_SIMD_OPT
+void BvSearchOps::initBvSearchOpsX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initBvSearchOpsX86<AVX2>();
+      break;
+#endif
+    case AVX:
+    case SSE42:
+    case SSE41:
+      _initBvSearchOpsX86<SSE41>();
       break;
     default:
       break;

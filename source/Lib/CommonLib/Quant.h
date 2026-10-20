@@ -140,6 +140,7 @@ private:
   void    xDestroyScalingList     ();
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
   void    xSignBitHidingHDQ       ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, int &lastPos, const int maxLog2TrDynamicRange);
+  void    xInvResDPCM             ( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf& dstBuf ) const;
   void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
                                     const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
                                     TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
@@ -161,6 +162,13 @@ private:
 
 public:
   bool    ( *xNeedRdoq )          ( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff, int64_t offset, int shift );
+  // the BDPCM residual in place: each coefficient minus its left (horizontal) or upper (vertical) neighbour
+  void    ( *xFwdResDPCM )        ( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical );
+  // the inverse vertical BDPCM residual: the column sums of coef, each clipped to the 16-bit coefficient range
+  void    ( *xInvResDPCMVer )     ( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height );
+  // the C versions of xFwdResDPCM and xInvResDPCMVer, also used by the SIMD versions for widths that are not a multiple of 4
+  static void fwdResDPCMCore       ( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical );
+  static void invResDPCMVerCore    ( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height );
   void    ( *xDeQuant )           ( const int maxX, const int maxY, const int scale, const TCoeffSig* const piQCoef, const size_t piQCfStride, TCoeff* const piCoef, const int rightShift, const int inputMaximum, const TCoeff transformMaximum );
 
 protected:
