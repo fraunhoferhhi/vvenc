@@ -597,12 +597,121 @@ static bool NeedRdoqSIMD( const TCoeff* pCoeff, size_t numCoeff, int quantCoeff,
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// BDPCM residuals (Quant::xFwdResDPCM / xInvResDPCMVer) for blocks a multiple of 4 wide. The forward residual is a
+// 16-bit wrap-around subtraction, the vertical inverse a 16-bit saturating addition: both equal the C versions.
+// ---------------------------------------------------------------------------------------------------------------------
+
+template<X86_VEXT vext>
+static void fwdResDPCM_SIMD( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical )
+{
+  if( width & 3 )
+  {
+    Quant::fwdResDPCMCore( coef, stride, width, height, vertical );
+    return;
+  }
+
+  if( !vertical && width == 4 )
+  {
+    // two rows per vector: the 64-bit shift moves each row by one coefficient and shifts in a zero
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, coef += 2 * stride )
+    {
+      const __m128i cur  = _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) coef ), _vv_loadl_epi64( ( const __m128i* ) &coef[stride] ) );
+      const __m128i diff = _mm_sub_epi16( cur, _mm_slli_epi64( cur, 16 ) );
+      _vv_storel_epi64( ( __m128i* ) coef, diff );
+      _vv_storel_epi64( ( __m128i* ) &coef[stride], _mm_unpackhi_epi64( diff, diff ) );
+    }
+    if( y < height )
+    {
+      const __m128i cur = _vv_loadl_epi64( ( const __m128i* ) coef );
+      _vv_storel_epi64( ( __m128i* ) coef, _mm_sub_epi16( cur, _mm_slli_epi64( cur, 16 ) ) );
+    }
+  }
+  else if( !vertical )
+  {
+    for( int y = 0; y < height; y++, coef += stride )
+    {
+      // from the right, so that each left neighbour is still the original value when it is read
+      int x = width - 8;
+      for( ; x > 0; x -= 8 )
+      {
+        const __m128i cur  = _mm_loadu_si128( ( const __m128i* ) &coef[x] );
+        const __m128i left = _mm_loadu_si128( ( const __m128i* ) &coef[x - 1] );
+        _mm_storeu_si128( ( __m128i* ) &coef[x], _mm_sub_epi16( cur, left ) );
+      }
+      // the first 8 or 4 coefficients: the first one has no left neighbour and stays
+      if( x == 0 )
+      {
+        const __m128i cur = _mm_loadu_si128( ( const __m128i* ) coef );
+        _mm_storeu_si128( ( __m128i* ) coef, _mm_sub_epi16( cur, _mm_slli_si128( cur, 2 ) ) );
+      }
+      else
+      {
+        const __m128i cur = _vv_loadl_epi64( ( const __m128i* ) coef );
+        _vv_storel_epi64( ( __m128i* ) coef, _mm_sub_epi16( cur, _mm_slli_si128( cur, 2 ) ) );
+      }
+    }
+  }
+  else
+  {
+    // from the bottom, so that each upper neighbour is still the original value when it is read
+    coef += stride * ( height - 1 );
+    for( int y = height - 1; y > 0; y--, coef -= stride )
+    {
+      int x = 0;
+      for( ; x + 8 <= width; x += 8 )
+      {
+        const __m128i cur = _mm_loadu_si128( ( const __m128i* ) &coef[x] );
+        const __m128i up  = _mm_loadu_si128( ( const __m128i* ) &coef[x - stride] );
+        _mm_storeu_si128( ( __m128i* ) &coef[x], _mm_sub_epi16( cur, up ) );
+      }
+      if( x < width )
+      {
+        const __m128i cur = _vv_loadl_epi64( ( const __m128i* ) &coef[x] );
+        const __m128i up  = _vv_loadl_epi64( ( const __m128i* ) &coef[x - stride] );
+        _vv_storel_epi64( ( __m128i* ) &coef[x], _mm_sub_epi16( cur, up ) );
+      }
+    }
+  }
+}
+
+template<X86_VEXT vext>
+static void invResDPCMVer_SIMD( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height )
+{
+  if( width & 3 )
+  {
+    Quant::invResDPCMVerCore( coef, coefStride, dst, dstStride, width, height );
+    return;
+  }
+
+  std::copy( coef, coef + width, dst );
+  for( int y = 1; y < height; y++ )
+  {
+    coef += coefStride;
+    dst  += dstStride;
+    int x = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const __m128i sum = _mm_adds_epi16( _mm_loadu_si128( ( const __m128i* ) &dst[x - dstStride] ), _mm_loadu_si128( ( const __m128i* ) &coef[x] ) );
+      _mm_storeu_si128( ( __m128i* ) &dst[x], sum );
+    }
+    if( x < width )
+    {
+      const __m128i sum = _mm_adds_epi16( _vv_loadl_epi64( ( const __m128i* ) &dst[x - dstStride] ), _vv_loadl_epi64( ( const __m128i* ) &coef[x] ) );
+      _vv_storel_epi64( ( __m128i* ) &dst[x], sum );
+    }
+  }
+}
+
 template<X86_VEXT vext>
 void Quant::_initQuantX86()
 {
-  xDeQuant  = DeQuantCoreSIMD<vext>;
-  xQuant    = QuantCoreSIMD  <vext>;
-  xNeedRdoq = NeedRdoqSIMD   <vext>;
+  xDeQuant       = DeQuantCoreSIMD<vext>;
+  xQuant         = QuantCoreSIMD  <vext>;
+  xNeedRdoq      = NeedRdoqSIMD   <vext>;
+  xFwdResDPCM    = fwdResDPCM_SIMD<vext>;
+  xInvResDPCMVer = invResDPCMVer_SIMD<vext>;
 }
 template void Quant::_initQuantX86<SIMDX86>();
 

@@ -69,6 +69,33 @@ template<bool isAligned> static inline __m128i load_aligned       ( const void* 
 template<>                      inline __m128i load_aligned<true> ( const void* addr ) { return _mm_load_si128 ( (const __m128i *) addr );}
 template<>                      inline __m128i load_aligned<false>( const void* addr ) { return _mm_loadu_si128( (const __m128i *) addr );}
 
+// the two samples of each of up to four rows in one vector; the lanes of missing rows are zero
+static inline __m128i _vv_loadWidth2Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  __m128i r[4];
+  for( int i = 0; i < 4; i++ )
+  {
+    r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
+  }
+  return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
+}
+
+// the four samples of each of up to two rows in one vector; the lanes of a missing row are zero
+static inline __m128i _vv_loadWidth4Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
+  return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
+}
+
+// stores the two samples of each of up to four rows from one vector in the layout of _vv_loadWidth2Rows
+static inline void _vv_storeWidth2Rows( Pel* p, const ptrdiff_t stride, const int numRows, __m128i v )
+{
+  for( int i = 0; i < numRows; i++, v = _mm_srli_si128( v, 4 ) )
+  {
+    _mm_storeu_si32( &p[i * stride], v );
+  }
+}
+
 template< X86_VEXT vext >
 void weightCiip_SSE( Pel* res, const Pel* src, const int numSamples, int numIntra )
 {
@@ -1543,6 +1570,49 @@ void copyClip_SSE( const int16_t* src, int srcStride, int16_t* dst, int dstStrid
 #endif
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Blocks 2 wide (the chroma of 4xN blocks), four rows per vector. reco2 adds with 16-bit saturation before clipping to
+// the sample range, sub2 subtracts with 16-bit wrap-around: both equal the C versions for every Pel.
+// ---------------------------------------------------------------------------------------------------------------------
+
+template<X86_VEXT vext>
+void reco2_SIMD( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const __m128i vmin = _mm_set1_epi16( clpRng.min() );
+  const __m128i vmax = _mm_set1_epi16( clpRng.max() );
+  for( int y = 0; y < height; y += 4, src0 += 4 * src0Stride, src1 += 4 * src1Stride, dst += 4 * dstStride )
+  {
+    const int     numRows = std::min( 4, height - y );
+    const __m128i sum     = _mm_adds_epi16( _vv_loadWidth2Rows( src0, src0Stride, numRows ), _vv_loadWidth2Rows( src1, src1Stride, numRows ) );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_min_epi16( vmax, _mm_max_epi16( vmin, sum ) ) );
+  }
+}
+
+template<X86_VEXT vext>
+void sub2_SIMD( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  for( int y = 0; y < height; y += 4, src0 += 4 * src0Stride, src1 += 4 * src1Stride, dst += 4 * dstStride )
+  {
+    const int numRows = std::min( 4, height - y );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_sub_epi16( _vv_loadWidth2Rows( src0, src0Stride, numRows ), _vv_loadWidth2Rows( src1, src1Stride, numRows ) ) );
+  }
+}
+
+template<X86_VEXT vext>
+void copyClip2_SIMD( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, const ClpRng& clpRng )
+{
+  CHECKD( width != 2, "only for blocks 2 wide" );
+  const __m128i vmin = _mm_set1_epi16( clpRng.min() );
+  const __m128i vmax = _mm_set1_epi16( clpRng.max() );
+  for( int y = 0; y < height; y += 4, src += 4 * srcStride, dst += 4 * dstStride )
+  {
+    const int numRows = std::min( 4, height - y );
+    _vv_storeWidth2Rows( dst, dstStride, numRows, _mm_min_epi16( vmax, _mm_max_epi16( vmin, _vv_loadWidth2Rows( src, srcStride, numRows ) ) ) );
+  }
+}
+
 template<X86_VEXT vext, int W>
 void transposeNxN_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride )
 {
@@ -2561,24 +2631,6 @@ static inline __m128i _vv_fold_epi64( __m256i v )
 }
 #endif
 
-// the two samples of each of up to four rows in one vector; the lanes of missing rows are zero
-static inline __m128i _vv_loadWidth2Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
-{
-  __m128i r[4];
-  for( int i = 0; i < 4; i++ )
-  {
-    r[i] = i < numRows ? _mm_loadu_si32( &p[i * stride] ) : _mm_setzero_si128();
-  }
-  return _mm_unpacklo_epi64( _mm_unpacklo_epi32( r[0], r[1] ), _mm_unpacklo_epi32( r[2], r[3] ) );
-}
-
-// the four samples of each of up to two rows in one vector; the lanes of a missing row are zero
-static inline __m128i _vv_loadWidth4Rows( const Pel* p, const ptrdiff_t stride, const int numRows )
-{
-  const __m128i r0 = _vv_loadl_epi64( ( const __m128i* ) p );
-  return numRows > 1 ? _mm_unpacklo_epi64( r0, _vv_loadl_epi64( ( const __m128i* ) &p[stride] ) ) : r0;
-}
-
 // sum over the block of ( src0 - src1 )^2, for samples in 0 ... 2^15 - 1
 template<X86_VEXT vext>
 uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
@@ -3251,6 +3303,79 @@ uint32_t sumAbsDeviation_SIMD( const Pel* src, const ptrdiff_t stride, const int
   return sum + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// The plane checksum of the decoded picture hash SEI (PelBufferOps::pictureChecksum). Per sample, the terms
+// ( p & 0xff ) ^ m and ( p >> 8 ) ^ m (arithmetic shift) are in -256 ... 255, so their sum fits 16 bits; the 32-bit
+// lane sums wrap around modulo 2^32 like the C sum. The positions x and y are below 2^16, so each byte of the mask is
+// below 2^8 and the mask needs no truncation to 8 bits.
+// ---------------------------------------------------------------------------------------------------------------------
+
+template<X86_VEXT vext>
+uint32_t pictureChecksum_SIMD( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes )
+{
+  CHECKD( width > 0xffff || height > 0xffff, "the positions of the mask have to fit 16 bits" );
+
+  uint32_t tail = 0;
+  __m128i  acc  = _mm_setzero_si128();
+#if USE_AVX2
+  __m256i  acc256 = _mm256_setzero_si256();
+#endif
+
+  for( int y = 0; y < height; y++, plane += stride )
+  {
+    const int yMask = ( y & 0xff ) ^ ( y >> 8 );
+    int x = 0;
+#if USE_AVX2
+    if( vext >= AVX2 )
+    {
+      const __m256i low   = _mm256_set1_epi16( 0xff );
+      const __m256i ym    = _mm256_set1_epi16( yMask );
+      __m256i       xs    = _mm256_setr_epi16( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+      for( ; x + 16 <= width; x += 16, xs = _mm256_add_epi16( xs, _mm256_set1_epi16( 16 ) ) )
+      {
+        const __m256i mask = _mm256_xor_si256( _mm256_xor_si256( _mm256_and_si256( xs, low ), _mm256_srli_epi16( xs, 8 ) ), ym );
+        const __m256i p    = _mm256_loadu_si256( ( const __m256i* ) &plane[x] );
+        __m256i       terms = _mm256_xor_si256( _mm256_and_si256( p, low ), mask );
+        if( twoBytes )
+        {
+          terms = _mm256_add_epi16( terms, _mm256_xor_si256( _mm256_srai_epi16( p, 8 ), mask ) );
+        }
+        acc256 = _mm256_add_epi32( acc256, _mm256_madd_epi16( terms, _mm256_set1_epi16( 1 ) ) );
+      }
+    }
+#endif
+    const __m128i low = _mm_set1_epi16( 0xff );
+    const __m128i ym  = _mm_set1_epi16( yMask );
+    __m128i       xs  = _mm_add_epi16( _mm_set1_epi16( x ), _mm_setr_epi16( 0, 1, 2, 3, 4, 5, 6, 7 ) );
+    for( ; x + 8 <= width; x += 8, xs = _mm_add_epi16( xs, _mm_set1_epi16( 8 ) ) )
+    {
+      const __m128i mask  = _mm_xor_si128( _mm_xor_si128( _mm_and_si128( xs, low ), _mm_srli_epi16( xs, 8 ) ), ym );
+      const __m128i p     = _mm_loadu_si128( ( const __m128i* ) &plane[x] );
+      __m128i       terms = _mm_xor_si128( _mm_and_si128( p, low ), mask );
+      if( twoBytes )
+      {
+        terms = _mm_add_epi16( terms, _mm_xor_si128( _mm_srai_epi16( p, 8 ), mask ) );
+      }
+      acc = _mm_add_epi32( acc, _mm_madd_epi16( terms, _mm_set1_epi16( 1 ) ) );
+    }
+    for( ; x < width; x++ )
+    {
+      const uint8_t xorMask = ( x & 0xff ) ^ yMask ^ ( x >> 8 );
+      tail += ( plane[x] & 0xff ) ^ xorMask;
+      if( twoBytes )
+      {
+        tail += ( plane[x] >> 8 ) ^ xorMask;
+      }
+    }
+  }
+
+#if USE_AVX2
+  acc = _mm_add_epi32( acc, _mm_add_epi32( _mm256_castsi256_si128( acc256 ), _mm256_extracti128_si256( acc256, 1 ) ) );
+#endif
+  acc = _mm_hadd_epi32( acc, acc );
+  return tail + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
+}
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3263,12 +3388,15 @@ void PelBufferOps::_initPelBufOpsX86()
   addAvg8  = addAvg_SSE<vext, 8>;
   addAvg16 = addAvg_SSE<vext, 16>;
 
+  sub2 = sub2_SIMD<vext>;
   sub4 = sub_SSE<vext, 4>;
   sub8 = sub_SSE<vext, 8>;
 
+  copyClip2 = copyClip2_SIMD<vext>;
   copyClip4 = copyClip_SSE<vext, 4>;
   copyClip8 = copyClip_SSE<vext, 8>;
 
+  reco2 = reco2_SIMD<vext>;
   reco4 = reco_SSE<vext, 4>;
   reco8 = reco_SSE<vext, 8>;
 
@@ -3298,6 +3426,7 @@ void PelBufferOps::_initPelBufOpsX86()
   blockStats4x4       = blockStats4x4_SIMD<vext>;
   absGradientSums     = absGradientSums_SIMD<vext>;
   sumAbsDeviation     = sumAbsDeviation_SIMD<vext>;
+  pictureChecksum     = pictureChecksum_SIMD<vext>;
 
   weightCiip = weightCiip_SSE<vext>;
 

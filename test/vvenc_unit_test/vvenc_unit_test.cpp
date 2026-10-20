@@ -72,6 +72,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/BvSearchOps.h"
 #include "EncoderLib/SEIFilmGrainAnalyzer.h"
 
 #include "apputils/ParseArg.h"
@@ -1092,6 +1093,68 @@ static bool check_cpyCoeff( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
   return passed;
 }
 
+// The residual copies of the inverse transforms and of transform skip: the coefficients are within 16 bit, where the
+// saturating SIMD versions equal the C cast. The destination is compared including the columns beyond the block.
+static bool check_cpyResi( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
+{
+  DimensionGenerator dim;
+
+  static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
+
+  // Use xMalloc to create aligned buffers for x86.
+  TCoeff *src     = ( TCoeff* )xMalloc( TCoeff, buf_size );
+  Pel    *dst_ref = ( Pel*    )xMalloc( Pel,    buf_size );
+  Pel    *dst_opt = ( Pel*    )xMalloc( Pel,    buf_size );
+
+  bool passed = true;
+
+  // any 16-bit value (RAND_MAX may be only 2^15 - 1)
+  auto inp_gen = []() { return TCoeff( Pel( ( rand() << 8 ) ^ rand() ) ); };
+
+  std::ostringstream sstm_test;
+  sstm_test << "TCoeffOps::cpyResi";
+  std::cout << "Testing " << sstm_test.str() << std::endl;
+
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    // Set height and width to powers of two: 4 to 128 (MAX_CU_SIZE).
+    unsigned height = 1 << dim.get( 2, 7 );
+    unsigned width = 1 << dim.get( 2, 7 );
+    const unsigned dstStride = dim.get( width, MAX_CU_SIZE );
+
+    std::generate( src, src + buf_size, inp_gen );
+    std::fill( dst_ref, dst_ref + buf_size, Pel( 0x5a5a ) );
+    std::fill( dst_opt, dst_opt + buf_size, Pel( 0x5a5a ) );
+
+    std::ostringstream sstm_subtest;
+
+    if( width % 8 == 0 )
+    {
+      ref->cpyResi8( src, dst_ref, dstStride, width, height );
+      opt->cpyResi8( src, dst_opt, dstStride, width, height );
+
+      sstm_subtest << sstm_test.str() << "8";
+    }
+    else
+    {
+      ref->cpyResi4( src, dst_ref, dstStride, width, height );
+      opt->cpyResi4( src, dst_opt, dstStride, width, height );
+
+      sstm_subtest << sstm_test.str() << "4";
+    }
+
+    sstm_subtest << " dstStride=" << dstStride << " w=" << width << " h=" << height;
+
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, dstStride ) && passed;
+  }
+
+  xFree( src );
+  xFree( dst_ref );
+  xFree( dst_opt );
+
+  return passed;
+}
+
 template<int W>
 static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
 {
@@ -1413,6 +1476,7 @@ static bool test_TCoeffOps()
   bool passed        = true;
 
   passed = check_cpyCoeff( &ref, &opt, num_cases ) && passed;
+  passed = check_cpyResi( &ref, &opt, num_cases ) && passed;
 
   for( unsigned h : { 1, 2, 4, 8, 16, 32, 64 } )
   {
@@ -2511,6 +2575,56 @@ static bool check_SADwMask( RdCost* ref, RdCost* opt, unsigned num_cases, int wi
   return passed;
 }
 
+// The IBC block vector bits of a line of search positions: the SIMD line against the C line, and the column (whose
+// predictors and coordinates are transposed) against getBitsMultiplePredsIBC per vector. The predictors and positions
+// cover the 18 bits of an Mv component, multiples of 4 for the sample-precision candidates, and both orders of the two
+// predictor costs.
+static bool check_bvBitsLineIBC( RdCost* ref, RdCost* opt, unsigned num_cases )
+{
+  printf( "Testing RdCost::m_bvBitsLineIBC\n" );
+  DimensionGenerator rng;
+  auto anyComponent = [&rng]( const int range ) { return int( rng.get( 0, 2 * range ) ) - range; };
+  std::vector<unsigned> bitsRef( 300 ), bitsOpt( 300 );
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int range = rng.getOneOf<int>( { 8, 64, 1 << 12, ( 1 << 17 ) - 1 } );
+    Mv predictors[2] = { Mv( anyComponent( range ), anyComponent( range ) ), Mv( anyComponent( range ), anyComponent( range ) ) };
+    if( i & 1 )
+    {
+      predictors[0] = Mv( predictors[0].hor & ~3, predictors[0].ver & ~3 );
+    }
+    ref->setPredictorsIBC( predictors );
+    opt->setPredictorsIBC( predictors );
+
+    const int  count  = rng.get( 1, unsigned( bitsRef.size() ) );
+    const int  step   = rng.getOneOf<int>( { 1, -1, 2, 4, -4, 8 } );
+    const int  x0     = anyComponent( range );
+    const int  y      = i % 3 ? anyComponent( range ) & ~3 : anyComponent( range );
+    const bool useIMV = i % 4 != 0;
+
+    std::ostringstream sstm;
+    sstm << "bvBitsLine x0=" << x0 << " step=" << step << " count=" << count << " y=" << y << " imv=" << useIMV;
+    ref->getBvBitsRowIBC( x0, step, count, y, useIMV, bitsRef.data() );
+    opt->getBvBitsRowIBC( x0, step, count, y, useIMV, bitsOpt.data() );
+    if( !compare_values_1d( sstm.str() + " row", bitsRef.data(), bitsOpt.data(), count ) )
+    {
+      return false;
+    }
+
+    opt->getBvBitsColumnIBC( y, x0, step, count, useIMV, bitsOpt.data() );
+    for( int k = 0; k < count; k++ )
+    {
+      bitsRef[k] = ref->getBitsMultiplePredsIBC( y, x0 + k * step, useIMV );
+    }
+    if( !compare_values_1d( sstm.str() + " column", bitsRef.data(), bitsOpt.data(), count ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_RdCost()
 {
   RdCost ref;
@@ -2520,6 +2634,7 @@ static bool test_RdCost()
 
   unsigned num_cases = NUM_CASES;
   bool passed = true;
+  passed = check_bvBitsLineIBC( &ref, &opt, 10 * num_cases ) && passed;
   std::array<int, 8> widths = { 1, 2, 4, 8, 16, 32, 64, 128 };
   std::array<int, 7> heights = { 2, 4, 8, 16, 32, 64, 128 };
 
@@ -2811,6 +2926,77 @@ static bool check_reco( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   xFree( dest_opt );
 
   return passed;
+}
+
+// The plane checksum of the decoded picture hash SEI: widths and heights beyond 256, where the high bytes of the
+// positions enter the mask, any Pel values (the arithmetic shift of negative values) and both sample sizes.
+static bool check_pictureChecksum( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::pictureChecksum\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const bool tall   = i % 4 == 0;
+    const int  width  = tall ? rng.get( 1, 40 ) : rng.get( 1, 600 );
+    const int  height = tall ? rng.get( 250, 600 ) : rng.get( 1, 20 );
+    const int  stride = width + rng.get( 0, 16 );
+    std::vector<Pel> plane( stride * height );
+    std::generate( plane.begin(), plane.end(), anyPel );
+
+    for( bool twoBytes : { false, true } )
+    {
+      std::ostringstream sstm;
+      sstm << "pictureChecksum " << width << "x" << height << " stride=" << stride << " twoBytes=" << twoBytes;
+      if( !compare_value( sstm.str(), ref->pictureChecksum( plane.data(), stride, width, height, twoBytes ),
+                                      opt->pictureChecksum( plane.data(), stride, width, height, twoBytes ) ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// reco2, sub2 and copyClip2 on blocks 2 wide with any Pel values (the SIMD versions equal C for all of them), heights
+// 1 to 64 and padded strides; the whole destination is compared, so that writes beyond the block are found
+static bool check_width2Ops( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::reco2, sub2, copyClip2\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int    height = rng.get( 1, 64 );
+    const int    stride = 2 + rng.get( 0, 6 );
+    const ClpRng clpRng{ int( rng.getOneOf<unsigned>( { 8, 10 } ) ) };
+    std::vector<Pel> src0( stride * height ), src1( stride * height );
+    std::generate( src0.begin(), src0.end(), anyPel );
+    std::generate( src1.begin(), src1.end(), anyPel );
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+
+    std::ostringstream sstm;
+    sstm << " 2x" << height << " stride=" << stride << " bd=" << clpRng.bd;
+
+    ref->reco2( src0.data(), stride, src1.data(), stride, dstRef.data(), stride, 2, height, clpRng );
+    opt->reco2( src0.data(), stride, src1.data(), stride, dstOpt.data(), stride, 2, height, clpRng );
+    bool ok = compare_values_1d( "reco2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ref->sub2( src0.data(), stride, src1.data(), stride, dstRef.data(), stride, 2, height );
+    opt->sub2( src0.data(), stride, src1.data(), stride, dstOpt.data(), stride, 2, height );
+    ok = ok && compare_values_1d( "sub2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+
+    ref->copyClip2( src0.data(), stride, dstRef.data(), stride, 2, height, clpRng );
+    opt->copyClip2( src0.data(), stride, dstOpt.data(), stride, 2, height, clpRng );
+    ok = ok && compare_values_1d( "copyClip2" + sstm.str(), dstRef.data(), dstOpt.data(), stride * height );
+    if( !ok )
+    {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
@@ -3144,6 +3330,8 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
+  passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
@@ -4948,6 +5136,49 @@ static bool check_dequant( Quant* ref, Quant* opt, unsigned num_cases )
   return passed;
 }
 
+// The BDPCM residuals: the forward residual in place in both directions and the vertical inverse, with any 16-bit
+// values (wrap-around and saturation), widths 2 to 32 (2 uses the C version) and padded strides; the whole buffers are
+// compared, so that writes beyond the block are found.
+static bool check_resDPCM( Quant* ref, Quant* opt, unsigned num_cases )
+{
+  printf( "Testing Quant::xFwdResDPCM, xInvResDPCMVer\n" );
+  DimensionGenerator rng;
+  auto anyCoeff = []() { return TCoeffSig( ( rand() << 8 ) ^ rand() ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = 1 << rng.get( 1, 5 );
+    const int height = rng.get( 1, 32 );
+    const int stride = width + rng.get( 0, 8 );
+    std::vector<TCoeffSig> coef( stride * height );
+    std::generate( coef.begin(), coef.end(), anyCoeff );
+
+    for( bool vertical : { false, true } )
+    {
+      std::ostringstream sstm;
+      sstm << ( vertical ? " vertical " : " horizontal " ) << width << "x" << height << " stride=" << stride;
+      std::vector<TCoeffSig> fwdRef( coef ), fwdOpt( coef );
+      ref->xFwdResDPCM( fwdRef.data(), stride, width, height, vertical );
+      opt->xFwdResDPCM( fwdOpt.data(), stride, width, height, vertical );
+      if( !compare_values_1d( "xFwdResDPCM" + sstm.str(), fwdRef.data(), fwdOpt.data(), stride * height ) )
+      {
+        return false;
+      }
+    }
+
+    std::vector<TCoeffSig> invRef( stride * height, 0x5a5a ), invOpt( stride * height, 0x5a5a );
+    ref->xInvResDPCMVer( coef.data(), stride, invRef.data(), stride, width, height );
+    opt->xInvResDPCMVer( coef.data(), stride, invOpt.data(), stride, width, height );
+    std::ostringstream sstm;
+    sstm << "xInvResDPCMVer " << width << "x" << height << " stride=" << stride;
+    if( !compare_values_1d( sstm.str(), invRef.data(), invOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 static bool test_Quant()
 {
   Quant ref( /*other=*/nullptr, /*useScalingLists=*/false, /*enableOpt=*/false );
@@ -4956,9 +5187,76 @@ static bool test_Quant()
   unsigned num_cases = NUM_CASES;
   bool     passed    = check_needRdoq( &ref, &opt, num_cases );
   passed             = check_dequant( &ref, &opt, num_cases ) && passed;
+  passed             = check_resDPCM( &ref, &opt, num_cases ) && passed;
   return passed;
 }
 #endif // ENABLE_SIMD_OPT_QUANT
+
+#if ENABLE_SIMD_OPT
+// BvSearchOps::containsMv on block vector lists of up to 2 * IBC_NUM_CANDIDATES entries with few distinct values, so
+// that most keys are found, at varying positions; also keys that equal a list entry in one component only.
+static bool test_BvSearchOps()
+{
+  BvSearchOps ref( /*enableOpt=*/false );
+  BvSearchOps opt( /*enableOpt=*/true );
+
+  printf( "Testing BvSearchOps::containsMv\n" );
+  DimensionGenerator rng;
+  std::vector<Mv> list( 2 * IBC_NUM_CANDIDATES );
+
+  for( unsigned i = 0; i < 10 * NUM_CASES; i++ )
+  {
+    const int range = rng.get( 1, 8 );
+    for( Mv& mv : list )
+    {
+      mv = Mv( int( rng.get( 0, 2 * range ) ) - range, int( rng.get( 0, 2 * range ) ) - range );
+    }
+    const unsigned n     = rng.get( 0, unsigned( list.size() ) );
+    const Mv       entry = list[rng.get( 0, unsigned( list.size() ) - 1 )];
+    for( const Mv& key : { entry, Mv( entry.hor, entry.ver + 1 ), Mv( entry.hor + 1, entry.ver ) } )
+    {
+      std::ostringstream sstm;
+      sstm << "containsMv n=" << n << " key=(" << key.hor << "," << key.ver << ")";
+      if( !compare_value( sstm.str(), ref.containsMv( list.data(), n, key ), opt.containsMv( list.data(), n, key ) ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  // the chroma cost of the candidates: block widths of 1 to 40 (2 to 32 in the encoder), samples of up to 15 bits
+  printf( "Testing BvSearchOps::sumAbsDiffShifted\n" );
+  InputGenerator<Pel> pixels10{ 10, /*is_signed=*/false };
+  MinMaxGenerator<Pel> extremes{ 15, /*is_signed=*/false };
+  for( unsigned i = 0; i < NUM_CASES; i++ )
+  {
+    const int width  = i % 2 ? 1 << rng.get( 1, 5 ) : rng.get( 1, 40 );
+    const int height = rng.get( 1, 32 );
+    const int stride = width + rng.get( 0, 8 );
+    const int shift  = rng.get( 0, 4 );
+    std::vector<Pel> org( stride * height ), cur( stride * height );
+    if( i % 3 == 2 )
+    {
+      std::generate( org.begin(), org.end(), extremes );
+      std::generate( cur.begin(), cur.end(), extremes );
+    }
+    else
+    {
+      std::generate( org.begin(), org.end(), pixels10 );
+      std::generate( cur.begin(), cur.end(), pixels10 );
+    }
+
+    std::ostringstream sstm;
+    sstm << "sumAbsDiffShifted " << width << "x" << height << " stride=" << stride << " shift=" << shift;
+    if( !compare_value( sstm.str(), ref.sumAbsDiffShifted( org.data(), stride, cur.data(), stride, width, height, shift ),
+                                    opt.sumAbsDiffShifted( org.data(), stride, cur.data(), stride, width, height, shift ) ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+#endif // ENABLE_SIMD_OPT
 
 struct UnitTestEntry
 {
@@ -5004,6 +5302,9 @@ static const UnitTestEntry test_suites[] = {
 #endif
 #if ENABLE_SIMD_DBLF
     { "LoopFilterPandQ", test_LoopFilterPandQ },
+#endif
+#if ENABLE_SIMD_OPT
+    { "BvSearch", test_BvSearchOps },
 #endif
 #if ENABLE_SIMD_OPT_FGA
     { "FGAnalyzer", test_FGAnalyzer },

@@ -706,17 +706,16 @@ template< X86_VEXT vext, int W >
 void cpyResi_SSE( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width, unsigned height )
 {
 #if USE_AVX2
-  if( W >= 8 && vext >= AVX2 )
+  if( W >= 8 && vext >= AVX2 && ( width & 15 ) == 0 )
   {
+    // sixteen coefficients per step; packs works per 128-bit lane, the permutation restores the order
     while( height-- )
     {
-      for( int col = 0; col < width; col += 8 )
+      for( int col = 0; col < width; col += 16 )
       {
-        __m256i
-        vsrc = _mm256_load_si256        ( ( const __m256i * ) &src[col] );
-        __m128i
-        vdst = _mm_packs_epi32          ( _mm256_castsi256_si128( vsrc ), _mm256_extracti128_si256( vsrc, 1 ) );
-        _mm_storeu_si128                ( ( __m128i * ) &dst[col], vdst );
+        const __m256i lo = _mm256_load_si256( ( const __m256i * ) &src[col] );
+        const __m256i hi = _mm256_load_si256( ( const __m256i * ) &src[col + 8] );
+        _mm256_storeu_si256( ( __m256i * ) &dst[col], _mm256_permute4x64_epi64( _mm256_packs_epi32( lo, hi ), 0xD8 ) );
       }
 
       src += width;
@@ -725,7 +724,23 @@ void cpyResi_SSE( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width,
   }
   else
 #endif
-  if( W >= 4 )
+  if( W >= 8 )
+  {
+    // eight coefficients per step: packs fills the whole 128-bit destination
+    while( height-- )
+    {
+      for( int col = 0; col < width; col += 8 )
+      {
+        const __m128i lo = _mm_load_si128( ( const __m128i * ) &src[col] );
+        const __m128i hi = _mm_load_si128( ( const __m128i * ) &src[col + 4] );
+        _mm_storeu_si128( ( __m128i * ) &dst[col], _mm_packs_epi32( lo, hi ) );
+      }
+
+      src += width;
+      dst += stride;
+    }
+  }
+  else if( W >= 4 )
   {
     __m128i vzero = _mm_setzero_si128();
     __m128i vdst;

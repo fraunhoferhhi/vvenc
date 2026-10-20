@@ -40,7 +40,7 @@ if( VVENC_ENABLE_X86_SIMD )
 
   if( ${VVENC_TARGET_ARCH} STREQUAL "X86" )
     # get avx2 source files
-    file( GLOB AVX2_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/avx2/*.cpp" )
+    file( GLOB AVX2_SRC_FILES CONFIGURE_DEPENDS "../CommonLib/x86/avx2/*.cpp" "../EncoderLib/x86/avx2/*.cpp" )
   endif()
 endif()
 
