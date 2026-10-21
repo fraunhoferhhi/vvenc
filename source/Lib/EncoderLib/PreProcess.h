@@ -73,6 +73,16 @@ class PreProcess : public EncStage
     bool            m_doVisActQpa;
     bool            m_cappedCQF;
 
+    // Scene cut detection for the film grain analysis: the luma histogram of the previous picture and its distance to
+    // the one before it, the picture's shared data (it is marked once the next picture confirms the cut) and the
+    // latest cut found.
+    static constexpr int FGA_HIST_BINS = 64;
+    std::vector<int> m_fgaPrevHist;
+    int              m_fgaPrevPoc      = std::numeric_limits<int>::min();
+    int              m_fgaPrevDistance = 0;
+    PicShared*       m_fgaPrevShared   = nullptr;
+    int              m_fgaLastCutPoc   = std::numeric_limits<int>::min();
+
   public:
     PreProcess( MsgLog& _m );
     virtual ~PreProcess();
@@ -97,6 +107,7 @@ class PreProcess : public EncStage
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
     void     xDisableTempDown     ( Picture* pic, const PicList& picList, const int thresh = INT32_MAX );
+    void     xDetectFgaSceneCut   ( Picture* pic );
 };
 
 } // namespace vvenc

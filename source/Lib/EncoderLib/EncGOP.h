@@ -55,6 +55,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
 #include "EncHRD.h"
+
+#include <map>
+#include <set>
 #include "EncStage.h"
 #include "SEIFilmGrainAnalyzer.h"
 
@@ -201,14 +204,25 @@ private:
     EncGOP*        gop       = nullptr;
     Picture*       pic       = nullptr;
     int            codingNum = 0;
+    int            startPoc  = std::numeric_limits<int>::min();   ///< the first picture in output order its result applies to
+    bool           sceneCut  = false;   ///< a scene cut lies between the previously analysed picture and this one
     FilmGrainParam result;
     WaitCounter    counter;
   };
   std::deque<std::unique_ptr<FgaTask>> m_fgaTasks;      ///< analyses whose access unit is not written yet
   std::unique_ptr<FgaTask>             m_fgaConsumed;   ///< the last consumed task, kept until the next one has run
   FgaTask*                             m_fgaLast = nullptr;   ///< the last submitted task
-  FilmGrainParam            m_fgcParam;                     ///< film grain parameters signalled in the access units being written
-  bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components signalled as present so far
+  int                                  m_fgaPrevAnalysedPoc = std::numeric_limits<int>::min();   ///< POC of the last analysed picture
+  // The film grain parameter sets by the POC from which they apply in output order: an analysis applies from the
+  // picture after the previously analysed one, or from a scene cut between them. The latest few are kept.
+  static constexpr size_t   FGC_PARAM_SETS  = 8;
+  std::map<int, FilmGrainParam> m_fgcByStartPoc;
+  bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components present in a parameter set so far
+  // The POCs of the latest access units written in the current coded layer video sequence (more than two GOPs), and
+  // whether a RASL picture carried a film grain SEI since the last other picture; to decide where the SEI is needed.
+  static constexpr size_t   FGC_SEI_HISTORY = 160;
+  std::set<int>             m_fgcWrittenPocs;
+  bool                      m_fgcRaslSeiPending = false;
 
 public:
   EncGOP( MsgLog& msglog );
@@ -263,6 +277,10 @@ private:
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  void xAddFilmGrainParameters       ( const FgaTask& task );
+  const FilmGrainParam& xFilmGrainParametersAt( int poc ) const;
+  SeiFgc xFilmGrainSei                ( const FilmGrainParam& param, ChromaFormat chromaFormat );
+  bool xFilmGrainSeiNeeded           ( const Slice& slice, const SeiFgc& sei, ChromaFormat chromaFormat );
   void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );

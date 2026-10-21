@@ -196,7 +196,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     // auto-regressive grain model
     m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_internChromaFormat,
                          m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent, encCfg.m_fga == 2, encCfg.m_fga == 3 );
-    m_fgcParam = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
+    m_fgcByStartPoc[ std::numeric_limits<int>::min() ] = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
   }
 
   if( !m_pcEncCfg->m_poc0idr )
@@ -1458,6 +1458,15 @@ void EncGOP::xAnalyzeFilmGrain( Picture& pic )
   task->gop        = this;
   task->pic        = &pic;
   task->codingNum  = pic.gopEntry->m_codingNum;
+
+  // The result applies from the picture after the previously analysed one; when PreProcess found a scene cut in
+  // between, from the cut, so that the pictures before it keep the parameters of their scene. The first analysis
+  // applies to all pictures before it as well.
+  const bool first  = m_fgaPrevAnalysedPoc == std::numeric_limits<int>::min();
+  const int  cutPoc = pic.m_picShared->fgaSceneCut() ? pic.poc : pic.m_picShared->fgaLastSceneCutPoc();
+  task->sceneCut    = !first && cutPoc > m_fgaPrevAnalysedPoc;
+  task->startPoc    = first ? std::numeric_limits<int>::min() : task->sceneCut ? cutPoc : m_fgaPrevAnalysedPoc + 1;
+  m_fgaPrevAnalysedPoc = pic.poc;
   const Barrier* previous = m_fgaLast ? &m_fgaLast->counter.done : nullptr;
   m_fgaLast = task;
 
@@ -1489,11 +1498,11 @@ void EncGOP::xRunFgaTask( FgaTask& task )
   if( residualWeight )
   {
     const CPelUnitBuf residual( residualBuf );
-    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, &residual, residualWeight );
+    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, &residual, residualWeight, task.sceneCut );
   }
   else
   {
-    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised );
+    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, nullptr, 0, task.sceneCut );
   }
   residualBuf.destroy();
   if( ownBuf )
@@ -2512,6 +2521,141 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnitList& accessUnit, HLSWr
   return numBytes * 8;
 }
 
+// True when the two film grain characteristics SEI messages would be written with the same syntax element values.
+static bool sameFilmGrainCharacteristics( const SeiFgc& a, const SeiFgc& b )
+{
+  if( a.fgcCancelFlag || b.fgcCancelFlag )
+  {
+    return a.fgcCancelFlag == b.fgcCancelFlag;
+  }
+  if( a.filmGrainModelId != b.filmGrainModelId || a.separateColourDescriptionPresent != b.separateColourDescriptionPresent
+      || a.blendingModeId != b.blendingModeId || a.log2ScaleFactor != b.log2ScaleFactor || a.fgcPersistenceFlag != b.fgcPersistenceFlag )
+  {
+    return false;
+  }
+  if( a.separateColourDescriptionPresent
+      && ( a.filmGrainBitDepthLumaMinus8 != b.filmGrainBitDepthLumaMinus8 || a.filmGrainBitDepthChromaMinus8 != b.filmGrainBitDepthChromaMinus8
+           || a.filmGrainFullRangeFlag != b.filmGrainFullRangeFlag || a.filmGrainColourPrimaries != b.filmGrainColourPrimaries
+           || a.filmGrainTransferCharacteristics != b.filmGrainTransferCharacteristics || a.filmGrainMatrixCoeffs != b.filmGrainMatrixCoeffs ) )
+  {
+    return false;
+  }
+  for( int c = 0; c < MAX_NUM_COMP; c++ )
+  {
+    const SeiFgc::CompModel& ca = a.compModel[ c ];
+    const SeiFgc::CompModel& cb = b.compModel[ c ];
+    // as in SEIWriter: a component is written as present only with intervals and model values
+    const bool presentA = ca.presentFlag && ca.numIntensityIntervals > 0 && ca.numModelValues > 0;
+    const bool presentB = cb.presentFlag && cb.numIntensityIntervals > 0 && cb.numModelValues > 0;
+    if( presentA != presentB )
+    {
+      return false;
+    }
+    if( !presentA )
+    {
+      continue;
+    }
+    if( ca.numIntensityIntervals != cb.numIntensityIntervals || ca.numModelValues != cb.numModelValues )
+    {
+      return false;
+    }
+    for( int i = 0; i < ca.numIntensityIntervals; i++ )
+    {
+      const SeiFgc::CompModelIntensityValues& va = ca.intensityValues[ i ];
+      const SeiFgc::CompModelIntensityValues& vb = cb.intensityValues[ i ];
+      if( va.intensityIntervalLowerBound != vb.intensityIntervalLowerBound || va.intensityIntervalUpperBound != vb.intensityIntervalUpperBound
+          || !std::equal( va.compModelValue.begin(), va.compModelValue.begin() + ca.numModelValues, vb.compModelValue.begin() ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Adds the parameter set of a finished analysis. vvdec keeps synthesizing the grain of a component that a later SEI
+// marks as absent (fixed by its pull request 414, open in October 2026), so once a component had grain, a parameter set
+// without it signals one interval with scaling factor 0 instead.
+void EncGOP::xAddFilmGrainParameters( const FgaTask& task )
+{
+  FilmGrainParam param = task.result;
+  for( int c = 0; c < MAX_NUM_COMP; c++ )
+  {
+    SeiFgc::CompModel& cm = param.compModel[ c ];
+    if( m_pcEncCfg->m_fga && !cm.presentFlag && m_fgcCompSignalled[ c ] )
+    {
+      cm.presentFlag           = true;
+      cm.numIntensityIntervals = 1;
+      cm.numModelValues        = 1;
+      cm.intensityValues.resize( 1 );
+      cm.intensityValues[ 0 ].intensityIntervalLowerBound = 0;
+      cm.intensityValues[ 0 ].intensityIntervalUpperBound = 255;
+      cm.intensityValues[ 0 ].compModelValue.assign( 1, 0 );
+    }
+    m_fgcCompSignalled[ c ] = m_fgcCompSignalled[ c ] || cm.presentFlag;
+  }
+  m_fgcByStartPoc.erase( m_fgcByStartPoc.lower_bound( task.startPoc ), m_fgcByStartPoc.end() );
+  m_fgcByStartPoc[ task.startPoc ] = param;
+  while( m_fgcByStartPoc.size() > FGC_PARAM_SETS )
+  {
+    // the oldest set is dropped; the next one then applies to all earlier pictures, all of them written long ago
+    m_fgcByStartPoc.erase( m_fgcByStartPoc.begin() );
+    FilmGrainParam oldest = m_fgcByStartPoc.begin()->second;
+    m_fgcByStartPoc.erase( m_fgcByStartPoc.begin() );
+    m_fgcByStartPoc[ std::numeric_limits<int>::min() ] = oldest;
+  }
+}
+
+const FilmGrainParam& EncGOP::xFilmGrainParametersAt( int poc ) const
+{
+  return std::prev( m_fgcByStartPoc.upper_bound( poc ) )->second;   // the first set starts at the lowest int
+}
+
+// The film grain SEI of a parameter set; the components the configuration marks absent stay absent.
+SeiFgc EncGOP::xFilmGrainSei( const FilmGrainParam& param, ChromaFormat chromaFormat )
+{
+  SeiFgc sei;
+  m_seiEncoder.initSeiFgc( &sei );
+  sei.log2ScaleFactor = param.log2ScaleFactor;
+  for( int c = 0; c < getNumberValidComponents( chromaFormat ); c++ )
+  {
+    if( sei.compModel[ c ].presentFlag )
+    {
+      sei.compModel[ c ] = param.compModel[ c ];
+    }
+  }
+  return sei;
+}
+
+// A persistent film grain SEI message applies to its picture and the following pictures in output order, up to the next
+// picture with a message, so repeating it in every access unit (45-60 bytes, 2-3.5% of a low rate encode) is not needed:
+// a picture needs it when the picture before it in output order signals other parameters. Random access points, where
+// decoding can start, always get the message, and so does a picture with no picture before it written yet in this coded
+// layer video sequence (the leading pictures of an IDR, of which the first in output order is not known in coding
+// order). Decoding from a CRA, vvdec skips its RASL pictures but applies their messages to the next decoded picture, so
+// the first picture after RASL pictures with a message gets one as well.
+bool EncGOP::xFilmGrainSeiNeeded( const Slice& slice, const SeiFgc& sei, ChromaFormat chromaFormat )
+{
+  if( slice.isIDRorBLA() )
+  {
+    m_fgcWrittenPocs.clear();   // a new coded layer video sequence, where no earlier message persists
+  }
+  const bool rasl         = slice.nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL;
+  const bool randomAccess = slice.isIRAP() || slice.picHeader->gdrPic;
+  const bool firstWritten = m_fgcWrittenPocs.lower_bound( slice.poc ) == m_fgcWrittenPocs.begin();
+  const bool afterRasl    = !rasl && m_fgcRaslSeiPending;
+  const bool changed      = !sameFilmGrainCharacteristics( xFilmGrainSei( xFilmGrainParametersAt( slice.poc - 1 ), chromaFormat ), sei );
+  const bool needed       = !sei.fgcPersistenceFlag || randomAccess || firstWritten || afterRasl || changed;
+
+  m_fgcWrittenPocs.insert( slice.poc );
+  while( m_fgcWrittenPocs.size() > FGC_SEI_HISTORY )
+  {
+    m_fgcWrittenPocs.erase( m_fgcWrittenPocs.begin() );
+  }
+  m_fgcRaslSeiPending = rasl && ( m_fgcRaslSeiPending || needed );
+  return needed;
+}
+
 void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
 {
   const Slice* slice = pic.slices[ 0 ];
@@ -2557,42 +2701,22 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   // film grain SEI
   if ( m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI )
   {
-    // Access units are written in coding order. An analysis result takes effect with the access unit of the analyzed
-    // picture, however far ahead of the output the analysis ran.
+    // Access units are written in coding order. An analysis result is added with the access unit of the analyzed
+    // picture, the first coded picture of its GOP, and applies from its start picture on (xAddFilmGrainParameters).
     while( !m_fgaTasks.empty() && m_fgaTasks.front()->codingNum <= pic.gopEntry->m_codingNum )
     {
       m_fgaTasks.front()->counter.wait();
-      m_fgcParam = m_fgaTasks.front()->result;
+      xAddFilmGrainParameters( *m_fgaTasks.front() );
       // the consumed task has run, so the task after it no longer looks at its barrier once that one has run too
       m_fgaConsumed = std::move( m_fgaTasks.front() );
       m_fgaTasks.pop_front();
     }
 
-    SeiFgc* sei = new SeiFgc;
-    m_seiEncoder.initSeiFgc( sei );
-    sei->log2ScaleFactor = m_fgcParam.log2ScaleFactor;
-    for ( int compIdx = 0; compIdx < getNumberValidComponents(pic.chromaFormat); compIdx++ )
+    const SeiFgc sei = xFilmGrainSei( xFilmGrainParametersAt( slice->poc ), pic.chromaFormat );
+    if( xFilmGrainSeiNeeded( *slice, sei, pic.chromaFormat ) )
     {
-      if ( sei->compModel[compIdx].presentFlag )
-      {  // higher importance of presentFlag is from cfg file
-        sei->compModel[compIdx] = m_fgcParam.compModel[compIdx];
-      }
-      SeiFgc::CompModel& cm = sei->compModel[ compIdx ];
-      if( m_pcEncCfg->m_fga && !cm.presentFlag && m_fgcCompSignalled[ compIdx ] )
-      {
-        // vvdec keeps synthesizing the grain of a component that a later SEI marks as absent (fixed by its pull
-        // request 414, open in October 2026), so a component that had grain gets one interval with scaling factor 0.
-        cm.presentFlag           = true;
-        cm.numIntensityIntervals = 1;
-        cm.numModelValues        = 1;
-        cm.intensityValues.resize( 1 );
-        cm.intensityValues[ 0 ].intensityIntervalLowerBound = 0;
-        cm.intensityValues[ 0 ].intensityIntervalUpperBound = 255;
-        cm.intensityValues[ 0 ].compModelValue.assign( 1, 0 );
-      }
-      m_fgcCompSignalled[ compIdx ] = m_fgcCompSignalled[ compIdx ] || cm.presentFlag;
+      leadingSeiMessages.push_back( new SeiFgc( sei ) );
     }
-    leadingSeiMessages.push_back( sei );
   }
 
   // mastering display colour volume

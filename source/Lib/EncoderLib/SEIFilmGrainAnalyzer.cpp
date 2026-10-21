@@ -872,14 +872,19 @@ void FGAnalyzer::init( int width, int height, ChromaFormat chromaFormat, const i
     m_doAnalysis[ c ]  = doAnalysis[ c ];
     m_cutoffPairs[ c ] = 0;
     m_failedFits [ c ] = 0;
-
-    const int numMeans = 1 << m_bitDepths[ toChannelType( ComponentID( c ) ) ];
-    m_squaredDctSums[ c ].assign( numMeans, SquaredDctSum( BLOCK_SIZE * BLOCK_SIZE, 0.0 ) );
-    m_numDctBlocks  [ c ].assign( numMeans, 0.0 );
-    m_storedMeanIntensity[ c ].clear();
-    m_storedStrengthIntensity[ c ].clear();
-    m_storedElementsPerInterval[ c ].clear();
+    resetStatistics( c );
   }
+}
+
+// Drops the data accumulated over the analysed pictures of a component.
+void FGAnalyzer::resetStatistics( int c )
+{
+  const int numMeans = 1 << m_bitDepths[ toChannelType( ComponentID( c ) ) ];
+  m_squaredDctSums[ c ].assign( numMeans, SquaredDctSum( BLOCK_SIZE * BLOCK_SIZE, 0.0 ) );
+  m_numDctBlocks  [ c ].assign( numMeans, 0.0 );
+  m_storedMeanIntensity[ c ].clear();
+  m_storedStrengthIntensity[ c ].clear();
+  m_storedElementsPerInterval[ c ].clear();
 }
 
 // ====================================================================================================================
@@ -1194,10 +1199,15 @@ void FGAnalyzer::getSignalledParameters( double strength, int& log2ScaleFactor, 
 // Analysis of one picture
 // ====================================================================================================================
 
-void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, const CPelUnitBuf* residual, int residualWeight )
+void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, const CPelUnitBuf* residual, int residualWeight,
+                                          bool sceneCut )
 {
   const int numComp = getNumberValidComponents( m_chromaFormat );
   m_grainWeight = residual ? residualWeight : 1;
+  for( int c = 0; sceneCut && c < numComp; c++ )
+  {
+    resetStatistics( c );
+  }
   for( int c = 0; c < numComp; c++ )
   {
     const ComponentID compId = ComponentID( c );
@@ -1386,14 +1396,7 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
     const double stored = storedStrength / storedElements;
     if( mean > GRAIN_CHANGE_RATIO * stored || stored > GRAIN_CHANGE_RATIO * mean )
     {
-      m_storedMeanIntensity      [ compId ].clear();
-      m_storedStrengthIntensity  [ compId ].clear();
-      m_storedElementsPerInterval[ compId ].clear();
-      for( size_t m = 0; m < m_numDctBlocks[ compId ].size(); m++ )
-      {
-        m_numDctBlocks[ compId ][ m ] = 0.0;
-        std::fill( m_squaredDctSums[ compId ][ m ].begin(), m_squaredDctSums[ compId ][ m ].end(), 0.0 );
-      }
+      resetStatistics( compId );
     }
   }
 
