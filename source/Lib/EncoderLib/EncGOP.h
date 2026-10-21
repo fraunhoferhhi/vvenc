@@ -209,6 +209,12 @@ private:
   FgaTask*                             m_fgaLast = nullptr;   ///< the last submitted task
   FilmGrainParam            m_fgcParam;                     ///< film grain parameters signalled in the access units being written
   bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components signalled as present so far
+  // The film grain parameters of the pictures written in the current coded layer video sequence, by POC: the latest
+  // ones, more than two GOPs, to decide where the film grain SEI must be repeated.
+  static constexpr size_t   FGC_SEI_HISTORY = 160;
+  std::map<int, SeiFgc>     m_fgcByPoc;
+  SeiFgc                    m_fgcPrevAccessUnit;            ///< film grain parameters of the previous access unit written
+  bool                      m_fgcPrevAccessUnitSet = false;
 
 public:
   EncGOP( MsgLog& msglog );
@@ -263,6 +269,7 @@ private:
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  bool xFilmGrainSeiNeeded           ( const Slice& slice, const SeiFgc& sei );
   void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );

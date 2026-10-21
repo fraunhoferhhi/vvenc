@@ -2499,6 +2499,89 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnitList& accessUnit, HLSWr
   return numBytes * 8;
 }
 
+// True when the two film grain characteristics SEI messages would be written with the same syntax element values.
+static bool sameFilmGrainCharacteristics( const SeiFgc& a, const SeiFgc& b )
+{
+  if( a.fgcCancelFlag || b.fgcCancelFlag )
+  {
+    return a.fgcCancelFlag == b.fgcCancelFlag;
+  }
+  if( a.filmGrainModelId != b.filmGrainModelId || a.separateColourDescriptionPresent != b.separateColourDescriptionPresent
+      || a.blendingModeId != b.blendingModeId || a.log2ScaleFactor != b.log2ScaleFactor || a.fgcPersistenceFlag != b.fgcPersistenceFlag )
+  {
+    return false;
+  }
+  if( a.separateColourDescriptionPresent
+      && ( a.filmGrainBitDepthLumaMinus8 != b.filmGrainBitDepthLumaMinus8 || a.filmGrainBitDepthChromaMinus8 != b.filmGrainBitDepthChromaMinus8
+           || a.filmGrainFullRangeFlag != b.filmGrainFullRangeFlag || a.filmGrainColourPrimaries != b.filmGrainColourPrimaries
+           || a.filmGrainTransferCharacteristics != b.filmGrainTransferCharacteristics || a.filmGrainMatrixCoeffs != b.filmGrainMatrixCoeffs ) )
+  {
+    return false;
+  }
+  for( int c = 0; c < MAX_NUM_COMP; c++ )
+  {
+    const SeiFgc::CompModel& ca = a.compModel[ c ];
+    const SeiFgc::CompModel& cb = b.compModel[ c ];
+    // as in SEIWriter: a component is written as present only with intervals and model values
+    const bool presentA = ca.presentFlag && ca.numIntensityIntervals > 0 && ca.numModelValues > 0;
+    const bool presentB = cb.presentFlag && cb.numIntensityIntervals > 0 && cb.numModelValues > 0;
+    if( presentA != presentB )
+    {
+      return false;
+    }
+    if( !presentA )
+    {
+      continue;
+    }
+    if( ca.numIntensityIntervals != cb.numIntensityIntervals || ca.numModelValues != cb.numModelValues )
+    {
+      return false;
+    }
+    for( int i = 0; i < ca.numIntensityIntervals; i++ )
+    {
+      const SeiFgc::CompModelIntensityValues& va = ca.intensityValues[ i ];
+      const SeiFgc::CompModelIntensityValues& vb = cb.intensityValues[ i ];
+      if( va.intensityIntervalLowerBound != vb.intensityIntervalLowerBound || va.intensityIntervalUpperBound != vb.intensityIntervalUpperBound
+          || !std::equal( va.compModelValue.begin(), va.compModelValue.begin() + ca.numModelValues, vb.compModelValue.begin() ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// A persistent film grain SEI message applies to its picture and the following pictures in output order, up to the next
+// picture with a message, so repeating it in every access unit (45-60 bytes, 2-3.5% of a low rate encode) is not needed.
+// The access units of a GOP all signal the same parameters, and the pictures of later GOPs follow in output order
+// (leading pictures belong to the GOP of their random access point). So a picture needs the message only when the
+// picture before it in output order was written before it with other parameters; when that picture is written later,
+// it belongs to the same GOP and carries any change itself. Random access points, where decoding can start, always get
+// the message, and so does a picture with no picture before it written yet in this coded layer video sequence. The
+// first access unit with new parameters in coding order gets it as well: decoding from a CRA, vvdec skips its RASL
+// pictures but applies their messages to the next decoded picture, which is that access unit.
+bool EncGOP::xFilmGrainSeiNeeded( const Slice& slice, const SeiFgc& sei )
+{
+  if( slice.isIDRorBLA() )
+  {
+    m_fgcByPoc.clear();   // a new coded layer video sequence, where no earlier message persists
+  }
+  const bool randomAccess = slice.isIRAP() || slice.picHeader->gdrPic;
+  const auto previous     = m_fgcByPoc.find( slice.poc - 1 );
+  const bool firstWritten = m_fgcByPoc.lower_bound( slice.poc ) == m_fgcByPoc.begin();
+  const bool newInCoding  = !m_fgcPrevAccessUnitSet || !sameFilmGrainCharacteristics( m_fgcPrevAccessUnit, sei );
+  const bool changed      = previous != m_fgcByPoc.end() && !sameFilmGrainCharacteristics( previous->second, sei );
+
+  m_fgcByPoc[ slice.poc ] = sei;
+  while( m_fgcByPoc.size() > FGC_SEI_HISTORY )
+  {
+    m_fgcByPoc.erase( m_fgcByPoc.begin() );
+  }
+  m_fgcPrevAccessUnit    = sei;
+  m_fgcPrevAccessUnitSet = true;
+  return !sei.fgcPersistenceFlag || randomAccess || firstWritten || newInCoding || changed;
+}
+
 void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
 {
   const Slice* slice = pic.slices[ 0 ];
@@ -2579,7 +2662,14 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
       }
       m_fgcCompSignalled[ compIdx ] = m_fgcCompSignalled[ compIdx ] || cm.presentFlag;
     }
-    leadingSeiMessages.push_back( sei );
+    if( xFilmGrainSeiNeeded( *slice, *sei ) )
+    {
+      leadingSeiMessages.push_back( sei );
+    }
+    else
+    {
+      delete sei;
+    }
   }
 
   // mastering display colour volume
