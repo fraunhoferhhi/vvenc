@@ -183,6 +183,9 @@ private:
 
   double  xGetQPForPicture    ( const Slice* slice );
   int     xGetQPForPicture    ( const Slice* slice, const int baseQP );
+
+public:
+  static int getCascadeQP     ( const VVEncCfg& encCfg, const GOPEntry& gopEntry, const bool isIntra, int qp, const int lumaQpBDOffset );
 };
 
 } // namespace vvenc

@@ -532,7 +532,7 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !pic->isPreAnalysis);
   const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
-  const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
+  const bool isBIM            = (encCfg->hasBlockQpOffsets() && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isSccStrongRC    = ((encCfg->m_LookAhead > 0 || encCfg->m_RCNumPasses == 2) && pic->isSccStrong);
   const bool isHighResolution = (std::min (encCfg->m_SourceWidth, encCfg->m_SourceHeight) > 1280);
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (encCfg->m_framesToBeEncoded != 1) && (slice->TLayer > 0);
@@ -832,7 +832,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   const bool isEncPass        = (encCfg->m_LookAhead > 0 && !pic->isPreAnalysis);
   const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
-  const bool isBIM            = (encCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty());
+  const bool isBIM            = (encCfg->hasBlockQpOffsets() && !pic->m_picShared->m_ctuBimQpOffset.empty());
   const bool isSccStrongRC    = ((encCfg->m_LookAhead > 0 || encCfg->m_RCNumPasses == 2) && pic->isSccStrong);
   const bool isHighResolution = (std::min (encCfg->m_SourceWidth, encCfg->m_SourceHeight) > 1280);
   const uint32_t hpFrameRate  = (pic->force2ndOrder ? 32 : encCfg->m_FrameRate / encCfg->m_FrameScale);

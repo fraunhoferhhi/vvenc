@@ -752,7 +752,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const SPS &sps      = *tempCS->sps;
   const uint32_t uiLPelX  = tempCS->area.Y().lumaPos().x;
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
-  const bool isBimEnabled = (m_pcEncCfg->m_blockImportanceMapping && !bestCS->picture->m_picShared->m_ctuBimQpOffset.empty());
+  const bool isBimEnabled = (m_pcEncCfg->hasBlockQpOffsets() && !bestCS->picture->m_picShared->m_ctuBimQpOffset.empty());
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
   m_CABACEstimator->determineNeighborCus( *tempCS, partitioner.currArea(), partitioner.chType, partitioner.treeType );
@@ -2025,7 +2025,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
     CHECK( bestCS->cost < MAX_DOUBLE, "This has to be the first test performed!" );
 
     const Picture *pic         = slice.pic;
-    const bool     isBIM       = m_pcEncCfg->m_RCNumPasses != 2 && m_pcEncCfg->m_blockImportanceMapping && !pic->m_picShared->m_ctuBimQpOffset.empty();
+    const bool     isBIM       = m_pcEncCfg->m_RCNumPasses != 2 && m_pcEncCfg->hasBlockQpOffsets() && !pic->m_picShared->m_ctuBimQpOffset.empty();
     const uint32_t rsAddr      = getCtuAddr( partitioner.currQgPos, *pic->cs->pcv );
     const int      pumpReducQP = BitAllocation::getCtuPumpingReducingQP( &slice, tempCS->getOrgBuf( COMP_Y ), m_uiSadBestForQPA, *m_globalCtuQpVector, rsAddr,
                                                                          m_pcEncCfg->m_QP, isBIM );
