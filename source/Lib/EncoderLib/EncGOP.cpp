@@ -616,7 +616,7 @@ void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
 
   if( pic->slices[0]->TLayer + 1 < m_pcEncCfg->m_maxTLayer ) // skip for highest two temporal levels
   {
-    initPicAuxQPOffsets( pic->slices[0], m_pcEncCfg->m_blockImportanceMapping );
+    initPicAuxQPOffsets( pic->slices[0], m_pcEncCfg->hasBlockQpOffsets() );
   }
 
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
@@ -1092,7 +1092,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bUseDQP = m_pcEncCfg->m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_pcEncCfg->m_lumaLevelToDeltaQPEnabled == 1;
   bUseDQP |= m_pcEncCfg->m_usePerceptQPA;
-  bUseDQP |= m_pcEncCfg->m_blockImportanceMapping;
+  bUseDQP |= m_pcEncCfg->hasBlockQpOffsets();
 
   if (m_pcEncCfg->m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_pcEncCfg->m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
@@ -1895,7 +1895,7 @@ void EncGOP::xInitGopQpCascade( Picture& keyPic, PicList::const_iterator picList
     const int intraP = Clip3(m_pcEncCfg->m_GOPSize, 4 * VVENC_MAX_GOP, m_pcEncCfg->m_IntraPeriod);
     const int visAct = std::max(uint16_t(spVisActTL0[CH_L] >> (12 - bDepth)), keyPic.picVA.visAct); // when vaY=0
     const double apa = sqrt((m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice ? 32.0 : 16.0) * double(1 << (2 * bDepth - 10)) / sqrt(resRatio4K)); // average picture activity
-    const int auxOff = (m_pcEncCfg->m_blockImportanceMapping && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
+    const int auxOff = (m_pcEncCfg->hasBlockQpOffsets() && !keyPic.m_picShared->m_ctuBimQpOffset.empty() ? keyPic.m_picShared->m_picAuxQpOffset : 0) + dQP;
     const int iFrmQP = std::min(MAX_QP, m_pcEncCfg->m_QP + m_pcEncCfg->m_intraQPOffset + auxOff + int(floor(m_pcEncCfg->m_QPFractionReal + 3.0 * log(visAct / apa) / log(2.0) + 0.5)));
     const int qp32BC = int(16384.0 + 7.21875 * pow((double)spVisActTL0[CH_L], 4.0 / 3.0) + 1.46875 * pow((double)spVisActTL0[CH_C], 4.0 / 3.0)) * (isHighRes ? 96 : 24); // TODO hlm
     const int iFrmBC = int(0.5 + qp32BC * pow(2.0, (32.0 - iFrmQP) * 11.0 / 64.0) * pow(resRatio4K, 2.0 / 3.0)); // * HD tuning

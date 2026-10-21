@@ -55,6 +55,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/MsgLog.h"
 #include "EncStage.h"
 #include "PreProcess.h"
+#include "CuTree.h"
 #include "EncGOP.h"
 #include "CommonLib/x86/CommonDefX86.h"
 
@@ -78,6 +79,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_rateCtrl       ( nullptr )
   , m_preProcess     ( nullptr )
   , m_MCTF           ( nullptr )
+  , m_cuTree         ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
   , m_threadPool     ( nullptr )
@@ -257,6 +259,17 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_maxNumPicShared += minQueueSize - leadFrames;
   }
 
+  // CU-tree look-ahead, holds the pictures of a GOP until the next GOP has arrived
+  if( m_encCfg.useCuTree() )
+  {
+    m_cuTree = new CuTree();
+    m_cuTree->initStage( m_encCfg, 1, 0, false, true, false );
+    m_cuTree->init( m_encCfg, m_threadPool );
+    m_encStages.push_back( m_cuTree );
+    // a GOP and its look-ahead wait here, while the GOP encoder holds the previous GOP
+    m_maxNumPicShared += m_encCfg.m_GOPSize + CuTree::getNumLookAheadPics( m_encCfg );
+  }
+
   // pre analysis encoder
   if( m_encCfg.m_LookAhead )
   {
@@ -322,6 +335,11 @@ void EncLib::xUninitLib()
     delete m_MCTF;
     m_MCTF = nullptr;
   }
+  if( m_cuTree )
+  {
+    delete m_cuTree;
+    m_cuTree = nullptr;
+  }
   if( m_preEncoder )
   {
     delete m_preEncoder;
@@ -385,6 +403,9 @@ void EncLib::xInitRCCfg()
     m_firstPassCfg.m_CTUSize       = m_encCfg.m_CTUSize;
   }
   m_firstPassCfg.m_vvencMCTF.MCTF  = m_encCfg.m_vvencMCTF.MCTF;
+  // the first pass measures the rates with the final pass's block importance mapping; the firstpass preset also
+  // leaves the CU-tree block size of the final pass
+  m_firstPassCfg.m_blockImportanceMapping = m_encCfg.m_blockImportanceMapping;
   m_firstPassCfg.m_IBCMode         = m_encCfg.m_IBCMode;
   m_firstPassCfg.m_bimCtuSize      = m_encCfg.m_CTUSize;
   m_firstPassCfg.m_log2MinCodingBlockSize = m_encCfg.m_log2MinCodingBlockSize;
@@ -431,6 +452,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   //   4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
   //   5. Then we have to wait for the next available picture-unit, so the input frame can be passed to the 1.stage.
 
+  // CU-tree passes its pictures on a GOP at a time, and the GOP encoder only starts with a GOP and one picture queued.
+  // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
+  // Without stage parallel processing, a buffer of that many access units covers the wait, so every call still
+  // returns one; with it, the delayed output below already does.
+  const size_t auBuffer = ( m_encCfg.useCuTree() && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
+
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );
   while( true )
@@ -452,9 +479,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     // trigger stages
     isQueueEmpty = m_picsRcvd > 0 || ( m_picsRcvd <= 0 && flush );
+    bool progress = false;
     for( auto encStage : m_encStages )
     {
-      encStage->runStage( flush, au );
+      progress     |= encStage->runStage( flush, au );
       isQueueEmpty &= encStage->isStageDone();
     }
 
@@ -464,14 +492,21 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
       au.detachNalUnitList();
       au.clearAu();
-      // NOTE: delay AU output in stage parallel mode only
+      // NOTE: delay AU output in stage parallel mode, and by the CU-tree buffer without it
       if( !m_accessUnitOutputStarted )
-        m_accessUnitOutputStarted = !m_encCfg.m_stageParallelProc || m_AuList.size() > 4 || flush;
+        m_accessUnitOutputStarted = ( !m_encCfg.m_stageParallelProc && m_AuList.size() > auBuffer ) || m_AuList.size() > 4 || flush;
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
-    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
+    // (or, with the CU-tree buffer, until the buffer is full again)
+    bool waitAndStay = inputPending || ( m_rateCtrl->rcIsFinalPass && m_AuList.size() <= auBuffer && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
+    {
+      break;
+    }
+    // With the CU-tree buffer (no stage parallel processing), nothing changes until a stage passes a picture on:
+    // return for more input rather than wait for an access unit that cannot come.
+    if( auBuffer && ! inputPending && ! progress )
     {
       break;
     }

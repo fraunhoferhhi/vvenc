@@ -169,6 +169,10 @@ public:
   void( *m_applyBlock )( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const ClpRng& clpRng, const Pel** correctedPics, int numRefs, const int* verror, const double* refStrenghts, double weightScaling, double sigmaSq );
   double( *m_calcVar ) ( const Pel* org, const ptrdiff_t origStride, const int w, const int h );
 
+  // The CU-tree look-ahead reuses the motion search.
+  void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int bs,
+    const Array2D<MotionVector> *previous=0, const int factor = 1, const bool doubleRes = false) const;
+
 private:
   static const double   m_chromaFactor;
   static const double   m_sigmaMultiplier;
@@ -198,9 +202,6 @@ private:
 
   bool estimateLumaLn   ( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY, int bitDepth ) const;
-
-  void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int bs,
-    const Array2D<MotionVector> *previous=0, const int factor = 1, const bool doubleRes = false) const;
 
   void bilateralFilter  (const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
 
