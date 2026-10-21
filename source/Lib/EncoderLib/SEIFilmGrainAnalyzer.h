@@ -115,8 +115,9 @@ public:
   void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ] );
 
   // Analyses one picture: orig is the original, denoised its temporally filtered version (same size); the grain is
-  // estimated as denoised minus orig.
-  void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised );
+  // estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped first, as they
+  // describe another scene.
+  void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, bool sceneCut = false );
 
   // Sets the row kernels: the scalar ones, then the SIMD ones the CPU supports.
   static void initKernels( FgaRowKernels& k );
@@ -191,6 +192,7 @@ private:
   Scratch           m_scratch;
 
   // flat area mask
+  void resetStatistics       ( int c );
   void findMask              ( ComponentID compId );
   void maskForScale          ( const Plane& picture, Plane& mask, int bitDepth, int numDilations );
 

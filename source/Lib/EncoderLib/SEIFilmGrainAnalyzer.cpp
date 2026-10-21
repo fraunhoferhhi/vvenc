@@ -569,14 +569,19 @@ void FGAnalyzer::init( int width, int height, ChromaFormat chromaFormat, const i
     }
     m_doAnalysis[ c ]  = doAnalysis[ c ];
     m_cutoffPairs[ c ] = 0;
-
-    const int numMeans = 1 << m_bitDepths[ toChannelType( ComponentID( c ) ) ];
-    m_squaredDctSums[ c ].assign( numMeans, SquaredDctSum( BLOCK_SIZE * BLOCK_SIZE, 0.0 ) );
-    m_numDctBlocks  [ c ].assign( numMeans, 0.0 );
-    m_storedMeanIntensity[ c ].clear();
-    m_storedStrengthIntensity[ c ].clear();
-    m_storedElementsPerInterval[ c ].clear();
+    resetStatistics( c );
   }
+}
+
+// Drops the data accumulated over the analysed pictures of a component.
+void FGAnalyzer::resetStatistics( int c )
+{
+  const int numMeans = 1 << m_bitDepths[ toChannelType( ComponentID( c ) ) ];
+  m_squaredDctSums[ c ].assign( numMeans, SquaredDctSum( BLOCK_SIZE * BLOCK_SIZE, 0.0 ) );
+  m_numDctBlocks  [ c ].assign( numMeans, 0.0 );
+  m_storedMeanIntensity[ c ].clear();
+  m_storedStrengthIntensity[ c ].clear();
+  m_storedElementsPerInterval[ c ].clear();
 }
 
 // VTM's scaling factors: twice the standard deviation, at log2 scale factor 2, scaled by the strength and kept at
@@ -617,9 +622,13 @@ void FGAnalyzer::getSignalledParameters( double strength, int& log2ScaleFactor, 
 // Analysis of one picture
 // ====================================================================================================================
 
-void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised )
+void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, bool sceneCut )
 {
   const int numComp = getNumberValidComponents( m_chromaFormat );
+  for( int c = 0; sceneCut && c < numComp; c++ )
+  {
+    resetStatistics( c );
+  }
   for( int c = 0; c < numComp; c++ )
   {
     const ComponentID compId = ComponentID( c );
