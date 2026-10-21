@@ -168,6 +168,7 @@ private:
   void   xSearchFractional   ( const Frame& cur, const Frame& ref, const Array2D<MotionVector>& coarse, Array2D<MotionVector>& mvs ) const;
   void   xPropagate          ( int firstPoc );
   void   xDistribute         ( Frame& ref, int bx, int by, const MotionVector& mv, double dist, double rate ) const;
+  void   xSetPicQpOffsets    ( const std::vector<Picture*>& codingOrder, int batchEndPoc );
   void   xSetQpOffsets       ( const Frame& frame, Picture* pic ) const;
 };
 

@@ -92,6 +92,7 @@ struct CuTree::Frame
   bool                  analysed  = false;
   bool                  hasImages = true;    // lowRes and recon are kept while other pictures can reference them
   int                   refPoc[2] = { NO_REF, NO_REF };
+  int                   picQpOffset = 0;     // BIM 2's picture-level QP offset, see xSetPicQpOffsets
   PelStorage            lowRes[NUM_LEVELS];
   PelStorage            recon;               // half-resolution reconstruction at the picture's QP
   Array2D<MotionVector> mvs[2];              // half-resolution motion towards refPoc[0] and refPoc[1]
@@ -558,6 +559,7 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   }
 
   xPropagate( picList.front()->poc );
+  xSetPicQpOffsets( codingOrder, batchEndPoc );
 
   for( auto pic : picList )
   {
@@ -1074,13 +1076,44 @@ void CuTree::xDistribute( Frame& ref, int bx, int by, const MotionVector& mv, do
   }
 }
 
+// The picture-level QP offsets of BIM 2 (MCTF): MCTF's offset for the pictures it analysed, and for the others 3/4 of
+// the mean of their two references' offsets, as EncGOP's initPicAuxQPOffsets derives them for BIM 2. They lower the QP
+// of whole pictures in static content, which CU-tree's CTU offsets, relative to the picture's own mean dependency,
+// cannot do. Runs in coding order, so the references come first; MCTF has to have run, its offsets are read before
+// xSetQpOffsets replaces them.
+void CuTree::xSetPicQpOffsets( const std::vector<Picture*>& codingOrder, int batchEndPoc )
+{
+  for( auto pic : codingOrder )
+  {
+    Frame* frame = xFindFrame( pic->poc );
+    if( pic->poc > batchEndPoc || ! frame )
+    {
+      continue;
+    }
+    if( ! pic->m_picShared->m_ctuBimQpOffset.empty() )
+    {
+      frame->picQpOffset = pic->m_picShared->m_picAuxQpOffset;
+      continue;
+    }
+    const Frame* ref0 = xFindFrame( frame->refPoc[0] );
+    const Frame* ref1 = xFindFrame( frame->refPoc[1] );
+    if( ref0 && ref1 )
+    {
+      const int sum      = ref0->picQpOffset + ref1->picQpOffset;
+      frame->picQpOffset = ( 3 * sum + ( sum < 0 ? 3 : 4 ) ) >> 3;   // rounding as in initPicAuxQPOffsets
+    }
+  }
+}
+
 // The QP offset of each CTU (Han et al., Eqs. 19 to 21): with the dependency factor
 //   alpha = ( distortion + lambda * rate owed by later pictures ) / own distortion
 // of the CTU and of the picture, lambda_ctu = lambda * ( 1 + alpha_pic ) / ( 1 + alpha_ctu ). As lambda goes with
 // 2^(QP / 3), the QP offset is a multiple of -log2( beta ), beta = ( 1 + alpha_ctu ) / ( 1 + alpha_pic ). Like
 // libaom's superblock QP, the change is damped to the square root of beta for intra pictures and for CTUs below
 // the picture's average, and to the fourth root for CTUs above it in inter pictures. The offsets go where QPA
-// and the non-QPA path pick up the BIM offsets; the picture QP stays that of the temporal-layer cascade.
+// and the non-QPA path pick up the BIM offsets. The picture QP gets BIM 2's picture offset (xSetPicQpOffsets) and,
+// rounded, the mean of the CTU offsets, which the CTUs lose again: as with BIM 2, the CTU offsets average 0, so rate
+// control, which sets the picture QP itself, still gets the QP it chose.
 void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
 {
   const int ctuSize      = m_encCfg->m_bimCtuSize;
@@ -1090,7 +1123,7 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
 
   PicShared* picShared = pic->m_picShared;
   picShared->m_ctuBimQpOffset.assign( widthInCtus * heightInCtus, 0 );
-  picShared->m_picAuxQpOffset = 0;
+  picShared->m_picAuxQpOffset = frame.picQpOffset;
   if( m_blkWidth == 0 || m_blkHeight == 0 || ! frame.analysed )
   {
     return; // picture smaller than one analysis block, or not analysed
@@ -1131,6 +1164,14 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
       picShared->m_ctuBimQpOffset[cy * widthInCtus + cx] = int( std::lround( -m_encCfg->m_cuTreeScale * damping * std::log2( beta ) ) );
     }
   }
+
+  // move the mean into the picture QP, rounded as MCTF does for BIM 2
+  const int numCtu = widthInCtus * heightInCtus;
+  int       sum    = 0;
+  for( int offset : picShared->m_ctuBimQpOffset ) sum += offset;
+  const int mean = ( sum + ( sum < 0 ? -( numCtu >> 1 ) : numCtu >> 1 ) ) / numCtu;
+  for( int& offset : picShared->m_ctuBimQpOffset ) offset -= mean;
+  picShared->m_picAuxQpOffset += mean;
 }
 
 } // namespace vvenc

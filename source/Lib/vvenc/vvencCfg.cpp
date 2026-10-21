@@ -1525,9 +1525,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 16 : 32;
   }
 
-  // BIM 2 derives the block importance from MCTF's motion error; BIM 1 (CU-tree) does its own analysis
+  // BIM 2 derives the block importance from MCTF's motion error. BIM 1 (CU-tree) does its own analysis and takes only
+  // the picture-level offset from MCTF, so it also works without MCTF, with CTU offsets only.
   vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) 2 cannot be enabled when MCTF is disabled!" );
-  vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM 2 is enabled!" );
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM and MCTF are enabled!" );
 
   bool disableF2O = c->m_usePerceptQPATempFiltISlice < -1;
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
