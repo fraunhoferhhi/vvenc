@@ -639,7 +639,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
-  c->m_blockImportanceMapping                  = 1;
+  c->m_blockImportanceMapping                  = 2;   // from MCTF; CU-tree (1) is opt-in for now
   c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
   c->m_cuTreeBlockSize                        = -1;
 
@@ -2692,7 +2692,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_blockImportanceMapping          = 1;   // CU-tree; EncLib's first rate control pass takes the final pass's
+      c->m_blockImportanceMapping          = 2;   // from MCTF; EncLib's first rate control pass takes the final pass's
                                                   // BIM, and the preset leaves the CU-tree block size to the final pass
       c->m_RDOQ                            = 2;
       c->m_useSelectiveRDOQ                = 2;
@@ -2753,8 +2753,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
-      c->m_blockImportanceMapping          = 1;   // CU-tree
-      c->m_cuTreeBlockSize                 = -1;  // automatic, 32x32 blocks from 720p on for speed
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
@@ -2819,8 +2819,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 1;
       c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 1;   // CU-tree
-      c->m_cuTreeBlockSize                 = -1;  // automatic, 32x32 blocks from 720p on for speed
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_DepQuantEnabled                 = 1;
@@ -2889,8 +2889,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 1;   // CU-tree
-      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 0;
@@ -2984,8 +2984,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 1;   // CU-tree
-      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3059,8 +3059,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 1;   // CU-tree
-      c->m_cuTreeBlockSize                 = 16;  // no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
