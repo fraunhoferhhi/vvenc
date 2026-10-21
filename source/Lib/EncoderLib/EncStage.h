@@ -368,8 +368,11 @@ public:
     m_picCount++;
   }
 
-  void runStage( bool flush, AccessUnitList& auList )
+  // Returns whether a picture was passed on to the next stage or released.
+  bool runStage( bool flush, AccessUnitList& auList )
   {
+    bool progress = false;
+
     // check for first flush signal
     if( flush && ! m_flush )
     {
@@ -400,6 +403,7 @@ public:
         PicList doneList;
         PicList freeList;
         processPictures( m_procList, auList, doneList, freeList );
+        progress |= ! doneList.empty() || ! freeList.empty();
 
         // send processed/finalized pictures to next stage
         for( auto pic : doneList )
@@ -427,6 +431,7 @@ public:
         }
       } while( m_flushAll && flush && m_procList.size() );
     }
+    return progress;
   }
 };
 

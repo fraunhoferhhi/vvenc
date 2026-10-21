@@ -639,7 +639,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
-  c->m_blockImportanceMapping                  = true;
+  c->m_blockImportanceMapping                  = 2;   // from MCTF; CU-tree (1) is opt-in for now
+  c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
+  c->m_cuTreeBlockSize                        = -1;
 
   c->m_maxDeltaQP                              = -1;
 
@@ -697,7 +699,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_fga                                     = 0;
   c->m_fgaStrength                             = 100.0;
 
-  memset( c->m_reservedInt8, 0, sizeof(c->m_reservedInt8) );
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
@@ -1532,8 +1533,17 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFraction / 256.0 - 4.0 ) * 3.0 / 32.0 );
   }
 
-  vvenc_confirmParameter( c, c->m_blockImportanceMapping && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) cannot be enabled when MCTF is disabled!" );
-  vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM is enabled!" );
+  if( c->m_cuTreeBlockSize == -1 )
+  {
+    // from 720p on, 32x32 blocks make the analysis much cheaper at a small quality cost (larger at 720p and 1080p
+    // than at 4K); below, 16x16 blocks
+    c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 16 : 32;
+  }
+
+  // BIM 2 derives the block importance from MCTF's motion error. BIM 1 (CU-tree) does its own analysis and takes only
+  // the picture-level offset from MCTF, so it also works without MCTF, with CTU offsets only.
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) 2 cannot be enabled when MCTF is disabled!" );
+  vvenc_confirmParameter( c, c->m_blockImportanceMapping && c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFUnitSize > c->m_CTUSize, "MCTFUnitSize cannot exceed CTUSize if BIM and MCTF are enabled!" );
 
   bool disableF2O = c->m_usePerceptQPATempFiltISlice < -1;
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
@@ -2138,7 +2148,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                           "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
 
-  vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA or BIM or LumaLevelToDeltaQPMode" );
+  vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA, BIM or LumaLevelToDeltaQPMode" );
+  vvenc_confirmParameter(c, c->m_blockImportanceMapping < 0 || c->m_blockImportanceMapping > 2,                 "BIM must be 0 (off), 1 (CU-tree) or 2 (from MCTF)" );
+  vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -2705,7 +2717,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; EncLib's first rate control pass takes the final pass's
+                                                  // BIM, and the preset leaves the CU-tree block size to the final pass
       c->m_RDOQ                            = 2;
       c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
@@ -2765,7 +2778,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
@@ -2830,7 +2844,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 1;
       c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_DepQuantEnabled                 = 1;
@@ -2899,7 +2914,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 0;
@@ -2993,7 +3009,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3067,7 +3084,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 1;
+      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
+      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3378,7 +3396,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-    css << "BIM:" << c->m_blockImportanceMapping << " ";
+    css << "BIM:" << (int)c->m_blockImportanceMapping << " ";
+    if( c->m_blockImportanceMapping == 1 ) css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize << ") ";
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";

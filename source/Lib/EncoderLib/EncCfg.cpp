@@ -55,6 +55,7 @@ VVEncCfg::VVEncCfg()
   , m_rateCap ( false )
   , m_bimCtuSize( 64 )
   , m_MaxQT { 128, 128, 128 }
+  , m_cuTreeScale( 0.0 )
   , m_QPFractionReal( 0.0 )
 {
   m_fg.m_fgcSEIEnabled = false;
@@ -95,6 +96,7 @@ void VVEncCfg::xInitCfgMembers()
   m_rateCap             = m_RCMaxBitrate > 0 && m_RCMaxBitrate < INT32_MAX && m_RCTargetBitrate == 0;
   m_reuseCuResults      = ( m_IntraPeriod > 1 && getMaxTlVal( m_maxMTTDepth ) > 1 ) || m_maxMTTDepthI > ( m_IntraPeriod == 1 ? 1 : 2 );
   m_splitCostThrParamId = getMaxTlVal(m_maxMTTDepth);
+  m_cuTreeScale         = m_cuTreeStrength / 32.0;
 
   m_mergeRdCandQuotaRegular = std::min( NUM_MRG_SATD_CAND, std::max( ( int ) m_maxNumMergeCand - 2, 1 ) );
   //                                        0  1  2  3  4
