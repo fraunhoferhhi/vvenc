@@ -540,6 +540,132 @@ void fgaSquaredDct16SIMD( const Pel* src, int stride, int maxRange, double* sum 
   }
 }
 
+// 4x downsampling: the four rows are added in 16 bits (at most 4 * 4095), then groups of four samples with madd
+// (pairs) and hadd (pairs of pairs).
+template<X86_VEXT vext>
+void fgaDownsample4SIMD( const Pel* src, int stride, int n, Pel* dst )
+{
+  int x = 0;
+#ifdef USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i ones  = _mm256_set1_epi16( 1 );
+    const __m256i round = _mm256_set1_epi32( 8 );
+    for( ; x + 8 <= n; x += 8 )
+    {
+      const Pel* s = src + 4 * x;
+      __m256i a = _mm256_loadu_si256( (const __m256i*) s );
+      __m256i b = _mm256_loadu_si256( (const __m256i*) ( s + 16 ) );
+      for( int y = 1; y < 4; y++ )
+      {
+        a = _mm256_add_epi16( a, _mm256_loadu_si256( (const __m256i*) ( s + y * stride ) ) );
+        b = _mm256_add_epi16( b, _mm256_loadu_si256( (const __m256i*) ( s + y * stride + 16 ) ) );
+      }
+      // lane 0 holds the sums of outputs 0, 1, 4, 5 and lane 1 those of outputs 2, 3, 6, 7
+      __m256i q = _mm256_hadd_epi32( _mm256_madd_epi16( a, ones ), _mm256_madd_epi16( b, ones ) );
+      q = _mm256_permute4x64_epi64( q, 0xD8 );
+      q = _mm256_srai_epi32( _mm256_add_epi32( q, round ), 4 );
+      q = _mm256_permute4x64_epi64( _mm256_packs_epi32( q, q ), 0x08 );
+      _mm_storeu_si128( (__m128i*) ( dst + x ), _mm256_castsi256_si128( q ) );
+    }
+  }
+#endif
+  const __m128i ones  = _mm_set1_epi16( 1 );
+  const __m128i round = _mm_set1_epi32( 8 );
+  for( ; x + 4 <= n; x += 4 )
+  {
+    const Pel* s = src + 4 * x;
+    __m128i a = _mm_loadu_si128( (const __m128i*) s );
+    __m128i b = _mm_loadu_si128( (const __m128i*) ( s + 8 ) );
+    for( int y = 1; y < 4; y++ )
+    {
+      a = _mm_add_epi16( a, _mm_loadu_si128( (const __m128i*) ( s + y * stride ) ) );
+      b = _mm_add_epi16( b, _mm_loadu_si128( (const __m128i*) ( s + y * stride + 8 ) ) );
+    }
+    __m128i q = _mm_hadd_epi32( _mm_madd_epi16( a, ones ), _mm_madd_epi16( b, ones ) );
+    q = _mm_srai_epi32( _mm_add_epi32( q, round ), 4 );
+    _mm_storel_epi64( (__m128i*) ( dst + x ), _mm_packs_epi32( q, q ) );
+  }
+  fgaDownsample4Core( src + 4 * x, stride, n - x, dst + x );
+}
+
+// SAD of 4x4 blocks: absolute differences of four rows added in 16 bits (at most 4 * 4095), then groups of four
+// samples with madd and hadd.
+template<X86_VEXT vext>
+void fgaSad4x4RowSIMD( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad )
+{
+  int b = 0;
+#ifdef USE_AVX2
+  if( vext >= AVX2 )
+  {
+    const __m256i ones = _mm256_set1_epi16( 1 );
+    for( ; b + 8 <= n; b += 8 )
+    {
+      __m256i lo = _mm256_setzero_si256(), hi = _mm256_setzero_si256();
+      for( int y = 0; y < 4; y++ )
+      {
+        const Pel* c = cur + y * curStride + 4 * b;
+        const Pel* r = ref + y * refStride + 4 * b;
+        lo = _mm256_add_epi16( lo, _mm256_abs_epi16( _mm256_sub_epi16( _mm256_loadu_si256( (const __m256i*) c ), _mm256_loadu_si256( (const __m256i*) r ) ) ) );
+        hi = _mm256_add_epi16( hi, _mm256_abs_epi16( _mm256_sub_epi16( _mm256_loadu_si256( (const __m256i*) ( c + 16 ) ), _mm256_loadu_si256( (const __m256i*) ( r + 16 ) ) ) ) );
+      }
+      const __m256i q = _mm256_hadd_epi32( _mm256_madd_epi16( lo, ones ), _mm256_madd_epi16( hi, ones ) );
+      _mm256_storeu_si256( (__m256i*) ( sad + b ), _mm256_permute4x64_epi64( q, 0xD8 ) );
+    }
+  }
+#endif
+  const __m128i ones = _mm_set1_epi16( 1 );
+  for( ; b + 4 <= n; b += 4 )
+  {
+    __m128i lo = _mm_setzero_si128(), hi = _mm_setzero_si128();
+    for( int y = 0; y < 4; y++ )
+    {
+      const Pel* c = cur + y * curStride + 4 * b;
+      const Pel* r = ref + y * refStride + 4 * b;
+      lo = _mm_add_epi16( lo, _mm_abs_epi16( _mm_sub_epi16( _mm_loadu_si128( (const __m128i*) c ), _mm_loadu_si128( (const __m128i*) r ) ) ) );
+      hi = _mm_add_epi16( hi, _mm_abs_epi16( _mm_sub_epi16( _mm_loadu_si128( (const __m128i*) ( c + 8 ) ), _mm_loadu_si128( (const __m128i*) ( r + 8 ) ) ) ) );
+    }
+    _mm_storeu_si128( (__m128i*) ( sad + b ), _mm_hadd_epi32( _mm_madd_epi16( lo, ones ), _mm_madd_epi16( hi, ones ) ) );
+  }
+  fgaSad4x4RowCore( cur + 4 * b, curStride, ref + 4 * b, refStride, n - b, sad + b );
+}
+
+template<X86_VEXT vext>
+void fgaResidualRowSIMD( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst )
+{
+  int x = 0;
+  if( next )
+  {
+#ifdef USE_AVX2
+    if( vext >= AVX2 )
+    {
+      for( ; x + 16 <= n; x += 16 )
+      {
+        const __m256i c = _mm256_loadu_si256( (const __m256i*) ( cur + x ) );
+        const __m256i d = _mm256_sub_epi16( _mm256_sub_epi16( _mm256_add_epi16( c, c ), _mm256_loadu_si256( (const __m256i*) ( prev + x ) ) ),
+                                            _mm256_loadu_si256( (const __m256i*) ( next + x ) ) );
+        _mm256_storeu_si256( (__m256i*) ( dst + x ), d );
+      }
+    }
+#endif
+    for( ; x + 8 <= n; x += 8 )
+    {
+      const __m128i c = _mm_loadu_si128( (const __m128i*) ( cur + x ) );
+      const __m128i d = _mm_sub_epi16( _mm_sub_epi16( _mm_add_epi16( c, c ), _mm_loadu_si128( (const __m128i*) ( prev + x ) ) ),
+                                       _mm_loadu_si128( (const __m128i*) ( next + x ) ) );
+      _mm_storeu_si128( (__m128i*) ( dst + x ), d );
+    }
+  }
+  else
+  {
+    for( ; x + 8 <= n; x += 8 )
+    {
+      _mm_storeu_si128( (__m128i*) ( dst + x ), _mm_sub_epi16( _mm_loadu_si128( (const __m128i*) ( cur + x ) ), _mm_loadu_si128( (const __m128i*) ( prev + x ) ) ) );
+    }
+  }
+  fgaResidualRowCore( cur + x, prev + x, next ? next + x : nullptr, n - x, dst + x );
+}
+
 template<X86_VEXT vext>
 void FGAnalyzer::_initFGAnalyzerX86( FgaRowKernels& k )
 {
@@ -553,6 +679,9 @@ void FGAnalyzer::_initFGAnalyzerX86( FgaRowKernels& k )
   k.isZeroBlock  = fgaIsZeroBlockSIMD<vext>;
   k.blockSums    = fgaBlockSumsSIMD<vext>;
   k.squaredDct16 = fgaSquaredDct16SIMD<vext>;
+  k.downsample4  = fgaDownsample4SIMD<vext>;
+  k.sad4x4Row    = fgaSad4x4RowSIMD<vext>;
+  k.residualRow  = fgaResidualRowSIMD<vext>;
 }
 
 template void FGAnalyzer::_initFGAnalyzerX86<SIMDX86>( FgaRowKernels& k );

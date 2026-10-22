@@ -192,8 +192,10 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
 
   if ( encCfg.m_fga )
   {
+    // --fga 1: VTM's analysis with its bugs fixed; --fga 2: with the improvements beyond VTM; --fga 3: --fga 2 with the
+    // auto-regressive grain model
     m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_internChromaFormat,
-                         m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent );
+                         m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent, encCfg.m_fga == 2, encCfg.m_fga == 3 );
     m_fgcByStartPoc[ std::numeric_limits<int>::min() ] = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
   }
 
@@ -1489,9 +1491,20 @@ void EncGOP::xRunFgaTask( FgaTask& task )
 {
   PicShared* shared         = task.pic->m_picShared;
   PelStorage& fgaBuf        = shared->getFgaFilteredBuf();
+  PelStorage& residualBuf   = shared->getFgaResidualBuf();
+  const int residualWeight  = shared->fgaResidualWeight();
   const bool ownBuf         = fgaBuf.valid();
   const CPelUnitBuf denoised = ownBuf ? CPelUnitBuf( fgaBuf ) : CPelUnitBuf( task.pic->getFilteredOrigBuffer() );
-  m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, task.sceneCut );
+  if( residualWeight )
+  {
+    const CPelUnitBuf residual( residualBuf );
+    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, &residual, residualWeight, task.sceneCut );
+  }
+  else
+  {
+    m_fgAnalyzer.estimateGrainParameters( task.pic->getOrigBuffer(), denoised, nullptr, 0, task.sceneCut );
+  }
+  residualBuf.destroy();
   if( ownBuf )
   {
     fgaBuf.destroy();

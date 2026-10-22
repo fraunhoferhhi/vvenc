@@ -595,6 +595,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
+  IStreamToInt8                     toFga                         ( &c->m_fga );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
@@ -1199,7 +1200,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
-    ("fga",                           c->m_fga,                  "Experimental: Enable film grain analysis (the analysis of VTM, JVET-AN0237) and generate FGC SEI message ")
+    ("fga",                           toFga,                     "Experimental: film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM (JVET-AN0237), 2: the same with improvements: grain measured from the temporal residual, calibrated scaling factors, 3: like 2 with the auto-regressive grain model, which only some decoders (vvdec) synthesize)")
     ("fgastrength",                   c->m_fgaStrength,          "Experimental: film grain strength in percent of the analysed strength (0..400, 0 disables the grain)")
     ;
   }

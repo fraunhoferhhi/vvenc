@@ -696,7 +696,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_forceScc                                = 0;
   c->m_GOPQPA                                  = -1;
 
-  c->m_fga                                     = false;
+  c->m_fga                                     = 0;
   c->m_fgaStrength                             = 100.0;
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
@@ -1801,6 +1801,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  vvenc_confirmParameter( c, c->m_fga < 0 || c->m_fga > 3, "Film grain analysis (fga) must be 0, 1, 2 or 3!");
   vvenc_confirmParameter( c, c->m_fgaStrength < 0.0 || c->m_fgaStrength > 400.0, "Film grain strength (fgastrength) must be in the range 0 to 400!");
   if (c->m_fga)
   {

@@ -77,6 +77,8 @@ private:
   PelStorage       m_filteredBuf;
   PelStorage       m_fgaFilteredBuf;   // temporally filtered picture for the film grain analysis, until analysed
   bool             m_fgaUsesFilteredBuf = false;   // the encoding filtered picture is the analysis picture
+  PelStorage       m_fgaResidualBuf;   // temporal residual for the improved film grain analysis, until analysed
+  int              m_fgaResidualWeight = 0;        // its variance relative to the grain variance, 0 without residual
   bool             m_fgaSceneCut = false;          // the picture starts a new scene (film grain analysis)
   int              m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();   // the latest scene cut before it
   uint64_t         m_cts;
@@ -121,6 +123,8 @@ public:
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
   PelStorage&  getFgaFilteredBuf()     { return m_fgaFilteredBuf; }
   bool&        fgaUsesFilteredBuf()    { return m_fgaUsesFilteredBuf; }
+  PelStorage&  getFgaResidualBuf()     { return m_fgaResidualBuf; }
+  int&         fgaResidualWeight()     { return m_fgaResidualWeight; }
   bool&        fgaSceneCut()           { return m_fgaSceneCut; }
   int&         fgaLastSceneCutPoc()    { return m_fgaLastSceneCutPoc; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
@@ -144,6 +148,8 @@ public:
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
     m_fgaFilteredBuf.destroy();
     m_fgaUsesFilteredBuf = false;
+    m_fgaResidualBuf.destroy();
+    m_fgaResidualWeight = 0;
     m_fgaSceneCut        = false;
     m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();
 

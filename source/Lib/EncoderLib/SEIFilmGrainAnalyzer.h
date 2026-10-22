@@ -40,11 +40,14 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-/* Film grain analysis (--fga 1): a port of the film grain analysis of the VTM reference software (VTM master,
- * including JVET-AL0282 and JVET-AN0237 by InterDigital).
+/* Film grain analysis (--fga 1, 2 and 3): a port of the film grain analysis of the VTM reference software (VTM master,
+ * including JVET-AL0282 and JVET-AN0237 by InterDigital), with improvements (--fga 2) and the auto-regressive grain
+ * model (--fga 3, which signals an AR filter fitted to the grain spectrum instead of cut-off frequencies).
  *
  * For every analysed picture, the grain is estimated as the difference between the original and a temporally filtered
- * (denoised) version of it, as in VTM.
+ * (denoised) version of it, as in VTM (--fga 1). With the improvements (--fga 2) it is estimated from the temporal
+ * residual instead, twice the picture minus its motion compensated neighbours (FgaTemporalResidual), which also holds
+ * the part of the grain that the filter keeps.
  * Flat blocks are found with a multi-scale Canny edge detector and morphological dilation on the denoised picture. On
  * 16x16 flat blocks the analysis collects
  *  - the block mean and the grain strength (twice the standard deviation of the grain), from which a polynomial
@@ -93,6 +96,13 @@ struct FgaRowKernels
   // coefficients are added to sum[ horizontal * 16 + vertical ].
   void ( *squaredDct16 )( const Pel* src, int stride, int maxRange, double* sum );
 
+  // Temporal residual kernels (FgaTemporalResidual).
+  // 4x downsampling of n samples: dst[ x ] = ( sum of the 4x4 samples from src[ 4 x ] on + 8 ) >> 4.
+  void ( *downsample4 ) ( const Pel* src, int stride, int n, Pel* dst );
+  // Sums of absolute differences of n 4x4 blocks next to each other: sad[ b ] of the blocks at x = 4 b.
+  void ( *sad4x4Row )   ( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad );
+  // Temporal residual of n samples: 2 cur - prev - next, or cur - prev when next is null.
+  void ( *residualRow ) ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 };
 
 // Scalar row kernels for x = xStart to xEnd - 1; the SIMD kernels use them at the picture borders.
@@ -106,24 +116,31 @@ void fgaClassifyCore( Pel* row, int n, Pel low, Pel high, Pel weak, Pel strong )
 bool fgaIsZeroBlockCore ( const Pel* src, int stride );
 void fgaBlockSumsCore   ( const Pel* src, int stride, int64_t& sum, int64_t& sumSq );
 void fgaSquaredDct16Core( const Pel* src, int stride, int maxRange, double* sum );
+void fgaDownsample4Core ( const Pel* src, int stride, int n, Pel* dst );
+void fgaSad4x4RowCore   ( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad );
+void fgaResidualRowCore ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 
 class FGAnalyzer
 {
 public:
   FGAnalyzer();
 
-  void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ] );
+  // improved: the analysis with the improvements beyond VTM (--fga 2), else VTM's analysis with its bugs fixed
+  // (--fga 1). arModel: the improved analysis with the auto-regressive grain model (--fga 3). See m_improved.
+  void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ], bool improved, bool arModel = false );
 
-  // Analyses one picture: orig is the original, denoised its temporally filtered version (same size); the grain is
-  // estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped first, as they
-  // describe another scene.
-  void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, bool sceneCut = false );
+  // Analyses one picture: orig is the original, denoised its temporally filtered version (same size). residual is the
+  // temporal residual of FgaTemporalResidual, whose variance is residualWeight times the grain variance; without it
+  // the grain is estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped
+  // first, as they describe another scene.
+  void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, const CPelUnitBuf* residual = nullptr, int residualWeight = 0,
+                                bool sceneCut = false );
 
   // Sets the row kernels: the scalar ones, then the SIMD ones the CPU supports.
   static void initKernels( FgaRowKernels& k );
 
   // The parameters to signal in the FGC SEI, with the grain strength set to strength percent of the analysed grain:
-  // the log2 scale factor and the component models.
+  // the log2 scale factor and the component models, with scaling factors calibrated against the synthesis.
   void getSignalledParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
 
   // A plane of samples with its own storage; the analysis works on whole planes.
@@ -164,11 +181,32 @@ private:
   int               m_bitDepths[ MAX_NUM_CH ] = { 10, 10 };
   bool              m_doAnalysis[ MAX_NUM_COMP ] = { false, false, false };
 
-  // The analysed parameters: intensities at 8 bits, compModelValue[ 0 ] the grain strength (twice the standard deviation
-  // of the grain on 16x16 blocks, at the component's bit depth), cut-off frequencies at the component's resolution.
-  // getSignalledParameters() converts them for the synthesis.
+  // The analysed parameters: intensities at 8 bits, compModelValue[ 0 ] the grain strength (m_strengthScale times twice
+  // the standard deviation of the grain on 16x16 blocks, at the component's bit depth), cut-off frequencies at the
+  // component's resolution. getSignalledParameters() converts them for the synthesis.
   SeiFgc::CompModel m_compModel[ MAX_NUM_COMP ];
   int               m_cutoffPairs[ MAX_NUM_COMP ] = { 0, 0, 0 };
+  int               m_failedFits [ MAX_NUM_COMP ] = { 0, 0, 0 };   // analyses in a row whose scaling function fit failed
+
+  // With the improvements beyond VTM (--fga 2): the grain is measured from the temporal residual when MCTF provides
+  // it, the strengths are kept in finer units, the scaling function fit works with few intensity intervals (chroma),
+  // the scaling factors are calibrated against the synthesis, and the statistics follow grain that changes or
+  // disappears. Without them (--fga 1) the analysis is VTM's, with its bugs fixed.
+  bool              m_improved = true;
+  int               m_strengthScale = 1;   // units of the strengths: twice the standard deviation / m_strengthScale
+
+  // The auto-regressive grain model (--fga 3, FGC model_id 1): instead of cut-off frequencies, every component
+  // signals the filter of vvdec's SEI AR mode, x = a1 * left + a1 * r * top + a3 * r * ( top-left + top-right )
+  // + a5 * left-left + a5 * r^2 * top-top + noise, fitted to the measured grain spectrum. One filter per component,
+  // the same for all intensity intervals, so that the synthesis makes one pattern per component.
+  struct ArFilter
+  {
+    double a1 = 0.0, a3 = 0.0, a5 = 0.0, r = 1.0;
+    double nonDcShare = 1.0;   // share of the grain variance outside the DC coefficient of 16x16 blocks
+    bool   valid = false;
+  };
+  bool              m_arModel = false;
+  ArFilter          m_arFilter[ MAX_NUM_COMP ];
 
   // Data accumulated over the analysed pictures, weighted (see ACCUMULATION_DECAY).
   std::vector<SquaredDctSum> m_squaredDctSums[ MAX_NUM_COMP ];   // per block mean
@@ -179,7 +217,8 @@ private:
 
   // Planes of the picture being analysed.
   Plane             m_denoised[ MAX_NUM_COMP ];
-  Plane             m_grain   [ MAX_NUM_COMP ];   // denoised minus original
+  Plane             m_grain   [ MAX_NUM_COMP ];   // temporal residual, or denoised minus original
+  int               m_grainWeight = 1;            // variance of m_grain relative to the grain variance
   Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
 
   // Scratch planes and lists of the mask search, kept to avoid allocating and clearing them for every picture.
@@ -204,11 +243,17 @@ private:
   void extendPoints          ( std::vector<int>& dataX, std::vector<int>& dataY, int bitDepth ) const;
   bool lloydMax              ( std::vector<double>& scalingVec, std::vector<int>& quantizedVec, int numQuantizedLevels, int bitDepth ) const;
   void setEstimatedParameters( std::vector<int>& quantizedVec, int bitDepth, ComponentID compId );
+  void holdEdgeStrengths     ( std::vector<int>& quantizedVec, int bitDepth ) const;
   void mergeIntervals        ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
   void scaleDown             ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
 
+  void getVtmParameters      ( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
+  void getArParameters       ( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
+  void fitArFilter           ( ComponentID compId );
+
   void estimateCutoffFreq    ( ComponentID compId, int bitDepth );
   int  cutoffFrequency       ( const std::vector<double>& mean ) const;
+  void fitCutoffPair         ( const std::vector<double>& meanSq, bool chroma420, int& horizontal, int& vertical ) const;
   void replaceCutoff         ( ComponentID compId, int& replacementH, int& replacementV );
   void limitCutoff           ( ComponentID compId, int avgH, int avgV );
   void limitCutoffConsecutive( ComponentID compId );
@@ -226,6 +271,36 @@ private:
   template <arm_simd::ARM_VEXT vext>
   static void _initFGAnalyzerARM( FgaRowKernels& k );
 #endif
+};
+
+// Temporal residual of the film grain for the improved analysis (--fga 2). For grain that is independent from picture
+// to picture, the residual e = 2 O - P - N of a picture O and its motion compensated neighbours P and N has six times
+// the grain variance and the spectrum of the grain, whatever the denoiser would have kept of it. MCTF computes it for
+// the analysed pictures, while their neighbours are available.
+class FgaTemporalResidual
+{
+public:
+  FgaTemporalResidual();
+
+  // Computes the residual of cur from the previous and next picture (null when missing) into residual (created here).
+  // The motion is searched per 16x16 block on 4x downsampled luma, with a bias towards zero motion, so that the vectors
+  // do not follow the grain in flat areas. A neighbour that matches much worse than the other (a scene cut) is left
+  // out. Returns the variance of the residual relative to the grain variance: 6 with both neighbours, 2 with one, and
+  // 0, with no residual made, without neighbours or for pictures smaller than one block.
+  int compute( const CPelUnitBuf& cur, const CPelUnitBuf* prev, const CPelUnitBuf* next, PelStorage& residual ) const;
+
+private:
+  // Block motion in samples of the 4x downsampled pictures, per 16x16 block of the full picture.
+  struct Motion
+  {
+    std::vector<int8_t> dx, dy;
+    double              meanSad = 0.0;   // mean absolute difference per downsampled sample, at the chosen vectors
+  };
+
+  void downsample( const CPelBuf& src, FGAnalyzer::Plane& dst ) const;
+  void search    ( const FGAnalyzer::Plane& cur, const FGAnalyzer::Plane& ref, int numBlocksX, int numBlocksY, Motion& motion ) const;
+
+  FgaRowKernels m_kernels;
 };
 
 } // namespace vvenc

@@ -121,7 +121,7 @@ void VVEncCfg::xInitCfgMembers()
     m_fg.m_fgcSEICompModelPresent[2] = true;
     m_fg.m_fgcSEICancelFlag = false;
     m_fg.m_fgcSEIPersistenceFlag = true;
-    m_fg.m_fgcSEIModelID = 0;
+    m_fg.m_fgcSEIModelID = this->m_fga == 3 ? 1 : 0;   // --fga 3: the auto-regressive model
     m_fg.m_fgcSEISepColourDescPresentFlag = false;
     m_fg.m_fgcSEIBlendingModeID = 0;
     m_fg.m_fgcSEILog2ScaleFactor = 0;

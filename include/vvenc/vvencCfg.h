@@ -763,7 +763,7 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_picReordering;
-  bool                m_fga;                                                             // Film grain analysis configuration options, set to 0 to disable (default), or 1 to enable analysis.
+  int8_t              m_fga;                                                             // Film grain analysis: 0 disabled (default), 1 the analysis of VTM (JVET-AN0237), 2 the same with improvements, 3 like 2 with the auto-regressive grain model
   int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
   int8_t              m_blockImportanceMapping;                                          // block importance mapping, the QP of blocks that later pictures predict from (0: off,
