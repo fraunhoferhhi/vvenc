@@ -145,6 +145,9 @@ EncRCPic::EncRCPic()
   poc                 = 0;
   refreshParams       = false;
   visActSteady        = 0;
+  predictedBits       = 0.0;
+  twoPassGop          = -1;
+  twoPassGroup        = -1;
 }
 
 EncRCPic::~EncRCPic()
@@ -295,6 +298,21 @@ RateCtrl::RateCtrl(MsgLog& logger)
   std::fill_n( m_gopMEErrorCBuf, QPA_MAX_NOISE_LEVELS, 0 );
   std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
   std::fill_n( m_tempDownSamplStats, VVENC_MAX_TLAYER + 1, TRCPassStats() );
+  std::fill_n( &m_twoPassBitsLeft[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  std::fill_n( &m_twoPassFirstPassBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  std::fill_n( &m_twoPassActualBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  std::fill_n( &m_twoPassPredictedBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  m_twoPassCountedBits     = 0.0;
+  m_twoPassLastShift       = 0.0;
+  m_twoPassGopShift        = 0.0;
+  m_twoPassGopNum          = -1;
+  m_twoPassTotalBits       = 0.0;
+  m_twoPassInFlightBits    = 0.0;
+  m_twoPassUncountedBits   = 0.0;
+  m_twoPassRecentActual    = 0.0;
+  m_twoPassRecentPredicted = 0.0;
+  m_twoPassQPShiftMode     = false;
+  m_twoPassCapSavings      = 0.0;
 }
 
 RateCtrl::~RateCtrl()
@@ -814,6 +832,302 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
   }
 
   encRCSeq->firstPassData = m_listRCFirstPassStats;
+
+  if( m_pcEncCfg->m_RCNumPasses == 2 && !m_pcEncCfg->m_LookAhead )
+  {
+    initTwoPassQPShift();
+  }
+}
+
+// In constant-QP mode a change of the base QP moves the QP of an I-picture by 15/16 and that of a B-picture in
+// temporal layer t by (16 + min (2, t)) / 16 of that change (see EncSlice::xGetQPForPicture with QPA), so the
+// two-pass QP shift is weighted the same way to keep the QP hierarchy of constant-QP encoding.
+static const double TWO_PASS_SHIFT_WEIGHT[ 4 ] = { 15.0 / 16.0, 1.0, 17.0 / 16.0, 18.0 / 16.0 };
+
+// Largest change of the two-pass QP shift from one GOP to the next (see initTwoPassRateControlPic).
+static const double TWO_PASS_MAX_SHIFT_STEP = 1.0;
+
+static int getTwoPassClass( const TRCPassStats& stats )
+{
+  return stats.isIntra ? 0 : std::min( 3, stats.tempLayer ); // tempLayer is the temporal layer plus 1 for B-pictures
+}
+
+// The rate model of the VCIP paper used in this file: the bit count doubles when the QP drops by this amount.
+static double getQPPerBitDoubling( const int qp )
+{
+  return ( 105.0 / 128.0 ) * sqrt( (double) std::max( 1, qp ) );
+}
+
+// Predicted bits of a picture coded at its first-pass QP minus the weighted shift.
+static double predictTwoPassBits( const TRCPassStats& stats, const double shift )
+{
+  return stats.numBits * exp2( shift * TWO_PASS_SHIFT_WEIGHT[ getTwoPassClass( stats ) ] / getQPPerBitDoubling( Clip3( 0, MAX_QP, stats.qp ) ) );
+}
+
+void RateCtrl::initTwoPassQPShift()
+{
+  std::fill_n( &m_twoPassBitsLeft[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  std::fill_n( &m_twoPassActualBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+  std::fill_n( &m_twoPassPredictedBits[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, 0.0 );
+
+  for( const auto& stats : m_listRCFirstPassStats )
+  {
+    m_twoPassBitsLeft[ Clip3( 0, MAX_QP, stats.qp ) ][ getTwoPassClass( stats ) ] += stats.numBits;
+  }
+  std::copy_n( &m_twoPassBitsLeft[ 0 ][ 0 ], ( MAX_QP + 1 ) * TWO_PASS_CLASSES, &m_twoPassFirstPassBits[ 0 ][ 0 ] );
+  m_twoPassCountedBits = 0.0;
+  m_twoPassLastShift   = 0.0;
+  m_twoPassGopShift    = 0.0;
+  m_twoPassGopNum      = -1;
+
+  m_twoPassTotalBits       = (double) encRCSeq->targetRate * m_listRCFirstPassStats.size() / encRCSeq->frameRate;
+  m_twoPassInFlightBits    = 0.0;
+  m_twoPassUncountedBits   = 0.0;
+  m_twoPassRecentActual    = 0.0;
+  m_twoPassRecentPredicted = 0.0;
+  m_twoPassQPShiftMode     = true;
+
+  initTwoPassGops();
+
+  // estimate the bits saved by the GOP limits at the shift that they lead to
+  for( int iter = 0; iter < 3 && !m_twoPassGops.empty(); iter++ )
+  {
+    const double shift = getTwoPassQPShift( m_twoPassTotalBits, encRCSeq->firstPassData.end(), encRCSeq->firstPassData.end() );
+
+    m_twoPassCapSavings = getTwoPassCapSavings( shift );
+  }
+}
+
+// Splits the pictures into GOPs with a bit limit each when a maximum bitrate is given. As in processGops(), the
+// first I-picture is not limited, a GOP starting with an I-picture may exceed the limit by the I-picture's share,
+// and the other GOPs leave room for the next I-picture, so the rate averaged over an intra period stays capped.
+void RateCtrl::initTwoPassGops()
+{
+  m_twoPassGops.clear();
+  m_twoPassCapSavings = 0.0;
+
+  if( m_pcEncCfg->m_RCMaxBitrate == INT32_MAX ) // unconstrained VBR
+  {
+    return;
+  }
+
+  for( TRCPassStats& stats : encRCSeq->firstPassData )
+  {
+    if( stats.poc == 0 && stats.isIntra ) continue;
+
+    if( m_twoPassGops.empty() || m_twoPassGops.back().pics.front()->gopNum != stats.gopNum )
+    {
+      m_twoPassGops.emplace_back();
+    }
+    m_twoPassGops.back().pics.push_back( &stats );
+    stats.twoPassGop = int( m_twoPassGops.size() ) - 1;
+  }
+
+  const double maxBitsPerPic = (double) encRCSeq->maxGopRate / encRCSeq->gopSize;
+  double intraShare = 0.0; // the I-picture's share of the bits of its GOP in the first pass
+
+  for( TwoPassGop& gop : m_twoPassGops )
+  {
+    double gopBits = 0.0, intraBits = 0.0;
+    for( const TRCPassStats* stats : gop.pics )
+    {
+      gopBits += stats->numBits;
+      if( stats->isIntra ) intraBits += stats->numBits;
+    }
+    if( intraBits > 0.0 ) intraShare = intraBits / std::max( 1.0, gopBits );
+
+    const double scale = encRCSeq->intraPeriod / ( encRCSeq->intraPeriod + intraShare * encRCSeq->gopSize );
+    gop.maxBits = maxBitsPerPic * gop.pics.size() * scale * ( intraBits > 0.0 ? 1.0 + intraShare : 1.0 );
+  }
+}
+
+// Called when the first picture of a GOP starts: sets the GOP's budget, reduced by the overshoot of the previous
+// GOP so that the rate stays capped over longer windows, and updates the predicted savings of the GOPs not yet started.
+void RateCtrl::startTwoPassGop( const int gopIdx, const double shift, const double recentRatio )
+{
+  TwoPassGop& gop = m_twoPassGops[ gopIdx ];
+  double overshoot = 0.0;
+
+  if( gopIdx > 0 )
+  {
+    const TwoPassGop& prev = m_twoPassGops[ gopIdx - 1 ];
+    overshoot = prev.actualBits + prev.inFlightBits * recentRatio - prev.budget;
+  }
+  gop.isStarted = true;
+  gop.budget    = gop.maxBits - Clip3( 0.0, 0.5 * gop.maxBits, overshoot );
+
+  m_twoPassCapSavings = getTwoPassCapSavings( shift );
+}
+
+// Predicted bits that the limits save in the GOPs not yet started, with the prediction scaled by the learned ratio
+// of each picture's group like the pool of pictures not yet started in getTwoPassQPShift().
+double RateCtrl::getTwoPassCapSavings( const double shift ) const
+{
+  double savings = 0.0;
+  for( const TwoPassGop& gop : m_twoPassGops )
+  {
+    if( gop.isStarted ) continue;
+    double bits = 0.0;
+    for( const TRCPassStats* stats : gop.pics )
+    {
+      bits += getTwoPassGroupRatio( Clip3( 0, MAX_QP, stats->qp ), getTwoPassClass( *stats ) ) * predictTwoPassBits( *stats, shift );
+    }
+    savings += std::max( 0.0, bits - gop.maxBits );
+  }
+  return savings;
+}
+
+// Returns the shift for the next picture of a rate-capped GOP: the sequence-wide shift, or a smaller one at which the
+// GOP's pictures not yet started are predicted to fit into what is left of its budget. Being solved again for every
+// picture, it corrects the prediction errors within the GOP. minShift bounds the QP rise of single pictures.
+double RateCtrl::getTwoPassGopShift( const TwoPassGop& gop, const double seqShift, const double recentRatio, const double minShift ) const
+{
+  const double budgetLeft = gop.budget - gop.actualBits - gop.inFlightBits * recentRatio;
+  auto gopBits = [ & ]( const double s )
+  {
+    double bits = 0.0;
+    for( const TRCPassStats* stats : gop.pics )
+    {
+      if( !stats->isStartedInFinalPass ) bits += recentRatio * predictTwoPassBits( *stats, s );
+    }
+    return bits;
+  };
+
+  double low = std::min( minShift, seqShift ), high = seqShift;
+  if( gopBits( high ) <= budgetLeft ) return high;
+  if( gopBits( low ) >= budgetLeft ) return low;
+
+  while( high - low > 0.01 )
+  {
+    const double mid = 0.5 * ( low + high );
+    if( gopBits( mid ) > budgetLeft ) high = mid; else low = mid;
+  }
+  return low;
+}
+
+// Ratio of actual to predicted bits of the recently finished pictures, 1 before any picture is finished.
+static double getRecentBitRatio( const double actual, const double predicted )
+{
+  return predicted > 0.0 ? Clip3( 0.5, 2.0, actual / predicted ) : 1.0;
+}
+
+// Ratio of actual to predicted bits of the finished pictures of a group. It is pulled towards 1 until a few percent
+// of the group's content is finished, so that single pictures do not set the prediction of the whole group.
+double RateCtrl::getTwoPassGroupRatio( const int qp, const int picClass ) const
+{
+  const double overhead = m_twoPassCountedBits > 0.0 ? ( m_twoPassCountedBits + m_twoPassUncountedBits ) / m_twoPassCountedBits : 1.0;
+  const double prior    = 0.03 * m_twoPassFirstPassBits[ qp ][ picClass ]
+                          * exp2( m_twoPassLastShift * TWO_PASS_SHIFT_WEIGHT[ picClass ] / getQPPerBitDoubling( qp ) );
+
+  return Clip3( 0.5, 2.0, ( m_twoPassActualBits[ qp ][ picClass ] * overhead + prior ) / std::max( 1.0, m_twoPassPredictedBits[ qp ][ picClass ] + prior ) );
+}
+
+// Returns the QP shift (positive: lower QPs than in the first pass) at which the pictures not yet started are
+// predicted to use bitsLeft bits. Spreading any surplus or deficit over all remaining pictures keeps the QPs as
+// steady as in constant-QP encoding, instead of spending it on the next pictures. The prediction error of the
+// recently finished pictures is applied to the next GOP only, since it depends on the content: this improves the
+// rate match at the end of the sequence without letting one scene move the QPs of the whole sequence.
+double RateCtrl::getTwoPassQPShift( const double bitsLeft, std::list<TRCPassStats>::const_iterator next, const std::list<TRCPassStats>::const_iterator end ) const
+{
+  const double recentRatio = getRecentBitRatio( m_twoPassRecentActual, m_twoPassRecentPredicted );
+  std::vector<const TRCPassStats*> nextPics;
+
+  for( ; next != end && (int) nextPics.size() < encRCSeq->gopSize; next++ )
+  {
+    if( !next->isStartedInFinalPass ) nextPics.push_back( &( *next ) );
+  }
+
+  double groupRatio[ MAX_QP + 1 ][ TWO_PASS_CLASSES ];
+  for( int qp = 0; qp <= MAX_QP; qp++ )
+  {
+    for( int c = 0; c < TWO_PASS_CLASSES; c++ )
+    {
+      groupRatio[ qp ][ c ] = m_twoPassBitsLeft[ qp ][ c ] > 0.0 ? getTwoPassGroupRatio( qp, c ) : 1.0;
+    }
+  }
+
+  auto predictBits = [ & ]( const double shift )
+  {
+    double sum = 0.0;
+    for( int qp = 0; qp <= MAX_QP; qp++ )
+    {
+      for( int c = 0; c < TWO_PASS_CLASSES; c++ )
+      {
+        if( m_twoPassBitsLeft[ qp ][ c ] > 0.0 )
+        {
+          sum += groupRatio[ qp ][ c ] * m_twoPassBitsLeft[ qp ][ c ] * exp2( shift * TWO_PASS_SHIFT_WEIGHT[ c ] / getQPPerBitDoubling( qp ) );
+        }
+      }
+    }
+    for( const TRCPassStats* stats : nextPics ) // the recent ratio replaces the group ratio for the next GOP
+    {
+      sum += ( recentRatio - groupRatio[ Clip3( 0, MAX_QP, stats->qp ) ][ getTwoPassClass( *stats ) ] ) * predictTwoPassBits( *stats, shift );
+    }
+    return sum - m_twoPassCapSavings;
+  };
+
+  double low = -MAX_QP, high = MAX_QP;
+  if( predictBits( high ) <= bitsLeft ) return high;
+  if( predictBits( low ) >= bitsLeft ) return low;
+
+  while( high - low > 0.01 ) // the predicted bits grow monotonically with the shift
+  {
+    const double mid = 0.5 * ( low + high );
+    if( predictBits( mid ) < bitsLeft ) low = mid; else high = mid;
+  }
+  return 0.5 * ( low + high );
+}
+
+void RateCtrl::initTwoPassRateControlPic( EncRCPic* encRcPic, std::list<TRCPassStats>::iterator stats, int& qp, double& lambda )
+{
+  const int    statsQP     = Clip3( 0, MAX_QP, stats->qp );
+  const int    picClass    = getTwoPassClass( *stats );
+  const double recentRatio = getRecentBitRatio( m_twoPassRecentActual, m_twoPassRecentPredicted );
+  const double bitsLeft    = m_twoPassTotalBits - encRCSeq->bitsUsed - m_twoPassUncountedBits - m_twoPassInFlightBits * recentRatio;
+  double       seqShift    = getTwoPassQPShift( bitsLeft, stats, encRCSeq->firstPassData.end() );
+
+  // The shift moves by at most TWO_PASS_MAX_SHIFT_STEP from one GOP to the next, and within a GOP by at most that
+  // much from the shift of its first picture. Solved freely for every picture, the shift chased the prediction error
+  // of the pictures in flight; as the pictures not yet started became few and small at the end of a sequence, it
+  // drifted far from the first-pass QPs, where the rate model under-predicts, and an overshoot then left the last
+  // pictures no budget at all (QP 63). Bounded, the QPs stay as steady as in constant-QP encoding, and the file ends
+  // a little above or below the target instead.
+  if( stats->gopNum != m_twoPassGopNum )
+  {
+    m_twoPassGopShift = m_twoPassGopNum < 0 ? seqShift : Clip3( m_twoPassGopShift - TWO_PASS_MAX_SHIFT_STEP, m_twoPassGopShift + TWO_PASS_MAX_SHIFT_STEP, seqShift );
+    m_twoPassGopNum   = stats->gopNum;
+  }
+  seqShift = Clip3( m_twoPassGopShift - TWO_PASS_MAX_SHIFT_STEP, m_twoPassGopShift + TWO_PASS_MAX_SHIFT_STEP, seqShift );
+
+  m_twoPassLastShift = seqShift;
+
+  double shift = seqShift;
+  if( stats->twoPassGop >= 0 )
+  {
+    TwoPassGop& gop = m_twoPassGops[ stats->twoPassGop ];
+    if( !gop.isStarted )
+    {
+      startTwoPassGop( stats->twoPassGop, seqShift, recentRatio );
+      // the whole GOP fits its budget, with QPs at most 12 above the sequence's level (the solver's lower limit,
+      // -MAX_QP, gave QPs up to 63 when the GOP could not fit at all)
+      gop.startShift = getTwoPassGopShift( gop, seqShift, recentRatio, seqShift - 12.0 );
+    }
+    // later pictures may raise the QP by at most 12 above the GOP's start level to correct prediction errors
+    shift = getTwoPassGopShift( gop, seqShift, recentRatio, gop.startShift - 12.0 );
+  }
+
+  qp     = Clip3( 0, MAX_QP, int( floor( stats->qp - shift * TWO_PASS_SHIFT_WEIGHT[ picClass ] + 0.5 ) ) );
+  lambda = Clip3( encRCSeq->minEstLambda, encRCSeq->maxEstLambda, stats->lambda * pow( 2.0, double( qp - stats->qp ) / 3.0 ) );
+
+  // this picture's first-pass bits leave the not-yet-started pool and its predicted bits count as spent until it is done
+  stats->isStartedInFinalPass = true;
+  m_twoPassBitsLeft[ statsQP ][ picClass ] = std::max( 0.0, m_twoPassBitsLeft[ statsQP ][ picClass ] - stats->numBits );
+  encRcPic->predictedBits = stats->numBits * exp2( double( stats->qp - qp ) / getQPPerBitDoubling( statsQP ) );
+  encRcPic->targetBits    = encRcPic->tmpTargetBits = int( std::min( (double) INT32_MAX, encRcPic->predictedBits + 0.5 ) );
+  m_twoPassInFlightBits  += encRcPic->predictedBits;
+  encRcPic->twoPassGop    = stats->twoPassGop;
+  encRcPic->twoPassGroup  = statsQP * TWO_PASS_CLASSES + picClass;
+  if( stats->twoPassGop >= 0 ) m_twoPassGops[ stats->twoPassGop ].inFlightBits += encRcPic->predictedBits;
 }
 
 double RateCtrl::getAverageBitsFromFirstPass()
@@ -1165,10 +1479,43 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 
+  if ( m_twoPassQPShiftMode ) // the actual bits now replace the prediction
+  {
+    const double decay = 1.0 - 1.0 / std::max( 1, encRCSeq->gopSize ); // remember about the last GOP
+
+    m_twoPassInFlightBits    = std::max( 0.0, m_twoPassInFlightBits - encRCPic->predictedBits );
+    m_twoPassRecentActual    = m_twoPassRecentActual    * decay + pic->actualTotalBits;
+    m_twoPassRecentPredicted = m_twoPassRecentPredicted * decay + encRCPic->predictedBits;
+    m_twoPassCountedBits    += pic->actualTotalBits;
+
+    if( encRCPic->twoPassGroup >= 0 )
+    {
+      const int qp = encRCPic->twoPassGroup / TWO_PASS_CLASSES, picClass = encRCPic->twoPassGroup % TWO_PASS_CLASSES;
+      m_twoPassActualBits   [ qp ][ picClass ] += pic->actualTotalBits;
+      m_twoPassPredictedBits[ qp ][ picClass ] += encRCPic->predictedBits;
+    }
+
+    if( encRCPic->twoPassGop >= 0 )
+    {
+      TwoPassGop& gop  = m_twoPassGops[ encRCPic->twoPassGop ];
+      gop.inFlightBits = std::max( 0.0, gop.inFlightBits - encRCPic->predictedBits );
+      gop.actualBits  += pic->actualTotalBits;
+    }
+  }
+
   if ( encRCSeq->isLookAhead )
   {
     if ( pic->isMeanQPLimited ) encRCSeq->bitsUsedQPLimDiff += pic->actualTotalBits - clipBits;
     encRCSeq->bitsUsed += encRCSeq->bitsUsedQPLimDiff;  // sum up actual, not ideal bit counts
+  }
+}
+
+void RateCtrl::addUncountedBits( const int bits )
+{
+  if( m_twoPassQPShiftMode )
+  {
+    m_twoPassUncountedBits += bits;
+    m_twoPassRecentActual  += bits; // the first-pass bits that the prediction scales include these bits as well
   }
 }
 
@@ -1190,6 +1537,11 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
       for ( it = encRCSeq->firstPassData.begin(); it != encRCSeq->firstPassData.end(); it++ )
       {
+        if ( it->poc == slice->poc && m_twoPassQPShiftMode )
+        {
+          initTwoPassRateControlPic( encRcPic, it, sliceQP, lambda );
+          break;
+        }
         if ( it->poc == slice->poc && it->numBits > 0 )
         {
           const double sqrOfResRatio = std::min( 1.0, double( m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight ) / ( 3840.0 * 2160.0 ) );
