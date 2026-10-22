@@ -75,6 +75,10 @@ public:
 private:
   PelStorage       m_origBuf;
   PelStorage       m_filteredBuf;
+  PelStorage       m_fgaFilteredBuf;   // temporally filtered picture for the film grain analysis, until analysed
+  bool             m_fgaUsesFilteredBuf = false;   // the encoding filtered picture is the analysis picture
+  bool             m_fgaSceneCut = false;          // the picture starts a new scene (film grain analysis)
+  int              m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();   // the latest scene cut before it
   uint64_t         m_cts;
   int              m_maxFrames;
   int              m_poc;
@@ -115,6 +119,10 @@ public:
   bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
   int          getPOC()          const { return m_poc; }
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
+  PelStorage&  getFgaFilteredBuf()     { return m_fgaFilteredBuf; }
+  bool&        fgaUsesFilteredBuf()    { return m_fgaUsesFilteredBuf; }
+  bool&        fgaSceneCut()           { return m_fgaSceneCut; }
+  int&         fgaLastSceneCutPoc()    { return m_fgaLastSceneCutPoc; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
 
   void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter )
@@ -134,6 +142,10 @@ public:
     CHECK( isUsed(),       "PicShared still in use" );
 
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
+    m_fgaFilteredBuf.destroy();
+    m_fgaUsesFilteredBuf = false;
+    m_fgaSceneCut        = false;
+    m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();
 
     m_picVA.reset();
     m_isSccWeak    = false;

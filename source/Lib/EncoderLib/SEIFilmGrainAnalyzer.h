@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2026, Fraunhofer-Gesellschaft zur F�rderung der angewandten Forschung e.V. & The VVenC Authors.
+Copyright (c) 2019-2026, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -40,332 +40,192 @@ POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-
-#ifndef __SEIFILMGRAINANALYZER__
-#define __SEIFILMGRAINANALYZER__
+/* Film grain analysis (--fga 1): a port of the film grain analysis of the VTM reference software (VTM master,
+ * including JVET-AL0282 and JVET-AN0237 by InterDigital).
+ *
+ * For every analysed picture, the grain is estimated as the difference between the original and a temporally filtered
+ * (denoised) version of it, as in VTM.
+ * Flat blocks are found with a multi-scale Canny edge detector and morphological dilation on the denoised picture. On
+ * 16x16 flat blocks the analysis collects
+ *  - the block mean and the grain strength (twice the standard deviation of the grain), from which a polynomial
+ *    scaling function is fitted and quantized with Lloyd-Max into intensity intervals and scaling factors, and
+ *  - the squared DCT of the grain, per block mean, from which horizontal and vertical cut-off frequencies are
+ *    estimated per intensity interval.
+ * Both are accumulated over the analysed pictures with exponentially decreasing weights, so that the estimate follows
+ * the current scene.
+ */
 
 #pragma once
 
-#include "CommonLib/Picture.h"
+#include "CommonLib/CommonDef.h"
+#include "CommonLib/Unit.h"
 #include "CommonLib/SEI.h"
 
-#include <numeric>
-#include <cmath>
-#include <algorithm>
-#include <fstream>  // Include this for std::ofstream
+#include <utility>
+#include <vector>
 
-//using namespace vvenc;
 namespace vvenc {
 
-#if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_FGA
-using namespace x86_simd;
-#endif
-  
-static constexpr double   PI                     = 3.14159265358979323846;
-static constexpr double   PI_2                   = 3.14159265358979323846 / 2.0;
-static constexpr double   pi_8                   = PI / 8.0;
-static constexpr double   pi_3_8                 = 3.0 * PI / 8.0;
-static constexpr double   pi_5_8                 = 5.0 * PI / 8.0;
-static constexpr double   pi_7_8                 = 7.0 * PI / 8.0;
-
-static constexpr int      DATA_BASE_SIZE         = 64;
-static constexpr int      INTERVAL_SIZE          = 16;
-static constexpr int      MAX_INTERVAL_NUMBER    = (1 << 16) / INTERVAL_SIZE;
-static constexpr int      MAXPAIRS               = 256;
-
-static constexpr int      KERNELSIZE             = 3;     // Dilation and erosion kernel size
-static constexpr int      CONV_WIDTH_S           = 3;
-static constexpr int      CONV_HEIGHT_S          = 3;
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-class Canny
+// Row and block kernels of the analysis, with SIMD versions in CommonLib/x86/FGAX86.h and
+// CommonLib/arm/neon/FGA_neon.cpp. A row is processed from x = 0 to width - 1; neighbours outside the picture repeat
+// the border sample.
+struct FgaRowKernels
 {
-public:
-  Canny( bool enableOpt = true );
-  ~Canny();
+  // Sobel gradients of the row "cur": magnitude, (|gx| + |gy|) / 2 limited to maxVal, and edge direction (0, 45, 90
+  // or 135 degrees).
+  void ( *sobel )   ( const Pel* above, const Pel* cur, const Pel* below, int width, Pel maxVal, Pel* mag, Pel* dir );
+  // Non-maximum suppression: the magnitude where it is not smaller than both neighbours along the direction, else 0.
+  void ( *nonMax )  ( const Pel* magAbove, const Pel* mag, const Pel* magBelow, const Pel* dir, int width, Pel* dst );
+  // 3-tap maximum (dilate) or minimum (erode) along a row, and over three rows.
+  void ( *morphRow )( const Pel* src, int width, bool dilate, Pel* dst );
+  void ( *morphCol )( const Pel* above, const Pel* cur, const Pel* below, int width, bool dilate, Pel* dst );
+  // Largest of n non-negative samples.
+  Pel  ( *rowMax )  ( const Pel* src, int n );
+  // Double threshold: strong above high, weak above low, else 0.
+  void ( *classify )( Pel* row, int n, Pel low, Pel high, Pel weak, Pel strong );
+  // Positions x of the samples equal to value, in increasing order; returns their number.
+  int  ( *findEqual )( const Pel* row, int n, Pel value, int* positions );
 
-  unsigned int      m_convWidthG = 5, m_convHeightG = 5;		  // Pixel's row and col positions for Gauss filtering
-  
-  void init ( unsigned int width,
-              unsigned int height,
-              ChromaFormat inputChroma );
+  // Block kernels, on 16x16 blocks.
+  bool ( *isZeroBlock ) ( const Pel* src, int stride );
+  void ( *blockSums )   ( const Pel* src, int stride, int64_t& sum, int64_t& sumSq );
+  // 16x16 DCT-II of VVC (rounding shift 8 after each stage, the second stage clipped to +-maxRange); the squared
+  // coefficients are added to sum[ horizontal * 16 + vertical ].
+  void ( *squaredDct16 )( const Pel* src, int stride, int maxRange, double* sum );
 
-  void destroy ();
-
-  void detect_edges ( const PelStorage* orig,
-                      PelStorage* dest,
-                      unsigned int uiBitDepth,
-                      ComponentID compID );
-
-  // Sobel gradient of a plane: the edge magnitude replaces the samples of buff1, and the quantized edge direction
-  // goes to buff2. tmpBuf1 and tmpBuf2 hold the two Sobel responses (Gx and Gy of gradient_core) meanwhile.
-  void (*gradient) ( PelStorage* buff1,
-                     PelStorage* buff2,
-                     PelStorage *tmpBuf1,
-                     PelStorage *tmpBuf2,
-                     unsigned int width,
-                     unsigned int height,
-                     unsigned int bitDepth,
-                     ComponentID compID);
-
-private:
-  double            m_lowThresholdRatio   = 0.1;               // low threshold rato
-  int               m_highThresholdRatio  = 3;                 // high threshold rato
-
-  PelStorage *m_orientationBuf = nullptr;
-  PelStorage* m_gradientBufX = nullptr;
-  PelStorage* m_gradientBufY = nullptr;
-
-  void suppressNonMax ( PelStorage* buff1,
-                        PelStorage* buff2,
-                        unsigned int width,
-                        unsigned int height,
-                        ComponentID compID );
-
-  void doubleThreshold ( PelStorage *buff,
-                         unsigned int width,
-                         unsigned int height,
-                         unsigned int bitDepth,
-                         ComponentID compID );
-
-  void edgeTracking ( PelStorage* buff1,
-                      unsigned int width,
-                      unsigned int height,
-                      unsigned int windowWidth,
-                      unsigned int windowHeight,
-                      unsigned int bitDepth,
-                      ComponentID compID );
-
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  void initFGACannyX86();
-  template <X86_VEXT vext>
-  void _initFGACannyX86();
-#endif
 };
 
-class Morph
-{
-public:
-  Morph( bool enableOpt = true );
-  ~Morph();
-
-  void init ( uint32_t width,
-              uint32_t height );
-
-  void destroy ();
-
-  int (*dilation) ( PelStorage *buff,
-                    PelStorage *Wbuf,
-                    uint32_t bitDepth,
-                    ComponentID compID,
-                    int numIter,
-                    int iter,
-                    Pel Value );
-
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  void initFGAMorphX86();
-  template <X86_VEXT vext>
-  void _initFGAMorphX86();
-#endif
-#if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
-  void initFGAMorphARM();
-  template <ARM_VEXT vext>
-  void _initFGAMorphARM();
-#endif
-
-  PelStorage* m_dilationBuf = nullptr;
-  PelStorage* m_dilationBuf2 = nullptr;
-  PelStorage* m_dilationBuf4 = nullptr;
-};
-
+// Scalar row kernels for x = xStart to xEnd - 1; the SIMD kernels use them at the picture borders.
+void fgaSobelCore   ( const Pel* above, const Pel* cur, const Pel* below, int width, int xStart, int xEnd, Pel maxVal, Pel* mag, Pel* dir );
+void fgaNonMaxCore  ( const Pel* magAbove, const Pel* mag, const Pel* magBelow, const Pel* dir, int width, int xStart, int xEnd, Pel* dst );
+void fgaMorphRowCore( const Pel* src, int width, int xStart, int xEnd, bool dilate, Pel* dst );
+void fgaMorphColCore( const Pel* above, const Pel* cur, const Pel* below, int xStart, int xEnd, bool dilate, Pel* dst );
+Pel  fgaRowMaxCore  ( const Pel* src, int n );
+int  fgaFindEqualCore( const Pel* row, int n, Pel value, int* positions );
+void fgaClassifyCore( Pel* row, int n, Pel low, Pel high, Pel weak, Pel strong );
+bool fgaIsZeroBlockCore ( const Pel* src, int stride );
+void fgaBlockSumsCore   ( const Pel* src, int stride, int64_t& sum, int64_t& sumSq );
+void fgaSquaredDct16Core( const Pel* src, int stride, int maxRange, double* sum );
 
 class FGAnalyzer
 {
 public:
-  FGAnalyzer( bool enableOpt = true );
-  ~FGAnalyzer();
+  FGAnalyzer();
 
-  int                             prevAnalysisPoc                = -1;
+  void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ] );
 
-  void init( const int                        width,
-             const int                        height,
-             const ChromaFormat               inputChroma,
-             const int                        *outputBitDepths,
-             const bool doAnalysis[] );
-  void destroy        ();
+  // Analyses one picture: orig is the original, denoised its temporally filtered version (same size); the grain is
+  // estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped first, as they
+  // describe another scene.
+  void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, bool sceneCut = false );
 
-  void estimateGrainParameters ( Picture* pic );
+  // Sets the row kernels: the scalar ones, then the SIMD ones the CPU supports.
+  static void initKernels( FgaRowKernels& k );
 
-  int getLog2scaleFactor()  { return m_log2ScaleFactor; };
+  // The parameters to signal in the FGC SEI, with the grain strength set to strength percent of the analysed grain:
+  // the log2 scale factor and the component models.
+  void getSignalledParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
 
-  SeiFgc::CompModel  getCompModel( int idx ) { return m_compModel[idx];  };
+  // A plane of samples with its own storage; the analysis works on whole planes.
+  struct Plane
+  {
+    int              width  = 0;
+    int              height = 0;
+    std::vector<Pel> samples;
 
-  double (*calcVar) ( const Pel* org,
-                      const ptrdiff_t origStride,
-                      const int w,
-                      const int h );
-
-  int (*calcMean) ( const Pel* org,
-                    const ptrdiff_t origStride,
-                    const int w,
-                    const int h );
-
-  void (*fastDCT2_64) ( const TCoeff* src,
-                        TCoeff* dst,
-                        int shift,
-                        int line,
-                        int iSkipLine,
-                        int iSkipLine2 );
+    // Sets the size; the storage only grows, so planes reused for smaller sizes are not cleared again.
+    void resize( int w, int h )                     { width = w; height = h; if( samples.size() < (size_t) w * h ) samples.resize( (size_t) w * h ); }
+    Pel* row   ( int y )                            { return samples.data() + (size_t) y * width; }
+    const Pel* row( int y ) const                   { return samples.data() + (size_t) y * width; }
+    Pel  at    ( int x, int y ) const               { return samples[ (size_t) y * width + x ]; }
+    // Sample at (x, y) with the coordinates clamped to the plane, as on a border-extended buffer.
+    Pel  clampedAt( int x, int y ) const;
+  };
 
 private:
-  int                             *m_bitDepths;
-  ChromaFormat                    m_inputChromaFormat;
-  bool                            m_doAnalysis[ComponentID::MAX_NUM_COMP] = { true, true, true };
+  static constexpr int    BLOCK_SIZE         = 16;    // analysis block size, for scaling function and cut-off frequencies
+  // Weight of the data accumulated so far when a picture is added. VTM sums the data of all pictures without limit,
+  // so a new scene hardly changes the estimate; halving the old data lets it follow the scene within a few analyses.
+  static constexpr double ACCUMULATION_DECAY = 0.5;
 
-  Canny                           m_edgeDetector;
-  Morph                           m_morphOperation;
-  double                          m_lowIntensityRatio            = 0.1;           // supress everything below 0.1*maxIntensityOffset
+  // Squared DCT coefficients of the grain, summed over the blocks with one block mean.
+  typedef std::vector<double> SquaredDctSum;   // BLOCK_SIZE * BLOCK_SIZE entries, [horizontal][vertical]
 
-  CoeffBuf                        * m_dctGrainBlockList;
-  TCoeff                          * m_coeffBuf;
-  int                             m_numDctGrainBlocks;
+  struct CutoffPair
+  {
+    std::pair<int, int> p;      // horizontal and vertical cut-off
+    int                 w = 0;  // weight (interval width)
+    std::vector<int>    idx;    // intensity intervals having this pair
+  };
 
-  std::vector<double>             coeffs;
-  std::vector<double>             scalingVec;
-  std::vector<int>                quantVec;
+  int               m_width  = 0;
+  int               m_height = 0;
+  ChromaFormat      m_chromaFormat = CHROMA_420;
+  int               m_bitDepths[ MAX_NUM_CH ] = { 10, 10 };
+  bool              m_doAnalysis[ MAX_NUM_COMP ] = { false, false, false };
 
-  std::vector<int>                vecMean;
-  std::vector<int>                vecVar;
+  // The analysed parameters: intensities at 8 bits, compModelValue[ 0 ] the grain strength (twice the standard deviation
+  // of the grain on 16x16 blocks, at the component's bit depth), cut-off frequencies at the component's resolution.
+  // getSignalledParameters() converts them for the synthesis.
+  SeiFgc::CompModel m_compModel[ MAX_NUM_COMP ];
+  int               m_cutoffPairs[ MAX_NUM_COMP ] = { 0, 0, 0 };
 
-  double                          meanSquaredDctGrain[DATA_BASE_SIZE][DATA_BASE_SIZE];
+  // Data accumulated over the analysed pictures, weighted (see ACCUMULATION_DECAY).
+  std::vector<SquaredDctSum> m_squaredDctSums[ MAX_NUM_COMP ];   // per block mean
+  std::vector<double>        m_numDctBlocks  [ MAX_NUM_COMP ];   // per block mean
+  std::vector<double>        m_storedMeanIntensity   [ MAX_NUM_COMP ];
+  std::vector<double>        m_storedStrengthIntensity[ MAX_NUM_COMP ];
+  std::vector<double>        m_storedElementsPerInterval[ MAX_NUM_COMP ];
 
-  /* Interval points for fitFunction */
-  std::vector<int>                vec_mean_intensity;
-  std::vector<int>                vec_variance_intensity;
-  std::vector<int>                element_number_per_interval;
-  std::vector<int>                tmp_data_x;
-  std::vector<int>                tmp_data_y;
+  // Planes of the picture being analysed.
+  Plane             m_denoised[ MAX_NUM_COMP ];
+  Plane             m_grain   [ MAX_NUM_COMP ];   // denoised minus original
+  Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
 
-  static constexpr double         m_tapFilter[3]                = { 1, 2, 1 };
-  static constexpr double         m_normTap                     = 4.0;
+  // Scratch planes and lists of the mask search, kept to avoid allocating and clearing them for every picture.
+  struct Scratch
+  {
+    Plane            magnitude, direction, morph, half, quarter, lowMask;
+    std::vector<int> positions, weakX, weakY, columnStart;
+    std::vector<Pel> wide, top, bottom, left, right;
+  };
+  Scratch           m_scratch;
 
-  // fg model parameters
-  int                             m_log2ScaleFactor;
-  std::vector<std::array<int, 3>> finalIntervalsandScalingFactors;   // lower_bound, upper_bound, scaling_factor
-  SeiFgc::CompModel               m_compModel[ComponentID::MAX_NUM_COMP];
+  // flat area mask
+  void resetStatistics       ( int c );
+  void findMask              ( ComponentID compId );
+  void maskForScale          ( const Plane& picture, Plane& mask, int bitDepth, int numDilations );
 
-  const PelStorage                *m_originalBuf             = nullptr;
-  const PelStorage                *m_workingBuf              = nullptr;
-  PelStorage                      *m_maskBuf                 = nullptr;
-  PelStorage                      *m_grainEstimateBuf        = nullptr;
-  PelStorage                      *m_workingBufSubsampled2   = nullptr;
-  PelStorage                      *m_maskSubsampled2         = nullptr;
-  PelStorage                      *m_workingBufSubsampled4   = nullptr;
-  PelStorage                      *m_maskSubsampled4         = nullptr;
-  PelStorage                      *m_maskUpsampled           = nullptr;
-  // for DCT
-  TCoeff                          *m_DCTinout                = nullptr;
-  TCoeff                          *m_DCTtemp                 = nullptr;
+  // parameter estimation
+  void estimateComponent     ( ComponentID compId );
+  void estimateScalingFactors( std::vector<int>& dataX, std::vector<int>& dataY, int bitDepth, ComponentID compId );
+  bool fitFunction           ( std::vector<int>& dataX, std::vector<int>& dataY, std::vector<double>& coeffs, std::vector<double>& scalingVec,
+                               int order, int bitDepth, bool secondPass, ComponentID compId );
+  void extendPoints          ( std::vector<int>& dataX, std::vector<int>& dataY, int bitDepth ) const;
+  bool lloydMax              ( std::vector<double>& scalingVec, std::vector<int>& quantizedVec, int numQuantizedLevels, int bitDepth ) const;
+  void setEstimatedParameters( std::vector<int>& quantizedVec, int bitDepth, ComponentID compId );
+  void mergeIntervals        ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
+  void scaleDown             ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
 
-  void findMask ( ComponentID compID );
+  void estimateCutoffFreq    ( ComponentID compId, int bitDepth );
+  int  cutoffFrequency       ( const std::vector<double>& mean ) const;
+  void replaceCutoff         ( ComponentID compId, int& replacementH, int& replacementV );
+  void limitCutoff           ( ComponentID compId, int avgH, int avgV );
+  void limitCutoffConsecutive( ComponentID compId );
+  int  limitCutoffPairs      ( std::vector<CutoffPair>& pairs, int maxUnique ) const;
 
-  void blockTransform ( CoeffBuf& currentCoeffBuf,
-                        int offsetX,
-                        int offsetY,
-                        uint32_t bitDepth,
-                        ComponentID compId );
-
-  void adaptiveSampling ( int bins,
-                          double threshold,
-                          std::vector<int>& significantIndices,
-                          bool isRow,
-                          int startIdx );
-
-  void estimateCutoffFreqAdaptive ( ComponentID compID );
-
-  void estimateScalingFactors ( uint32_t bitDepth,
-                                ComponentID compID );
-
-  bool fitFunction ( int order,
-                     int bitDepth,
-                     bool second_pass );
-
-  void avgScalingVec ( int bitDepth );
-
-  bool lloydMax ( double& distortion,
-                  int bitDepth );
-
-  void quantize ( std::vector<double>& quantizedVec,
-                  double& distortion,
-                  double partition[],
-                  double codebook[] );
-
-  void extendPoints ( int bitDepth );
-
-  void setEstimatedParameters ( uint32_t bitDepth,
-                                ComponentID compID );
-
-  void defineIntervalsAndScalings ( int bitDepth );
-
-  void scaleDown ( int bitDepth );
-
-  void confirmIntervals ( );
-
-  long double ldpow ( long double n,
-                      unsigned p );
-
-  int countEdges ( int windowSize,
-                   int offsetX,
-                   int offsetY,
-                   ComponentID compID );
-
-  void subsample ( PelStorage& output,
-                   const int factor = 2,
-                   const int padding = 0, 
-                   ComponentID compID = COMP_Y ) const;
-
-  void upsample ( const PelStorage& input,
-                  const int factor = 2,
-                  const int padding = 0,
-                  ComponentID compID = COMP_Y ) const;
-
-  void combineMasks ( ComponentID compId );
-
-  void suppressLowIntensity ( const PelStorage& buff1,
-                              PelStorage& buff2,
-                              uint32_t bitDepth,
-                              ComponentID compId );
+  FgaRowKernels     m_kernels;
 
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
-  void initFGAnalyzerX86();
-  template <X86_VEXT vext>
-  void _initFGAnalyzerX86();
+  static void initFGAnalyzerX86( FgaRowKernels& k );
+  template <x86_simd::X86_VEXT vext>
+  static void _initFGAnalyzerX86( FgaRowKernels& k );
 #endif
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_ARM )
-  void initFGAnalyzerARM();
-  template <ARM_VEXT vext>
-  void _initFGAnalyzerARM();
+  static void initFGAnalyzerARM( FgaRowKernels& k );
+  template <arm_simd::ARM_VEXT vext>
+  static void _initFGAnalyzerARM( FgaRowKernels& k );
 #endif
 };
 
 } // namespace vvenc
-
-// Scalar reference for Morph::dilation. Global (not vvenc::) because this
-// header's .cpp only does "using namespace vvenc;" rather than wrapping its
-// definitions in the namespace. SIMD dilation implementations that need a
-// fallback for widths their vectorized path can't handle delegate to it
-// directly instead of duplicating the 3x3 test.
-int dilation_core( vvenc::PelStorage* buff, vvenc::PelStorage* Wbuf, uint32_t bitDepth, vvenc::ComponentID compID,
-                   int numIter, int iter, vvenc::Pel Value );
-
-// Scalar reference for Canny::gradient, global for the same reason. The x86 SIMD gradient falls back to it for
-// widths its vectorized path can't handle.
-void gradient_core( vvenc::PelStorage* buff1, vvenc::PelStorage* buff2, vvenc::PelStorage* tmpBuf1,
-                    vvenc::PelStorage* tmpBuf2, uint32_t width, uint32_t height, uint32_t bitDepth,
-                    vvenc::ComponentID compID );
-
-#endif // __SEIFILMGRAINANALYZER__
-
-

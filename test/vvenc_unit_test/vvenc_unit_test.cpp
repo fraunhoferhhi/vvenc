@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cmath>
 #include <iostream>
 #include <limits.h>
+#include <random>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -4507,194 +4508,116 @@ static bool test_LoopFilterPandQ()
 
 #if ENABLE_SIMD_OPT_FGA
 
-static bool test_FGAnalyzer()
+// The row and block kernels of the film grain analysis, as FGAnalyzer::initKernels() selects them for this CPU,
+// against the scalar kernels, on random rows of widths 1..70 and two large widths, with extreme values. Nothing may be
+// written past the row.
+static bool test_FGAnalyzerKernels()
 {
-  printf( "Testing FGAnalyzer::calcVar / calcMean\n" );
+  printf( "Testing the film grain analysis kernels\n" );
 
-  vvenc::FGAnalyzer ref{ /*enableOpt=*/false };
-  vvenc::FGAnalyzer opt{ /*enableOpt=*/true };
+  vvenc::FgaRowKernels k;
+  vvenc::FGAnalyzer::initKernels( k );
 
-  bool                passed    = true;
-  InputGenerator<Pel> gen{ 10, /*is_signed=*/false };
-  unsigned            num_cases = g_fastUnitTest ? 10 : NUM_CASES;
-
-  const int sizes[] = { 8, 16, 32, 64 };
-
-  for( unsigned i = 0; i < num_cases; ++i )
+  std::mt19937 rng( 7 );
+  long long    bad = 0;
+  std::vector<int> widths;
+  for( int w = 1; w <= 70; w++ )
   {
-    for( int w : sizes )
-    {
-      for( int h : sizes )
-      {
-        const ptrdiff_t  stride = w + 8;
-        std::vector<Pel> buf( stride * h );
-        std::generate( buf.begin(), buf.end(), gen );
-
-        std::ostringstream ctx;
-        ctx << "calcVar/calcMean w=" << w << " h=" << h;
-
-        const double varRef = ref.calcVar( buf.data(), stride, w, h );
-        const double varOpt = opt.calcVar( buf.data(), stride, w, h );
-        passed = compare_value( ctx.str() + " var", varRef, varOpt ) && passed;
-
-        const int meanRef = ref.calcMean( buf.data(), stride, w, h );
-        const int meanOpt = opt.calcMean( buf.data(), stride, w, h );
-        passed = compare_value( ctx.str() + " mean", meanRef, meanOpt ) && passed;
-      }
-    }
+    widths.push_back( w );
   }
-  return passed;
-}
+  widths.push_back( 963 );
+  widths.push_back( 1920 );
 
-static bool test_MorphDilation()
-{
-  printf( "Testing Morph::dilation\n" );
-  vvenc::Morph ref{ /*enableOpt=*/false };
-  vvenc::Morph opt{ /*enableOpt=*/true };
-
-  bool     passed    = true;
-  unsigned num_cases = g_fastUnitTest ? 5 : NUM_CASES;
-
-  const int widths[]     = { 4, 8, 16, 24, 32, 44, 64 };
-  const int heights[]    = { 1, 4, 8, 33, 44, 64 };
-  const int iters_list[] = { 1, 2, 3, 4 };
-  const int bitDepth     = 10;
-  const Pel strongPel    = ( (Pel)1 << bitDepth ) - 1;
-  const Pel values[]     = { strongPel, 0 };
-
-  for( unsigned c = 0; c < num_cases; ++c )
+  for( int bd : { 8, 10 } )   // VVenC's internal bit depth is at most 10
   {
+    const Pel maxVal = (Pel) ( ( 1 << bd ) - 1 );
+    std::uniform_int_distribution<int> d( 0, maxVal );
+    // random samples, or only 0 and maxVal, or values close to maxVal
+    auto randomRow = [&]( int n, int mode )
+    {
+      std::vector<Pel> r( n + 64 );
+      for( auto& v : r )
+      {
+        const int x = d( rng );
+        v = (Pel) ( mode == 0 ? x : mode == 1 ? ( x & 1 ? maxVal : 0 ) : maxVal - ( x & 7 ) );
+      }
+      return r;
+    };
     for( int w : widths )
     {
-      for( int h : heights )
+      for( int rep = 0; rep < ( g_fastUnitTest ? 3 : 12 ); rep++ )
       {
-        for( int numIter : iters_list )
+        const int mode = rep % 3;
+        auto a = randomRow( w, mode ), c = randomRow( w, mode ), b = randomRow( w, mode );
+
+        // edge detection: Sobel and non-maximum suppression
+        std::vector<Pel> m1( w + 32, -1 ), d1( w + 32, -1 ), m2( w + 32, -1 ), d2( w + 32, -1 );
+        vvenc::fgaSobelCore( a.data(), c.data(), b.data(), w, 0, w, maxVal, m1.data(), d1.data() );
+        k.sobel( a.data(), c.data(), b.data(), w, maxVal, m2.data(), d2.data() );
+        bad += m1 != m2 || d1 != d2;
+        std::vector<Pel> dir( w );
+        for( auto& v : dir )
         {
-          for( Pel value : values )
-          {
-            // Input buffers need margin >= 1 (extendBorderPel requirement). Output/working
-            // buffers use margin 0, matching real call sites (m_maskBuf vs m_dilationBuf).
-            vvenc::PelStorage buffRef, buffOpt, wbufRef, wbufOpt;
-            buffRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, 2, 0, false );
-            buffOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, 2, 0, false );
-            wbufRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ) );
-            wbufOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ) );
-
-            InputGenerator<Pel> gen{ (unsigned)bitDepth, /*is_signed=*/false };
-            for( int y = 0; y < h; y++ )
-            {
-              for( int x = 0; x < w; x++ )
-              {
-                Pel v = gen();
-                if( ( rand() % 16 ) == 0 ) v = value;   // sprinkle strong pixels
-                buffRef.getBuf( COMP_Y ).at( x, y ) = v;
-                buffOpt.getBuf( COMP_Y ).at( x, y ) = v;
-              }
-            }
-
-            int rRef = ref.dilation( &buffRef, &wbufRef, bitDepth, COMP_Y, numIter, 0, value );
-            int rOpt = opt.dilation( &buffOpt, &wbufOpt, bitDepth, COMP_Y, numIter, 0, value );
-
-            std::ostringstream ctx;
-            ctx << "Morph::dilation w=" << w << " h=" << h << " numIter=" << numIter << " value=" << value;
-            passed = compare_value( ctx.str() + " ret", rRef, rOpt ) && passed;
-            passed = compare_values_2d( ctx.str(), buffRef.getBuf( COMP_Y ).bufAt( 0, 0 ),
-                                        buffOpt.getBuf( COMP_Y ).bufAt( 0, 0 ), h, w,
-                                        buffRef.getBuf( COMP_Y ).stride ) && passed;
-          }
+          v = (Pel) ( 45 * ( d( rng ) & 3 ) );
         }
+        std::vector<Pel> n1( w + 32, -1 ), n2( w + 32, -1 );
+        vvenc::fgaNonMaxCore( a.data(), c.data(), b.data(), dir.data(), w, 0, w, n1.data() );
+        k.nonMax( a.data(), c.data(), b.data(), dir.data(), w, n2.data() );
+        bad += n1 != n2;
+
+        // morphology
+        for( bool dilate : { true, false } )
+        {
+          std::vector<Pel> r1( w + 32, -1 ), r2( w + 32, -1 ), c1( w + 32, -1 ), c2( w + 32, -1 );
+          vvenc::fgaMorphRowCore( c.data(), w, 0, w, dilate, r1.data() );
+          k.morphRow( c.data(), w, dilate, r2.data() );
+          vvenc::fgaMorphColCore( a.data(), c.data(), b.data(), 0, w, dilate, c1.data() );
+          k.morphCol( a.data(), c.data(), b.data(), w, dilate, c2.data() );
+          bad += r1 != r2 || c1 != c2;
+        }
+
+        // row maximum, double threshold, positions of a value
+        bad += vvenc::fgaRowMaxCore( c.data(), w ) != k.rowMax( c.data(), w );
+        std::vector<Pel> t1 = c, t2 = c;
+        const Pel low = (Pel) ( d( rng ) / 2 ), high = (Pel) std::min<int>( maxVal, 3 * low );
+        vvenc::fgaClassifyCore( t1.data(), w, low, high, (Pel) ( maxVal >> 1 ), maxVal );
+        k.classify( t2.data(), w, low, high, (Pel) ( maxVal >> 1 ), maxVal );
+        bad += t1 != t2;
+        std::vector<int> p1( w + 1, -7 ), p2( w + 1, -7 );
+        const int e1 = vvenc::fgaFindEqualCore( c.data(), w, c[ w / 2 ], p1.data() );
+        const int e2 = k.findEqual( c.data(), w, c[ w / 2 ], p2.data() );
+        bad += e1 != e2 || p1 != p2;
+
       }
     }
-  }
-  return passed;
-}
 
-static bool test_CannyGradient()
-{
-  printf( "Testing Canny::gradient\n" );
-  vvenc::Canny ref{ /*enableOpt=*/false };
-  vvenc::Canny opt{ /*enableOpt=*/true };
-
-  bool     passed    = true;
-  unsigned num_cases = g_fastUnitTest ? 2 : NUM_CASES;
-
-  // FGAnalyzer::findMask runs the gradient on luma at full, half and quarter size, so widths need not be multiples
-  // of the vector size; narrow ones take the scalar path. As there, the plane has a margin of 2, while the direction
-  // and accumulator buffers are allocated at full size.
-  const int widths[]  = { 2, 6, 8, 12, 16, 20, 24, 36, 62, 64, 162, 324 };
-  const int heights[] = { 1, 2, 5, 16, 33 };
-  const int fullW     = 648;
-  const int fullH     = 66;
-  const int margin    = 2;
-  const int bitDepth  = 10;
-
-  for( unsigned c = 0; c < num_cases; ++c )
-  {
-    for( int w : widths )
+    // 16x16 block kernels, on grain-like blocks of up to +-3 * maxVal and on special blocks
+    for( int rep = 0; rep < ( g_fastUnitTest ? 100 : 1000 ); rep++ )
     {
-      for( int h : heights )
+      const int stride = 16 + rep % 37;
+      std::vector<Pel> blk( 16 * stride + 16 );
+      std::uniform_int_distribution<int> g( -3 * maxVal, 3 * maxVal );
+      const int mode = rep % 4;
+      for( auto& v : blk )
       {
-        vvenc::PelStorage planeRef, planeOpt, dirRef, dirOpt, gxRef, gxOpt, gyRef, gyOpt;
-        planeRef.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, margin, 0, false );
-        planeOpt.create( VVENC_CHROMA_400, Area( 0, 0, w, h ), 0, margin, 0, false );
-        for( vvenc::PelStorage* full : { &dirRef, &dirOpt, &gxRef, &gxOpt, &gyRef, &gyOpt } )
-        {
-          full->create( VVENC_CHROMA_400, Area( 0, 0, fullW, fullH ) );
-        }
-
-        // In the encoder the margin holds what an earlier frame left there, which must not matter: it gets
-        // different values for the two implementations, the plane itself the same ones.
-        InputGenerator<Pel> gen{ (unsigned)bitDepth, /*is_signed=*/false };
-        PelBuf bufRef = planeRef.getBuf( COMP_Y ), bufOpt = planeOpt.getBuf( COMP_Y );
-        for( int y = -margin; y < h + margin; y++ )
-        {
-          for( int x = -margin; x < w + margin; x++ )
-          {
-            const bool inside = x >= 0 && y >= 0 && x < w && y < h;
-            bufRef.at( x, y ) = gen();
-            bufOpt.at( x, y ) = inside ? bufRef.at( x, y ) : gen();
-          }
-        }
-
-        ref.gradient( &planeRef, &dirRef, &gxRef, &gyRef, w, h, bitDepth, COMP_Y );
-        opt.gradient( &planeOpt, &dirOpt, &gxOpt, &gyOpt, w, h, bitDepth, COMP_Y );
-
-        std::ostringstream ctx;
-        ctx << "Canny::gradient w=" << w << " h=" << h;
-        passed = compare_values_2d( ctx.str() + " magnitude", bufRef.bufAt( 0, 0 ), bufOpt.bufAt( 0, 0 ), h, w,
-                                    bufRef.stride ) && passed;
-
-        // The vector path quantizes the direction with a polynomial approximation of atan, so within a hair of a
-        // boundary between two directions it may round the other way. The scalar path leaves both Sobel responses
-        // in the accumulators, which give the exact angle.
-        for( int y = 0; y < h; y++ )
-        {
-          for( int x = 0; x < w; x++ )
-          {
-            const Pel dirR = dirRef.getBuf( COMP_Y ).at( x, y ), dirO = dirOpt.getBuf( COMP_Y ).at( x, y );
-            if( dirR == dirO )
-            {
-              continue;
-            }
-            const double theta      = std::fabs( std::atan2( (double)gyRef.getBuf( COMP_Y ).at( x, y ),
-                                                             (double)gxRef.getBuf( COMP_Y ).at( x, y ) ) );
-            bool         atBoundary = false;
-            const double pi         = std::acos( -1.0 );
-            for( double boundary : { pi / 8, 3 * pi / 8, 5 * pi / 8, 7 * pi / 8 } )
-            {
-              atBoundary = atBoundary || std::fabs( theta - boundary ) < 1e-4;
-            }
-            if( !atBoundary )
-            {
-              printf( "failed: %s direction at (%d,%d): ref %d, opt %d\n", ctx.str().c_str(), x, y, dirR, dirO );
-              passed = false;
-            }
-          }
-        }
+        v = (Pel) ( mode == 0 ? g( rng ) : mode == 1 ? ( g( rng ) > 0 ? 3 * maxVal : -3 * maxVal ) : mode == 2 ? g( rng ) / 64 : 0 );
       }
+      if( mode == 3 && rep % 8 == 3 )
+      {
+        blk[ ( rep % 16 ) * stride + ( rep / 16 ) % 16 ] = 1;   // a single non-zero sample
+      }
+      bad += vvenc::fgaIsZeroBlockCore( blk.data(), stride ) != k.isZeroBlock( blk.data(), stride );
+      int64_t s1, sq1, s2, sq2;
+      vvenc::fgaBlockSumsCore( blk.data(), stride, s1, sq1 );
+      k.blockSums( blk.data(), stride, s2, sq2 );
+      bad += s1 != s2 || sq1 != sq2;
+      std::vector<double> dct1( 256, 0.5 ), dct2( 256, 0.5 );
+      vvenc::fgaSquaredDct16Core( blk.data(), stride, ( 1 << ( bd + 4 ) ) - 1, dct1.data() );
+      k.squaredDct16( blk.data(), stride, ( 1 << ( bd + 4 ) ) - 1, dct2.data() );
+      bad += dct1 != dct2;
     }
   }
-  return passed;
+  return compare_value( "film grain analysis kernels, mismatching cases", 0, (int) bad );
 }
 
 #endif // ENABLE_SIMD_OPT_FGA
@@ -5411,9 +5334,7 @@ static const UnitTestEntry test_suites[] = {
     { "BvSearch", test_BvSearchOps },
 #endif
 #if ENABLE_SIMD_OPT_FGA
-    { "FGAnalyzer", test_FGAnalyzer },
-    { "MorphDilation", test_MorphDilation },
-    { "CannyGradient", test_CannyGradient },
+    { "FGAnalyzerKernels", test_FGAnalyzerKernels },
 #endif
 #if ENABLE_SIMD_OPT
     { "CuTree", test_CuTree },

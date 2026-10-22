@@ -798,7 +798,8 @@ typedef struct vvenc_config
   uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
   int8_t              m_reservedInt8_2[3];
   int32_t             m_reservedInt32;
-  double              m_reservedDouble[7];
+  double              m_fgaStrength;                                                     // Film grain strength in percent of the analysed strength (default 100, 0 disables the grain)
+  double              m_reservedDouble[6];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

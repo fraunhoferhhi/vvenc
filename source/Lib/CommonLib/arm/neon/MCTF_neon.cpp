@@ -1215,8 +1215,7 @@ void applyFrac6Tap_4x_neon( const Pel* org, const ptrdiff_t origStride, Pel* dst
 // Bit-exact port of the x86 calcVarSse: integer accumulation throughout with a
 // single final divide. The mean is computed with a Log2(w)+Log2(h) shift, so it
 // matches the scalar calcVarCore only for power-of-two w,h; for other multiples
-// of 8 it follows the same rounding as calcVarSse. Shared with the film grain
-// analyzer (see FGA_neon.cpp), as on x86.
+// of 8 it follows the same rounding as calcVarSse.
 double calcVar_neon( const Pel* org, const ptrdiff_t origStride, const int w, const int h )
 {
   // Pass 1: mean. Dual accumulators with vpadalq_s16, which folds the pairwise
