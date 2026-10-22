@@ -795,9 +795,10 @@ typedef struct vvenc_config
   uint8_t             m_cuTreeStrength;                                                  // CU-tree (BIM 1): scale of its QP offsets as a 5-bit fixed point value (0 ... 255, i.e. 0 ... 7.97; default 64, i.e. 2.0)
                                                                                          // for convenience use VVENC_SET_CUTREE_STRENGTH, e.g. VVENC_SET_CUTREE_STRENGTH(2.0)
 
-  uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
+#define VVENC_SET_QP_FRACTION(s) ((uint8_t)((s)*256+0.5))
+  uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
-  uint8_t             m_fgaStrengthVal;                                                     // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
+  uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
   int8_t              m_reservedInt8_2[2];
   int32_t             m_reservedInt32;
   double              m_reservedDouble[7];

@@ -1045,7 +1045,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       if( distFactor[0] < 3 && distFactor[1] < 3 )
       {
         const double weight = std::min( 1.0, overallStrength );
-        const double factor = std::min( 1.0, sqrt((1920.0 * 1080.0) / double (m_encCfg->m_SourceWidth * m_encCfg->m_SourceHeight)) ) * ( ( m_encCfg->m_QP + m_encCfg->m_QPFractionReal ) / (MAX_QP + 1.0) );
+        const double factor = std::min( 1.0, sqrt((1920.0 * 1080.0) / double (m_encCfg->m_SourceWidth * m_encCfg->m_SourceHeight)) ) * ( ( m_encCfg->m_QP + m_encCfg->m_QPFraction ) / (MAX_QP + 1.0) );
         int sumCtuQpOffsets = 0;
 
         meanRmsAcrossPic = (!m_encCfg->m_usePerceptQPA || !m_encCfg->m_salienceBasedOpt || maxRmsCTU == 0 || nMax < 2 ? 65535.0 : sqrt (double (sumSRmsAcrossPic - (uint64_t) maxRmsCTU * maxRmsCTU) / (nMax - 1.0)));
@@ -1555,7 +1555,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
 
 void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
 {
-  const double qp          = m_encCfg->m_QP + m_encCfg->m_QPFractionReal;
+  const double qp          = m_encCfg->m_QP + m_encCfg->m_QPFraction;
   const double lumaSigmaSq = m_sigmaMultiplier * ( 128.0 + 3.0 / 256.0 * qp * qp * qp );
   const double chromaSigmaSq = 30 * 30;
 

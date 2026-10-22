@@ -600,7 +600,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
-  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFraction );
+  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );

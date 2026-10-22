@@ -102,7 +102,7 @@ struct VVEncCfg : public vvenc_config
   int       m_internalUsePerceptQPATempFiltISlice;
   bool      m_disableForce2ndOderFilter;
   double    m_cuTreeScale;      // scale of CU-tree's QP offsets, decoded from the 5-bit fixed point m_cuTreeStrength
-  double    m_QPFractionReal;   // m_QPFraction in QP units (0 <= value < 1)
+  double    m_QPFraction;       // m_QPFraction in QP units (0 <= value < 1)
   double    m_fgaStrength;      // Film grain strength as the fraction of the analysed strength (0 <= value <  4)
 
 
