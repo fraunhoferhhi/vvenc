@@ -316,9 +316,9 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFi
     parsedChars = 0;
   }
 
-  const double fixed = value * ( 1 << toFixed.fracBits ) + 0.5;
+  const double fixed = ( value == ( 1 << ( toFixed.fracBits - 8 ) ) ) ? 255.0 : ( value * ( 1 << toFixed.fracBits ) + 0.5 );
   // written so that NaN fails as well
-  if( parsedChars == 0 || parsedChars != str.size() || !( value >= 0.0 && fixed <= 256.0 ) )
+  if( parsedChars == 0 || parsedChars != str.size() || !( value >= 0.0 && fixed < 256 ) )
   {
     in.setstate( std::ios::failbit );
     return in;
