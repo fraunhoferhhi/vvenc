@@ -796,10 +796,11 @@ typedef struct vvenc_config
                                                                                          // for convenience use VVENC_SET_CUTREE_STRENGTH, e.g. VVENC_SET_CUTREE_STRENGTH(2.0)
 
   uint8_t             m_QPFraction;                                                      // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
-  int8_t              m_reservedInt8_2[3];
+#define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
+  uint8_t             m_fgaStrengthVal;                                                     // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
+  int8_t              m_reservedInt8_2[2];
   int32_t             m_reservedInt32;
-  double              m_fgaStrength;                                                     // Film grain strength in percent of the analysed strength (default 100, 0 disables the grain)
-  double              m_reservedDouble[6];
+  double              m_reservedDouble[7];
 
   // internal state variables
   bool                m_configDone;                                                      // state variable, Private context used for internal data ( do not change )

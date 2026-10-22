@@ -90,6 +90,7 @@ void VVEncCfg::xInitCfgMembers()
   m_maxTLayer           = m_picReordering && m_GOPSize > 1 ? vvenc::ceilLog2( m_GOPSize ) : 0;
   m_bimCtuSize          = m_CTUSize;
   m_QPFractionReal      = m_QPFraction / 256.0;
+  m_fgaStrength         = m_fgaStrengthVal / 64.0;
   m_MaxQT[0]            =
   m_MaxQT[1]            = 
   m_MaxQT[2]            = m_CTUSize;
