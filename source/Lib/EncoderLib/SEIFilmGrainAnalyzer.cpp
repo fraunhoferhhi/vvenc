@@ -1070,7 +1070,7 @@ void FGAnalyzer::getVtmParameters( double strength, int& log2ScaleFactor, SeiFgc
         v[ k ] = Clip3( 2, 14, ( v[ k ] + 1 ) >> 1 );
       }
       const int scale = ( v[ 0 ] << log2ScaleFactor ) >> ( bitDepth - BIT_DEPTH_8 );
-      v[ 0 ]   = std::min( MAX_SCALING_FACTOR, (int) ( scale * strength / 100.0 + 0.5 ) );
+      v[ 0 ]   = std::min( MAX_SCALING_FACTOR, (int) ( scale * strength + 0.5 ) );
       anyGrain = anyGrain || v[ 0 ] > 0;
     }
     cm.presentFlag = anyGrain;
@@ -1107,7 +1107,7 @@ void FGAnalyzer::getArParameters( double strength, int& log2ScaleFactor, SeiFgc:
       {
         std::vector<int>& v = cm.intensityValues[ i ].compModelValue;
         const double stddev = v[ 0 ] / ( 2.0 * m_strengthScale ) / std::sqrt( f.nonDcShare );
-        const double scale  = std::ldexp( stddev * strength / 100.0, log2ScaleFactor + 10 - bitDepth ) / patternStddev;
+        const double scale  = std::ldexp( stddev * strength, log2ScaleFactor + 10 - bitDepth ) / patternStddev;
         fits     = fits && scale <= MAX_SCALING_FACTOR + 0.5;
         v.assign( 6, 0 );
         v[ 0 ]   = std::min( MAX_SCALING_FACTOR, (int) ( scale + 0.5 ) );
@@ -1167,7 +1167,7 @@ void FGAnalyzer::getSignalledParameters( double strength, int& log2ScaleFactor, 
       const int h = cm.numModelValues > 1 ? Clip3( 2, 14, v[ 1 ] ) : 8;
       const int w = cm.numModelValues > 2 ? Clip3( 2, 14, v[ 2 ] ) : h;
       const double stddev = v[ 0 ] / ( 2.0 * m_strengthScale ) / std::sqrt( BLOCK_VARIANCE_SHARE[ table ][ h - 2 ][ w - 2 ] );
-      scales[ c ].push_back( stddev * strength / 100.0 * ( 1 << ( 14 - bitDepth ) ) / PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ] );
+      scales[ c ].push_back( stddev * strength * ( 1 << ( 14 - bitDepth ) ) / PATTERN_STDDEV[ table ][ h - 2 ][ w - 2 ] );
       maxScale = std::max( maxScale, scales[ c ].back() );
     }
   }
