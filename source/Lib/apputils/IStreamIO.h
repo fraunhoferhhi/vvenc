@@ -316,14 +316,14 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFixedPointU8& toFi
     parsedChars = 0;
   }
 
-  const double fixed = ( value == ( 1 << ( toFixed.fracBits - 8 ) ) ) ? 255.0 : ( value * ( 1 << toFixed.fracBits ) + 0.5 );
+  const double fixed = ( value == ( 1 << ( 8 - toFixed.fracBits ) ) ) ? 255.0 : ( value * ( 1 << toFixed.fracBits ) + 0.5 );
   // written so that NaN fails as well
   if( parsedChars == 0 || parsedChars != str.size() || !( value >= 0.0 && fixed < 256 ) )
   {
     in.setstate( std::ios::failbit );
     return in;
   }
-  *toFixed.dstVal = fixed == 256.0 ? 255 : (uint8_t)fixed;
+  *toFixed.dstVal = (uint8_t)fixed;
   return in;
 }
 
