@@ -279,7 +279,6 @@ RateCtrl::RateCtrl(MsgLog& logger)
 {
   m_pcEncCfg           = nullptr;
   encRCSeq             = NULL;
-  encRCPic             = NULL;
   flushPOC             = -1;
   rcPass               = 0;
   rcIsFinalPass        = true;
@@ -1180,7 +1179,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
   int   sliceQP = MAX_QP;
 
   encRcPic->create( encRCSeq, frameLevel, slice->poc );
-  pic.encRCPic = encRCPic = encRcPic;
+  pic.encRCPic = encRcPic;
 
   if ( frameLevel <= 7 )
   {

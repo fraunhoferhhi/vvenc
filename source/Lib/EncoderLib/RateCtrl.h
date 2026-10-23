@@ -186,7 +186,6 @@ namespace vvenc {
 
     std::list<EncRCPic*>    m_listRCPictures;
     EncRCSeq*               encRCSeq;
-    EncRCPic*               encRCPic;
     int                     flushPOC;
     int                     rcPass;
     bool                    rcIsFinalPass;
