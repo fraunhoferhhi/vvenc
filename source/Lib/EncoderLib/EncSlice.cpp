@@ -476,7 +476,7 @@ double EncSlice::xGetQPForPicture( const Slice* slice )
 {
   const int qp = xGetQPForPicture( slice, m_pcEncCfg->m_QP );
 
-  if( m_pcEncCfg->m_QPFractionReal <= 0.0 || m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
+  if( m_pcEncCfg->m_QPFraction <= 0.0 || m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
   {
     return qp;
   }
@@ -485,7 +485,7 @@ double EncSlice::xGetQPForPicture( const Slice* slice )
   // interpolation keeps the result between them, so the rate moves smoothly from one integer QP to the next.
   const int qpNext = xGetQPForPicture( slice, m_pcEncCfg->m_QP + 1 );
 
-  return qp + m_pcEncCfg->m_QPFractionReal * ( qpNext - qp );
+  return qp + m_pcEncCfg->m_QPFraction * ( qpNext - qp );
 }
 
 int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )

@@ -600,7 +600,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
   IStreamToInt8                     toCuTreeBlockSize             ( &c->m_cuTreeBlockSize );
-  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFraction );
+  IStreamToQP                       toQP                          ( &c->m_QP, &c->m_QPFractionVal );
   IStreamToInt8                     toLumaLevelToDeltaQP          ( &c->m_lumaLevelToDeltaQPEnabled );
 
   IStreamToEnum<int8_t>             toUseWpp                      ( &c->m_entropyCodingSyncEnabled,    &FlagToIntMap<int8_t> );
@@ -608,6 +608,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToEnum<int8_t>             toChromaLocInfo               ( &c->m_chromaLocInfoPresent,        &FlagToIntMap<int8_t> );
   IStreamToEnum<int8_t>             toMtProfile                   ( &c->m_mtProfile,                   &MtAbrevToIntMap );
   IStreamToInt8                     toNumParallelGOPs             ( &c->m_numParallelGOPs );
+  IStreamToFixedPointU8             toFgaStrength                 ( &c->m_fgaStrengthVal, 6 );
 
   po::Options opts;
   if( m_easyMode )
@@ -1124,7 +1125,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
     ("BIM",                                             toBIM,                                               "Block importance mapping: lower the QP of blocks that later pictures predict from (0: off, 1: CU-tree, TPL model with one GOP of look-ahead, 2: from MCTF's motion error)")
-    ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets (0 ... 7.97, in steps of 1/32)")
+    ("CuTreeStrength",                                  toCuTreeStrength,                                    "CU-tree (BIM 1): scale of its QP offsets [0...8.0)")
     ("CuTreeBlockSize",                                 toCuTreeBlockSize,                                   "CU-tree (BIM 1): side of its analysis blocks in luma samples (16, 32, or -1: automatic, 32 from 720 lines on, else 16)")
 
     ("FastLocalDualTreeMode",                           c->m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
@@ -1200,8 +1201,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
-    ("fga",                           toFga,                     "Experimental: film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM (JVET-AN0237), 2: the same with improvements: grain measured from the temporal residual, calibrated scaling factors, 3: like 2 with the auto-regressive grain model, which only some decoders (vvdec) synthesize)")
-    ("fgastrength",                   c->m_fgaStrength,          "Experimental: film grain strength in percent of the analysed strength (0..400, 0 disables the grain)")
+    ("fga",                           toFga,                     "Experimental: Film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM, 2: (1) + grain measured from the temporal residual, calibrated scaling factors, 3: (2) + auto-regressive grain model)")
+    ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength in percent of the analysed strength [0...4.0), 0 disables the grain")
     ;
   }
 

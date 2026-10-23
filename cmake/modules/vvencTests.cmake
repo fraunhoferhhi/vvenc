@@ -83,9 +83,9 @@ add_vvenc_test( vvencFFapp-lowdelay_medium 30 OUTF_VVC  ""            vvencFFapp
 # pictures narrower than 32 samples in the x86 SIMD edge detection. Reading the 80x44 clip as 24x44 pictures covers
 # both. With fewer than 8 frames the encode ends before the first picture the analysis looks at.
 add_vvenc_test( vvencapp-medium_fga_small 30 OUT_VVC   ""                     vvencapp --preset medium --fga 1 -s 24x44 -r 15 -i ${TEST_YUV} -ip 32 -f 9 --mtprofile 0 -o OUTPUT )
-add_vvenc_test( vvencapp-faster_fga_strength 30 OUT_VVC ""                  vvencapp --preset faster --fga 1 --fgastrength 150 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
+add_vvenc_test( vvencapp-faster_fga_strength 30 OUT_VVC ""                  vvencapp --preset faster --fga 1 --fgastrength 1.5 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
 add_vvenc_test( vvencapp-medium_fga2_small 30 OUT_VVC  ""                     vvencapp --preset medium --fga 2 -s 24x44 -r 15 -i ${TEST_YUV} -ip 32 -f 9 --mtprofile 0 -o OUTPUT )
-add_vvenc_test( vvencapp-faster_fga2_strength 30 OUT_VVC ""                 vvencapp --preset faster --fga 2 --fgastrength 150 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
+add_vvenc_test( vvencapp-faster_fga2_strength 30 OUT_VVC ""                 vvencapp --preset faster --fga 2 --fgastrength 1.5 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
 add_vvenc_test( vvencapp-faster_fga3 30 OUT_VVC ""                          vvencapp --preset faster --fga 3 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
 
 add_vvenc_test( vvencapp-medium_rc2p       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 --Bitrate=10000 --Passes=2 --mtprofile 0 -o OUTPUT )

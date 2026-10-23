@@ -366,7 +366,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numThreads                              = 0;             ///< number of worker threads
 
   c->m_QP                                      = VVENC_DEFAULT_QP;
-  c->m_QPFraction                              = 0;
+  c->m_QPFractionVal                           = 0;
   c->m_RCTargetBitrate                         = VVENC_RC_OFF;
   c->m_RCMaxBitrate                            = 0;
   c->m_RCInitialQP                             = 0;
@@ -639,7 +639,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
-  c->m_blockImportanceMapping                  = 2;   // from MCTF; CU-tree (1) is opt-in for now
+  c->m_blockImportanceMapping                  = 2;
   c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
   c->m_cuTreeBlockSize                        = -1;
 
@@ -697,7 +697,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPQPA                                  = -1;
 
   c->m_fga                                     = 0;
-  c->m_fgaStrength                             = 100.0;
+  c->m_fgaStrengthVal                          = VVENC_SET_FGA_STRENGTH(1.0);
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
@@ -848,13 +848,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   if( c->m_RCTargetBitrate != VVENC_RC_OFF )
   {
-    c->m_QPFraction = 0; // rate control chooses its own QPs, a fractional constant QP does not apply
+    c->m_QPFractionVal = 0; // rate control chooses its own QPs, a fractional constant QP does not apply
   }
 
   if( c->m_QP == VVENC_AUTO_QP ) c->m_QP = ( c->m_RCTargetBitrate != VVENC_RC_OFF ? rcQP : VVENC_DEFAULT_QP );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == VVENC_RC_OFF && ( c->m_QP < 0 || c->m_QP > vvenc::MAX_QP ), "QP exceeds supported range (0 to 63)" );
-  vvenc_confirmParameter( c, c->m_QPFraction > 0 && c->m_QP >= vvenc::MAX_QP, "Fractional QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QPFractionVal > 0 && c->m_QP >= vvenc::MAX_QP, "Fractional QP exceeds supported range (0 to 63)" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && ( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000 ),  "TargetBitrate must be between 0 and 800000000" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate != VVENC_RC_OFF && (int64_t) c->m_RCMaxBitrate * 2 < (int64_t) c->m_RCTargetBitrate * 3, "MaxBitrate must be at least 1.5*TargetBitrate" );
@@ -1528,9 +1528,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
     {
       c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
-      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP + c->m_QPFraction / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
+      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
     }
-    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFraction / 256.0 - 4.0 ) * 3.0 / 32.0 );
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) * 3.0 / 32.0 );
   }
 
   if( c->m_cuTreeBlockSize == -1 )
@@ -1802,7 +1802,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter( c, c->m_fga < 0 || c->m_fga > 3, "Film grain analysis (fga) must be 0, 1, 2 or 3!");
-  vvenc_confirmParameter( c, c->m_fgaStrength < 0.0 || c->m_fgaStrength > 400.0, "Film grain strength (fgastrength) must be in the range 0 to 400!");
   if (c->m_fga)
   {
     vvenc_confirmParameter( c, !c->m_vvencMCTF.MCTF, "Film grain analysis cannot be enabled when MCTF is disabled!");
@@ -2589,7 +2588,7 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_internalBitDepth[0] = 10;                       // internal bitdepth
 
   c->m_QP                  = qp;                       // quantization parameter 0-63
-  c->m_QPFraction          = 0;                        // integer QP
+  c->m_QPFractionVal       = 0;                        // integer QP
   c->m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
   c->m_RCTargetBitrate     = targetbitrate;            // target bitrate for rate ctrl. in bps
@@ -2717,8 +2716,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numRefPicsSCC                   = 0;
 
       // tools
-      c->m_blockImportanceMapping          = 2;   // from MCTF; EncLib's first rate control pass takes the final pass's
-                                                  // BIM, and the preset leaves the CU-tree block size to the final pass
+      c->m_blockImportanceMapping          = 2;
       c->m_RDOQ                            = 2;
       c->m_useSelectiveRDOQ                = 2;
       c->m_SignDataHidingEnabled           = 1;
@@ -2778,8 +2776,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 2;
       c->m_alfUnitSize                     = 128;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
-      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
+      c->m_blockImportanceMapping          = 2;
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_RDOQ                            = 2;
@@ -2844,8 +2841,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 1;
       c->m_alfUnitSize                     = 128;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
-      c->m_cuTreeBlockSize                 = -1;  // for BIM 1: automatic, 32x32 blocks from 720p on for speed
+      c->m_blockImportanceMapping          = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_DepQuantEnabled                 = 1;
@@ -2914,8 +2910,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
-      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 0;
@@ -3009,8 +3004,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
-      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3084,8 +3078,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
       c->m_BCW                             = 2;
-      c->m_blockImportanceMapping          = 2;   // from MCTF; CU-tree (1) is opt-in for now
-      c->m_cuTreeBlockSize                 = 16;  // for BIM 1: no slower than 32x32 here, and better below 4K
+      c->m_blockImportanceMapping          = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3250,7 +3243,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
     {
-      css << "QP " << c->m_QP + c->m_QPFraction / 256.0;
+      css << "QP " << c->m_QP + c->m_QPFractionVal / 256.0;
     }
     if( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
     {
@@ -3298,7 +3291,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << loglvl << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
     css << loglvl << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
     css << loglvl << "Motion search range                    : " << c->m_SearchRange << "\n";
-    css << loglvl << "QP                                     : " << c->m_QP + c->m_QPFraction / 256.0 << "\n";
+    css << loglvl << "QP                                     : " << c->m_QP + c->m_QPFractionVal / 256.0 << "\n";
     css << loglvl << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
     css << loglvl << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
     css << loglvl << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
@@ -3314,10 +3307,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
     css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
-    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << "\n";
-    if( c->m_fga )
-      css << loglvl << "Film grain strength                    : " << c->m_fgaStrength << " %\n";
-    }
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << " (strength: " << c->m_fgaStrengthVal / 64.0 << ")\n";
+  }
 
   if( eMsgLevel >= VVENC_VERBOSE )
   {    
@@ -3464,7 +3455,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     }
     else
     {
-      css << "QP:" << c->m_QP + c->m_QPFraction / 256.0 << " ";
+      css << "QP:" << c->m_QP + c->m_QPFractionVal / 256.0 << " ";
     }
     if ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate != INT32_MAX )
     {
