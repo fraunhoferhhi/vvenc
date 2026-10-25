@@ -537,8 +537,19 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   }
 
   // Every picture is coded from reconstructed references, so the references go first: analyse in coding order.
-  const bool flush = picList.back()->isFlush;
-  std::vector<Picture*> codingOrder( picList.begin(), picList.end() );
+  // Only the batch and the look-ahead after it are analysed, however many pictures are queued: at flush the queue can
+  // hold several GOPs when the stages before this one release pictures in a burst, and a GOP's propagation window
+  // must not depend on when its pictures arrived.
+  const bool flush     = picList.back()->isFlush;
+  const int  windowEnd = batchEndPoc + m_lookAheadPics;
+  std::vector<Picture*> codingOrder;
+  for( auto pic : picList )
+  {
+    if( pic->poc <= windowEnd )
+    {
+      codingOrder.push_back( pic );
+    }
+  }
   std::sort( codingOrder.begin(), codingOrder.end(), []( const Picture* a, const Picture* b ) { return a->gopEntry->m_codingNum < b->gopEntry->m_codingNum; } );
   for( auto pic : codingOrder )
   {

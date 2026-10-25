@@ -772,6 +772,7 @@ typedef struct vvenc_config
   bool                m_addGOP32refPics;
   bool                m_fastHad;
   int8_t              m_sliceTypeAdapt;                                                  // enable slice type adaptation (STA)
+  int8_t              m_adaptiveIntra;                                                   // adaptive intra refresh: I pictures where they pay, at scene cuts and in the slice type adaptation (0: off, 1: on)
   bool                m_treatAsSubPic;
 
 #define VVENC_SET_MAXRATE_FACTOR(f) (-((int)(f*16+0.5)))

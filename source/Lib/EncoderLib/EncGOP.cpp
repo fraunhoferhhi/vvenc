@@ -312,6 +312,22 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
+// The queue holds a complete GOP when it contains the first pictures of two GOPs: pictures arrive in output order,
+// so everything between them has arrived, and the second GOP's first picture is the anchor the first GOP's B
+// pictures predict from.
+bool EncGOP::xReadyToProcess() const
+{
+  int gopStarts = 0;
+  for( auto pic : stageQueue() )
+  {
+    if( pic->gopEntry && pic->gopEntry->m_isValid && pic->gopEntry->m_isStartOfGop && ++gopStarts >= 2 )
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 void EncGOP::waitForFreeEncoders()
 {
   {

@@ -52,6 +52,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncStage.h"
 #include "GOPCfg.h"
 #include "BitAllocation.h"
+#include "CommonLib/MCTF.h"
+#include <map>
 
 //! \ingroup EncoderLib
 //! \{
@@ -66,6 +68,16 @@ class PreProcess : public EncStage
     const VVEncCfg* m_encCfg;
     GOPCfg          m_gopCfg;
     int             m_lastPoc;
+    // adaptive intra refresh: pictures held ahead of the GOP structure (a GOP plus one, so that a cut anywhere in
+    // the next GOP is confirmed before that GOP is laid out); 0 = off, GOP entries are handed out on arrival
+    int             m_lookahead   = 0;
+    int             m_lastSeenPoc = std::numeric_limits<int>::min();   // newest picture the cut detector has seen
+    // adaptive intra refresh: whether an I picture pays at a cut or a slice type adaptation candidate is decided from
+    // a motion search on low-resolution luma (the MCTF's integer search) against a DC-intra estimate
+    MCTF            m_motionSearch;
+    PelStorage      m_halfRes;                                 // half resolution luma, a stage of the downsampling
+    std::map<std::pair<int, int>, double> m_predCosts;      // prediction error by (POC, reference POC)
+    std::map<int, double>                 m_dcIntraCosts;   // DC-intra estimate by POC
     bool            m_isHighRes;
     bool            m_doSTA;
     bool            m_doTempDown;
@@ -87,9 +99,10 @@ class PreProcess : public EncStage
     PreProcess( MsgLog& _m );
     virtual ~PreProcess();
 
-    void init( const VVEncCfg& encCfg, bool isFinalPass );
+    void init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool );
 
     const GOPCfg* getGOPCfg() const { return &m_gopCfg; };
+    int           lookahead() const { return m_lookahead; }
 
   protected:
     virtual void initPicture    ( Picture* pic );
@@ -99,7 +112,7 @@ class PreProcess : public EncStage
     void     xFreeUnused          ( Picture* pic, const PicList& picList, PicList& doneList, PicList& freeList ) const;
     void     xGetPrevPics         ( const Picture* pic, const PicList& picList, const Picture* prevPics[ NUM_QPA_PREV_FRAMES ] ) const;
     Picture* xGetPrevTL0Pic       ( const Picture* pic, const PicList& picList ) const;
-    Picture* xGetStartOfLastGop   ( const PicList& picList ) const;
+    Picture* xGetStartOfLastGop   ( const PicList& picList, int maxPoc = INT32_MAX ) const;
     void     xLinkPrevQpaBufs     ( Picture* pic, const PicList& picList ) const;
     void     xGetVisualActivity   ( Picture* pic, const PicList& picList ) const;
     void     xGetSpatialActivity  ( Picture* pic, bool doLuma, bool doChroma, VisAct va[ MAX_NUM_CH ] ) const;
@@ -107,7 +120,12 @@ class PreProcess : public EncStage
     void     xDetectSTA           ( Picture* pic, const PicList& picList );
     void     xDetectScc           ( Picture* pic ) const;
     void     xDisableTempDown     ( Picture* pic, const PicList& picList, const int thresh = INT32_MAX );
-    void     xDetectFgaSceneCut   ( Picture* pic );
+    void     xDetectSceneCut      ( Picture* pic, const PicList& picList );
+    void     xMakeLowRes          ( Picture* pic );
+    double   xPredCost            ( const Picture* cur, const Picture* ref );
+    double   xDcIntraCost         ( const Picture* pic );
+    bool     xIntraPays           ( const Picture* pic, const Picture* ref );
+    const Picture* xFindPoc       ( const PicList& picList, int poc ) const;
 };
 
 } // namespace vvenc

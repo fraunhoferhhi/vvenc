@@ -74,7 +74,7 @@ PreProcess::~PreProcess()
 }
 
 
-void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
+void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* threadPool )
 {
   m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode, encCfg.m_minIntraDist );
   CHECK( m_gopCfg.getMaxTLayer() != encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
@@ -91,6 +91,12 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
                          || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0)
                          || (m_encCfg->m_RCNumPasses > 1 && (!isFinalPass));
   m_doVisActQpa        = m_encCfg->m_usePerceptQPA;
+  m_lookahead          = m_encCfg->m_adaptiveIntra > 0 ? m_encCfg->m_GOPSize + 1 : 0;
+  m_lastSeenPoc        = std::numeric_limits<int>::min();
+  if( m_lookahead > 0 )
+  {
+    m_motionSearch.init( encCfg, true, threadPool );
+  }
 }
 
 
@@ -101,10 +107,40 @@ void PreProcess::initPicture( Picture* pic )
 
 void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
-  // continue with next poc
-  if( ! picList.empty() && picList.back()->poc > m_lastPoc )
+  // the scene cut detector sees every picture as it arrives, ahead of the GOP structure
+  if( ! picList.empty() && picList.back()->poc > m_lastSeenPoc )
   {
-    auto pic = picList.back();
+    Picture* newest = picList.back();
+    m_lastSeenPoc   = newest->poc;
+    if( m_lookahead > 0 && ! newest->m_picShared->isLeadTrail() )
+    {
+      xMakeLowRes( newest );
+    }
+    if( ( m_encCfg->m_fga || m_lookahead > 0 ) && ! newest->m_picShared->isLeadTrail() )
+    {
+      xDetectSceneCut( newest, picList );
+    }
+  }
+
+  // continue with next poc: the oldest picture without a GOP entry, once the look-ahead behind it is filled (or at flush)
+  Picture* next = nullptr;
+  for( auto p : picList )
+  {
+    if( p->poc > m_lastPoc && ( ! next || p->poc < next->poc ) ) next = p;
+  }
+  if( next && ( picList.back()->poc >= next->poc + m_lookahead || picList.back()->isFlush ) )
+  {
+    auto pic = next;
+
+    if( m_lookahead > 0 && m_gopCfg.nextStartsGop() )
+    {
+      // the costs of pictures before this GOP are not needed any more
+      for( auto it = m_predCosts.begin(); it != m_predCosts.end(); )
+      {
+        it = it->first.first < pic->poc ? m_predCosts.erase( it ) : std::next( it );
+      }
+      m_dcIntraCosts.erase( m_dcIntraCosts.begin(), m_dcIntraCosts.lower_bound( pic->poc ) );
+    }
 
     // set gop entry
     m_gopCfg.getNextGopEntry( pic->m_picShared->m_gopEntry );
@@ -120,12 +156,6 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
 
       // detect scc
       xDetectScc( pic );
-
-      // scene cuts, where the film grain parameters switch
-      if( m_encCfg->m_fga )
-      {
-        xDetectFgaSceneCut( pic );
-      }
 
       // slice type adaptation
       if( m_doSTA && pic->gopEntry->m_temporalId == 0 )
@@ -155,7 +185,7 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
     // cleanup pic list
     xFreeUnused( pic, picList, doneList, freeList );
 
-    m_lastPoc = picList.back()->poc;
+    m_lastPoc = pic->poc;
   }
   else if( ! picList.empty() && picList.back()->isFlush  )
   {
@@ -189,10 +219,11 @@ void PreProcess::xFreeUnused( Picture* pic, const PicList& picList, PicList& don
   // free unused previous frames
   bool foundTl0       = ! m_doSTA; // is sta is off, not need to keep previous tl0 pic
   int idx             = 0;
-  Picture* startOfGop = xGetStartOfLastGop( picList );
-  for( auto itr = picList.rbegin(); itr != picList.rend(); itr++, idx++ )
+  Picture* startOfGop = xGetStartOfLastGop( picList, pic->poc );
+  for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
   {
     Picture* tp  = *itr;
+    if( tp->poc > pic->poc ) continue;   // still waiting for its GOP entry (adaptive intra refresh look-ahead)
     bool keepPic = false;
 
     // keep previous frames for visual activity
@@ -207,6 +238,7 @@ void PreProcess::xFreeUnused( Picture* pic, const PicList& picList, PicList& don
     {
       freeList.push_back( tp );
     }
+    idx++;
   }
 }
 
@@ -244,7 +276,7 @@ Picture* PreProcess::xGetPrevTL0Pic( const Picture* pic, const PicList& picList 
   for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
   {
     Picture* tp = *itr;
-    if( tp == pic )
+    if( tp == pic || tp->poc > pic->poc )   // newer pictures have no GOP entry yet
       continue;
     if( tp->gopEntry->m_temporalId == 0 )
     {
@@ -256,14 +288,14 @@ Picture* PreProcess::xGetPrevTL0Pic( const Picture* pic, const PicList& picList 
 }
 
 
-Picture* PreProcess::xGetStartOfLastGop( const PicList& picList ) const
+Picture* PreProcess::xGetStartOfLastGop( const PicList& picList, int maxPoc ) const
 {
   // use only non lead trail pics
   std::vector<Picture*> cnList;
   cnList.reserve( picList.size() );
   for( auto pic : picList )
   {
-    if( ! pic->m_picShared->isLeadTrail() )
+    if( ! pic->m_picShared->isLeadTrail() && pic->poc <= maxPoc )   // only pictures with a GOP entry
     {
       cnList.push_back( pic );
     }
@@ -441,6 +473,10 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
   bool isSta        = false;
   bool intraAllowed = m_gopCfg.isSTAallowed( pic->poc );
 
+  if( prevTL0 && prevTL0->m_picShared->sceneCutStart() )
+  {
+    intraAllowed = false;   // a scene cut picture's activity is measured across the cut; no reference for the next key picture
+  }
   if( prevTL0 && prevTL0->picVA.visActTL0 > 0 && intraAllowed )
   {
     const int scThreshold = ( ( pic->isSccStrong ? 6 : ( pic->isSccWeak ? 5 : 4 ) ) * ( m_isHighRes ? 19 : 15 ) ) >> 2;
@@ -454,6 +490,13 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
     }
   }
 
+  // adaptive intra refresh: the activity jump alone does not say that an I picture is cheaper than predicting;
+  // on flat content (animation) the slice type adaptation placed I pictures of 80 times a B picture where a B anchor
+  // predicted the change for a tenth of that
+  if( isSta && m_lookahead > 0 && prevTL0 && ! prevTL0->m_picShared->isLeadTrail() && ! xIntraPays( pic, prevTL0 ) )
+  {
+    isSta = false;
+  }
   if( isSta )
   {
     PicShared* picShared              = pic->m_picShared;
@@ -475,10 +518,11 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 // of the picture before it by more than 0.3 (L1 distance of the normalized histograms, 0 to 2) and the next picture's
 // stays within a quarter of that of it, so that a single flash frame is no cut. On three minutes of The Beekeeper (4316
 // pictures) the distance is 0.014 at the median; the 41 cuts found are the same from thresholds 0.15 to 0.3, and
-// no GOP of 32 pictures has two of them. The cut is marked on the picture once the next one is processed, and every
-// picture carries the latest cut found before it, so that the film grain analysis of a GOP's first coded picture knows
-// the cuts among the pictures it covers.
-void PreProcess::xDetectFgaSceneCut( Picture* pic )
+// no GOP of 32 pictures has two of them. The detector runs on every picture as it arrives; the cut is marked on the
+// picture once the next one has arrived, and every picture carries the latest cut found before it, so that the film
+// grain analysis of a GOP's first coded picture knows the cuts among the pictures it covers. With the adaptive intra
+// refresh the cut is also reported to the GOP structure, which the look-ahead keeps a GOP behind the arrivals.
+void PreProcess::xDetectSceneCut( Picture* pic, const PicList& picList )
 {
   const CPelBuf y     = pic->getOrigBuf( COMP_Y );
   const int     shift = std::max( 0, m_encCfg->m_internalBitDepth[ CH_L ] - 6 );
@@ -504,6 +548,16 @@ void PreProcess::xDetectFgaSceneCut( Picture* pic )
   {
     m_fgaPrevShared->fgaSceneCut() = true;
     m_fgaLastCutPoc                = m_fgaPrevPoc;
+    if( m_lookahead > 0 )
+    {
+      // adaptive intra refresh: the GOP before the cut ends at it, the cut picture is no reference for the slice type
+      // adaptation, and it starts a new intra period when an I picture pays there (a change in a flat scene predicts
+      // well enough across the cut and gets none)
+      const Picture* cutPic = xFindPoc( picList, m_fgaPrevPoc );
+      const Picture* before = xFindPoc( picList, m_fgaPrevPoc - 1 );
+      m_fgaPrevShared->sceneCutStart() = true;
+      m_gopCfg.addCut( m_fgaPrevPoc, ! cutPic || ! before || xIntraPays( cutPic, before ) );
+    }
   }
   pic->m_picShared->fgaLastSceneCutPoc() = m_fgaLastCutPoc;
 
@@ -513,11 +567,137 @@ void PreProcess::xDetectFgaSceneCut( Picture* pic )
   m_fgaPrevShared   = pic->m_picShared;
 }
 
+// ====================================================================================================================
+// Adaptive intra refresh: does an I picture pay?
+// ====================================================================================================================
+
+static constexpr int    LOOKAHEAD_PAD     = 32;    // border of the low-resolution pictures, the motion search reads into it
+static constexpr int    LOOKAHEAD_BLK     = 16;    // motion search block at quarter resolution (64x64 at full)
+static constexpr double INTRA_COST_RATIO  = 1.0;   // an I picture pays when the prediction error exceeds this times the DC-intra estimate
+
+// Halves the luma resolution into dst, which keeps its buffer from picture to picture once it has the right size.
+static void downsampleLuma( const PelStorage& src, PelStorage& dst )
+{
+  const CPelBuf in = src.Y();
+  if( dst.Y().buf == nullptr || dst.Y().width != (int)in.width / 2 || dst.Y().height != (int)in.height / 2 )
+  {
+    dst.destroy();
+    dst.create( CHROMA_400, Area( 0, 0, in.width / 2, in.height / 2 ), 0, LOOKAHEAD_PAD );
+  }
+  const PelBuf out = dst.Y();
+  g_pelBufOP.downsample2x2( in.buf, in.stride, out.buf, out.stride, out.width, out.height );
+  dst.extendBorderPel( LOOKAHEAD_PAD, LOOKAHEAD_PAD );
+}
+
+// Quarter, eighth and sixteenth resolution luma of an arriving picture (the half resolution step is only a stage).
+void PreProcess::xMakeLowRes( Picture* pic )
+{
+  downsampleLuma( pic->getOrigBuffer(), m_halfRes );
+  downsampleLuma( m_halfRes, pic->m_picShared->lowRes( 0 ) );
+  downsampleLuma( pic->m_picShared->lowRes( 0 ), pic->m_picShared->lowRes( 1 ) );
+  downsampleLuma( pic->m_picShared->lowRes( 1 ), pic->m_picShared->lowRes( 2 ) );
+}
+
+// How well ref predicts cur: the summed squared error of the MCTF's integer motion search, started at a sixteenth of
+// the resolution (its range of 8 there covers 128 samples of motion) and refined at an eighth and a quarter. Kept by
+// (POC, reference POC).
+double PreProcess::xPredCost( const Picture* cur, const Picture* ref )
+{
+  const std::pair<int, int> key( cur->poc, ref->poc );
+  auto it = m_predCosts.find( key );
+  if( it != m_predCosts.end() )
+  {
+    return it->second;
+  }
+  PicShared* c = cur->m_picShared;
+  PicShared* r = ref->m_picShared;
+  Array2D<MotionVector> mvs[ 3 ];
+  for( int level = 2; level >= 0; level-- )
+  {
+    const CPelBuf y = c->lowRes( level ).Y();
+    mvs[ level ].allocate( y.width / LOOKAHEAD_BLK + 1, y.height / LOOKAHEAD_BLK + 1 );
+    if( level == 2 )
+    {
+      m_motionSearch.motionEstimationLuma( mvs[ level ], c->lowRes( level ), r->lowRes( level ), LOOKAHEAD_PAD, LOOKAHEAD_BLK );
+    }
+    else
+    {
+      m_motionSearch.motionEstimationLuma( mvs[ level ], c->lowRes( level ), r->lowRes( level ), LOOKAHEAD_PAD, LOOKAHEAD_BLK, &mvs[ level + 1 ], 2 );
+    }
+  }
+  double cost = 0.0;
+  for( int y = 0; y < mvs[ 0 ].h(); y++ )
+  {
+    for( int x = 0; x < mvs[ 0 ].w(); x++ )
+    {
+      const MotionVector& mv = mvs[ 0 ].get( x, y );
+      if( mv.error != INT_LEAST32_MAX )
+      {
+        cost += mv.error;
+      }
+    }
+  }
+  m_predCosts[ key ] = cost;
+  return cost;
+}
+
+// DC-intra estimate of a picture: the summed squared error of the quarter-resolution 16x16 blocks against their mean,
+// the same units as the motion search's prediction error. Kept by POC.
+double PreProcess::xDcIntraCost( const Picture* pic )
+{
+  auto it = m_dcIntraCosts.find( pic->poc );
+  if( it != m_dcIntraCosts.end() )
+  {
+    return it->second;
+  }
+  const CPelBuf y = pic->m_picShared->lowRes( 0 ).Y();
+  double cost = 0.0;
+  for( int by = 0; by + LOOKAHEAD_BLK <= y.height; by += LOOKAHEAD_BLK )
+  {
+    for( int bx = 0; bx + LOOKAHEAD_BLK <= y.width; bx += LOOKAHEAD_BLK )
+    {
+      int64_t sum = 0, sq = 0;
+      for( int j = 0; j < LOOKAHEAD_BLK; j++ )
+      {
+        const Pel* row = y.buf + ( by + j ) * y.stride + bx;
+        for( int i = 0; i < LOOKAHEAD_BLK; i++ )
+        {
+          sum += row[ i ];
+          sq  += row[ i ] * row[ i ];
+        }
+      }
+      cost += double( sq ) - double( sum ) * double( sum ) / ( LOOKAHEAD_BLK * LOOKAHEAD_BLK );
+    }
+  }
+  m_dcIntraCosts[ pic->poc ] = cost;
+  return cost;
+}
+
+// An I picture pays at pic when predicting it from ref costs more than INTRA_COST_RATIO times its DC-intra estimate.
+// Hard cuts measured 2.1 to 11.6 on an action movie, activity jumps that predict well 0.1 to 0.35.
+bool PreProcess::xIntraPays( const Picture* pic, const Picture* ref )
+{
+  return xPredCost( pic, ref ) > INTRA_COST_RATIO * xDcIntraCost( pic );
+}
+
+const Picture* PreProcess::xFindPoc( const PicList& picList, int poc ) const
+{
+  for( auto p : picList )
+  {
+    if( p->poc == poc && ! p->m_picShared->isLeadTrail() )
+    {
+      return p;
+    }
+  }
+  return nullptr;
+}
+
 void PreProcess::xDisableTempDown( Picture* pic, const PicList& picList, const int thresh /*= INT32_MAX*/ )
 {
   for( auto itr = picList.rbegin(); itr != picList.rend(); itr++ )
   {
     Picture* tp = *itr;
+    if( tp->poc > pic->poc ) continue;   // newer pictures have no GOP entry yet
     if( pic->gopEntry->m_gopNum != tp->gopEntry->m_gopNum )
       break;
     if( tp->gopEntry->m_temporalId <= thresh )

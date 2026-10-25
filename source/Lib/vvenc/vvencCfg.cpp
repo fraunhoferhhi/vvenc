@@ -387,6 +387,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
   c->m_sliceTypeAdapt                          = -1;            ///< perceptually and objectively motivated slice type adaptation (STA)
+  c->m_adaptiveIntra                           = 0;             ///< adaptive intra refresh: I pictures where they pay, at scene cuts and in the slice type adaptation
   c->m_minIntraDist                            = -1;
 
   c->m_RCNumPasses                             = -1;
@@ -781,6 +782,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 6)" );
   vvenc_confirmParameter( c, c->m_sliceTypeAdapt < -1 || c->m_sliceTypeAdapt > 2,                        "Slice type adaptation (STA) invalid parameter given, range is (-1 .. 2)" );
+  vvenc_confirmParameter( c, c->m_adaptiveIntra < 0 || c->m_adaptiveIntra > 1,                           "Adaptive intra refresh invalid parameter given, range is (0 .. 1)" );
   vvenc_confirmParameter( c, c->m_minIntraDist < -1,                                                     "Minimum intra distance cannot be smaller than -1" );
 
   if( VVENC_RC_OFF == c->m_RCTargetBitrate )
@@ -1454,6 +1456,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_sliceTypeAdapt = c->m_GOPSize > 8 ? 1 : 0;
   }
   vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
+  vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_adaptiveIntra > 0, "Adaptive intra refresh for GOPSize <= 8 not supported" );
 
   if( c->m_minIntraDist < 0 )
   {
@@ -3392,6 +3395,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";
+    css << "AdaptiveIntra:" << (int)c->m_adaptiveIntra << " ";
     css << "LeadFrames:" << c->m_leadFrames << " ";
     css << "TrailFrames:" << c->m_trailFrames << " ";
 

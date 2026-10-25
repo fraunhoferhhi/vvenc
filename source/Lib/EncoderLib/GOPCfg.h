@@ -49,6 +49,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
 #include "Utilities/MsgLog.h"
+#include <map>
+#include <algorithm>
+#include <tuple>
 
 
 //! \ingroup EncoderLib
@@ -67,6 +70,13 @@ class GOPCfg
 
     std::vector<GOPEntryList>    m_defaultGopLists;
     GOPEntryList                 m_remainGopList;
+    // adaptive intra refresh: the scene cuts ahead (POCs, ascending) reported by the pre-processing stage. The GOP
+    // before a cut is shortened to end at it and the cut picture starts a new intra period.
+    std::vector<int>             m_cutPocs;
+    std::vector<int>             m_alignOnlyPocs;      // of those, the cuts that start no intra period (an I picture would not pay)
+    std::vector<vvencGOPEntry>   m_cfgGopList;         // the configured GOP, to build shortened GOP lists at run time
+    // shortened GOP lists by size, previous full GOP list and position in the intra period, built on first use
+    std::map<std::tuple<int, const GOPEntryList*, int>, GOPEntryList> m_cutGopLists;
 
     GOPEntryList*                m_gopList;
     std::vector<int>             m_pocToGopIdx;
@@ -132,6 +142,8 @@ class GOPCfg
     void getNextGopEntry( GOPEntry& gopEntry );
     void startIntraPeriod( GOPEntry& gopEntry );
     void fixStartOfLastGop( GOPEntry& gopEntry );
+    void addCut( int poc, bool intra );
+    bool nextStartsGop() const { return m_numTillGop == 0; }
     void getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const;
     void setLastIntraSTA( int poc ) { m_lastIntraPOC = poc; }
 
@@ -167,6 +179,7 @@ class GOPCfg
     int  xGetMaxRefPics      ( const GOPEntry& gopEntry ) const;
     int  xGetMaxNumReorder   ( const GOPEntry& gopEntry, const GOPEntryList& gopList ) const;
     void xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const;
+    GOPEntryList* xGopListOfSize( int gopSize, const GOPEntryList* prevGopList, int pocOffsetInPeriod );
 };
 
 } // namespace vvenc

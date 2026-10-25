@@ -47,6 +47,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "GOPCfg.h"
 #include "EncStage.h"
+#include <climits>
 
 //! \ingroup EncoderLib
 //! \{
@@ -121,6 +122,10 @@ void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int go
   m_numTillIntra = poc0idr ? 0 : (int)m_gopList->size() - 1;
   m_minIntraDist = minIntraDist;
   m_lastIntraPOC = -1;
+  m_cfgGopList.assign( cfgGopList, cfgGopList + VVENC_MAX_GOP );
+  m_cutPocs.clear();
+  m_alignOnlyPocs.clear();
+  m_cutGopLists.clear();
   m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
 }
 
@@ -182,6 +187,20 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   }
   gopEntry.m_isValid   = true;
 
+  // adaptive intra refresh: the cut picture starts a new intra period (the GOP before it was sized to end there),
+  // unless an I picture would not pay there; then it only starts a GOP
+  if( ! m_cutPocs.empty() && m_nextPoc >= m_cutPocs.front() )
+  {
+    const bool alignOnly = std::find( m_alignOnlyPocs.begin(), m_alignOnlyPocs.end(), m_cutPocs.front() ) != m_alignOnlyPocs.end();
+    if( m_nextPoc == m_cutPocs.front() && m_numTillGop == 0 && ! alignOnly )
+    {
+      m_numTillIntra = 0;
+    }
+    m_alignOnlyPocs.erase( std::remove( m_alignOnlyPocs.begin(), m_alignOnlyPocs.end(), m_cutPocs.front() ), m_alignOnlyPocs.end() );
+    m_cutPocs.erase( m_cutPocs.begin() );
+  }
+  const int cutLimit = m_cutPocs.empty() ? INT_MAX : m_cutPocs.front() - m_nextPoc; // pictures until the next cut
+
   // mark start of intra
   if( m_numTillIntra == 0 )
   {
@@ -197,6 +216,12 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   if( m_numTillGop == 0 )
   {
     const int prevGopSize = (int)m_gopList->size();
+    // adaptive intra refresh: a periodic refresh that would fall less than a GOP before a known cut moves to the cut,
+    // one I picture there instead of two within a GOP
+    if( m_numTillIntra > 0 && cutLimit > m_numTillIntra && cutLimit - m_numTillIntra < m_defGopSize )
+    {
+      m_numTillIntra = cutLimit;
+    }
     // check for start of new intra period
     if( m_numTillIntra == 0 )
     {
@@ -204,6 +229,15 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
       m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
       m_numTillIntra = m_fixIntraPeriod;
       m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_fixIntraPeriod <= m_maxGopSize;
+      if( cutLimit < (int)m_gopList->size() )
+      {
+        m_gopList = xGopListOfSize( cutLimit, nullptr, 0 ); // the first GOP of the period ends at the next cut
+      }
+    }
+    else if( cutLimit < std::min( m_defGopSize, m_numTillIntra > 0 ? m_numTillIntra : m_defGopSize ) )
+    {
+      m_gopList = xGopListOfSize( cutLimit, m_gopList, m_nextPoc - m_lastIntraPOC ); // this GOP ends at the next cut
+      m_adjustNoLPcodingOrder = false;
     }
     else
     {
@@ -213,10 +247,14 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
         m_gopList     = &m_defaultGopLists[ m_nextListIdx ];
         m_nextListIdx = std::min( m_nextListIdx + 1, (int)m_defaultGopLists.size() - 1 );
       }
+      else if( remainSize == (int)m_remainGopList.size() && prevGopSize == m_defGopSize )
+      {
+        m_gopList = &m_remainGopList;
+      }
       else
       {
-        CHECK( remainSize != (int)m_remainGopList.size() || prevGopSize != m_defGopSize, "remaining size does not match size of pre-calculated gop list" );
-        m_gopList = &m_remainGopList;
+        // the pre-built lists do not fit when a refresh moved to a cut changed the remainder
+        m_gopList = xGopListOfSize( remainSize, m_gopList, m_nextPoc - m_lastIntraPOC );
       }
       //if we have a full gop, we don't need to change the coding order...
       m_adjustNoLPcodingOrder = m_refreshType == VVENC_DRT_IDR_NO_RADL && m_numTillIntra <= m_maxGopSize;
@@ -237,6 +275,21 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
   if( m_numTillIntra > 0 )
   {
     m_numTillIntra -= 1;
+  }
+}
+
+// Adaptive intra refresh: a scene cut the pre-processing stage found ahead of the GOP structure; intra says whether
+// the cut picture starts a new intra period or only a GOP. A cut at a picture whose GOP entry has already been
+// handed out cannot be honoured any more and is dropped.
+void GOPCfg::addCut( int poc, bool intra )
+{
+  if( poc >= m_nextPoc && ( m_cutPocs.empty() || poc > m_cutPocs.back() ) )
+  {
+    m_cutPocs.push_back( poc );
+    if( ! intra )
+    {
+      m_alignOnlyPocs.push_back( poc );
+    }
   }
 }
 
@@ -1129,6 +1182,29 @@ int GOPCfg::xGetMaxNumReorder( const GOPEntry& gopEntry, const GOPEntryList& gop
     }
   }
   return numReorder;
+}
+
+// A GOP list of the given size, shorter than the default GOP, for the GOP before a scene cut: built like the intra
+// period's remainder list and kept for reuse.
+GOPCfg::GOPEntryList* GOPCfg::xGopListOfSize( int gopSize, const GOPEntryList* prevGopList, int pocOffsetInPeriod )
+{
+  CHECK( gopSize < 1 || gopSize > m_defGopSize, "cut GOP size out of range" );
+  // what xCreateGopList's result depends on: the previous GOP's list when that GOP was a full one (a shorter one
+  // contributes no references), and the position in the intra period for a full-size list only
+  const bool prevUsed = prevGopList && (int)prevGopList->size() == m_maxGopSize;
+  const auto key      = std::make_tuple( gopSize, prevUsed ? prevGopList : nullptr, gopSize == m_maxGopSize ? pocOffsetInPeriod : 0 );
+  auto it = m_cutGopLists.find( key );
+  if( it == m_cutGopLists.end() )
+  {
+    GOPEntryList& list = m_cutGopLists[ key ];
+    xCreateGopList( m_maxGopSize, gopSize, pocOffsetInPeriod, m_cfgGopList.data(), prevGopList, list );
+    if( ! xCheckDBPConstraints( list ) )
+    {
+      THROW( "cut GOP list does not fulfil the DPB constraints" );
+    }
+    it = m_cutGopLists.find( key );
+  }
+  return &it->second;
 }
 
 void GOPCfg::xAdjustNoLPcodingOrder( GOPEntry& gopEntry, const int orgGopId ) const
