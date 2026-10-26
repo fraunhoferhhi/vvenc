@@ -123,6 +123,7 @@ namespace vvenc {
                                  uint16_t* const picVisActLuma,
                                  std::vector<int>& ctuPumpRedQP,
                                  std::vector<uint8_t>* ctuRCQPMemory,
+                                 const int ctuRCQPMemoryIndex,
                                  int* const optChromaQPOffsets,
                                  const uint8_t* minNoiseLevels,
                                  const uint32_t ctuStartAddr,

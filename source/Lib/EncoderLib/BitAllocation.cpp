@@ -515,6 +515,7 @@ static int refineDeltaQpDistribution (Picture* const pic, const VVEncCfg* encCfg
 int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
                                            const double sliceLambda, uint16_t* const picVisActLuma,
                                            std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
+                                           const int ctuRCQPMemoryIndex,
                                            int* const optChromaQPOffsets, const uint8_t* minNoiseLevels,
                                            const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
@@ -670,10 +671,10 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
     }
   }
 
-  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra())
+  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra() && ctuRCQPMemoryIndex >= 0)
   {
     const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
-    const int offs = (slice->poc / encCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
+    const int offs = ctuRCQPMemoryIndex * ((nCtu + 1) >> 1); // this I picture's first-pass memory (RateCtrl::getIntraPQPAIndex)
     std::vector<uint8_t>& ctuQPMem = *ctuRCQPMemory; // unpack 1st-pass reduction QPs
 
     if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))

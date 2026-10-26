@@ -335,6 +335,15 @@ void RateCtrl::init( const VVEncCfg& encCfg )
                     m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
+// Index of the first-pass CTU QP memory of the I picture at poc: the first pass stores one block per I picture after
+// POC 0, in coding (= POC) order (BitAllocation). -1 if the first pass coded no I picture at poc. Counted rather than
+// poc / IntraPeriod, which is wrong once the slice type adaptation adds I pictures or POC0IDR leaves POC 0 without one.
+int RateCtrl::getIntraPQPAIndex( int poc ) const
+{
+  const auto it = std::lower_bound( m_intraPQPAPocs.begin(), m_intraPQPAPocs.end(), poc );
+  return it != m_intraPQPAPocs.end() && *it == poc ? int( it - m_intraPQPAPocs.begin() ) : -1;
+}
+
 int RateCtrl::getBaseQP()
 {
   // estimate near-optimal base QP for PPS in second RC pass
@@ -787,6 +796,19 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
+
+  if( m_pcEncCfg->m_RCNumPasses == 2 )
+  {
+    // the first pass's intra pictures after POC 0 in POC order, for getIntraPQPAIndex
+    m_intraPQPAPocs.clear();
+    for( const auto& stats : m_listRCFirstPassStats )
+    {
+      if( stats.isIntra && stats.poc > 0 )
+      {
+        m_intraPQPAPocs.push_back( stats.poc );
+      }
+    }
+  }
 
   if ( flush || !m_pcEncCfg->m_LookAhead )
   {

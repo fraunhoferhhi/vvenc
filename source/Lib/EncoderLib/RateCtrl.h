@@ -181,6 +181,7 @@ namespace vvenc {
     std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
     std::vector<uint8_t>*    getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    int                      getIntraPQPAIndex( int poc ) const;
     const uint8_t*           getMinNoiseLevels() { return m_minNoiseLevels; }
     int                      lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
@@ -214,6 +215,7 @@ namespace vvenc {
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
+    std::vector<int>        m_intraPQPAPocs;   // POCs of the first pass's intra pictures after POC 0, ascending
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
