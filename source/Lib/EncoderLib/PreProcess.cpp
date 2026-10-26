@@ -91,9 +91,9 @@ void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadP
                          || (m_encCfg->m_LookAhead && m_encCfg->m_RCTargetBitrate > 0)
                          || (m_encCfg->m_RCNumPasses > 1 && (!isFinalPass));
   m_doVisActQpa        = m_encCfg->m_usePerceptQPA;
-  m_lookahead          = m_encCfg->m_adaptiveIntra > 0 ? m_encCfg->m_GOPSize + 1 : 0;
+  m_lookahead          = m_encCfg->m_adaptiveIntra == 1 ? m_encCfg->m_GOPSize + 1 : 0;   // mode 2 keeps the GOP structure: no look-ahead, no cuts
   m_lastSeenPoc        = std::numeric_limits<int>::min();
-  if( m_lookahead > 0 )
+  if( m_encCfg->m_adaptiveIntra > 0 )
   {
     m_motionSearch.init( encCfg, true, threadPool );
   }
@@ -112,7 +112,7 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
   {
     Picture* newest = picList.back();
     m_lastSeenPoc   = newest->poc;
-    if( m_lookahead > 0 && ! newest->m_picShared->isLeadTrail() )
+    if( m_encCfg->m_adaptiveIntra > 0 && ! newest->m_picShared->isLeadTrail() )
     {
       xMakeLowRes( newest );
     }
@@ -132,7 +132,7 @@ void PreProcess::processPictures( const PicList& picList, AccessUnitList& auList
   {
     auto pic = next;
 
-    if( m_lookahead > 0 && m_gopCfg.nextStartsGop() )
+    if( m_encCfg->m_adaptiveIntra > 0 && m_gopCfg.nextStartsGop() )
     {
       // the costs of pictures before this GOP are not needed any more
       for( auto it = m_predCosts.begin(); it != m_predCosts.end(); )
@@ -493,7 +493,7 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
   // adaptive intra refresh: the activity jump alone does not say that an I picture is cheaper than predicting;
   // on flat content (animation) the slice type adaptation placed I pictures of 80 times a B picture where a B anchor
   // predicted the change for a tenth of that
-  if( isSta && m_lookahead > 0 && prevTL0 && ! prevTL0->m_picShared->isLeadTrail() && ! xIntraPays( pic, prevTL0 ) )
+  if( isSta && m_encCfg->m_adaptiveIntra > 0 && prevTL0 && ! prevTL0->m_picShared->isLeadTrail() && ! xIntraPays( pic, prevTL0 ) )
   {
     isSta = false;
   }

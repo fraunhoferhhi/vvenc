@@ -782,7 +782,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 6)" );
   vvenc_confirmParameter( c, c->m_sliceTypeAdapt < -1 || c->m_sliceTypeAdapt > 2,                        "Slice type adaptation (STA) invalid parameter given, range is (-1 .. 2)" );
-  vvenc_confirmParameter( c, c->m_adaptiveIntra < 0 || c->m_adaptiveIntra > 1,                           "Adaptive intra refresh invalid parameter given, range is (0 .. 1)" );
+  vvenc_confirmParameter( c, c->m_adaptiveIntra < 0 || c->m_adaptiveIntra > 2,                           "Adaptive intra refresh invalid parameter given, range is (0 .. 2)" );
   vvenc_confirmParameter( c, c->m_minIntraDist < -1,                                                     "Minimum intra distance cannot be smaller than -1" );
 
   if( VVENC_RC_OFF == c->m_RCTargetBitrate )
