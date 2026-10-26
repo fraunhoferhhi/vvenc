@@ -514,6 +514,10 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 }
 
 
+// Adaptive intra refresh thresholds (the cost functions are below)
+static constexpr double INTRA_COST_RATIO  = 1.0;   // an I picture pays when the prediction error exceeds this times the DC-intra estimate
+static constexpr double CUT_STAY_RATIO    = 0.25;  // the picture after a cut stays in the scene when its prediction error is below this times its DC-intra estimate (the histogram detector's 0.075 against 0.3)
+
 // A picture starts a new scene when its luma histogram (64 bins, every 4th sample of every 4th row) differs from that
 // of the picture before it by more than 0.3 (L1 distance of the normalized histograms, 0 to 2) and the next picture's
 // stays within a quarter of that of it, so that a single flash frame is no cut. On three minutes of The Beekeeper (4316
@@ -521,7 +525,10 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 // no GOP of 32 pictures has two of them. The detector runs on every picture as it arrives; the cut is marked on the
 // picture once the next one has arrived, and every picture carries the latest cut found before it, so that the film
 // grain analysis of a GOP's first coded picture knows the cuts among the pictures it covers. With the adaptive intra
-// refresh the cut is also reported to the GOP structure, which the look-ahead keeps a GOP behind the arrivals.
+// refresh the cut is also reported to the GOP structure, which the look-ahead keeps a GOP behind the arrivals, and a
+// second test on the look-ahead's motion search finds the cuts between shots of alike brightness, which the histogram
+// does not see (11 of 31 cuts of an action sequence); those are the adaptive intra refresh's alone, the film grain
+// analysis keeps the histogram's cuts.
 void PreProcess::xDetectSceneCut( Picture* pic, const PicList& picList )
 {
   const CPelBuf y     = pic->getOrigBuf( COMP_Y );
@@ -544,19 +551,29 @@ void PreProcess::xDetectSceneCut( Picture* pic, const PicList& picList )
     distance += std::abs( hist[ b ] - m_fgaPrevHist[ b ] );
   }
   // the previous picture is a cut when it jumped from its predecessor (above 0.3) and this one stays (below 0.075)
-  if( follows && m_fgaPrevShared && m_fgaPrevDistance * 10 > 3 * numSamples && distance * 40 < 3 * numSamples )
+  const bool histCut = follows && m_fgaPrevShared && m_fgaPrevDistance * 10 > 3 * numSamples && distance * 40 < 3 * numSamples;
+  if( histCut )
   {
     m_fgaPrevShared->fgaSceneCut() = true;
     m_fgaLastCutPoc                = m_fgaPrevPoc;
-    if( m_lookahead > 0 )
+  }
+  if( m_lookahead > 0 && follows && m_fgaPrevShared )
+  {
+    // adaptive intra refresh: the GOP before a cut ends at it, the cut picture is no reference for the slice type
+    // adaptation, and it starts a new intra period when an I picture pays there (a change in a flat scene predicts
+    // well enough across the cut and gets none). Besides the histogram's cuts, the previous picture is a cut when its
+    // histogram moved at least half the detector's threshold and the motion search cannot predict it from its
+    // predecessor (an I picture pays) while this picture predicts well from it (so a single flash frame is no cut):
+    // shots of alike brightness have no full histogram jump.
+    const Picture* cutPic   = xFindPoc( picList, m_fgaPrevPoc );
+    const Picture* before   = xFindPoc( picList, m_fgaPrevPoc - 1 );
+    const bool     haveBoth = cutPic && before;
+    const bool     pays     = ! haveBoth || xIntraPays( cutPic, before );   // a histogram cut gets its I picture unless shown not to pay
+    const bool     costCut  = haveBoth && pays && m_fgaPrevDistance * 20 > 3 * numSamples && xPredCost( pic, cutPic ) <= CUT_STAY_RATIO * xDcIntraCost( pic );
+    if( histCut || costCut )
     {
-      // adaptive intra refresh: the GOP before the cut ends at it, the cut picture is no reference for the slice type
-      // adaptation, and it starts a new intra period when an I picture pays there (a change in a flat scene predicts
-      // well enough across the cut and gets none)
-      const Picture* cutPic = xFindPoc( picList, m_fgaPrevPoc );
-      const Picture* before = xFindPoc( picList, m_fgaPrevPoc - 1 );
       m_fgaPrevShared->sceneCutStart() = true;
-      m_gopCfg.addCut( m_fgaPrevPoc, ! cutPic || ! before || xIntraPays( cutPic, before ) );
+      m_gopCfg.addCut( m_fgaPrevPoc, pays );
     }
   }
   pic->m_picShared->fgaLastSceneCutPoc() = m_fgaLastCutPoc;
@@ -573,7 +590,6 @@ void PreProcess::xDetectSceneCut( Picture* pic, const PicList& picList )
 
 static constexpr int    LOOKAHEAD_PAD     = 32;    // border of the low-resolution pictures, the motion search reads into it
 static constexpr int    LOOKAHEAD_BLK     = 16;    // motion search block at quarter resolution (64x64 at full)
-static constexpr double INTRA_COST_RATIO  = 1.0;   // an I picture pays when the prediction error exceeds this times the DC-intra estimate
 
 // Halves the luma resolution into dst, which keeps its buffer from picture to picture once it has the right size.
 static void downsampleLuma( const PelStorage& src, PelStorage& dst )
