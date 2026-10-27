@@ -799,7 +799,8 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_reservedInt8_2[2];
+  int8_t              m_adaptiveIntra;                                                   // adaptive intra refresh (0: off, 1: I pictures where they pay at scene cuts and in the slice type adaptation, 2: the cost test for the slice type adaptation only)
+  int8_t              m_reservedInt8_2[1];
   int32_t             m_reservedInt32;
   double              m_reservedDouble[7];
 

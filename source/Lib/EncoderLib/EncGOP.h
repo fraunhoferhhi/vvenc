@@ -264,6 +264,7 @@ private:
   void xRunFgaTask                  ( FgaTask& task );
   void xWaitFgaTasks                ();
   void xInitPicsInCodingOrder         ( const PicList& picList );
+  bool xAdaptiveIntraGopReady         ( const PicList& picList ) const;
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
   void xUpdateVAStartOfLastGop        ( Picture& keyPic ) const;
   void xInitGopQpCascade              ( Picture& keyPic, PicList::const_iterator picItr, const PicList& picList );

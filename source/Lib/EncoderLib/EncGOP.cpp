@@ -312,6 +312,31 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
+// The look-ahead of the adaptive intra refresh (mode 1) holds the next GOP's pictures back, so with stage parallel
+// processing, whose picture pool is limited, a GOP shortened by a cut or by the intra period may never reach the
+// minimum queue size. The queue then holds a complete GOP to code when it holds the first coded picture of a GOP not
+// coded yet: that is the GOP's last picture in output order, so the whole GOP has arrived when pictures arrive in
+// output order, as they do unless the pre-encoder of the look-ahead rate control hands them over in coding order.
+// (Coded pictures stay queued as references and do not count.) Without stage parallel processing the queue fills up
+// to the minimum anyway, and starting earlier would start the access unit output before the encoder can return one
+// access unit per input picture.
+bool EncGOP::xAdaptiveIntraGopReady( const PicList& picList ) const
+{
+  const bool arrivesInOutputOrder = m_isPreAnalysis || ! m_pcEncCfg->m_LookAhead;
+  if( m_pcEncCfg->m_adaptiveIntra != 1 || ! m_pcEncCfg->m_stageParallelProc || ! arrivesInOutputOrder )
+  {
+    return false;
+  }
+  for( auto pic : picList )
+  {
+    if( pic->gopEntry && pic->gopEntry->m_isValid && pic->gopEntry->m_isStartOfGop && ! pic->isInitDone )
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool EncGOP::waitForFreeEncoders()
 {
   std::unique_lock<std::mutex> lock( m_gopEncMutex );
@@ -326,7 +351,7 @@ bool EncGOP::waitForFreeEncoders()
 
 bool EncGOP::hasEnoughPictures( const PicList& picList ) const
 {
-  if( EncStage::hasEnoughPictures( picList ) )
+  if( EncStage::hasEnoughPictures( picList ) || xAdaptiveIntraGopReady( picList ) )
   {
     return true;
   }

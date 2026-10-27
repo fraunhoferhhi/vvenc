@@ -784,6 +784,33 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       subsampleLuma(origSubsampled4, origSubsampled8);
     }
 
+    // Adaptive intra refresh: a reference picture across a scene cut stays a reference of the filter, whose weights
+    // already follow the motion error, but its motion error is no measure of noise: the noise and block importance
+    // estimates below sum the error of both neighbours at the same distance per CTU, so the picture beside a cut got
+    // those of an unpredictable picture. Only mode 1 marks cuts; otherwise every picture counts.
+    int sceneStart = std::numeric_limits<int>::min(), nextSceneStart = std::numeric_limits<int>::max();
+    for( auto p : picFifo )
+    {
+      if( p->m_picShared->sceneCutStart() )
+      {
+        if( p->poc <= m_filterPoc ) sceneStart     = std::max( sceneStart, p->poc );
+        else                        nextSceneStart = std::min( nextSceneStart, p->poc );
+      }
+    }
+    auto sameScene = [&]( const Picture* p ) { return p->poc >= sceneStart && p->poc < nextSceneStart; };
+    // A reference's buffer wraps the original of its picture: whether the reference lies across a cut.
+    auto otherScene = [&]( const TemporalFilterSourcePicInfo& srcPic )
+    {
+      for( auto p : picFifo )
+      {
+        if( p->getOrigBuf().Y().buf == srcPic.picBuffer.Y().buf )
+        {
+          return ! sameScene( p );
+        }
+      }
+      return false;
+    };
+
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
     for ( int i = dropFramesFront; i < picFifo.size() - dropFramesBack; i++ )
@@ -917,10 +944,13 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       std::vector<double> blkCount( numCtu * 2, 0 );
 
       int distFactor[2] = { 3,3 };
+      bool skippedOtherScene = false;
 
       for( auto& srcPic : srcFrameInfo )
       {
-        if( srcPic.index >= 2 )
+        const bool acrossCut = otherScene( srcPic );
+        skippedOtherScene |= acrossCut;
+        if( srcPic.index >= 2 || acrossCut )
         {
           continue;
         }
@@ -955,8 +985,16 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
           const unsigned avgIndex = pic->getOrigBuf (ctuArea).getAvg() >> (m_encCfg->m_internalBitDepth[CH_L] - 3); // one of 8 mean level regions
           double meanInCTU;
 
-          sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
-          meanInCTU = bd12bScale * sumRMS[i] / blkCount[i];
+          if( skippedOtherScene ) // the two distances may have different numbers of references: compare their means
+          {
+            meanInCTU = bd12bScale * std::min( sumRMS[i] / blkCount[i], sumRMS[i + numCtu] / blkCount[i + numCtu] );
+            sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
+          }
+          else
+          {
+            sumRMS[i] = std::min (sumRMS[i], sumRMS[i + numCtu]);
+            meanInCTU = bd12bScale * sumRMS[i] / blkCount[i];
+          }
           meanRmsAcrossPic += meanInCTU;
           if (meanInCTU < pic->m_picShared->m_minNoiseLevels[avgIndex])
           {
