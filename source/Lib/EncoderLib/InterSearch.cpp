@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "InterSearch.h"
+#include "MotionHints.h"
 #include "EncModeCtrl.h"
 #include "EncLib.h"
 #include "CommonLib/CommonDef.h"
@@ -2369,11 +2370,36 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     }
   }
 
+  // optional motion hint from the application, tested like the candidates above
+  int hintDx = 0, hintDy = 0;
+  const Picture* hintRef = cu.cs->slice->getRefPic( refPicList, iRefIdxPred );
+  const bool hasHint = hintRef && MotionHints::get( *m_pcEncCfg, *cu.cs->picture, *hintRef,
+                                                    cu.lumaPos().x + cu.lumaSize().width / 2,
+                                                    cu.lumaPos().y + cu.lumaSize().height / 2, hintDx, hintDy );
+  if( hasHint )
+  {
+    Mv cTmpMv( hintDx << MV_FRACTIONAL_BITS_INTERNAL, hintDy << MV_FRACTIONAL_BITS_INTERNAL );
+    xClipMvSearch( cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines );
+    cTmpMv.changePrecision( MV_PRECISION_INTERNAL, MV_PRECISION_INT );
+    m_cDistParam.cur.buf = cStruct.piRefY + ( cTmpMv.ver * cStruct.iRefStride ) + cTmpMv.hor;
+
+    Distortion uiSad = m_cDistParam.distFunc( m_cDistParam );
+    uiSad += m_pcRdCost->getCostOfVectorWithPredictor( cTmpMv.hor, cTmpMv.ver, cStruct.imvShift );
+    if( uiSad < cStruct.uiBestSad )
+    {
+      cStruct.uiBestSad = uiSad;
+      cStruct.iBestX    = cTmpMv.hor;
+      cStruct.iBestY    = cTmpMv.ver;
+      m_cDistParam.maximumDistortionForEarlyExit = uiSad;
+    }
+  }
+
   {
     // set search range
     Mv currBestMv(cStruct.iBestX, cStruct.iBestY );
     currBestMv <<= MV_FRACTIONAL_BITS_INTERNAL;
-    xSetSearchRange(cu, currBestMv, m_iSearchRange >> (bFastSettings ? 1 : 0), sr );
+    const int hintShift = hasHint ? m_pcEncCfg->m_motionHintRangeShift : 0;
+    xSetSearchRange(cu, currBestMv, m_iSearchRange >> ( ( bFastSettings ? 1 : 0 ) + hintShift ), sr );
   }
 
   // starting point after initial examination
