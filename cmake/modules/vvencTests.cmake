@@ -65,6 +65,9 @@ add_vvenc_test( vvencapp-fast       40 OUT_VVC   ""                       vvenca
 add_vvenc_test( vvencFFapp-fast     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_fast.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 8 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-fast 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )
 
+# CU-tree picture QPs: the dependency model's picture offsets in place of the QP cascade.
+add_vvenc_test( vvencapp-fast_cutreepicstrength 30 OUT_VVC ""               vvencapp --preset fast -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -t 4 --additional "BIM=1 CuTreePicStrength=2" -o OUTPUT )
+
 add_vvenc_test( vvencapp-medium       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 --Threads=-1 -b OUTPUT )
 add_vvenc_test( compare_output-medium 30 NO_OUTPUT "${OUT_VVC};${OUTF_VVC}" ${CMAKE_COMMAND} -E compare_files ${OUT_VVC} ${OUTF_VVC} )

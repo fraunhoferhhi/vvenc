@@ -403,6 +403,28 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     slice->pic->picInitialQP = -1; // no QPA - unused now
   }
 
+  // CuTreePicStrength: a picture MCTF does not filter whose QP the dependency model lowered is coded no finer than its
+  // noise floor (CuTree::xSetQpOffsets); the slice QP and lambda and QPA's CTU QPs and lambdas move together, as for
+  // capped CQF in BitAllocation::applyQPAdaptationSlice (QPA's slice chroma QP offsets stay as QPA derived them)
+  const PicShared* picShared = slice->pic->m_picShared;
+  if (picShared->m_noiseFloorQp >= 0 && iQP < picShared->m_noiseFloorQp)
+  {
+    const int    qpRaise     = std::min (picShared->m_noiseFloorQp - iQP, picShared->m_noiseFloorRaise);
+    const double lambdaScale = pow (2.0, double (qpRaise) / 3.0);
+
+    iQP     += qpRaise;
+    dLambda *= lambdaScale;
+    if (m_pcEncCfg->m_usePerceptQPA)
+    {
+      for (uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[0]; ctuRsAddr < slice->pic->cs->pcv->sizeInCtus; ctuRsAddr++)
+      {
+        slice->pic->ctuQpaLambda[ctuRsAddr] *= lambdaScale;
+        slice->pic->ctuAdaptedQP[ctuRsAddr] = std::min (MAX_QP, slice->pic->ctuAdaptedQP[ctuRsAddr] + qpRaise);
+      }
+      slice->pic->picInitialQP = Clip3 (0, MAX_QP, slice->pic->picInitialQP + qpRaise); // used in applyQPAdaptationSubCtu
+    }
+  }
+
   if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
     cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + lookAheadRCCQpOffset; // QP offset for dual-tree
@@ -499,9 +521,13 @@ int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )
   }
   else
   {
-    qp = getCascadeQP( *m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP + slice->pic->gopAdaptedQP, lumaQpBDOffset );
+    const bool hasBlockOffsets = m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty();
+    // with CuTreePicStrength the CU tree's picture offset (m_picAuxQpOffset) takes the place of the QP cascade
+    qp = m_pcEncCfg->m_cuTreePicScale > 0.0 && hasBlockOffsets
+           ? baseQP + slice->pic->gopAdaptedQP
+           : getCascadeQP( *m_pcEncCfg, *slice->pic->gopEntry, slice->isIntra(), baseQP + slice->pic->gopAdaptedQP, lumaQpBDOffset );
 
-    if( m_pcEncCfg->hasBlockQpOffsets() && !slice->pic->m_picShared->m_ctuBimQpOffset.empty() )
+    if( hasBlockOffsets )
     {
       qp += slice->pic->m_picShared->m_picAuxQpOffset;
     }
