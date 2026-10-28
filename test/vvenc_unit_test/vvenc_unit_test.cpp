@@ -5121,17 +5121,15 @@ static bool check_resDPCM( Quant* ref, Quant* opt, unsigned num_cases )
   return true;
 }
 
-// Quant::quant's !enableScalingLists path (xQuant) takes a TransformUnit by
-// value, so unlike check_dequant/check_needRdoq this can't be driven from
-// flat buffers alone. The minimal object graph -- tu.block(compID) and
-// tu.cs->sps->getMaxLog2TrDynamicRange() are read by CoeffCodingContext's
-// constructor (ContextModelling.cpp), tu.cu->lfnstIdx directly by xQuant
-// itself (QuantCore/QuantCoreSIMD/quantNeon) -- is an SPS, a CodingStructure
-// pointing at it, a CodingUnit carrying lfnstIdx, and a TransformUnit built
-// from a 1- or 3-CompArea UnitArea. tu.idx/tu.prev are never read by xQuant
-// but are copied along with the rest of the by-value TU, so they're set
-// explicitly rather than left indeterminate (TransformUnit::initData()
-// doesn't touch them).
+// xQuant takes a TransformUnit by value, not flat buffers, so the test
+// needs the object graph it reads from: tu.block(compID) and
+// tu.cs->sps->getMaxLog2TrDynamicRange() go to CoeffCodingContext's
+// constructor (ContextModelling.cpp), tu.cu->lfnstIdx goes straight to
+// xQuant (QuantCore/QuantCoreSIMD/quantNeon). Hence an SPS, a
+// CodingStructure pointing at it, a CodingUnit carrying lfnstIdx, and a
+// TransformUnit built from a 1- or 3-CompArea UnitArea. tu.idx/tu.prev
+// aren't read but are copied with the rest of the by-value TU, so they're
+// set explicitly since TransformUnit::initData() leaves them alone.
 static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
 {
   std::cout << "Testing Quant::quant\n";
@@ -5169,11 +5167,10 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     return tu;
   };
 
-  // Mirrors QuantCore/QuantCoreSIMD's own initial-scan-position derivation
-  // (Quant.cpp), i.e. the highest scan position a directed test may place a
-  // nonzero coefficient at without manufacturing an out-of-domain access --
-  // g_log2SbbSize gives a CG of 4 (not 16) coefficients for 2x2/2x4/4x2, so
-  // this must be computed per shape rather than assumed to be 15/63/etc.
+  // Mirrors QuantCore/QuantCoreSIMD's initial-scan-position derivation
+  // (Quant.cpp): the highest in-domain scan position for a shape. CGs are
+  // 4 coefficients, not 16, for 2x2/2x4/4x2, so this is per-shape, not a
+  // fixed 15/63/etc.
   auto maxScanPosFor = [&]( int w, int h, ComponentID compID, int lfnstIdx ) -> int {
     TransformUnit    tu( makeTU( w, h, compID, lfnstIdx ) );
     CoeffCodingContext cctx( tu, compID, false );
@@ -5200,11 +5197,11 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     TCoeff uiAbsSumRef = 0, uiAbsSumOpt = 0;
     int    lastScanPosRef = -1, lastScanPosOpt = -1;
 
-    // Poisoned, not zeroed: xQuant only ever writes deltaU up to its own
+    // Poisoned, not zeroed: xQuant only writes deltaU up to its own
     // lastScanPos (see the write-set note on the comparison below), so a
-    // read past that -- an existing caller-side issue in
-    // Quant::quant/xSignBitHidingHDQ under BDPCM, out of scope for this
-    // kernel -- would otherwise read this sentinel rather than 0.
+    // read past that would otherwise read this sentinel rather than 0.
+    // Quant::quant/xSignBitHidingHDQ itself can read past lastScanPos
+    // under BDPCM, unrelated to xQuant.
     std::vector<TCoeff> deltaURef( MAX_TB_SIZEY * MAX_TB_SIZEY, TCoeff( 0xCDCDCDCD ) );
     std::vector<TCoeff> deltaUOpt( MAX_TB_SIZEY * MAX_TB_SIZEY, TCoeff( 0xCDCDCDCD ) );
 
@@ -5222,12 +5219,10 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     ok      = compare_value( sstm.str() + " uiAbsSum", uiAbsSumRef, uiAbsSumOpt ) && ok;
     ok      = compare_value( sstm.str() + " lastScanPos", lastScanPosRef, lastScanPosOpt ) && ok;
 
-    // deltaU's write-set differs between scalar (always) and SIMD
-    // (signHiding-only, both vector and fallback) -- see Quant.cpp/QuantX86.h
-    // -- but that's unobservable: the only consumer, xSignBitHidingHDQ, is
-    // only ever called when signHiding is true (Quant.cpp), and (BDPCM
-    // aside, see above) never reads past lastScanPos. So compare only the
-    // oracle-covered range, and only when it's actually written.
+    // deltaU is written unconditionally by the scalar path but only when
+    // signHiding is set by SIMD; that's fine since its only reader,
+    // xSignBitHidingHDQ, is itself only called when signHiding is set and
+    // never reads past lastScanPos. Compare just that range, and only here.
     if( signHiding )
     {
       CoeffCodingContext cctx( tu, compID, signHiding );
@@ -5241,11 +5236,9 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     return ok;
   };
 
-  // Shapes reachable at real call sites (Quant::quant, gated as in
-  // Quant.h/QuantRDOQ2.cpp -- see plan): ordinary square/rectangular
+  // Shapes reachable from Quant::quant: ordinary square/rectangular
   // power-of-two transforms, ISP-degenerate 1xN/Nx1 and 2xN/Nx2 luma, and
-  // narrow 4:2:0 chroma including 2x2 (SBT-halved, see the dequant NEON
-  // port's domain proof).
+  // narrow 4:2:0 chroma including 2x2 (SBT-halved).
   std::vector<std::tuple<int, int, ComponentID>> ordinaryShapes;
   for( int w : { 4, 8, 16, 32, 64 } )
     for( int h : { 4, 8, 16, 32, 64 } )
@@ -5265,10 +5258,8 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
 
   bool passed = true;
 
-  // (a) Random sweep: shape, scale, iQBits, lfnstIdx, signHiding, isIRAP
-  // independently sampled from their real-reachable sets (a conservative
-  // cross-product covering the domain, not only jointly-real tuples -- same
-  // logic as the dequant NEON port's test).
+  // Random sweep: shape, scale, iQBits, lfnstIdx, signHiding, isIRAP
+  // sampled independently from their real-reachable sets.
   for( unsigned n = 0; n < num_cases; n++ )
   {
     const auto& shape     = allShapes[rng.get( 0, (unsigned)allShapes.size() - 1 )];
@@ -5289,13 +5280,9 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
              passed;
   }
 
-  // (b)/(d)/(e) Directed cases across a representative subset of shapes
-  // (every shape x every iQBits x every signHiding would be prohibitively
-  // slow; the random sweep above samples the full cross-product, though only
-  // stochastically over NUM_CASES draws with a time-based default seed --
-  // these directed cases use a real (not synthetic) scale so the extremes
-  // deterministically reach the entropy clip / narrowing-saturation path on
-  // every run, rather than depending on the random sweep to land there).
+  // Directed cases over a representative subset of shapes, using a real
+  // scale so the extremes always reach the entropy clip and vqmovn_s32
+  // narrowing-saturation path.
   static const std::vector<std::tuple<int, int, ComponentID>> directedShapes{
       { 4, 4, COMP_Y },  { 8, 8, COMP_Y },   { 16, 16, COMP_Y }, { 32, 32, COMP_Y },
       { 8, 4, COMP_Y },  { 4, 8, COMP_Y },   { 1, 16, COMP_Y },  { 16, 1, COMP_Y },
@@ -5314,7 +5301,7 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
         {
           const int maxPos = maxScanPosFor( w, h, compID, 0 );
 
-          // (d) all-zero
+          // all-zero
           {
             std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
             passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
@@ -5322,11 +5309,10 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
                      passed;
           }
 
-          // (e) extremes, all positions, both signs; and a distinguishable
-          // alternating-small pattern (uniform/extreme buffers can hide a
-          // lane/position mixup that clipping or saturation coincidentally
-          // masks). Real (not synthetic) scale so the extremes actually
-          // reach the entropy clip / vqmovn_s32 narrowing-saturation path.
+          // extremes, all positions, both signs; and a distinguishable
+          // alternating-small pattern, since uniform/extreme buffers can
+          // hide a lane/position mixup that clipping or saturation
+          // coincidentally masks.
           for( TCoeff extreme : { TCoeff( 32767 ), TCoeff( -32768 ) } )
           {
             std::vector<TCoeff> coeff( (size_t)w * h, extreme );
@@ -5344,13 +5330,10 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
                      passed;
           }
 
-          // (b) last non-zero at CG-boundary-aware directed positions:
-          // 0, the shape's own max, and (for shapes with more than one
-          // coding group) the end of the first group and the start of the
-          // second, using this shape's own group size -- not a hardcoded
-          // 15, which only applies to the common 16-coefficient group and
-          // would silently skip the boundary entirely for narrow shapes
-          // like 2x4/4x2 (4-coefficient groups).
+          // last non-zero at 0, the shape's own max, and (for shapes
+          // with more than one CG) the group boundary, using this shape's
+          // own group size rather than a hardcoded 15 so narrow shapes
+          // like 2x4/4x2 (4-coefficient CGs) are covered too.
           std::vector<int> positions{ 0, maxPos };
           {
             TransformUnit      tuTmp( makeTU( w, h, compID, 0 ) );
@@ -5376,20 +5359,16 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     }
   }
 
-  // (c) CG threshold-skip: fill the top CG(s) with coefficients at/under
-  // useThres (computed exactly as QuantCore does, same operation order --
-  // narrowing to TCoeff before the division, see plan) so they're skipped,
-  // then stop at the next CG; also an isolated per-row check (only one row
-  // of the skip-candidate CG exceeds useThres) and the v3-clarified case
-  // where useThres itself is <= 0 (int32 truncation of thres at high
-  // iQBits) on an active multi-CG shape -- the correct behaviour there is
-  // zero skips, not "skip everything", since the first (highest) CG always
-  // contains the last real non-zero coefficient found in scan 2 and so is
-  // never below a <=0 threshold. Covers both a shape with few CGs (8x8) and
-  // one with many (32x32, several skipped groups above the found CG), and
-  // both signHiding states (the skip-then-quant sequence and the
-  // signHiding-gated deltaU write don't share code, but nothing rules out
-  // an interaction, so both are exercised here rather than assumed safe).
+  // CG threshold-skip: fill the top CG(s) with coefficients at/under
+  // useThres (same operation order as QuantCore, narrowing to TCoeff before
+  // the division) so they're skipped, then stop at the next CG; also an
+  // isolated per-row check (only the skip-candidate CG's last row exceeds
+  // useThres) and the useThres<=0 case (int32 truncation of thres at high
+  // iQBits) on an active multi-CG shape, where the correct behaviour is
+  // zero skips: the first (highest) CG holds the last real non-zero
+  // coefficient, so it's never below a <=0 threshold. Covers both a small
+  // (8x8) and a large (32x32, several skipped groups) shape, and both
+  // signHiding states.
   for( int w : { 8, 32 } )
   {
     const int h = w, compID_i = COMP_Y;
@@ -5409,10 +5388,8 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
           const int            groupSize = 1 << cctx.log2CGSize();
 
           // Top two CGs at/under useThres (or, if useThres<=0, just small
-          // values -- the point of this case is confirming zero CGs actually
-          // get skipped when useThres<=0, not that these particular values
-          // would have been skipped at a positive threshold), then a real
-          // coefficient in the third CG from the top.
+          // values, to confirm zero CGs get skipped in that case), then a
+          // real coefficient in the third CG from the top.
           std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
           const int maxPos = maxScanPosFor( w, h, COMP_Y, 0 );
           const int topCG  = maxPos >> cctx.log2CGSize();
@@ -5444,7 +5421,7 @@ static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
     }
   }
 
-  // (f) LFNST: square 4x4/8x8 forced to scan pos<=7; rectangular (4x8/8x4)
+  // LFNST: square 4x4/8x8 forced to scan pos<=7; rectangular (4x8/8x4)
   // and 16x16 get a full CG (pos<=15) with no override.
   {
     struct LfnstCase { int w, h, pos; };

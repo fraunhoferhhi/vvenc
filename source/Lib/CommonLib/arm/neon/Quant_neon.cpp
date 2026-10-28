@@ -257,85 +257,60 @@ static void dequantNeon( const int maxX, const int maxY, const int scale, const 
   }
 }
 
-// Mirrors QuantCore (Quant.cpp) / QuantCoreSIMD (x86/QuantX86.h). Per the
-// plan this ports to (see the M3 engineering plan for the full derivation):
-// a scalar prologue (last-non-zero scan, CG threshold skip -- itself
-// vectorized on x86, see below), a 4x4-coding-group vector kernel, and a
-// scalar fallback, gated exactly as upstream:
-//   is4x4sbb            = log2CGSize==4 && cctx.log2CGWidth()==2   (w,h>=4)
-//   thresholdScan (NEON) = is4x4sbb && iScanPos>=16
-//   quantKernel   (NEON) = is4x4sbb && (iScanPos&15)==15
-// Per coefficient, in the vector kernel:
-//   sign = c < 0
-//   a    = abs(c)                              (INT_MIN-safe: unsigned mul below)
-//   p    = a * defaultQuantisationCoefficient   (32x32->64, unsigned)
-//   q    = (p + iAdd) >> iQBits                 (logical/arithmetic agree: p+iAdd >= 0)
-//   if signHiding: deltaU = (p - (q << iQBits)) >> qBits8, low 32 bits kept
-//   uiAbsSum += q
-//   piQCoef  = clip(sign ? -q : q, entropyCodingMinimum, entropyCodingMaximum)
+// Quantize four coefficients from one row of a complete 4x4 coding group.
+// quantNeon handles the last-nonzero scan and threshold skipping, and uses
+// the scalar path for other group shapes or a partial final group.
 //
-// vmull_u32 (unsigned, not vmull_s32) on the low/high halves of a loaded
-// int32x4_t row reproduces x86's _mm_mul_epu32's multiplication bit-for-bit
-// over the full int32 input range including INT_MIN (both vabsq_s32 and
-// _mm_abs_epi32 leave INT_MIN as the bit pattern 0x80000000, and
-// reinterpreting that as unsigned gives the correct magnitude 2^31 to both
-// unsigned-multiply instructions), without needing x86's even/odd-lane
-// interleave-then-recombine dance: NEON's low half is already lanes 0,1 and
-// its high half is already lanes 2,3, so the two 2x64 halves are already in
-// natural coefficient order once narrowed back with vcombine_s32(vmovn_s64,
-// vmovn_s64) -- no reassembly needed. (This is a multiplication-bit-pattern
-// equivalence only; it says nothing about the scalar C++ reference, where
-// abs(INT_MIN) is itself undefined -- moot here since the real coefficient
-// domain never reaches INT_MIN.)
+// For each coefficient c, matching QuantCore:
+//   p = abs(c) * defaultQuantisationCoefficient
+//   t = p + iAdd; q = t >> iQBits
+//   deltaU = ((t & ((int64_t(1) << iQBits) - 1)) - iAdd) >> qBits8
+// Accumulate q before restoring the sign and clipping the output.
 //
-// vshlq_s64 with a negative count is an arithmetic right shift. For any
-// 64-bit value and a shift count k<=32, an arithmetic and a logical right
-// shift produce identical low 32 bits (they differ only in bits [64-k, 63],
-// the sign-fill bits, which -- since k<=32 puts 64-k>=32 -- fall entirely
-// above the 32 bits kept by the narrowing vmovn_s64 afterwards) -- so this
-// matches x86's logical
-// shift for deltaU regardless of that value's sign. The largest reachable
-// qBits8 (= iQBits-8) is 21: the vector kernel only ever runs for w,h>=4
-// (is4x4sbb), which bounds iQBits at 29 (iQBits = 14 + QP_per + transform-
-// shift terms; QpParam clips QP_per to <= 10 at 8-bit / 12 at 10-bit, and
-// the smallest w,h>=4 shape's transform-shift term is the smallest
-// magnitude the formula can subtract, giving the largest iQBits). That's
-// comfortably under the k<=32 bound above, with room to spare. The
-// magnitude arguments this matches (p, p+iAdd, and deltaU's p-(q<<iQBits),
-// which is >= -iAdd > -2^31 for every iAdd this domain produces) are also
-// all representable, so the arithmetic itself -- not just its bit pattern
-// -- matches the scalar reference's int64 arithmetic `>>` exactly.
-// signHiding is loop-invariant across the whole CG loop below (it's a
-// per-call argument, not per-coefficient), so it's a template parameter
-// here rather than a branch re-evaluated on every row -- the same
-// loop-hoisting georges-arm asked for on the dequant Neon port (#725).
+// Reinterpreting vabsq_s32 as unsigned gives vmull_u32 the magnitude bit
+// pattern, including 0x80000000 for INT_MIN. This also matches the x86
+// unsigned multiply; scalar abs(INT_MIN) is undefined, but that input is
+// outside the encoder's coefficient domain. The low/high products retain
+// coefficient order when narrowed and combined.
+//
+// Products and rounded sums fit signed 64-bit lanes. vshlq_s64 performs the
+// arithmetic right shifts required by QuantCore. For deltaU, its low 32
+// bits also match a logical right shift as long as qBits8 <= 32 (i.e.
+// iQBits <= 40): the sign-fill bits then lie entirely above the retained
+// bits, and real iQBits values stay far below that.
+//
+// SignHiding is a template parameter so the per-call choice is made outside
+// the coefficient-group loops and deltaU work is omitted when sign hiding
+// is disabled.
 template<bool SignHiding>
 static inline void quantCG4x4Neon( const CCoeffBuf& piCoef, CoeffSigBuf& piQCoef, TCoeff* deltaU, int uiBlockPos,
-                                    const int32x4_t vQuantCoeff, const int64x2_t vAdd, const int64x2_t vQBits,
+                                    const uint32x4_t vQuantCoeff, const int64x2_t vAdd, const int64x2_t vQMask,
                                     const int64x2_t vNegQBits, const int64x2_t vNegQBits8, const int32x4_t vMin,
                                     const int32x4_t vMax, int32x4_t& vAbsSum )
 {
-  const int32x4_t vLevel = vld1q_s32( &piCoef.buf[uiBlockPos] );
-  const uint32x4_t vSign  = vcltq_s32( vLevel, vdupq_n_s32( 0 ) );
-  const int32x4_t  vAbs   = vabsq_s32( vLevel );
+  const int32x4_t  vLevel = vld1q_s32( &piCoef.buf[uiBlockPos] );
+  const uint32x4_t vSign  = vreinterpretq_u32_s32( vshrq_n_s32( vLevel, 31 ) );
+  const uint32x4_t vAbs   = vreinterpretq_u32_s32( vabsq_s32( vLevel ) );
 
-  const uint64x2_t p0u = vmull_u32( vreinterpret_u32_s32( vget_low_s32( vAbs ) ), vreinterpret_u32_s32( vget_low_s32( vQuantCoeff ) ) );
-  const uint64x2_t p1u = vmull_u32( vreinterpret_u32_s32( vget_high_s32( vAbs ) ), vreinterpret_u32_s32( vget_high_s32( vQuantCoeff ) ) );
+  const uint64x2_t p0u = vmull_u32( vget_low_u32( vAbs ), vget_low_u32( vQuantCoeff ) );
+  const uint64x2_t p1u = vmull_u32( vget_high_u32( vAbs ), vget_high_u32( vQuantCoeff ) );
   const int64x2_t  p0  = vreinterpretq_s64_u64( p0u );
   const int64x2_t  p1  = vreinterpretq_s64_u64( p1u );
 
-  const int64x2_t q0 = vshlq_s64( vaddq_s64( p0, vAdd ), vNegQBits );
-  const int64x2_t q1 = vshlq_s64( vaddq_s64( p1, vAdd ), vNegQBits );
+  const int64x2_t t0 = vaddq_s64( p0, vAdd );
+  const int64x2_t t1 = vaddq_s64( p1, vAdd );
+  const int64x2_t q0 = vshlq_s64( t0, vNegQBits );
+  const int64x2_t q1 = vshlq_s64( t1, vNegQBits );
 
   if( SignHiding )
   {
-    const int64x2_t du0 = vshlq_s64( vsubq_s64( p0, vshlq_s64( q0, vQBits ) ), vNegQBits8 );
-    const int64x2_t du1 = vshlq_s64( vsubq_s64( p1, vshlq_s64( q1, vQBits ) ), vNegQBits8 );
+    const int64x2_t du0 = vshlq_s64( vsubq_s64( vandq_s64( t0, vQMask ), vAdd ), vNegQBits8 );
+    const int64x2_t du1 = vshlq_s64( vsubq_s64( vandq_s64( t1, vQMask ), vAdd ), vNegQBits8 );
     vst1q_s32( &deltaU[uiBlockPos], vcombine_s32( vmovn_s64( du0 ), vmovn_s64( du1 ) ) );
   }
 
   const int32x4_t qMag = vcombine_s32( vmovn_s64( q0 ), vmovn_s64( q1 ) );
-  vAbsSum               = vaddq_s32( vAbsSum, qMag );
+  vAbsSum             = vaddq_s32( vAbsSum, qMag );
 
   const int32x4_t signedQ = vsubq_s32( veorq_s32( qMag, vreinterpretq_s32_u32( vSign ) ), vreinterpretq_s32_u32( vSign ) );
   const int32x4_t clipped = vminq_s32( vMax, vmaxq_s32( vMin, signedQ ) );
@@ -403,13 +378,10 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
       uiBlkPos += uiWidth;
       anyOver = vorrq_u32( anyOver, vcgtq_s32( vabsq_s32( vld1q_s32( &piCoef.buf[uiBlkPos] ) ), vThres ) );
 
-      if( !any_lane_set_u32x4( anyOver ) )
-      {
-        iScanPos -= iScanPosinCG + 1;
-        continue;
-      }
-      else
+      if( any_lane_set_u32x4( anyOver ) )
         break;
+
+      iScanPos -= iScanPosinCG + 1;
     }
   }
 
@@ -419,9 +391,9 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
 
   if( is4x4sbb && ( iScanPos & 15 ) == 15 )
   {
-    const int32x4_t vQuantCoeff = vdupq_n_s32( defaultQuantisationCoefficient );
+    const uint32x4_t vQuantCoeff = vreinterpretq_u32_s32( vdupq_n_s32( defaultQuantisationCoefficient ) );
     const int64x2_t vAdd        = vdupq_n_s64( iAdd );
-    const int64x2_t vQBits      = vdupq_n_s64( iQBits );
+    const int64x2_t vQMask      = vdupq_n_s64( ( int64_t( 1 ) << iQBits ) - 1 );
     const int64x2_t vNegQBits   = vdupq_n_s64( -(int64_t)iQBits );
     const int64x2_t vNegQBits8  = vdupq_n_s64( -(int64_t)qBits8 );
     const int32x4_t vMin        = vdupq_n_s32( entropyCodingMinimum );
@@ -435,7 +407,7 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
         int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
         for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
         {
-          quantCG4x4Neon<true>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQBits, vNegQBits,
+          quantCG4x4Neon<true>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQMask, vNegQBits,
                                 vNegQBits8, vMin, vMax, vAbsSum );
         }
       }
@@ -447,7 +419,7 @@ static void quantNeon( const TransformUnit tu, const ComponentID compID, const C
         int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
         for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
         {
-          quantCG4x4Neon<false>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQBits, vNegQBits,
+          quantCG4x4Neon<false>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQMask, vNegQBits,
                                  vNegQBits8, vMin, vMax, vAbsSum );
         }
       }

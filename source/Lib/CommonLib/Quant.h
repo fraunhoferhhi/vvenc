@@ -163,6 +163,7 @@ public:
   static void fwdResDPCMCore       ( TCoeffSig* coef, const ptrdiff_t stride, const int width, const int height, const bool vertical );
   static void invResDPCMVerCore    ( const TCoeffSig* coef, const ptrdiff_t coefStride, TCoeffSig* dst, const ptrdiff_t dstStride, const int width, const int height );
   void    ( *xDeQuant )           ( const int maxX, const int maxY, const int scale, const TCoeffSig* const piQCoef, const size_t piQCfStride, TCoeff* const piCoef, const int rightShift, const int inputMaximum, const TCoeff transformMaximum );
+  // deltaU is only populated up to lastScanPos, and only when signHiding is true
   void    ( *xQuant )             ( const TransformUnit tu, const ComponentID compID,
                                     const CCoeffBuf& piCoef, CoeffSigBuf piQCoef,
                                     TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
