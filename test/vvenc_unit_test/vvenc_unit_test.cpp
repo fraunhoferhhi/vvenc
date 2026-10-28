@@ -5530,6 +5530,44 @@ static bool check_tplPredBlock( TplPredBlockFn opt, unsigned num_cases )
   return passed;
 }
 
+// The fused prediction error against the reference prediction and its squared error.
+template<int N>
+static bool check_tplPredError( TplPredErrorFn opt, unsigned num_cases )
+{
+  if( ! opt )
+  {
+    return true;   // no SIMD version: the search predicts and measures separately
+  }
+  InputGenerator<Pel> pelGen( 10, /*is_signed=*/false );
+  MinMaxGenerator<Pel> extremeGen( 10, /*is_signed=*/false );
+  bool passed = true;
+
+  constexpr int STRIDE = N + 16;
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    Pel src[( N + 1 ) * STRIDE], org[N * STRIDE], pred[N * N];
+    for( int i = 0; i < ( N + 1 ) * STRIDE; i++ ) src[i] = ( n & 1 ) ? extremeGen() : pelGen();
+    for( int i = 0; i < N * STRIDE; i++ )         org[i] = ( n & 2 ) ? extremeGen() : pelGen();
+    const int fx = rand() & 15, fy = rand() & 15;
+    tplPredBlockCore<N>( src, STRIDE, fx, fy, pred );
+    int ref = 0;
+    for( int y = 0; y < N; y++ )
+    {
+      for( int x = 0; x < N; x++ )
+      {
+        const int d = org[y * STRIDE + x] - pred[y * N + x];
+        ref += d * d;
+      }
+    }
+    const int got = opt( src, STRIDE, fx, fy, org, STRIDE );
+
+    std::ostringstream ctx;
+    ctx << "tplPredError" << N << " fx=" << fx << " fy=" << fy << " case=" << n;
+    passed = compare_value( ctx.str(), ref, got ) && passed;
+  }
+  return passed;
+}
+
 // The CU-tree look-ahead's 2x2 down-sampling of one row.
 static bool check_tplDownsampleRow( TplDownsampleRowFn opt, unsigned num_cases )
 {
@@ -5563,6 +5601,8 @@ static bool test_CuTree()
   passed = check_tplCodeBlock<16>( cuTree.m_codeBlock[TPL_BLK_16], num_cases, MinMaxGenerator<int>( 11 ) ) && passed;
   passed = check_tplPredBlock<8> ( cuTree.m_predBlock[TPL_BLK_8],  num_cases ) && passed;
   passed = check_tplPredBlock<16>( cuTree.m_predBlock[TPL_BLK_16], num_cases ) && passed;
+  passed = check_tplPredError<8> ( cuTree.m_predError[TPL_BLK_8],  num_cases ) && passed;
+  passed = check_tplPredError<16>( cuTree.m_predError[TPL_BLK_16], num_cases ) && passed;
   passed = check_tplDownsampleRow( cuTree.m_downsampleRow, num_cases ) && passed;
   return passed;
 }
