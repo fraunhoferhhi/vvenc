@@ -2115,8 +2115,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->picHeader->picInterSliceAllowed = sliceType != VVENC_I_SLICE;
   slice->picHeader->picIntraSliceAllowed = sliceType == VVENC_I_SLICE;
 
-  // a GOP entry's deblocking offsets apply, as in VTM, only when the PPS lets slices override its parameters
-  // (LoopFilterOffsetInPPS 0) and deblocking is enabled; otherwise the slices use the PPS parameters
+  // the slices' deblocking control, as in VTM: a slice is deblocked as the PPS says (a decoder infers
+  // sh_deblocking_filter_disabled_flag from the PPS when the slice does not override it), and a GOP entry's offsets
+  // apply only when the PPS lets slices override its parameters (LoopFilterOffsetInPPS 0) and deblocking is enabled
+  slice->deblockingFilterDisable  = slice->pps->deblockingFilterDisabled;
   slice->deblockingFilterOverride = slice->pps->deblockingFilterOverrideEnabled && !slice->pps->deblockingFilterDisabled
                                     && sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
 
