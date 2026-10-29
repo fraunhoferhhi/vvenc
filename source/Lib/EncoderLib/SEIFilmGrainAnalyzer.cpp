@@ -2118,7 +2118,10 @@ void FGAnalyzer::mergeIntervals( std::vector<std::vector<int>>& parameters, int 
     }
     const int n = mergeLeft ? i - 1 : i + 1;
     const int otherWidth = parameters[ 1 ][ n ] - parameters[ 0 ][ n ];
-    const int newScale = ( otherWidth * parameters[ 2 ][ n ] + width * parameters[ 2 ][ i ] ) / ( otherWidth + width );
+    // the scales weighted by the interval widths; two intervals of one intensity each (width 0) weigh the same
+    const int newScale = otherWidth + width > 0
+                       ? ( otherWidth * parameters[ 2 ][ n ] + width * parameters[ 2 ][ i ] ) / ( otherWidth + width )
+                       : ( parameters[ 2 ][ n ] + parameters[ 2 ][ i ] ) / 2;
     if( mergeLeft )
     {
       parameters[ 1 ][ i - 1 ] = parameters[ 1 ][ i ];
