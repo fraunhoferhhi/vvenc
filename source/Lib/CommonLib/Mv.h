@@ -294,7 +294,14 @@ bool wrapClipMv( Mv& rcMv, const Position& pos,
                  const Size& size,
                  const CodingStructure& cs );
 
-void roundAffineMv( int& mvx, int& mvy, int nShift );
+// inline, so the SIMD per-CU affine loop (InterPredX86.h) does not call it for every sub-block: even with LTO,
+// GCC kept it out of line there
+inline void roundAffineMv( int& mvx, int& mvy, int nShift )
+{
+  const int nOffset = 1 << (nShift - 1);
+  mvx = (mvx + nOffset - (mvx >= 0)) >> nShift;
+  mvy = (mvy + nOffset - (mvy >= 0)) >> nShift;
+}
 
 } // namespace vvenc
 
