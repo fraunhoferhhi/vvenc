@@ -5121,6 +5121,334 @@ static bool check_resDPCM( Quant* ref, Quant* opt, unsigned num_cases )
   return true;
 }
 
+// xQuant takes a TransformUnit by value, not flat buffers, so the test
+// needs the object graph it reads from: tu.block(compID) and
+// tu.cs->sps->getMaxLog2TrDynamicRange() go to CoeffCodingContext's
+// constructor (ContextModelling.cpp), tu.cu->lfnstIdx goes straight to
+// xQuant (QuantCore/QuantCoreSIMD/quantNeon). Hence an SPS, a
+// CodingStructure pointing at it, a CodingUnit carrying lfnstIdx, and a
+// TransformUnit built from a 1- or 3-CompArea UnitArea. tu.idx/tu.prev
+// aren't read but are copied with the rest of the by-value TU, so they're
+// set explicitly since TransformUnit::initData() leaves them alone.
+static bool check_quant( Quant* ref, Quant* opt, unsigned num_cases )
+{
+  std::cout << "Testing Quant::quant\n";
+
+  DimensionGenerator rng;
+  InputGenerator<TCoeff> coeffGen{ 16 }; // matches the real +-2^15 transform coefficient range
+
+  // g_quantScales values (Rom.cpp): both rows (no-sqrt-adjustment and
+  // sqrt-adjustment) flattened into their 9 distinct values -- always
+  // positive, always < 2^15.
+  static const std::vector<int> quantScales{ 10280, 11651, 13107, 14564, 16384, 18396, 20560, 23302, 26214 };
+
+  // SPS carries fixed-size subpicture arrays sized by MAX_NUM_SUB_PICS
+  // (1<<16), making sizeof(SPS) ~1.2MB -- larger than Windows' default 1MB
+  // main-thread stack, so it must be heap-allocated rather than a local.
+  auto sps = std::make_unique<SPS>();
+  XUCache xuCache;
+  std::mutex csMutex;
+  CodingStructure cs{ xuCache, &csMutex };
+  cs.sps = sps.get();
+  CodingUnit cu{};
+
+  auto makeTU = [&]( int w, int h, ComponentID compID, int lfnstIdx ) -> TransformUnit {
+    cu.lfnstIdx = lfnstIdx;
+    TransformUnit tu( compID == COMP_Y
+                           ? UnitArea( CHROMA_400, CompArea( COMP_Y, CHROMA_400, Area( 0, 0, w, h ) ) )
+                           : UnitArea( CHROMA_420,
+                                       CompArea( COMP_Y, CHROMA_420, Area( 0, 0, 2 * w, 2 * h ) ),
+                                       CompArea( COMP_Cb, CHROMA_420, Area( 0, 0, w, h ) ),
+                                       CompArea( COMP_Cr, CHROMA_420, Area( 0, 0, w, h ) ) ) );
+    tu.cs   = &cs;
+    tu.cu   = &cu;
+    tu.idx  = 0;
+    tu.prev = nullptr;
+    return tu;
+  };
+
+  // Mirrors QuantCore/QuantCoreSIMD's initial-scan-position derivation
+  // (Quant.cpp): the highest in-domain scan position for a shape. CGs are
+  // 4 coefficients, not 16, for 2x2/2x4/4x2, so this is per-shape, not a
+  // fixed 15/63/etc.
+  auto maxScanPosFor = [&]( int w, int h, ComponentID compID, int lfnstIdx ) -> int {
+    TransformUnit    tu( makeTU( w, h, compID, lfnstIdx ) );
+    CoeffCodingContext cctx( tu, compID, false );
+    const int         log2CGSize = (int)cctx.log2CGSize();
+    const int         iCGNum =
+        lfnstIdx > 0 ? 1 : ( std::min( 32, w ) * std::min( 32, h ) ) >> log2CGSize;
+    int pos = ( iCGNum << log2CGSize ) - 1;
+    if( lfnstIdx > 0 && ( ( w == 4 && h == 4 ) || ( w == 8 && h == 8 ) ) )
+      pos = 7;
+    return pos;
+  };
+
+  auto run_one = [&]( int w, int h, ComponentID compID, int lfnstIdx, int scale, int iQBits, bool isIRAP,
+                       bool signHiding, TCoeff thrVal, const std::vector<TCoeff>& coeffIn,
+                       const std::string& label ) -> bool {
+    TransformUnit tu( makeTU( w, h, compID, lfnstIdx ) );
+    const CCoeffBuf piCoef( const_cast<TCoeff*>( coeffIn.data() ), w, h );
+    const int64_t   iAdd = int64_t( isIRAP ? 171 : 85 ) << int64_t( iQBits - 9 );
+
+    std::vector<TCoeffSig> qRefBuf( (size_t)w * h ), qOptBuf( (size_t)w * h );
+    CoeffSigBuf             qRef( qRefBuf.data(), w, h );
+    CoeffSigBuf             qOpt( qOptBuf.data(), w, h );
+
+    TCoeff uiAbsSumRef = 0, uiAbsSumOpt = 0;
+    int    lastScanPosRef = -1, lastScanPosOpt = -1;
+
+    // Poisoned, not zeroed: xQuant only writes deltaU up to its own
+    // lastScanPos (see the write-set note on the comparison below), so a
+    // read past that would otherwise read this sentinel rather than 0.
+    // Quant::quant/xSignBitHidingHDQ itself can read past lastScanPos
+    // under BDPCM, unrelated to xQuant.
+    std::vector<TCoeff> deltaURef( MAX_TB_SIZEY * MAX_TB_SIZEY, TCoeff( 0xCDCDCDCD ) );
+    std::vector<TCoeff> deltaUOpt( MAX_TB_SIZEY * MAX_TB_SIZEY, TCoeff( 0xCDCDCDCD ) );
+
+    ref->xQuant( tu, compID, piCoef, qRef, uiAbsSumRef, lastScanPosRef, deltaURef.data(), scale, iQBits, iAdd,
+                 -32768, 32767, signHiding, thrVal );
+    opt->xQuant( tu, compID, piCoef, qOpt, uiAbsSumOpt, lastScanPosOpt, deltaUOpt.data(), scale, iQBits, iAdd,
+                 -32768, 32767, signHiding, thrVal );
+
+    std::ostringstream sstm;
+    sstm << "Quant::quant " << label << " w=" << w << " h=" << h << " compID=" << (int)compID
+         << " lfnst=" << lfnstIdx << " scale=" << scale << " iQBits=" << iQBits << " isIRAP=" << isIRAP
+         << " signHiding=" << signHiding << " thrVal=" << thrVal;
+
+    bool ok = compare_values_2d( sstm.str(), qRefBuf.data(), qOptBuf.data(), h, w );
+    ok      = compare_value( sstm.str() + " uiAbsSum", uiAbsSumRef, uiAbsSumOpt ) && ok;
+    ok      = compare_value( sstm.str() + " lastScanPos", lastScanPosRef, lastScanPosOpt ) && ok;
+
+    // deltaU is written unconditionally by the scalar path but only when
+    // signHiding is set by SIMD; that's fine since its only reader,
+    // xSignBitHidingHDQ, is itself only called when signHiding is set and
+    // never reads past lastScanPos. Compare just that range, and only here.
+    if( signHiding )
+    {
+      CoeffCodingContext cctx( tu, compID, signHiding );
+      for( int s = 0; s <= lastScanPosRef; s++ )
+      {
+        uint32_t blkPos = cctx.blockPos( s );
+        ok = compare_value( sstm.str() + " deltaU s=" + std::to_string( s ), deltaURef[blkPos], deltaUOpt[blkPos] ) &&
+             ok;
+      }
+    }
+    return ok;
+  };
+
+  // Shapes reachable from Quant::quant: ordinary square/rectangular
+  // power-of-two transforms, ISP-degenerate 1xN/Nx1 and 2xN/Nx2 luma, and
+  // narrow 4:2:0 chroma including 2x2 (SBT-halved).
+  std::vector<std::tuple<int, int, ComponentID>> ordinaryShapes;
+  for( int w : { 4, 8, 16, 32, 64 } )
+    for( int h : { 4, 8, 16, 32, 64 } )
+      ordinaryShapes.emplace_back( w, h, COMP_Y );
+  static const std::vector<std::tuple<int, int, ComponentID>> ispShapes{
+      { 1, 16, COMP_Y }, { 1, 32, COMP_Y }, { 1, 64, COMP_Y }, { 16, 1, COMP_Y }, { 32, 1, COMP_Y },
+      { 64, 1, COMP_Y }, { 2, 16, COMP_Y }, { 2, 32, COMP_Y }, { 2, 64, COMP_Y }, { 16, 2, COMP_Y },
+      { 32, 2, COMP_Y }, { 64, 2, COMP_Y },
+  };
+  static const std::vector<std::tuple<int, int, ComponentID>> chromaShapes{
+      { 2, 2, COMP_Cb }, { 2, 4, COMP_Cb }, { 4, 2, COMP_Cb }, { 2, 8, COMP_Cb },  { 8, 2, COMP_Cb },
+      { 2, 16, COMP_Cb }, { 16, 2, COMP_Cb }, { 2, 32, COMP_Cb }, { 32, 2, COMP_Cb },
+  };
+  std::vector<std::tuple<int, int, ComponentID>> allShapes = ordinaryShapes;
+  allShapes.insert( allShapes.end(), ispShapes.begin(), ispShapes.end() );
+  allShapes.insert( allShapes.end(), chromaShapes.begin(), chromaShapes.end() );
+
+  bool passed = true;
+
+  // Random sweep: shape, scale, iQBits, lfnstIdx, signHiding, isIRAP
+  // sampled independently from their real-reachable sets.
+  for( unsigned n = 0; n < num_cases; n++ )
+  {
+    const auto& shape     = allShapes[rng.get( 0, (unsigned)allShapes.size() - 1 )];
+    const int   w         = std::get<0>( shape );
+    const int   h         = std::get<1>( shape );
+    const ComponentID compID = std::get<2>( shape );
+    const int  scale      = rng.getOneOf( quantScales );
+    const int  iQBits     = (int)rng.get( 13, 30 );
+    const bool canLfnst   = std::min( w, h ) >= 4;
+    const int  lfnstIdx   = canLfnst ? (int)rng.get( 0, 2 ) : 0;
+    const bool signHiding = rng.get( 0, 1 ) != 0;
+    const bool isIRAP     = rng.get( 0, 1 ) != 0;
+
+    std::vector<TCoeff> coeff( (size_t)w * h );
+    std::generate( coeff.begin(), coeff.end(), coeffGen );
+
+    passed = run_one( w, h, compID, lfnstIdx, scale, iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff, "random" ) &&
+             passed;
+  }
+
+  // Directed cases over a representative subset of shapes, using a real
+  // scale so the extremes always reach the entropy clip and vqmovn_s32
+  // narrowing-saturation path.
+  static const std::vector<std::tuple<int, int, ComponentID>> directedShapes{
+      { 4, 4, COMP_Y },  { 8, 8, COMP_Y },   { 16, 16, COMP_Y }, { 32, 32, COMP_Y },
+      { 8, 4, COMP_Y },  { 4, 8, COMP_Y },   { 1, 16, COMP_Y },  { 16, 1, COMP_Y },
+      { 2, 4, COMP_Cb }, { 4, 2, COMP_Cb },  { 2, 2, COMP_Cb },  { 8, 2, COMP_Cb },
+  };
+  for( auto& shape : directedShapes )
+  {
+    const int   w         = std::get<0>( shape );
+    const int   h         = std::get<1>( shape );
+    const ComponentID compID = std::get<2>( shape );
+    for( int iQBits : { 13, 21, 30 } )
+    {
+      for( bool signHiding : { false, true } )
+      {
+        for( bool isIRAP : { false, true } )
+        {
+          const int maxPos = maxScanPosFor( w, h, compID, 0 );
+
+          // all-zero
+          {
+            std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                              "all-zero" ) &&
+                     passed;
+          }
+
+          // extremes, all positions, both signs; and a distinguishable
+          // alternating-small pattern, since uniform/extreme buffers can
+          // hide a lane/position mixup that clipping or saturation
+          // coincidentally masks.
+          for( TCoeff extreme : { TCoeff( 32767 ), TCoeff( -32768 ) } )
+          {
+            std::vector<TCoeff> coeff( (size_t)w * h, extreme );
+            passed =
+                run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                        "all-extreme " + std::to_string( extreme ) ) &&
+                passed;
+          }
+          {
+            std::vector<TCoeff> coeff( (size_t)w * h );
+            for( size_t i = 0; i < coeff.size(); i++ )
+              coeff[i] = TCoeff( ( i % 3 == 0 ) ? 0 : ( i & 1 ) ? -TCoeff( 100 + i ) : TCoeff( 100 + i ) );
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                              "distinguishable-small" ) &&
+                     passed;
+          }
+
+          // last non-zero at 0, the shape's own max, and (for shapes
+          // with more than one CG) the group boundary, using this shape's
+          // own group size rather than a hardcoded 15 so narrow shapes
+          // like 2x4/4x2 (4-coefficient CGs) are covered too.
+          std::vector<int> positions{ 0, maxPos };
+          {
+            TransformUnit      tuTmp( makeTU( w, h, compID, 0 ) );
+            CoeffCodingContext cctxTmp( tuTmp, compID, false );
+            const int          groupSize = 1 << cctxTmp.log2CGSize();
+            if( groupSize - 1 < maxPos )
+              positions.push_back( groupSize - 1 );
+            if( groupSize <= maxPos )
+              positions.push_back( groupSize );
+          }
+          for( int p : positions )
+          {
+            std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
+            TransformUnit       tu( makeTU( w, h, compID, 0 ) );
+            CoeffCodingContext   cctx( tu, compID, signHiding );
+            coeff[cctx.blockPos( p )] = TCoeff( 12345 );
+            passed = run_one( w, h, compID, 0, quantScales.back(), iQBits, isIRAP, signHiding, TCoeff( 8 ), coeff,
+                              "last-nonzero pos=" + std::to_string( p ) ) &&
+                     passed;
+          }
+        }
+      }
+    }
+  }
+
+  // CG threshold-skip: fill the top CG(s) with coefficients at/under
+  // useThres (same operation order as QuantCore, narrowing to TCoeff before
+  // the division) so they're skipped, then stop at the next CG; also an
+  // isolated per-row check (only the skip-candidate CG's last row exceeds
+  // useThres) and the useThres<=0 case (int32 truncation of thres at high
+  // iQBits) on an active multi-CG shape, where the correct behaviour is
+  // zero skips: the first (highest) CG holds the last real non-zero
+  // coefficient, so it's never below a <=0 threshold. Covers both a small
+  // (8x8) and a large (32x32, several skipped groups) shape, and both
+  // signHiding states.
+  for( int w : { 8, 32 } )
+  {
+    const int h = w, compID_i = COMP_Y;
+    for( int iQBits : { 13, 21, 28 } )
+    {
+      for( TCoeff thrVal : { TCoeff( 8 ), TCoeff( 0 ), TCoeff( 1 ), TCoeff( 16 ) } )
+      {
+        for( bool signHiding : { false, true } )
+        {
+          const int scale        = 26214;
+          const TCoeff thres      = iQBits ? TCoeff( ( int64_t( thrVal ) << ( iQBits - 1 ) ) )
+                                            : TCoeff( ( int64_t( thrVal >> 1 ) << iQBits ) );
+          const TCoeff useThres   = thres / ( scale << 2 );
+
+          TransformUnit       tu( makeTU( w, h, COMP_Y, 0 ) );
+          CoeffCodingContext   cctx( tu, COMP_Y, signHiding );
+          const int            groupSize = 1 << cctx.log2CGSize();
+
+          // Top two CGs at/under useThres (or, if useThres<=0, just small
+          // values, to confirm zero CGs get skipped in that case), then a
+          // real coefficient in the third CG from the top.
+          std::vector<TCoeff> coeff( (size_t)w * h, TCoeff( 0 ) );
+          const int maxPos = maxScanPosFor( w, h, COMP_Y, 0 );
+          const int topCG  = maxPos >> cctx.log2CGSize();
+          TCoeff fillVal   = useThres > 0 ? useThres : TCoeff( 1 );
+          if( topCG >= 1 )
+            for( int n = 0; n < groupSize; n++ )
+              coeff[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + n )] = fillVal;
+          if( topCG >= 2 )
+            coeff[cctx.blockPos( ( ( topCG - 1 ) << cctx.log2CGSize() ) )] = fillVal;
+          if( topCG >= 2 )
+            coeff[cctx.blockPos( ( ( topCG - 2 ) << cctx.log2CGSize() ) )] = TCoeff( 12345 );
+
+          passed = run_one( w, h, ComponentID( compID_i ), 0, scale, iQBits, false, signHiding, thrVal, coeff,
+                            "threshold-skip useThres=" + std::to_string( useThres ) ) &&
+                   passed;
+
+          // per-row isolated: only the last row of the top CG exceeds
+          // useThres, forcing that specific row's SIMD load to be checked.
+          if( topCG >= 1 && useThres > 0 )
+          {
+            std::vector<TCoeff> coeffRow( (size_t)w * h, TCoeff( 0 ) );
+            coeffRow[cctx.blockPos( ( topCG << cctx.log2CGSize() ) + groupSize - 1 )] = TCoeff( useThres + 1 );
+            passed = run_one( w, h, COMP_Y, 0, scale, iQBits, false, signHiding, thrVal, coeffRow,
+                              "threshold-skip-row" ) &&
+                     passed;
+          }
+        }
+      }
+    }
+  }
+
+  // LFNST: square 4x4/8x8 forced to scan pos<=7; rectangular (4x8/8x4)
+  // and 16x16 get a full CG (pos<=15) with no override.
+  {
+    struct LfnstCase { int w, h, pos; };
+    static const std::vector<LfnstCase> lfnstCases{
+        { 4, 4, 7 }, { 8, 8, 7 }, { 4, 8, 14 }, { 8, 4, 14 }, { 4, 8, 15 }, { 8, 4, 15 }, { 16, 16, 15 },
+    };
+    for( auto& lc : lfnstCases )
+    {
+      for( int lfnstIdx : { 1, 2 } )
+      {
+        for( bool signHiding : { false, true } )
+        {
+          std::vector<TCoeff> coeff( (size_t)lc.w * lc.h, TCoeff( 0 ) );
+          TransformUnit        tu( makeTU( lc.w, lc.h, COMP_Y, lfnstIdx ) );
+          CoeffCodingContext    cctx( tu, COMP_Y, signHiding );
+          coeff[cctx.blockPos( lc.pos )] = TCoeff( 777 );
+          passed = run_one( lc.w, lc.h, COMP_Y, lfnstIdx, 26214, 21, false, signHiding, TCoeff( 8 ), coeff,
+                            "lfnst pos=" + std::to_string( lc.pos ) ) &&
+                   passed;
+        }
+      }
+    }
+  }
+
+  return passed;
+}
+
 static bool test_Quant()
 {
   Quant ref( /*other=*/nullptr, /*useScalingLists=*/false, /*enableOpt=*/false );
@@ -5130,6 +5458,7 @@ static bool test_Quant()
   bool     passed    = check_needRdoq( &ref, &opt, num_cases );
   passed             = check_dequant( &ref, &opt, num_cases ) && passed;
   passed             = check_resDPCM( &ref, &opt, num_cases ) && passed;
+  passed             = check_quant( &ref, &opt, num_cases ) && passed;
   return passed;
 }
 #endif // ENABLE_SIMD_OPT_QUANT

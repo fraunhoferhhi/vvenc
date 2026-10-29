@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Quant.h"
 #include "CommonLib/arm/mem_neon.h"
+#include "CommonLib/arm/neon/sum_neon.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -256,11 +257,203 @@ static void dequantNeon( const int maxX, const int maxY, const int scale, const 
   }
 }
 
+// Quantize four coefficients from one row of a complete 4x4 coding group.
+// quantNeon handles the last-nonzero scan and threshold skipping, and uses
+// the scalar path for other group shapes or a partial final group.
+//
+// For each coefficient c, matching QuantCore:
+//   p = abs(c) * defaultQuantisationCoefficient
+//   t = p + iAdd; q = t >> iQBits
+//   deltaU = ((t & ((int64_t(1) << iQBits) - 1)) - iAdd) >> qBits8
+// Accumulate q before restoring the sign and clipping the output.
+//
+// Reinterpreting vabsq_s32 as unsigned gives vmull_u32 the magnitude bit
+// pattern, including 0x80000000 for INT_MIN. This also matches the x86
+// unsigned multiply; scalar abs(INT_MIN) is undefined, but that input is
+// outside the encoder's coefficient domain. The low/high products retain
+// coefficient order when narrowed and combined.
+//
+// Products and rounded sums fit signed 64-bit lanes. vshlq_s64 performs the
+// arithmetic right shifts required by QuantCore. For deltaU, its low 32
+// bits also match a logical right shift as long as qBits8 <= 32 (i.e.
+// iQBits <= 40): the sign-fill bits then lie entirely above the retained
+// bits, and real iQBits values stay far below that.
+//
+// SignHiding is a template parameter so the per-call choice is made outside
+// the coefficient-group loops and deltaU work is omitted when sign hiding
+// is disabled.
+template<bool SignHiding>
+static inline void quantCG4x4Neon( const CCoeffBuf& piCoef, CoeffSigBuf& piQCoef, TCoeff* deltaU, int uiBlockPos,
+                                    const uint32x4_t vQuantCoeff, const int64x2_t vAdd, const int64x2_t vQMask,
+                                    const int64x2_t vNegQBits, const int64x2_t vNegQBits8, const int32x4_t vMin,
+                                    const int32x4_t vMax, int32x4_t& vAbsSum )
+{
+  const int32x4_t  vLevel = vld1q_s32( &piCoef.buf[uiBlockPos] );
+  const uint32x4_t vSign  = vreinterpretq_u32_s32( vshrq_n_s32( vLevel, 31 ) );
+  const uint32x4_t vAbs   = vreinterpretq_u32_s32( vabsq_s32( vLevel ) );
+
+  const uint64x2_t p0u = vmull_u32( vget_low_u32( vAbs ), vget_low_u32( vQuantCoeff ) );
+  const uint64x2_t p1u = vmull_u32( vget_high_u32( vAbs ), vget_high_u32( vQuantCoeff ) );
+  const int64x2_t  p0  = vreinterpretq_s64_u64( p0u );
+  const int64x2_t  p1  = vreinterpretq_s64_u64( p1u );
+
+  const int64x2_t t0 = vaddq_s64( p0, vAdd );
+  const int64x2_t t1 = vaddq_s64( p1, vAdd );
+  const int64x2_t q0 = vshlq_s64( t0, vNegQBits );
+  const int64x2_t q1 = vshlq_s64( t1, vNegQBits );
+
+  if( SignHiding )
+  {
+    const int64x2_t du0 = vshlq_s64( vsubq_s64( vandq_s64( t0, vQMask ), vAdd ), vNegQBits8 );
+    const int64x2_t du1 = vshlq_s64( vsubq_s64( vandq_s64( t1, vQMask ), vAdd ), vNegQBits8 );
+    vst1q_s32( &deltaU[uiBlockPos], vcombine_s32( vmovn_s64( du0 ), vmovn_s64( du1 ) ) );
+  }
+
+  const int32x4_t qMag = vcombine_s32( vmovn_s64( q0 ), vmovn_s64( q1 ) );
+  vAbsSum             = vaddq_s32( vAbsSum, qMag );
+
+  const int32x4_t signedQ = vsubq_s32( veorq_s32( qMag, vreinterpretq_s32_u32( vSign ) ), vreinterpretq_s32_u32( vSign ) );
+  const int32x4_t clipped = vminq_s32( vMax, vmaxq_s32( vMin, signedQ ) );
+  vst1_s16( &piQCoef.buf[uiBlockPos], vqmovn_s32( clipped ) );
+}
+
+static void quantNeon( const TransformUnit tu, const ComponentID compID, const CCoeffBuf& piCoef,
+                        CoeffSigBuf piQCoef, TCoeff& uiAbsSum, int& lastScanPos, TCoeff* deltaU,
+                        const int defaultQuantisationCoefficient, const int iQBits, const int64_t iAdd,
+                        const TCoeff entropyCodingMinimum, const TCoeff entropyCodingMaximum, const bool signHiding,
+                        const TCoeff m_thrVal )
+{
+  CoeffCodingContext cctx( tu, compID, signHiding );
+
+  const CompArea& rect    = tu.blocks[compID];
+  const uint32_t  uiWidth  = rect.width;
+  const uint32_t  uiHeight = rect.height;
+
+  const uint32_t log2CGSize = cctx.log2CGSize();
+  uiAbsSum                   = 0;
+  const int iCGSize          = 1 << log2CGSize;
+
+  const uint32_t lfnstIdx = tu.cu->lfnstIdx;
+  const int      iCGNum =
+      lfnstIdx > 0 ? 1
+                   : std::min<int>( JVET_C0024_ZERO_OUT_TH, uiWidth ) * std::min<int>( JVET_C0024_ZERO_OUT_TH, uiHeight ) >>
+                         cctx.log2CGSize();
+  int iScanPos = ( iCGNum << log2CGSize ) - 1;
+
+  if( lfnstIdx > 0 && ( ( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8 ) ) )
+    iScanPos = 7;
+
+  // Find first non-zero coeff (scalar, identical to QuantCore/QuantCoreSIMD).
+  for( ; iScanPos > 0; iScanPos-- )
+  {
+    const uint32_t uiBlkPos = cctx.blockPos( iScanPos );
+    if( piCoef.buf[uiBlkPos] )
+      break;
+  }
+
+  TCoeff thres = 0, useThres = 0;
+  if( iQBits )
+    thres = TCoeff( ( int64_t( m_thrVal ) << ( iQBits - 1 ) ) );
+  else
+    thres = TCoeff( ( int64_t( m_thrVal >> 1 ) << iQBits ) );
+  useThres = thres / ( defaultQuantisationCoefficient << 2 );
+
+  const bool is4x4sbb = log2CGSize == 4 && cctx.log2CGWidth() == 2;
+
+  int subSetId = iScanPos >> log2CGSize;
+  if( is4x4sbb && iScanPos >= 16 )
+  {
+    const int32x4_t vThres = vdupq_n_s32( useThres );
+    for( ; subSetId >= 1; subSetId-- )
+    {
+      const int      iScanPosinCG = iScanPos & ( iCGSize - 1 );
+      const int      firstTestPos = iScanPos - iScanPosinCG;
+      uint32_t       uiBlkPos     = cctx.blockPos( firstTestPos );
+
+      uint32x4_t anyOver = vcgtq_s32( vabsq_s32( vld1q_s32( &piCoef.buf[uiBlkPos] ) ), vThres );
+      uiBlkPos += uiWidth;
+      anyOver = vorrq_u32( anyOver, vcgtq_s32( vabsq_s32( vld1q_s32( &piCoef.buf[uiBlkPos] ) ), vThres ) );
+      uiBlkPos += uiWidth;
+      anyOver = vorrq_u32( anyOver, vcgtq_s32( vabsq_s32( vld1q_s32( &piCoef.buf[uiBlkPos] ) ), vThres ) );
+      uiBlkPos += uiWidth;
+      anyOver = vorrq_u32( anyOver, vcgtq_s32( vabsq_s32( vld1q_s32( &piCoef.buf[uiBlkPos] ) ), vThres ) );
+
+      if( any_lane_set_u32x4( anyOver ) )
+        break;
+
+      iScanPos -= iScanPosinCG + 1;
+    }
+  }
+
+  const int qBits8 = iQBits - 8;
+  piQCoef.memset( 0 );
+  lastScanPos = iScanPos;
+
+  if( is4x4sbb && ( iScanPos & 15 ) == 15 )
+  {
+    const uint32x4_t vQuantCoeff = vreinterpretq_u32_s32( vdupq_n_s32( defaultQuantisationCoefficient ) );
+    const int64x2_t vAdd        = vdupq_n_s64( iAdd );
+    const int64x2_t vQMask      = vdupq_n_s64( ( int64_t( 1 ) << iQBits ) - 1 );
+    const int64x2_t vNegQBits   = vdupq_n_s64( -(int64_t)iQBits );
+    const int64x2_t vNegQBits8  = vdupq_n_s64( -(int64_t)qBits8 );
+    const int32x4_t vMin        = vdupq_n_s32( entropyCodingMinimum );
+    const int32x4_t vMax        = vdupq_n_s32( entropyCodingMaximum );
+    int32x4_t       vAbsSum     = vdupq_n_s32( 0 );
+
+    if( signHiding )
+    {
+      for( subSetId = iScanPos >> log2CGSize; subSetId >= 0; subSetId-- )
+      {
+        int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
+        for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
+        {
+          quantCG4x4Neon<true>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQMask, vNegQBits,
+                                vNegQBits8, vMin, vMax, vAbsSum );
+        }
+      }
+    }
+    else
+    {
+      for( subSetId = iScanPos >> log2CGSize; subSetId >= 0; subSetId-- )
+      {
+        int uiBlockPos = cctx.blockPos( subSetId << log2CGSize );
+        for( int line = 0; line < 4; line++, uiBlockPos += uiWidth )
+        {
+          quantCG4x4Neon<false>( piCoef, piQCoef, deltaU, uiBlockPos, vQuantCoeff, vAdd, vQMask, vNegQBits,
+                                 vNegQBits8, vMin, vMax, vAbsSum );
+        }
+      }
+    }
+
+    uiAbsSum += horizontal_add_s32x4( vAbsSum );
+  }
+  else
+  {
+    for( int currPos = 0; currPos <= iScanPos; currPos++ )
+    {
+      const int    uiBlockPos = cctx.blockPos( currPos );
+      const TCoeff iLevel     = piCoef.buf[uiBlockPos];
+      const TCoeff iSign      = ( iLevel < 0 ? -1 : 1 );
+
+      const int64_t tmpLevel            = (int64_t)abs( iLevel ) * defaultQuantisationCoefficient;
+      const TCoeff  quantisedMagnitude  = TCoeff( ( tmpLevel + iAdd ) >> iQBits );
+      if( signHiding )
+      {
+        deltaU[uiBlockPos] = (TCoeff)( ( tmpLevel - ( (int64_t)quantisedMagnitude << iQBits ) ) >> qBits8 );
+      }
+      uiAbsSum += quantisedMagnitude;
+      const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+      piQCoef.buf[uiBlockPos]           = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+    }
+  }
+}
+
 template<>
 void Quant::_initQuantARM<NEON>()
 {
   xNeedRdoq = needRdoqNeon;
   xDeQuant  = dequantNeon;
+  xQuant    = quantNeon;
 }
 
 }  // namespace vvenc
