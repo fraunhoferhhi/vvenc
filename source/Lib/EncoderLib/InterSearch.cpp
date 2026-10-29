@@ -770,7 +770,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   uint32_t        uiDirecBest = 0;
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
-  Pel*  piRefPos;
+  const Pel* piRefPos;
   int iRefStride = pcPatternKey->width + 1;
   m_pcRdCost->setDistParam( m_cDistParam, *pcPatternKey, m_filteredBlock[0][0][0], iRefStride, m_lumaClpRng.bd, COMP_Y, 0, m_pcEncCfg->m_bUseHADME ? ( m_pcEncCfg->m_fastHad ? 2 : 1 ) : 0 );
 
@@ -813,23 +813,17 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
         if( 0 == i )
         {
-          // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-          m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 0 ][ 0 ], intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-          m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 0 ][ 0 ] + width, intStride, 1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          // the integer position needs no interpolation: its SAD reads the reference itself (see piRefPos below)
 
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
           m_if.filterHor( COMP_Y, srcPtr, srcStride, m_filteredBlockTmp[ 2 ][ 0 ], intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
           m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[ 2 ][ 0 ] + width, intStride, 1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-
-          intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + halfFilterSize * intStride + 1;
-          dstPtr = m_filteredBlock[ 0 ][ 0 ][ 0 ];
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
         }
         else if( 1 == i )
         {
-          intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + ( halfFilterSize - 1 ) * intStride + 1;
+          // vertical-only position: filtered straight from the reference (isFirst), see xFilterVerFromReference
           dstPtr = m_filteredBlock[ 2 ][ 0 ][ 0 ];
-          m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+          xFilterVerFromReference( pattern, -1, dstPtr, dstStride, height + 1, 2, useAltHpelIf );
         }
         else if( 3 == i )
         {
@@ -854,7 +848,9 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
     int horVal = cMvTest.hor * iFrac;
     int verVal = cMvTest.ver * iFrac;
-    piRefPos = m_filteredBlock[verVal & 3][horVal & 3][0];
+    // the integer position is the reference itself, with the reference's stride; the others are interpolated blocks
+    const bool integerPos = ( verVal & 3 ) == 0 && ( horVal & 3 ) == 0;
+    piRefPos = integerPos ? pattern->buf : m_filteredBlock[verVal & 3][horVal & 3][0];
 
     if ( horVal == 2 && ( verVal & 1 ) == 0 )
     {
@@ -868,7 +864,8 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
     cMvTest += rcMvFrac;
 
 
-    m_cDistParam.cur.buf   = piRefPos;
+    m_cDistParam.cur.buf    = piRefPos;
+    m_cDistParam.cur.stride = integerPos ? pattern->stride : iRefStride;
     uiDist = m_cDistParam.distFunc( m_cDistParam );
     uiDist += m_pcRdCost->getCostOfVectorWithPredictor( cMvTest.hor, cMvTest.ver, 0 );
 
@@ -2903,6 +2900,18 @@ void InterSearch::xSymMotionEstimation( CodingUnit& cu, CPelUnitBuf& origBuf, Mv
 }
 
 
+// A vertical-only sub-pel position of the ME (fraction quarterFrac / 4 vertically, 0 horizontally), filtered from the
+// reference rows starting at rowOffset relative to the pattern. Before, these positions were filtered from a frac-0
+// "horizontal" pass, ( x << h ) - IF_INTERNAL_OFFS in m_filteredBlockTmp[ 0 ][ 0 ], with isFirst = false. Because the
+// taps sum to 64, ( sum c * ( ( x << h ) - IF_INTERNAL_OFFS ) + IF_INTERNAL_OFFS * 64 + 2^(5+h) ) >> ( 6 + h ) equals
+// ( sum c * x + 32 ) >> 6, the isFirst = true filter of the reference, with the same clip: identical samples, without
+// the copy, for every luma filter the ME uses and both internal bit depths (8 and 10).
+void InterSearch::xFilterVerFromReference( const CPelBuf* pattern, int rowOffset, Pel* dst, int dstStride, int height, int quarterFrac, bool useAltHpelIf )
+{
+  m_if.filterVer( COMP_Y, pattern->buf + rowOffset * pattern->stride, pattern->stride, dst, dstStride, pattern->width, height,
+                  quarterFrac << MV_FRACTIONAL_BITS_DIFF, true, true, m_currChromaFormat, m_lumaClpRng, useAltHpelIf, 0, m_pcEncCfg->m_meReduceTap );
+}
+
 /**
 * \brief Generate half-sample interpolated block
 *
@@ -2930,21 +2939,14 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
 
   const ChromaFormat chFmt = m_currChromaFormat;
 
-  // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
-  m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[0][0]        , intStride, width, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-  m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[0][0] + width, intStride,     1, height + filterSize, 0 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  // the integer position needs no interpolation: xPatternRefinement's SAD reads the reference itself
 
   // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
   m_if.filterHor( COMP_Y, srcPtr,         srcStride, m_filteredBlockTmp[2][0],         intStride, width, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
   m_if.filterHor( COMP_Y, srcPtr + width, srcStride, m_filteredBlockTmp[2][0] + width, intStride,     1, height + filterSize, 2 << MV_FRACTIONAL_BITS_DIFF, false, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
 
-  intPtr = m_filteredBlockTmp[0][0] + halfFilterSize * intStride + 1;
-  dstPtr = m_filteredBlock[0][0][0];
-  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 0, 0 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
-
-  intPtr = m_filteredBlockTmp[0][0] + (halfFilterSize - 1) * intStride + 1;
   dstPtr = m_filteredBlock[2][0][0];
-  m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width + 0, height + 1, 2 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, useAltHpelIf, 0, reduceTap );
+  xFilterVerFromReference( pattern, -1, dstPtr, dstStride, height + 1, 2, useAltHpelIf );
 
   intPtr = m_filteredBlockTmp[2][0] + halfFilterSize * intStride;
   dstPtr = m_filteredBlock[0][2][0];
@@ -3150,25 +3152,15 @@ void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patt
     if( s_doInterpQ[ patternId ][ 0 ] )
     {
       // Generate @ 1,0
-      intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + ( halfFilterSize - 1 ) * intStride + 1;
       dstPtr = m_filteredBlock[ 1 ][ 0 ][ 0 ];
-      if( halfPelRef.ver >= 0 )
-      {
-        intPtr += intStride;
-      }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, reduceTap );
+      xFilterVerFromReference( pattern, halfPelRef.ver >= 0 ? 0 : -1, dstPtr, dstStride, height, 1, false );
     }
 
     if( s_doInterpQ[ patternId ][ 1 ] )
     {
       // Generate @ 3,0
-      intPtr = m_filteredBlockTmp[ 0 ][ 0 ] + ( halfFilterSize - 1 ) * intStride + 1;
       dstPtr = m_filteredBlock[ 3 ][ 0 ][ 0 ];
-      if( halfPelRef.ver > 0 )
-      {
-        intPtr += intStride;
-      }
-      m_if.filterVer( COMP_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3 << MV_FRACTIONAL_BITS_DIFF, false, true, chFmt, clpRng, false, 0, reduceTap );
+      xFilterVerFromReference( pattern, halfPelRef.ver > 0 ? 0 : -1, dstPtr, dstStride, height, 3, false );
     }
   }
 }

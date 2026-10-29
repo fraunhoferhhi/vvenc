@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefX86.h"
 #include "Rom.h"
 #include "InterpolationFilter.h"
+#include "InterpolationFilter4x4X86.h"
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCIF
 
@@ -70,17 +71,16 @@ namespace vvenc {
 // ===========================
 // Full-pel copy 8-bit/16-bit
 // ===========================
-template<typename Tsrc, int N, bool isFirst, bool isLast>
+template<typename Tsrc, int N, bool isFirst, bool isLast, int bitDepth>
 static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride, int16_t *dst, int dstStride, int width, int height )
 {
   Tsrc* src = (Tsrc*)_src;
 
-  int headroom = IF_INTERNAL_PREC - clpRng.bd;
+  constexpr int headroom = IF_INTERNAL_PREC - bitDepth;
   int headroom_offset = 1 << ( headroom - 1 );
   int offset   = IF_INTERNAL_OFFS;
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
-  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
 
   __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
   __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
@@ -110,14 +110,14 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
         }
         else if( isFirst )
         {
-          vsrc = _mm_sll_epi16( vsrc, vheadroom );
+          vsrc = _mm_slli_epi16( vsrc, headroom );
           vsum = _mm_sub_epi16( vsrc, voffset );
         }
         else
         {
           vsrc = _mm_add_epi16( vsrc, voffset );
           vsrc = _mm_add_epi16( vsrc, voffset_headroom );
-          vsrc = _mm_sra_epi16( vsrc, vheadroom );
+          vsrc = _mm_srai_epi16( vsrc, headroom );
           vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsrc ) );
         }
 #if JEM_UNALIGNED_DST
@@ -132,17 +132,16 @@ static void fullPelCopySSE( const ClpRng& clpRng, const void*_src, int srcStride
   }
 }
 
-template<typename Tsrc, bool isFirst, bool isLast>
+template<typename Tsrc, bool isFirst, bool isLast, int bitDepth>
 static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t srcStride, int16_t *dst, ptrdiff_t dstStride, int width, int height )
 {
   Tsrc* src = (Tsrc*)_src;
 
-  int headroom = IF_INTERNAL_PREC - clpRng.bd;
+  constexpr int headroom = IF_INTERNAL_PREC - bitDepth;
   int headroom_offset = 1 << ( headroom - 1 );
   int offset   = IF_INTERNAL_OFFS;
   __m128i voffset  = _mm_set1_epi16( offset );
   __m128i voffset_headroom  = _mm_set1_epi16( headroom_offset );
-  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
   __m128i vibdimin = _mm_set1_epi16( clpRng.min() );
   __m128i vibdimax = _mm_set1_epi16( clpRng.max() );
 
@@ -171,14 +170,14 @@ static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t 
       }
       else if( isFirst )
       {
-        vsrc = _mm_sll_epi16( vsrc, vheadroom );
+        vsrc = _mm_slli_epi16( vsrc, headroom );
         vsum = _mm_sub_epi16( vsrc, voffset );
       }
       else
       {
         vsrc = _mm_add_epi16( vsrc, voffset );
         vsrc = _mm_add_epi16( vsrc, voffset_headroom );
-        vsrc = _mm_sra_epi16( vsrc, vheadroom );
+        vsrc = _mm_srai_epi16( vsrc, headroom );
         vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsrc ) );
       }
 
@@ -189,19 +188,18 @@ static void fullPelCopySSE_M4( const ClpRng& clpRng, const void*_src, ptrdiff_t 
   }
 }
 
-template<typename Tsrc, int N, bool isFirst, bool isLast>
+template<typename Tsrc, int N, bool isFirst, bool isLast, int bitDepth>
 static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStride, short *dst, int dstStride, int width, int height )
 {
 #ifdef USE_AVX2
   Tsrc* src = (Tsrc*)_src;
 
-  int headroom = IF_INTERNAL_PREC - clpRng.bd;
+  constexpr int headroom = IF_INTERNAL_PREC - bitDepth;
   int offset   = 1 << ( headroom - 1 );
   int internal_offset = IF_INTERNAL_OFFS;
 
   __m256i vinternal_offset = _mm256_set1_epi16( internal_offset );
   __m256i vheadroom_offset = _mm256_set1_epi16( offset );
-  __m128i vheadroom = _mm_cvtsi32_si128( headroom );
 
   __m256i vibdimin = _mm256_set1_epi16( clpRng.min() );
   __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
@@ -232,14 +230,14 @@ static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStrid
         }
         else if( isFirst )
         {
-          vsrc = _mm256_sll_epi16( vsrc, vheadroom );
+          vsrc = _mm256_slli_epi16( vsrc, headroom );
           vsum = _mm256_sub_epi16( vsrc, vinternal_offset );
         }
         else
         {
           vsrc = _mm256_add_epi16( vsrc, vinternal_offset );
           vsrc = _mm256_add_epi16( vsrc, vheadroom_offset );
-          vsrc = _mm256_sra_epi16( vsrc, vheadroom );
+          vsrc = _mm256_srai_epi16( vsrc, headroom );
           vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsrc ) );
         }
 #if JEM_UNALIGNED_DST
@@ -261,30 +259,73 @@ static void fullPelCopyAVX2( const ClpRng& clpRng, const void*_src, int srcStrid
 }
 
 
+// filterCopy< true, false > with biMCForDMVR: dst = src << ( IF_INTERNAL_PREC_BILINEAR - bitDepth ), a plain copy at 10 bit.
+// DMVR's widths are the block width + 4 (20, 36, 68), so 16 samples at a time with AVX2, then 8, 4 and single ones.
+template<X86_VEXT vext>
+static void copyToBilinearPrecision( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height )
+{
+  CHECKD( clpRng.bd > IF_INTERNAL_PREC_BILINEAR, "VVenC doesn't support bitdepth over '10'!" );
+  const int     shift  = IF_INTERNAL_PREC_BILINEAR - clpRng.bd;
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+
+  for( int row = 0; row < height; row++, src += srcStride, dst += dstStride )
+  {
+    int col = 0;
+#if USE_AVX2
+    for( ; vext >= AVX2 && col + 16 <= width; col += 16 )
+    {
+      _mm256_storeu_si256( ( __m256i* ) &dst[col], _mm256_sll_epi16( _mm256_loadu_si256( ( const __m256i* ) &src[col] ), vshift ) );
+    }
+#endif
+    for( ; col + 8 <= width; col += 8 )
+    {
+      _mm_storeu_si128( ( __m128i* ) &dst[col], _mm_sll_epi16( _mm_loadu_si128( ( const __m128i* ) &src[col] ), vshift ) );
+    }
+    for( ; col + 4 <= width; col += 4 )
+    {
+      _vv_storel_epi64( ( __m128i* ) &dst[col], _mm_sll_epi16( _vv_loadl_epi64( ( const __m128i* ) &src[col] ), vshift ) );
+    }
+    for( ; col < width; col++ )
+    {
+      dst[col] = src[col] << shift;
+    }
+  }
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    _mm256_zeroupper();
+  }
+#endif
+}
+
 template<X86_VEXT vext, bool isFirst, bool isLast>
 static void simdFilterCopy( const ClpRng& clpRng, const Pel* src, int srcStride, int16_t* dst, int dstStride, int width, int height, bool biMCForDMVR)
 {
-  if( biMCForDMVR )
+  if( biMCForDMVR && isFirst && !isLast )
   {
-    // TODO: SIMD implementation
+    // the integer-MV case of DMVR's bilinear search: the samples at the bilinear filter's 10-bit precision
+    copyToBilinearPrecision<vext>( clpRng, src, srcStride, dst, dstStride, width, height );
+  }
+  else if( biMCForDMVR )
+  {
     InterpolationFilter::filterCopy<isFirst, isLast>( clpRng, src, srcStride, dst, dstStride, width, height, biMCForDMVR);
   }
   else
   if( vext >= AVX2 && ( width % 16 ) == 0 )
   {
-    fullPelCopyAVX2<Pel, 16, isFirst, isLast >(clpRng, src, srcStride, dst, dstStride, width, height);
+    dispatchBitDepth( clpRng.bd, [&]( auto bd ) { fullPelCopyAVX2<Pel, 16, isFirst, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height ); } );
   }
   else if( ( width % 16 ) == 0 )
   {
-    fullPelCopySSE<Pel, 16, isFirst, isLast >(clpRng, src, srcStride, dst, dstStride, width, height);
+    dispatchBitDepth( clpRng.bd, [&]( auto bd ) { fullPelCopySSE<Pel, 16, isFirst, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height ); } );
   }
   else if( ( width % 8 ) == 0 )
   {
-    fullPelCopySSE<Pel, 8, isFirst, isLast>(clpRng, src, srcStride, dst, dstStride, width, height);
+    dispatchBitDepth( clpRng.bd, [&]( auto bd ) { fullPelCopySSE<Pel, 8, isFirst, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height ); } );
   }
   else if( ( width % 4 ) == 0 )
   {
-    fullPelCopySSE_M4<Pel, isFirst, isLast>( clpRng, src, srcStride, dst, dstStride, width, height );
+    dispatchBitDepth( clpRng.bd, [&]( auto bd ) { fullPelCopySSE_M4<Pel, isFirst, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height ); } );
   }
   else
   { //Scalar
@@ -908,8 +949,8 @@ static void simdInterpolateHorM8_AVX2( const int16_t* src, int srcStride, int16_
 }
 
 
-template<X86_VEXT vext, int N, bool shiftBack>
-static void simdInterpolateHorM16_AVX2( const int16_t* src, int srcStride, int16_t *dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const *coeff )
+template<X86_VEXT vext, int N, bool shiftBack, int shift>
+static void simdInterpolateHorM16_AVX2( const int16_t* src, int srcStride, int16_t *dst, int dstStride, int width, int height, int offset, const ClpRng& clpRng, int16_t const *coeff )
 {
 #ifdef USE_AVX2
   const int filterSpan = ( N-1 );
@@ -924,7 +965,6 @@ static void simdInterpolateHorM16_AVX2( const int16_t* src, int srcStride, int16
   cond_mm_prefetch( (const char*)( src+width+filterSpan+3*srcStride ), _MM_HINT_T0 );
 
   __m256i voffset    = _mm256_set1_epi32( offset );
-  __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
   __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
   __m256i vzero      = _mm256_setzero_si256();
   __m256i vsum, vsuma, vsumb;
@@ -1004,12 +1044,7 @@ static void simdInterpolateHorM16_AVX2( const int16_t* src, int srcStride, int16
       vsumb = _mm256_add_epi32( vsumb, voffset );
       vsuma = _mm256_srai_epi32( vsuma, shift );
       vsumb = _mm256_srai_epi32( vsumb, shift );
-      vsum  = _mm256_packs_epi32( vsuma, vsumb );
-
-      if( shiftBack )
-      { //clip
-        vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
-      }
+      vsum  = shiftBack ? packClipLast_AVX2( vsuma, vsumb, vibdimax ) : _mm256_packs_epi32( vsuma, vsumb );
 #if JEM_UNALIGNED_DST
       _mm256_storeu_si256( ( __m256i * )&dst[col], vsum );
 #else
@@ -1284,8 +1319,8 @@ static void simdInterpolateVerM8_AVX2( const int16_t *src, int srcStride, int16_
 }
 
 
-template<X86_VEXT vext, int N, bool shiftBack>
-static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16_t *dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const *coeff )
+template<X86_VEXT vext, int N, bool shiftBack, int shift>
+static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16_t *dst, int dstStride, int width, int height, int offset, const ClpRng& clpRng, int16_t const *coeff )
 {
 #ifdef USE_AVX2
   cond_mm_prefetch( (const char *) &src[0 * srcStride], _MM_HINT_T0 );
@@ -1307,7 +1342,6 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
   }
 
   const __m256i voffset    = _mm256_set1_epi32( offset );
-  const __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
   const __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
   __m256i vsum, vsuma, vsumb;
 
@@ -1349,12 +1383,7 @@ static void simdInterpolateVerM16_AVX2( const int16_t *src, int srcStride, int16
       vsuma = _mm256_srai_epi32 ( vsuma, shift );
       vsumb = _mm256_srai_epi32 ( vsumb, shift );
 
-      vsum  = _mm256_packs_epi32( vsuma, vsumb );
-
-      if( shiftBack )
-      { //clip
-        vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
-      }
+      vsum  = shiftBack ? packClipLast_AVX2( vsuma, vsumb, vibdimax ) : _mm256_packs_epi32( vsuma, vsumb );
 
       _mm256_storeu_si256( ( __m256i * )&dst[col], vsum );
 
@@ -1485,13 +1514,11 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
   int cStride = ( isVertical ) ? srcStride : 1;
   src -= ( N/2 - 1 ) * cStride;
 
-  int offset;
-  int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift    = IF_FILTER_PREC;
   // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
   // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
+  const int shift = ifFilterShift( N, isFirst, isLast, clpRng.bd );
   CHECK( shift < 0, "Negative shift" );
-  
+  int offset;
 
 #define USE_M16_AVX2_IF 1
 
@@ -1499,28 +1526,17 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
   {
     if( isLast )
     {
-      shift  += ( isFirst ) ? 0 : headRoom;
       offset  = 1 << ( shift - 1 );
       offset += ( isFirst ) ? 0 : (IF_INTERNAL_OFFS << IF_FILTER_PREC);
     }
     else
     {
-      shift -= ( isFirst ) ? headRoom : 0;
       offset = ( isFirst ) ? -(IF_INTERNAL_OFFS << shift) : 0;
     }
   }
   else
   {
-    if( isFirst )
-    {
-      shift  = IF_FILTER_PREC_BILINEAR - (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
-      offset = 1 << (shift - 1);
-    }
-    else
-    {
-      shift  = 4;
-      offset = 1 << (shift - 1);
-    }
+    offset = 1 << (shift - 1);
   }
 
   CHECKD( clpRng.bd > 10, "VVenC does not support bitdepths larger than 10!" );
@@ -1538,7 +1554,7 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
         if( vext >= AVX2 )
 #if USE_M16_AVX2_IF
           if( !( width & 15 ) )
-            simdInterpolateHorM16_AVX2<vext, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
+            dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdInterpolateHorM16_AVX2<vext, 6, isLast, ifFilterShift( N, isFirst, isLast, decltype( bd )::value )>( src, srcStride, dst, dstStride, width, height, offset, clpRng, c + 1 ); } );
           else
 #endif
             simdInterpolateHorM8_AVX2<vext, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
@@ -1550,7 +1566,7 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
         if( vext >= AVX2 )
 #if USE_M16_AVX2_IF
           if( !( width & 15 ) )
-            simdInterpolateVerM16_AVX2<vext, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
+            dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdInterpolateVerM16_AVX2<vext, 6, isLast, ifFilterShift( N, isFirst, isLast, decltype( bd )::value )>( src, srcStride, dst, dstStride, width, height, offset, clpRng, c + 1 ); } );
           else
 #endif
             simdInterpolateVerM8_AVX2<vext, 6, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c + 1 );
@@ -1587,7 +1603,7 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
       if( vext >= AVX2 )
 #if USE_M16_AVX2_IF
         if( !( width & 15 ) )
-          simdInterpolateHorM16_AVX2<vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+          dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdInterpolateHorM16_AVX2<vext, N, isLast, ifFilterShift( N, isFirst, isLast, decltype( bd )::value )>( src, srcStride, dst, dstStride, width, height, offset, clpRng, c ); } );
         else
 #endif
           simdInterpolateHorM8_AVX2 <vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
@@ -1609,7 +1625,7 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
       if( vext >= AVX2 )
 #if USE_M16_AVX2_IF
         if( !( width & 15 ) )
-          simdInterpolateVerM16_AVX2<vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
+          dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdInterpolateVerM16_AVX2<vext, N, isLast, ifFilterShift( N, isFirst, isLast, decltype( bd )::value )>( src, srcStride, dst, dstStride, width, height, offset, clpRng, c ); } );
         else
 #endif
           simdInterpolateVerM8_AVX2 <vext, N, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
@@ -1668,242 +1684,38 @@ scalar_if:
     dst += dstStride;
   }
 }
-#if USE_AVX2
-// A pair of 16-bit filter coefficients as one 32-bit value, for _mm256_madd_epi16 with a pair of neighbouring values.
-static inline int xCoeffPair( TFilterCoeff first, TFilterCoeff second )
+template<X86_VEXT vext, bool isLast, int bitDepth>
+static void simdFilter4x4_N6BitDepth( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, TFilterCoeff const *coeffH, TFilterCoeff const *_coeffV )
 {
-  return int( uint16_t( first ) | ( uint32_t( uint16_t( second ) ) << 16 ) );
-}
-
-// The 4x4 block of simdFilter4x4_N6 with AVX2. src points two rows above and two samples left of the block. The
-// filters have 6 taps (coefficients 0 and 7 are zero for every 4x4 luma filter), and the horizontal results fit in
-// 16 bits for bit depths up to 12 (as the previous code also assumed), so the vertical filter runs on 16-bit values
-// like the horizontal one. The results are exactly those of the C version.
-template<bool isLast>
-static inline void simdFilter4x4_N6_AVX2( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride,
-                                          const TFilterCoeff* coeffH, const TFilterCoeff* coeffV,
-                                          int offset1st, int shift1st, int offset2nd, int shift2nd )
-{
-  const __m256i h12 = _mm256_set1_epi32( xCoeffPair( coeffH[1], coeffH[2] ) );
-  const __m256i h34 = _mm256_set1_epi32( xCoeffPair( coeffH[3], coeffH[4] ) );
-  const __m256i h56 = _mm256_set1_epi32( xCoeffPair( coeffH[5], coeffH[6] ) );
-  const __m256i off = _mm256_set1_epi32( offset1st );
-
-  // Horizontal filter of the 9 rows the 4 output rows need, two rows per register, one per 128-bit lane: rows[i]
-  // holds the 4 results of rows 2i and 2i + 1 as 32-bit values (row 8 goes into both lanes of rows[4], as there is
-  // no row 9 to read). Output x takes samples x to x + 5, as the pairs (x, x + 1), (x + 2, x + 3) and (x + 4, x + 5).
-  __m256i rows[5];
-  for( int i = 0; i < 5; i++ )
-  {
-    const Pel*    row  = src + 2 * i * srcStride;
-    const Pel*    next = src + std::min( 2 * i + 1, 8 ) * srcStride;
-    const __m256i from0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) row ) ),
-                                                   _mm_loadu_si128( ( const __m128i* ) next ), 1 );                  // samples 0..7
-    const __m256i from1 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( row + 1 ) ) ),
-                                                   _mm_loadu_si128( ( const __m128i* ) ( next + 1 ) ), 1 );          // samples 1..8
-    const __m256i samplePairs0 = _mm256_unpacklo_epi16( from0, from1 );                  // (0,1) (1,2) (2,3) (3,4)
-    const __m256i samplePairs4 = _mm256_unpackhi_epi16( from0, from1 );                  // (4,5) (5,6) (6,7) (7,8)
-    const __m256i samplePairs2 = _mm256_alignr_epi8( samplePairs4, samplePairs0, 8 );    // (2,3) (3,4) (4,5) (5,6)
-    __m256i sum = _mm256_madd_epi16( samplePairs0, h12 );
-    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs2, h34 ) );
-    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs4, h56 ) );
-    rows[i] = _mm256_srai_epi32( _mm256_add_epi32( sum, off ), shift1st );
-  }
-
-  // Vertical filter. Output row y takes rows y to y + 5 as the pairs (y, y + 1), (y + 2, y + 3) and (y + 4, y + 5).
-  // rowPairs[i] holds rows 2i and 2i + 1 interleaved in its low lane and rows 2i + 1 and 2i + 2 in its high lane, so
-  // one multiply-add serves two output rows at once.
-  const __m256i interleave = _mm256_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15,
-                                               0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 );
-  __m256i rowPairs[4];
-  for( int i = 0; i < 4; i++ )
-  {
-    // the pack gives the 64-bit chunks (rows 2i, 2i + 2, 2i + 1, 2i + 3); reorder them to (2i, 2i + 1, 2i + 1, 2i + 2)
-    const __m256i packed = _mm256_packs_epi32( rows[i], rows[i + 1] );
-    rowPairs[i] = _mm256_shuffle_epi8( _mm256_permute4x64_epi64( packed, 0 + ( 2 << 2 ) + ( 2 << 4 ) + ( 1 << 6 ) ), interleave );
-  }
-
-  const __m256i v12  = _mm256_set1_epi32( xCoeffPair( coeffV[1], coeffV[2] ) );
-  const __m256i v34  = _mm256_set1_epi32( xCoeffPair( coeffV[3], coeffV[4] ) );
-  const __m256i v56  = _mm256_set1_epi32( xCoeffPair( coeffV[5], coeffV[6] ) );
-  const __m256i off2 = _mm256_set1_epi32( offset2nd );
-
-  __m256i out01 = _mm256_add_epi32( off2, _mm256_madd_epi16( rowPairs[0], v12 ) );
-  out01 = _mm256_add_epi32( out01, _mm256_madd_epi16( rowPairs[1], v34 ) );
-  out01 = _mm256_add_epi32( out01, _mm256_madd_epi16( rowPairs[2], v56 ) );
-  out01 = _mm256_srai_epi32( out01, shift2nd );
-
-  __m256i out23 = _mm256_add_epi32( off2, _mm256_madd_epi16( rowPairs[1], v12 ) );
-  out23 = _mm256_add_epi32( out23, _mm256_madd_epi16( rowPairs[2], v34 ) );
-  out23 = _mm256_add_epi32( out23, _mm256_madd_epi16( rowPairs[3], v56 ) );
-  out23 = _mm256_srai_epi32( out23, shift2nd );
-
-  if( isLast )
-  {
-    const __m256i vmin = _mm256_set1_epi32( clpRng.min() );
-    const __m256i vmax = _mm256_set1_epi32( clpRng.max() );
-    out01 = _mm256_max_epi32( _mm256_min_epi32( out01, vmax ), vmin );
-    out23 = _mm256_max_epi32( _mm256_min_epi32( out23, vmax ), vmin );
-  }
-
-  // the pack gives the 64-bit chunks (rows 0, 2, 1, 3)
-  const __m256i out   = _mm256_packs_epi32( out01, out23 );
-  const __m128i out02 = _mm256_castsi256_si128( out );
-  const __m128i out13 = _mm256_extracti128_si256( out, 1 );
-  _vv_storel_epi64( ( __m128i* ) ( dst                 ), out02 );
-  _vv_storel_epi64( ( __m128i* ) ( dst +     dstStride ), out13 );
-  _vv_storel_epi64( ( __m128i* ) ( dst + 2 * dstStride ), _mm_unpackhi_epi64( out02, out02 ) );
-  _vv_storel_epi64( ( __m128i* ) ( dst + 3 * dstStride ), _mm_unpackhi_epi64( out13, out13 ) );
-}
-#endif
-
-template<X86_VEXT vext, bool isLast>
-void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *_coeffV )
-{
-  int row;
-
   src-=2;
   src-=2*srcStride;
   
   _mm_prefetch( ( const char* ) ( src                 ), _MM_HINT_T0 );
   _mm_prefetch( ( const char* ) ( src + 1 * srcStride ), _MM_HINT_T0 );
 
-  int offset1st, offset2nd;
-  int headRoom   = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift1st   = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
-  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
-
-  if( isLast )
-  {
-    shift1st  -= headRoom;
-    shift2nd  += headRoom;
-    offset1st  = -(IF_INTERNAL_OFFS << shift1st);
-    offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
-  }
-  else
-  {
-    shift1st -= headRoom;
-    offset1st = -(IF_INTERNAL_OFFS << shift1st);
-    offset2nd = 0;
-  }
+  // the bodies live in InterpolationFilter4x4X86.h, shared with the per-CU affine luma loop of InterPredX86.h
+  constexpr Filter4x4N6Rounding rnd = filter4x4N6Rounding<isLast>( bitDepth );
 
 #if USE_AVX2
   if( vext >= AVX2 )
   {
-    simdFilter4x4_N6_AVX2<isLast>( clpRng, src, srcStride, dst, dstStride, coeffH, _coeffV, offset1st, shift1st, offset2nd, shift2nd );
+    simdFilter4x4_N6_AVX2<isLast>( clpRng, src, srcStride, dst, dstStride, coeffH, _coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
     _mm256_zeroupper();
     return;
   }
 
 #endif
-  __m128i _dst0x;
-  __m128i _dst1x;
-  __m128i _dst2x;
-  __m128i _dst3x;
-  __m128i zerox = _mm_setzero_si128();
-
-  // without AVX2: one row at a time
-  {
-    ALIGN_DATA( 64, TFilterCoeff coeffV[17] ) = { 0, 0, 0, _coeffV[6], _coeffV[5], _coeffV[4], _coeffV[3], _coeffV[2], _coeffV[1], 0, 0, 0, 0, 0, 0 };
-    //ALIGN_DATA( 64, TFilterCoeff coeffV[17] ) = { 0, 0, 0, _coeffV[1], _coeffV[2], _coeffV[3], _coeffV[4], _coeffV[5], _coeffV[6], 0, 0, 0, 0, 0, 0,0,0 };
-
-    __m128i cH    = _mm_loadu_si128  ( ( const __m128i* ) ( coeffH + 1 ) );
-            cH    = _mm_blend_epi16  ( cH, _mm_setzero_si128(), 0x80 );
-    __m128i off   = _mm_set1_epi32   ( offset1st );
-    __m128i _src1, _src2, _srcx, cV;
-
-    _dst0x = _mm_set1_epi32( offset2nd );
-    _dst1x = _mm_set1_epi32( offset2nd );
-    _dst2x = _mm_set1_epi32( offset2nd );
-    _dst3x = _mm_set1_epi32( offset2nd );
-
-    for( row = 0; row < 9; row++ )
-    {
-      _mm_prefetch( ( const char* ) ( src + 2 * srcStride ), _MM_HINT_T0 );
-      _mm_prefetch( ( const char* ) ( src + 3 * srcStride ), _MM_HINT_T0 );
-
-      cV = _vv_loadl_epi64    ( ( const __m128i* ) ( coeffV + 9 - row - 1 ) );
-      cV = _mm_cvtepu16_epi32 ( cV );
-
-      _src1 = _mm_loadu_si128      ( ( const __m128i* ) &src[0] );
-      _src1 = _mm_madd_epi16       ( _src1, cH );
-
-      _src2 = _mm_loadu_si128      ( ( const __m128i* ) &src[1] );
-      _src2 = _mm_madd_epi16       ( _src2, cH );
-      _srcx = _mm_hadd_epi32       ( _src1, _src2 );
-
-      _src1 = _mm_loadu_si128      ( ( const __m128i* ) &src[2] );
-      _src1 = _mm_madd_epi16       ( _src1, cH );
-
-      _src2 = _mm_loadu_si128      ( ( const __m128i* ) &src[3] );
-      _src2 = _mm_madd_epi16       ( _src2, cH );
-      _src2 = _mm_hadd_epi32       ( _src1, _src2 );
-
-      _src2 = _mm_hadd_epi32       ( _srcx, _src2 );
-      _src2 = _mm_add_epi32        ( _src2, off );
-      _src2 = _mm_srai_epi32       ( _src2, shift1st );
-
-      _src1 = _mm_shuffle_epi32    ( _src2, 0 );
-      _src1 = _mm_madd_epi16       ( _src1, cV );
-      _dst0x = _mm_add_epi32       ( _src1, _dst0x );
-
-      _src1 = _mm_shuffle_epi32    ( _src2, 1 + 4 + 16 + 64 );
-      _src1 = _mm_madd_epi16       ( _src1, cV );
-      _dst1x = _mm_add_epi32       ( _src1, _dst1x );
-
-      _src1 = _mm_shuffle_epi32    ( _src2, 2 + 8 + 32 + 128 );
-      _src1 = _mm_madd_epi16       ( _src1, cV );
-      _dst2x = _mm_add_epi32       ( _src1, _dst2x );
-
-      _src1 = _mm_shuffle_epi32    ( _src2, 3 + 12 + 48 + 192 );
-      _src1 = _mm_madd_epi16       ( _src1, cV );
-      _dst3x = _mm_add_epi32       ( _src1, _dst3x );
-      
-      src += srcStride;
-    }
-
-    _dst0x = _mm_srai_epi32( _dst0x, shift2nd );
-    _dst1x = _mm_srai_epi32( _dst1x, shift2nd );
-    _dst2x = _mm_srai_epi32( _dst2x, shift2nd );
-    _dst3x = _mm_srai_epi32( _dst3x, shift2nd );
-
-    if( isLast )
-    {
-      __m128i vmin = _mm_set1_epi32( clpRng.min() );
-      __m128i vmax = _mm_set1_epi32( clpRng.max() );
-
-      _dst0x = _mm_max_epi32( _mm_min_epi32( _dst0x, vmax ), vmin );
-      _dst1x = _mm_max_epi32( _mm_min_epi32( _dst1x, vmax ), vmin );
-      _dst2x = _mm_max_epi32( _mm_min_epi32( _dst2x, vmax ), vmin );
-      _dst3x = _mm_max_epi32( _mm_min_epi32( _dst3x, vmax ), vmin );
-    }
-  }
-
-  __m128i a01b01 = _mm_unpacklo_epi32( _dst0x, _dst1x );
-  __m128i a23b23 = _mm_unpackhi_epi32( _dst0x, _dst1x );
-  __m128i c01d01 = _mm_unpacklo_epi32( _dst2x, _dst3x );
-  __m128i c23d23 = _mm_unpackhi_epi32( _dst2x, _dst3x );
-
-  _dst0x = _mm_unpacklo_epi64( a01b01, c01d01 );
-  _dst1x = _mm_unpackhi_epi64( a01b01, c01d01 );
-  _dst2x = _mm_unpacklo_epi64( a23b23, c23d23 );
-  _dst3x = _mm_unpackhi_epi64( a23b23, c23d23 );
-
-  _dst0x = _mm_packs_epi32( _dst0x, zerox );
-  _dst1x = _mm_packs_epi32( _dst1x, zerox );
-  _dst2x = _mm_packs_epi32( _dst2x, zerox );
-  _dst3x = _mm_packs_epi32( _dst3x, zerox );
-
-  _vv_storel_epi64( ( __m128i* ) ( dst                 ), _dst0x );
-  _vv_storel_epi64( ( __m128i* ) ( dst +     dstStride ), _dst1x );
-  _vv_storel_epi64( ( __m128i* ) ( dst + 2 * dstStride ), _dst2x );
-  _vv_storel_epi64( ( __m128i* ) ( dst + 3 * dstStride ), _dst3x );
+  simdFilter4x4_N6_SSE<isLast, true>( clpRng, src, srcStride, dst, dstStride, coeffH, _coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
 #if USE_AVX2
 
   _mm256_zeroupper();
 #endif
+}
+
+template<X86_VEXT vext, bool isLast>
+void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *_coeffV )
+{
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdFilter4x4_N6BitDepth<vext, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, coeffH, _coeffV ); } );
 }
 
 
@@ -2182,34 +1994,20 @@ void simdFilter4x4_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 }
 
 
-template<X86_VEXT vext, bool isLast>
-void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+template<X86_VEXT vext, bool isLast, int bitDepth>
+static void simdFilter16xH_N8BitDepth( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=3;
   src-=3*srcStride;
 
   _mm_prefetch( ( const char* ) ( src ), _MM_HINT_T0 );
 
-  int offset1st, offset2nd;
-  int headRoom  = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift1st  = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
+  // the shifts are immediates: this body is instantiated per internal bit depth
+  constexpr int shift1st  = ifFilterShift( 8, true, false, bitDepth );
+  constexpr int shift2nd  = ifFilterShift( 8, false, isLast, bitDepth );
+  const int     offset1st = -( IF_INTERNAL_OFFS << shift1st );
+  const int     offset2nd = isLast ? ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) : 0;
   int extHeight = height + 7;
-  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
-
-  shift1st -= headRoom;
-  offset1st = -(IF_INTERNAL_OFFS << shift1st);
-
-  if( isLast )
-  {
-    shift2nd  += headRoom;
-    offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
-  }
-  else
-  {
-    offset2nd = 0;
-  }
 
 #if USE_AVX2
   if( vext >= AVX2 )
@@ -2218,7 +2016,6 @@ void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     static const int filterSpan = 8;
 
     const __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    const __m256i vibdimin   = _mm256_set1_epi16( clpRng.min() );
     const __m256i vibdimax   = _mm256_set1_epi16( clpRng.max() );
 
     const __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
@@ -2324,12 +2121,7 @@ void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
         vsuma = _mm256_srai_epi32 ( vsuma, shift2nd );
         vsumb = _mm256_srai_epi32 ( vsumb, shift2nd );
 
-        vsum  = _mm256_packs_epi32( vsuma, vsumb );
-
-        if( isLast )
-        { //clip
-          vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
-        }
+        vsum  = isLast ? packClipLast_AVX2( vsuma, vsumb, vibdimax ) : _mm256_packs_epi32( vsuma, vsumb );
 
         _mm256_storeu_si256( ( __m256i * ) dst, vsum );
         
@@ -2453,32 +2245,24 @@ void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter16xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter16xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+{
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdFilter16xH_N8BitDepth<vext, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV ); } );
+}
+
+template<X86_VEXT vext, bool isLast, int bitDepth>
+static void simdFilter16xH_N4BitDepth( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=1;
   src-=srcStride;
 
   _mm_prefetch( ( const char* ) ( src ), _MM_HINT_T0 );
 
-  int offset1st, offset2nd;
-  int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift1st = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
-  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
-
-  shift1st -= headRoom;
-  offset1st = -(IF_INTERNAL_OFFS << shift1st);
-
-  if( isLast )
-  {
-    shift2nd  += headRoom;
-    offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
-  }
-  else
-  {
-    offset2nd = 0;
-  }
+  // the shifts are immediates: this body is instantiated per internal bit depth
+  constexpr int shift1st  = ifFilterShift( 4, true, false, bitDepth );
+  constexpr int shift2nd  = ifFilterShift( 4, false, isLast, bitDepth );
+  const int     offset1st = -( IF_INTERNAL_OFFS << shift1st );
+  const int     offset2nd = isLast ? ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) : 0;
 
   const int extHeight = height + 3;
 
@@ -2488,8 +2272,8 @@ void simdFilter16xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 #if USE_AVX2
   if( vext >= AVX2 )
   {
-    simdInterpolateHorM16_AVX2<vext, 4, false >( src, srcStride, tmp, 16, 16, extHeight, shift1st, offset1st, clpRng, coeffH );
-    simdInterpolateVerM16_AVX2<vext, 4, isLast>( tmp, 16, dst, dstStride, 16,    height, shift2nd, offset2nd, clpRng, coeffV );
+    simdInterpolateHorM16_AVX2<vext, 4, false, shift1st>( src, srcStride, tmp, 16, 16, extHeight, offset1st, clpRng, coeffH );
+    simdInterpolateVerM16_AVX2<vext, 4, isLast, shift2nd>( tmp, 16, dst, dstStride, 16,    height, offset2nd, clpRng, coeffV );
   }
   else
 #endif
@@ -2500,130 +2284,120 @@ void simdFilter16xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter8xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter16xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+{
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdFilter16xH_N4BitDepth<vext, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV ); } );
+}
+
+#if USE_AVX2
+// The horizontal 8-tap pass of simdFilter8xH_N8 for two rows: rowA's 8 outputs in lane 0, rowB's in lane 1. Each lane
+// reads its row at 0..7, 4..11 and 8..15; outputs 0..3 use the first two loads, outputs 4..7 the last two.
+static ALWAYS_INLINE void filter8xH_N8HorTwoRows( const Pel* rowA, const Pel* rowB, const __m256i& vshuf0, const __m256i& vshuf1, const __m256i* vcoeff,
+                                           const __m256i& voffset, int shift, __m256i& rows )
+{
+  const __m256i vsrc0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) rowA ) ), _mm_loadu_si128( ( const __m128i* ) rowB ), 1 );
+  const __m256i vsrc4 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( rowA + 4 ) ) ), _mm_loadu_si128( ( const __m128i* ) ( rowB + 4 ) ), 1 );
+  const __m256i vsrc8 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( rowA + 8 ) ) ), _mm_loadu_si128( ( const __m128i* ) ( rowB + 8 ) ), 1 );
+
+  // the pairs of the middle load serve taps 4..7 of outputs 0..3 and taps 0..3 of outputs 4..7
+  const __m256i vpairs4a = _mm256_shuffle_epi8( vsrc4, vshuf0 );
+  const __m256i vpairs4b = _mm256_shuffle_epi8( vsrc4, vshuf1 );
+
+  __m256i vsum0 = _mm256_add_epi32( _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc0, vshuf0 ), vcoeff[0] ), _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc0, vshuf1 ), vcoeff[1] ) );
+  vsum0 = _mm256_add_epi32( vsum0, _mm256_add_epi32( _mm256_madd_epi16( vpairs4a, vcoeff[2] ), _mm256_madd_epi16( vpairs4b, vcoeff[3] ) ) );
+  __m256i vsum4 = _mm256_add_epi32( _mm256_madd_epi16( vpairs4a, vcoeff[0] ), _mm256_madd_epi16( vpairs4b, vcoeff[1] ) );
+  vsum4 = _mm256_add_epi32( vsum4, _mm256_add_epi32( _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc8, vshuf0 ), vcoeff[2] ), _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc8, vshuf1 ), vcoeff[3] ) ) );
+
+  vsum0 = _mm256_srai_epi32( _mm256_add_epi32( vsum0, voffset ), shift );
+  vsum4 = _mm256_srai_epi32( _mm256_add_epi32( vsum4, voffset ), shift );
+
+  rows = _mm256_packs_epi32( vsum0, vsum4 );
+}
+
+#endif
+template<X86_VEXT vext, bool isLast, int bitDepth>
+static void simdFilter8xH_N8BitDepth( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=3;
   src-=3*srcStride;
 
   _mm_prefetch( ( const char* ) ( src ), _MM_HINT_T0 );
 
-  int offset1st, offset2nd;
-  int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift1st = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
-  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
-
-  shift1st -= headRoom;
-  offset1st = -(IF_INTERNAL_OFFS << shift1st);
-
-  if( isLast )
-  {
-    shift2nd  += headRoom;
-    offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
-  }
-  else
-  {
-    offset2nd = 0;
-  }
+  // the shifts are immediates: this body is instantiated per internal bit depth
+  constexpr int shift1st  = ifFilterShift( 8, true, false, bitDepth );
+  constexpr int shift2nd  = ifFilterShift( 8, false, isLast, bitDepth );
+  const int     offset1st = -( IF_INTERNAL_OFFS << shift1st );
+  const int     offset2nd = isLast ? ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) : 0;
 
   const int extHeight = height + 7;
 
 #if USE_AVX2
   if( vext >= AVX2 )
   {
-    static const int filterSpan = 8;
+    // Two horizontal rows per register (lane 0 row y, lane 1 row y + 1), so the vertical filter makes output rows y
+    // and y + 1 in one 256-bit pass: for taps 2k, 2k + 1 it interleaves [ y+2k | y+2k+1 ] with [ y+2k+1 | y+2k+2 ],
+    // one permute2x128 of two neighbouring registers. Luma heights are even.
+    CHECKD( height & 1, "simdFilter8xH_N8 expects an even height" );
 
-    __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    __m128i xbdimin    = _mm_set1_epi16( clpRng.min() );
-    __m128i xbdimax    = _mm_set1_epi16( clpRng.max() );
-    __m256i vsum;
+    const __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
+                                            0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
+    const __m256i vshuf1 = _mm256_set_epi8( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4,
+                                            0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
 
-    __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
-                                      0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
-    __m256i vshuf1 = _mm256_set_epi8( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4,
-                                      0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
-
-    int vcoeffh[4];
-    int vcoeffv[4];
-    
-    __m128i xsrcv  [8];
-
-    for( int i = 0; i < 8; i += 2 )
+    __m256i vcoeffh[4], vcoeffv[4];
+    for( int i = 0; i < 4; i++ )
     {
-      vcoeffh[i / 2] = ( coeffH[i] & 0xffff ) | ( coeffH[i + 1] *(1<< 16 ));
-      vcoeffv[i / 2] = ( coeffV[i] & 0xffff ) | ( coeffV[i + 1] *(1<< 16) );
+      vcoeffh[i] = _mm256_set1_epi32( ( coeffH[2 * i] & 0xffff ) | ( coeffH[2 * i + 1] * ( 1 << 16 ) ) );
+      vcoeffv[i] = _mm256_set1_epi32( ( coeffV[2 * i] & 0xffff ) | ( coeffV[2 * i + 1] * ( 1 << 16 ) ) );
     }
 
-    for( int row = 0; row < extHeight; row++ )
+    const __m256i voffset1 = _mm256_set1_epi32( offset1st );
+    const __m256i voffset2 = _mm256_set1_epi32( offset2nd );
+    const __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
+
+    // rowPairs[k] holds the horizontal rows row + 2k and row + 2k + 1
+    __m256i rowPairs[5];
+    for( int k = 0; k < 4; k++ )
     {
-      _mm_prefetch( ( const char* ) ( src + 2 * srcStride ), _MM_HINT_T0 );
-      _mm_prefetch( ( const char* ) ( src + ( 16 >> 1 ) + 2 * srcStride ), _MM_HINT_T0 );
-      _mm_prefetch( ( const char* ) ( src + 16 + filterSpan + 2 * srcStride ), _MM_HINT_T0 );
-
-      __m128i xsrc0 = _mm_loadu_si128( ( const __m128i * ) &src[0] );
-      __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &src[4] );
-
-      __m256i vsrc0, vsrca0, vsrca1;
-
-      vsrc0  = _mm256_castsi128_si256   ( xsrc0 );
-      vsrc0  = _mm256_inserti128_si256  ( vsrc0, xsrc1, 1 );
-      vsrca0 = _mm256_shuffle_epi8      ( vsrc0, vshuf0 );
-      vsrca1 = _mm256_shuffle_epi8      ( vsrc0, vshuf1 );
-      vsum   = _mm256_add_epi32         ( _mm256_madd_epi16( vsrca0, _mm256_set1_epi32( vcoeffh[0] ) ), _mm256_madd_epi16( vsrca1, _mm256_set1_epi32( vcoeffh[1] ) ) );
-      
-      xsrc0  = _mm_loadu_si128          ( (const __m128i *) &src[8] );
-
-      vsrc0  = _mm256_castsi128_si256   ( xsrc1 );
-      vsrc0  = _mm256_inserti128_si256  ( vsrc0, xsrc0, 1 );
-      vsrca0 = _mm256_shuffle_epi8      ( vsrc0, vshuf0 );
-      vsrca1 = _mm256_shuffle_epi8      ( vsrc0, vshuf1 );
-      vsum   = _mm256_add_epi32         ( vsum, _mm256_add_epi32( _mm256_madd_epi16( vsrca0, _mm256_set1_epi32( vcoeffh[2] ) ), _mm256_madd_epi16( vsrca1, _mm256_set1_epi32( vcoeffh[3] ) ) ) );
-
-      vsum   = _mm256_add_epi32         ( vsum, voffset1 );
-      vsum   = _mm256_srai_epi32        ( vsum, shift1st );
-
-      __m128i
-      xsump  = _mm256_cvtepi32_epi16x   ( vsum );
-
-      if( row < 7 )
-      {
-        xsrcv[row + 1] = xsump;
-      }
-      else
-      {
-        for( int i = 0; i < 7; i++ )
-        {
-          xsrcv[i] = xsrcv[i + 1];
-        }
-        xsrcv[7] = xsump;
-        
-        vsum = _mm256_set1_epi32( offset2nd );
-
-        for( int i = 0; i < 8; i += 2 )
-        {
-          __m128i xsrc0 = _mm_unpacklo_epi16( xsrcv[i], xsrcv[i + 1] );
-          __m128i xsrc1 = _mm_unpackhi_epi16( xsrcv[i], xsrcv[i + 1] );
-          __m256i vsrc  = _mm256_inserti128_si256( _mm256_castsi128_si256( xsrc0 ), xsrc1, 1 );
-          vsum          = _mm256_add_epi32( vsum, _mm256_madd_epi16( vsrc, _mm256_set1_epi32( vcoeffv[i / 2] ) ) );
-        }
-
-        vsum = _mm256_srai_epi32 ( vsum, shift2nd );
-
-        __m128i xsum = _mm256_cvtepi32_epi16x( vsum );
-
-        if( isLast )
-        { //clip
-          xsum = _mm_min_epi16( xbdimax, _mm_max_epi16( xbdimin, xsum ) );
-        }
-
-        _mm_storeu_si128( ( __m128i * ) dst, xsum );
-
-        dst += dstStride;
-      }
-
-      src += srcStride;
+      filter8xH_N8HorTwoRows( src + 2 * k * srcStride, src + ( 2 * k + 1 ) * srcStride, vshuf0, vshuf1, vcoeffh, voffset1, shift1st, rowPairs[k] );
     }
+
+    // the vertical filter reads horizontal rows 0 .. height + 6: the second lane of the last pair repeats row
+    // height + 6 instead of reading a row the old kernel did not
+    const int lastRow = height + 6;
+
+    for( int row = 0; row < height; row += 2 )
+    {
+      const Pel* src8 = src + ( row + 8 ) * srcStride;
+      _mm_prefetch( ( const char* ) ( src8 + 2 * srcStride ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src8 + 2 * srcStride + 15 ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src8 + 3 * srcStride ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src8 + 3 * srcStride + 15 ), _MM_HINT_T0 );
+      filter8xH_N8HorTwoRows( src8, row + 9 <= lastRow ? src8 + srcStride : src8, vshuf0, vshuf1, vcoeffh, voffset1, shift1st, rowPairs[4] );
+
+      __m256i vsumLo = voffset2, vsumHi = voffset2;
+      for( int k = 0; k < 4; k++ )
+      {
+        const __m256i nextRows = _mm256_permute2x128_si256( rowPairs[k], rowPairs[k + 1], 0x21 );
+        vsumLo = _mm256_add_epi32( vsumLo, _mm256_madd_epi16( _mm256_unpacklo_epi16( rowPairs[k], nextRows ), vcoeffv[k] ) );
+        vsumHi = _mm256_add_epi32( vsumHi, _mm256_madd_epi16( _mm256_unpackhi_epi16( rowPairs[k], nextRows ), vcoeffv[k] ) );
+      }
+
+      vsumLo = _mm256_srai_epi32( vsumLo, shift2nd );
+      vsumHi = _mm256_srai_epi32( vsumHi, shift2nd );
+      const __m256i vsum = isLast ? packClipLast_AVX2( vsumLo, vsumHi, vibdimax ) : _mm256_packs_epi32( vsumLo, vsumHi );
+
+      _mm_storeu_si128( ( __m128i* ) dst, _mm256_castsi256_si128( vsum ) );
+      _mm_storeu_si128( ( __m128i* ) ( dst + dstStride ), _mm256_extracti128_si256( vsum, 1 ) );
+
+      for( int k = 0; k < 4; k++ )
+      {
+        rowPairs[k] = rowPairs[k + 1];
+      }
+      dst += 2 * dstStride;
+    }
+
+    _mm256_zeroupper();
   }
   else
 #endif
@@ -2737,144 +2511,106 @@ void simdFilter8xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 }
 
 template<X86_VEXT vext, bool isLast>
-void simdFilter8xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+void simdFilter8xH_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+{
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdFilter8xH_N8BitDepth<vext, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV ); } );
+}
+
+#if USE_AVX2
+// The horizontal 4-tap pass of simdFilter8xH_N4 for two rows: rowA's 8 outputs in lane 0, rowB's in lane 1. Each lane
+// reads its row at 0..7 (outputs 0..3) and 4..11 (outputs 4..7), as the one-row pass does with its two lanes.
+static ALWAYS_INLINE void filter8xH_N4HorTwoRows( const Pel* rowA, const Pel* rowB, const __m256i& vshuf0, const __m256i& vshuf1, const __m256i& vcoeff01,
+                                           const __m256i& vcoeff23, const __m256i& voffset, int shift, __m256i& rows )
+{
+  const __m256i vsrc0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) rowA ) ), _mm_loadu_si128( ( const __m128i* ) rowB ), 1 );
+  const __m256i vsrc4 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( rowA + 4 ) ) ), _mm_loadu_si128( ( const __m128i* ) ( rowB + 4 ) ), 1 );
+
+  __m256i vsum0 = _mm256_add_epi32( _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc0, vshuf0 ), vcoeff01 ), _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc0, vshuf1 ), vcoeff23 ) );
+  __m256i vsum4 = _mm256_add_epi32( _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc4, vshuf0 ), vcoeff01 ), _mm256_madd_epi16( _mm256_shuffle_epi8( vsrc4, vshuf1 ), vcoeff23 ) );
+  vsum0 = _mm256_srai_epi32( _mm256_add_epi32( vsum0, voffset ), shift );
+  vsum4 = _mm256_srai_epi32( _mm256_add_epi32( vsum4, voffset ), shift );
+
+  rows = _mm256_packs_epi32( vsum0, vsum4 );
+}
+
+#endif
+template<X86_VEXT vext, bool isLast, int bitDepth>
+static void simdFilter8xH_N4BitDepth( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
 {
   src-=1;
   src-=srcStride;
 
   _mm_prefetch( ( const char* ) src, _MM_HINT_T0 );
 
-  int offset1st, offset2nd;
-  int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
-  int shift1st = IF_FILTER_PREC, shift2nd = IF_FILTER_PREC;
-  // with the current settings (IF_INTERNAL_PREC = 14 and IF_FILTER_PREC = 6), though headroom can be
-  // negative for bit depths greater than 14, shift will remain non-negative for bit depths of 8->20
-
-  shift1st -= headRoom;
-  offset1st = -(IF_INTERNAL_OFFS << shift1st);
-
-  if( isLast )
-  {
-    shift2nd  += headRoom;
-    offset2nd  = 1 << ( shift2nd - 1 );
-    offset2nd += (IF_INTERNAL_OFFS << IF_FILTER_PREC);
-  }
-  else
-  {
-    offset2nd = 0;
-  }
+  // the shifts are immediates: this body is instantiated per internal bit depth
+  constexpr int shift1st  = ifFilterShift( 4, true, false, bitDepth );
+  constexpr int shift2nd  = ifFilterShift( 4, false, isLast, bitDepth );
+  const int     offset1st = -( IF_INTERNAL_OFFS << shift1st );
+  const int     offset2nd = isLast ? ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) : 0;
 
   const int extHeight = height + 3;
 
 #if USE_AVX2
   if( vext >= AVX2 )
   {
-    GCC_WARNING_DISABLE_maybe_uninitialized
-    static constexpr int width      = 8;
-    static constexpr int N          = 4;
-    static constexpr int filterSpan = N - 1;
+    // Two horizontal rows per register: lane 0 holds row y, lane 1 row y + 1. The vertical filter of output rows y
+    // and y + 1 then needs [ y | y+1 ] interleaved with [ y+1 | y+2 ] (one permute2x128 of two such registers) for
+    // taps 0, 1 and [ y+2 | y+3 ] with [ y+3 | y+4 ] for taps 2, 3: both output rows in one 256-bit pass, where the
+    // 128-bit pass filtered one row. Chroma heights are even.
+    CHECKD( height & 1, "simdFilter8xH_N4 expects an even height" );
 
-    _mm_prefetch( ( const char* ) ( src + srcStride ), _MM_HINT_T0 );
-    _mm_prefetch( ( const char* ) ( src + ( width >> 1 ) + srcStride ), _MM_HINT_T0 );
-    _mm_prefetch( ( const char* ) ( src + width + filterSpan + srcStride ), _MM_HINT_T0 );
+    const __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
+                                            0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
+    const __m256i vshuf1 = _mm256_set_epi8( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4,
+                                            0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
 
-    __m256i voffset1   = _mm256_set1_epi32( offset1st );
-    __m128i vibdimin   = _mm_set1_epi16( clpRng.min() );
-    __m128i vibdimax   = _mm_set1_epi16( clpRng.max() );
+    const __m256i vcoeffh01 = _mm256_set1_epi32( ( coeffH[0] & 0xffff ) | ( coeffH[1] * ( 1 << 16 ) ) );
+    const __m256i vcoeffh23 = _mm256_set1_epi32( ( coeffH[2] & 0xffff ) | ( coeffH[3] * ( 1 << 16 ) ) );
+    const __m256i vcoeffv01 = _mm256_set1_epi32( ( coeffV[0] & 0xffff ) | ( coeffV[1] * ( 1 << 16 ) ) );
+    const __m256i vcoeffv23 = _mm256_set1_epi32( ( coeffV[2] & 0xffff ) | ( coeffV[3] * ( 1 << 16 ) ) );
 
-    __m256i vshuf0 = _mm256_set_epi8( 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0,
-                                      0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4, 0x5, 0x4, 0x3, 0x2, 0x3, 0x2, 0x1, 0x0 );
-    __m256i vshuf1 = _mm256_set_epi8( 0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4,
-                                      0xd, 0xc, 0xb, 0xa, 0xb, 0xa, 0x9, 0x8, 0x9, 0x8, 0x7, 0x6, 0x7, 0x6, 0x5, 0x4 );
+    const __m256i voffset1 = _mm256_set1_epi32( offset1st );
+    const __m256i voffset2 = _mm256_set1_epi32( offset2nd );
+    const __m256i vibdimax = _mm256_set1_epi16( clpRng.max() );
 
-    int vcoeffh[2];
-    int vcoeffv[2];
+    __m256i rows01, rows23, rows45;
+    filter8xH_N4HorTwoRows( src, src + srcStride, vshuf0, vshuf1, vcoeffh01, vcoeffh23, voffset1, shift1st, rows01 );
+    filter8xH_N4HorTwoRows( src + 2 * srcStride, src + 3 * srcStride, vshuf0, vshuf1, vcoeffh01, vcoeffh23, voffset1, shift1st, rows23 );
 
-#if !_DEBUG 
-    __m128i vsrcv0, vsrcv1, vsrcv2, vsrcv3;
-#else
-    __m128i
-      vsrcv0 = _mm_setzero_si128(), vsrcv1 = _mm_setzero_si128(),
-      vsrcv2 = _mm_setzero_si128(), vsrcv3 = _mm_setzero_si128();
-#endif
+    // the vertical filter reads horizontal rows 0 .. height + 2: the second lane of the last pair repeats row
+    // height + 2 instead of reading a row the old kernel did not
+    const int lastRow = height + 2;
 
-    for( int i = 0; i < 4; i += 2 )
+    for( int row = 0; row < height; row += 2 )
     {
-      vcoeffh[i / 2] = ( coeffH[i] & 0xffff ) | ( coeffH[i + 1] *(1<< 16));
-      vcoeffv[i / 2] = ( coeffV[i] & 0xffff ) | ( coeffV[i + 1] *(1<< 16 ));
+      const Pel* src4 = src + ( row + 4 ) * srcStride;
+      _mm_prefetch( ( const char* ) ( src4 + 2 * srcStride ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src4 + 2 * srcStride + 11 ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src4 + 3 * srcStride ), _MM_HINT_T0 );
+      _mm_prefetch( ( const char* ) ( src4 + 3 * srcStride + 11 ), _MM_HINT_T0 );
+      filter8xH_N4HorTwoRows( src4, row + 5 <= lastRow ? src4 + srcStride : src4, vshuf0, vshuf1, vcoeffh01, vcoeffh23, voffset1, shift1st, rows45 );
+
+      const __m256i rows12 = _mm256_permute2x128_si256( rows01, rows23, 0x21 );
+      const __m256i rows34 = _mm256_permute2x128_si256( rows23, rows45, 0x21 );
+
+      __m256i vsumLo = _mm256_add_epi32( voffset2, _mm256_madd_epi16( _mm256_unpacklo_epi16( rows01, rows12 ), vcoeffv01 ) );
+      __m256i vsumHi = _mm256_add_epi32( voffset2, _mm256_madd_epi16( _mm256_unpackhi_epi16( rows01, rows12 ), vcoeffv01 ) );
+      vsumLo = _mm256_add_epi32( vsumLo, _mm256_madd_epi16( _mm256_unpacklo_epi16( rows23, rows34 ), vcoeffv23 ) );
+      vsumHi = _mm256_add_epi32( vsumHi, _mm256_madd_epi16( _mm256_unpackhi_epi16( rows23, rows34 ), vcoeffv23 ) );
+
+      vsumLo = _mm256_srai_epi32( vsumLo, shift2nd );
+      vsumHi = _mm256_srai_epi32( vsumHi, shift2nd );
+      const __m256i vsum = isLast ? packClipLast_AVX2( vsumLo, vsumHi, vibdimax ) : _mm256_packs_epi32( vsumLo, vsumHi );
+
+      _mm_storeu_si128( ( __m128i* ) dst, _mm256_castsi256_si128( vsum ) );
+      _mm_storeu_si128( ( __m128i* ) ( dst + dstStride ), _mm256_extracti128_si256( vsum, 1 ) );
+
+      rows01 = rows23;
+      rows23 = rows45;
+      dst += 2 * dstStride;
     }
 
-    __m256i vsum;
-
-    for( int row = 0; row < extHeight; row++ )
-    {
-      _mm_prefetch( ( const char* ) ( src + 2 * srcStride ), _MM_HINT_T0 );
-      _mm_prefetch( ( const char* ) ( src + ( width >> 1 ) + 2 * srcStride ), _MM_HINT_T0 );
-      _mm_prefetch( ( const char* ) ( src + width + filterSpan + 2 * srcStride ), _MM_HINT_T0 );
-
-      __m256i vtmp02, vtmp13;
-
-      __m256i vsrc = _mm256_castsi128_si256(   _mm_loadu_si128( ( const __m128i* )&src[0] ) );
-      vsrc    = _mm256_inserti128_si256( vsrc, _mm_loadu_si128( ( const __m128i* )&src[4] ), 1 );
-
-      vtmp02  = _mm256_shuffle_epi8( vsrc, vshuf0 );
-      vtmp13  = _mm256_shuffle_epi8( vsrc, vshuf1 );
-
-      vtmp02  = _mm256_madd_epi16  ( vtmp02, _mm256_set1_epi32( vcoeffh[0] ) );
-      vtmp13  = _mm256_madd_epi16  ( vtmp13, _mm256_set1_epi32( vcoeffh[1] ) );
-      vsum    = _mm256_add_epi32   ( vtmp02, vtmp13 );
-
-      vsum    = _mm256_add_epi32   ( vsum, voffset1 );
-      vsum    = _mm256_srai_epi32  ( vsum, shift1st );
-
-      __m128i vsump = _mm256_cvtepi32_epi16x( vsum );
-
-      if( row < 3 )
-      {
-        vsrcv1 = vsrcv2;
-        vsrcv2 = vsrcv3;
-        vsrcv3 = vsump;
-      }
-      else
-      {
-        vsrcv0 = vsrcv1;
-        vsrcv1 = vsrcv2;
-        vsrcv2 = vsrcv3;
-        vsrcv3 = vsump;
-
-        __m128i vsum1 = _mm_set1_epi32( offset2nd );
-        __m128i vsum2 = vsum1;
-
-        __m128i vsrc0 = _mm_unpacklo_epi16( vsrcv0, vsrcv1 );
-        __m128i vsrc1 = _mm_unpackhi_epi16( vsrcv0, vsrcv1 );
-        __m128i vtmp  = _mm_set1_epi32( vcoeffv[0] );
-        vsum1  = _mm_add_epi32( vsum1, _mm_madd_epi16( vsrc0, vtmp ) );
-        vsum2  = _mm_add_epi32( vsum2, _mm_madd_epi16( vsrc1, vtmp ) );
-
-        vsrc0 = _mm_unpacklo_epi16( vsrcv2, vsrcv3 );
-        vsrc1 = _mm_unpackhi_epi16( vsrcv2, vsrcv3 );
-        vtmp  = _mm_set1_epi32( vcoeffv[1] );
-        vsum1 = _mm_add_epi32( vsum1, _mm_madd_epi16( vsrc0, vtmp ) );
-        vsum2 = _mm_add_epi32( vsum2, _mm_madd_epi16( vsrc1, vtmp ) );
-
-        vsum1 = _mm_srai_epi32( vsum1, shift2nd );
-        vsum2 = _mm_srai_epi32( vsum2, shift2nd );
-
-        vsump = _mm_packs_epi32( vsum1, vsum2 );
-
-        if( isLast )
-        { //clip
-          vsump = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsump ) );
-        }
-
-        _mm_storeu_si128( ( __m128i* ) dst, vsump );
-
-        dst += dstStride;
-      }
-
-      src += srcStride;
-    }
-    GCC_WARNING_RESET
+    _mm256_zeroupper();
   }
   else
 #endif
@@ -2985,6 +2721,12 @@ void simdFilter8xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
     simdInterpolateVerM8<vext, 4, isLast>( tmp, 8, dst, dstStride, 8,    height, shift2nd, offset2nd, clpRng, coeffV );
 #endif
   }
+}
+
+template<X86_VEXT vext, bool isLast>
+void simdFilter8xH_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV )
+{
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { simdFilter8xH_N4BitDepth<vext, isLast, decltype( bd )::value>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV ); } );
 }
 
 #if USE_AVX2 && defined( VVCLIB_OWN_mm256_set_m128i )

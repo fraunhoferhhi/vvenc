@@ -98,6 +98,31 @@ public:
   void(*xFpApplyPROF)         ( Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng );
   void(*xFpPadDmvr)           ( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize );
 
+  // The luma prediction of one affine CU, everything xPredAffineBlk's sub-block loop needs for it.
+  struct AffineLumaCU
+  {
+    const Pel*  ref;                          // reference picture at the CU's position
+    int         refStride;
+    Pel*        dst;                          // prediction of the CU
+    int         dstStride;
+    int         width, height;                // CU size, powers of 2 from 8
+    int         mvScaleHor, mvScaleVer;       // affine model: MV at the top-left corner, << MAX_CU_DEPTH
+    int         dMvHorX, dMvHorY;             // its change per sample to the right
+    int         dMvVerX, dMvVerY;             // and per sample down
+    bool        spreadOverLimit;              // every sub-block takes the MV at the CU centre
+    int         roundShift;                   // to 1/16 sample, for roundAffineMv
+    int         horMin, horMax, verMin, verMax;  // window the MVs are clipped to for the reference fetch
+    Mv*         storedMv;                     // sub-block MVs, kept for the chroma pass
+    int         storedMvStride;
+    const int16_t* dMvXY;                     // PROF: the CU's (dMvX, dMvY) pairs, interleaved
+    int         shiftNum;                     // PROF: border shift and output shift (they are equal)
+    Pel         offset;                       // PROF: output offset
+    ClpRng      clpRng;
+  };
+  // The per-sub-block loop of xPredAffineBlk for luma in one call, by [PROF][bi]: same MVs and m_storedMv writes,
+  // same samples as m_if's 4x4 filters and the PROF functions. nullptr where no SIMD version exists.
+  void(*xFpAffineLumaCU[2][2])( const AffineLumaCU& cu ) = {};
+
 protected:
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
   void initInterPredictionX86();

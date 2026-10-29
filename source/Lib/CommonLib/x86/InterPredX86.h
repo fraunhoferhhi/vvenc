@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefX86.h"
 #include "Rom.h"
 #include "InterPrediction.h"
+#include "InterpolationFilter4x4X86.h"
 
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_BDOF
 
@@ -68,7 +69,7 @@ static inline int rightShiftMSB(int numer, int denom)
 }
   
 template<X86_VEXT vext>
-static inline void addBIOAvg4_SSE(const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride, const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0, const int16_t* gradY1, ptrdiff_t widthG, int tmpx, int tmpy, int shift, int offset, const ClpRng& clpRng)
+static ALWAYS_INLINE void addBIOAvg4_SSE(const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride, const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0, const int16_t* gradY1, ptrdiff_t widthG, int tmpx, int tmpy, int shift, int offset, const ClpRng& clpRng)
 {
   const ptrdiff_t src0Stride = widthG + 2;
   const ptrdiff_t src1Stride = widthG + 2;
@@ -98,7 +99,7 @@ static inline void addBIOAvg4_SSE(const int16_t* src0, const int16_t* src1, int1
 }
 
 #if USE_AVX2
-static inline void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride, const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0, const int16_t* gradY1, ptrdiff_t widthG, int tmpx0, int tmpx1, int tmpy0, int tmpy1, int shift, int offset, const ClpRng& clpRng)
+static ALWAYS_INLINE void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, int16_t* dst, ptrdiff_t dstStride, const int16_t* gradX0, const int16_t* gradX1, const int16_t* gradY0, const int16_t* gradY1, ptrdiff_t widthG, int tmpx0, int tmpx1, int tmpy0, int tmpy1, int shift, int offset, const ClpRng& clpRng)
 {
   const ptrdiff_t src0Stride = widthG + 2;
   const ptrdiff_t src1Stride = widthG + 2;
@@ -353,8 +354,8 @@ static inline void calcBIOSums2x_AVX2(const Pel* srcY0Tmp, const Pel* srcY1Tmp, 
 }
 #endif
 
-template< X86_VEXT vext>
-void BiOptFlowCoreSIMD( const Pel* srcY0,
+template<X86_VEXT vext, int bitDepth>
+static void BiOptFlowCoreSIMDBitDepth( const Pel* srcY0,
                         const Pel* srcY1,
                         const Pel* gradX0,
                         const Pel* gradX1,
@@ -368,8 +369,9 @@ void BiOptFlowCoreSIMD( const Pel* srcY0,
                         const int  offset,
                         const int  limit,
                         const ClpRng& clpRng,
-                        const int bitDepth )
+                        const int /* bitDepth: the template argument */ )
 {
+  CHECKD( shiftNum != IF_INTERNAL_PREC + 1 - bitDepth, "BDOF shift" );
   const int widthG        = width  + 2 * BDOF_EXTEND_SIZE;
   const int stridePredMC  = widthG + 2;
         int offsetPos     = widthG * BDOF_EXTEND_SIZE + BDOF_EXTEND_SIZE;
@@ -403,7 +405,7 @@ void BiOptFlowCoreSIMD( const Pel* srcY0,
 
       //addBIOAvg4_SSE<vext>( srcY0Temp + stridePredMC + 1 + 0, srcY1Temp + stridePredMC + 1 + 0, dstY0 + 0, dstStride, gradX0 + OffPos + 0, gradX1 + OffPos + 0, gradY0 + OffPos + 0, gradY1 + OffPos + 0, widthG, tmpx0, tmpy0, shiftNum, offset, clpRng );
       //addBIOAvg4_SSE<vext>( srcY0Temp + stridePredMC + 1 + 4, srcY1Temp + stridePredMC + 1 + 4, dstY0 + 4, dstStride, gradX0 + OffPos + 4, gradX1 + OffPos + 4, gradY0 + OffPos + 4, gradY1 + OffPos + 4, widthG, tmpx1, tmpy1, shiftNum, offset, clpRng );
-      addBIOAvg4_2x_AVX2( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0 + OffPos, gradX1 + OffPos, gradY0 + OffPos, gradY1 + OffPos, widthG, tmpx0, tmpx1, tmpy0, tmpy1, shiftNum, offset, clpRng );
+      addBIOAvg4_2x_AVX2( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0 + OffPos, gradX1 + OffPos, gradY0 + OffPos, gradY1 + OffPos, widthG, tmpx0, tmpx1, tmpy0, tmpy1, IF_INTERNAL_PREC + 1 - bitDepth, offset, clpRng );
     }  // xu
 #else
     for( int xu = 0; xu < xUnit; xu++, srcY0Temp += 4, srcY1Temp += 4, dstY0 += 4, OffPos += 4, OffPad += 4 )
@@ -412,7 +414,7 @@ void BiOptFlowCoreSIMD( const Pel* srcY0,
 
       calcBIOSums_SSE<vext>( srcY0Temp, srcY1Temp, gradX0 + OffPad, gradX1 + OffPad, gradY0 + OffPad, gradY1 + OffPad, widthG, bitDepth, limit, tmpx, tmpy );
 
-      addBIOAvg4_SSE<vext> ( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0 + OffPos, gradX1 + OffPos, gradY0 + OffPos, gradY1 + OffPos, widthG, tmpx, tmpy, shiftNum, offset, clpRng );
+      addBIOAvg4_SSE<vext> ( srcY0Temp + stridePredMC + 1, srcY1Temp + stridePredMC + 1, dstY0, dstStride, gradX0 + OffPos, gradX1 + OffPos, gradY0 + OffPos, gradY1 + OffPos, widthG, tmpx, tmpy, IF_INTERNAL_PREC + 1 - bitDepth, offset, clpRng );
     }  // xu
 #endif
   }  // yu
@@ -420,6 +422,27 @@ void BiOptFlowCoreSIMD( const Pel* srcY0,
 
   _mm256_zeroupper();
 #endif
+}
+
+template< X86_VEXT vext>
+void BiOptFlowCoreSIMD( const Pel* srcY0,
+                        const Pel* srcY1,
+                        const Pel* gradX0,
+                        const Pel* gradX1,
+                        const Pel* gradY0,
+                        const Pel* gradY1,
+                        const int  width,
+                        const int  height,
+                              Pel* dstY,
+                        const ptrdiff_t dstStride,
+                        const int  shiftNum,
+                        const int  offset,
+                        const int  limit,
+                        const ClpRng& clpRng,
+                        const int bitDepth )
+{
+  CHECKD( bitDepth != clpRng.bd, "BDOF bit depth" );
+  dispatchBitDepth( clpRng.bd, [&]( auto bd ) { BiOptFlowCoreSIMDBitDepth<vext, decltype( bd )::value>( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset, limit, clpRng, bitDepth ); } );
 }
 
 template< X86_VEXT vext, bool PAD = true>
@@ -628,6 +651,348 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
     dstPel += (dstStride  << 1);
   }
 #endif
+}
+
+// One row of the 6x6 PROF window, columns -1 .. 6 of the sub-block row at ref (only -1 .. 4 are used), converted to
+// the 14-bit intermediate format of the prediction with the same 16-bit arithmetic as the scalar border copy.
+// The two extra samples on the right stay inside the picture margin: xPredAffineBlk clips each sub-block MV so that
+// it moves the CU origin at most 7 samples past the right picture edge, the sub-block starts at most CTUSize - 4 into
+// the CU and xOffset adds 1, so the load ends at most CTUSize + 10 samples past the edge, inside the CTUSize + 16
+// margin of the reference pictures (EncStage.h).
+// borderShift is a template argument: an immediate shift, which SIMDE's Neon translation also needs.
+template<int borderShift>
+static ALWAYS_INLINE __m128i profBorderRow( const Pel* ref )
+{
+  const __m128i row = _mm_loadu_si128( ( const __m128i* ) ( ref - 1 ) );
+  return _mm_sub_epi16( _mm_slli_epi16( row, borderShift ), _mm_set1_epi16( IF_INTERNAL_OFFS ) );
+}
+
+// PROF of one 4x4 affine sub-block. pred holds the filtered sub-block, ref its nearest integer position in the
+// reference picture, which supplies the one-sample border. Each window row lives in one register (columns -1 .. 6 in
+// lanes 0 .. 7), so both gradients are register shifts: gradX = right - left two lanes apart, gradY = the row below
+// minus the row above. The arithmetic matches gradFilter_SSE< vext, false > followed by applyPROF_SSE, including the
+// saturating packs and adds. Always inlined into affineLumaCU_SSE, which runs it for every sub-block.
+template<X86_VEXT vext, int borderShift>
+ALWAYS_INLINE void affinePROF4x4_SSE( Pel* dst, int dstStride, const Pel* pred, int predStride, const Pel* ref, int refStride, const int16_t* dMvXY, const bool bi, int shiftNum, Pel offset, const ClpRng& clpRng )
+{
+  const int     dILimit    = 1 << std::max<int>( clpRng.bd + 1, 13 );
+  const __m128i dIMin      = _mm_set1_epi32( -dILimit );
+  const __m128i dIMax      = _mm_set1_epi32( dILimit - 1 );
+
+  // Window rows -1 .. 4, each shifted right by 6 as the gradient filter does: the top and bottom rows come from the
+  // reference only (their corner lanes are never used), the inner rows take the prediction in lanes 1 .. 4 (blend
+  // mask 0x1E).
+  __m128i predRow[4];
+  __m128i window[6];
+  window[0] = _mm_srai_epi16( profBorderRow<borderShift>( ref - refStride ), 6 );
+  for( int r = 0; r < 4; r++ )
+  {
+    predRow[r]        = _vv_loadl_epi64( ( const __m128i* ) ( pred + r * predStride ) );
+    const __m128i row = _mm_blend_epi16( profBorderRow<borderShift>( ref + r * refStride ), _mm_slli_si128( predRow[r], 2 ), 0x1E );
+    window[r + 1]     = _mm_srai_epi16( row, 6 );
+  }
+  window[5] = _mm_srai_epi16( profBorderRow<borderShift>( ref + 4 * refStride ), 6 );
+
+  // dI = dMvX * gradX + dMvY * gradY per sample, clipped to the PROF limit (32 bit, one row per register).
+  __m128i dI[4];
+  for( int r = 0; r < 4; r++ )
+  {
+    const __m128i gradX = _mm_sub_epi16( _mm_srli_si128( window[r + 1], 4 ), window[r + 1] );
+    const __m128i gradY = _mm_srli_si128( _mm_sub_epi16( window[r + 2], window[r] ), 2 );
+    const __m128i dMv   = _mm_loadu_si128( ( const __m128i* ) ( dMvXY + 8 * r ) );
+    dI[r] = _mm_madd_epi16( dMv, _mm_unpacklo_epi16( gradX, gradY ) );
+    dI[r] = _mm_min_epi32( dIMax, _mm_max_epi32( dIMin, dI[r] ) );
+  }
+
+  const __m128i vOffset = _mm_set1_epi16( offset );
+  const __m128i vMin    = _mm_set1_epi16( clpRng.min() );
+  const __m128i vMax    = _mm_set1_epi16( clpRng.max() );
+  for( int r = 0; r < 4; r += 2 )
+  {
+    __m128i res = _mm_add_epi16( _mm_packs_epi32( dI[r], dI[r + 1] ), _mm_unpacklo_epi64( predRow[r], predRow[r + 1] ) );
+    if( !bi )
+    {
+      res = _mm_srai_epi16( _mm_adds_epi16( res, vOffset ), shiftNum );
+      res = _mm_min_epi16( vMax, _mm_max_epi16( vMin, res ) );
+    }
+    _vv_storel_epi64( ( __m128i* ) ( dst + r * dstStride ), res );
+    _vv_storel_epi64( ( __m128i* ) ( dst + ( r + 1 ) * dstStride ), _mm_unpackhi_epi64( res, res ) );
+  }
+}
+
+// The MV of one luma sub-block, as xPredAffineBlk derives it: the affine model at the sub-block centre, rounded to
+// 1/16 sample and to the MV storage range. It is stored for the chroma pass, which reads the luma MVs.
+static inline Mv affineLumaSubblockMv( const InterPredInterpolation::AffineLumaCU& cu, int w, int h )
+{
+  const int half = AFFINE_MIN_BLOCK_SIZE >> 1;
+  const int x    = cu.spreadOverLimit ? cu.width  >> 1 : half + w;
+  const int y    = cu.spreadOverLimit ? cu.height >> 1 : half + h;
+  int mvHor      = cu.mvScaleHor + cu.dMvHorX * x + cu.dMvVerX * y;
+  int mvVer      = cu.mvScaleVer + cu.dMvHorY * x + cu.dMvVerY * y;
+  roundAffineMv( mvHor, mvVer, cu.roundShift );
+  Mv mv( mvHor, mvVer );
+  mv.clipToStorageBitDepth();
+  cu.storedMv[( h / AFFINE_MIN_BLOCK_SIZE ) * cu.storedMvStride + w / AFFINE_MIN_BLOCK_SIZE] = mv;
+  return mv;
+}
+
+// The 6-tap 4x4 luma filter of m_filter4x4[0][isLast] without the call; src points at the sub-block.
+template<X86_VEXT vext, bool isLast>
+static ALWAYS_INLINE void affineLumaFilter4x4( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride,
+                                               const TFilterCoeff* coeffH, const TFilterCoeff* coeffV, const Filter4x4N6Rounding& rnd )
+{
+  src -= 2 + 2 * srcStride;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    simdFilter4x4_N6_AVX2<isLast>( clpRng, src, srcStride, dst, dstStride, coeffH, coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
+    return;
+  }
+#endif
+  simdFilter4x4_N6_SSE<isLast, false>( clpRng, src, srcStride, dst, dstStride, coeffH, coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
+}
+
+// Where one luma sub-block of the CU loop reads the reference: its MV, clipped to the reference window, split into the
+// integer position (ref) and the 1/16 fractions; nearest is the nearest integer position, which PROF takes its border
+// from.
+struct AffineLumaSubblockRef
+{
+  const Pel* ref;
+  const Pel* nearest;
+  int        xFrac, yFrac;
+};
+
+static ALWAYS_INLINE AffineLumaSubblockRef affineLumaSubblockRef( const InterPredInterpolation::AffineLumaCU& cu, int w, int h )
+{
+  const Mv  mv    = affineLumaSubblockMv( cu, w, h );
+  const int mvHor = std::min<int>( cu.horMax, std::max<int>( cu.horMin, mv.hor ) );
+  const int mvVer = std::min<int>( cu.verMax, std::max<int>( cu.verMin, mv.ver ) );
+  AffineLumaSubblockRef r;
+  r.xFrac   = mvHor & 15;
+  r.yFrac   = mvVer & 15;
+  r.ref     = cu.ref + ( h + ( mvVer >> 4 ) ) * cu.refStride + w + ( mvHor >> 4 );
+  r.nearest = r.ref + ( r.yFrac >> 3 ) * cu.refStride + ( r.xFrac >> 3 );
+  return r;
+}
+
+// One luma sub-block of the CU loop: its 4x4 filter into dst. Returns the sub-block's nearest integer position.
+template<X86_VEXT vext, bool isLast>
+static ALWAYS_INLINE const Pel* affineLumaPredict4x4( const InterPredInterpolation::AffineLumaCU& cu, int w, int h,
+                                                      const Filter4x4N6Rounding& rnd, Pel* dst, int dstStride )
+{
+  const AffineLumaSubblockRef r = affineLumaSubblockRef( cu, w, h );
+  affineLumaFilter4x4<vext, isLast>( cu.clpRng, r.ref, cu.refStride, dst, dstStride,
+                                     InterpolationFilter::m_lumaFilter4x4[r.xFrac], InterpolationFilter::m_lumaFilter4x4[r.yFrac], rnd );
+  return r.nearest;
+}
+
+#if USE_AVX2
+// Coefficient pair (k, k + 1) of the left sub-block's filter in the low 128-bit lane, of the right one's in the high lane.
+static ALWAYS_INLINE __m256i coeffPairLanes( const TFilterCoeff* left, const TFilterCoeff* right, int k )
+{
+  return _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( xCoeffPair( left[k], left[k + 1] ) ) ),
+                                  _mm_set1_epi32( xCoeffPair( right[k], right[k + 1] ) ), 1 );
+}
+
+// The 14-bit (not last) 4x4 6-tap filter of two side-by-side sub-blocks in one pass, the left one in the low 128-bit
+// lane and the right one in the high lane, each with its own fractions. Per lane these are the sums of
+// simdFilter4x4_N6_AVX2<false>: the same sample pairs and coefficient pairs, the same multiply-add order and the same
+// saturating packs, so the results are identical. The output is in the layout affinePROF4x4Pair_AVX2 works in:
+// pred[0] holds rows 0 and 1 of each sub-block (row 0 in the low 64 bits of its lane), pred[1] rows 2 and 3. Unlike
+// a filter per sub-block, the hand-off to PROF needs no reorder across the lanes and no trip through memory.
+// srcLeft and srcRight point at the sub-blocks; the reads are those of the single 4x4 filter.
+static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, const Pel* srcRight, int srcStride,
+                                                        const TFilterCoeff* coeffHLeft, const TFilterCoeff* coeffHRight,
+                                                        const TFilterCoeff* coeffVLeft, const TFilterCoeff* coeffVRight,
+                                                        const Filter4x4N6Rounding& rnd, __m256i* pred )
+{
+  srcLeft  -= 2 + 2 * srcStride;
+  srcRight -= 2 + 2 * srcStride;
+  const __m256i h12 = coeffPairLanes( coeffHLeft, coeffHRight, 1 );
+  const __m256i h34 = coeffPairLanes( coeffHLeft, coeffHRight, 3 );
+  const __m256i h56 = coeffPairLanes( coeffHLeft, coeffHRight, 5 );
+  const __m256i off = _mm256_set1_epi32( rnd.offset1st );
+
+  // horizontal filter of the 9 rows the 4 output rows need: rows[y] holds row y of both sub-blocks as 32-bit values
+  __m256i rows[9];
+  for( int y = 0; y < 9; y++ )
+  {
+    const Pel*    left  = srcLeft  + y * srcStride;
+    const Pel*    right = srcRight + y * srcStride;
+    const __m256i from0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) left ) ),
+                                                   _mm_loadu_si128( ( const __m128i* ) right ), 1 );               // samples 0..7
+    const __m256i from1 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( left + 1 ) ) ),
+                                                   _mm_loadu_si128( ( const __m128i* ) ( right + 1 ) ), 1 );       // samples 1..8
+    const __m256i samplePairs0 = _mm256_unpacklo_epi16( from0, from1 );                  // (0,1) (1,2) (2,3) (3,4)
+    const __m256i samplePairs4 = _mm256_unpackhi_epi16( from0, from1 );                  // (4,5) (5,6) (6,7) (7,8)
+    const __m256i samplePairs2 = _mm256_alignr_epi8( samplePairs4, samplePairs0, 8 );    // (2,3) (3,4) (4,5) (5,6)
+    __m256i sum = _mm256_madd_epi16( samplePairs0, h12 );
+    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs2, h34 ) );
+    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs4, h56 ) );
+    rows[y] = _mm256_srai_epi32( _mm256_add_epi32( sum, off ), rnd.shift1st );
+  }
+
+  // vertical filter: rowPairs[y] holds rows y and y + 1 as interleaved 16-bit values, so output row y is three
+  // multiply-adds, of the pairs (y, y + 1), (y + 2, y + 3) and (y + 4, y + 5)
+  const __m256i interleave = _mm256_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15,
+                                               0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 );
+  __m256i rowPairs[8];
+  for( int y = 0; y < 8; y++ )
+  {
+    rowPairs[y] = _mm256_shuffle_epi8( _mm256_packs_epi32( rows[y], rows[y + 1] ), interleave );
+  }
+  const __m256i v12  = coeffPairLanes( coeffVLeft, coeffVRight, 1 );
+  const __m256i v34  = coeffPairLanes( coeffVLeft, coeffVRight, 3 );
+  const __m256i v56  = coeffPairLanes( coeffVLeft, coeffVRight, 5 );
+  const __m256i off2 = _mm256_set1_epi32( rnd.offset2nd );
+  __m256i out[4];
+  for( int y = 0; y < 4; y++ )
+  {
+    __m256i sum = _mm256_add_epi32( off2, _mm256_madd_epi16( rowPairs[y], v12 ) );
+    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( rowPairs[y + 2], v34 ) );
+    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( rowPairs[y + 4], v56 ) );
+    out[y] = _mm256_srai_epi32( sum, rnd.shift2nd );
+  }
+  pred[0] = _mm256_packs_epi32( out[0], out[1] );
+  pred[1] = _mm256_packs_epi32( out[2], out[3] );
+}
+
+// profBorderRow for two side-by-side sub-blocks, one per 128-bit lane.
+template<int borderShift>
+static ALWAYS_INLINE __m256i profBorderRowPair( const Pel* refLeft, const Pel* refRight )
+{
+  const __m256i row = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( refLeft - 1 ) ) ),
+                                               _mm_loadu_si128( ( const __m128i* ) ( refRight - 1 ) ), 1 );
+  return _mm256_sub_epi16( _mm256_slli_epi16( row, borderShift ), _mm256_set1_epi16( IF_INTERNAL_OFFS ) );
+}
+
+// affinePROF4x4_SSE for two side-by-side sub-blocks of a CU at once: the left one in the low 128-bit lane, the right
+// one in the high lane. Every step of the 4x4 PROF is lane-local (byte shifts, blend, unpack, madd, packs, adds,
+// min / max), so each lane computes exactly what affinePROF4x4_SSE computes for its sub-block, for about the work of
+// one. pred is the output of affineLumaFilter4x4Pair_AVX2; dMvRows the CU's dMv pairs, row r in both lanes.
+template<bool bi, int borderShift>
+static ALWAYS_INLINE void affinePROF4x4Pair_AVX2( Pel* dst, int dstStride, const __m256i* pred, const Pel* refLeft, const Pel* refRight,
+                                                  int refStride, const __m256i* dMvRows, int shiftNum, Pel offset,
+                                                  const ClpRng& clpRng )
+{
+  const int     dILimit   = 1 << std::max<int>( clpRng.bd + 1, 13 );
+  const __m256i dIMin     = _mm256_set1_epi32( -dILimit );
+  const __m256i dIMax     = _mm256_set1_epi32( dILimit - 1 );
+
+  // Window rows -1 .. 4: prediction row r of each sub-block (from pred, moved to lanes 1 .. 4) between its border
+  // samples. Rows 1 and 3 sit in the high 64 bits of pred's lanes, so they shift right by 6 bytes instead of left by 2.
+  __m256i window[6];
+  window[0] = _mm256_srai_epi16( profBorderRowPair<borderShift>( refLeft - refStride, refRight - refStride ), 6 );
+  for( int r = 0; r < 4; r++ )
+  {
+    const __m256i predRow = r & 1 ? _mm256_bsrli_epi128( pred[r >> 1], 6 ) : _mm256_bslli_epi128( pred[r >> 1], 2 );
+    const __m256i row     = _mm256_blend_epi16( profBorderRowPair<borderShift>( refLeft + r * refStride, refRight + r * refStride ),
+                                                predRow, 0x1E );
+    window[r + 1]     = _mm256_srai_epi16( row, 6 );
+  }
+  window[5] = _mm256_srai_epi16( profBorderRowPair<borderShift>( refLeft + 4 * refStride, refRight + 4 * refStride ), 6 );
+
+  __m256i dI[4];
+  for( int r = 0; r < 4; r++ )
+  {
+    const __m256i gradX = _mm256_sub_epi16( _mm256_bsrli_epi128( window[r + 1], 4 ), window[r + 1] );
+    const __m256i gradY = _mm256_bsrli_epi128( _mm256_sub_epi16( window[r + 2], window[r] ), 2 );
+    dI[r] = _mm256_madd_epi16( dMvRows[r], _mm256_unpacklo_epi16( gradX, gradY ) );
+    dI[r] = _mm256_min_epi32( dIMax, _mm256_max_epi32( dIMin, dI[r] ) );
+  }
+
+  const __m256i vOffset = _mm256_set1_epi16( offset );
+  const __m256i vMin    = _mm256_set1_epi16( clpRng.min() );
+  const __m256i vMax    = _mm256_set1_epi16( clpRng.max() );
+  for( int r = 0; r < 4; r += 2 )
+  {
+    __m256i res = _mm256_add_epi16( _mm256_packs_epi32( dI[r], dI[r + 1] ), pred[r >> 1] );
+    if( !bi )
+    {
+      res = _mm256_srai_epi16( _mm256_adds_epi16( res, vOffset ), shiftNum );
+      res = _mm256_min_epi16( vMax, _mm256_max_epi16( vMin, res ) );
+    }
+    // the lanes hold (left r, left r + 1) and (right r, right r + 1): reorder to whole rows of 8 samples
+    res = _mm256_permute4x64_epi64( res, 0xD8 );
+    _mm_storeu_si128( ( __m128i* ) ( dst + r * dstStride ), _mm256_castsi256_si128( res ) );
+    _mm_storeu_si128( ( __m128i* ) ( dst + ( r + 1 ) * dstStride ), _mm256_extracti128_si256( res, 1 ) );
+  }
+}
+#endif
+
+// xPredAffineBlk's luma sub-block loop in one call, so the filter and PROF of each sub-block need no call of their own.
+// Every sub-block goes through the 2-D 4x4 filter, whatever its fractions: a zero fraction takes the identity taps
+// m_lumaFilter4x4[0] = { 0, 0, 0, 64, 0, 0, 0, 0 }, which give exactly the horizontal-only, vertical-only and copy
+// results of m_if's filterHor and filterVer (the identity stage stays within 14 bits, so no pack saturates), with no
+// branch on the fractions. So every sub-block reads the 2-D footprint, rows and columns -2 .. +6 of the sub-block
+// (columns to +8 with SSE41), as a 2-D sub-block already does anywhere inside the MV clip window: at most
+// CTUSize + 9 (SSE41: + 11) samples past the right or bottom picture edge and CTUSize + 9 before the left or top
+// one, inside the CTUSize + 16 margin of the reference pictures (EncStage.h).
+// Instantiated per internal bit depth: the filter's shifts, the PROF border shift and shiftNum are constants, which the
+// always-inlined sub-block functions take as immediates.
+template<X86_VEXT vext, bool prof, bool bi, int bitDepth>
+static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu )
+{
+  constexpr bool isLast   = !prof && !bi;   // as in xPredAffineBlk: PROF works on the 14-bit prediction
+  constexpr Filter4x4N6Rounding rnd = filter4x4N6Rounding<isLast>( bitDepth );
+  constexpr int  shiftNum = std::max<int>( 2, IF_INTERNAL_PREC - bitDepth );
+  CHECKD( cu.shiftNum != shiftNum, "affine shiftNum" );
+
+#if USE_AVX2
+  if( vext >= AVX2 && prof )
+  {
+    // PROF two sub-blocks at a time, one per 128-bit lane; every row of an affine CU holds an even number of them
+    __m256i dMvRows[4];
+    for( int r = 0; r < 4; r++ )
+    {
+      dMvRows[r] = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( cu.dMvXY + 8 * r ) ) );
+    }
+    for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
+    {
+      for( int w = 0; w < cu.width; w += 2 * AFFINE_MIN_BLOCK_SIZE )
+      {
+        const AffineLumaSubblockRef left  = affineLumaSubblockRef( cu, w, h );
+        const AffineLumaSubblockRef right = affineLumaSubblockRef( cu, w + AFFINE_MIN_BLOCK_SIZE, h );
+        __m256i pred[2];
+        affineLumaFilter4x4Pair_AVX2( left.ref, right.ref, cu.refStride,
+                                      InterpolationFilter::m_lumaFilter4x4[left.xFrac], InterpolationFilter::m_lumaFilter4x4[right.xFrac],
+                                      InterpolationFilter::m_lumaFilter4x4[left.yFrac], InterpolationFilter::m_lumaFilter4x4[right.yFrac], rnd, pred );
+        affinePROF4x4Pair_AVX2<bi, shiftNum>( cu.dst + h * cu.dstStride + w, cu.dstStride, pred, left.nearest, right.nearest,
+                                              cu.refStride, dMvRows, shiftNum, cu.offset, cu.clpRng );
+      }
+    }
+    _mm256_zeroupper();
+    return;
+  }
+#endif
+
+  for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
+  {
+    for( int w = 0; w < cu.width; w += AFFINE_MIN_BLOCK_SIZE )
+    {
+      Pel* dst = cu.dst + h * cu.dstStride + w;
+      // with PROF the filtered sub-block goes through a small buffer (its stores forward to PROF's loads)
+      alignas( 16 ) Pel pred[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
+      const Pel* refNearest = affineLumaPredict4x4<vext, isLast>( cu, w, h, rnd, prof ? pred : dst, prof ? AFFINE_MIN_BLOCK_SIZE : cu.dstStride );
+      if( prof )
+      {
+        affinePROF4x4_SSE<vext, shiftNum>( dst, cu.dstStride, pred, AFFINE_MIN_BLOCK_SIZE, refNearest, cu.refStride, cu.dMvXY, bi,
+                                           shiftNum, cu.offset, cu.clpRng );
+      }
+    }
+  }
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    _mm256_zeroupper();
+  }
+#endif
+}
+
+template<X86_VEXT vext, bool prof, bool bi>
+void affineLumaCU_SSE( const InterPredInterpolation::AffineLumaCU& cu )
+{
+  dispatchBitDepth( cu.clpRng.bd, [&]( auto bd ) { affineLumaCUBitDepth<vext, prof, bi, decltype( bd )::value>( cu ); } );
 }
 
 template<X86_VEXT vext>
@@ -842,6 +1207,12 @@ void InterPredInterpolation::_initInterPredictionX86()
   xFpProfGradFilter   = gradFilter_SSE<vext, false>;
   xFpApplyPROF        = applyPROF_SSE<vext>;
   xFpPadDmvr          = padDmvr_SSE<vext>;
+#if defined( REAL_TARGET_X86 )   // builds that compile these kernels through SIMDE (Arm) keep their own path
+  xFpAffineLumaCU[0][0] = affineLumaCU_SSE<vext, false, false>;
+  xFpAffineLumaCU[0][1] = affineLumaCU_SSE<vext, false, true>;
+  xFpAffineLumaCU[1][0] = affineLumaCU_SSE<vext, true, false>;
+  xFpAffineLumaCU[1][1] = affineLumaCU_SSE<vext, true, true>;
+#endif
 }
 template void InterPredInterpolation::_initInterPredictionX86<SIMDX86>();
 

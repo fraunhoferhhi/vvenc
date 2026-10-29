@@ -756,6 +756,10 @@ void InterPredInterpolation::init( bool enableOpt )
   xFpBDOFGradFilter = gradFilterCore;
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;
+  for (auto& byBi : xFpAffineLumaCU)
+  {
+    byBi[0] = byBi[1] = nullptr;
+  }
   xFpPadDmvr        = padDmvrCore;
 
   if( enableOpt )
@@ -1593,6 +1597,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
   int *dMvScaleHor = m_dMvBuf[refPicList];
   int *dMvScaleVer = m_dMvBuf[refPicList] + 16;
+  alignas(16) int16_t dMvScaleXY[2 * AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
 
   if (enablePROF)
   {
@@ -1642,6 +1647,18 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
       int sz = blockWidth * blockHeight;
       g_pelBufOP.roundIntVector(dMvScaleHor, sz, mvShift, dmvLimit);
       g_pelBufOP.roundIntVector(dMvScaleVer, sz, mvShift, dmvLimit);
+    }
+
+    // The dMv offsets are the same for every sub-block of the CU, so the per-CU luma function gets them interleaved as
+    // int16 once here. They are clipped to +-dmvLimit above, so the narrowing is exact, as applyPROF_SSE's saturating
+    // packs.
+    if (xFpAffineLumaCU[1][bi])
+    {
+      for (int idx = 0; idx < blockWidth * blockHeight; idx++)
+      {
+        dMvScaleXY[2 * idx]     = (int16_t) dMvScaleHor[idx];
+        dMvScaleXY[2 * idx + 1] = (int16_t) dMvScaleVer[idx];
+      }
     }
   }
 
@@ -1709,6 +1726,49 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
   const int puX = cu.blocks[compID].x;
   const int puY = cu.blocks[compID].y;
+
+  if (compID == COMP_Y && xFpAffineLumaCU[enablePROF][bi])
+  {
+    // the whole luma loop below in one SIMD call, which saves two calls and their argument set-up per sub-block
+    AffineLumaCU luma;
+    luma.ref             = refBuf.bufAt(puX, puY);
+    luma.refStride       = refBuf.stride;
+    luma.dst             = dstBuf.buf;
+    luma.dstStride       = dstBuf.stride;
+    luma.width           = cxWidth;
+    luma.height          = cxHeight;
+    luma.mvScaleHor      = iMvScaleHor;
+    luma.mvScaleVer      = iMvScaleVer;
+    luma.dMvHorX         = iDMvHorX;
+    luma.dMvHorY         = iDMvHorY;
+    luma.dMvVerX         = iDMvVerX;
+    luma.dMvVerY         = iDMvVerY;
+    luma.spreadOverLimit = subblkMVSpreadOverLimit;
+    luma.roundShift      = shift;
+    luma.horMin          = iHorMin;
+    luma.horMax          = iHorMax;
+    luma.verMin          = iVerMin;
+    luma.verMax          = iVerMax;
+    luma.storedMv        = m_storedMv;
+    luma.storedMvStride  = MVBUFFER_SIZE;
+    luma.dMvXY           = dMvScaleXY;
+    luma.shiftNum        = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
+    luma.offset          = (1 << (luma.shiftNum - 1)) + IF_INTERNAL_OFFS;
+    luma.clpRng          = clpRng;
+    xFpAffineLumaCU[enablePROF][bi](luma);
+#if defined( _DEBUG )
+    // the FPP MV restriction check of the sub-block loop below, on the MVs the CU call stored
+    for (int h = 0; h < cxHeight; h += blockHeight)
+    {
+      for (int w = 0; w < cxWidth; w += blockWidth)
+      {
+        const int mvVer = std::min<int>(iVerMax, std::max<int>(iVerMin, m_storedMv[h / AFFINE_MIN_BLOCK_SIZE * MVBUFFER_SIZE + w / AFFINE_MIN_BLOCK_SIZE].ver));
+        CHECKD( m_ifpLines && !CU::isMvInRangeFPP( puY + h, blockHeight, mvVer, m_ifpLines, *pps.pcv, iScaleY ), "xPredAffineBlk: FPP MV restriction failed!\n" );
+      }
+    }
+#endif
+    return;
+  }
 
   for (int h = 0; h < cxHeight; h += blockHeight)
   {
