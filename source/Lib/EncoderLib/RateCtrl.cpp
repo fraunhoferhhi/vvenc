@@ -1286,8 +1286,15 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
           sliceQP = int( 0.5 + d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
+          const int sqp_bckp = sliceQP;
           encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
                                   ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );
+          
+          if( it->isIntra && sliceQP >= sqp_bckp )
+          {
+            sliceQP -= (it->visActY < 64 ? 2 : std::max( 0, (encRCSeq->bitDepth < 10 ? 7 : 8) - floorLog2(it->visActY)));
+          }
+          
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRCSeq->minEstLambda, encRCSeq->maxEstLambda, lambda );
 
