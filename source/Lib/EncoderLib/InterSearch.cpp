@@ -409,31 +409,25 @@ void InterSearch::getBestSbt( CodingStructure* tempCS, CodingUnit* cu, uint8_t& 
 
 inline void InterSearch::xTZSearchHelp( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance )
 {
-  Distortion  uiSad = 0;
+  // Check the MV cost first: a point whose MV cost alone reaches the best cost cannot win, whatever its SAD.
+  const Distortion mvCost = m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
+  if( mvCost >= rcStruct.uiBestSad )
+  {
+    return;
+  }
 
-  const Pel* const  piRefSrch = rcStruct.piRefY + iSearchY * rcStruct.iRefStride + iSearchX;
+  m_cDistParam.cur.buf = rcStruct.piRefY + iSearchY * rcStruct.iRefStride + iSearchX;
 
-  m_cDistParam.cur.buf = piRefSrch;
-
-  uiSad = m_cDistParam.distFunc( m_cDistParam );
-
-  // only add motion cost if uiSad is smaller than best. Otherwise pointless
-  // to add motion cost.
+  const Distortion uiSad = m_cDistParam.distFunc( m_cDistParam ) + mvCost;
   if( uiSad < rcStruct.uiBestSad )
   {
-    // motion cost
-    uiSad += m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
-
-    if( uiSad < rcStruct.uiBestSad )
-    {
-      rcStruct.uiBestSad      = uiSad;
-      rcStruct.iBestX         = iSearchX;
-      rcStruct.iBestY         = iSearchY;
-      rcStruct.uiBestDistance = uiDistance;
-      rcStruct.uiBestRound    = 0;
-      rcStruct.ucPointNr      = ucPointNr;
-      m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-    }
+    rcStruct.uiBestSad      = uiSad;
+    rcStruct.iBestX         = iSearchX;
+    rcStruct.iBestY         = iSearchY;
+    rcStruct.uiBestDistance = uiDistance;
+    rcStruct.uiBestRound    = 0;
+    rcStruct.ucPointNr      = ucPointNr;
+    m_cDistParam.maximumDistortionForEarlyExit = uiSad;
   }
 }
 
