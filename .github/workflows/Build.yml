@@ -79,10 +79,6 @@ jobs:
 
 
           - os: macos-latest
-            osx_arch: x86_64
-            run_unit_test: true
-
-          - os: macos-latest
             osx_arch: arm64
             run_unit_test: true
 
