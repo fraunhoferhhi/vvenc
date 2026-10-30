@@ -225,6 +225,9 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   m_parentCandList.resize( 0 );
   m_parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
 
+  // the prediction parameters of every mode for this block size, taken once (the loop below changes only the mode)
+  const LumaModeParam* lumaParams = getLumaParamRow( cu );
+
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
     // Skip checking extended Angular modes in the first round of SATD
@@ -261,7 +264,14 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
         cu.intraDir[0] = mode;
 
-        initPredIntraParams( cu, cu.Y(), sps );
+        if( lumaParams )
+        {
+          setLumaModeParams( lumaParams[mode] );
+        }
+        else
+        {
+          initPredIntraParams( cu, cu.Y(), sps );
+        }
         distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
         predIntraAng( COMP_Y, piPred, cu );
 
