@@ -1350,6 +1350,152 @@ static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_c
   return true;
 }
 
+// The forward cores with the encoder's real matrices (DCT-II, DST-7, DCT-8) and with random 8-bit matrices, on inputs
+// at the int16 extremes (the SIMD kernels saturate to int16, the scalar core does not, so larger inputs would differ),
+// for every line / reducedLine / cutoff combination the x86 kernels accept, including reducedLine 2 and cutoff 4 and 8.
+static bool check_fastFwdCore_2D_extreme( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastFwdCore_2D extreme inputs, real matrices trSize=%d\n", trSize );
+  std::vector<const TMatrixCoeff*> matrices;
+  switch( trSize )
+  {
+  case  4: matrices = { g_trCoreDCT2P4 [TRANSFORM_FORWARD][0], g_trCoreDST7P4 [TRANSFORM_FORWARD][0], g_trCoreDCT8P4 [TRANSFORM_FORWARD][0] }; break;
+  case  8: matrices = { g_trCoreDCT2P8 [TRANSFORM_FORWARD][0], g_trCoreDST7P8 [TRANSFORM_FORWARD][0], g_trCoreDCT8P8 [TRANSFORM_FORWARD][0] }; break;
+  case 16: matrices = { g_trCoreDCT2P16[TRANSFORM_FORWARD][0], g_trCoreDST7P16[TRANSFORM_FORWARD][0], g_trCoreDCT8P16[TRANSFORM_FORWARD][0] }; break;
+  case 32: matrices = { g_trCoreDCT2P32[TRANSFORM_FORWARD][0], g_trCoreDST7P32[TRANSFORM_FORWARD][0], g_trCoreDCT8P32[TRANSFORM_FORWARD][0] }; break;
+  case 64: matrices = { g_trCoreDCT2P64[TRANSFORM_FORWARD][0] }; break;
+  }
+  matrices.push_back( nullptr );   // random 8-bit matrix
+
+  // int16 extremes and zero, with some random 16-bit values in between
+  auto extreme = []() -> TCoeff
+  {
+    switch( rand() % 4 )
+    {
+    case 0:  return  32767;
+    case 1:  return -32768;
+    case 2:  return  0;
+    default: return TCoeff( Pel( ( rand() << 8 ) ^ rand() ) );   // any int16 value (RAND_MAX may be only 2^15 - 1)
+    }
+  };
+  TrafoGenerator<TMatrixCoeff> random8bit{ 8 };
+  DimensionGenerator rng;
+
+  for( const TMatrixCoeff* matrix : matrices )
+  {
+    for( unsigned line : { 2, 4, 8, 16, 32, 64 } )
+    {
+      for( unsigned reducedLine = line == 2 ? 2 : 4; reducedLine <= std::min( line, 32u ); reducedLine += line == 2 ? 2 : 4 )
+      {
+        for( unsigned cutoff = 4; cutoff <= trSize; cutoff += 4 )
+        {
+          const unsigned shift = rng.get( 1, 16 );
+          auto trafo = [matrix, &random8bit, k = 0u]() mutable { return matrix ? matrix[k++] : random8bit(); };
+          if( !check_one_fastFwdCore_2D( ref, opt, idx, trSize, line, reducedLine, cutoff, shift, extreme, trafo ) )
+          {
+            return false;
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+// The even/odd split of the SIMD forward DCT-II relies on the matrix symmetry T[j][N - 1 - k] = (-1)^j * T[j][k]; the
+// even rows of the N-point matrix are the N/2-point matrix (nesting).
+static bool check_dct2_matrix_symmetry()
+{
+  printf( "Testing forward DCT-II matrices: symmetry and nesting\n" );
+  const TMatrixCoeff* matrices[] = { g_trCoreDCT2P4[TRANSFORM_FORWARD][0], g_trCoreDCT2P8[TRANSFORM_FORWARD][0],
+                                     g_trCoreDCT2P16[TRANSFORM_FORWARD][0], g_trCoreDCT2P32[TRANSFORM_FORWARD][0],
+                                     g_trCoreDCT2P64[TRANSFORM_FORWARD][0] };
+  for( unsigned m = 1; m < 5; m++ )
+  {
+    const unsigned n = 4 << m;
+    const TMatrixCoeff* t    = matrices[m];
+    const TMatrixCoeff* half = matrices[m - 1];
+    for( unsigned j = 0; j < n; j++ )
+    {
+      for( unsigned k = 0; k < n / 2; k++ )
+      {
+        const int mirrored = ( j & 1 ) ? -t[j * n + n - 1 - k] : t[j * n + n - 1 - k];
+        if( t[j * n + k] != mirrored || ( !( j & 1 ) && t[j * n + k] != half[j / 2 * ( n / 2 ) + k] ) )
+        {
+          printf( "failed: DCT-II %u-point matrix, row %u column %u\n", n, j, k );
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed parts) against the scalar
+// matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values that trip
+// its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine / cutoff
+// combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, 12).
+static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastFwdDCT2 trSize=%d\n", trSize );
+  const TMatrixCoeff* tc = trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+                         : trSize == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
+  const unsigned coreIdx = Log2( trSize ) - 2;   // fastFwdCore_* index of the same size
+  DimensionGenerator rng;
+
+  // aligned as the encoder's buffers (the SIMD kernels use aligned loads)
+  const unsigned size = trSize * 64;
+  TCoeff* src  = ( TCoeff* ) xMalloc( TCoeff, size );
+  TCoeff* dst0 = ( TCoeff* ) xMalloc( TCoeff, size );
+  TCoeff* dst1 = ( TCoeff* ) xMalloc( TCoeff, size );
+  bool passed  = true;
+
+  for( unsigned line : { 1, 2, 4, 8, 16, 32, 64 } )
+  {
+    for( unsigned reducedLine = line <= 2 ? line : 4; reducedLine <= line; reducedLine += line <= 2 ? line : 4 )
+    {
+      for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
+      {
+        for( int dist = 0; dist < 4; dist++ )
+        {
+          for( unsigned n = 0; n < size; n++ )
+          {
+            src[n] = dist == 0 ? int( rng.get( 0, 2047 ) ) - 1024
+              : dist == 1 ? ( rng.get( 0, 1 ) ? 16383 : -16384 )
+              : dist == 2 ? int( rng.get( 0, 32767 ) ) - 16384
+              :             TCoeff( Pel( ( rand() << 8 ) ^ rand() ) );   // any int16 value (RAND_MAX may be only 2^15 - 1)
+          }
+          if( dist == 2 )
+          {
+            const int trip[] = { 16384, 32767, -32768 };
+            src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+          }
+          std::fill( dst0, dst0 + size, 0x5a5a5a5a );
+          std::fill( dst1, dst1 + size, 0x5a5a5a5a );
+          const int shift = rng.get( 1, 16 );
+
+          // the reference: scalar matrix multiply, then the zeroed parts
+          ref->fastFwdCore_2D[coreIdx]( tc, src, dst0, line, reducedLine, cutoff, shift );
+          fastForwardZeroSkipped( dst0, line, reducedLine, cutoff, line - reducedLine, trSize - cutoff );
+          opt->fastFwdDCT2[idx]( src, dst1, shift, line, line - reducedLine, trSize - cutoff );
+
+          std::ostringstream sstm;
+          sstm << "fastFwdDCT2 trSize=" << trSize << " line=" << line << " reducedLine=" << reducedLine << " cutoff=" << cutoff
+               << " shift=" << shift << " inputs=" << dist;
+          passed = compare_values_1d( sstm.str(), dst0, dst1, size ) && passed;   // the whole buffer: stray writes fail
+        }
+      }
+    }
+  }
+
+  xFree( src );
+  xFree( dst0 );
+  xFree( dst1 );
+
+  return passed;
+}
+
 typedef void InvTrFn( const TCoeff*, TCoeff*, int, int, int, int, const TCoeff, const TCoeff );
 typedef void FwdTrFn( const TCoeff*, TCoeff*, int, int, int, int );
 
@@ -1501,6 +1647,17 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 2, 16 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 3, 32 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 4, 64 ) && passed;
+
+  passed = check_fastFwdCore_2D_extreme( &ref, &opt, 0, 4 ) && passed;
+  passed = check_fastFwdCore_2D_extreme( &ref, &opt, 1, 8 ) && passed;
+  passed = check_fastFwdCore_2D_extreme( &ref, &opt, 2, 16 ) && passed;
+  passed = check_fastFwdCore_2D_extreme( &ref, &opt, 3, 32 ) && passed;
+  passed = check_fastFwdCore_2D_extreme( &ref, &opt, 4, 64 ) && passed;
+
+  passed = check_dct2_matrix_symmetry() && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
 
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;
