@@ -2122,7 +2122,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->deblockingFilterOverride = slice->pps->deblockingFilterOverrideEnabled && !slice->pps->deblockingFilterDisabled
                                     && sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
 
-  if( m_pcEncCfg->m_deblockLastTLayers > 0 && slice->TLayer <= m_pcEncCfg->m_maxTLayer - m_pcEncCfg->m_deblockLastTLayers )
+  // only the highest DeblockLastTLayers temporal layers are deblocked; the signed tLayer is compared, since without
+  // temporal layers m_maxTLayer - m_deblockLastTLayers is negative and no layer is at or below it (the unsigned
+  // slice->TLayer would compare it as a huge value)
+  if( m_pcEncCfg->m_deblockLastTLayers > 0 && tLayer <= m_pcEncCfg->m_maxTLayer - m_pcEncCfg->m_deblockLastTLayers )
   {
     slice->deblockingFilterOverride = true;
     slice->deblockingFilterDisable  = true;
