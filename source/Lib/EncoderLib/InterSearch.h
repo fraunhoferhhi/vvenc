@@ -609,6 +609,7 @@ private:
   bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, uint32_t& ruiBits, Distortion& ruiCost);
 
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);
+  void xFilterVerFromReference        ( const CPelBuf* pattern, int rowOffset, Pel* dst, int dstStride, int height, int quarterFrac, bool useAltHpelIf );
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );
 
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
