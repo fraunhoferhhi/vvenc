@@ -374,6 +374,20 @@ static double qpToLambda( int qp, int bitDepth )
   return 0.57 * std::pow( 2.0, ( qp - 12 ) / 3.0 ) * double( 1 << ( 2 * ( bitDepth - 8 ) ) );
 }
 
+// The rate a block passes on for its own propagated rate R_prop: log2( 2^(2 R_prop) / ( r * 2^(2 R_prop) + 1 - r ) ),
+// r = D_src / D_rec in [0, 1]. From R_prop = 512 bits on, 2^(2 R_prop) overflows to infinity and the expression
+// becomes NaN (inf / inf, or 0 * inf for r = 0). The same value is -log2( r + ( 1 - r ) * 2^(-2 R_prop) ), in which
+// 2^(-2 R_prop) <= 2^-1024 is far below double precision (a positive r is at least 1/64 / D_rec), so it is
+// -log2( r ), or 2 R_prop for r = 0.
+static double propagatedRate( double propRate, double growth, double srcRatio )
+{
+  if( std::isfinite( growth ) )
+  {
+    return std::log2( growth / ( srcRatio * growth + 1.0 - srcRatio ) );
+  }
+  return srcRatio > 0.0 ? -std::log2( srcRatio ) : 2.0 * propRate;
+}
+
 // ====================================================================================================================
 // Stage
 // ====================================================================================================================
@@ -1024,7 +1038,7 @@ void CuTree::xPropagate( int firstPoc )
           const double deltaDist = frame->deltaDist[l][idx];
           const double srcRatio  = frame->distSrc[l][idx] / distRec;
           const double dist      = deltaDist + deltaDist / distRec * frame->propDist[idx];
-          const double rate      = frame->deltaRate[l][idx] + ( propRate > 0.0 ? std::log2( growth / ( srcRatio * growth + 1.0 - srcRatio ) ) : 0.0 );
+          const double rate      = frame->deltaRate[l][idx] + ( propRate > 0.0 ? propagatedRate( propRate, growth, srcRatio ) : 0.0 );
           if( dist > 0.0 || rate > 0.0 )
           {
             xDistribute( *refs[l], bx, by, frame->mvs[l].get( bx, by ), dist, rate );
