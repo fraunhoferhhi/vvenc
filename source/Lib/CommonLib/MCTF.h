@@ -163,6 +163,10 @@ public:
 
   int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
   int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
+  // The exact errors (no early exit) of num <= 4 vectors that share their horizontal position, for the 4-tap filters:
+  // vector i uses yFilter[i] and starts rowOffset[i] (0 or 1) rows below buf; w is a multiple of 16, w and h are at
+  // most 32 (MCTFUnitSize). nullptr where no such kernel exists.
+  void ( *m_motionErrorLumaFracColumn )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error );
 
   void( *m_applyFrac[MAX_NUM_CH][2] )( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth );
 
@@ -201,6 +205,10 @@ private:
 
   // refMargin is the width of the replicated border around the reference frame buffer.
   int motionErrorLuma   (const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
+  void testSubpelLattice( const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, const int bs,
+                          const MotionVector &center, const int range, const int step, MotionVector &best ) const;
+  void testIntegerLattice( const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int x, const int y, const int bs,
+                           const int centerX, const int centerY, const int range, const int step, const MotionVector &tested, MotionVector &best ) const;
 
   bool estimateLumaLn   ( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int refMargin, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY, int bitDepth ) const;
