@@ -121,6 +121,7 @@ struct TemporalFilterSourcePicInfo
   PelStorage            picBuffer;
   Array2D<MotionVector> mvs;
   int                   index;
+  bool                  otherScene = false;   // the picture is across a scene cut (adaptive intra refresh): no noise estimate from it
 };
 // ====================================================================================================================
 // Class definition

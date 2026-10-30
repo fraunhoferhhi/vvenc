@@ -243,9 +243,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   // pre processing
   m_preProcess = new PreProcess( msg );
   m_preProcess->initStage( m_encCfg, 1, -m_encCfg.m_leadFrames, true, true, false );
-  m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass );
+  m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass, m_threadPool );
   m_encStages.push_back( m_preProcess );
-  m_maxNumPicShared += 1;
+  m_maxNumPicShared += 1 + m_preProcess->lookahead();   // the pictures held ahead of the GOP structure
 
   // MCTF
   if( m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA )
@@ -455,7 +455,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // CU-tree passes its pictures on a GOP at a time, and the GOP encoder only starts with a GOP and one picture queued.
   // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
   // Without stage parallel processing, a buffer of that many access units covers the wait, so every call still
-  // returns one; with it, the delayed output below already does.
+  // returns one; with it, the delayed output below covers it unless a GOP needs more pictures in flight than the GOPs
+  // before it (see the end of the loop).
   const size_t auBuffer = ( m_encCfg.useCuTree() && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
 
   PicShared* picShared = nullptr;
@@ -513,10 +514,18 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     if( m_encCfg.m_stageParallelProc )
     {
+      bool encoderRan = false;
       for( auto encStage : m_encStages )
       {
         if( encStage->isNonBlocking() )
-          encStage->waitForFreeEncoders();
+          encoderRan |= encStage->waitForFreeEncoders();
+      }
+      // No stage passed a picture on and no encoder was running, so nothing can change before more input arrives:
+      // return for it. This happens when a GOP needs more pictures in flight than the access units held back cover,
+      // e.g. a full GOP with the CU tree after a first GOP that a scene cut ended after a few pictures.
+      if( ! encoderRan && ! progress && ! inputPending && ! flush )
+      {
+        break;
       }
     }
   }

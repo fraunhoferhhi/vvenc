@@ -312,16 +312,41 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-void EncGOP::waitForFreeEncoders()
+// The look-ahead of the adaptive intra refresh (mode 1) holds the next GOP's pictures back, so with stage parallel
+// processing, whose picture pool is limited, a GOP shortened by a cut or by the intra period may never reach the
+// minimum queue size. The queue then holds a complete GOP to code when it holds the first coded picture of a GOP not
+// coded yet: that is the GOP's last picture in output order, so the whole GOP has arrived when pictures arrive in
+// output order, as they do unless the pre-encoder of the look-ahead rate control hands them over in coding order.
+// (Coded pictures stay queued as references and do not count.) Without stage parallel processing the queue fills up
+// to the minimum anyway, and starting earlier would start the access unit output before the encoder can return one
+// access unit per input picture.
+bool EncGOP::xReadyToProcess() const
 {
+  const bool arrivesInOutputOrder = m_isPreAnalysis || ! m_pcEncCfg->m_LookAhead;
+  if( m_pcEncCfg->m_adaptiveIntra != 1 || ! m_pcEncCfg->m_stageParallelProc || ! arrivesInOutputOrder )
   {
-    std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    if( ! xEncodersFinished() )
+    return false;
+  }
+  for( auto pic : stageQueue() )
+  {
+    if( pic->gopEntry && pic->gopEntry->m_isValid && pic->gopEntry->m_isStartOfGop && ! pic->isInitDone )
     {
-      CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-      m_gopEncCond.wait( lock );
+      return true;
     }
   }
+  return false;
+}
+
+bool EncGOP::waitForFreeEncoders()
+{
+  std::unique_lock<std::mutex> lock( m_gopEncMutex );
+  if( xEncodersFinished() )
+  {
+    return false;
+  }
+  CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+  m_gopEncCond.wait( lock );
+  return true;
 }
 
 void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )

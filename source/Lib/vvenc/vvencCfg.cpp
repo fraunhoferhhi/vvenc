@@ -387,6 +387,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
   c->m_sliceTypeAdapt                          = -1;            ///< perceptually and objectively motivated slice type adaptation (STA)
+  c->m_adaptiveIntra                           = 0;             ///< adaptive intra refresh: I pictures where they pay, at scene cuts and in the slice type adaptation
   c->m_minIntraDist                            = -1;
 
   c->m_RCNumPasses                             = -1;
@@ -781,6 +782,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 6)" );
   vvenc_confirmParameter( c, c->m_sliceTypeAdapt < -1 || c->m_sliceTypeAdapt > 2,                        "Slice type adaptation (STA) invalid parameter given, range is (-1 .. 2)" );
+  vvenc_confirmParameter( c, c->m_adaptiveIntra < 0 || c->m_adaptiveIntra > 2,                           "Adaptive intra refresh invalid parameter given, range is (0 .. 2)" );
   vvenc_confirmParameter( c, c->m_minIntraDist < -1,                                                     "Minimum intra distance cannot be smaller than -1" );
 
   if( VVENC_RC_OFF == c->m_RCTargetBitrate )
@@ -1451,9 +1453,22 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // slice type adaptation (STA)
   if( c->m_sliceTypeAdapt < 0 )
   {
-    c->m_sliceTypeAdapt = c->m_GOPSize > 8 ? 1 : 0;
+    // the adaptive intra refresh (mode 1) places I pictures at the scene cuts it detects in place of the STA's I
+    // pictures at activity jumps, which cost more than they save even after its cost test (game footage: 2 % of the
+    // rate); with STA set explicitly both run
+    c->m_sliceTypeAdapt = c->m_GOPSize > 8 && c->m_adaptiveIntra != 1 ? 1 : 0;
   }
   vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_sliceTypeAdapt > 0, "Slice type adaptation for GOPSize <= 8 not supported" );
+  vvenc_confirmParameter( c, c->m_GOPSize <= 8 && c->m_adaptiveIntra > 0, "Adaptive intra refresh for GOPSize <= 8 not supported" );
+  vvenc_confirmParameter( c, c->m_adaptiveIntra == 2 && c->m_sliceTypeAdapt == 0, "Adaptive intra refresh mode 2 applies to the slice type adaptation (STA), which is off" );
+  // the DASH refresh types align segments on fixed refresh positions (and an IDR without leading pictures cannot end a
+  // GOP shortened by a cut), which mode 1 moves to the content
+  vvenc_confirmParameter( c, c->m_adaptiveIntra == 1 && ( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE || c->m_DecodingRefreshType == VVENC_DRT_IDR_NO_RADL ),
+                                                                                          "Adaptive intra refresh mode 1 not supported with the refresh types cra_cre and idr_no_radl" );
+  vvenc_confirmParameter( c, c->m_adaptiveIntra == 1 && ! c->m_picReordering, "Adaptive intra refresh mode 1 needs picture reordering (random access)" );
+  // the HRD timing of these SEI messages assumes the configured GOP structure and intra period
+  vvenc_confirmParameter( c, c->m_adaptiveIntra == 1 && ( c->m_bufferingPeriodSEIEnabled || c->m_pictureTimingSEIEnabled ),
+                                                                                          "Adaptive intra refresh mode 1 not supported with buffering period or picture timing SEI" );
 
   if( c->m_minIntraDist < 0 )
   {
@@ -3392,6 +3407,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";
+    css << "AdaptiveIntra:" << (int)c->m_adaptiveIntra << " ";
     css << "LeadFrames:" << c->m_leadFrames << " ";
     css << "TrailFrames:" << c->m_trailFrames << " ";
 

@@ -335,6 +335,15 @@ void RateCtrl::init( const VVEncCfg& encCfg )
                     m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
+// Index of the first-pass CTU QP memory of the I picture at poc: the first pass stores one block per I picture after
+// POC 0, in coding (= POC) order (BitAllocation). -1 if the first pass coded no I picture at poc. Counted rather than
+// poc / IntraPeriod, which is wrong once the slice type adaptation adds I pictures or POC0IDR leaves POC 0 without one.
+int RateCtrl::getIntraPQPAIndex( int poc ) const
+{
+  const auto it = std::lower_bound( m_intraPQPAPocs.begin(), m_intraPQPAPocs.end(), poc );
+  return it != m_intraPQPAPocs.end() && *it == poc ? int( it - m_intraPQPAPocs.begin() ) : -1;
+}
+
 int RateCtrl::getBaseQP()
 {
   // estimate near-optimal base QP for PPS in second RC pass
@@ -439,6 +448,10 @@ void RateCtrl::writeStatsHeader()
     { "QP",           m_pcEncCfg->m_QP },
     { "RCInitialQP",  m_pcEncCfg->m_RCInitialQP }
   };
+  if( m_pcEncCfg->m_adaptiveIntra )
+  {
+    header[ "AdaptiveIntra" ] = (int)m_pcEncCfg->m_adaptiveIntra;   // it changes the GOP structure; absent means off
+  }
   m_rcStatsFHandle << header << std::endl;
 }
 
@@ -469,6 +482,8 @@ void RateCtrl::readStatsHeader()
   if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      msg.log( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
   if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg.log( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
   if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg.log( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
+  const int adaptiveIntra = header.find( "AdaptiveIntra" ) != header.end() && header[ "AdaptiveIntra" ].is_number() ? header[ "AdaptiveIntra" ].get<int>() : 0;
+  if( adaptiveIntra            != m_pcEncCfg->m_adaptiveIntra ) msg.log( VVENC_WARNING, "WARNING: wrong adaptive intra refresh mode in rate control statistics file\n" );
 }
 #endif // VVENC_ENABLE_THIRDPARTY_JSON
 
@@ -787,6 +802,19 @@ void RateCtrl::xProcessFirstPassData( const bool flush, const int poc )
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
+
+  if( m_pcEncCfg->m_RCNumPasses == 2 )
+  {
+    // the first pass's intra pictures after POC 0 in POC order, for getIntraPQPAIndex
+    m_intraPQPAPocs.clear();
+    for( const auto& stats : m_listRCFirstPassStats )
+    {
+      if( stats.isIntra && stats.poc > 0 )
+      {
+        m_intraPQPAPocs.push_back( stats.poc );
+      }
+    }
+  }
 
   if ( flush || !m_pcEncCfg->m_LookAhead )
   {

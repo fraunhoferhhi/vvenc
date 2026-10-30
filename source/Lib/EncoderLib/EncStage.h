@@ -78,8 +78,11 @@ private:
   PelStorage       m_fgaFilteredBuf;   // temporally filtered picture for the film grain analysis, until analysed
   bool             m_fgaUsesFilteredBuf = false;   // the encoding filtered picture is the analysis picture
   PelStorage       m_fgaResidualBuf;   // temporal residual for the improved film grain analysis, until analysed
+  PelStorage       m_lowRes[ 3 ];      // quarter, eighth and sixteenth resolution luma, padded, for the look-ahead
+                                       //   motion search of the adaptive intra refresh
   int              m_fgaResidualWeight = 0;        // its variance relative to the grain variance, 0 without residual
   bool             m_fgaSceneCut = false;          // the picture starts a new scene (film grain analysis)
+  bool             m_sceneCutStart = false;        // the picture starts a new scene (adaptive intra refresh mode 1)
   int              m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();   // the latest scene cut before it
   uint64_t         m_cts;
   int              m_maxFrames;
@@ -124,8 +127,12 @@ public:
   PelStorage&  getFgaFilteredBuf()     { return m_fgaFilteredBuf; }
   bool&        fgaUsesFilteredBuf()    { return m_fgaUsesFilteredBuf; }
   PelStorage&  getFgaResidualBuf()     { return m_fgaResidualBuf; }
+  PelStorage&  lowRes( int level )     { return m_lowRes[ level ]; }   // 0: quarter, 1: eighth, 2: sixteenth
+  bool         hasLowRes()       const { return ! m_lowRes[ 0 ].bufs.empty(); }   // made on first use, freed with the picture
+  void         freeLowRes()            { for( auto& b : m_lowRes ) b.destroy(); }
   int&         fgaResidualWeight()     { return m_fgaResidualWeight; }
   bool&        fgaSceneCut()           { return m_fgaSceneCut; }
+  bool&        sceneCutStart()         { return m_sceneCutStart; }
   int&         fgaLastSceneCutPoc()    { return m_fgaLastSceneCutPoc; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
 
@@ -151,6 +158,8 @@ public:
     m_fgaResidualBuf.destroy();
     m_fgaResidualWeight = 0;
     m_fgaSceneCut        = false;
+    m_sceneCutStart      = false;
+    freeLowRes();   // normally freed already with the previous picture
     m_fgaLastSceneCutPoc = std::numeric_limits<int>::min();
 
     m_picVA.reset();
@@ -260,9 +269,16 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+  // The stage can process its queue although it holds fewer pictures than the minimum queue size: a GOP shortened by
+  // the intra period or by a scene cut is complete with fewer pictures than GOP + 1, and while the look-ahead of the
+  // adaptive intra refresh holds the next pictures back, waiting for GOP + 1 can deadlock the pipeline when the
+  // picture pool is used up.
+  virtual bool xReadyToProcess() const { return false; }
+  const PicList& stageQueue() const { return m_procList; }
 
 public:
-  virtual void waitForFreeEncoders() {}
+  // waits until a running encoder is finished; returns false at once when none is running
+  virtual bool waitForFreeEncoders() { return false; }
 
   void freePicList()
   {
@@ -400,7 +416,8 @@ public:
 
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
-        || ( m_procList.size() && flush ) )
+        || ( m_procList.size() && flush )
+        || xReadyToProcess() )
     {
       // process always one picture or all if encoder should be flushed
       do

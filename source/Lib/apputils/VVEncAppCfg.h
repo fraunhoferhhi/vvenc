@@ -591,6 +591,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToFunc<int>                toSaoWithScc                  ( setSAO, this, c, &SaoToIntMap, 0 );
 
   IStreamToInt8                     toSliceTypeAdapt              ( &c->m_sliceTypeAdapt );
+  IStreamToInt8                     toAdaptiveIntra               ( &c->m_adaptiveIntra );
   IStreamToInt8                     toSelectiveRDOQ               ( &c->m_useSelectiveRDOQ );
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
@@ -731,6 +732,7 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ("MaxDeltaQP",                                      toMaxDeltaQP,                                        "QPA: set lambda - limit delta QP (-2: set depending on base QP, -1: max QP, 0 .. max QP)")
     ("STA",                                             toSliceTypeAdapt,                                    "Enable slice type adaptation at GOPSize>8 (-1: auto, 0: off, 1: adapt slice type, 2: adapt NAL unit type)")
+    ("AdaptiveIntra",                                   toAdaptiveIntra,                                     "Adaptive intra refresh, random access with GOPSize>8 (0: off, 1: I pictures at detected scene cuts where they pay, each starting a new intra period, in place of the slice type adaptation's (STA auto: 0), 2: keep the slice type adaptation's I pictures only where they pay)")
     ("MinIntraDistance",                                c->m_minIntraDist,                                   "With STA: set a minimum coded frame distance to the previous intra frame (-1: GOPSize)" )
     ;
 
