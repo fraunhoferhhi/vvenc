@@ -329,6 +329,10 @@ int testLibParameterRanges()
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
 
+  // film grain analysis interval: 0 (automatic) or a power of 2 up to 64
+  testParamList( "FgaInterval",                            vvencParams.m_fgaInterval,                vvencParams, { 0,1,2,8,32,64 } );
+  testParamList( "FgaInterval",                            vvencParams.m_fgaInterval,                vvencParams, { -1,3,12,65 }, true );
+
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
 
@@ -372,6 +376,28 @@ int testLibParameterRanges()
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 
   return 0;
+}
+
+// The film grain analysis interval resolved by the first configuration init (here raised to MCTF's first filtered
+// picture, 12, which is not a power of 2) must pass the second init, which opening the encoder does.
+int checkFgaIntervalReinit()
+{
+  vvenc_config c;
+  vvenc_config_default( &c );
+  fillEncoderParameters( c, false );
+  c.m_fga                        = 2;
+  c.m_vvencMCTF.MCTF             = 2;
+  c.m_vvencMCTF.numFrames        = 2;
+  c.m_vvencMCTF.numStrength      = 2;
+  c.m_vvencMCTF.MCTFFrames[ 0 ]  = 12;
+  c.m_vvencMCTF.MCTFFrames[ 1 ]  = 24;
+  c.m_vvencMCTF.MCTFStrengths[ 0 ] = 0.5;
+  c.m_vvencMCTF.MCTFStrengths[ 1 ] = 1.0;
+  if( vvenc_init_config_parameter( &c ) || c.m_fgaInterval != 12 )
+  {
+    return -1;
+  }
+  return vvenc_init_config_parameter( &c ) || c.m_fgaInterval != 12 ? -1 : 0;
 }
 
 int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool expectedFail = false )
@@ -1279,6 +1305,7 @@ int testLibCallingOrder()
 int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  testfunc( "checkFgaIntervalReinit", &checkFgaIntervalReinit, false );
   testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
   return 0;
 }
