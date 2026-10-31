@@ -94,6 +94,10 @@ typedef void ( *TplPredBlockFn )( const Pel* src, ptrdiff_t srcStride, int fx, i
 template<int N>
 void tplPredBlockCore( const Pel* src, ptrdiff_t srcStride, int fx, int fy, Pel* dst );
 
+// The squared error between the N x N block at org and its bilinear prediction from src at ( fx, fy ), as
+// TplPredBlockFn predicts it: the fractional motion search's cost without storing the prediction.
+typedef int ( *TplPredErrorFn )( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride );
+
 // One row of 2x2 averages, ( a + b + c + d + 2 ) >> 2.
 typedef void ( *TplDownsampleRowFn )( const Pel* src, ptrdiff_t srcStride, Pel* dst, int dstWidth );
 
@@ -129,6 +133,7 @@ public:
 
   TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
   TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
+  TplPredErrorFn     m_predError[NUM_TPL_BLK_SIZES];   // AVX2 only; elsewhere the search predicts, then measures
   TplDownsampleRowFn m_downsampleRow;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT
@@ -156,6 +161,7 @@ private:
   int                                   m_blkHeight;
   int                                   m_qpBDOffset;
   double                                m_lambdaLeaf;    // Lagrange multiplier at the QP of unreferenced pictures
+  double                                m_noiseVar;      // CuTreePicStrength: mean MCTF noise estimate of the latest batch's T2 pictures
   std::map<int, std::unique_ptr<Frame>> m_frames;        // analysis data by POC, kept while it can still be referenced
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;

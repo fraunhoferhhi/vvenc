@@ -864,6 +864,24 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     {
       fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, MCTF_FRAME_MARGIN );
       bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
+
+      // CuTreePicStrength's noise floor (CuTree::xSetQpOffsets): the luma energy the filter removes, measured on the
+      // pictures of temporal layer 2, whose strength-table entry does not change with the QP (the filter's sigma does)
+      if( m_encCfg->m_cuTreePicScale > 0.0 && pic->gopEntry->m_temporalId == 2 )
+      {
+        const CPelBuf orig = origBuf.get( COMP_Y );
+        const CPelBuf filt = fltrBuf.get( COMP_Y );
+        int64_t sse = 0;
+        for( int y = 0; y < (int)orig.height; y++ )
+        {
+          for( int x = 0; x < (int)orig.width; x++ )
+          {
+            const int64_t d = orig.at( x, y ) - filt.at( x, y );
+            sse += d * d;
+          }
+        }
+        pic->m_picShared->m_mctfNoiseVar = double( sse ) / ( double( orig.width ) * orig.height );
+      }
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
@@ -1032,8 +1050,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         pic->m_picShared->m_forceSCC = forceSCC;
       }
 
-      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset, and
-      // replaces the CTU offsets with its own.
+      // BIM 2 uses these offsets as they are. CU-tree (BIM 1) keeps their picture offset, m_picAuxQpOffset (unless
+      // CuTreePicStrength replaces it as well), and replaces the CTU offsets with its own.
       if( !m_encCfg->hasBlockQpOffsets() || !pic->useMCTF )
       {
         CHECKD( !pic->m_picShared->m_ctuBimQpOffset.empty(), "BIM disabled, but offset vector not empty!" );
