@@ -1056,6 +1056,8 @@ static void getPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterSh
                                  const Pel yLocal[4][4], const int numBins );
 static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                          const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
+static void getPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
+                                          const Pel yLocal[4][4], const int equalBinsMask );
 
 EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
   : AdaptiveLoopFilter( enableOpt )
@@ -1098,6 +1100,7 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
 
   m_getPreBlkStatsAccum = getPreBlkStatsAccum;
   m_getPreBlkStatsWeightedAccum = getPreBlkStatsWeightedAccum;
+  m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins;
 
   if( enableOpt )
   {
@@ -3341,6 +3344,103 @@ static void getPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterSh
   alfCovariance.pixAcc += sum;
 }
 
+// Which neighbouring clipping bins of a 4x4 block have identical ELocal rows (bit b: bin b + 1 equals bin b). The last
+// row, the centre sample, is never clipped and so equal in every bin. Each other entry, clip(d0) + clip(d1), is monotone
+// in the clipping value c (with opposite signs it is +-(min(c, |d0|) - min(c, |d1|))), and the clipping values fall with
+// the bin index: equal bins form runs, and the first bin equal to the last means that all bins are equal.
+static int getEqualBinsMask( const Pel* ELocal, const int numCoeff )
+{
+  constexpr int numBins         = AdaptiveLoopFilter::AlfNumClippingValues;
+  const size_t  clippedRowsSize = size_t( numCoeff - 1 ) * NL_COVAR_kstride * sizeof( Pel );
+  const auto    binRows         = [ELocal]( int b ) { return &GET_ALF_COVAR( ELocal, b, 0, 0 ); };
+
+  if( memcmp( binRows( 0 ), binRows( numBins - 1 ), clippedRowsSize ) == 0 )
+  {
+    return ( 1 << ( numBins - 1 ) ) - 1;
+  }
+  int equalBinsMask = 0;
+  for( int b = 0; b + 1 < numBins; b++ )
+  {
+    if( memcmp( binRows( b ), binRows( b + 1 ), clippedRowsSize ) == 0 )
+    {
+      equalBinsMask |= 1 << b;
+    }
+  }
+  return equalBinsMask;
+}
+
+// getPreBlkStatsAccum with all clipping bins for a block whose equal bins form the runs of equalBinsMask
+// (AlfEqualBinRuns): each sum is computed once per pair of runs and added to every cell it stands for, so every cell
+// gets the same single addition of the same value as in getPreBlkStatsAccum. Requires the bins of a run to be equal in
+// all shape.numCoeff rows.
+static void getPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
+                                          const Pel yLocal[4][4], const int equalBinsMask )
+{
+  const AlfEqualBinRuns runs( equalBinsMask );
+
+  for( int r0 = 0; r0 < runs.numRuns; r0++ )
+  {
+    const int firstBin0 = runs.first[r0], endBin0 = firstBin0 + runs.size[r0];
+
+    for( int k = 0; k < shape.numCoeff; k++ )
+    {
+      const Pel* Elocalk = &GET_ALF_COVAR( ELocal, firstBin0, k, 0 );
+
+      for( int r1 = 0; r1 < runs.numRuns; r1++ )
+      {
+        const int firstBin1 = runs.first[r1], endBin1 = firstBin1 + runs.size[r1];
+
+        for( int l = k; l < shape.numCoeff; l++ )
+        {
+          const Pel* Elocall = &GET_ALF_COVAR( ELocal, firstBin1, l, 0 );
+
+          int64_t sum = 0;
+          for( int ii = 0; ii < 4; ii++ )
+          {
+            for( int jj = 0; jj < 4; jj++ )
+            {
+              sum += int( Elocall[( ii << 2 ) + jj] ) * Elocalk[( ii << 2 ) + jj];
+            }
+          }
+
+          for( int b0 = firstBin0; b0 < endBin0; b0++ )
+          {
+            for( int b1 = firstBin1; b1 < endBin1; b1++ )
+            {
+              alfCovariance.E[b0][b1][k][l] += sum;
+            }
+          }
+        }
+      }
+
+      int64_t sum = 0;
+      for( int ii = 0; ii < 4; ii++ )
+      {
+        for( int jj = 0; jj < 4; jj++ )
+        {
+          sum += int( Elocalk[( ii << 2 ) + jj] ) * yLocal[ii][jj];
+        }
+      }
+
+      for( int b0 = firstBin0; b0 < endBin0; b0++ )
+      {
+        alfCovariance.y[b0][k] += sum;
+      }
+    }
+  }
+
+  int64_t sum = 0;
+  for( int ii = 0; ii < 4; ii++ )
+  {
+    for( int jj = 0; jj < 4; jj++ )
+    {
+      sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
+    }
+  }
+
+  alfCovariance.pixAcc += sum;
+}
+
 static void getPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                          const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins )
 {
@@ -3503,7 +3603,23 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         }
       }
 
-      m_getPreBlkStatsAccum( alfCovariance[classIdx], shape, ELocal, yLocal, numBins );
+      // with non-linear ALF most blocks repeat some clipping bins (bins whose clipping values no sample difference of
+      // the block reaches are equal): compute the statistics of equal bins once. That pays off when at most two distinct
+      // bins are left (two or three equal neighbours); with three distinct bins the run bookkeeping costs more than the
+      // dot products it saves, so those blocks keep the full kernel.
+      static_assert( AlfNumClippingValues == 4, "equalBinsMask has one bit per neighbouring pair of 4 bins" );
+      const bool checkEqualBins  = numBins == AlfNumClippingValues && m_getPreBlkStatsAccumEqualBins;
+      const int  equalBinsMask   = checkEqualBins ? getEqualBinsMask( ELocal, shape.numCoeff ) : 0;
+      const int  numEqualPairs   = ( equalBinsMask & 1 ) + ( ( equalBinsMask >> 1 ) & 1 ) + ( ( equalBinsMask >> 2 ) & 1 );
+      const int  numDistinctBins = AlfNumClippingValues - numEqualPairs;
+      if( numDistinctBins <= 2 )
+      {
+        m_getPreBlkStatsAccumEqualBins( alfCovariance[classIdx], shape, ELocal, yLocal, equalBinsMask );
+      }
+      else
+      {
+        m_getPreBlkStatsAccum( alfCovariance[classIdx], shape, ELocal, yLocal, numBins );
+      }
 
       alfCovariance[classIdx].all0 = false;
     }

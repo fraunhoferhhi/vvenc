@@ -4225,6 +4225,27 @@ static bool test_AlfCovariance( unsigned num_cases )
   return passed;
 }
 
+static bool compare_AlfCovariance( const std::string& name, const AlfCovariance& covRef, const AlfCovariance& covOpt )
+{
+  bool passed = compare_value( name + " pixAcc", covRef.pixAcc, covOpt.pixAcc, alf_float_t( 0 ), alf_float_t( 0 ),
+                               alf_float_t( 0 ) );
+  passed = compare_values_2d( name + " y", &covRef.y[0][0], &covOpt.y[0][0], covRef.numBins, covRef.numCoeff,
+                              MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
+           passed;
+
+  for( int b0 = 0; b0 < covRef.numBins; ++b0 )
+  {
+    for( int b1 = 0; b1 < covRef.numBins; ++b1 )
+    {
+      passed = compare_values_2d( name + " E b0=" + std::to_string( b0 ) + " b1=" + std::to_string( b1 ),
+                                  &covRef.E[b0][b1][0][0], &covOpt.E[b0][b1][0][0], covRef.numCoeff, covRef.numCoeff,
+                                  MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
+               passed;
+    }
+  }
+  return passed;
+}
+
 static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize,
                                        int numBins, unsigned num_cases )
 {
@@ -4272,25 +4293,80 @@ static bool check_getPreBlkStatsAccum( EncAdaptiveLoopFilter* ref, EncAdaptiveLo
     std::ostringstream sstm;
     sstm << "EncAdaptiveLoopFilter::getPreBlkStatsAccum filterSize=" << filterSize << " numBins=" << numBins;
 
-    passed = compare_value( sstm.str() + " pixAcc", covRef.pixAcc, covOpt.pixAcc, alf_float_t( 0 ), alf_float_t( 0 ),
-                           alf_float_t( 0 ) ) &&
-             passed;
-    passed = compare_values_2d( sstm.str() + " y", &covRef.y[0][0], &covOpt.y[0][0], covRef.numBins, covRef.numCoeff,
-                                MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
-             passed;
+    passed = compare_AlfCovariance( sstm.str(), covRef, covOpt ) && passed;
+  }
 
-    for( int b0 = 0; b0 < covRef.numBins; ++b0 )
+  covRef.destroy();
+  covOpt.destroy();
+
+  return passed;
+}
+
+// For every pattern of equal neighbouring clipping bins: the kernels for equal bins (scalar, and the optimised one where
+// it exists) must give exactly the result of the scalar kernel for all bins.
+static bool check_getPreBlkStatsAccumEqualBins( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize,
+                                                unsigned num_cases )
+{
+  std::cout << "Testing EncAdaptiveLoopFilter::getPreBlkStatsAccumEqualBins" << " filterSize=" << filterSize << '\n';
+
+  constexpr int numBins = AdaptiveLoopFilter::AlfNumClippingValues;
+  constexpr int binSize = MAX_NUM_ALF_LUMA_COEFF << 4;   // Pels of one bin in ELocal
+  bool passed = true;
+
+  InputGenerator<Pel> g8{ 8, /*is_signed=*/true };
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/true };
+  FloatGenerator fg( -1000.0f, 1000.0f );
+  FloatGenerator fgPix( 0.0f, 1000.0f );
+
+  AlfFilterShape shape( filterSize );
+  AlfCovariance covInit, covRef, covOpt;
+  covInit.create( shape.numCoeff, numBins );
+  covRef.create( shape.numCoeff, numBins );
+  covOpt.create( shape.numCoeff, numBins );
+
+  Pel y[4][4];
+  std::vector<Pel> e( numBins * binSize );
+
+  for( int equalBinsMask = 1; equalBinsMask < ( 1 << ( numBins - 1 ) ); equalBinsMask++ )
+  {
+    for( unsigned i = 0; i < num_cases; ++i )
     {
-      for( int b1 = 0; b1 < covRef.numBins; ++b1 )
+      std::generate_n( &y[0][0], 4 * 4, g8 );
+      std::generate( e.begin(), e.end(), g10 );
+      for( int b = 0; b + 1 < numBins; b++ )
       {
-        passed = compare_values_2d( sstm.str() + " E b0=" + std::to_string( b0 ) + " b1=" + std::to_string( b1 ),
-                                    &covRef.E[b0][b1][0][0], &covOpt.E[b0][b1][0][0], covRef.numCoeff, covRef.numCoeff,
-                                    MAX_NUM_ALF_LUMA_COEFF, alf_float_t( 0 ), alf_float_t( 0 ), alf_float_t( 0 ) ) &&
-                 passed;
+        if( ( equalBinsMask >> b ) & 1 )
+        {
+          std::copy_n( &e[b * binSize], binSize, &e[( b + 1 ) * binSize] );   // whole bin, centre row included
+        }
+      }
+
+      for( int b = 0; b < numBins; ++b )
+      {
+        std::generate_n( &covInit.E[b][0][0][0], numBins * MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_LUMA_COEFF, fg );
+      }
+      std::generate_n( &covInit.y[0][0], numBins * MAX_NUM_ALF_LUMA_COEFF, fg );
+      covInit.pixAcc = fgPix();
+
+      std::ostringstream sstm;
+      sstm << "EncAdaptiveLoopFilter::getPreBlkStatsAccumEqualBins filterSize=" << filterSize << " mask=" << equalBinsMask;
+
+      covRef = covInit;
+      ref->m_getPreBlkStatsAccum( covRef, shape, e.data(), y, numBins );
+
+      for( EncAdaptiveLoopFilter* alf : { ref, opt } )
+      {
+        if( alf->m_getPreBlkStatsAccumEqualBins )
+        {
+          covOpt = covInit;
+          alf->m_getPreBlkStatsAccumEqualBins( covOpt, shape, e.data(), y, equalBinsMask );
+          passed = compare_AlfCovariance( sstm.str() + ( alf == ref ? " scalar" : " opt" ), covRef, covOpt ) && passed;
+        }
       }
     }
   }
 
+  covInit.destroy();
   covRef.destroy();
   covOpt.destroy();
 
@@ -4309,6 +4385,10 @@ static bool test_EncAdaptiveLoopFilter( unsigned num_cases )
     {
       passed = check_getPreBlkStatsAccum( &ref, &opt, filterSize, numBin, num_cases ) && passed;
     }
+  }
+  for( int filterSize : { 5, 7 } )
+  {
+    passed = check_getPreBlkStatsAccumEqualBins( &ref, &opt, filterSize, num_cases ) && passed;
   }
 
   return passed;

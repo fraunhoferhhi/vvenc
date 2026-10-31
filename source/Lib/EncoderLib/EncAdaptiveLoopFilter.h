@@ -331,6 +331,34 @@ private:
   int  gnsSolveByChol              ( const int *clip, alf_float_t*x, int numEq ) const;
 };
 
+// Runs of equal neighbouring clipping bins of a 4x4 block's non-linear ALF statistics: equalBinsMask bit b set means bin
+// b + 1 equals bin b. Each run is represented by its first bin.
+struct AlfEqualBinRuns
+{
+  static constexpr int numBins = AdaptiveLoopFilter::AlfNumClippingValues;
+
+  int numRuns = 0;
+  int first[numBins];   // first bin of each run
+  int size [numBins];   // number of bins in each run
+
+  explicit AlfEqualBinRuns( int equalBinsMask )
+  {
+    for( int b = 0; b < numBins; b++ )
+    {
+      if( b > 0 && ( ( equalBinsMask >> ( b - 1 ) ) & 1 ) )
+      {
+        size[numRuns - 1]++;
+      }
+      else
+      {
+        first[numRuns] = b;
+        size [numRuns] = 1;
+        numRuns++;
+      }
+    }
+  }
+};
+
 struct EncAlfRsrc
 {
   CABACWriter* m_CABACEstimator;
@@ -446,6 +474,10 @@ public:
                                    const Pel yLocal[4][4], const int numBins );
   void ( *m_getPreBlkStatsWeightedAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                            const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
+  // m_getPreBlkStatsAccum for a block with all clipping bins in use and some of them equal (AlfEqualBinRuns), with the
+  // identical result; nullptr where only m_getPreBlkStatsAccum is optimised
+  void ( *m_getPreBlkStatsAccumEqualBins )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
+                                            const Pel yLocal[4][4], const int equalBinsMask );
 
                                            private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
