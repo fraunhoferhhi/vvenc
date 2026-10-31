@@ -28,6 +28,10 @@ target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CX
 
 target_include_directories( ${EXE_NAME} PRIVATE ${VVENC_LIB_DIR} )
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
+# the test uses NoMallocThreadPool, whose thread type depends on HAVE_PTHREADS as in the library
+if( CMAKE_USE_PTHREADS_INIT )
+  target_compile_definitions( ${EXE_NAME} PRIVATE HAVE_PTHREADS )
+endif()
 target_include_directories( ${EXE_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>> )
 target_compile_options( ${EXE_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_OPTIONS>> )
 target_compile_definitions( ${EXE_NAME} PRIVATE $<$<TARGET_EXISTS:nlohmann_json::nlohmann_json>:$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_COMPILE_DEFINITIONS>> )
