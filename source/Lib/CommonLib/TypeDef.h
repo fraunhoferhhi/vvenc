@@ -872,6 +872,7 @@ typedef struct GOPEntry : vvencGOPEntry
   bool      m_isSTSA;
   bool      m_useBckwdOnly;
   bool      m_isStartOfGop;
+  bool      m_isFgaPicture;      // film grain analysis: every FgaInterval-th picture MCTF filters (GOP starts always)
   bool      m_isStartOfIntra;
   bool      m_isValid;
   bool      m_skipFirstPass;
@@ -888,6 +889,7 @@ typedef struct GOPEntry : vvencGOPEntry
     m_isSTSA           = false;
     m_useBckwdOnly     = false;
     m_isStartOfGop     = false;
+    m_isFgaPicture     = false;
     m_isStartOfIntra   = false;
     m_isValid          = false;
     m_skipFirstPass    = false;
