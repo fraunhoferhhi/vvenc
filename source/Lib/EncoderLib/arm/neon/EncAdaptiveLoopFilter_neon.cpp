@@ -597,6 +597,8 @@ template<>
 void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilterARM<NEON>()
 {
   m_getPreBlkStatsAccum = getPreBlkStatsAccum_neon;
+  // no NEON version of the equal-bins kernel yet: use the NEON/SVE kernel for every block
+  m_getPreBlkStatsAccumEqualBins = nullptr;
 }
 
 } // namespace vvenc
