@@ -1567,10 +1567,11 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   const bool subblkMVSpreadOverLimit = isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
+  const bool cpmvEqual = (cu.affineType == AFFINEMODEL_6PARAM && _mv[0] == _mv[1] && _mv[0] == _mv[2]) || (cu.affineType == AFFINEMODEL_4PARAM && _mv[0] == _mv[1]);
 
   bool enablePROF = sps.PROF && (!m_skipPROF) && (compID == COMP_Y);
   enablePROF &= (!cu.cs->picHeader->disProfFlag);
-  enablePROF &= !((cu.affineType == AFFINEMODEL_6PARAM && _mv[0] == _mv[1] && _mv[0] == _mv[2]) || (cu.affineType == AFFINEMODEL_4PARAM && _mv[0] == _mv[1]));
+  enablePROF &= !cpmvEqual;
   enablePROF &= !subblkMVSpreadOverLimit;
   const int profThres = 1 << (iBit + (m_isBi ? 1 : 0));
   enablePROF &= !m_encOnly || cu.slice->checkLDC || iDMvHorX > profThres || iDMvHorY > profThres || iDMvVerX > profThres || iDMvVerY > profThres || iDMvHorX < -profThres || iDMvHorY < -profThres || iDMvVerX < -profThres || iDMvVerY < -profThres;
@@ -1709,6 +1710,36 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
   const int puX = cu.blocks[compID].x;
   const int puY = cu.blocks[compID].y;
+
+  // Equal control-point MVs (no affine motion) or a spread over the limit (every subblock takes the MV of the block's
+  // centre) give all subblocks one MV: then the luma block is predicted in one filter call (PROF is off for both).
+  if( compID == COMP_Y && ( cpmvEqual || subblkMVSpreadOverLimit ) )
+  {
+    // the subblocks' MV as the loop below computes it
+    const int mvPosX = subblkMVSpreadOverLimit ? cxWidth >> 1  : iHalfBW;
+    const int mvPosY = subblkMVSpreadOverLimit ? cxHeight >> 1 : iHalfBH;
+    int mvHor = iMvScaleHor + iDMvHorX * mvPosX + iDMvVerX * mvPosY;
+    int mvVer = iMvScaleVer + iDMvHorY * mvPosX + iDMvVerY * mvPosY;
+    roundAffineMv( mvHor, mvVer, shift );
+    Mv mv( mvHor, mvVer );
+    mv.clipToStorageBitDepth();
+    for( int h = 0; h < cxHeight; h += blockHeight )
+    {
+      for( int w = 0; w < cxWidth; w += blockWidth )
+      {
+        m_storedMv[h / AFFINE_MIN_BLOCK_SIZE * MVBUFFER_SIZE + w / AFFINE_MIN_BLOCK_SIZE] = mv;   // chroma reads them
+      }
+    }
+    mvHor = std::min<int>( iHorMax, std::max<int>( iHorMin, mv.hor ) );
+    mvVer = std::min<int>( iVerMax, std::max<int>( iVerMin, mv.ver ) );
+    CHECKD( m_ifpLines && !CU::isMvInRangeFPP( puY, cxHeight, mvVer, m_ifpLines, *pps.pcv, iScaleY ), "xPredAffineBlk: FPP MV restriction failed!\n" );
+
+    // luma MVs in 1/16 sample
+    const Pel* ref = refBuf.buf + puX + ( mvHor >> 4 ) + ( puY + ( mvVer >> 4 ) ) * refBuf.stride;
+    m_if.filterAffineLumaBlock( ref, refBuf.stride, dstBuf.buf, dstBuf.stride, m_filteredBlockTmp[0][COMP_Y], cxWidth,
+                                cxHeight, mvHor & 15, mvVer & 15, isLast, chFmt, clpRng );
+    return;
+  }
 
   for (int h = 0; h < cxHeight; h += blockHeight)
   {

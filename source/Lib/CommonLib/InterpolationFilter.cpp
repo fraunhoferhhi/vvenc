@@ -708,6 +708,33 @@ void InterpolationFilter::filter4x4( const ComponentID compID, const Pel* src, i
     THROW( "4x4 interpolation filter does not support bilinear filtering!" );
   }
 }
+
+// The luma prediction of an affine block whose 4x4 subblocks all have one MV, in one filter call over the whole block
+// instead of one per subblock. The subblocks use the 6-tap filters m_lumaFilter4x4 (filter4x4, and filterHor /
+// filterVer at 4x4), so reduceTap = 1 selects them here at any size; the two-pass 2-D filter has the same shifts,
+// offsets and clipping as the 4x4 2-D kernel, which makes the result bit-identical. A fraction of 0 in both directions
+// is the same copy.
+void InterpolationFilter::filterAffineLumaBlock( Pel const* src, int srcStride, Pel* dst, int dstStride, Pel* tmp, int width, int height, int fracX, int fracY, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng )
+{
+  const int reduceTap = 1;
+  if( fracX && fracY )
+  {
+    // the vertical 6-tap filter reads 2 rows above the block and 3 below
+    const int rowsAbove = 2;
+    const int rowsBelow = 3;
+    filterHor( COMP_Y, src - rowsAbove * srcStride, srcStride, tmp, width, width, height + rowsAbove + rowsBelow, fracX, false, fmt, clpRng, false, 0, reduceTap );
+    filterVer( COMP_Y, tmp + rowsAbove * width, width, dst, dstStride, width, height, fracY, false, isLast, fmt, clpRng, false, 0, reduceTap );
+  }
+  else if( !fracY )
+  {
+    filterHor( COMP_Y, src, srcStride, dst, dstStride, width, height, fracX, isLast, fmt, clpRng, false, 0, reduceTap );
+  }
+  else
+  {
+    filterVer( COMP_Y, src, srcStride, dst, dstStride, width, height, fracY, true, isLast, fmt, clpRng, false, 0, reduceTap );
+  }
+}
+
 void InterpolationFilter::filter8xH( const ComponentID compID, const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height,  int fracX, int fracY, bool isLast, const ChromaFormat fmt, const ClpRng& clpRng,bool useAltHpelIf,int nFilterIdx /*= 0*/ )
 {
   const int vFilterSize = nFilterIdx == 1 ? 2 : ( isLuma( compID ) ? NTAPS_LUMA : NTAPS_CHROMA );
