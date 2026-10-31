@@ -55,11 +55,12 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist )
+void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist, int fgaInterval )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
   m_mctfCfg            = &mctfCfg;
+  m_fgaInterval        = fgaInterval;
   m_refreshType        = refreshType;
   m_picReordering      = bPicReordering;
   m_poc0idr            = poc0idr;
@@ -592,6 +593,7 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
+  xSetFgaPictures( maxGopSize, gopList );
   xSetVTL      ( gopList );
   if( m_firstPassMode == 2 || m_firstPassMode == 4 )
   {
@@ -754,6 +756,27 @@ void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
         break;
       }
     }
+  }
+}
+
+// The pictures the film grain analysis looks at: every m_fgaInterval-th picture of the GOP (by its position in the GOP,
+// which with POC0IDR 0 differs from the POC by one) that MCTF filters, as the analysis works on MCTF's pictures (see
+// MCTF::filter). The start of each GOP is analysed in any case (MCTF also checks m_isStartOfGop).
+void GOPCfg::xSetFgaPictures( int maxGopSize, GOPEntryList& gopList ) const
+{
+  if( m_fgaInterval <= 0 )
+  {
+    return;
+  }
+  for( auto& gopEntry : gopList )
+  {
+    int poc = gopEntry.m_POC;
+    // as in xSetMctfIndex: the last picture of a pruned GOP stands for the end of the full GOP
+    if( (int)gopList.size() < maxGopSize && poc == (int)gopList.size() )
+    {
+      poc = maxGopSize;
+    }
+    gopEntry.m_isFgaPicture = gopEntry.m_mctfIndex >= 0 && poc % m_fgaInterval == 0;
   }
 }
 

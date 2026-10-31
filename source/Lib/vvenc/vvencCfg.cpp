@@ -697,6 +697,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPQPA                                  = -1;
 
   c->m_fga                                     = 0;
+  c->m_fgaInterval                             = 0;
   c->m_fgaStrengthVal                          = VVENC_SET_FGA_STRENGTH(1.0);
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
@@ -1531,6 +1532,32 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
     }
     c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) * 3.0 / 32.0 );
+  }
+
+  // Film grain analysis interval: automatic 8 pictures for --fga 2 and 3, the GOP for --fga 1. The analysis needs a
+  // picture MCTF filters, so no closer than MCTF's closest filtered pictures (MCTFFrames[ 0 ]), and at most a GOP. With
+  // the look-ahead the final encoding stage gets the pictures in coding order, so the pictures inside a GOP cannot be
+  // analysed in POC order before their access units: only the GOP's first picture is analysed then.
+  // The resolution below stores its result in m_fgaInterval; the encoder initialises the configuration again when it
+  // is opened, so the values it produces (the GOP size, MCTFFrames[ 0 ]) must pass this check as well.
+  const bool fgaIntervalResolved = c->m_fgaInterval == c->m_GOPSize
+                                   || ( c->m_vvencMCTF.numFrames > 0 && c->m_fgaInterval == c->m_vvencMCTF.MCTFFrames[ 0 ] );
+  const bool fgaIntervalValid    = c->m_fgaInterval >= 0 && c->m_fgaInterval <= 64
+                                   && ( ( c->m_fgaInterval & ( c->m_fgaInterval - 1 ) ) == 0 || fgaIntervalResolved );
+  vvenc_confirmParameter( c, ! fgaIntervalValid, "fgainterval (FgaInterval) must be 0 (automatic) or a power of 2 up to 64" );
+  if( c->m_fga && fgaIntervalValid && c->m_vvencMCTF.numFrames > 0 )
+  {
+    const int requested = c->m_fgaInterval == 0 ? ( c->m_fga >= 2 ? 8 : c->m_GOPSize ) : c->m_fgaInterval;
+    const int closest   = c->m_LookAhead ? c->m_GOPSize : std::max<int>( requested, c->m_vvencMCTF.MCTFFrames[ 0 ] );
+    const int interval  = std::min<int>( c->m_GOPSize, closest );
+    if( c->m_fgaInterval > 0 && interval != requested )
+    {
+      msg.log( VVENC_WARNING,
+               "Film grain analysis interval %d set to %d (MCTF filters every %d pictures, GOP size %d%s)\n",
+               requested, interval, c->m_vvencMCTF.MCTFFrames[ 0 ], c->m_GOPSize,
+               c->m_LookAhead ? ", look-ahead" : "" );
+    }
+    c->m_fgaInterval = interval;
   }
 
   if( c->m_cuTreeBlockSize == -1 )
@@ -3307,7 +3334,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
       css << loglvl << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
     }
     css << loglvl << "Cost function                          : " << getCostFunctionStr( c->m_costMode ) << "\n";
-    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << " (strength: " << c->m_fgaStrengthVal / 64.0 << ")\n";
+    css << loglvl << "Film grain analysis                    : " << (int)c->m_fga << " (strength: " << c->m_fgaStrengthVal / 64.0;
+    if( c->m_fga )
+    {
+      css << ", interval: " << (int)c->m_fgaInterval;
+    }
+    css << ")\n";
   }
 
   if( eMsgLevel >= VVENC_VERBOSE )

@@ -197,13 +197,13 @@ private:
 
   FGAnalyzer              m_fgAnalyzer;                 ///< film grain analysis (--fga)
 
-  // An analysis, run as a thread pool task. The tasks run one after the other in coding order (each waits
-  // for the previous one), because every analysis adds to the statistics of the previous ones.
+  // An analysis, run as a thread pool task. The tasks run one after the other in POC order (each waits for the
+  // previous one), because every analysis adds to the statistics of the previous ones.
   struct FgaTask
   {
     EncGOP*        gop       = nullptr;
     Picture*       pic       = nullptr;
-    int            codingNum = 0;
+    int            codingNum = 0;   ///< the picture with whose access unit the result is taken
     int            startPoc  = std::numeric_limits<int>::min();   ///< the first picture in output order its result applies to
     bool           sceneCut  = false;   ///< a scene cut lies between the previously analysed picture and this one
     FilmGrainParam result;
@@ -215,7 +215,7 @@ private:
   int                                  m_fgaPrevAnalysedPoc = std::numeric_limits<int>::min();   ///< POC of the last analysed picture
   // The film grain parameter sets by the POC from which they apply in output order: an analysis applies from the
   // picture after the previously analysed one, or from a scene cut between them. The latest few are kept.
-  static constexpr size_t   FGC_PARAM_SETS  = 8;
+  size_t                    m_fgcParamSets  = 8;   ///< the most kept: two GOPs of analyses and two more, at least 8
   std::map<int, FilmGrainParam> m_fgcByStartPoc;
   bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components present in a parameter set so far
   // The POCs of the latest access units written in the current coded layer video sequence (more than two GOPs), and
@@ -259,7 +259,8 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
   void xSetupPicAps                   ( Picture* pic );
-  void xAnalyzeFilmGrain              ( Picture& pic );
+  void xAnalyzeFilmGrain              ( const Picture& current, const PicList& picList );
+  void xIssueFgaTask                  ( Picture& pic, int codingNum );
   void xRunFgaTask                  ( FgaTask& task );
   void xWaitFgaTasks                ();
   void xInitPicsInCodingOrder         ( const PicList& picList );

@@ -87,6 +87,8 @@ add_vvenc_test( vvencapp-faster_fga_strength 30 OUT_VVC ""                  vven
 add_vvenc_test( vvencapp-medium_fga2_small 30 OUT_VVC  ""                     vvencapp --preset medium --fga 2 -s 24x44 -r 15 -i ${TEST_YUV} -ip 32 -f 9 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencapp-faster_fga2_strength 30 OUT_VVC ""                 vvencapp --preset faster --fga 2 --fgastrength 1.5 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
 add_vvenc_test( vvencapp-faster_fga3 30 OUT_VVC ""                          vvencapp --preset faster --fga 3 -s 80x44 -r 15 -i ${TEST_YUV} -ip 8 -t 4 -o OUTPUT )
+# several film grain analyses per GOP (FgaInterval 8 at intra period 32), in POC order across the thread pool
+add_vvenc_test( vvencapp-faster_fga2_interval 30 OUT_VVC ""                vvencapp --preset faster --fga 2 -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -t 4 -o OUTPUT )
 
 add_vvenc_test( vvencapp-medium_rc2p       30 OUT_VVC   ""                       vvencapp --preset medium -s 80x44 -r 15 -i ${TEST_YUV} -ip 32 -f 5 --Bitrate=10000 --Passes=2 --mtprofile 0 -o OUTPUT )
 add_vvenc_test( vvencFFapp-medium_rc2p     30 OUTF_VVC  ""                       vvencFFapp -c ${CFG_DIR}/randomaccess_medium.cfg -c ${TEST_CFG} -i ${TEST_YUV} -f 5 --TargetBitrate=10000 --Passes=2 --Threads=-1 -b OUTPUT )
