@@ -2723,24 +2723,48 @@ void InterSearch::xPatternSearchFracDIF(
 
 }
 
+// The luma prediction of the symmetric MVD search for an already clipped MV. At an integer MV the prediction is a plain
+// copy of the reference block (xPredInterBlk: filterHor with fraction 0 and isLast), and the SMVD cost only reads it,
+// so the reference picture is read in place instead. Not with IFP and a fast inter search mode below 2: there the
+// affine bi-prediction search can skip its first prediction (an MV outside the IFP lines) and then read a prediction
+// buffer it did not write, so the buffer has to hold what this function would have written into it.
+CPelUnitBuf InterSearch::xPredSymLuma( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
+{
+  static constexpr int FRAC_MASK = ( 1 << MV_FRACTIONAL_BITS_INTERNAL ) - 1;
+  const bool integerMv            = ( mv.hor & FRAC_MASK ) == 0 && ( mv.ver & FRAC_MASK ) == 0;
+  const bool bufferMayBeReadLater = m_pcEncCfg->m_ifpLines && m_pcEncCfg->m_fastInterSearchMode < VVENC_FASTINTERSEARCH_MODE2;
+  if( integerMv && !bufferMayBeReadLater )
+  {
+    // the block xPredInterBlk would copy: the CU's position moved by the integer MV, in the picture's own stride
+    const int  stride = refPic->getRecoBufStride( COMP_Y );
+    const Pel* ref    = refPic->getRecoBufPtr( COMP_Y ) + cu.lumaPos().x + ( mv.hor >> MV_FRACTIONAL_BITS_INTERNAL )
+                        + ( cu.lumaPos().y + ( mv.ver >> MV_FRACTIONAL_BITS_INTERNAL ) ) * stride;
+    CHECKD( m_ifpLines && cu.cs->picture != refPic && !CU::isMvInRangeFPP( cu.lumaPos().y, cu.lumaSize().height, mv.ver, m_ifpLines, *cu.cs->pcv ),
+            "xPredSymLuma: CTU line-wise FPP MV restriction failed!\n" );   // as xPredInterBlk checks it
+    return CPelUnitBuf( cu.chromaFormat, CPelBuf( ref, stride, cu.lumaSize() ) );
+  }
+  xPredInterBlk( COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+  return predBuf;
+}
+
 Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField, int BcwIdx )
 {
   Distortion cost = MAX_DISTORTION;
   RefPicList eTarRefPicList = (RefPicList)(1 - (int)eCurRefPicList);
 
   // get prediction of eCurRefPicList
-  PelUnitBuf  predBufA  = m_tmpPredStorage[eCurRefPicList].getCompactBuf( cu );
+  PelUnitBuf  predStorageA = m_tmpPredStorage[eCurRefPicList].getCompactBuf( cu );
   const Picture* picRefA = cu.slice->getRefPic( eCurRefPicList, cCurMvField.refIdx );
   Mv mvA = cCurMvField.mv;
   clipMv( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  xPredInterBlk( COMP_Y, cu, picRefA, mvA, predBufA, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+  const CPelUnitBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
 
   // get prediction of eTarRefPicList
-  PelUnitBuf predBufB = m_tmpPredStorage[eTarRefPicList].getCompactBuf( cu );
+  PelUnitBuf predStorageB = m_tmpPredStorage[eTarRefPicList].getCompactBuf( cu );
   const Picture* picRefB = cu.slice->getRefPic( eTarRefPicList, cTarMvField.refIdx );
   Mv mvB = cTarMvField.mv;
   clipMv( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  xPredInterBlk( COMP_Y, cu, picRefB, mvB, predBufB, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+  const CPelUnitBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
 
   PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
   bufTmp.copyFrom( origBuf );
@@ -4327,11 +4351,11 @@ void InterSearch::xSymMvdCheckBestMvp(
   PelUnitBuf bufTmp;
 
   // get prediction of eCurRefPicList
-  PelUnitBuf predBufA = m_tmpPredStorage[curRefList].getCompactBuf( cu );
+  PelUnitBuf predStorageA = m_tmpPredStorage[curRefList].getCompactBuf( cu );
   const Picture* picRefA = cu.slice->getRefPic(curRefList, cCurMvField.refIdx);
   Mv mvA = cCurMvField.mv;
   xClipMvSearch( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_ifpLines );
-  xPredInterBlk( COMP_Y, cu, picRefA, mvA, predBufA, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+  const CPelUnitBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
 
   bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
   bufTmp.copyFrom( origBuf );
@@ -4353,11 +4377,11 @@ void InterSearch::xSymMvdCheckBestMvp(
       cTarMvField.setMvField(curMv.getSymmvdMv(amvpCur.mvCand[i], amvpTar.mvCand[j]), refIdxTar);
 
       // get prediction of eTarRefPicList
-      PelUnitBuf predBufB = m_tmpPredStorage[tarRefList].getCompactBuf( cu );
+      PelUnitBuf predStorageB = m_tmpPredStorage[tarRefList].getCompactBuf( cu );
       const Picture* picRefB = cu.slice->getRefPic(tarRefList, cTarMvField.refIdx);
       Mv mvB = cTarMvField.mv;
       xClipMvSearch( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_ifpLines );
-      xPredInterBlk( COMP_Y, cu, picRefB, mvB, predBufB, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+      const CPelUnitBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
 
       // calc distortion
       cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
