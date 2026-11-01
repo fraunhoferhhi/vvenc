@@ -403,6 +403,7 @@ CuTree::CuTree()
   , m_motionSearch ( true )
   , m_hadFunc      ( nullptr )
   , m_lookAheadPics( 0 )
+  , m_capToIntra   ( false )
   , m_blkSizeIdx   ( TPL_BLK_8 )
   , m_blkSize      ( 8 )
   , m_blkWidth     ( 0 )
@@ -416,10 +417,25 @@ CuTree::~CuTree()
 {
 }
 
+// The most pictures from a picture to the next intra picture: the intra period. An encoder change that can delay a
+// refresh beyond the intra period must add that delay here.
+static int maxPicsToNextIntra( const VVEncCfg& encCfg )
+{
+  return encCfg.m_IntraPeriod;
+}
+
 int CuTree::getNumLookAheadPics( const VVEncCfg& encCfg )
 {
-  // the key picture of a GOP is referenced by the whole next GOP
-  return encCfg.m_GOPSize;
+  // The key picture of a GOP is referenced by the whole next GOP, that GOP's key picture by the GOP after it, and so
+  // on: N GOPs of look-ahead follow this chain N GOPs deep. Nothing propagates across an intra picture, so the window
+  // need not reach past the next one, which saves the memory and delay where the intra period is shorter; the window
+  // of one GOP stays as it is.
+  const int lookAhead = encCfg.m_GOPSize * getCuTreeLookAheadGops( encCfg );
+  if( encCfg.m_IntraPeriod > 0 )
+  {
+    return std::min( lookAhead, std::max<int>( encCfg.m_GOPSize, maxPicsToNextIntra( encCfg ) ) );
+  }
+  return lookAhead;
 }
 
 void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
@@ -427,6 +443,7 @@ void CuTree::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_encCfg        = &encCfg;
   m_threadPool    = threadPool;
   m_lookAheadPics = getNumLookAheadPics( encCfg );
+  m_capToIntra    = m_lookAheadPics < encCfg.m_GOPSize * getCuTreeLookAheadGops( encCfg );
   // the configured size is that of the full-resolution block, 16 or 32
   m_blkSizeIdx    = encCfg.m_cuTreeBlockSize == 32 ? TPL_BLK_16 : TPL_BLK_8;
   m_blkSize       = tplBlkSide( m_blkSizeIdx );
@@ -557,6 +574,10 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
 
   // Every picture is coded from reconstructed references, so the references go first: analyse in coding order.
   const bool flush = picList.back()->isFlush;
+  // the shortened look-ahead relies on an intra picture inside it, after which nothing propagates back
+  CHECKD( m_capToIntra && ! flush && std::none_of( picList.begin(), picList.end(), [&]( const Picture* pic ) {
+            return pic->poc > batchEndPoc && pic->poc <= batchEndPoc + m_lookAheadPics && pic->gopEntry->m_sliceType == 'I';
+          } ), "CU-tree look-ahead capped at the intra period, but no intra picture in the window" );
   std::vector<Picture*> codingOrder( picList.begin(), picList.end() );
   std::sort( codingOrder.begin(), codingOrder.end(), []( const Picture* a, const Picture* b ) { return a->gopEntry->m_codingNum < b->gopEntry->m_codingNum; } );
   for( auto pic : codingOrder )
@@ -759,7 +780,7 @@ bool CuTree::selectRefs( const GOPEntry& gopEntry, const RefContext& ctx, const 
 }
 
 // A batch is the pictures of the GOP that comes next. It is ready when that GOP and the look-ahead after it
-// have arrived, or when the encoder is flushed.
+// (getNumLookAheadPics) have arrived, or when the encoder is flushed.
 bool CuTree::xIsBatchReady( const PicList& picList, int& batchEndPoc ) const
 {
   const int  gopNum = picList.front()->gopEntry->m_gopNum;
