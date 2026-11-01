@@ -314,10 +314,10 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
     return j == 0 ? i : ( j == 1 ? 3 + i : 5 );
   }
 
-  // The five sums of the four 4x4 blocks of 16 pixels and 4 rows starting at the given pointers: returned per block in
-  // blockSum[sum][block].
+  // The five sums of the four 4x4 blocks of 16 pixels and 4 rows starting at the given pointers, one block per 64-bit
+  // lane: blockSum[sum] holds block k's sum in both 32-bit halves of lane k.
   static inline void eqCoeffBlockSums( const Pel* d0, const Pel* d1, const Pel* res, int derivateBufStride, int residueStride,
-                                       int32_t blockSum[NUM_EQ_COEFF_SUMS][4] )
+                                       __m256i blockSum[NUM_EQ_COEFF_SUMS] )
   {
     __m256i acc[NUM_EQ_COEFF_SUMS];
     for( auto& a : acc ) a = _mm256_setzero_si256();
@@ -338,13 +338,17 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
     }
     for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
     {
-      // hadd adds neighbouring pairs within each 128-bit half: the low 64 bits of each half hold its two block sums
-      const __m256i blocks = _mm256_hadd_epi32( acc[s], acc[s] );
-      blockSum[s][0] = _mm256_extract_epi32( blocks, 0 );
-      blockSum[s][1] = _mm256_extract_epi32( blocks, 1 );
-      blockSum[s][2] = _mm256_extract_epi32( blocks, 4 );
-      blockSum[s][3] = _mm256_extract_epi32( blocks, 5 );
+      // block k's 4 columns are 32-bit pair sums 2k and 2k + 1, the two halves of 64-bit lane k: swapping the halves
+      // (shuffle 0xB1) and adding puts the block sum into both
+      blockSum[s] = _mm256_add_epi32( acc[s], _mm256_shuffle_epi32( acc[s], 0xB1 ) );
     }
+  }
+
+  // The sum of the four 64-bit lanes
+  static inline int64_t eqCoeffLaneSum( const __m256i v )
+  {
+    const __m128i halves = _mm_add_epi64( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+    return _mm_cvtsi128_si64( _mm_add_epi64( halves, _mm_unpackhi_epi64( halves, halves ) ) );
   }
 
   // One term coef * cx^i * cy^j * d of an iC[p], with d the gradient grad (0 or 1); an iC[p] has one or two terms.
@@ -357,41 +361,68 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
     // the affine motion search runs on CUs wider and higher than 8: powers of two from 16 to 128
     CHECKD( ( width & 15 ) || ( height & 3 ), "EqualCoeffComputer: unsupported block size" );
 
-    // weighted[s][power]: the sum over the block of cx^i * cy^j * S
-    int64_t weighted[NUM_EQ_COEFF_SUMS][NUM_EQ_COEFF_POWERS] = {};
-    int32_t blockSum[NUM_EQ_COEFF_SUMS][4];
+    // Per 64-bit lane (one 4x4 block column of every 16-pixel step), in vectors:
+    //   total[s][k]   the block sums S weighted by cx^k (k = 0, 1, 2), over all bands so far;
+    //   runSum1[s][k] (k = 0, 1) total[s][k] added once after each band, runSum2[s] runSum1[s][0] added after each band.
+    // So band b (of N bands) is counted N - b times in runSum1 and (N - b)(N - b + 1) / 2 times in runSum2, which gives
+    // the cy weights (cy = 4 b + 2) at the end without a multiply per band. _mm256_mul_epi32 multiplies the low, signed
+    // 32 bits of each 64-bit lane into a 64-bit product: exact, as the block sums are below 2^30 and cx, cx^2 below 2^14.
+    // The arrays keep the 30 accumulators aligned in memory where they do not fit the 16 registers.
+    alignas( 32 ) __m256i total[NUM_EQ_COEFF_SUMS][3];
+    alignas( 32 ) __m256i runSum1[NUM_EQ_COEFF_SUMS][2];
+    alignas( 32 ) __m256i runSum2[NUM_EQ_COEFF_SUMS];
+    alignas( 32 ) __m256i blockSum[NUM_EQ_COEFF_SUMS];
+    for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
+    {
+      total[s][0] = total[s][1] = total[s][2] = runSum1[s][0] = runSum1[s][1] = runSum2[s] = _mm256_setzero_si256();
+    }
+    const __m256i one = _mm256_set1_epi64x( 1 );
 
     for( int y = 0; y < height; y += 4 )
     {
-      // the sums of this band of 4 rows, weighted by 1, cx and cx^2
-      int64_t band[NUM_EQ_COEFF_SUMS][3] = {};
+      __m256i cx = _mm256_set_epi64x( 14, 10, 6, 2 );   // the block centres of the first step, lane 0 first
       for( int x = 0; x < width; x += 16 )
       {
         const Pel* d0  = ppDerivate[0] + y * derivateBufStride + x;
         const Pel* d1  = ppDerivate[1] + y * derivateBufStride + x;
         const Pel* res = pResidue + y * residueStride + x;
         eqCoeffBlockSums( d0, d1, res, derivateBufStride, residueStride, blockSum );
-        for( int blk = 0; blk < 4; blk++ )
+        const __m256i cx2 = _mm256_mul_epi32( cx, cx );
+        for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
         {
-          const int64_t cx = x + 4 * blk + 2;
-          for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
-          {
-            band[s][0] += blockSum[s][blk];
-            band[s][1] += cx * blockSum[s][blk];
-            band[s][2] += cx * cx * blockSum[s][blk];
-          }
+          total[s][0] = _mm256_add_epi64( total[s][0], _mm256_mul_epi32( blockSum[s], one ) );   // sign-extends to 64 bits
+          total[s][1] = _mm256_add_epi64( total[s][1], _mm256_mul_epi32( blockSum[s], cx ) );
+          total[s][2] = _mm256_add_epi64( total[s][2], _mm256_mul_epi32( blockSum[s], cx2 ) );
         }
+        cx = _mm256_add_epi64( cx, _mm256_set1_epi64x( 16 ) );
       }
-      const int64_t cy = y + 2;
       for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
       {
-        weighted[s][eqCoeffPower( 0, 0 )] += band[s][0];
-        weighted[s][eqCoeffPower( 1, 0 )] += band[s][1];
-        weighted[s][eqCoeffPower( 2, 0 )] += band[s][2];
-        weighted[s][eqCoeffPower( 0, 1 )] += cy * band[s][0];
-        weighted[s][eqCoeffPower( 1, 1 )] += cy * band[s][1];
-        weighted[s][eqCoeffPower( 0, 2 )] += cy * cy * band[s][0];
+        runSum1[s][0] = _mm256_add_epi64( runSum1[s][0], total[s][0] );
+        runSum1[s][1] = _mm256_add_epi64( runSum1[s][1], total[s][1] );
+        runSum2[s]    = _mm256_add_epi64( runSum2[s], runSum1[s][0] );
       }
+    }
+
+    // weighted[s][power]: the sum over the block of cx^i * cy^j * S. With B_b the sums of band b and N bands:
+    //   sum_b ( N - b ) B_b = runSum1, sum_b ( N - b )^2 B_b = 2 runSum2 - runSum1, hence
+    //   sum_b b B_b = N total - runSum1 and sum_b b^2 B_b = N^2 total - 2 N runSum1 + 2 runSum2 - runSum1,
+    // and cy = 4 b + 2, cy^2 = 16 b^2 + 16 b + 4. All exact in 64 bits (below 2^55 for 128x128 and 14-bit inputs).
+    int64_t weighted[NUM_EQ_COEFF_SUMS][NUM_EQ_COEFF_POWERS];
+    const int64_t numBands = height / 4;
+    for( int s = 0; s < NUM_EQ_COEFF_SUMS; s++ )
+    {
+      const int64_t sum0 = eqCoeffLaneSum( total[s][0] ), sumCx = eqCoeffLaneSum( total[s][1] ), sumCx2 = eqCoeffLaneSum( total[s][2] );
+      const int64_t run0 = eqCoeffLaneSum( runSum1[s][0] ), runCx = eqCoeffLaneSum( runSum1[s][1] ), run2 = eqCoeffLaneSum( runSum2[s] );
+      const int64_t sumB   = numBands * sum0 - run0;    // sum_b b B_b
+      const int64_t sumBCx = numBands * sumCx - runCx;  // sum_b b B_b, weighted by cx
+      const int64_t sumB2  = numBands * numBands * sum0 - 2 * numBands * run0 + 2 * run2 - run0;
+      weighted[s][eqCoeffPower( 0, 0 )] = sum0;
+      weighted[s][eqCoeffPower( 1, 0 )] = sumCx;
+      weighted[s][eqCoeffPower( 2, 0 )] = sumCx2;
+      weighted[s][eqCoeffPower( 0, 1 )] = 4 * sumB + 2 * sum0;
+      weighted[s][eqCoeffPower( 1, 1 )] = 4 * sumBCx + 2 * sumCx;
+      weighted[s][eqCoeffPower( 0, 2 )] = 16 * sumB2 + 16 * sumB + 4 * sum0;
     }
 
     // the iC[p] of the scalar version as terms: 6 parameters iC = { d0, cx d0, d1, cx d1, cy d0, cy d1 },
