@@ -705,7 +705,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   memset( c->m_reservedInt8_2, 0, sizeof(c->m_reservedInt8_2) );
   c->m_reservedInt32 = 0;
-  memset( c->m_reservedInt8_7, 0, sizeof(c->m_reservedInt8_7) );
+  c->m_cuTreeLookAheadGOPs = -1;
+  memset( c->m_reservedInt8_6, 0, sizeof(c->m_reservedInt8_6) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
@@ -1564,6 +1565,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_cuTreeBlockSize = std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ? 16 : 32;
   }
 
+  if( c->m_cuTreeLookAheadGOPs == -1 )
+  {
+    c->m_cuTreeLookAheadGOPs = vvenc::getCuTreeLookAheadGops( *c );
+  }
+
   // BIM 2 derives the block importance from MCTF's motion error. BIM 1 (CU-tree) does its own analysis and takes only
   // the picture-level offset from MCTF, so it also works without MCTF, with CTU offsets only.
   vvenc_confirmParameter( c, c->m_blockImportanceMapping == 2 && !c->m_vvencMCTF.MCTF, "BIM (block importance mapping) 2 cannot be enabled when MCTF is disabled!" );
@@ -2185,6 +2191,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_blockImportanceMapping != 1,                      "CuTreePicStrength needs the CU tree (BIM 1)" );
   vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ),   "CuTreePicStrength needs random access (picture reordering, not all intra)" );
+  vvenc_confirmParameter(c, c->m_cuTreeLookAheadGOPs < 1 || c->m_cuTreeLookAheadGOPs > 4,                        "CuTreeLookAheadGOPs must be 1 to 4 or -1 (automatic)" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3425,7 +3432,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "BIM:" << (int)c->m_blockImportanceMapping << " ";
     if( c->m_blockImportanceMapping == 1 )
     {
-      css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize;
+      css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize
+          << ", look-ahead up to " << vvenc::getCuTreeLookAheadGops( *c ) << " GOP(s)";
       if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0;
       // with a target bitrate the rate control sets the QP
       if( c->m_cuTreePicStrength > 0 && c->m_RCTargetBitrate == 0 ) css << ", coded at QP " << vvenc::getCodingQp( *c );

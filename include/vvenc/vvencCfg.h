@@ -769,7 +769,7 @@ typedef struct vvenc_config
   int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
   int8_t              m_blockImportanceMapping;                                          // block importance mapping, the QP of blocks that later pictures predict from (0: off,
-                                                                                         // 1: CU-tree with the TPL model and one GOP of look-ahead, 2: from MCTF's motion error)
+                                                                                         // 1: CU-tree with the TPL model and m_cuTreeLookAheadGOPs of look-ahead, 2: from MCTF's motion error)
   bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
@@ -811,7 +811,10 @@ typedef struct vvenc_config
   int8_t              m_fastAMVR;                                                        // 1: no AMVR search where the best mode is skip, where the motion search with quarter-sample MVDs costs more than
                                                                                          // 1.1 times the best mode or its largest MVD is below half a sample, and no 4-sample MVDs where that MVD
                                                                                          // is below 4 samples (default 0: off)
-  int8_t              m_reservedInt8_7[7];                                               // with the field above in place of the first of seven reserved doubles: the same layout on every ABI
+  int8_t              m_cuTreeLookAheadGOPs;                                             // GOPs the CU tree looks ahead (BIM 1), never more than the intra period (at least 1 GOP): 1 to 4
+                                                                                         // (default -1: automatic, 1); each extra GOP costs one GOP of pictures in memory and of delay,
+                                                                                         // none once the window reaches the intra period
+  int8_t              m_reservedInt8_6[6];                                               // with the two fields above in place of the first of seven reserved doubles: the same layout on every ABI
   double              m_reservedDouble[6];
 
   // internal state variables

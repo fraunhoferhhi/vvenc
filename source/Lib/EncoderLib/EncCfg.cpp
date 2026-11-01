@@ -75,6 +75,11 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
   return *this;
 }
 
+int getCuTreeLookAheadGops( const vvenc_config& c )
+{
+  return c.m_cuTreeLookAheadGOPs > 0 ? c.m_cuTreeLookAheadGOPs : 1;
+}
+
 static unsigned getMaxTlVal( unsigned perTlVal )
 {
   unsigned maxVal = 0;
