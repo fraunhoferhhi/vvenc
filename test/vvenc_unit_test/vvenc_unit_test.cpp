@@ -7263,6 +7263,43 @@ static bool test_RefreshMarking()
 
 bool test_ThreadPool();   // test_ThreadPool.cpp
 
+// The CU tree's look-ahead in pictures: N GOPs, more GOPs never past the next intra picture; one GOP stays one GOP.
+static bool test_CuTreeLookAhead()
+{
+  struct Case { int gopSize, intraPeriod, lookAheadGops, expected; };
+  const Case cases[] = {
+    // one GOP: the GOP size at every intra period (as before the option)
+    { 32, -1, 1, 32 }, { 32, 16, 1, 32 }, { 32, 24, 1, 32 }, { 32, 32, 1, 32 }, { 32, 72, 1, 32 }, { 32, 240, 1, 32 },
+    // three GOPs, capped at the intra period (at least one GOP)
+    { 32, 24, 3, 32 }, { 32, 48, 3, 48 }, { 32, 72, 3, 72 }, { 32, 120, 3, 96 }, { 32, -1, 3, 96 },
+    // four GOPs
+    { 32, 72, 4, 72 }, { 32, 120, 4, 120 }, { 32, 240, 4, 128 }, { 32, -1, 4, 128 },
+    // two GOPs
+    { 32, 48, 2, 48 }, { 32, 72, 2, 64 }, { 32, 240, 2, 64 },
+    // GOP 16
+    { 16, 32, 3, 32 }, { 16, 64, 3, 48 }, { 16, -1, 2, 32 },
+    // automatic (-1): one GOP
+    { 32, 240, -1, 32 }, { 32, -1, -1, 32 },
+  };
+  bool passed = true;
+  for( const Case& c : cases )
+  {
+    VVEncCfg cfg;
+    vvenc_config_default( &cfg );
+    cfg.m_GOPSize             = c.gopSize;
+    cfg.m_IntraPeriod         = c.intraPeriod;
+    cfg.m_cuTreeLookAheadGOPs = c.lookAheadGops;
+    const int lookAhead = CuTree::getNumLookAheadPics( cfg );
+    if( lookAhead != c.expected )
+    {
+      printf( "CuTreeLookAhead: GOP %d, intra period %d, %d GOPs: %d pictures, expected %d\n", c.gopSize, c.intraPeriod,
+              c.lookAheadGops, lookAhead, c.expected );
+      passed = false;
+    }
+  }
+  return passed;
+}
+
 struct UnitTestEntry
 {
   std::string name;
@@ -7320,6 +7357,7 @@ static const UnitTestEntry test_suites[] = {
     { "CuTreeRefs", test_CuTreeRefs },
     { "ThreadPool", test_ThreadPool },
     { "RefreshMarking", test_RefreshMarking },
+    { "CuTreeLookAhead", test_CuTreeLookAhead },
 };
 
 struct UnitTestArgs

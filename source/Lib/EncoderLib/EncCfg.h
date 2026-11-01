@@ -123,6 +123,9 @@ private:
 // apply for MB-tree (mbtree_offset). Every QP-dependent default and tool uses the coding QP.
 int getCodingQp( const vvenc_config& c );
 
+// The GOPs the CU tree looks ahead: CuTreeLookAheadGOPs, or 1 for -1 (automatic).
+int getCuTreeLookAheadGops( const vvenc_config& c );
+
 }
 
 

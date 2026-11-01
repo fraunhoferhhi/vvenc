@@ -115,8 +115,9 @@ void tplDownsampleRowCore( const Pel* src, ptrdiff_t srcStride, Pel* dst, int ds
 // distortion and rate caused by the reference's coding error is what propagates.
 //
 // The analysis runs on half-resolution luma in 8x8 or 16x16 blocks (see TplBlkSize), in coding order. The stage
-// holds back the pictures of a GOP until the next GOP has arrived, because the GOP's key picture is also
-// referenced by the next one. The result is a QP offset per CTU, applied where QPA and the frame QP apply the
+// holds back the pictures of a GOP until the next CuTreeLookAheadGOPs GOPs have arrived (never more than the intra
+// period, at least one GOP), because the GOP's key picture is also referenced by the next one, whose key picture by the one after it,
+// and so on. The result is a QP offset per CTU, applied where QPA and the frame QP apply the
 // block importance mapping (BIM) offsets, which CU-tree replaces.
 // ====================================================================================================================
 
@@ -176,6 +177,7 @@ private:
   RdCost                                m_rdCost;        // provides the SIMD Hadamard SATD
   FpDistFunc                            m_hadFunc;
   int                                   m_lookAheadPics;
+  bool                                  m_capToIntra;    // the look-ahead is shortened to the intra period
   int                                   m_blkSizeIdx;    // TplBlkSize of the analysis blocks
   int                                   m_blkSize;       // their side at half resolution
   int                                   m_blkWidth;      // width and height of the picture in analysis blocks
