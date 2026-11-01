@@ -65,6 +65,15 @@ using namespace arm_simd;
 #define IF_INTERNAL_OFFS (1<<(IF_INTERNAL_PREC-1)) ///< Offset used internally
 #define IF_INTERNAL_PREC_BILINEAR 10 ///< Number of bits for internal precision
 #define IF_FILTER_PREC_BILINEAR   4  ///< Bilinear filter coeff precision so that intermediate value will not exceed 16 bit for SIMD - bit exact
+
+// A 4x4 luma subblock of an affine block for InterpolationFilter::m_filterAffineLumaSubblocks
+struct AffineSubblockRef
+{
+  int32_t refOffset;   // its top-left reference sample, from the reference buffer (the kernel reads 2 before it)
+  uint8_t fracX;       // MV fractions in 1/16 sample
+  uint8_t fracY;
+};
+
 /**
  * \brief Interpolation filter class
  */
@@ -116,6 +125,11 @@ public:
   void (*m_weightedGeoBlk)(const ClpRngs &clpRngs, const CodingUnit& cu, const uint32_t width, const uint32_t height,
                            const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf &predDst, PelUnitBuf &predSrc0,
                            PelUnitBuf &predSrc1);
+  // The luma prediction of an affine block whose 4x4 subblocks have different MVs: numSubX x numSubY subblocks, row by
+  // row, each from ref + its refOffset, all through the 6-tap 2-D 4x4 filter in one call (a zero fraction included: its
+  // filter {0, 0, 64, 0, 0, 0} gives exactly the 1-D or copy result). Only with AVX2; nullptr elsewhere, where
+  // xPredAffineBlk filters each subblock on its own.
+  void( *m_filterAffineLumaSubblocks[2] )( const ClpRng& clpRng, Pel const* ref, int refStride, Pel* dst, int dstStride, int numSubX, int numSubY, const AffineSubblockRef* subblocks );
 
   void initInterpolationFilter( bool enable );
 #if defined(TARGET_SIMD_X86)  && ENABLE_SIMD_OPT_MCIF

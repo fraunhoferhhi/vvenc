@@ -1669,10 +1669,14 @@ scalar_if:
   }
 }
 #if USE_AVX2
-// A pair of 16-bit filter coefficients as one 32-bit value, for _mm256_madd_epi16 with a pair of neighbouring values.
-static inline int xCoeffPair( TFilterCoeff first, TFilterCoeff second )
+// The pair of 16-bit filter coefficients at coeff as one 32-bit value, for _mm256_madd_epi16 with a pair of
+// neighbouring values: on x86 (little endian) the first coefficient is the low half. One 32-bit load instead of
+// assembling the pair with shifts and ors.
+static inline int xCoeffPair( const TFilterCoeff* coeff )
 {
-  return int( uint16_t( first ) | ( uint32_t( uint16_t( second ) ) << 16 ) );
+  int32_t pair;
+  memcpy( &pair, coeff, sizeof( pair ) );
+  return pair;
 }
 
 // The 4x4 block of simdFilter4x4_N6 with AVX2. src points two rows above and two samples left of the block. The
@@ -1680,13 +1684,13 @@ static inline int xCoeffPair( TFilterCoeff first, TFilterCoeff second )
 // 16 bits for bit depths up to 12 (as the previous code also assumed), so the vertical filter runs on 16-bit values
 // like the horizontal one. The results are exactly those of the C version.
 template<bool isLast>
-static inline void simdFilter4x4_N6_AVX2( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride,
-                                          const TFilterCoeff* coeffH, const TFilterCoeff* coeffV,
-                                          int offset1st, int shift1st, int offset2nd, int shift2nd )
+static ALWAYS_INLINE void simdFilter4x4_N6_AVX2( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst,
+                                                 int dstStride, const TFilterCoeff* coeffH, const TFilterCoeff* coeffV,
+                                                 int offset1st, int shift1st, int offset2nd, int shift2nd )
 {
-  const __m256i h12 = _mm256_set1_epi32( xCoeffPair( coeffH[1], coeffH[2] ) );
-  const __m256i h34 = _mm256_set1_epi32( xCoeffPair( coeffH[3], coeffH[4] ) );
-  const __m256i h56 = _mm256_set1_epi32( xCoeffPair( coeffH[5], coeffH[6] ) );
+  const __m256i h12 = _mm256_set1_epi32( xCoeffPair( coeffH + 1 ) );
+  const __m256i h34 = _mm256_set1_epi32( xCoeffPair( coeffH + 3 ) );
+  const __m256i h56 = _mm256_set1_epi32( xCoeffPair( coeffH + 5 ) );
   const __m256i off = _mm256_set1_epi32( offset1st );
 
   // Horizontal filter of the 9 rows the 4 output rows need, two rows per register, one per 128-bit lane: rows[i]
@@ -1723,9 +1727,9 @@ static inline void simdFilter4x4_N6_AVX2( const ClpRng& clpRng, const Pel* src, 
     rowPairs[i] = _mm256_shuffle_epi8( _mm256_permute4x64_epi64( packed, 0 + ( 2 << 2 ) + ( 2 << 4 ) + ( 1 << 6 ) ), interleave );
   }
 
-  const __m256i v12  = _mm256_set1_epi32( xCoeffPair( coeffV[1], coeffV[2] ) );
-  const __m256i v34  = _mm256_set1_epi32( xCoeffPair( coeffV[3], coeffV[4] ) );
-  const __m256i v56  = _mm256_set1_epi32( xCoeffPair( coeffV[5], coeffV[6] ) );
+  const __m256i v12  = _mm256_set1_epi32( xCoeffPair( coeffV + 1 ) );
+  const __m256i v34  = _mm256_set1_epi32( xCoeffPair( coeffV + 3 ) );
+  const __m256i v56  = _mm256_set1_epi32( xCoeffPair( coeffV + 5 ) );
   const __m256i off2 = _mm256_set1_epi32( offset2nd );
 
   __m256i out01 = _mm256_add_epi32( off2, _mm256_madd_epi16( rowPairs[0], v12 ) );
@@ -1905,6 +1909,38 @@ void simdFilter4x4_N6( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
   _mm256_zeroupper();
 #endif
 }
+
+#if USE_AVX2
+// InterpolationFilter::m_filterAffineLumaSubblocks with AVX2: the 4x4 luma subblocks of an affine block with different
+// MVs in one call, each through the 2-D kernel of simdFilter4x4_N6 (a zero fraction too: its filter {0, 0, 64, 0, 0, 0}
+// gives exactly the 1-D or copy result of the per-subblock calls), with the shifts and offsets set up once per block
+// and one vzeroupper at the end instead of one call, setup and vzeroupper per subblock.
+template<bool isLast>
+void simdFilterAffineLumaSubblocks_AVX2( const ClpRng& clpRng, const Pel* ref, int refStride, Pel* dst, int dstStride,
+                                         int numSubX, int numSubY, const AffineSubblockRef* subblocks )
+{
+  // as in simdFilter4x4_N6
+  const int headRoom = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+  const int shift1st = IF_FILTER_PREC - headRoom;
+  const int shift2nd = isLast ? IF_FILTER_PREC + headRoom : IF_FILTER_PREC;
+  const int offset1st = -( IF_INTERNAL_OFFS << shift1st );
+  const int offset2nd = isLast ? ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) : 0;
+
+  // the kernel reads from two rows above and two samples left of the subblock
+  const int readOffset = -2 - 2 * refStride;
+  for( int y = 0; y < numSubY; y++, dst += 4 * dstStride )
+  {
+    for( int x = 0; x < numSubX; x++, subblocks++ )
+    {
+      simdFilter4x4_N6_AVX2<isLast>( clpRng, ref + subblocks->refOffset + readOffset, refStride, dst + 4 * x, dstStride,
+                                     InterpolationFilter::m_lumaFilter4x4[subblocks->fracX],
+                                     InterpolationFilter::m_lumaFilter4x4[subblocks->fracY],
+                                     offset1st, shift1st, offset2nd, shift2nd );
+    }
+  }
+  _mm256_zeroupper();
+}
+#endif
 
 
   
@@ -3439,6 +3475,15 @@ void InterpolationFilter::_initInterpolationFilterX86()
   m_filter4x4[0][1]    = simdFilter4x4_N6<vext, true>;
   m_filter4x4[1][0]    = simdFilter4x4_N4<vext, false>;
   m_filter4x4[1][1]    = simdFilter4x4_N4<vext, true>;
+#if USE_AVX2
+  // AVX2 only: without it (SSE4.1-only x86, and Arm, which builds the SSE4.1 code through SIMDE) the per-subblock calls
+  // keep their own kernels
+  if( vext >= AVX2 )
+  {
+    m_filterAffineLumaSubblocks[0] = simdFilterAffineLumaSubblocks_AVX2<false>;
+    m_filterAffineLumaSubblocks[1] = simdFilterAffineLumaSubblocks_AVX2<true>;
+  }
+#endif
   
   m_filter8xH[0][0]    = simdFilter8xH_N8<vext, false>;
   m_filter8xH[0][1]    = simdFilter8xH_N8<vext, true>;

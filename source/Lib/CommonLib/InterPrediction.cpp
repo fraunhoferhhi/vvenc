@@ -1741,6 +1741,10 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     return;
   }
 
+  // Without PROF the luma subblocks are filtered after the loop in one call, where a SIMD kernel for it exists
+  const bool collectLumaSubblocks = compID == COMP_Y && !enablePROF && m_if.m_filterAffineLumaSubblocks[isLast];
+  int        numSubblocks         = 0;
+
   for (int h = 0; h < cxHeight; h += blockHeight)
   {
     for (int w = 0; w < cxWidth; w += blockWidth)
@@ -1809,6 +1813,16 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
       {
         yInt = iMvScaleTmpVer >> 5;
         yFrac = iMvScaleTmpVer & 31;
+      }
+
+      if( collectLumaSubblocks )
+      {
+        // filtered after the loop, all subblocks in one call
+        AffineSubblockRef& subblock = m_affineSubblocks[numSubblocks++];
+        subblock.refOffset = puX + xInt + w + ( puY + yInt + h ) * refBuf.stride;
+        subblock.fracX     = uint8_t( xFrac );
+        subblock.fracY     = uint8_t( yFrac );
+        continue;
       }
 
       const Pel* ref = refBuf.buf;
@@ -1882,6 +1896,12 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         xFpApplyPROF(dstY, dstBuf.stride, src, dstExtBuf.stride, blockWidth, blockHeight, gX, gY, gradXBuf.stride, dMvScaleHor, dMvScaleVer, blockWidth, bi, shiftNum, offset, clpRng);
       }
     }
+  }
+
+  if( collectLumaSubblocks )
+  {
+    m_if.m_filterAffineLumaSubblocks[isLast]( clpRng, refBuf.buf, refBuf.stride, dstBuf.buf, dstBuf.stride,
+                                              cxWidth / blockWidth, cxHeight / blockHeight, m_affineSubblocks );
   }
 }
 
