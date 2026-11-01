@@ -678,7 +678,8 @@ static bool check_updateStatesEOS( DepQuant* ref, DepQuant* opt, unsigned num_ca
   tu.cu = &cu;
 
   DQIntern::RateEstimator rateEst;
-  rateEst.initCtx( tuPars, tu, COMP_Cb, fracBitsAccess );
+  DQIntern::RateTablesMemo rateTablesMemo;
+  rateEst.initCtx( tuPars, tu, COMP_Cb, fracBitsAccess, rateTablesMemo );
 
   commonCtx_ref.reset( tuPars, rateEst );
   commonCtx_ref.swap();
