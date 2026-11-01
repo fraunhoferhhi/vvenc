@@ -198,6 +198,7 @@ private:
   bool                  m_lowResFltSearch = false;  // TODO: use this to select high/low-res filter (6/4 tap) for motion search
   bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
   int                   m_searchPttrn     = 0;
+  double                m_filterStrength[VVENC_MAX_MCTF_FRAMES];   // the strength the encoding's filter uses, per MCTF index
   int                   m_mctfUnitSize;
   FgaTemporalResidual   m_fgaResidual;      // grain measurement of the improved film grain analysis (--fga 2)
 
