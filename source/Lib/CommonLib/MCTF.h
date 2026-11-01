@@ -195,6 +195,7 @@ private:
   bool                  m_lowResFltApply  = false;  // TODO: use this to select high/low-res filter (6/4 tap) for actual application
   int                   m_searchPttrn     = 0;
   int                   m_mctfUnitSize;
+  double                m_filterStrength[VVENC_MAX_MCTF_FRAMES];   // the strength the encoding's filter uses, per MCTF index
   FgaTemporalResidual   m_fgaResidual;      // grain measurement of the improved film grain analysis (--fga 2)
 
   void subsampleLuma    (const PelStorage &input, PelStorage &output, const int factor = 2) const;
