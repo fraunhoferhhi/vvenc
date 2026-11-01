@@ -7016,6 +7016,58 @@ static bool test_CuTreeRefs()
   return passed;
 }
 
+// Slice::setDecodingRefreshMarking at a CRA with a pending marking: at the first CRA after an IDR that is not at POC 0
+// (POC0IDR 0: IDR at 31, CRA at 63, pocCRA still 0) the IDR stays a reference for the CRA's leading pictures; at the
+// next CRA (95) the previous CRA (63) stays and the IDR goes.
+static bool test_RefreshMarking()
+{
+  Picture pics[4];
+  PicList picList;
+  const int pocs[4] = { 0, 31, 63, 95 };
+  for( int i = 0; i < 4; i++ )
+  {
+    pics[i].poc = pocs[i];
+    picList.push_back( &pics[i] );
+  }
+  Slice slice;
+  slice.nalUnitType        = VVENC_NAL_UNIT_CODED_SLICE_CRA;
+  slice.associatedIRAPType = VVENC_NAL_UNIT_CODED_SLICE_CRA;
+  slice.lastIDR            = 31;
+
+  struct Case { int poc, pocCRA; bool referenced[4]; };
+  const Case cases[] = {
+    { 63, 0,  { false, true,  true, false } },  // first CRA: keeps the IDR (31), not POC 0
+    { 95, 63, { false, false, true, true } },   // second CRA: keeps the previous CRA (63)
+  };
+  bool passed = true;
+  for( const Case& c : cases )
+  {
+    for( Picture& pic : pics )
+    {
+      pic.isReferenced = true;
+    }
+    slice.poc       = c.poc;
+    int  pocCRA     = c.pocCRA;
+    bool pending    = true;
+    slice.setDecodingRefreshMarking( pocCRA, pending, picList );
+    for( int i = 0; i < 4; i++ )
+    {
+      if( pics[i].isReferenced != c.referenced[i] )
+      {
+        printf( "RefreshMarking: CRA %d, POC %d referenced %d, expected %d\n", c.poc, pocs[i], pics[i].isReferenced,
+                c.referenced[i] );
+        passed = false;
+      }
+    }
+    if( pocCRA != c.poc || !pending )
+    {
+      printf( "RefreshMarking: CRA %d: pocCRA %d pending %d, expected %d 1\n", c.poc, pocCRA, pending, c.poc );
+      passed = false;
+    }
+  }
+  return passed;
+}
+
 struct UnitTestEntry
 {
   std::string name;
@@ -7071,6 +7123,7 @@ static const UnitTestEntry test_suites[] = {
     { "CuTree", test_CuTree },
 #endif
     { "CuTreeRefs", test_CuTreeRefs },
+    { "RefreshMarking", test_RefreshMarking },
 };
 
 struct UnitTestArgs

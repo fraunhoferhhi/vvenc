@@ -550,9 +550,9 @@ void Slice::checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureLi
  *    If the nal_unit_type is BLA/BLANT, set the pocCRA to the temporal reference of the current picture.
  * Otherwise
  *    If the bRefreshPending flag is true (a deferred decoding refresh is pending) and the current
- *    temporal reference is greater than the temporal reference of the latest CRA/CRANT/BLA/BLANT picture (pocCRA),
- *    mark all reference pictures except the latest CRA/CRANT/BLA/BLANT picture as "unused for reference" and set
- *    the bRefreshPending flag to false.
+ *    temporal reference is greater than that of the IRAP picture that set it (the later of the last IDR and the
+ *    latest CRA/CRANT/BLA/BLANT picture), mark all reference pictures except that IRAP picture as "unused for
+ *    reference" and set the bRefreshPending flag to false.
  *    If the nal_unit_type is CRA/CRANT, set the bRefreshPending flag to true and pocCRA to the temporal
  *    reference of the current picture.
  * Note that the current picture is already placed in the reference list and its marking is not changed.
@@ -604,13 +604,17 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, const
     }
     else
     {
-      if (bRefreshPending==true && pocCurr > pocCRA) // CRA reference marking pending
+      // Keep the IRAP picture that set the pending marking: the later of the last IDR and the last CRA (IRAP POCs
+      // increase in decoding order). pocCRA is 0 until the first CRA, so at the first CRA after an IDR with a POC above
+      // 0 (POC0IDR 0) the IDR must be kept, or the CRA's leading pictures lose it as a reference.
+      const int pendingIrapPoc = std::max( lastIDR, pocCRA );
+      if (bRefreshPending==true && pocCurr > pendingIrapPoc) // IRAP reference marking pending
       {
         PicList::const_iterator iterPic = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
-          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != pocCRA)
+          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != pendingIrapPoc)
           {
             rpcPic->isReferenced = false;
           }
