@@ -205,7 +205,7 @@ private:
     EncGOP*        gop       = nullptr;
     Picture*       pic       = nullptr;
     int            codingNum = 0;
-    int            startPoc  = std::numeric_limits<int>::min();   ///< the first picture in output order its result applies to
+    int            startPoc  = std::numeric_limits<int>::min();   ///< the first picture in output order its result is for; written pictures keep theirs
     bool           sceneCut  = false;   ///< a scene cut lies between the previously analysed picture and this one
     FilmGrainParam result;
     WaitCounter    counter;
@@ -215,7 +215,8 @@ private:
   FgaTask*                             m_fgaLast = nullptr;   ///< the last submitted task
   int                                  m_fgaPrevAnalysedPoc = std::numeric_limits<int>::min();   ///< POC of the last analysed picture
   // The film grain parameter sets by the POC from which they apply in output order: an analysis applies from the
-  // picture after the previously analysed one, or from a scene cut between them. The latest few are kept.
+  // picture after the previously analysed one, or from a scene cut between them, but never before the picture after
+  // the last written one. The latest few are kept.
   static constexpr size_t   FGC_PARAM_SETS  = 8;
   std::map<int, FilmGrainParam> m_fgcByStartPoc;
   bool                      m_fgcCompSignalled[ MAX_NUM_COMP ] = { false, false, false };   ///< components present in a parameter set so far

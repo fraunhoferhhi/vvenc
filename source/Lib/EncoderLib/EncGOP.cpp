@@ -1457,7 +1457,8 @@ void EncGOP::xAnalyzeFilmGrain( Picture& pic )
 {
   // Pictures come here in coding order. Analyzing them here rather than when their encoding starts keeps the choice
   // of analyzed pictures, and the parameters each access unit signals, independent of the parallel encoding order.
-  // The analysis looks at the first picture of every GOP, which MCTF filtered for it.
+  // The analysis looks at the start picture of every GOP, which MCTF filtered for it: the first coded picture of its
+  // GOP in random access, normally the last in low delay.
   if( !pic.m_picShared->getFgaFilteredBuf().valid() && !pic.m_picShared->fgaUsesFilteredBuf() )
   {
     return;
@@ -1470,7 +1471,7 @@ void EncGOP::xAnalyzeFilmGrain( Picture& pic )
 
   // The result applies from the picture after the previously analysed one; when PreProcess found a scene cut in
   // between, from the cut, so that the pictures before it keep the parameters of their scene. The first analysis
-  // applies to all pictures before it as well.
+  // applies to all pictures before it as well. Pictures already written keep theirs (xAddFilmGrainParameters).
   const bool first  = m_fgaPrevAnalysedPoc == std::numeric_limits<int>::min();
   const int  cutPoc = pic.m_picShared->fgaSceneCut() ? pic.poc : pic.m_picShared->fgaLastSceneCutPoc();
   task->sceneCut    = !first && cutPoc > m_fgaPrevAnalysedPoc;
@@ -2611,8 +2612,19 @@ void EncGOP::xAddFilmGrainParameters( const FgaTask& task )
     }
     m_fgcCompSignalled[ c ] = m_fgcCompSignalled[ c ] || cm.presentFlag;
   }
-  m_fgcByStartPoc.erase( m_fgcByStartPoc.lower_bound( task.startPoc ), m_fgcByStartPoc.end() );
-  m_fgcByStartPoc[ task.startPoc ] = param;
+  // A set cannot apply to pictures whose access units are written already, so that xFilmGrainSeiNeeded, which compares
+  // a picture's set with the previous picture's, sees every change. In low delay (coding order = output order) the
+  // analysed picture is the last coded of its GOP and its set would otherwise start among the written pictures before
+  // it, compare equal with itself and never be signalled. In random access the analysed picture is coded before the
+  // rest of its GOP, so its set already starts after every written picture; the one exception, an IDR without leading
+  // pictures (idr_no_radl), coded after the pictures before it in output order, carries the message anyway.
+  int startPoc = task.startPoc;
+  if( !m_fgcWrittenPocs.empty() )
+  {
+    startPoc = std::max( startPoc, *m_fgcWrittenPocs.rbegin() + 1 );
+  }
+  m_fgcByStartPoc.erase( m_fgcByStartPoc.lower_bound( startPoc ), m_fgcByStartPoc.end() );
+  m_fgcByStartPoc[ startPoc ] = param;
   while( m_fgcByStartPoc.size() > FGC_PARAM_SETS )
   {
     // the oldest set is dropped; the next one then applies to all earlier pictures, all of them written long ago
@@ -2966,7 +2978,7 @@ void EncGOP::xWriteLeadingSEIs( Picture& pic, AccessUnitList& accessUnit )
   if ( m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI )
   {
     // Access units are written in coding order. An analysis result is added with the access unit of the analyzed
-    // picture, the first coded picture of its GOP, and applies from its start picture on (xAddFilmGrainParameters).
+    // picture, the start picture of its GOP, and applies from its start POC on (xAddFilmGrainParameters).
     while( !m_fgaTasks.empty() && m_fgaTasks.front()->codingNum <= pic.gopEntry->m_codingNum )
     {
       m_fgaTasks.front()->counter.wait();
