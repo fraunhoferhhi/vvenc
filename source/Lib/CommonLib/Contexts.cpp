@@ -875,6 +875,10 @@ const CtxSet ContextSetCfg::Sao = { ContextSetCfg::SaoMergeFlag, ContextSetCfg::
 
 const CtxSet ContextSetCfg::Alf = { ContextSetCfg::ctbAlfFlag, ContextSetCfg::ctbAlfAlternative, ContextSetCfg::AlfUseTemporalFilt };
 
+const CtxSet ContextSetCfg::MergeData = { ContextSetCfg::MergeFlag, ContextSetCfg::RegularMergeFlag, ContextSetCfg::MergeIdx, ContextSetCfg::MmvdFlag,
+                                          ContextSetCfg::MmvdMergeIdx, ContextSetCfg::MmvdStepMvpIdx, ContextSetCfg::SubblockMergeFlag,
+                                          ContextSetCfg::AffMergeIdx, ContextSetCfg::CiipFlag };
+
 CtxStore::CtxStore()
   : m_CtxBuffer ()
   , m_Ctx       ( nullptr )

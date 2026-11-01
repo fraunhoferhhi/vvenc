@@ -3566,6 +3566,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     bestTU.initData();
     bestTU.UnitArea::operator=( currArea );
 
+    bool ctxIsStart = true;   // nothing coded since ctxStart was saved: the first restore below can be skipped
     for( uint32_t c = 0; c < numTBlocks; c++ )
     {
       const ComponentID compID    = ComponentID(c);
@@ -3606,7 +3607,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         csFull->getResiBuf(compArea).copyFrom(orgResiBuf.get(compID));
 
 
-        m_CABACEstimator->getCtx() = ctxStart;
+        if( !ctxIsStart )
+        {
+          m_CABACEstimator->getCtx() = ctxStart;
+        }
+        ctxIsStart = false;
         m_CABACEstimator->resetBits();
 
         if (bestTU.mtsIdx[compID] == MTS_SKIP && m_pcEncCfg->m_TS)
@@ -3673,7 +3678,9 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         {
           if (isFirstMode)
           {
-            m_CABACEstimator->getCtx() = ctxStart;
+            // since ctxStart (restored above, or never left) only the zero cbf was coded; checktransformsNxN and
+            // transformNxN only read the contexts
+            m_CABACEstimator->getCtx() = SubCtx( Ctx::QtCbf[compID], ctxStart );
             m_CABACEstimator->resetBits();
           }
 

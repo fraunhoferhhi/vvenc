@@ -1981,7 +1981,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     TempCtx ctxBest(m_CtxCache);
 
     ctxStartTU = m_CABACEstimator->getCtx();
-    ctxStart = m_CABACEstimator->getCtx();
     currTU.jointCbCr = 0;
 
     // Do predictions here to avoid repeating the "default0Save1Load2" stuff
@@ -2126,7 +2125,10 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         bool cbfDCT2 = true;
         const bool isLastMode = testLFNST || cs.sps->jointCbCr ||  tsAllowed ? false : true;
         int bestModeId = 0;
-        ctxStart = m_CABACEstimator->getCtx();
+        if( nNumTransformCands > 1 )   // only the second transform mode restores it
+        {
+          ctxStart = m_CABACEstimator->getCtx();
+        }
         for (int modeId = 0; modeId < nNumTransformCands; modeId++)
         {
           if (lfnstIdx || modeId)
