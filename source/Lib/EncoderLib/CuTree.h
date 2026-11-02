@@ -127,6 +127,27 @@ public:
   // number of pictures the stage holds in addition to the encoder's own GOP queue
   static int getNumLookAheadPics( const VVEncCfg& encCfg );
 
+  // The reference pictures of a picture as the encoder will build its lists (see CuTree.cpp), public for the unit test.
+  enum class RefState { AVAILABLE, MISSING, NOT_ARRIVED };
+  struct PocCodingNum
+  {
+    int poc       = -MAX_INT;   // -MAX_INT and -1: none
+    int codingNum = -1;
+  };
+  struct RefContext             // what decides which references a picture can use
+  {
+    int          poc;
+    int          codingNum;
+    PocCodingNum idr;           // the IDR coded last before the picture
+    PocCodingNum irap;          // the IRAP coded last before it among those with a lower POC
+    int          lastPoc;       // the highest POC received
+    bool         flush;         // no more pictures will arrive
+  };
+  static bool     isCodedAsIdr( bool isIrap, int poc, bool cra, bool poc0idr, bool& idrAbove0 );
+  static RefState refState    ( int refPoc, int refCodingNum, const RefContext& ctx );
+  static bool     selectRefs  ( const GOPEntry& gopEntry, const RefContext& ctx,
+                                const std::function<int( int )>& codingNumOf, int refPoc[2] );
+
   TplCodeBlockFn     m_codeBlock[NUM_TPL_BLK_SIZES];   // kernels per block size, SIMD where available
   TplPredBlockFn     m_predBlock[NUM_TPL_BLK_SIZES];
   TplDownsampleRowFn m_downsampleRow;
@@ -157,11 +178,16 @@ private:
   int                                   m_qpBDOffset;
   double                                m_lambdaLeaf;    // Lagrange multiplier at the QP of unreferenced pictures
   std::map<int, std::unique_ptr<Frame>> m_frames;        // analysis data by POC, kept while it can still be referenced
+  // the IRAP and the IDR picture coded last among the erased ones
+  PocCodingNum                          m_lastErasedIrap;
+  PocCodingNum                          m_lastErasedIdr;
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;
   void   xDownsample         ( const PelStorage& src, PelStorage& dst ) const;
   bool   xIsBatchReady       ( const PicList& picList, int& batchEndPoc ) const;
   Frame* xFindFrame          ( int poc ) const;
+  void   xMarkRandomAccess   ( const PicList& picList );
+  void   xGetRefContext      ( const Frame& cur, bool flush, RefContext& ctx ) const;
   void   xAnalyse            ( Frame& frame, Picture* pic, bool flush );
   void   xEstimateMotion     ( const Frame& cur, const Frame& ref, Array2D<MotionVector>& mvs ) const;
   void   xSearchInteger      ( const PelStorage& curPic, const PelStorage& refPic, const Array2D<MotionVector>& coarse, Array2D<MotionVector>& mvs ) const;

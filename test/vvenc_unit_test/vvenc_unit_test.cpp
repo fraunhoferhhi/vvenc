@@ -6505,6 +6505,87 @@ static bool test_BvSearchOps()
 }
 #endif // ENABLE_SIMD_OPT
 
+// CuTree::selectRefs: the references the CU tree analyses a picture with are the first entries of the encoder's lists,
+// taken from the pictures still available (MAX_INT: no reference); CuTree::isCodedAsIdr: the IDR pictures.
+static bool test_CuTreeRefs()
+{
+  struct Case
+  {
+    const char*          name;
+    GOPEntry             gopEntry;
+    int                  poc, codingNum;
+    CuTree::PocCodingNum idr, irap;   // the IDR coded last before the picture, the IRAP coded last with a lower POC
+    int                  lastPoc;     // the highest POC received
+    bool                 flush;
+    std::map<int, int>   cached;      // POC -> coding number of the cached pictures
+    bool                 ready;
+    int                  ref0, ref1;
+  };
+  const GOPEntry b( 'B', 0, 0, 0.0, 0.0, 0.0, 1, 2, { 8, 40 }, 2, { -24, 8 } );   // POC 40: L0 32, 0; L1 64, 32
+  const GOPEntry p( 'P', 0, 0, 0.0, 0.0, 0.0, 1, 1, { 16, 8 }, 0, { 16, 8 } );     // POC 56: 40, 48
+  const CuTree::PocCodingNum none;
+  const Case cases[] = {
+    // the heads of the GOP entry's lists are usable
+    { "template", b, 40, 40, none, { 32, 32 }, 95, false, { { 32, 32 }, { 64, 33 } }, true, 32, 64 },
+    // idr_no_radl: the IDR at 64 is coded after the picture; L1 goes on to 32, the same as L0 (uni-prediction)
+    { "idr_no_radl", b, 40, 34, none, { 32, 32 }, 95, false, { { 32, 32 }, { 64, 36 } }, true, 32, MAX_INT },
+    // refresh idr: a RADL picture of the IDR at 64 cannot use 32 or 0, coded before the IDR; L0 takes L1's head
+    { "RADL", b, 40, 66, { 64, 64 }, { 32, 32 }, 95, false, { { 32, 32 }, { 64, 64 } }, true, 64, MAX_INT },
+    // a trailing picture of the CRA at 48 cannot use the CRA's leading picture 40: the inactive entry 48 is used
+    { "trailing", p, 56, 70, none, { 48, 60 }, 95, false, { { 40, 66 }, { 48, 60 } }, true, 48, MAX_INT },
+    // a reference past the last picture received: wait, or at the end of the sequence missing and the scan goes on
+    { "not arrived", b, 40, 40, none, { 32, 32 }, 60, false, { { 32, 32 } }, false, 0, 0 },
+    { "end of sequence", b, 40, 40, none, { 32, 32 }, 60, true, { { 32, 32 } }, true, 32, MAX_INT },
+  };
+  bool passed = true;
+  for( const Case& c : cases )
+  {
+    const CuTree::RefContext ctx = { c.poc, c.codingNum, c.idr, c.irap, c.lastPoc, c.flush };
+    auto codingNumOf = [&c]( int poc )
+    {
+      auto it = c.cached.find( poc );
+      return it == c.cached.end() ? -1 : it->second;
+    };
+    int refPoc[2] = { 0, 0 };
+    const bool ready = CuTree::selectRefs( c.gopEntry, ctx, codingNumOf, refPoc );
+    if( ready != c.ready || ( ready && ( refPoc[0] != c.ref0 || refPoc[1] != c.ref1 ) ) )
+    {
+      printf( "CuTreeRefs %s: ready %d refs %d %d, expected %d %d %d\n", c.name, ready, refPoc[0], refPoc[1], c.ready,
+              c.ref0, c.ref1 );
+      passed = false;
+    }
+  }
+
+  // IRAP pictures in POC order: CRA without POC0IDR (the first IRAP is an IDR, then CRAs), an IDR at POC 0 followed by
+  // another IDR (no IDR above POC 0 yet), CRA with POC0IDR, refresh idr
+  struct IdrCase
+  {
+    const char* name;
+    bool        cra, poc0idr;
+    int         pocs[3];
+    bool        idr[3];
+  };
+  const IdrCase idrCases[] = {
+    { "CRA", true, false, { 32, 64, 96 }, { true, false, false } },
+    { "CRA, IDR at POC 0", true, false, { 0, 64, 128 }, { true, true, false } },
+    { "CRA, POC0IDR", true, true, { 0, 32, 64 }, { true, false, false } },
+    { "IDR", false, false, { 32, 64, 96 }, { true, true, true } },
+  };
+  for( const IdrCase& c : idrCases )
+  {
+    bool idrAbove0 = false;
+    for( int i = 0; i < 3; i++ )
+    {
+      if( CuTree::isCodedAsIdr( true, c.pocs[i], c.cra, c.poc0idr, idrAbove0 ) != c.idr[i] )
+      {
+        printf( "CuTreeRefs isCodedAsIdr %s: POC %d, expected %d\n", c.name, c.pocs[i], c.idr[i] );
+        passed = false;
+      }
+    }
+  }
+  return passed;
+}
+
 struct UnitTestEntry
 {
   std::string name;
@@ -6559,6 +6640,7 @@ static const UnitTestEntry test_suites[] = {
 #if ENABLE_SIMD_OPT
     { "CuTree", test_CuTree },
 #endif
+    { "CuTreeRefs", test_CuTreeRefs },
 };
 
 struct UnitTestArgs

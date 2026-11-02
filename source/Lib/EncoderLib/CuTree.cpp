@@ -89,6 +89,8 @@ struct CuTree::Frame
   int                   codingNum = 0;
   int                   qp        = 0;       // the picture's QP from the temporal-layer cascade
   bool                  isIntra   = false;
+  bool                  isIrap    = false;   // an IRAP picture (CRA or IDR), see xMarkRandomAccess
+  bool                  isIdr     = false;   // an IDR picture, which removes every picture coded before it
   bool                  analysed  = false;
   bool                  hasImages = true;    // lowRes and recon are kept while other pictures can reference them
   int                   refPoc[2] = { NO_REF, NO_REF };
@@ -531,7 +533,8 @@ void CuTree::xDownsample( const PelStorage& src, PelStorage& dst ) const
 void CuTree::initPicture( Picture* pic )
 {
   std::unique_ptr<Frame> frame( new Frame );
-  frame->poc = pic->poc;
+  frame->poc       = pic->poc;
+  frame->codingNum = pic->gopEntry->m_codingNum;
 
   xDownsample( pic->getOrigBuffer(), frame->lowRes[0] );
   for( int level = 1; level < NUM_LEVELS; level++ )
@@ -549,6 +552,8 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   {
     return;
   }
+
+  xMarkRandomAccess( picList );
 
   // Every picture is coded from reconstructed references, so the references go first: analyse in coding order.
   const bool flush = picList.back()->isFlush;
@@ -587,7 +592,9 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
   }
 
   // Keep the pictures from the batch's last one on, which the next GOP references, and every picture a cached
-  // later picture references. Pictures that have not arrived reference only pictures that are still cached.
+  // later picture references. Pictures not analysed yet take their first usable reference from the batch's last
+  // picture on (an IDR or IRAP that removes a list entry removes the deeper, older entries too, and after an IDR
+  // dropped as coded later, the next entries lie within the GOP).
   int oldestPocNeeded = batchEndPoc;
   for( auto itr = m_frames.upper_bound( batchEndPoc ); itr != m_frames.end(); itr++ )
   {
@@ -596,7 +603,159 @@ void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, Pi
       if( refPoc != NO_REF ) oldestPocNeeded = std::min( oldestPocNeeded, refPoc );
     }
   }
-  m_frames.erase( m_frames.begin(), m_frames.lower_bound( oldestPocNeeded ) );
+  const auto eraseEnd = m_frames.lower_bound( oldestPocNeeded );
+  for( auto itr = m_frames.begin(); itr != eraseEnd; itr++ )
+  {
+    // the random access points coded last stay known after their analysis data is gone (xGetRefContext); IRAP
+    // pictures are coded in POC order
+    const Frame& frame = *itr->second;
+    if( frame.isIrap ) m_lastErasedIrap = { frame.poc, frame.codingNum };
+    if( frame.isIdr  ) m_lastErasedIdr  = { frame.poc, frame.codingNum };
+  }
+  m_frames.erase( m_frames.begin(), eraseEnd );
+}
+
+// Marks the IRAP and IDR pictures as EncGOP::xGetNalUnitType will code them (see isCodedAsIdr). A start-of-intra
+// picture is an IRAP. Re-read on every call: at the end of the sequence fixStartOfLastGop can make a picture the start
+// of an intra period.
+void CuTree::xMarkRandomAccess( const PicList& picList )
+{
+  const bool cra = m_encCfg->m_DecodingRefreshType == VVENC_DRT_CRA
+                || m_encCfg->m_DecodingRefreshType == VVENC_DRT_CRA_CRE;
+  for( auto pic : picList )
+  {
+    Frame& frame = *xFindFrame( pic->poc );
+    frame.isIrap = pic->gopEntry->m_isStartOfIntra || ( m_encCfg->m_poc0idr && pic->poc == 0 );
+  }
+  bool idrAbove0 = m_lastErasedIdr.poc > 0;
+  for( auto& entry : m_frames )
+  {
+    Frame& frame = *entry.second;
+    frame.isIdr  = isCodedAsIdr( frame.isIrap, frame.poc, cra, m_encCfg->m_poc0idr, idrAbove0 );
+  }
+}
+
+// Whether EncGOP::xGetNalUnitType codes a picture as an IDR. POC 0 with POC0IDR is one. Every other IRAP is one,
+// except under the refresh types CRA and CRA_CRE: there with POC0IDR none is, and without it only the first ones are
+// (the first intra picture is coded as an IDR, and the IRAPs after it until an IDR with a POC above 0 has been coded).
+// Call it in POC order (IRAP pictures are coded in POC order); idrAbove0 carries that state from one call to the next.
+bool CuTree::isCodedAsIdr( bool isIrap, int poc, bool cra, bool poc0idr, bool& idrAbove0 )
+{
+  bool idr = false;
+  if( poc0idr && poc == 0 )
+  {
+    idr = true;
+  }
+  else if( isIrap )
+  {
+    idr = cra ? ! poc0idr && ! idrAbove0 : true;
+  }
+  idrAbove0 = idrAbove0 || ( idr && poc > 0 );
+  return idr;
+}
+
+// The IDR and IRAP pictures that decide which references the picture can use (see refState).
+void CuTree::xGetRefContext( const Frame& cur, bool flush, RefContext& ctx ) const
+{
+  ctx.poc       = cur.poc;
+  ctx.codingNum = cur.codingNum;
+  ctx.lastPoc   = m_frames.rbegin()->first;
+  ctx.flush     = flush;
+  // the erased pictures have lower POCs than every cached one and were coded before every picture still to analyse
+  ctx.idr       = m_lastErasedIdr;
+  ctx.irap      = m_lastErasedIrap;
+  for( auto& entry : m_frames )
+  {
+    const Frame& f = *entry.second;
+    if( f.codingNum >= cur.codingNum )
+    {
+      continue;
+    }
+    if( f.isIdr && f.codingNum > ctx.idr.codingNum )
+    {
+      ctx.idr = { f.poc, f.codingNum };
+    }
+    if( f.isIrap && f.poc < cur.poc && f.codingNum > ctx.irap.codingNum )
+    {
+      ctx.irap = { f.poc, f.codingNum };
+    }
+  }
+}
+
+// Whether a reference picture can be used by a picture, following how the encoder builds its reference lists
+// (Slice::createExplicitReferencePictureSetFromReference after the reference marking of
+// Slice::setDecodingRefreshMarking): a picture that does not exist (POC below 0, or past the end of the sequence) or is
+// coded after the picture is missing; an IDR removes every picture coded before it; and once a picture follows an IRAP
+// (CRA or IDR) in POC order, the pictures before that IRAP are removed too. refCodingNum is -1 for a picture no longer
+// cached. The encoder's quirk that after the first IDR the first CRA's leading pictures cannot use that IDR is not
+// followed. Long-term references and DRAP, which vvenc does not use, are not considered.
+CuTree::RefState CuTree::refState( int refPoc, int refCodingNum, const RefContext& ctx )
+{
+  if( refPoc < 0 )
+  {
+    return RefState::MISSING;
+  }
+  if( refPoc > ctx.lastPoc )
+  {
+    return ctx.flush ? RefState::MISSING : RefState::NOT_ARRIVED;
+  }
+  if( refCodingNum >= 0 )
+  {
+    if( refCodingNum > ctx.codingNum || refCodingNum < ctx.idr.codingNum )
+    {
+      return RefState::MISSING;
+    }
+  }
+  else if( refPoc < ctx.idr.poc )
+  {
+    // no longer cached: below the IDR it was coded before it (the RADL pictures of an IDR are all analysed in the
+    // IDR's batch, before any of them can be erased)
+    return RefState::MISSING;
+  }
+  if( refPoc < ctx.irap.poc )
+  {
+    return RefState::MISSING;
+  }
+  return RefState::AVAILABLE;
+}
+
+// The first entry of each reference list as the encoder builds it from the GOP entry: the first usable entry of the
+// list, an empty L0 taking the first usable L1 entry and an empty L1 the first usable L0 entry; L1 only for B slices.
+// codingNumOf gives a picture's coding number, -1 if it is no longer cached. Returns false if an entry has not arrived
+// yet, so the picture has to be analysed later. refPoc[1] is NO_REF where L1 would only repeat L0 (uni-prediction).
+bool CuTree::selectRefs( const GOPEntry& gopEntry, const RefContext& ctx, const std::function<int( int )>& codingNumOf,
+                         int refPoc[2] )
+{
+  const bool usesL1 = gopEntry.m_sliceType == 'B' && gopEntry.m_numRefPicsActive[1] > 0;
+  int first[2] = { NO_REF, NO_REF };
+  for( int l = 0; l < 2; l++ )
+  {
+    if( l == 1 && ! usesL1 && first[0] != NO_REF )
+    {
+      break; // L1 is needed only by B slices, or to fill an empty L0
+    }
+    for( int k = 0; k < gopEntry.m_numRefPics[l]; k++ )
+    {
+      const int poc = ctx.poc - gopEntry.m_deltaRefPics[l][k];
+      const RefState state = refState( poc, codingNumOf( poc ), ctx );
+      if( state == RefState::NOT_ARRIVED )
+      {
+        return false;
+      }
+      if( state == RefState::AVAILABLE )
+      {
+        first[l] = poc;
+        break;
+      }
+    }
+  }
+  refPoc[0] = first[0] != NO_REF ? first[0] : first[1];
+  refPoc[1] = ! usesL1 ? NO_REF : first[1] != NO_REF ? first[1] : first[0];
+  if( refPoc[1] == refPoc[0] )
+  {
+    refPoc[1] = NO_REF;
+  }
+  return true;
 }
 
 // A batch is the pictures of the GOP that comes next. It is ready when that GOP and the look-ahead after it
@@ -637,43 +796,41 @@ void CuTree::xAnalyse( Frame& frame, Picture* pic, bool flush )
   const int maxVal         = ( 1 << bitDepth ) - 1;
   const int numBlocks      = m_blkWidth * m_blkHeight;
 
-  frame.codingNum = gopEntry.m_codingNum;
   frame.isIntra   = gopEntry.m_sliceType == 'I';
   frame.qp        = Clip3( -m_qpBDOffset, MAX_QP, EncSlice::getCascadeQP( *m_encCfg, gopEntry, frame.isIntra, m_encCfg->m_QP, m_qpBDOffset ) );
 
-  // the nearest reference picture of each list, which must be reconstructed already
+  // the first reference picture of each list as the encoder will use it, which must be reconstructed already
   Frame* refs[2] = { nullptr, nullptr };
   if( ! frame.isIntra )
   {
-    const int lastPoc = m_frames.rbegin()->first;
+    RefContext ctx;
+    xGetRefContext( frame, flush, ctx );
+    auto codingNumOf = [this]( int poc ) { const Frame* f = xFindFrame( poc ); return f ? f->codingNum : -1; };
+    int refPoc[2];
+    if( ! selectRefs( gopEntry, ctx, codingNumOf, refPoc ) )
+    {
+      return; // a reference has not arrived yet, analyse the picture later
+    }
     for( int l = 0; l < 2; l++ )
     {
-      if( gopEntry.m_numRefPicsActive[l] <= 0 )
+      if( refPoc[l] == NO_REF )
       {
         continue;
       }
-      const int refPoc = frame.poc - gopEntry.m_deltaRefPics[l][0];
-      if( l == 1 && refPoc == frame.refPoc[0] )
-      {
-        continue;
-      }
-      if( refPoc > lastPoc && ! flush )
-      {
-        return; // the reference has not arrived yet, analyse the picture later
-      }
-      refs[l] = xFindFrame( refPoc );
-      if( refs[l] && ! refs[l]->hasImages )
+      refs[l] = xFindFrame( refPoc[l] );
+      CHECK( ! refs[l], "CU tree: the analysis data of a usable reference picture is gone" );
+      if( ! refs[l]->hasImages )
       {
         refs[l] = nullptr; // not expected: only unreferenced pictures drop their images
       }
-      if( refs[l] && ! refs[l]->analysed )
+      else if( ! refs[l]->analysed )
       {
         return; // the reference is not reconstructed yet
       }
-      if( refs[l] )
-      {
-        frame.refPoc[l] = refPoc;
-      }
+    }
+    for( int l = 0; l < 2; l++ )
+    {
+      frame.refPoc[l] = refs[l] ? refPoc[l] : NO_REF;
     }
   }
   for( int l = 0; l < 2; l++ )
