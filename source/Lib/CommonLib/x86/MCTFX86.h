@@ -62,9 +62,63 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if USE_AVX2
+static inline int sumOfLanes_AVX2( const __m256i v )
+{
+  __m128i x = _mm_add_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+  x = _mm_hadd_epi32( x, x );
+  x = _mm_hadd_epi32( x, x );
+  return _mm_cvtsi128_si32( x );
+}
+
+// The largest block whose squared error cannot overflow 32 bits: 2048 * 1023^2 < 2^31 (samples of at most 10 bits).
+static constexpr int MAX_EXACT_INT_AREA = 2048;
+
+// motionErrorLumaInt_SIMD for blocks of a width that is a multiple of 16 and at most MAX_EXACT_INT_AREA samples. It
+// returns the exact error when that is not above besterror and a partial sum above besterror otherwise, as every other
+// kernel does (only a smaller error replaces the best, so the values above besterror are never used). Blocks of up to
+// 16 rows are summed in full: for them the checks cost more than the early exits save. Taller blocks check the exact
+// running sum after every 4 rows, which never computes more rows than the general path's check after every row pair
+// (that check reads the sum of all but the last two row pairs).
+static int motionErrorLumaInt_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
+{
+  const bool check = h > 16;
+  __m256i vsum = _mm256_setzero_si256();
+  for( int y = 0; y < h; y += 2 )
+  {
+    const Pel* orgRow = org + y * origStride;
+    const Pel* bufRow = buf + y * buffStride;
+    for( int x = 0; x < w; x += 16 )
+    {
+      const __m256i diff1 = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) ( orgRow + x ) ),
+                                              _mm256_loadu_si256( ( const __m256i* ) ( bufRow + x ) ) );
+      const __m256i diff2 = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) ( orgRow + origStride + x ) ),
+                                              _mm256_loadu_si256( ( const __m256i* ) ( bufRow + buffStride + x ) ) );
+      vsum = _mm256_add_epi32( vsum, _mm256_add_epi32( _mm256_madd_epi16( diff1, diff1 ), _mm256_madd_epi16( diff2, diff2 ) ) );
+    }
+    // after rows 4, 8, ...; the last check is the final sum
+    if( check && ( y & 2 ) && y + 2 < h )
+    {
+      const int error = sumOfLanes_AVX2( vsum );
+      if( error > besterror )
+      {
+        return error;
+      }
+    }
+  }
+  return sumOfLanes_AVX2( vsum );
+}
+#endif
+
 template<X86_VEXT vext>
 int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
+#if USE_AVX2
+  if( vext >= AVX2 && ( w & 15 ) == 0 && w * h <= MAX_EXACT_INT_AREA )
+  {
+    return motionErrorLumaInt_AVX2( org, origStride, buf, buffStride, w, h, besterror );
+  }
+#endif
   int error = 0;
   __m128i xerror = _mm_setzero_si128();
 
@@ -431,6 +485,173 @@ int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const 
 }
 
 
+#if USE_AVX2
+// Filter 0 of the 4-tap table is { 0, 64, 0, 0 }: its pass only clips the samples to the sample range
+// ( ( 64 * s + 32 ) >> 6 = s ), so a vector whose horizontal or vertical part is a full sample needs only the other pass.
+static inline bool isIdentityFilter4( const int16_t* filter )
+{
+  return filter[0] == 0 && filter[1] == 64 && filter[2] == 0 && filter[3] == 0;
+}
+
+static inline __m256i clipToSampleRange_AVX2( const __m256i v, const __m256i maxSample )
+{
+  return _mm256_min_epi16( maxSample, _mm256_max_epi16( _mm256_setzero_si256(), v ) );
+}
+
+// Rounds the 32-bit filter sums of 16 samples ( >> 6 ) and clips them to the sample range.
+static inline __m256i roundAndClip4Tap_AVX2( const __m256i sumLo, const __m256i sumHi, const __m256i maxSample )
+{
+  return clipToSampleRange_AVX2( _mm256_packs_epi32( _mm256_srai_epi32( sumLo, 6 ), _mm256_srai_epi32( sumHi, 6 ) ), maxSample );
+}
+
+// The horizontal 4-tap filter of 16 samples: output sample x from source samples x - 1 to x + 2, rounded and clipped.
+static inline __m256i horizontal4Tap_AVX2( const Pel* src, const __m256i xfilt12, const __m256i xfilt34, const __m256i rounding, const __m256i maxSample )
+{
+  const __m256i s0 = _mm256_loadu_si256( ( const __m256i* ) ( src - 1 ) );
+  const __m256i s1 = _mm256_loadu_si256( ( const __m256i* ) src );
+  const __m256i s2 = _mm256_loadu_si256( ( const __m256i* ) ( src + 1 ) );
+  const __m256i s3 = _mm256_loadu_si256( ( const __m256i* ) ( src + 2 ) );
+  __m256i sumLo = _mm256_add_epi32( rounding, _mm256_madd_epi16( _mm256_unpacklo_epi16( s0, s1 ), xfilt12 ) );
+  __m256i sumHi = _mm256_add_epi32( rounding, _mm256_madd_epi16( _mm256_unpackhi_epi16( s0, s1 ), xfilt12 ) );
+  sumLo = _mm256_add_epi32( sumLo, _mm256_madd_epi16( _mm256_unpacklo_epi16( s2, s3 ), xfilt34 ) );
+  sumHi = _mm256_add_epi32( sumHi, _mm256_madd_epi16( _mm256_unpackhi_epi16( s2, s3 ), xfilt34 ) );
+  return roundAndClip4Tap_AVX2( sumLo, sumHi, maxSample );
+}
+
+// The squared error against org of the vertical 4-tap filter over the rows of src: output row y from rows y to y + 3.
+// clipInput clips the input samples to the sample range first, as a skipped horizontal pass would.
+// The filter runs in 16-bit lanes, exactly: every tap of the table is even, so with the halved taps and samples of at
+// most 10 bits the sum lies in [-5115, 37851]. Adding the rounding 16 and a bias of 160 << 5 puts it in [21, 42987],
+// inside the unsigned 16-bit range, so ( ( sum + 16 + ( 160 << 5 ) ) >> 5 ) - 160 == ( 2 * sum + 32 ) >> 6, the
+// rounding of the full taps, for every input; the shift is logical (unsigned 16-bit).
+template<bool clipInput>
+static int verticalPassError_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* src, const ptrdiff_t srcStride, const int w, const int h, const int16_t* yFilter, const int bitDepth )
+{
+  static constexpr int BIAS = 160;
+  CHECKD( bitDepth > 10 || ( ( yFilter[0] | yFilter[1] | yFilter[2] | yFilter[3] ) & 1 ), "The 16-bit vertical pass needs even taps and at most 10 bits" );
+  const __m256i tap0      = _mm256_set1_epi16( yFilter[0] / 2 );
+  const __m256i tap1      = _mm256_set1_epi16( yFilter[1] / 2 );
+  const __m256i tap2      = _mm256_set1_epi16( yFilter[2] / 2 );
+  const __m256i tap3      = _mm256_set1_epi16( yFilter[3] / 2 );
+  const __m256i biased    = _mm256_set1_epi16( 16 + ( BIAS << 5 ) );
+  const __m256i bias      = _mm256_set1_epi16( BIAS );
+  const __m256i maxSample = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
+  __m256i verror = _mm256_setzero_si256();
+
+  for( int x = 0; x < w; x += 16 )
+  {
+    auto loadRow = [&]( int y )
+    {
+      const __m256i row = _mm256_loadu_si256( ( const __m256i* ) ( src + y * srcStride + x ) );
+      return clipInput ? clipToSampleRange_AVX2( row, maxSample ) : row;
+    };
+    __m256i row0 = loadRow( 0 );
+    __m256i row1 = loadRow( 1 );
+    __m256i row2 = loadRow( 2 );
+    for( int y = 0; y < h; y++ )
+    {
+      const __m256i row3 = loadRow( y + 3 );
+      const __m256i sum  = _mm256_add_epi16( _mm256_add_epi16( _mm256_mullo_epi16( row0, tap0 ), _mm256_mullo_epi16( row1, tap1 ) ),
+                                             _mm256_add_epi16( _mm256_mullo_epi16( row2, tap2 ), _mm256_mullo_epi16( row3, tap3 ) ) );
+      const __m256i pred = _mm256_sub_epi16( _mm256_srli_epi16( _mm256_add_epi16( sum, biased ), 5 ), bias );
+
+      const __m256i org16 = _mm256_loadu_si256( ( const __m256i* ) ( org + y * origStride + x ) );
+      const __m256i diff  = _mm256_sub_epi16( clipToSampleRange_AVX2( pred, maxSample ), org16 );
+      verror = _mm256_add_epi32( verror, _mm256_madd_epi16( diff, diff ) );
+
+      row0 = row1;
+      row1 = row2;
+      row2 = row3;
+    }
+  }
+  return sumOfLanes_AVX2( verror );
+}
+
+// The squared error between the w x h blocks a and org.
+static int squaredError_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* a, const ptrdiff_t aStride, const int w, const int h )
+{
+  __m256i verror = _mm256_setzero_si256();
+  for( int y = 0; y < h; y++ )
+  {
+    for( int x = 0; x < w; x += 16 )
+    {
+      const __m256i diff = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) ( a + y * aStride + x ) ),
+                                             _mm256_loadu_si256( ( const __m256i* ) ( org + y * origStride + x ) ) );
+      verror = _mm256_add_epi32( verror, _mm256_madd_epi16( diff, diff ) );
+    }
+  }
+  return sumOfLanes_AVX2( verror );
+}
+
+// motionErrorLumaFrac_loRes_SIMD for a full-sample horizontal position: the vertical pass alone, on the clipped samples.
+static int motionErrorLumaFracV_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* yFilter, const int bitDepth )
+{
+  // output row y is filtered from source rows y - 1 to y + 2
+  return verticalPassError_AVX2<true>( org, origStride, buf - buffStride, buffStride, w, h, yFilter, bitDepth );
+}
+
+// motionErrorLumaFrac_loRes_SIMD for a full-sample vertical position: the horizontal pass alone.
+static int motionErrorLumaFracH_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int bitDepth )
+{
+  const __m256i xfilt12   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[0] ), _mm256_set1_epi16( xFilter[1] ) );
+  const __m256i xfilt34   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[2] ), _mm256_set1_epi16( xFilter[3] ) );
+  const __m256i maxSample = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
+  const __m256i rounding  = _mm256_set1_epi32( 1 << 5 );
+  __m256i verror = _mm256_setzero_si256();
+
+  for( int x = 0; x < w; x += 16 )
+  {
+    for( int y = 0; y < h; y++ )
+    {
+      const __m256i pred  = horizontal4Tap_AVX2( buf + y * buffStride + x, xfilt12, xfilt34, rounding, maxSample );
+      const __m256i org16 = _mm256_loadu_si256( ( const __m256i* ) ( org + y * origStride + x ) );
+      const __m256i diff  = _mm256_sub_epi16( pred, org16 );
+      verror = _mm256_add_epi32( verror, _mm256_madd_epi16( diff, diff ) );
+    }
+  }
+  return sumOfLanes_AVX2( verror );
+}
+
+// MCTF::m_motionErrorLumaFracColumn: the exact errors of num vectors with the same horizontal position. The horizontal
+// pass of the union of their rows is done once into a buffer, then the vertical pass per vector, rowOffset[i] rows lower.
+static void motionErrorLumaFracColumn_loRes_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h,
+                                                  const int16_t* xFilter, const int num, const int16_t* const* yFilter, const int* rowOffset, const int bitDepth, int* error )
+{
+  static constexpr int MAX_SIZE = 32;   // the block size of the subpel search, MCTFUnitSize, is at most 32 (vvencCfg)
+  CHECKD( w > MAX_SIZE || h > MAX_SIZE || ( w & 15 ), "Unsupported block size" );
+
+  const __m256i xfilt12   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[0] ), _mm256_set1_epi16( xFilter[1] ) );
+  const __m256i xfilt34   = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[2] ), _mm256_set1_epi16( xFilter[3] ) );
+  const __m256i maxSample = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
+  const __m256i rounding  = _mm256_set1_epi32( 1 << 5 );
+
+  // row r of filtered is the horizontal pass of source row r - 1; a vector needs h + 3 rows from its offset on
+  int maxOffset = 0;
+  for( int i = 0; i < num; i++ )
+  {
+    maxOffset = std::max( maxOffset, rowOffset[i] );
+  }
+  CHECKD( maxOffset > 1, "The vectors of a column span more than two rows" );
+  // h + 3 + maxOffset <= MAX_SIZE + 4 rows; unaligned stores, the alignment only avoids split loads
+  alignas( 32 ) Pel filtered[( MAX_SIZE + 4 ) * MAX_SIZE];
+  for( int r = 0; r < h + 3 + maxOffset; r++ )
+  {
+    for( int x = 0; x < w; x += 16 )
+    {
+      _mm256_storeu_si256( ( __m256i* ) &filtered[r * w + x], horizontal4Tap_AVX2( buf + ( r - 1 ) * buffStride + x, xfilt12, xfilt34, rounding, maxSample ) );
+    }
+  }
+
+  for( int i = 0; i < num; i++ )
+  {
+    const Pel* rows = filtered + rowOffset[i] * w;
+    // a full-sample vertical position takes the filtered rows as they are: output row y is row y + 1
+    error[i] = isIdentityFilter4( yFilter[i] ) ? squaredError_AVX2( org, origStride, rows + w, w, w, h )
+                                               : verticalPassError_AVX2<false>( org, origStride, rows, w, w, h, yFilter[i], bitDepth );
+  }
+}
+#endif
+
 template<X86_VEXT vext>
 int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
@@ -446,6 +667,15 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
 #if USE_AVX2
   if( vext >= AVX2 && ( w & 15 ) == 0 )
   {
+    if( isIdentityFilter4( xFilter ) )
+    {
+      return motionErrorLumaFracV_loRes_AVX2( org, origStride, buf, buffStride, w, h, yFilter, bitDepth );
+    }
+    if( isIdentityFilter4( yFilter ) )
+    {
+      return motionErrorLumaFracH_loRes_AVX2( org, origStride, buf, buffStride, w, h, xFilter, bitDepth );
+    }
+
     GCC_WARNING_DISABLE_maybe_uninitialized
     const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
@@ -675,12 +905,99 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, 
   return error;
 }
 
+#if USE_AVX2
+// applyFrac6tap_SIMD_8x for a block whose width is a multiple of 16: one 256-bit pass per 16 columns instead of two
+// 128-bit strips. unpacklo / unpackhi and packs work per 128-bit lane, so the low lane computes columns 0..7 and the
+// high lane columns 8..15 exactly as the 128-bit strips do (same multiply-adds, rounding and saturation), and the packs
+// leave them in column order. The reads are those of the two strips.
+static void applyFrac6tap_AVX2_16x( const Pel* org, const ptrdiff_t origStride, Pel* buf, const ptrdiff_t buffStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  const __m256i yfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[1] ), _mm256_set1_epi16( yFilter[2] ) );
+  const __m256i yfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
+  const __m256i yfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
+
+  const __m256i xfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[1] ), _mm256_set1_epi16( xFilter[2] ) );
+  const __m256i xfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[3] ), _mm256_set1_epi16( xFilter[4] ) );
+  const __m256i xfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[5] ), _mm256_set1_epi16( xFilter[6] ) );
+
+  const __m256i vmax  = _mm256_set1_epi16( ( 1 << bitDepth ) - 1 );
+  const __m256i vmin  = _mm256_setzero_si256();
+  const __m256i round = _mm256_set1_epi32( 1 << 5 );
+
+  const Pel* srcCol = org - 3 + ( 1 - 3 ) * origStride;
+        Pel* dstCol = buf;
+
+  for( int x1 = 0; x1 < bsx; x1 += 16, srcCol += 16, dstCol += 16 )
+  {
+    const Pel* srcRow = srcCol;
+          Pel* dstRow = dstCol;
+
+    __m256i rows[6];   // the last 6 horizontally filtered rows
+
+    for( int y1 = 1; y1 < bsy + 6; y1++, srcRow += origStride )
+    {
+      const __m256i s1 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[1] );
+      const __m256i s2 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[2] );
+      const __m256i s3 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[3] );
+      const __m256i s4 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[4] );
+      const __m256i s5 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[5] );
+      const __m256i s6 = _mm256_loadu_si256( ( const __m256i* ) &srcRow[6] );
+
+      __m256i sum0 = round;
+      __m256i sum1 = round;
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( _mm256_unpacklo_epi16( s1, s2 ), xfilt12 ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( _mm256_unpackhi_epi16( s1, s2 ), xfilt12 ) );
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( _mm256_unpacklo_epi16( s3, s4 ), xfilt34 ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( _mm256_unpackhi_epi16( s3, s4 ), xfilt34 ) );
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( _mm256_unpacklo_epi16( s5, s6 ), xfilt56 ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( _mm256_unpackhi_epi16( s5, s6 ), xfilt56 ) );
+      const __m256i hor = _mm256_packs_epi32( _mm256_srai_epi32( sum0, 6 ), _mm256_srai_epi32( sum1, 6 ) );
+
+      if( y1 < 6 )
+      {
+        rows[y1] = hor;
+        continue;
+      }
+      rows[0] = rows[1];
+      rows[1] = rows[2];
+      rows[2] = rows[3];
+      rows[3] = rows[4];
+      rows[4] = rows[5];
+      rows[5] = hor;
+
+      sum0 = round;
+      sum1 = round;
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( yfilt12, _mm256_unpacklo_epi16( rows[0], rows[1] ) ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( yfilt12, _mm256_unpackhi_epi16( rows[0], rows[1] ) ) );
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( yfilt34, _mm256_unpacklo_epi16( rows[2], rows[3] ) ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( yfilt34, _mm256_unpackhi_epi16( rows[2], rows[3] ) ) );
+      sum0 = _mm256_add_epi32( sum0, _mm256_madd_epi16( yfilt56, _mm256_unpacklo_epi16( rows[4], rows[5] ) ) );
+      sum1 = _mm256_add_epi32( sum1, _mm256_madd_epi16( yfilt56, _mm256_unpackhi_epi16( rows[4], rows[5] ) ) );
+      __m256i ver = _mm256_packs_epi32( _mm256_srai_epi32( sum0, 6 ), _mm256_srai_epi32( sum1, 6 ) );
+      ver = _mm256_min_epi16( vmax, _mm256_max_epi16( vmin, ver ) );
+
+      _mm256_storeu_si256( ( __m256i* ) dstRow, ver );
+      dstRow += buffStride;
+    }
+  }
+  _mm256_zeroupper();
+}
+#endif
+
 template<X86_VEXT vext>
 void applyFrac6tap_SIMD_8x( const Pel* org, const ptrdiff_t origStride, Pel* buf, const ptrdiff_t buffStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
 {
   const int base = -3;
 
   CHECK( bsx & 7, "SIMD blockSizeX needs to be a multiple of 8" );
+
+#if USE_AVX2
+  if( vext >= AVX2 && ( bsx & 15 ) == 0 )
+  {
+    applyFrac6tap_AVX2_16x( org, origStride, buf, buffStride, bsx, bsy, xFilter, yFilter, bitDepth );
+    return;
+  }
+#endif
 
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
@@ -851,6 +1168,23 @@ void applyFrac6tap_SIMD_4x( const Pel* org, const ptrdiff_t origStride, Pel* buf
         xsrc[y1] = xsum;
       }
     }
+  }
+}
+
+// The 6-tap MCTF filter for chroma: blocks that are a multiple of 8 wide (MCTFUnitSize 16 or 32 at 4:2:0, and 4:2:2 or
+// 4:4:4; edge remainders can still be 4 wide) through the 8-wide kernel,
+// whose per-column arithmetic is that of the 4-wide one (same multiply-adds, rounding and saturation); 4-wide blocks
+// (MCTFUnitSize 8 at 4:2:0) keep the 4-wide kernel.
+template<X86_VEXT vext>
+void applyFrac6tap_SIMD_chroma( const Pel* org, const ptrdiff_t origStride, Pel* buf, const ptrdiff_t buffStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  if( ( bsx & 7 ) == 0 )
+  {
+    applyFrac6tap_SIMD_8x<vext>( org, origStride, buf, buffStride, bsx, bsy, xFilter, yFilter, bitDepth );
+  }
+  else
+  {
+    applyFrac6tap_SIMD_4x<vext>( org, origStride, buf, buffStride, bsx, bsy, xFilter, yFilter, bitDepth );
   }
 }
 
@@ -1376,9 +1710,58 @@ void applyBlockSIMD( const CPelBuf& src, PelBuf& dst, const CompArea& blk, const
   //  return x;
   //}
 
+#if USE_AVX2
+  // AVX2: 8 pixels per step, with the per-pixel operations of the 4-pixel loop below in the same order, so every pixel
+  // gets the same value (the default build has no FMA contraction; an FMA-enabled -march build fuses the same
+  // multiply-add in both loops).
+  const int w8 = vext >= AVX2 ? ( w & ~7 ) : 0;
+  __m256 vdivisor[2 * VVENC_MCTF_RANGE];
+  __m256 vrefweight[2 * VVENC_MCTF_RANGE];
+  for( int i = 0; w8 && i < numRefs; i++ )
+  {
+    vdivisor[i]   = _mm256_set1_ps( -vsw[i] * 1024.0f );
+    vrefweight[i] = _mm256_set1_ps( vww[i] );
+  }
+  const __m256i vmaxSample = _mm256_set1_epi32( clpRng.max() );
+#else
+  const int w8 = 0;
+#endif
+
   for( int y = 0; y < h; y++ )
   {
-    for( int x = 0; x < w; x += 4 )
+#if USE_AVX2
+    for( int x = 0; x < w8; x += 8 )
+    {
+      const __m256i vorgi = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) ( srcPel + srcStride * y + x ) ) );
+      __m256 vtws  = _mm256_set1_ps( 1.0f );
+      __m256 vnewv = _mm256_cvtepi32_ps( vorgi );
+
+      for( int i = 0; i < numRefs; i++ )
+      {
+        const __m256i vrefi = _mm256_cvtepi16_epi32( _mm_loadu_si128( ( const __m128i* ) ( correctedPics[i] + y * w + x ) ) );
+        // the 16-bit difference squared, as below (the high halves of the 32-bit lanes are 0 in both)
+        const __m256i vdifi = _mm256_sub_epi16( vrefi, vorgi );
+        __m256 vwght = _mm256_div_ps( _mm256_cvtepi32_ps( _mm256_madd_epi16( vdifi, vdifi ) ), vdivisor[i] );
+        vwght = _mm256_add_ps( vwght, _mm256_set1_ps( 1.0f ) );
+        for( int k = 0; k < 10; k++ )
+        {
+          vwght = _mm256_mul_ps( vwght, vwght );   // the fast exp below: ( 1 + x / 1024 )^1024
+        }
+        vwght = _mm256_mul_ps( vwght, vrefweight[i] );
+        vnewv = _mm256_add_ps( vnewv, _mm256_mul_ps( vwght, _mm256_cvtepi32_ps( vrefi ) ) );
+        vtws  = _mm256_add_ps( vtws, vwght );
+      }
+
+      vnewv = _mm256_div_ps( vnewv, vtws );
+      vnewv = _mm256_add_ps( vnewv, _mm256_set1_ps( 0.5f ) );
+      vnewv = _mm256_round_ps( vnewv, ( SIMDE_MM_FROUND_TO_ZERO | SIMDE_MM_FROUND_NO_EXC ) );
+      __m256i vnewi = _mm256_cvtps_epi32( vnewv );
+      vnewi = _mm256_min_epi32( _mm256_max_epi32( vnewi, _mm256_setzero_si256() ), vmaxSample );
+      // packs works per 128-bit half: pack the two halves in order
+      _mm_storeu_si128( ( __m128i* ) ( dstPel + dstStride * y + x ), _mm_packs_epi32( _mm256_castsi256_si128( vnewi ), _mm256_extracti128_si256( vnewi, 1 ) ) );
+    }
+#endif
+    for( int x = w8; x < w; x += 4 )
     {
       __m128i vorgi = _mm_cvtepi16_epi32( _vv_loadl_epi64( ( __m128i* ) ( srcPel + srcStride * y + x ) ) );
       __m128  vorg  = _mm_cvtepi32_ps( vorgi );
@@ -1566,9 +1949,15 @@ void MCTF::_initMCTF_X86()
   m_motionErrorLumaInt8     = motionErrorLumaInt_SIMD<vext>;
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac_SIMD<vext>;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_SIMD<vext>;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_AVX2;
+  }
+#endif
 
   m_applyFrac[0][0] = applyFrac6tap_SIMD_8x<vext>;
-  m_applyFrac[1][0] = applyFrac6tap_SIMD_4x<vext>;
+  m_applyFrac[1][0] = applyFrac6tap_SIMD_chroma<vext>;
   m_applyFrac[0][1] = applyFrac4tap_SIMD<vext>;
   m_applyFrac[1][1] = applyFrac4tap_SIMD<vext>;
 

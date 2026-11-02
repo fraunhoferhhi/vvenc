@@ -1691,6 +1691,61 @@ static bool check_applyBlock( MCTF* ref, MCTF* opt, unsigned num_cases, int w, i
   return true;
 }
 
+#if defined( TARGET_SIMD_X86 ) && defined( REAL_TARGET_X86 )
+// applyBlock of the current SIMD level against the SSE4.1 kernel, exactly (the C core differs by up to 1 from the
+// SIMD kernels): every block size and number of references, 8 and 10 bit, random, extreme and noisy references; the
+// whole destination buffer is compared, so writes outside the block are caught.
+static bool check_applyBlockExact( MCTF* sse, MCTF* opt, unsigned num_cases )
+{
+  printf( "Testing MCTF::applyBlock against SSE4.1, exactly\n" );
+  DimensionGenerator rng;
+  for( int w : { 4, 8, 12, 16, 24, 32 } )
+  for( int h : { 4, 8, 16, 32 } )
+  for( int bitDepth : { 8, 10 } )
+  for( int numRefs = 0; numRefs <= 2 * VVENC_MCTF_RANGE; numRefs++ )
+  for( unsigned c = 0; c < std::max( 1u, num_cases / 8 ); c++ )
+  {
+    const int maxVal   = ( 1 << bitDepth ) - 1;
+    const int kind     = rng.get( 0, 2 );   // 0: random, 1: extremes 0 / max, 2: references close to the source
+    const unsigned srcStride = rng.get( w + 2, 128 );
+    const unsigned dstStride = rng.get( w + 2, 128 );
+    std::vector<Pel> srcBuf( srcStride * ( h + 2 ) );
+    for( auto& v : srcBuf ) v = Pel( kind == 1 ? ( rng.get( 0, 1 ) ? maxVal : 0 ) : rng.get( 0, maxVal ) );
+    std::vector<Pel> refBuf( std::max( 1, numRefs ) * w * h + w );
+    for( size_t i = 0; i < refBuf.size(); i++ )
+    {
+      const int s = srcBuf[srcStride + ( i % ( w * h ) ) / w * srcStride + i % w];
+      refBuf[i] = Pel( kind == 1 ? ( rng.get( 0, 1 ) ? maxVal : 0 ) : kind == 2 ? Clip3( 0, maxVal, s + int( rng.get( 0, 8 ) ) - 4 ) : rng.get( 0, maxVal ) );
+    }
+    const Pel* correctedPics[2 * VVENC_MCTF_RANGE];
+    int verror[2 * VVENC_MCTF_RANGE];
+    double refStrengths[2 * VVENC_MCTF_RANGE];
+    for( int i = 0; i < 2 * VVENC_MCTF_RANGE; i++ )
+    {
+      correctedPics[i] = refBuf.data() + ( i < numRefs ? i * w * h : 0 );
+      verror[i]        = rng.get( 0, 200 );   // both sides of the 50 / 100 error thresholds
+      refStrengths[i]  = 0.2 + 0.1 * rng.get( 0, 10 );
+    }
+    const double weightScaling = 0.2 + 0.05 * rng.get( 0, 20 );
+    const double sigmaSq       = 400.0 + 100.0 * rng.get( 0, 50 );
+
+    std::vector<Pel> dstSse( dstStride * ( h + 2 ), Pel( 0x5a5a ) ), dstOpt( dstStride * ( h + 2 ), Pel( 0x5a5a ) );
+    CPelBuf src( srcBuf.data() + srcStride, srcStride, w, h );
+    PelBuf  dstS( dstSse.data() + dstStride, dstStride, w, h ), dstO( dstOpt.data() + dstStride, dstStride, w, h );
+    const CompArea blk( COMP_Y, VVENC_CHROMA_420, Area( 0, 0, w, h ) );
+    const ClpRng clpRng{ bitDepth };
+    sse->m_applyBlock( src, dstS, blk, clpRng, correctedPics, numRefs, verror, refStrengths, weightScaling, sigmaSq );
+    opt->m_applyBlock( src, dstO, blk, clpRng, correctedPics, numRefs, verror, refStrengths, weightScaling, sigmaSq );
+    if( dstSse != dstOpt )
+    {
+      printf( "FAILED applyBlock exact w=%d h=%d bitDepth=%d numRefs=%d kind=%d\n", w, h, bitDepth, numRefs, kind );
+      return false;
+    }
+  }
+  return true;
+}
+#endif
+
 template<ChannelType Ch, int NumTaps, typename G>
 static bool check_one_applyFrac( MCTF* ref, MCTF* opt, unsigned orgStride, unsigned dstStride, int w, int h,
                                  int xFilterIndex, int yFilterIndex, int bitDepth, G input_generator )
@@ -1706,8 +1761,9 @@ static bool check_one_applyFrac( MCTF* ref, MCTF* opt, unsigned orgStride, unsig
   const int centreTapOffset = 3;
 
   std::vector<Pel> orgBuf( orgStride * ( h + 3 * centreTapOffset ) );
-  std::vector<Pel> dst_ref( dstStride * h );
-  std::vector<Pel> dst_opt( dstStride * h );
+  // the same canary in both destinations, compared over the whole stride, catches writes past the block
+  std::vector<Pel> dst_ref( dstStride * h, Pel( 0x5a5a ) );
+  std::vector<Pel> dst_opt( dstStride * h, Pel( 0x5a5a ) );
 
   std::generate( orgBuf.begin(), orgBuf.end(), input_generator );
 
@@ -1730,7 +1786,7 @@ static bool check_one_applyFrac( MCTF* ref, MCTF* opt, unsigned orgStride, unsig
     opt->m_applyFrac[channelIndex][0]( org, orgStride, dst_opt.data(), dstStride, w, h, xFilter, yFilter, bitDepth );
   }
 
-  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h, w, dstStride );
+  return compare_values_2d( sstm.str(), dst_ref.data(), dst_opt.data(), h, dstStride, dstStride );
 }
 
 template<ChannelType Ch, int NumTaps>
@@ -1869,9 +1925,10 @@ static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
   constexpr unsigned motionVectorFactor = 16;
   constexpr unsigned bitDepth = 10;
 
-  for( unsigned xIndex = 1; xIndex < motionVectorFactor; ++xIndex )
+  // index 0 is a full-sample position: the kernels are called with at most one of the two at 0
+  for( unsigned xIndex = 0; xIndex < motionVectorFactor; ++xIndex )
   {
-    for( unsigned yIndex = 1; yIndex < motionVectorFactor; ++yIndex )
+    for( unsigned yIndex = xIndex ? 0 : 1; yIndex < motionVectorFactor; ++yIndex )
     {
       // Stride is often the width of a video frame, so use the width of 8K as an upper bound.
       unsigned orgStride = rng.get( w, g_fastUnitTest ? 512 : 8192 );
@@ -1885,6 +1942,108 @@ static bool check_motionErrorLumaFrac8( MCTF* ref, MCTF* opt, int w, int h )
     }
   }
 
+  return true;
+}
+
+// One case of the column kernel against the per-vector 4-tap kernel of the reference (exact errors, no early exit).
+static bool check_one_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, const Pel* org, unsigned orgStride, const Pel* buff, unsigned bufStride,
+                                                 int w, int h, int bitDepth, const int16_t* xFilter, int num, const int16_t* const* yFilter,
+                                                 const int* rowOffset )
+{
+  int error[4];
+  opt->m_motionErrorLumaFracColumn( org, orgStride, buff, bufStride, w, h, xFilter, num, yFilter, rowOffset, bitDepth, error );
+  for( int i = 0; i < num; i++ )
+  {
+    std::ostringstream sstm;
+    sstm << "motionErrorLumaFracColumn w=" << w << " h=" << h << " bitDepth=" << bitDepth << " vector " << i << " of " << num;
+    const int expected = ref->m_motionErrorLumaFrac8[1]( org, orgStride, buff + rowOffset[i] * bufStride, bufStride, w, h, xFilter, yFilter[i],
+                                                         bitDepth, INT_MAX );
+    if( !compare_value( sstm.str(), expected, error[i] ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The column kernel against the per-vector 4-tap kernel of the reference: up to 4 vectors with their own vertical
+// filter and row offset, 8- and 10-bit, inputs outside the sample range.
+static bool check_motionErrorLumaFracColumn( MCTF* ref, MCTF* opt, unsigned num_cases )
+{
+  if( !opt->m_motionErrorLumaFracColumn )
+  {
+    return true;
+  }
+  printf( "Testing MCTF::motionErrorLumaFracColumn\n" );
+
+  // Always the extremes: the largest block, four vectors one row down (the most buffered rows), every horizontal filter,
+  // samples at both ends of the sample range and beyond it.
+  {
+    constexpr int      w = 32, h = 32;
+    constexpr unsigned stride = 64;
+    const Pel extremes[4] = { 0, 1023, -512, 1535 };
+    std::vector<Pel> org( stride * h ), buf( stride * ( h + 8 ) );
+    for( int y = 0; y < h; y++ )
+    {
+      for( int x = 0; x < (int) stride; x++ )
+      {
+        org[y * stride + x] = extremes[( x + y ) & 3];
+      }
+    }
+    for( int y = 0; y < h + 8; y++ )
+    {
+      for( int x = 0; x < (int) stride; x++ )
+      {
+        buf[y * stride + x] = extremes[( x + 2 * y ) & 3];
+      }
+    }
+    const Pel*     buff         = buf.data() + 2 * stride + 2;
+    const int16_t* yFilter[4]   = { MCTF::m_interpolationFilter4[0], MCTF::m_interpolationFilter4[5], MCTF::m_interpolationFilter4[8], MCTF::m_interpolationFilter4[11] };
+    const int      rowOffset[4] = { 1, 1, 1, 1 };
+    for( int bitDepth : { 8, 10 } )
+    {
+      for( int xIndex = 1; xIndex < 16; xIndex++ )
+      {
+        if( !check_one_motionErrorLumaFracColumn( ref, opt, org.data(), stride, buff, stride, w, h, bitDepth, MCTF::m_interpolationFilter4[xIndex], 4,
+                                                  yFilter, rowOffset ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+
+  InputGenerator<TCoeff> g{ 10 };
+  DimensionGenerator rng;
+
+  for( unsigned c = 0; c < num_cases; c++ )
+  {
+    const int w        = rng.get( 1, 2 ) * 16;
+    const int h        = rng.get( 1, 4 ) * 8;
+    const int bitDepth = rng.get( 0, 1 ) ? 10 : 8;
+    const int num      = rng.get( 1, 4 );
+    const unsigned orgStride = rng.get( w, 512 );
+    const unsigned bufStride = rng.get( w, 512 );
+
+    std::vector<Pel> org( orgStride * h );
+    std::vector<Pel> buf( bufStride * ( h + 10 ) + 3 );
+    std::generate( org.begin(), org.end(), g );
+    std::generate( buf.begin(), buf.end(), g );
+    const Pel* buff = buf.data() + 3 * bufStride + 3;
+
+    const int16_t* xFilter = MCTF::m_interpolationFilter4[rng.get( 1, 15 )];
+    const int16_t* yFilter[4];
+    int rowOffset[4];
+    for( int i = 0; i < num; i++ )
+    {
+      yFilter[i]   = MCTF::m_interpolationFilter4[rng.get( 0, 15 )];
+      rowOffset[i] = rng.get( 0, 1 );
+    }
+    if( !check_one_motionErrorLumaFracColumn( ref, opt, org.data(), orgStride, buff, bufStride, w, h, bitDepth, xFilter, num, yFilter, rowOffset ) )
+    {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -1930,6 +2089,31 @@ static bool check_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned num_cases,
     }
   }
 
+  // The early exit: with besterror at the error of the first r rows (and one below and above), the kernel must return
+  // the exact error when it is not above besterror and a value above besterror otherwise.
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const unsigned orgStride = rng.get( w, 128 );
+    const unsigned bufStride = rng.get( w, 128 );
+    std::vector<Pel> org( orgStride * h );
+    std::vector<Pel> buf( bufStride * h );
+    std::generate( org.begin(), org.end(), g );
+    std::generate( buf.begin(), buf.end(), g );
+    const int exact = ref->m_motionErrorLumaInt8( org.data(), orgStride, buf.data(), bufStride, w, h, INT_MAX );
+    for( int rows = 1; rows <= h; rows++ )
+    {
+      const int prefix = ref->m_motionErrorLumaInt8( org.data(), orgStride, buf.data(), bufStride, w, rows, INT_MAX );
+      for( int besterror : { prefix - 1, prefix, prefix + 1 } )
+      {
+        const int error = opt->m_motionErrorLumaInt8( org.data(), orgStride, buf.data(), bufStride, w, h, besterror );
+        if( exact <= besterror ? error != exact : error <= besterror )
+        {
+          printf( "FAILED motionErrorLumaInt8 early exit w=%d h=%d besterror=%d: exact %d, returned %d\n", w, h, besterror, exact, error );
+          return false;
+        }
+      }
+    }
+  }
   return true;
 }
 
@@ -1979,6 +2163,16 @@ static bool test_MCTF()
       passed = check_applyBlock( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
+#if defined( TARGET_SIMD_X86 ) && defined( REAL_TARGET_X86 )
+  {
+    if( g_simdExtension != "SSE41" && g_simdExtension != "SCALAR" && vvenc_set_SIMD_extension( "SSE41" ) )
+    {
+      MCTF sse{ /*enableOpt=*/true };
+      vvenc_set_SIMD_extension( g_simdExtension.c_str() );
+      passed = check_applyBlockExact( &sse, &opt, num_cases ) && passed;
+    }
+  }
+#endif
 
   for( unsigned w : sizes )
   {
@@ -2016,6 +2210,7 @@ static bool test_MCTF()
       passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
+  passed = check_motionErrorLumaFracColumn( &ref, &opt, num_cases ) && passed;
 
   for( int w : { 8, 16, 32, 64 } )
   {
