@@ -3312,6 +3312,52 @@ static bool check_sumAbsDeviation( PelBufferOps* ref, PelBufferOps* opt, unsigne
   return true;
 }
 
+// Test flat copyClip with odd counts and incomplete SSE/AVX2 vectors.
+// Check destination guards against the sentinel: matching overruns in
+// the reference and optimized implementations would pass an equality check.
+static bool check_copyClip( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::copyClip\n" );
+  (void)num_cases;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  const Pel sentinel = Pel( 0x5a5a );
+
+  static const int sizes[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16,
+                                17, 18, 23, 24, 30, 31, 32, 33, 48, 63, 64, 65,
+                                127, 128, 192, 255, 256 };
+  static const int guard = 16;
+
+  for( const unsigned bd : { 8u, 10u } )
+  {
+    const ClpRng clpRng{ int( bd ) };
+    for( const int numSamples : sizes )
+    {
+      std::vector<Pel> src( numSamples );
+      std::generate( src.begin(), src.end(), anyPel );
+      std::vector<Pel> dstRef( numSamples + guard, sentinel ), dstOpt( numSamples + guard, sentinel );
+
+      ref->copyClip( src.data(), dstRef.data(), numSamples, clpRng );
+      opt->copyClip( src.data(), dstOpt.data(), numSamples, clpRng );
+
+      std::ostringstream sstm;
+      sstm << "copyClip N=" << numSamples << " bd=" << bd;
+      if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), numSamples + guard ) )
+      {
+        return false;
+      }
+      for( int i = numSamples; i < numSamples + guard; i++ )
+      {
+        if( dstRef[i] != sentinel || dstOpt[i] != sentinel )
+        {
+          printf( "failed: %s guard sample %d was overwritten (ref=%d opt=%d)\n", sstm.str().c_str(), i, dstRef[i], dstOpt[i] );
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -3332,6 +3378,7 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
   passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;

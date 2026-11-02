@@ -720,41 +720,39 @@ void recoCore_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, c
 template<X86_VEXT vext>
 void copyClip_SSE( const Pel* src, Pel* dst, int numSamples, const ClpRng& clpRng )
 {
-  if( vext >= AVX2 && numSamples >= 16 )
-  {
+  int col = 0;
+
 #if USE_AVX2
+  if( vext >= AVX2 )
+  {
     __m256i vbdmin   = _mm256_set1_epi16( clpRng.min() );
     __m256i vbdmax   = _mm256_set1_epi16( clpRng.max() );
 
-    for( int col = 0; col < numSamples; col += 16 )
+    for( ; col + 16 <= numSamples; col += 16 )
     {
       __m256i val = _mm256_loadu_si256  ( ( const __m256i * ) &src[col] );
       val = _mm256_min_epi16            ( vbdmax, _mm256_max_epi16( vbdmin, val ) );
       _mm256_storeu_si256               ( ( __m256i * )&dst[col], val );
     }
-#endif
   }
-  else if(numSamples >= 8 )
+#endif
+
+  if( col + 8 <= numSamples )
   {
     __m128i vbdmin = _mm_set1_epi16( clpRng.min() );
     __m128i vbdmax = _mm_set1_epi16( clpRng.max() );
 
-    for( int col = 0; col < numSamples; col += 8 )
+    for( ; col + 8 <= numSamples; col += 8 )
     {
       __m128i val = _mm_loadu_si128 ( ( const __m128i * ) &src[col] );
       val = _mm_min_epi16           ( vbdmax, _mm_max_epi16( vbdmin, val ) );
       _mm_storeu_si128              ( ( __m128i * )&dst[col], val );
     }
   }
-  else
-  {
-    __m128i vbdmin  = _mm_set1_epi16( clpRng.min() );
-    __m128i vbdmax  = _mm_set1_epi16( clpRng.max() );
 
-    __m128i val;
-    val = _vv_loadl_epi64   ( ( const __m128i * )&src[0] );
-    val = _mm_min_epi16     ( vbdmax, _mm_max_epi16( vbdmin, val ) );
-    _vv_storel_epi64        ( ( __m128i * )&dst[0], val );
+  for( ; col < numSamples; col++ )
+  {
+    dst[col] = ClipPel( src[col], clpRng );
   }
 #if USE_AVX2
 

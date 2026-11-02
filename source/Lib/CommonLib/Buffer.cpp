@@ -317,10 +317,15 @@ void recoCore( const T* src1, const T* src2, T* dest, int numSamples, const ClpR
 template<typename T>
 void copyClipCore( const T* src, Pel* dst, int numSamples, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2)
+  int n = 0;
+  for( ; n + 1 < numSamples; n += 2 )
   {
     dst[n]   = ClipPel( src[n]   , clpRng );
     dst[n+1] = ClipPel( src[n+1] , clpRng );
+  }
+  if( n < numSamples )
+  {
+    dst[n] = ClipPel( src[n], clpRng );
   }
 }
 
