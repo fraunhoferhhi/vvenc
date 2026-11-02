@@ -1266,7 +1266,7 @@ void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int 
        for (int col = 0; col < width; col += 8)
        {
          __m128i vsrc0 = _mm_load_si128((const __m128i *)&src0[col]);
-         __m128i vsrc1 = _mm_load_si128((const __m128i *)&src1[col]);
+         __m128i vsrc1 = _mm_loadu_si128((const __m128i *)&src1[col]);   // may be a view into a picture (SMVD cost)
 
          vsrc0 = _mm_sub_epi16(_mm_slli_epi16(vsrc0, 1), vsrc1);
          _mm_store_si128((__m128i *)&src0[col], vsrc0);
