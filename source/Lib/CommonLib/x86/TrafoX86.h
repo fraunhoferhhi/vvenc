@@ -307,6 +307,203 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
 #endif
 }
 
+#if USE_AVX2
+// [sum(a) sum(b) sum(c) sum(d)]: the totals of the 8 int32 lanes of each input (wrapping adds, as vpaddd/vphaddd).
+// Two levels of vphaddd leave [a b c d] partial sums in each 128-bit half; adding the halves gives the totals.
+static ALWAYS_INLINE __m128i sumLanes4_avx2( const __m256i& a, const __m256i& b, const __m256i& c, const __m256i& d )
+{
+  const __m256i abcd = _mm256_hadd_epi32( _mm256_hadd_epi32( a, b ), _mm256_hadd_epi32( c, d ) );
+  return _mm_add_epi32( _mm256_castsi256_si128( abcd ), _mm256_extracti128_si256( abcd, 1 ) );
+}
+
+// Forward matrix multiply, AVX2: the dot products of four source lines with two matrix rows (itPtr and
+// itPtr + rowStride), over trLoops * 16 columns. vsrc[l][k] holds inputs k * 16 .. k * 16 + 15 of line l packed to int16.
+// Returns [line0 line1 line2 line3] of row 0 in sumRow0 and of row 1 in sumRow1, i.e. the destination layout.
+// Each (line, row) pair keeps its own accumulator of 8 int32 partial sums over all k-steps and is reduced once at the
+// end, instead of one vphaddd per k-step. The int32 adds wrap mod 2^32, so the result does not depend on the summation
+// order and equals the per-step reduction exactly. 8 accumulators + 4 sources + 2 rows fit the 16 ymm registers.
+template<unsigned rowStride, unsigned trLoops>
+static ALWAYS_INLINE void fwdDot4Lines2Rows_avx2( const TMatrixCoeff* itPtr, const __m256i ( *vsrc )[trLoops], __m128i& sumRow0,
+                                                  __m128i& sumRow1 )
+{
+  __m256i vacc00 = _mm256_setzero_si256(), vacc10 = _mm256_setzero_si256();   // vaccLR: line L, row R
+  __m256i vacc20 = _mm256_setzero_si256(), vacc30 = _mm256_setzero_si256();
+  __m256i vacc01 = _mm256_setzero_si256(), vacc11 = _mm256_setzero_si256();
+  __m256i vacc21 = _mm256_setzero_si256(), vacc31 = _mm256_setzero_si256();
+
+  // Keep the loop rolled: fully unrolled, GCC turns the accumulator chains into add trees whose live products spill.
+#if defined( __GNUC__ )
+#pragma GCC unroll 1
+#endif
+  for( unsigned k = 0; k < trLoops; k++ )
+  {
+    const __m256i vit0 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 0 * rowStride] );
+    const __m256i vit1 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 1 * rowStride] );
+
+    vacc00 = _mm256_add_epi32( vacc00, _mm256_madd_epi16( vit0, vsrc[0][k] ) );
+    vacc10 = _mm256_add_epi32( vacc10, _mm256_madd_epi16( vit0, vsrc[1][k] ) );
+    vacc20 = _mm256_add_epi32( vacc20, _mm256_madd_epi16( vit0, vsrc[2][k] ) );
+    vacc30 = _mm256_add_epi32( vacc30, _mm256_madd_epi16( vit0, vsrc[3][k] ) );
+
+    vacc01 = _mm256_add_epi32( vacc01, _mm256_madd_epi16( vit1, vsrc[0][k] ) );
+    vacc11 = _mm256_add_epi32( vacc11, _mm256_madd_epi16( vit1, vsrc[1][k] ) );
+    vacc21 = _mm256_add_epi32( vacc21, _mm256_madd_epi16( vit1, vsrc[2][k] ) );
+    vacc31 = _mm256_add_epi32( vacc31, _mm256_madd_epi16( vit1, vsrc[3][k] ) );
+  }
+
+  sumRow0 = sumLanes4_avx2( vacc00, vacc10, vacc20, vacc30 );
+  sumRow1 = sumLanes4_avx2( vacc01, vacc11, vacc21, vacc31 );
+}
+
+// As fwdDot4Lines2Rows_avx2 for two source lines and four matrix rows (reducedLine == 2): returns [row0 row1 row2 row3]
+// of line 0 in sumLine0 and of line 1 in sumLine1.
+template<unsigned rowStride, unsigned trLoops>
+static ALWAYS_INLINE void fwdDot2Lines4Rows_avx2( const TMatrixCoeff* itPtr, const __m256i ( *vsrc )[trLoops], __m128i& sumLine0,
+                                                  __m128i& sumLine1 )
+{
+  __m256i vacc00 = _mm256_setzero_si256(), vacc01 = _mm256_setzero_si256();   // vaccLR: line L, row R
+  __m256i vacc02 = _mm256_setzero_si256(), vacc03 = _mm256_setzero_si256();
+  __m256i vacc10 = _mm256_setzero_si256(), vacc11 = _mm256_setzero_si256();
+  __m256i vacc12 = _mm256_setzero_si256(), vacc13 = _mm256_setzero_si256();
+
+  for( unsigned k = 0; k < trLoops; k++ )
+  {
+    const __m256i vit0 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 0 * rowStride] );
+    const __m256i vit1 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 1 * rowStride] );
+    const __m256i vit2 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 2 * rowStride] );
+    const __m256i vit3 = _mm256_load_si256( ( const __m256i* ) &itPtr[( k << 4 ) + 3 * rowStride] );
+
+    vacc00 = _mm256_add_epi32( vacc00, _mm256_madd_epi16( vit0, vsrc[0][k] ) );
+    vacc01 = _mm256_add_epi32( vacc01, _mm256_madd_epi16( vit1, vsrc[0][k] ) );
+    vacc02 = _mm256_add_epi32( vacc02, _mm256_madd_epi16( vit2, vsrc[0][k] ) );
+    vacc03 = _mm256_add_epi32( vacc03, _mm256_madd_epi16( vit3, vsrc[0][k] ) );
+
+    vacc10 = _mm256_add_epi32( vacc10, _mm256_madd_epi16( vit0, vsrc[1][k] ) );
+    vacc11 = _mm256_add_epi32( vacc11, _mm256_madd_epi16( vit1, vsrc[1][k] ) );
+    vacc12 = _mm256_add_epi32( vacc12, _mm256_madd_epi16( vit2, vsrc[1][k] ) );
+    vacc13 = _mm256_add_epi32( vacc13, _mm256_madd_epi16( vit3, vsrc[1][k] ) );
+  }
+
+  sumLine0 = sumLanes4_avx2( vacc00, vacc01, vacc02, vacc03 );
+  sumLine1 = sumLanes4_avx2( vacc10, vacc11, vacc12, vacc13 );
+}
+
+// Forward matrix multiply, AVX2: numRows (a multiple of 4) output rows for four (fourLines) or two source lines. Output
+// row r uses matrix row itPtr + r * rowStride and is stored, rounded and shifted, at dstPtr + r * dstStride.
+template<unsigned rowStride, unsigned trLoops>
+static ALWAYS_INLINE void fwdMatMulRows_avx2( const TMatrixCoeff* itPtr, const __m256i ( *vsrc )[trLoops], bool fourLines,
+                                              unsigned numRows, TCoeff* dstPtr, ptrdiff_t dstStride, int rnd_factor, int shift )
+{
+  const __m128i vrnd = _mm_set1_epi32( rnd_factor );
+
+  for( unsigned r = 0; r < numRows; r += 4, itPtr += 4 * rowStride )
+  {
+    if( fourLines )
+    {
+      // each result holds one row's outputs for the four lines: stored as they are
+      __m128i xsum0, xsum1, xsum2, xsum3;
+      fwdDot4Lines2Rows_avx2<rowStride, trLoops>( itPtr,                 vsrc, xsum0, xsum1 );
+      fwdDot4Lines2Rows_avx2<rowStride, trLoops>( itPtr + 2 * rowStride, vsrc, xsum2, xsum3 );
+
+      _mm_store_si128( ( __m128i* ) dstPtr, _mm_srai_epi32( _mm_add_epi32( xsum0, vrnd ), shift ) ); dstPtr += dstStride;
+      _mm_store_si128( ( __m128i* ) dstPtr, _mm_srai_epi32( _mm_add_epi32( xsum1, vrnd ), shift ) ); dstPtr += dstStride;
+      _mm_store_si128( ( __m128i* ) dstPtr, _mm_srai_epi32( _mm_add_epi32( xsum2, vrnd ), shift ) ); dstPtr += dstStride;
+      _mm_store_si128( ( __m128i* ) dstPtr, _mm_srai_epi32( _mm_add_epi32( xsum3, vrnd ), shift ) ); dstPtr += dstStride;
+    }
+    else
+    {
+      // each result holds one line's outputs for the four rows: interleaved into (line 0, line 1) pairs per row
+      __m128i xsum0, xsum1;
+      fwdDot2Lines4Rows_avx2<rowStride, trLoops>( itPtr, vsrc, xsum0, xsum1 );
+
+      xsum0 = _mm_srai_epi32( _mm_add_epi32( xsum0, vrnd ), shift );
+      xsum1 = _mm_srai_epi32( _mm_add_epi32( xsum1, vrnd ), shift );
+
+      __m128i xtmp = _mm_unpacklo_epi32( xsum0, xsum1 );
+
+      _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += dstStride;
+      _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += dstStride;
+
+      xtmp = _mm_unpackhi_epi32( xsum0, xsum1 );
+
+      _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += dstStride;
+      _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += dstStride;
+    }
+  }
+}
+
+// Forward matrix multiply over 8 columns, AVX2, two source lines in one register (line 0 in the low 128-bit half, line 1
+// in the high half): numRows (a multiple of 4) output rows. Row r uses the 8 coefficients at itPtr + r * rowStride,
+// broadcast to both halves so that one vpmaddwd serves both lines, and is stored, rounded and shifted, as (line 0,
+// line 1) pairs at dstPtr + r * dstStride.
+template<unsigned rowStride>
+static ALWAYS_INLINE void fwdMatMul8Cols2Lines_avx2( const TMatrixCoeff* itPtr, const __m256i& vsrc, unsigned numRows,
+                                                     TCoeff* dstPtr, ptrdiff_t dstStride, int rnd_factor, int shift )
+{
+  for( unsigned r = 0; r < numRows; r += 4, itPtr += 4 * rowStride )
+  {
+    const __m256i vit0 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &itPtr[0 * rowStride] ) );
+    const __m256i vit1 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &itPtr[1 * rowStride] ) );
+    const __m256i vit2 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &itPtr[2 * rowStride] ) );
+    const __m256i vit3 = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) &itPtr[3 * rowStride] ) );
+
+    // two levels of vphaddd leave [row0 row1 row2 row3] of line 0 in the low half and of line 1 in the high half
+    __m256i vsum = _mm256_hadd_epi32( _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ),
+                                      _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
+    vsum = _mm256_add_epi32 ( vsum, _mm256_set1_epi32( rnd_factor ) );
+    vsum = _mm256_srai_epi32( vsum, shift );
+
+    const __m128i vsum0 = _mm256_castsi256_si128( vsum );
+    const __m128i vsum1 = _mm256_extracti128_si256( vsum, 1 );
+
+    __m128i xtmp = _mm_unpacklo_epi32( vsum0, vsum1 );
+    _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += dstStride;
+
+    xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
+    _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += dstStride;
+
+    xtmp = _mm_unpackhi_epi32( vsum0, vsum1 );
+    _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += dstStride;
+
+    xtmp = _mm_shuffle_epi32( xtmp, ( 2 << 0 ) + ( 3 << 2 ) );
+    _vv_storel_epi64( ( __m128i* ) dstPtr, xtmp ); dstPtr += dstStride;
+  }
+}
+
+// Packs the trLoops * 16 int32 inputs of one line to int16 with saturation, in order: vpackssdw works within each
+// 128-bit half, the permute restores the order.
+template<unsigned trLoops>
+static ALWAYS_INLINE void fwdPackLine_avx2( const TCoeff* src, __m256i* vsrc )
+{
+  for( unsigned k = 0; k < trLoops; k++ )
+  {
+    const __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[( k << 4 ) + 0] );
+    const __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[( k << 4 ) + 8] );
+    vsrc[k] = _mm256_permute4x64_epi64( _mm256_packs_epi32( vsrc0, vsrc1 ), ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+  }
+}
+
+// The even/odd split of one line's packed inputs x (trLoops registers, N = 16 * trLoops inputs): for k < N / 2,
+// E[k] = x[k] + x[N - 1 - k] and O[k] = x[k] - x[N - 1 - k], trLoops / 2 registers each. The int16 adds wrap; the
+// caller makes sure they cannot (all x within [-16384, 16383]).
+template<unsigned trLoops>
+static ALWAYS_INLINE void fwdEvenOdd_avx2( const __m256i* vx, __m256i* ve, __m256i* vo )
+{
+  // reverses the 8 int16 within each 128-bit half; swapping the halves afterwards reverses all 16
+  const __m256i vrev = _mm256_setr_epi8( 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1,
+                                         14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 );
+
+  for( unsigned k = 0; k < trLoops / 2; k++ )
+  {
+    // x[N - 1 - k * 16 - i] for i = 0 .. 15
+    const __m256i vmirror = _mm256_permute4x64_epi64( _mm256_shuffle_epi8( vx[trLoops - 1 - k], vrev ),
+                                                      ( 2 << 0 ) + ( 3 << 2 ) + ( 0 << 4 ) + ( 1 << 6 ) );
+    ve[k] = _mm256_add_epi16( vx[k], vmirror );
+    vo[k] = _mm256_sub_epi16( vx[k], vmirror );
+  }
+}
+
+#endif
 template<X86_VEXT vext, int trSize>
 void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
 {
@@ -352,165 +549,39 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
       for( int i = 0; i < reducedLine; i += ( 2 << nlx4 ) )
       {
-              TCoeff*       dstPtr = dst + i;
-        const TMatrixCoeff* itPtr  = tc;
-        
-        __m256i vsrcarr[trLoops][4];
-          
-        for( int k = 0; k < trLoops; k++ )
+        // vsrcarr[l][k]: inputs k * 16 .. k * 16 + 15 of line i + l, packed to int16 with saturation
+        __m256i vsrcarr[4][trLoops];
+
+        for( int l = 0; l < ( 2 << nlx4 ); l++ )
         {
-          __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0] );
-          __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8] );
-          __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
-          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-          vsrcarr[k][0] = vsrc;
-          
-          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + trSize] );
-          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + trSize] );
-          vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
-          vsrc  = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-          vsrcarr[k][1] = vsrc;
-
-          if( !nlx4 ) continue;
-
-          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + 2 * trSize] );
-          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + 2 * trSize] );
-          vsrc = _mm256_packs_epi32( vsrc0, vsrc1 );
-          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-          vsrcarr[k][2] = vsrc;
-
-          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 0 + 3 * trSize] );
-          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[(k << 4) + 8 + 3 * trSize] );
-          vsrc = _mm256_packs_epi32( vsrc0, vsrc1 );
-          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
-
-          vsrcarr[k][3] = vsrc;
+          fwdPackLine_avx2<trLoops>( src + l * trSize, vsrcarr[l] );
         }
 
-        for( int j = 0; j < cutoff; j += 4 )
-        {
-          __m256i vsum00 = _mm256_setzero_si256();
-          __m256i vsum02 = _mm256_setzero_si256();
-
-          __m256i vsum10 = _mm256_setzero_si256();
-          __m256i vsum12 = _mm256_setzero_si256();
-          
-          __m256i vsum20 = _mm256_setzero_si256();
-          __m256i vsum22 = _mm256_setzero_si256();
-
-          __m256i vsum30 = _mm256_setzero_si256();
-          __m256i vsum32 = _mm256_setzero_si256();
-
-          for( int k = 0; k < trLoops; k++ )
-          {
-            // dst[j * line + i] += src[i * trSize + k] * t[j * trSize + k]
-
-#if 0
-#if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m256i vit0  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
-#else
-            __m256i vit0  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 3 * trSize] );
-#endif
-#else
-            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 0 * trSize] );
-            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 1 * trSize] );
-            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 2 * trSize] );
-            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[(k << 4) + 3 * trSize] );
-#endif
-
-            __m256i
-            vsrc  = vsrcarr[k][0];
-
-            vsum00 = _mm256_add_epi32( vsum00, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
-            vsum02 = _mm256_add_epi32( vsum02, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
-     
-            vsrc  = vsrcarr[k][1];
-
-            vsum10 = _mm256_add_epi32( vsum10, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
-            vsum12 = _mm256_add_epi32( vsum12, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
-
-            // skip branching
-            //if( !nlx4 ) continue;
-     
-            vsrc  = vsrcarr[k][2];
-
-            vsum20 = _mm256_add_epi32( vsum20, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
-            vsum22 = _mm256_add_epi32( vsum22, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
-            
-            vsrc  = vsrcarr[k][3];
-
-            vsum30 = _mm256_add_epi32( vsum30, _mm256_hadd_epi32( _mm256_madd_epi16( vit0, vsrc ), _mm256_madd_epi16( vit1, vsrc ) ) );
-            vsum32 = _mm256_add_epi32( vsum32, _mm256_hadd_epi32( _mm256_madd_epi16( vit2, vsrc ), _mm256_madd_epi16( vit3, vsrc ) ) );
-          }
-
-          vsum00 = _mm256_hadd_epi32( vsum00, vsum02 );
-
-          __m128i xsum00 = _mm_add_epi32( _mm256_castsi256_si128( vsum00 ), _mm256_extracti128_si256( vsum00, 1 ) );
-          xsum00 = _mm_add_epi32 ( xsum00, _mm_set1_epi32( rnd_factor ) );
-          xsum00 = _mm_srai_epi32( xsum00, shift );
-
-          vsum10 = _mm256_hadd_epi32( vsum10, vsum12 );
-          
-          __m128i xsum10 = _mm_add_epi32( _mm256_castsi256_si128( vsum10 ), _mm256_extracti128_si256( vsum10, 1 ) );
-          xsum10 = _mm_add_epi32 ( xsum10, _mm_set1_epi32( rnd_factor ) );
-          xsum10 = _mm_srai_epi32( xsum10, shift );
-
-          if( nlx4 )
-          {
-            vsum20 = _mm256_hadd_epi32( vsum20, vsum22 );
-
-            __m128i xsum20 = _mm_add_epi32( _mm256_castsi256_si128( vsum20 ), _mm256_extracti128_si256( vsum20, 1 ) );
-            xsum20 = _mm_add_epi32( xsum20, _mm_set1_epi32( rnd_factor ) );
-            xsum20 = _mm_srai_epi32( xsum20, shift );
-
-            vsum30 = _mm256_hadd_epi32( vsum30, vsum32 );
-
-            __m128i xsum30 = _mm_add_epi32( _mm256_castsi256_si128( vsum30 ), _mm256_extracti128_si256( vsum30, 1 ) );
-            xsum30 = _mm_add_epi32( xsum30, _mm_set1_epi32( rnd_factor ) );
-            xsum30 = _mm_srai_epi32( xsum30, shift );
-
-            __m128i xtmp0 = _mm_unpacklo_epi32( xsum00, xsum10 );
-            __m128i xtmp1 = _mm_unpacklo_epi32( xsum20, xsum30 );
-
-            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpacklo_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
-            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
-
-            xtmp0 = _mm_unpackhi_epi32( xsum00, xsum10 );
-            xtmp1 = _mm_unpackhi_epi32( xsum20, xsum30 );
-
-            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpacklo_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
-            _mm_store_si128( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp0, xtmp1 ) ); dstPtr += line;
-          }
-          else
-          {
-            __m128i xtmp = _mm_unpacklo_epi32( xsum00, xsum10 );
-
-            _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
-            _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
-
-            xtmp = _mm_unpackhi_epi32( xsum00, xsum10 );
-
-            _vv_storel_epi64( ( __m128i* ) dstPtr,                     xtmp );         dstPtr += line;
-            _vv_storel_epi64( ( __m128i* ) dstPtr, _mm_unpackhi_epi64( xtmp, xtmp ) ); dstPtr += line;
-          }
-
-          itPtr  += ( trSize << 2 );
-        }
+        // dst[j * line + i] += src[i * trSize + k] * t[j * trSize + k]
+        fwdMatMulRows_avx2<trSize, trLoops>( tc, vsrcarr, nlx4, cutoff, dst + i, line, rnd_factor, shift );
 
         src += ( trSize << ( 1 + nlx4 ) );
       }
 #if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
 #pragma GCC diagnostic pop
 #endif
+    }
+    else if( vext >= AVX2 && trSize == 8 )
+    {
+      // 8-point: one register holds two source lines (line i in the low 128-bit half, line i + 1 in the high half) and
+      // each matrix row is broadcast to both halves, so one vpmaddwd serves both lines where the 128-bit path needs two.
+      for( int i = 0; i < reducedLine; i += 2 )
+      {
+        // packs works within each 128-bit half ([line i 0..3, line i+1 0..3 | line i 4..7, line i+1 4..7]); the permute
+        // gathers each line into its own half. Same int16 saturation as the 128-bit path.
+        __m256i vsrc = _mm256_packs_epi32( _mm256_loadu_si256( ( const __m256i* ) &src[0] ),
+                                           _mm256_loadu_si256( ( const __m256i* ) &src[8] ) );
+        vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+        fwdMatMul8Cols2Lines_avx2<trSize>( tc, vsrc, cutoff, dst + i, line, rnd_factor, shift );
+
+        src += ( trSize << 1 );
+      }
     }
     else
 #endif
@@ -642,6 +713,135 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 #endif
 }
 
+#if USE_AVX2
+// Forward DCT-II, N = 32 or 64, AVX2, with one even/odd split: the matrix is symmetric, T[j][N - 1 - k] =
+// (-1)^j * T[j][k], so output j is the dot product of row j's first half with E[k] = x[k] + x[N - 1 - k] (j even) or
+// O[k] = x[k] - x[N - 1 - k] (j odd), k < N / 2: half the vpmaddwd of the full matrix multiply. The even rows of T (row
+// stride 2 * N) give the even outputs (destination stride 2 * line), the odd rows the odd ones.
+// Exact: x are the inputs saturated to int16 as in fastFwd_SSE. E and O, the vpmaddwd operands, are sure to fit int16
+// when all x of a group of lines lie in [-16384, 16383] (sufficient, not necessary); other groups use the full matrix
+// (fastFwd_SSE's kernel). Shapes the split
+// does not cover (one line, cutoff not a multiple of 8) take fastForwardDCT2_MM. With |T| <= 90 no int32 sum overflows,
+// so all paths give the same output.
+template<X86_VEXT vext, int N>
+void fastForwardDCT2_EvenOdd_SIMD( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+{
+  const int reducedLine = line - iSkipLine;
+  const int cutoff      = N - iSkipLine2;
+
+  if( line == 1 || ( cutoff & 7 ) != 0 )
+  {
+    fastForwardDCT2_MM<N>( src, dst, shift, line, iSkipLine, iSkipLine2 );
+    return;
+  }
+
+  static constexpr unsigned trLoops   = N >> 4;   // registers per line of 16 packed inputs
+  static constexpr unsigned halfLoops = N >> 5;   // registers per line of E or O
+  const TMatrixCoeff* tc = N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
+  const int  rnd_factor  = 1 << ( shift - 1 );
+  const bool fourLines   = reducedLine != 2;   // as fastFwd_SSE: groups of 4 lines, or the 2 lines of reducedLine 2
+  const int  groupLines  = fourLines ? 4 : 2;
+
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+  // lines 2 and 3 of the arrays below are not set for two-line groups, and not read either
+#endif
+  for( int i = 0; i < reducedLine; i += groupLines, src += groupLines * N )
+  {
+    __m256i vx[4][trLoops];
+    // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383]: OR all of them, test the signs
+    __m256i vrange = _mm256_setzero_si256();
+
+    for( int l = 0; l < groupLines; l++ )
+    {
+      fwdPackLine_avx2<trLoops>( src + l * N, vx[l] );
+
+      for( unsigned k = 0; k < trLoops; k++ )
+      {
+        vrange = _mm256_or_si256( vrange, _mm256_add_epi16( vx[l][k], _mm256_set1_epi16( 16384 ) ) );
+      }
+    }
+
+    if( !_mm256_testz_si256( vrange, _mm256_set1_epi16( -32768 ) ) )
+    {
+      fwdMatMulRows_avx2<N, trLoops>( tc, vx, fourLines, cutoff, dst + i, line, rnd_factor, shift );
+      continue;
+    }
+
+    __m256i ve[4][halfLoops], vo[4][halfLoops];
+
+    for( int l = 0; l < groupLines; l++ )
+    {
+      fwdEvenOdd_avx2<trLoops>( vx[l], ve[l], vo[l] );
+    }
+
+    fwdMatMulRows_avx2<2 * N, halfLoops>( tc,     ve, fourLines, cutoff >> 1, dst + i,        2 * line, rnd_factor, shift );
+    fwdMatMulRows_avx2<2 * N, halfLoops>( tc + N, vo, fourLines, cutoff >> 1, dst + i + line, 2 * line, rnd_factor, shift );
+  }
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic pop
+#endif
+
+  _mm256_zeroupper();
+
+  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine, iSkipLine2 );
+}
+
+// Forward DCT-II, N = 16, AVX2, with the even/odd split of fastForwardDCT2_EvenOdd_SIMD. E and O have 8 values per
+// line, so two lines share a register (line i in the low 128-bit half, line i + 1 in the high half), as in the 8-point
+// path of fastFwd_SSE. Same exactness rules: line pairs with inputs outside [-16384, 16383] use the full matrix; one
+// line, a cutoff that is not a multiple of 8 and an odd reducedLine take fastForwardDCT2_MM.
+template<X86_VEXT vext>
+void fastForwardDCT2_EvenOdd16_SIMD( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 )
+{
+  const int reducedLine = line - iSkipLine;
+  const int cutoff      = 16 - iSkipLine2;
+
+  if( line == 1 || ( cutoff & 7 ) != 0 || ( reducedLine & 1 ) != 0 )
+  {
+    fastForwardDCT2_MM<16>( src, dst, shift, line, iSkipLine, iSkipLine2 );
+    return;
+  }
+
+  const TMatrixCoeff* tc = g_trCoreDCT2P16[TRANSFORM_FORWARD][0];
+  const int rnd_factor   = 1 << ( shift - 1 );
+  // reverses the 8 int16 within each 128-bit half
+  const __m256i vrev = _mm256_setr_epi8( 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1,
+                                         14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 );
+
+  for( int i = 0; i < reducedLine; i += 2, src += 32 )
+  {
+    __m256i vx[2][1];   // the 16 packed inputs of lines i and i + 1
+    fwdPackLine_avx2<1>( src,      vx[0] );
+    fwdPackLine_avx2<1>( src + 16, vx[1] );
+
+    // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383]
+    const __m256i vrange = _mm256_or_si256( _mm256_add_epi16( vx[0][0], _mm256_set1_epi16( 16384 ) ),
+                                            _mm256_add_epi16( vx[1][0], _mm256_set1_epi16( 16384 ) ) );
+    if( !_mm256_testz_si256( vrange, _mm256_set1_epi16( -32768 ) ) )
+    {
+      fwdMatMulRows_avx2<16, 1>( tc, vx, false, cutoff, dst + i, line, rnd_factor, shift );
+      continue;
+    }
+
+    // [x[0..7] of line i | of line i + 1] and [x[15..8] of line i | of line i + 1]
+    const __m256i vfirst  = _mm256_permute2x128_si256( vx[0][0], vx[1][0], 0x20 );
+    const __m256i vmirror = _mm256_shuffle_epi8( _mm256_permute2x128_si256( vx[0][0], vx[1][0], 0x31 ), vrev );
+
+    const __m256i ve = _mm256_add_epi16( vfirst, vmirror );
+    const __m256i vo = _mm256_sub_epi16( vfirst, vmirror );
+
+    fwdMatMul8Cols2Lines_avx2<32>( tc,      ve, cutoff >> 1, dst + i,        2 * line, rnd_factor, shift );
+    fwdMatMul8Cols2Lines_avx2<32>( tc + 16, vo, cutoff >> 1, dst + i + line, 2 * line, rnd_factor, shift );
+  }
+
+  _mm256_zeroupper();
+
+  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine, iSkipLine2 );
+}
+
+#endif
 template< X86_VEXT vext, int W >
 void roundClip_SSE( TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift )
 {
@@ -1963,6 +2163,11 @@ void TCoeffOps::_initTCoeffOpsX86()
   fastInvDCT2[2] = fastInverseDCT2_B8_SIMD<vext>;
   fastFwdDCT2[0] = fastForwardDCT2_B2_SIMD<vext>;
   fastFwdDCT2[1] = fastForward4_SIMD<vext, DCT2>;
+#if USE_AVX2
+  fastFwdDCT2[2] = fastForwardDCT2_EvenOdd16_SIMD<vext>;
+  fastFwdDCT2[3] = fastForwardDCT2_EvenOdd_SIMD<vext, 32>;
+  fastFwdDCT2[4] = fastForwardDCT2_EvenOdd_SIMD<vext, 64>;
+#endif
   fastFwdDST7_4  = fastForward4_SIMD<vext, DST7>;
   fastFwdDCT8_4  = fastForward4_SIMD<vext, DCT8>;
 }

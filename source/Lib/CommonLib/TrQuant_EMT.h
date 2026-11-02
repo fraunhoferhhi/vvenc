@@ -74,9 +74,11 @@ struct TCoeffOps
   void( *fastFwdCore_1D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
   void( *roundClip4 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
   void( *roundClip8 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
-  // partial-butterfly 1D transforms that do not go through the matrix-multiplication cores
+  // 1D transforms called directly by fastForward/InverseDCT2_B*: partial butterflies (fastInvDCT2, fastFwdDCT2[0..1])
+  // and the whole forward DCT-II 16/32/64 (fastFwdDCT2[2..4])
   void( *fastInvDCT2[3] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum ); // [0]: 2-pt, [1]: 4-pt, [2]: 8-pt
-  void( *fastFwdDCT2[2] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 ); // [0]: 2-pt, [1]: 4-pt
+  // [0]: 2-pt, [1]: 4-pt (partial butterflies), [2]: 16-pt, [3]: 32-pt, [4]: 64-pt (by default fastForwardDCT2_MM)
+  void( *fastFwdDCT2[5] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDST7_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDCT8_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 
@@ -96,6 +98,31 @@ private:
 extern TCoeffOps g_tCoeffOps;
 
 #endif
+
+// Forward DCT-II of size N (16, 32 or 64) as a matrix multiply (through g_tCoeffOps.fastFwdCore_* with SIMD): the
+// default of TCoeffOps::fastFwdDCT2[2..4] and the fallback of their SIMD versions.
+template<int N>
+void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+
+// Zeroes what a forward 1D transform leaves out: columns reducedLine .. line - 1 of the first cutoff rows, and all
+// rows from cutoff on (dst holds the transform's rows of line coefficients each).
+static inline void fastForwardZeroSkipped( TCoeff *dst, int line, int reducedLine, int cutoff, int iSkipLine, int iSkipLine2 )
+{
+  if( iSkipLine )
+  {
+    TCoeff *pCoef = dst + reducedLine;
+    for( int j = 0; j < cutoff; j++ )
+    {
+      memset( pCoef, 0, sizeof( TCoeff ) * iSkipLine );
+      pCoef += line;
+    }
+  }
+
+  if( iSkipLine2 )
+  {
+    memset( dst + line * cutoff, 0, sizeof( TCoeff ) * line * iSkipLine2 );
+  }
+}
 
 ////DCT-II transforms
 void fastForwardDCT2_B2  (const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2);
