@@ -347,12 +347,14 @@ namespace DQIntern
     const unsigned first = Ctx::SigCoeffGroup[ 0 ].Offset;
     const unsigned end   = Ctx::GtxFlag[ 3 ].Offset + Ctx::GtxFlag[ 3 ].Size;
     CHECK( end - first != RateEstimator::sm_numCoeffCtx, "coefficient-coding contexts are not one span" );
+#if _DEBUG
     for( const CtxSet* set : { &Ctx::SigCoeffGroup[ 0 ], &Ctx::SigCoeffGroup[ 1 ], &Ctx::SigFlag[ 0 ], &Ctx::SigFlag[ 1 ],
                                &Ctx::SigFlag[ 2 ], &Ctx::SigFlag[ 3 ], &Ctx::SigFlag[ 4 ], &Ctx::SigFlag[ 5 ], &Ctx::ParFlag[ 0 ],
                                &Ctx::ParFlag[ 1 ], &Ctx::GtxFlag[ 0 ], &Ctx::GtxFlag[ 1 ], &Ctx::GtxFlag[ 2 ], &Ctx::GtxFlag[ 3 ] } )
     {
-      CHECK( set->Offset < first || set->Offset + set->Size > end, "a coefficient-coding context lies outside the span" );
+      CHECKD( set->Offset < first || set->Offset + set->Size > end, "a coefficient-coding context lies outside the span" );
     }
+#endif
     // no real context has these bytes (a state's high byte is at most 0x7f), so the first call per channel type builds
     // the tables (and a kept table set is only read after it was built)
     for( Channel& c : channel ) memset( c.ctxStates, 0xff, sizeof( c.ctxStates ) );
