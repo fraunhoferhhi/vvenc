@@ -1978,7 +1978,8 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
   // 1. Pass: get SATD-cost for selected candidates and reduce their count
   m_mergeItemList.resetList( numMergeSatdCand );
-  const TempCtx ctxStart   ( m_CtxCache, m_CABACEstimator->getCtx() );
+  // until the RD pass below, only xCalcPuMeBits codes, and only merge contexts: save and restore those, not the store
+  const TempCtx ctxStart   ( m_CtxCache, SubCtx( Ctx::MergeData, m_CABACEstimator->getCtx() ) );
   const DFunc   dfunc      = encTestMode.lossless ? DF_SAD : ( m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
   DistParam     distParam  = m_cRdCost.setDistParam( tempCS->getOrgBuf().Y(), tempCS->getOrgBuf().Y(), sps.bitDepths[CH_L], dfunc );
   m_uiSadBestForQPA        = MAX_DISTORTION;
@@ -2055,7 +2056,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
   // 2. Pass: RD checking 
   tempCS->initStructData( encTestMode.qp );
-  m_CABACEstimator->getCtx() = ctxStart;
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::MergeData, ctxStart );
 
   double bestEndCost                            =   MAX_DOUBLE;
   bool bestIsSkip                               =   false;
@@ -2876,7 +2877,7 @@ double EncCu::calcLumaCost4MergePrediction( const TempCtx &ctxStart, const PelUn
   distParam.cur = predBuf.Y();
   auto dist     = distParam.distFunc(distParam);
 
-  m_CABACEstimator->getCtx() = ctxStart;
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::MergeData, ctxStart );   // ctxStart holds the merge contexts only
   auto fracBits = xCalcPuMeBits( cu );
 
   double cost   = ( double ) dist + ( double ) fracBits * lambda;

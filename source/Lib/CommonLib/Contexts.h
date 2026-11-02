@@ -269,6 +269,7 @@ public:
   //       otherwise, you will copy more elements than you want !!!
   static const CtxSet   Sao;
   static const CtxSet   Alf;
+  static const CtxSet   MergeData;  // the contexts merge_flag and merge_data code
 public:
   static const std::vector<uint8_t>&  getInitTable( unsigned initId );
 private:
