@@ -79,6 +79,8 @@ class InterPredInterpolation
   Pel                  m_gradBuf[2][(AFFINE_MIN_BLOCK_SIZE + 2) * (AFFINE_MIN_BLOCK_SIZE + 2)];
   int                  m_dMvBuf[2][16 * 2];
   Mv*                  m_storedMv;
+  // the luma subblocks of an affine block without PROF, filtered together (xPredAffineBlk)
+  AffineSubblockRef    m_affineSubblocks[( MAX_CU_SIZE / AFFINE_MIN_BLOCK_SIZE ) * ( MAX_CU_SIZE / AFFINE_MIN_BLOCK_SIZE )];
 
 protected:
   bool                 m_skipPROF;

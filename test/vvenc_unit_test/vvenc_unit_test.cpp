@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cmath>
 #include <iostream>
 #include <limits.h>
+#include <numeric>
 #include <random>
 #include <stddef.h>
 #include <stdint.h>
@@ -4517,6 +4518,188 @@ static bool check_filterN2_2D( InterpolationFilter* ref, InterpolationFilter* op
   return passed;
 }
 
+// filterAffineLumaBlock must equal the 4x4 subblock calls of xPredAffineBlk (filter4x4, filterHor and filterVer) that
+// it replaces: fraction pairs incl. 0, isLast both, 8 and 10 bits, random and extreme samples.
+static bool check_filterAffineLumaBlock( InterpolationFilter* filter, const char* name )
+{
+  const int pad       = 8;   // the 6-tap filters read 2 samples before the block and 3 after it
+  const int srcStride = MAX_CU_SIZE + 2 * pad;
+  std::vector<Pel> src( srcStride * ( MAX_CU_SIZE + 2 * pad ) );
+  std::vector<Pel> block( MAX_CU_SIZE * MAX_CU_SIZE ), subblocks( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> tmp( MAX_CU_SIZE * ( MAX_CU_SIZE + 5 ) );
+  const Pel* org = src.data() + pad * srcStride + pad;
+
+  std::cout << "Testing InterpolationFilter::filterAffineLumaBlock (" << name << ")" << std::endl;
+  bool passed = true;
+  for( int bd : { 8, 10 } )
+  {
+    const ClpRng clpRng{ bd };
+    for( bool extreme : { false, true } )
+    {
+      if( extreme )
+      {
+        std::generate( src.begin(), src.end(), MinMaxGenerator<Pel>( bd, /*is_signed=*/false ) );
+      }
+      else
+      {
+        std::generate( src.begin(), src.end(), InputGenerator<Pel>( bd, /*is_signed=*/false ) );
+      }
+      for( const Size& size : { Size( 8, 8 ), Size( 16, 8 ), Size( 8, 16 ), Size( 32, 32 ), Size( 128, 128 ) } )
+      {
+        const int width  = size.width;
+        const int height = size.height;
+        // Every fraction pair (x in the low 4 bits) at the small sizes, which already run every kernel the larger
+        // sizes use (their column loops do not depend on the fraction); at the larger sizes, which add the extent,
+        // strides and the tmp offset, a few pairs of each kind: both 0, x only, y only, both.
+        std::vector<int> fracPairs = { 0x00, 0x07, 0x70, 0x5B, 0xF1, 0x8F, 0x18, 0xFF };
+        if( width * height <= 128 )
+        {
+          fracPairs.resize( 256 );
+          std::iota( fracPairs.begin(), fracPairs.end(), 0 );
+        }
+        for( int fracPair : fracPairs )
+        {
+          const int fracX = fracPair & 15;
+          const int fracY = fracPair >> 4;
+          for( bool isLast : { false, true } )
+          {
+            filter->filterAffineLumaBlock( org, srcStride, block.data(), width, tmp.data(), width, height, fracX, fracY,
+                                           isLast, CHROMA_420, clpRng );
+            for( int y = 0; y < height; y += 4 )
+            {
+              for( int x = 0; x < width; x += 4 )
+              {
+                const Pel* s = org + y * srcStride + x;
+                Pel*       d = subblocks.data() + y * width + x;
+                if( fracX && fracY )
+                {
+                  filter->filter4x4( COMP_Y, s, srcStride, d, width, 4, 4, fracX, fracY, isLast, CHROMA_420, clpRng );
+                }
+                else if( !fracY )
+                {
+                  filter->filterHor( COMP_Y, s, srcStride, d, width, 4, 4, fracX, isLast, CHROMA_420, clpRng );
+                }
+                else
+                {
+                  filter->filterVer( COMP_Y, s, srcStride, d, width, 4, 4, fracY, true, isLast, CHROMA_420, clpRng );
+                }
+              }
+            }
+            if( !std::equal( block.begin(), block.begin() + width * height, subblocks.begin() ) )
+            {
+              printf( "filterAffineLumaBlock %dx%d frac %d %d isLast %d bd %d extreme %d: differs from the 4x4 calls\n",
+                      width, height, fracX, fracY, isLast, bd, extreme );
+              passed = false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return passed;
+}
+
+// m_filterAffineLumaSubblocks (AVX2 only) must equal the per-subblock calls of xPredAffineBlk it replaces (filter4x4,
+// filterHor, filterVer at 4x4): blocks 8x8 to 128x128, also non-square; every fraction pair (a 64x64 block takes all 256
+// pairs in a random order, the other sizes random pairs); reference offsets of up to 8 samples around each subblock,
+// negative too; isLast both; 8 and 10 bits; random and extreme samples; nothing written outside the block.
+static bool check_filterAffineLumaSubblocks( InterpolationFilter* filter )
+{
+  if( !filter->m_filterAffineLumaSubblocks[0] )
+  {
+    std::cout << "Skipping InterpolationFilter::m_filterAffineLumaSubblocks (no kernel for this SIMD level)" << std::endl;
+    return true;
+  }
+  std::cout << "Testing InterpolationFilter::m_filterAffineLumaSubblocks" << std::endl;
+
+  const int maxMvInt  = 8;                         // largest integer MV offset of a subblock
+  const int pad       = maxMvInt + 8;              // the 6-tap 2-D filter reads 2 samples before and 3 after
+  const int refStride = MAX_CU_SIZE + 2 * pad;
+  std::vector<Pel> refPic( refStride * ( MAX_CU_SIZE + 2 * pad ) );
+  const Pel* refOrigin = refPic.data() + pad * refStride + pad;   // the block's position in the reference
+  const int dstStride  = MAX_CU_SIZE + 8;                         // wider than the block: the rest must stay untouched
+  const Pel guard      = 0x5a5a;
+  std::vector<Pel> dstKernel( dstStride * MAX_CU_SIZE ), dstRef( dstStride * MAX_CU_SIZE );
+  std::vector<AffineSubblockRef> subblocks( ( MAX_CU_SIZE / 4 ) * ( MAX_CU_SIZE / 4 ) );
+  DimensionGenerator rng;
+
+  bool passed = true;
+  for( int bd : { 8, 10 } )
+  {
+    const ClpRng clpRng{ bd };
+    for( bool extreme : { false, true } )
+    {
+      if( extreme )
+      {
+        std::generate( refPic.begin(), refPic.end(), MinMaxGenerator<Pel>( bd, /*is_signed=*/false ) );
+      }
+      else
+      {
+        std::generate( refPic.begin(), refPic.end(), InputGenerator<Pel>( bd, /*is_signed=*/false ) );
+      }
+      for( const Size& size : { Size( 8, 8 ), Size( 32, 8 ), Size( 8, 32 ), Size( 64, 64 ), Size( 128, 128 ) } )
+      {
+        const int numSubX = size.width / 4;
+        const int numSubY = size.height / 4;
+        const int num     = numSubX * numSubY;
+        std::vector<int> fracPairs( num );
+        if( num == 256 )
+        {
+          std::iota( fracPairs.begin(), fracPairs.end(), 0 );
+          std::shuffle( fracPairs.begin(), fracPairs.end(), std::mt19937( rand() ) );
+        }
+        else
+        {
+          std::generate( fracPairs.begin(), fracPairs.end(), [&]() { return int( rng.get( 0, 255 ) ); } );
+        }
+        for( int i = 0; i < num; i++ )
+        {
+          const int x = 4 * ( i % numSubX ) + int( rng.get( 0, 2 * maxMvInt ) ) - maxMvInt;
+          const int y = 4 * ( i / numSubX ) + int( rng.get( 0, 2 * maxMvInt ) ) - maxMvInt;
+          subblocks[i].refOffset = x + y * refStride;
+          subblocks[i].fracX     = uint8_t( fracPairs[i] & 15 );
+          subblocks[i].fracY     = uint8_t( fracPairs[i] >> 4 );
+        }
+        for( bool isLast : { false, true } )
+        {
+          std::fill( dstKernel.begin(), dstKernel.end(), guard );
+          std::fill( dstRef.begin(), dstRef.end(), guard );
+          filter->m_filterAffineLumaSubblocks[isLast]( clpRng, refOrigin, refStride, dstKernel.data(), dstStride, numSubX,
+                                                      numSubY, subblocks.data() );
+          // the reference: xPredAffineBlk's per-subblock calls
+          for( int i = 0; i < num; i++ )
+          {
+            const Pel* src   = refOrigin + subblocks[i].refOffset;
+            Pel*       dst   = dstRef.data() + 4 * ( i % numSubX ) + 4 * ( i / numSubX ) * dstStride;
+            const int  fracX = subblocks[i].fracX;
+            const int  fracY = subblocks[i].fracY;
+            if( fracX && fracY )
+            {
+              filter->filter4x4( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracX, fracY, isLast, CHROMA_420, clpRng );
+            }
+            else if( !fracY )
+            {
+              filter->filterHor( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracX, isLast, CHROMA_420, clpRng );
+            }
+            else
+            {
+              filter->filterVer( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracY, true, isLast, CHROMA_420, clpRng );
+            }
+          }
+          // the whole buffers, so that a write outside the block shows too
+          if( dstKernel != dstRef )
+          {
+            printf( "m_filterAffineLumaSubblocks %dx%d isLast %d bd %d extreme %d: differs from the per-subblock calls\n",
+                    size.width, size.height, isLast, bd, extreme );
+            passed = false;
+          }
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 static bool test_InterpolationFilter()
 {
   InterpolationFilter ref;
@@ -4526,7 +4709,9 @@ static bool test_InterpolationFilter()
   opt.initInterpolationFilter( /*enable=*/true );
 
   unsigned num_cases = NUM_CASES;
-  bool passed = true;
+  bool passed = check_filterAffineLumaBlock( &ref, "C" );
+  passed      = check_filterAffineLumaBlock( &opt, "SIMD" ) && passed;
+  passed      = check_filterAffineLumaSubblocks( &opt ) && passed;
 
   for( int height : { 4, 8, 16, 32, 64 } )
   {
