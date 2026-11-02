@@ -1009,6 +1009,337 @@ static bool check_IntraFilterRefSamples( IntraPrediction* ref, IntraPrediction* 
   return true;
 }
 
+// The intra kernels with the parameters the encoder gives them, for every block size and bit depth 8 and 10. Samples
+// and references are random, at the extremes (0 / max) or a smooth ramp, as in real predictions. Destinations are
+// prefilled with the same marker and compared over the whole buffer, so writes outside the block are caught too.
+static const int INTRA_LOG2_SIZES[] = { 2, 3, 4, 5, 6 };   // luma blocks 4 .. 64
+static const int INTRA_ANG_TABLE[32]     = { 0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 23, 26, 29, 32, 35, 39, 45, 51, 57, 64, 73, 86, 102, 128, 171, 256, 341, 512, 1024 };
+static const int INTRA_INV_ANG_TABLE[32] = { 0, 16384, 8192, 5461, 4096, 2731, 2048, 1638, 1365, 1170, 1024, 910, 819, 712, 630, 565,
+                                             512, 468, 420, 364, 321, 287, 256, 224, 191, 161, 128, 96, 64, 48, 32, 16 };
+
+static void fillIntraSamples( Pel* buf, size_t n, int bd, int kind )
+{
+  const int maxVal = ( 1 << bd ) - 1;
+  for( size_t i = 0; i < n; i++ )
+  {
+    buf[i] = kind == 0 ? Pel( rand() & maxVal )
+           : kind == 1 ? Pel( ( rand() & 1 ) ? maxVal : 0 )
+           :             Pel( std::min<int>( maxVal, int( i * 5 % ( maxVal + 1 ) ) / 2 + ( rand() & 15 ) ) );
+  }
+}
+
+// IntraAnglePDPC for every luma block size and mode 2 .. 66 that applies it, with the parameters of initPredIntraParams
+// and xPredIntraAng: wide-angle mapping, positive angles only, scale from the side (height, or width for horizontal
+// modes) and the block passed transposed for horizontal modes. The reference samples after the last one the scalar code
+// reads differ between the two runs (an implementation may load more, but must not use them). Bit depths 8, 10 and 12;
+// random samples, and the extremes left - dst = +-max with weight 32; destination strides of the block width and of
+// MAX_CU_SIZE in canary-filled buffers.
+static bool check_IntraAnglePDPC( IntraPrediction* ref, IntraPrediction* opt )
+{
+  printf( "Testing IntraPrediction::IntraAnglePDPC for every block size and mode\n" );
+  std::vector<Pel> sideRef( 1024 ), sideOpt( 1024 ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+  bool passed = true;
+  for( int bd : { 8, 10, 12 } )
+  for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
+  for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
+  {
+    // IntraPrediction::getWideAngle and initPredIntraParams
+    static const int modeShift[] = { 0, 6, 10, 12, 14, 15 };
+    const int deltaSize = std::abs( log2W - log2H );
+    int predMode = mode;
+    if( log2W > log2H && mode < 2 + modeShift[deltaSize] )      predMode += VDIA_IDX - 1;
+    else if( log2H > log2W && mode > VDIA_IDX - modeShift[deltaSize] ) predMode -= VDIA_IDX - 1;
+    const bool isModeVer = predMode >= DIA_IDX;
+    const int  angMode   = isModeVer ? predMode - VER_IDX : -( predMode - HOR_IDX );
+    if( angMode <= 0 )
+    {
+      continue;   // PDPC of angular modes needs a positive angle (pure HOR / VER use IntraHorVerPDPC)
+    }
+    const int inv   = INTRA_INV_ANG_TABLE[angMode];
+    const int scale = std::min( 2, ( isModeVer ? log2H : log2W ) - ( floorLog2( 3 * inv - 2 ) - 8 ) );
+    if( scale < 0 )
+    {
+      continue;
+    }
+    const int w = 1 << ( isModeVer ? log2W : log2H );   // as xPredIntraAng passes the block
+    const int h = 1 << ( isModeVer ? log2H : log2W );
+    const int n = std::min( 3 << scale, w );
+    const int validSide = ( h - 1 ) + ( ( n * inv + 256 ) >> 9 ) + 2;   // samples the scalar code reads
+    CHECK( validSide > ( int ) sideRef.size(), "reference buffer too small" );
+
+    for( int kind = 0; kind < 3; kind++ )
+    for( int stride : { w, ( int ) MAX_CU_SIZE } )
+    {
+      const int maxVal = ( 1 << bd ) - 1;
+      // 0: random; 1: dst 0, left max; 2: dst max, left 0 (the largest differences, at weight 32 in column 0)
+      for( int i = 0; i < validSide; i++ ) sideRef[i] = kind == 0 ? Pel( rand() & maxVal ) : kind == 1 ? Pel( maxVal ) : Pel( 0 );
+      std::copy( sideRef.begin(), sideRef.begin() + validSide, sideOpt.begin() );
+      for( size_t i = validSide; i < sideRef.size(); i++ )
+      {
+        sideRef[i] = Pel( rand() & maxVal );
+        sideOpt[i] = Pel( maxVal - sideRef[i] );
+      }
+      std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+      for( int y = 0; y < h; y++ )
+      for( int x = 0; x < w; x++ )
+      {
+        dstRef[y * stride + x] = kind == 0 ? Pel( rand() & maxVal ) : kind == 1 ? Pel( 0 ) : Pel( maxVal );
+      }
+      dstOpt = dstRef;
+      ref->IntraAnglePDPC( dstRef.data(), stride, sideRef.data(), w, h, scale, inv );
+      opt->IntraAnglePDPC( dstOpt.data(), stride, sideOpt.data(), w, h, scale, inv );
+      std::ostringstream sstm;
+      sstm << "IntraAnglePDPC block " << ( 1 << log2W ) << "x" << ( 1 << log2H ) << " mode=" << mode << " (" << w << "x" << h
+           << " invAngle=" << inv << " scale=" << scale << ") bd=" << bd << " samples=" << kind << " stride=" << stride;
+      passed = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), static_cast<unsigned>( dstRef.size() ) ) && passed;
+    }
+  }
+  return passed;
+}
+
+// IntraHorVerPDPC: pure horizontal / vertical modes, scale as xPredIntraAng derives it.
+static bool check_IntraHorVerPDPC( IntraPrediction* ref, IntraPrediction* opt )
+{
+  printf( "Testing IntraPrediction::IntraHorVerPDPC\n" );
+  const int stride = MAX_CU_SIZE;
+  std::vector<Pel> side( 2 * MAX_CU_SIZE + 2 ), main( 2 * MAX_CU_SIZE + 2 ), dstRef( stride * MAX_CU_SIZE ), dstOpt( stride * MAX_CU_SIZE );
+  bool passed = true;
+  for( int bd : { 8, 10 } )
+  for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
+  for( int kind = 0; kind < 3; kind++ )
+  {
+    const ClpRng clpRng{ bd };
+    const int    scale = ( log2W + log2H - 2 ) >> 2;
+    fillIntraSamples( side.data(), side.size(), bd, kind );
+    fillIntraSamples( main.data(), main.size(), bd, ( kind + 2 ) % 3 );
+    std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+    std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+    ref->IntraHorVerPDPC( dstRef.data(), stride, side.data(), 1 << log2W, 1 << log2H, scale, main.data(), clpRng );
+    opt->IntraHorVerPDPC( dstOpt.data(), stride, side.data(), 1 << log2W, 1 << log2H, scale, main.data(), clpRng );
+    std::ostringstream sstm;
+    sstm << "IntraHorVerPDPC " << ( 1 << log2W ) << "x" << ( 1 << log2H ) << " bd=" << bd << " samples=" << kind;
+    passed = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), static_cast<unsigned>( dstRef.size() ) ) && passed;
+  }
+  return passed;
+}
+
+// Planar and the planar/DC sample filter (PDPC) on a reference buffer laid out as IntraPrediction's: the above row
+// (stride 2 * width + 1) followed by the left column; widths and heights 1 .. 64 (the kernels have 1 / 2 / 4 branches),
+// bit depths 8, 10 and 12, destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers.
+static bool check_IntraPlanarAndSampleFilter( IntraPrediction* ref, IntraPrediction* opt )
+{
+  printf( "Testing IntraPrediction::xPredIntraPlanar and IntraPredSampleFilter\n" );
+  std::vector<Pel> refBuf( 2 * ( 2 * MAX_CU_SIZE + 1 ) ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+  bool passed = true;
+  for( int bd : { 8, 10, 12 } )
+  for( int log2W = 0; log2W <= 6; log2W++ ) for( int log2H = 0; log2H <= 6; log2H++ )
+  for( int stride : { 1 << log2W, ( int ) MAX_CU_SIZE } )
+  for( int kind = 0; kind < 3; kind++ )
+  {
+    const int w = 1 << log2W, h = 1 << log2H;
+    const CPelBuf src( refBuf.data(), 2 * w + 1, 2 );
+    fillIntraSamples( refBuf.data(), refBuf.size(), bd, kind );
+
+    std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+    std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+    PelBuf predRef( dstRef.data(), stride, w, h ), predOpt( dstOpt.data(), stride, w, h );
+    ref->xPredIntraPlanar( predRef, src );
+    opt->xPredIntraPlanar( predOpt, src );
+    std::ostringstream sstm;
+    sstm << "xPredIntraPlanar " << w << "x" << h << " bd=" << bd << " samples=" << kind;
+    passed = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), static_cast<unsigned>( dstRef.size() ) ) && passed;
+
+    if( w >= 4 && h >= 4 )   // PDPC applies from 4x4 on
+    {
+      fillIntraSamples( dstRef.data(), dstRef.size(), bd, ( kind + 1 ) % 3 );
+      dstOpt = dstRef;
+      ref->IntraPredSampleFilter( predRef, src );
+      opt->IntraPredSampleFilter( predOpt, src );
+      std::ostringstream sstm2;
+      sstm2 << "IntraPredSampleFilter " << w << "x" << h << " bd=" << bd << " samples=" << kind;
+      passed = compare_values_1d( sstm2.str(), dstRef.data(), dstOpt.data(), static_cast<unsigned>( dstRef.size() ) ) && passed;
+    }
+  }
+  return passed;
+}
+
+// IntraPredAngleLuma for every luma mode 2 .. 66 of every block size (aspect ratios up to 16:1), with the angle,
+// wide-angle mapping and width / height swap of initPredIntraParams and xPredIntraAng (fractional slopes only: integer
+// slopes are copied), reference lines 0, 1 and 2 (deltaPos = angle * ( 1 + line )), negative angles reading the main
+// reference to the left. Both filters, bit depths 8, 10 and 12; random samples, alternating 0 / max (drives the cubic
+// filter beyond the range, so its clipping is tested) and a ramp. The reference samples outside the range the scalar
+// code reads differ between the two runs; destination strides of the block width and of MAX_CU_SIZE, canary-filled.
+static bool check_IntraPredAngleLumaModes( IntraPrediction* ref, IntraPrediction* opt )
+{
+  printf( "Testing IntraPrediction::IntraPredAngleLuma for every mode of every block size\n" );
+  const int origin = 2 * MAX_CU_SIZE;   // the main reference reaches from -2 * 64 to about 2 * 64 + 4
+  std::vector<Pel> refRef( 4 * MAX_CU_SIZE + 16 ), refOpt( 4 * MAX_CU_SIZE + 16 );
+  std::vector<Pel> dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+  bool passed = true;
+  for( int bd : { 8, 10 } )   // the internal bit depths VVenC codes (the NEON kernel refuses more than 10)
+  for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
+  for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
+  for( bool cubic : { true, false } )
+  {
+    // IntraPrediction::getWideAngle and initPredIntraParams
+    static const int modeShift[] = { 0, 6, 10, 12, 14, 15 };
+    const int deltaSize = std::abs( log2W - log2H );
+    int predMode = mode;
+    if( log2W > log2H && mode < 2 + modeShift[deltaSize] )      predMode += VDIA_IDX - 1;
+    else if( log2H > log2W && mode > VDIA_IDX - modeShift[deltaSize] ) predMode -= VDIA_IDX - 1;
+    const bool isModeVer = predMode >= DIA_IDX;
+    const int  angMode   = isModeVer ? predMode - VER_IDX : -( predMode - HOR_IDX );
+    const int  angle     = ( angMode < 0 ? -1 : 1 ) * INTRA_ANG_TABLE[std::abs( angMode )];
+    if( ( std::abs( angle ) & 31 ) == 0 )
+    {
+      continue;   // pure horizontal / vertical or an integer slope: no interpolation
+    }
+    const int w = 1 << ( isModeVer ? log2W : log2H );   // xPredIntraAng predicts horizontal modes transposed
+    const int h = 1 << ( isModeVer ? log2H : log2W );
+
+    for( int line = 0; line < 3; line++ )
+    for( int stride : { w, ( int ) MAX_CU_SIZE } )
+    {
+      const int deltaPos = angle * ( 1 + line );
+      // the scalar code reads refMain[( deltaPos_y >> 5 ) + x + k], x < w, k < 4, for the rows' deltaPos_y
+      const int first = std::min( deltaPos >> 5, ( deltaPos + ( h - 1 ) * angle ) >> 5 );
+      const int last  = std::max( deltaPos >> 5, ( deltaPos + ( h - 1 ) * angle ) >> 5 ) + w + 2;
+      CHECK( origin + first < 0 || origin + last >= ( int ) refRef.size(), "reference buffer too small" );
+
+      const int kind = ( log2W + mode + line ) % 3;   // 0: random, 1: alternating 0 / max, 2: ramp
+      const int maxVal = ( 1 << bd ) - 1;
+      for( size_t i = 0; i < refRef.size(); i++ )
+      {
+        const int idx = int( i ) - origin;
+        if( idx >= first && idx <= last )
+        {
+          refRef[i] = refOpt[i] = kind == 0 ? Pel( rand() & maxVal ) : kind == 1 ? Pel( ( i & 1 ) ? maxVal : 0 )
+                                                                       : Pel( std::min<int>( maxVal, int( i * 7 % ( maxVal + 1 ) ) ) );
+        }
+        else
+        {
+          refRef[i] = Pel( rand() & maxVal );
+          refOpt[i] = Pel( maxVal - refRef[i] );
+        }
+      }
+
+      const ClpRng clpRng{ bd };
+      std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+      std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+      ref->IntraPredAngleLuma( dstRef.data(), stride, refRef.data() + origin, w, h, deltaPos, angle, nullptr, cubic, clpRng );
+      opt->IntraPredAngleLuma( dstOpt.data(), stride, refOpt.data() + origin, w, h, deltaPos, angle, nullptr, cubic, clpRng );
+      std::ostringstream sstm;
+      sstm << "IntraPredAngleLuma " << w << "x" << h << " mode=" << mode << " angle=" << angle << " line=" << line
+           << " cubic=" << cubic << " bd=" << bd << " samples=" << kind << " stride=" << stride;
+      passed = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), static_cast<unsigned>( dstRef.size() ) ) && passed;
+    }
+  }
+  return passed;
+}
+
+// IntraPredAngleLumaHor (horizontal luma modes in the block's own orientation) against the reference implementation's
+// IntraPredAngleLuma on the transposed block, its IntraAnglePDPC (positive angles, reference line 0) and a transpose:
+// every block width 8..64 and height 4..64 (aspect ratios up to 16:1), every horizontal mode after the wide-angle
+// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8, 10 and 12. Samples:
+// random, alternating 0 / max (the cubic clip), a ramp, and the PDPC extremes (prediction 0 with side samples at max,
+// and the reverse). Main and side samples outside the ranges the scalar code reads differ between the two runs;
+// destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers, compared whole.
+static bool check_IntraPredAngleLumaHor( IntraPrediction* ref, IntraPrediction* opt )
+{
+  if( !opt->IntraPredAngleLumaHor )
+  {
+    return true;   // no such kernel for this target
+  }
+  printf( "Testing IntraPrediction::IntraPredAngleLumaHor for every horizontal mode of every block size\n" );
+  const int origin = 2 * MAX_CU_SIZE;
+  std::vector<Pel> mainRef( 4 * MAX_CU_SIZE + 16 ), mainOpt( 4 * MAX_CU_SIZE + 16 ), sideRef( 1024 ), sideOpt( 1024 );
+  std::vector<Pel> tmp( MAX_CU_SIZE * MAX_CU_SIZE ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+  const unsigned size = static_cast<unsigned>( dstRef.size() );
+  bool passed = true;
+  for( int bd : { 8, 10, 12 } )
+  for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
+  for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
+  for( bool cubic : { true, false } )
+  {
+    const int w = 1 << log2W, h = 1 << log2H;   // the block
+    if( w < 8 )
+    {
+      continue;
+    }
+    // IntraPrediction::getWideAngle and initPredIntraParams
+    static const int modeShift[] = { 0, 6, 10, 12, 14, 15 };
+    const int deltaSize = std::abs( log2W - log2H );
+    int predMode = mode;
+    if( log2W > log2H && mode < 2 + modeShift[deltaSize] )      predMode += VDIA_IDX - 1;
+    else if( log2H > log2W && mode > VDIA_IDX - modeShift[deltaSize] ) predMode -= VDIA_IDX - 1;
+    if( predMode >= DIA_IDX )
+    {
+      continue;   // vertical
+    }
+    const int angMode = -( predMode - HOR_IDX );
+    const int angle   = ( angMode < 0 ? -1 : 1 ) * INTRA_ANG_TABLE[std::abs( angMode )];
+    if( ( std::abs( angle ) & 31 ) == 0 || std::abs( angle ) > 29 )
+    {
+      continue;   // pure horizontal, an integer slope or a steep wide angle: the transposed path
+    }
+    const int inv   = INTRA_INV_ANG_TABLE[std::abs( angMode )];
+    const int scale = std::min( 2, log2W - ( floorLog2( 3 * inv - 2 ) - 8 ) );
+
+    for( int line = 0; line < 3; line++ )
+    for( int stride : { w, ( int ) MAX_CU_SIZE } )
+    {
+      const bool pdpc     = angMode > 0 && scale >= 0 && line == 0;
+      const int  deltaPos = angle * ( 1 + line );
+      // the scalar code reads refMain[i_x + y + k], i_x = ( deltaPos + x * angle ) >> 5, x < w, y < h, k < 4
+      const int first = std::min( deltaPos >> 5, ( deltaPos + ( w - 1 ) * angle ) >> 5 );
+      const int last  = std::max( deltaPos >> 5, ( deltaPos + ( w - 1 ) * angle ) >> 5 ) + h + 2;
+      const int n     = pdpc ? std::min( 3 << scale, h ) : 0;
+      const int validSide = pdpc ? w + ( ( n * inv + 256 ) >> 9 ) + 1 : 0;   // refSide[x + off( y ) + 1], y < n
+      CHECK( origin + first < 0 || origin + last >= ( int ) mainRef.size() || validSide > ( int ) sideRef.size(), "reference buffer too small" );
+
+      const int kind   = ( log2W + log2H + mode + line ) % 5;   // 0 random, 1 alternating 0 / max, 2 ramp, 3 / 4 PDPC extremes
+      const int maxVal = ( 1 << bd ) - 1;
+      for( int i = 0; i < ( int ) mainRef.size(); i++ )
+      {
+        const int idx = i - origin;
+        if( idx >= first && idx <= last )
+        {
+          mainRef[i] = mainOpt[i] = kind == 0 ? Pel( rand() & maxVal ) : kind == 1 ? Pel( ( i & 1 ) ? maxVal : 0 )
+                                  : kind == 2 ? Pel( std::min( maxVal, i * 7 % ( maxVal + 1 ) ) ) : kind == 3 ? Pel( 0 ) : Pel( maxVal );
+        }
+        else
+        {
+          mainRef[i] = Pel( rand() & maxVal );
+          mainOpt[i] = Pel( maxVal - mainRef[i] );
+        }
+      }
+      for( int i = 0; i < ( int ) sideRef.size(); i++ )
+      {
+        const Pel v = kind == 3 ? Pel( maxVal ) : kind == 4 ? Pel( 0 ) : Pel( rand() & maxVal );
+        sideRef[i]  = i < validSide ? v : Pel( rand() & maxVal );
+        sideOpt[i]  = i < validSide ? sideRef[i] : Pel( maxVal - sideRef[i] );
+      }
+
+      const ClpRng clpRng{ bd };
+      std::fill( tmp.begin(), tmp.end(), Pel( 0x5a5a ) );
+      std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+      std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+      ref->IntraPredAngleLuma( tmp.data(), MAX_CU_SIZE, mainRef.data() + origin, h, w, deltaPos, angle, nullptr, cubic, clpRng );
+      if( pdpc )
+      {
+        ref->IntraAnglePDPC( tmp.data(), MAX_CU_SIZE, sideRef.data(), h, w, scale, inv );
+      }
+      for( int y = 0; y < h; y++ ) for( int x = 0; x < w; x++ ) dstRef[y * stride + x] = tmp[x * MAX_CU_SIZE + y];
+      opt->IntraPredAngleLumaHor( dstOpt.data(), stride, mainOpt.data() + origin, sideOpt.data(), w, h, angle, line, pdpc ? scale : 0, inv, cubic, pdpc, clpRng );
+      std::ostringstream sstm;
+      sstm << "IntraPredAngleLumaHor " << w << "x" << h << " mode=" << mode << " angle=" << angle << " line=" << line << " cubic=" << cubic
+           << " pdpc=" << pdpc << " scale=" << scale << " bd=" << bd << " samples=" << kind << " stride=" << stride;
+      passed = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), size ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool test_IntraPred()
 {
   IntraPrediction ref{ /*enableOpt=*/false };
@@ -1020,6 +1351,11 @@ static bool test_IntraPred()
   passed = check_IntraPredAngleLuma( &ref, &opt, num_cases ) && passed;
   passed = check_LMLumaDownsample420( &ref, &opt, num_cases ) && passed;
   passed = check_IntraFilterRefSamples( &ref, &opt, num_cases ) && passed;
+  passed = check_IntraAnglePDPC( &ref, &opt ) && passed;
+  passed = check_IntraHorVerPDPC( &ref, &opt ) && passed;
+  passed = check_IntraPlanarAndSampleFilter( &ref, &opt ) && passed;
+  passed = check_IntraPredAngleLumaModes( &ref, &opt ) && passed;
+  passed = check_IntraPredAngleLumaHor( &ref, &opt ) && passed;
 
   return passed;
 }

@@ -79,6 +79,9 @@ class IntraPrediction
 {
 private:
   Pel         m_refBuffer[MAX_NUM_COMP][NUM_PRED_BUF][(MAX_CU_SIZE * 2 + 1 + MAX_REF_LINE_IDX) * 2];
+  // xPredIntraAng's transposed prediction of horizontal modes; a member, since as a 32 KB local it made every call
+  // probe its stack pages (___chkstk_ms on Windows)
+  Pel         m_tempArray[MAX_CU_SIZE * MAX_CU_SIZE];
   uint32_t    m_refBufferStride[MAX_NUM_COMP];
   int         m_numIntraNeighbor;
   bool        m_neighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
@@ -112,8 +115,31 @@ private:
   };
 
   IntraPredParam        m_ipaParam;
+  static void xDerivePredIntraParams( IntraPredParam& param, const ChannelType chType, const Size& blockSize, const Size& puSize, const int dirMode,
+                                      const int multiRefIdx, const bool useISP, const bool isMIP, const bool bdpcm );
   Pel*                  m_pMdlmTemp; // for MDLM mode
   MatrixIntraPrediction m_matrixIntraPred;
+
+  // The above and left reference rows of one reference buffer as xPredIntraAng reads them: each after a front margin,
+  // into which negative angles write their projection of the side row, and replicated past its end as far as positive
+  // angles read. Built once per filling of the reference buffers (m_refGeneration, bumped by initIntraPatternChType*)
+  // instead of copied for every mode the encoder tests.
+  static const int EXT_REF_MARGIN = MAX_CU_SIZE;
+  static const int EXT_REF_SIZE   = EXT_REF_MARGIN + 2 * MAX_CU_SIZE + 3 + 33 * MAX_REF_LINE_IDX;
+  struct ExtRefRows
+  {
+    Pel      above[EXT_REF_SIZE] = {};   // initialised once: the windows of IntraPredAngleLumaHor and IntraAnglePDPC_SIMD
+    Pel      left [EXT_REF_SIZE] = {};   // load up to 3 / 7 samples past the ones they use, maybe past the ones built
+    uint64_t generation    = 0;   // m_refGeneration when built (0: never)
+    int      multiRefIdx   = -1;
+    int      width         = 0;
+    int      height        = 0;
+    int      topRefLength  = 0;
+    int      leftRefLength = 0;
+  };
+  ExtRefRows            m_extRef[MAX_NUM_COMP][NUM_PRED_BUF];
+  uint64_t              m_refGeneration = 1;
+  ExtRefRows&           xGetExtRefRows( const ComponentID compID, const CPelBuf& pSrc, const int width, const int height, const int multiRefIdx );
 
 protected:
   ChromaFormat          m_currChromaFormat;
@@ -128,7 +154,7 @@ private:
 
   // prediction
   void xPredIntraDc               ( PelBuf& pDst, const CPelBuf& pSrc );
-  void xPredIntraAng              ( PelBuf& pDst, const CPelBuf& pSrc, const ChannelType channelType, const ClpRng& clpRng);
+  void xPredIntraAng              ( PelBuf& pDst, const CPelBuf& pSrc, const ComponentID compID, const ClpRng& clpRng);
   Pel  xGetPredValDc              ( const CPelBuf& pSrc, const Size& dstSize );
   void xPredIntraBDPCM            ( PelBuf& pDst, const CPelBuf& pSrc, const uint32_t dirMode, const ClpRng& clpRng );
 
@@ -157,6 +183,33 @@ public:
   void destroy                ();
 
   void initPredIntraParams    ( const CodingUnit& cu,  const CompArea compArea, const SPS& sps );
+
+  // initPredIntraParams for plain luma blocks (no ISP, MIP, reference line or BDPCM), where the parameters depend only on
+  // the block size and the mode: getLumaParamRow gives a block's row once (nullptr: not such a block, initPredIntraParams
+  // has to be used), setLumaModeParams then sets the parameters of one mode from its entry. For every size
+  // 4..MAX_CU_SIZE and mode, derived at first use with xDerivePredIntraParams (initPredIntraParams' own derivation);
+  // where initPredIntraParams leaves a field unchanged (the angles of planar and DC, angularScale of non-positive
+  // angles) the table holds 0 (angles) or -1 (scale); none of these is read for those modes.
+  struct LumaModeParam
+  {
+    int16_t intraPredAngle;
+    int16_t absInvAngle;
+    int8_t  angularScale;
+    uint8_t flags;   // 1: isModeVer, 2: applyPDPC, 4: refFilterFlag, 8: interpolationFlag
+    int16_t unused;
+  };
+  const LumaModeParam* getLumaParamRow( const CodingUnit& cu ) const;
+  void setLumaModeParams      ( const LumaModeParam& p )
+  {
+    m_ipaParam.isModeVer         = ( p.flags & 1 ) != 0;
+    m_ipaParam.applyPDPC         = ( p.flags & 2 ) != 0;
+    m_ipaParam.refFilterFlag     = ( p.flags & 4 ) != 0;
+    m_ipaParam.interpolationFlag = ( p.flags & 8 ) != 0;
+    m_ipaParam.multiRefIndex     = 0;
+    m_ipaParam.intraPredAngle    = p.intraPredAngle;
+    m_ipaParam.absInvAngle       = p.absInvAngle;
+    m_ipaParam.angularScale      = p.angularScale;
+  }
 
   // Angular Intra
   void predIntraAng           ( const ComponentID compId, PelBuf& piPred, const CodingUnit& cu);
@@ -190,6 +243,12 @@ public:
   void ( *IntraPredAngleLuma )    ( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refMain, int width, int height, int deltaPos, int intraPredAngle, const TFilterCoeff* ff, const bool useCubicFilter, const ClpRng& clpRng );
   void ( *IntraPredAngleChroma )  ( Pel* pDst, const ptrdiff_t dstStride, Pel* pBorder, int width, int height, int deltaPos, int intraPredAngle );
   void ( *IntraAnglePDPC )        ( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height, int scale, int invAngle );
+  // horizontal luma modes with a fractional |angle| <= 29 straight into the block (width >= 8, height >= 4: the block's),
+  // IntraPredAngleLuma and IntraAnglePDPC of the transposed block, transposed; nullptr: xPredIntraAng predicts into a
+  // temporary block and transposes it
+  void ( *IntraPredAngleLumaHor ) ( Pel* dst, const ptrdiff_t dstStride, const Pel* refMain, const Pel* refSide, const int width, const int height,
+                                    const int intraPredAngle, const int multiRefIdx, const int scale, const int invAngle, const bool useCubicFilter,
+                                    const bool applyPDPC, const ClpRng& clpRng );
   void ( *IntraHorVerPDPC )       ( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height, int scale, const Pel* refMain, const ClpRng& clpRng );
   void ( *IntraPredSampleFilter ) ( PelBuf& piPred, const CPelBuf& pSrc );
   void ( *xPredIntraPlanar )      ( PelBuf& pDst, const CPelBuf& pSrc );
