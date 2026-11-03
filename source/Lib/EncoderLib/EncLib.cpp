@@ -431,7 +431,7 @@ void EncLib::xInitRCCfg()
 //   1. At the beginning, the encoder can consume input YUV buffers without an output.
 //   2. After the first encoded picture/access unit is output, on each next call: one yuv-buffer IN / one encoded access unit (AU) OUT.
 //      Hence, in stage-parallel mode, we must wait until next encoded picture (AU) is going to be output,
-//      unless nothing can progress without more input (then the call returns without an AU)
+//      unless nothing can progress without more input (then the call returns a buffered AU; none only when the buffer has run dry)
 //   3. When no more input is available, the top level goes into flushing mode: nullptr IN / one encoded access unit (AU) OUT. 
 //      The encoder flushes the encoded AUs until the queues are empty.
 
@@ -456,11 +456,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // CU-tree passes its pictures on a GOP at a time, and the GOP encoder only starts with a GOP and one picture queued.
   // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
   // A buffer of that many access units covers the wait, so that every call, once the output has started, takes its
-  // input picture and returns one access unit: with CU-tree the output starts after GOP + 1 access units in both
-  // modes. Without stage parallel processing the loop also refills the buffer before it returns; with it the loop
-  // only waits while no access unit is buffered, so the stages keep running in parallel with the input.
+  // input picture and returns one access unit: with CU-tree the output starts once more than GOP + 1 access units
+  // (and never fewer than the usual 4) are queued, in both modes. Without stage parallel processing the loop also
+  // refills the buffer before it returns; with it the loop only waits while no access unit is buffered, so the stages
+  // keep running in parallel with the input.
   const size_t cuTreeBuffer = m_encCfg.useCuTree() ? m_encCfg.m_GOPSize + 1 : 0;
-  const size_t outputDelay  = m_encCfg.useCuTree() ? cuTreeBuffer : ( m_encCfg.m_stageParallelProc ? 4 : 0 );
+  const size_t outputDelay  = m_encCfg.useCuTree() ? std::max<size_t>( cuTreeBuffer, 4 ) : ( m_encCfg.m_stageParallelProc ? 4 : 0 );
   const size_t auBuffer     = m_encCfg.m_stageParallelProc ? 0 : cuTreeBuffer;
 
   PicShared* picShared = nullptr;
