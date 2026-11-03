@@ -110,11 +110,13 @@ static inline void calcBIOSums_neon( const Pel* srcY0Tmp, const Pel* srcY1Tmp, c
     gradOfs += widthG;
   }
 
-  int sumAbsGX = horizontal_add_s16x8( vandq_s16( sumAbsGXTmp, mask6 ) );
-  int sumAbsGY = horizontal_add_s16x8( vandq_s16( sumAbsGYTmp, mask6 ) );
-  int sumDIX = horizontal_add_s16x8( vandq_s16( sumDIXTmp, mask6 ) );
-  int sumDIY = horizontal_add_s16x8( vandq_s16( sumDIYTmp, mask6 ) );
-  int sumSignGY_GX = horizontal_add_s16x8( vandq_s16( sumSignGyGxTmp, mask6 ) );
+  // Each lane holds the sum of 6 rows, which fits 16 bits; the sum over the 6 columns does not always (dI up to 1023 per
+  // sample for black and white predictions: 36 * 1023 > 32767), so the lanes are added in 32 bits.
+  int sumAbsGX = horizontal_add_long_s16x8( vandq_s16( sumAbsGXTmp, mask6 ) );
+  int sumAbsGY = horizontal_add_long_s16x8( vandq_s16( sumAbsGYTmp, mask6 ) );
+  int sumDIX = horizontal_add_long_s16x8( vandq_s16( sumDIXTmp, mask6 ) );
+  int sumDIY = horizontal_add_long_s16x8( vandq_s16( sumDIYTmp, mask6 ) );
+  int sumSignGY_GX = horizontal_add_long_s16x8( vandq_s16( sumSignGyGxTmp, mask6 ) );
 
   tmpx = sumAbsGX == 0 ? 0 : rightShiftMSB( sumDIX << 2, sumAbsGX );
   tmpx = Clip3( -limit, limit, tmpx );
