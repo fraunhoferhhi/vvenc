@@ -174,12 +174,15 @@ namespace DQIntern
     TUParameters* m_tuParameters         [ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ][ MAX_NUM_CH ];
   };
 
+  struct RateTablesMemo;
+
   class RateEstimator
   {
   public:
     RateEstimator () {}
     ~RateEstimator() {}
-    void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess );
+    void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+                    RateTablesMemo& memo );
 
     inline const BinFracBits *sigSbbFracBits() const { return m_sigSbbFracBits; }
     inline const BinFracBits *sigFlagBits(unsigned stateId) const
@@ -204,6 +207,10 @@ namespace DQIntern
     static const unsigned sm_maxNumSigSbbCtx  = 2;
     static const unsigned sm_maxNumSigCtx     = 12;
     static const unsigned sm_maxNumGtxCtx     = 21;
+    // the coefficient-coding contexts the sig / gtx tables are built from, for both channel types: SigCoeffGroup[2],
+    // SigFlag[6], ParFlag[2] and GtxFlag[4], defined back to back (checked in RateTablesMemo's constructor)
+    static const unsigned sm_numCoeffCtx      = 4 + 60 + 32 + 64;
+    static const unsigned sm_coeffCtxBytes    = sm_numCoeffCtx * sizeof( BinProbModel );
 
   private:
     const ScanElement * m_scanId2Pos;
@@ -212,6 +219,23 @@ namespace DQIntern
     BinFracBits         m_sigSbbFracBits [ sm_maxNumSigSbbCtx ];
     BinFracBits         m_sigFracBits    [ sm_numCtxSetsSig   ][ sm_maxNumSigCtx ];
     CoeffFracBits       m_gtxFracBits                          [ sm_maxNumGtxCtx ];
+  };
+
+  // The memo of RateEstimator::initCtx: per channel type, the sig / gtx tables last built for it and the raw bytes of
+  // the coefficient-coding contexts they came from (equal bytes give equal tables). DepQuant keeps it after the trellis
+  // and state arrays, so they keep their place in the object.
+  struct RateTablesMemo
+  {
+    RateTablesMemo();
+    struct Channel
+    {
+      uint8_t       ctxStates[ RateEstimator::sm_coeffCtxBytes ];
+      BinFracBits   sigSbb   [ RateEstimator::sm_maxNumSigSbbCtx ];
+      BinFracBits   sig      [ RateEstimator::sm_numCtxSetsSig ][ RateEstimator::sm_maxNumSigCtx ];
+      CoeffFracBits gtx      [ RateEstimator::sm_maxNumGtxCtx ];
+    };
+    Channel channel[ MAX_NUM_CH ];
+    int     current = -1;   // the channel type whose tables RateEstimator holds now (-1: none yet)
   };
 
   /*================================================================================*/
@@ -407,6 +431,7 @@ private:
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
   DQIntern::StateMem  m_state_curr;
   DQIntern::StateMem  m_state_skip;
+  DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
 
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
@@ -428,7 +453,6 @@ public:
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
-
 };
 
 } // namespace vvenc

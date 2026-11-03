@@ -437,13 +437,74 @@ namespace DQIntern
     }
   }
 
-  void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess )
+  RateTablesMemo::RateTablesMemo()
+  {
+    // the coefficient-coding contexts must lie back to back in the context store, in the span initCtx compares
+    const unsigned first = Ctx::SigCoeffGroup[ 0 ].Offset;
+    const unsigned end   = Ctx::GtxFlag[ 3 ].Offset + Ctx::GtxFlag[ 3 ].Size;
+    CHECK( end - first != RateEstimator::sm_numCoeffCtx, "coefficient-coding contexts are not one span" );
+#if _DEBUG
+    for( const CtxSet* set : { &Ctx::SigCoeffGroup[ 0 ], &Ctx::SigCoeffGroup[ 1 ], &Ctx::SigFlag[ 0 ], &Ctx::SigFlag[ 1 ],
+                               &Ctx::SigFlag[ 2 ], &Ctx::SigFlag[ 3 ], &Ctx::SigFlag[ 4 ], &Ctx::SigFlag[ 5 ], &Ctx::ParFlag[ 0 ],
+                               &Ctx::ParFlag[ 1 ], &Ctx::GtxFlag[ 0 ], &Ctx::GtxFlag[ 1 ], &Ctx::GtxFlag[ 2 ], &Ctx::GtxFlag[ 3 ] } )
+    {
+      CHECKD( set->Offset < first || set->Offset + set->Size > end, "a coefficient-coding context lies outside the span" );
+    }
+#endif
+    // no real context has these bytes (a state's high byte is at most 0x7f), so the first call per channel type builds
+    // the tables (and a kept table set is only read after it was built)
+    for( Channel& c : channel ) memset( c.ctxStates, 0xff, sizeof( c.ctxStates ) );
+  }
+
+  // true when the two spans of context bytes are equal: an OR of the XORed 64-bit words, which the compiler can
+  // vectorize; unlike memcmp it needs no ordering and no library call (whose speed differs between C runtimes). The
+  // span includes each context model's padding byte, which is never written: memory checkers may report it as
+  // uninitialized, and where it differs it only causes a needless rebuild, never a wrong table.
+  static inline bool equalCoeffCtxStates( const uint8_t* a, const uint8_t* b )
+  {
+    uint64_t diff = 0;
+    for( unsigned i = 0; i < RateEstimator::sm_coeffCtxBytes; i += 8 )
+    {
+      uint64_t x, y;
+      memcpy( &x, a + i, 8 );
+      memcpy( &y, b + i, 8 );
+      diff |= x ^ y;
+    }
+    return diff == 0;
+  }
+  static_assert( RateEstimator::sm_coeffCtxBytes % 8 == 0, "equalCoeffCtxStates compares 64-bit words" );
+
+  void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
+                               RateTablesMemo& memo )
   {
     m_scanId2Pos = tuPars.m_scanId2BlkPos;
-    xSetSigSbbFracBits  ( fracBitsAccess, tuPars.m_chType );
-    xSetSigFlagBits     ( fracBitsAccess, tuPars.m_chType );
-    xSetGtxFlagBits     ( fracBitsAccess, tuPars.m_chType );
-    xSetLastCoeffOffset ( fracBitsAccess, tuPars, tu, compID );
+
+    // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
+    // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when the bytes are
+    // unchanged, as they mostly are, the kept tables are still valid, and copying them in (only when the other channel
+    // type's tables are loaded) costs far less than building them. The result is identical to building them every time.
+    const ChannelType chType = tuPars.m_chType;
+    RateTablesMemo::Channel& kept = memo.channel[ chType ];
+    const uint8_t* ctxStates = reinterpret_cast<const uint8_t*>( &fracBitsAccess[ Ctx::SigCoeffGroup[ 0 ].Offset ] );
+    if( !equalCoeffCtxStates( kept.ctxStates, ctxStates ) )
+    {
+      xSetSigSbbFracBits( fracBitsAccess, chType );
+      xSetSigFlagBits   ( fracBitsAccess, chType );
+      xSetGtxFlagBits   ( fracBitsAccess, chType );
+      memcpy( kept.ctxStates, ctxStates, sizeof( kept.ctxStates ) );
+      memcpy( kept.sigSbb, m_sigSbbFracBits, sizeof( kept.sigSbb ) );
+      memcpy( kept.sig,    m_sigFracBits,    sizeof( kept.sig ) );
+      memcpy( kept.gtx,    m_gtxFracBits,    sizeof( kept.gtx ) );
+      memo.current = chType;
+    }
+    else if( memo.current != chType )
+    {
+      memcpy( m_sigSbbFracBits, kept.sigSbb, sizeof( kept.sigSbb ) );
+      memcpy( m_sigFracBits,    kept.sig,    sizeof( kept.sig ) );
+      memcpy( m_gtxFracBits,    kept.gtx,    sizeof( kept.gtx ) );
+      memo.current = chType;
+    }
+    xSetLastCoeffOffset( fracBitsAccess, tuPars, tu, compID );
   }
 
   void RateEstimator::xSetLastCoeffOffset( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID )
@@ -1295,7 +1356,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   }
 
   //===== real init =====
-  RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess() );
+  RateEstimator::initCtx( tuPars, tu, compID, ctx.getFracBitsAcess(), m_rateTablesMemo );
   m_commonCtx.reset( tuPars, *this );
   for( int k = 0; k < 4; k++ )
   {
