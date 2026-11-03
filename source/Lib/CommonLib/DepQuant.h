@@ -72,6 +72,21 @@ namespace DQIntern
     uint16_t  num;
     uint16_t  outPos[5];
   };
+  // For TU shapes with 4x4 SBBs, where the outside neighbours of an SBB's positions (NbInfoOut) lie: in its right,
+  // below or diagonal SBB. start[] is the start of that SBB in scan order relative to the SBB's own start, or -1 when
+  // it lies outside the non-zero-out region.
+  enum NbSbb { NB_SBB_RIGHT = 0, NB_SBB_BELOW = 1, NB_SBB_DIAG = 2, NUM_NB_SBB = 3 };
+  struct NbSbbStarts
+  {
+    int16_t   start[NUM_NB_SBB];
+  };
+  // The same for every TU shape with 4x4 SBBs: for neighbour k of the position p of an SBB (k as in the template:
+  // (x+1,y), (x+2,y), (x+1,y+1), (x,y+1), (x,y+2)), its position inside neighbouring SBB s as idx[k][s][p], or 0x80
+  // when it does not lie there. Used as pshufb indices.
+  struct NbOutShuffle16
+  {
+    uint8_t   idx[5][NUM_NB_SBB][16];
+  };
   struct CoeffFracBits
   {
     int32_t   bits[6];
@@ -124,6 +139,8 @@ namespace DQIntern
     const ScanElement *m_scanId2BlkPos;
     const NbInfoSbb*  m_scanId2NbInfoSbb;
     const NbInfoOut*  m_scanId2NbInfoOut;
+    const NbSbbStarts* m_scanSbb2NbSbbStarts;   // per SBB in scan order; nullptr unless the SBBs are 4x4
+    const NbOutShuffle16* m_nbOutShuffle16;
     ScanInfo*         m_scanInfo;
   private:
     void xSetScanInfo( ScanInfo& scanInfo, int scanIdx );
@@ -137,6 +154,8 @@ namespace DQIntern
     void                init        ()                       { xInitScanArrays(); }
     const NbInfoSbb*    getNbInfoSbb( int hd, int vd ) const { return m_scanId2NbInfoSbbArray[hd][vd]; }
     const NbInfoOut*    getNbInfoOut( int hd, int vd ) const { return m_scanId2NbInfoOutArray[hd][vd]; }
+    const NbSbbStarts*  getNbSbbStarts( int hd, int vd ) const { return m_scanSbb2NbSbbStartsArray[hd][vd]; }
+    const NbOutShuffle16& getNbOutShuffle16() const          { return m_nbOutShuffle16; }
     const TUParameters* getTUPars   ( const CompArea& area, const ComponentID compID ) const
     {
       return m_tuParameters[Log2(area.width)][Log2(area.height)][toChannelType(compID)];
@@ -144,10 +163,14 @@ namespace DQIntern
   private:
     void  xInitScanArrays   ();
     void  xUninitScanArrays ();
+    void  xSetNbSbb16       ( NbSbbStarts& starts, const int cpos[5], int x, int y, int insidePos, int begSbb );
+    void  xCheckNbSbb16     ( const NbSbbStarts* starts, const NbInfoOut* nbOut, unsigned numCoeff ) const;
   private:
     bool          m_scansInitialized;
     NbInfoSbb*    m_scanId2NbInfoSbbArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
     NbInfoOut*    m_scanId2NbInfoOutArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    NbSbbStarts*  m_scanSbb2NbSbbStartsArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    NbOutShuffle16 m_nbOutShuffle16;
     TUParameters* m_tuParameters         [ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ][ MAX_NUM_CH ];
   };
 
@@ -260,6 +283,8 @@ namespace DQIntern
     inline void reset( const TUParameters& tuPars, const RateEstimator& rateEst )
     {
       m_nbInfo = tuPars.m_scanId2NbInfoOut;
+      m_nbSbbStarts = tuPars.m_scanSbb2NbSbbStarts;
+      m_nbOutShuffle16 = tuPars.m_nbOutShuffle16;
       ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2 * sizeof( BinFracBits ) );
       const int numSbb = tuPars.m_numSbb;
       const int chunkSize = numSbb + tuPars.m_numCoeff;
@@ -271,7 +296,27 @@ namespace DQIntern
       }
     }
 
-    void update( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr );
+    // At the start of an SBB: takes over the SBB flags and the levels of the SBBs coded so far from the context prevId,
+    // and sets the template sums (tplAcc, sum1st) of the new SBB's positions from their neighbours in those SBBs.
+    void update( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
+    {
+      if( const uint8_t* absLevels = updateSbbFlags( scanInfo, prevId, stateId, curr ) )
+      {
+        updateTemplates( scanInfo, absLevels, stateId, curr );
+      }
+    }
+    // The first part of update(). Returns the levels from the new SBB's start when its template sums are needed (a
+    // neighbouring SBB has significant coefficients), else nullptr: the sums stay 0.
+    const uint8_t* updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr );
+    // The second part: the template sums of the new SBB's 16 positions for stateId. Expects them to be 0 before.
+    void updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const;
+
+    // For TUs with 4x4 SBBs, else nullptr: where the outside neighbours of the new SBB's positions lie.
+    const NbSbbStarts* nbSbbStarts( const ScanInfo& scanInfo ) const
+    {
+      return m_nbSbbStarts ? m_nbSbbStarts + ( ( scanInfo.scanIdx - scanInfo.sbbSize ) >> 4 ) : nullptr;
+    }
+    const NbOutShuffle16& nbOutShuffle16() const { return *m_nbOutShuffle16; }
 
     void getLevelPtrs( const ScanInfo& scanInfo, uint8_t*& levels0, uint8_t*& levels1, uint8_t*& levels2, uint8_t*& levels3 )
     {
@@ -283,6 +328,8 @@ namespace DQIntern
 
   private:
     const NbInfoOut* m_nbInfo;
+    const NbSbbStarts* m_nbSbbStarts;
+    const NbOutShuffle16* m_nbOutShuffle16;
     BinFracBits      m_sbbFlagBits[2];
     SbbCtx           m_allSbbCtx[8];
     SbbCtx*          m_currSbbCtx;
@@ -380,6 +427,9 @@ public:
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
+  // The SIMD template sums of a 4x4 SBB (CommonCtx::updateTemplates for 16 positions at once), which m_updateStatesEOS
+  // uses; exposed for the unit test. nullptr without SIMD.
+  void( *m_templateSums16 )( const uint8_t* absLevels, const DQIntern::NbSbbStarts& nb, const DQIntern::NbOutShuffle16& shuffle, uint8_t tplAcc[16], uint8_t sum1st[16] );
 
 };
 

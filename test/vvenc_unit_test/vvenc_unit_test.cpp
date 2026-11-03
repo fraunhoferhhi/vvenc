@@ -864,6 +864,80 @@ static bool check_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, unsigned num_
   return true;
 }
 
+// The SIMD template sums of 4x4 SBBs against CommonCtx::updateTemplates, for every TU shape with 4x4 SBBs and every
+// SBB that gets template sums, with random levels: mostly 0 and small ones, and 126 / 127, whose sums saturate sum1st.
+static bool check_templateSums16( DepQuant* opt, unsigned num_cases )
+{
+  if( !opt->m_templateSums16 )
+  {
+    return true;
+  }
+  printf( "Testing DepQuant templateSums16\n" );
+
+  DimensionGenerator rng;
+  DQIntern::Rom rom;
+  rom.init();
+  DQIntern::CommonCtx commonCtx;
+
+  // CommonCtx::reset reads the SBB flag rates, which the template sums do not use; set up as in check_updateStatesEOS
+  FracBitsAccess fracBitsAccess{ 1 };
+  CodingUnit cu;
+  TransformUnit tu;
+  tu.cu = &cu;
+  const DQIntern::TUParameters chromaPars( rom, 16, 16, CH_C );
+  DQIntern::RateEstimator rateEst;
+  rateEst.initCtx( chromaPars, tu, COMP_Cb, fracBitsAccess );
+
+  bool passed = true;
+  for( int log2W = 2; log2W <= 6; log2W++ )
+  {
+    for( int log2H = 2; log2H <= 6; log2H++ )
+    {
+      const DQIntern::TUParameters tuPars( rom, 1 << log2W, 1 << log2H, CH_L );
+      if( !tuPars.m_scanSbb2NbSbbStarts )
+      {
+        continue;
+      }
+      commonCtx.reset( tuPars, rateEst );
+
+      std::ostringstream sstm;
+      sstm << "DepQuant templateSums16 " << ( 1 << log2W ) << "x" << ( 1 << log2H );
+      std::vector<uint8_t> levels( tuPars.m_numCoeff );
+      for( unsigned i = 0; i < num_cases; i++ )
+      {
+        for( uint8_t& level : levels )
+        {
+          const int kind = rng.get( 0, 9 );
+          level = uint8_t( kind < 5 ? 0 : kind < 8 ? rng.get( 1, 4 ) : kind < 9 ? rng.get( 5, 125 ) : rng.get( 126, 127 ) );
+        }
+        for( unsigned scanIdx = 16; scanIdx < tuPars.m_numCoeff; scanIdx += 16 )
+        {
+          const DQIntern::ScanInfo& scanInfo = tuPars.m_scanInfo[scanIdx];
+          const uint8_t* absLevels = levels.data() + scanIdx - 16;
+
+          DQIntern::StateMem ref;
+          std::memset( ref.tplAcc, 0, sizeof( ref.tplAcc ) );
+          std::memset( ref.sum1st, 0, sizeof( ref.sum1st ) );
+          commonCtx.updateTemplates( scanInfo, absLevels, 0, ref );
+
+          uint8_t refTplAcc[16], refSum1st[16];
+          for( int id = 0; id < 16; id++ )
+          {
+            refTplAcc[id] = ref.tplAcc[id][0];
+            refSum1st[id] = ref.sum1st[id][0];
+          }
+          uint8_t tplAcc[16], sum1st[16];
+          opt->m_templateSums16( absLevels, *commonCtx.nbSbbStarts( scanInfo ), commonCtx.nbOutShuffle16(), tplAcc, sum1st );
+
+          passed = compare_values_1d( sstm.str() + " tplAcc", refTplAcc, tplAcc, 16 ) && passed;
+          passed = compare_values_1d( sstm.str() + " sum1st", refSum1st, sum1st, 16 ) && passed;
+        }
+      }
+    }
+  }
+  return passed;
+}
+
 static bool test_DepQuant()
 {
   auto ref = std::make_unique<DepQuant>( /*other=*/nullptr,
@@ -885,6 +959,16 @@ static bool test_DepQuant()
   passed = check_updateStates( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_updateStatesEOS( ref.get(), opt.get(), num_cases ) && passed;
   passed = check_xFindFirstTestPos( ref.get(), opt.get(), num_cases ) && passed;
+  passed = check_templateSums16( opt.get(), num_cases ) && passed;
+#if defined( TARGET_SIMD_X86 ) && defined( REAL_TARGET_X86 )
+  if( g_simdExtension != "SSE41" && g_simdExtension != "SCALAR" && vvenc_set_SIMD_extension( "SSE41" ) )
+  {
+    auto sse41 = std::make_unique<DepQuant>( /*other=*/nullptr, /*enc=*/true, /*useScalingLists=*/false, /*enableOpt=*/true );
+    sse41->init();
+    vvenc_set_SIMD_extension( g_simdExtension.c_str() );
+    passed = check_templateSums16( sse41.get(), num_cases ) && passed;
+  }
+#endif
 
   return passed;
 }
