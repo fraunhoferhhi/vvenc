@@ -536,7 +536,7 @@ def main():
     total_bitstream_bits = stream.stat().st_size * 8
     total_real_kbps = total_bitstream_bits * FPS / args.frames / 1000.0
     stats = {
-        "purpose": "TRAIN_ONLY_64_FRAME_REWARD_VALIDATION_NOT_TRAINING",
+        "purpose": "TRAIN_ONLY_REAL_REWARD_VALIDATION_NOT_TRAINING",
         "video_id": vid, "split": "train", "train_index": args.train_index,
         "frames": args.frames,
         "target_kbps": BITRATE_KBPS, "actual_kbps": total_real_kbps,
@@ -561,7 +561,9 @@ def main():
         "policy_checkpoint": (str(args.policy_checkpoint)
                               if args.policy_checkpoint else None),
         "policy_bridge_seed": args.policy_seed,
-        "validation_status": "UNTRAINED_POLICY_REWARD_DATA_COLLECTION",
+        "validation_status": ("UPDATED_POLICY_REWARD_DATA_COLLECTION"
+                              if args.policy_checkpoint else
+                              "UNTRAINED_POLICY_REWARD_DATA_COLLECTION"),
     }
     (args.out / "summary.json").write_text(
         json.dumps(stats, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8"
