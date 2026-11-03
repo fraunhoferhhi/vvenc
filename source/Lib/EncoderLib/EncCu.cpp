@@ -355,6 +355,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
 void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl, TrQuant* otherTrQuant )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
+  m_geoRowPrefix.resize( MRG_MAX_NUM_CANDS * ( GEO_MAX_CU_SIZE + 1 ) * GEO_MAX_CU_SIZE );
   m_cRdCost.create     ();
   m_cRdCost.setCostMode( encCfg.m_costMode );
   if ( encCfg.m_lumaLevelToDeltaQPEnabled == 1 )
@@ -2629,13 +2630,103 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
     m_mergeItemList        . insertMergeItemToList( best2geo[1] );
 }
 
+// The GPM SAD mask of a split direction for a block, addressed as xGetSADwMask reads it: sample x of row y is
+// mask[y * rowStep + x * stepX]. It is 1 on one side of the split line.
+struct GeoSadMaskWindow
+{
+  const Pel* mask;
+  int        stepX;
+  int        rowStep;
+};
+
+static GeoSadMaskWindow geoSadMaskWindow( const int splitDir, const int hIdx, const int wIdx )
+{
+  const int16_t* masks = g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]];
+  const int      offX  = g_weightOffset[hIdx][wIdx][splitDir][0];
+  const int      offY  = g_weightOffset[hIdx][wIdx][splitDir][1];
+  switch( g_angle2mirror[g_GeoParams[splitDir][0]] )
+  {
+  case 2:  return { masks + ( GEO_WEIGHT_MASK_SIZE - 1 - offY ) * GEO_WEIGHT_MASK_SIZE + offX,  1, -GEO_WEIGHT_MASK_SIZE };
+  case 1:  return { masks + offY * GEO_WEIGHT_MASK_SIZE + ( GEO_WEIGHT_MASK_SIZE - 1 - offX ), -1,  GEO_WEIGHT_MASK_SIZE };
+  default: return { masks + offY * GEO_WEIGHT_MASK_SIZE + offX,                                  1,  GEO_WEIGHT_MASK_SIZE };
+  }
+}
+
+// The run of mask samples per row: [runStart, runEnd). A straight line splits each row once, so the samples equal to
+// the row's first one form a prefix: its end is found by binary search.
+static void geoSadMaskRowRuns( const GeoSadMaskWindow& win, const int width, const int height, int* runStart, int* runEnd )
+{
+  for( int y = 0; y < height; y++ )
+  {
+    const Pel* row   = win.mask + y * win.rowStep;
+    const Pel  first = row[0];
+    int lo = 1, hi = width;   // the first x with row[x * stepX] != first, or width
+    while( lo < hi )
+    {
+      const int mid = ( lo + hi ) >> 1;
+      if( row[mid * win.stepX] == first ) lo = mid + 1;
+      else                                hi = mid;
+    }
+    runStart[y] = first ? 0  : lo;
+    runEnd  [y] = first ? lo : width;
+  }
+}
+
+// The runs of every block size and split direction, found once (the masks are fixed; searching them per CU costs more
+// than the masked SADs it replaces). Built on first use, after the masks are initialised.
+struct GeoSadMaskRuns
+{
+  uint8_t start[GEO_NUM_CU_SIZE][GEO_NUM_CU_SIZE][GEO_NUM_PARTITION_MODE][GEO_MAX_CU_SIZE];
+  uint8_t end  [GEO_NUM_CU_SIZE][GEO_NUM_CU_SIZE][GEO_NUM_PARTITION_MODE][GEO_MAX_CU_SIZE];
+
+  GeoSadMaskRuns()
+  {
+    int runStart[GEO_MAX_CU_SIZE], runEnd[GEO_MAX_CU_SIZE];
+    for( int hIdx = 0; hIdx < GEO_NUM_CU_SIZE; hIdx++ )
+    {
+      for( int wIdx = 0; wIdx < GEO_NUM_CU_SIZE; wIdx++ )
+      {
+        const int width = 1 << ( wIdx + GEO_MIN_CU_LOG2 ), height = 1 << ( hIdx + GEO_MIN_CU_LOG2 );
+        for( int splitDir = 0; splitDir < GEO_NUM_PARTITION_MODE; splitDir++ )
+        {
+          geoSadMaskRowRuns( geoSadMaskWindow( splitDir, hIdx, wIdx ), width, height, runStart, runEnd );
+          std::copy( runStart, runStart + height, start[hIdx][wIdx][splitDir] );
+          std::copy( runEnd,   runEnd   + height, end  [hIdx][wIdx][splitDir] );
+        }
+      }
+    }
+  }
+};
+
+static const GeoSadMaskRuns& geoSadMaskRuns()
+{
+  static const GeoSadMaskRuns runs;   // thread-safe initialisation on first use
+  return runs;
+}
+
+// Per row, the prefix sums of |org - pred|: prefix[y * ( width + 1 ) + x] is the sum over the row's first x samples.
+static void geoRowPrefixSums( const CPelBuf& org, const CPelBuf& pred, uint32_t* prefix )
+{
+  for( int y = 0; y < (int) org.height; y++ )
+  {
+    const Pel* o = org.bufAt( 0, y );
+    const Pel* p = pred.bufAt( 0, y );
+    uint32_t   sum = 0;
+    *prefix++ = 0;
+    for( int x = 0; x < (int) org.width; x++ )
+    {
+      sum += abs( o[x] - p[x] );
+      *prefix++ = sum;
+    }
+  }
+}
+
 bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &localUnitArea, double sqrtLambdaForFirstPass,
                                  GeoComboCostList& comboList, MergeBufVector& geoBuffer, CodingUnit& pu )
 {
           sqrtLambdaForFirstPass /= FRAC_BITS_SCALE;
   const int bitsForPartitionIdx   = floorLog2(GEO_NUM_PARTITION_MODE);
   const int maxNumMergeCandidates = std::min( ( int ) pu.cs->sps->maxNumGeoCand, MRG_MAX_NUM_CANDS );
-  DistParam distParam;
   // the second arguments to setDistParam is dummy and will be updated before being used
   DistParam  distParamWholeBlk     = m_cRdCost.setDistParam( pu.cs->getOrgBuf().Y(), pu.cs->getOrgBuf().Y(), pu.cs->sps->bitDepths[ CH_L ], DF_SAD );
   Distortion bestWholeBlkSad       = MAX_UINT64;
@@ -2713,6 +2804,7 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
 
     distParamWholeBlk.cur  = geoTempBuf[mergeCand].Y();
     sadWholeBlk[mergeCand] = distParamWholeBlk.distFunc( distParamWholeBlk );
+    geoRowPrefixSums( pu.cs->getOrgBuf().Y(), geoTempBuf[mergeCand].Y(), m_geoRowPrefix.data() + mergeCand * ( pu.lwidth() + 1 ) * pu.lheight() );
 
     if( sadWholeBlk[mergeCand] < bestWholeBlkSad )
     {
@@ -2735,46 +2827,17 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
   const int wIdx = floorLog2( pu.lwidth() )  - GEO_MIN_CU_LOG2;
   const int hIdx = floorLog2( pu.lheight() ) - GEO_MIN_CU_LOG2;
 
+  const int      width          = pu.lwidth();
+  const int      height         = pu.lheight();
+  const uint32_t distShift      = DISTORTION_PRECISION_ADJUSTMENT( pu.cs->sps->bitDepths[CH_L] );
+  const GeoSadMaskRuns& maskRuns = geoSadMaskRuns();
+
   for( int splitDir = 0; splitDir < GEO_NUM_PARTITION_MODE; )
   {
-    int maskStride = 0, maskStride2 = 0;
-    int stepX = 1;
-    Pel *sadMask;
-    int16_t angle = g_GeoParams[splitDir][0];
-    
-    if( g_angle2mirror[angle] == 2 )
-    {
-      maskStride  = -GEO_WEIGHT_MASK_SIZE;
-      maskStride2 = -( int ) pu.lwidth();
-      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
-                      [( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][1] ) * GEO_WEIGHT_MASK_SIZE
-                                                  + g_weightOffset[hIdx][wIdx][splitDir][0]
-                      ];
-    }
-    else if( g_angle2mirror[angle] == 1 )
-    {
-      stepX       = -1;
-      maskStride2 = pu.lwidth();
-      maskStride  = GEO_WEIGHT_MASK_SIZE;
-      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
-                      [     GEO_WEIGHT_MASK_SIZE *     g_weightOffset[hIdx][wIdx][splitDir][1]
-                        + ( GEO_WEIGHT_MASK_SIZE - 1 - g_weightOffset[hIdx][wIdx][splitDir][0] )
-                      ];
-    }
-    else
-    {
-      maskStride  = GEO_WEIGHT_MASK_SIZE;
-      maskStride2 = -( int ) pu.lwidth();
-      sadMask     = &g_globalGeoEncSADmask[g_angle2mask[g_GeoParams[splitDir][0]]]
-                      [   g_weightOffset[hIdx][wIdx][splitDir][1] * GEO_WEIGHT_MASK_SIZE
-                        + g_weightOffset[hIdx][wIdx][splitDir][0]
-                      ];
-    }
-
-    m_cRdCost.setDistParamGeo ( distParam, pu.cs->getOrgBuf().Y(),
-                                nullptr, 0,
-                                sadMask, maskStride, stepX, maskStride2,
-                                pu.cs->sps->bitDepths[CH_L], COMP_Y );
+    // The masked SAD of the larger part (xGetSADwMask's sum with subShift 0): the mask is one side of a straight line,
+    // so in every row its samples are one run, and the sum over it is one difference of the row's prefix sums.
+    const uint8_t* runStart = maskRuns.start[hIdx][wIdx][splitDir];
+    const uint8_t* runEnd   = maskRuns.end  [hIdx][wIdx][splitDir];
 
     for( uint8_t mergeCand = 0; mergeCand < maxNumMergeCandidates; mergeCand++ )
     {
@@ -2783,9 +2846,13 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
         continue;
       }
 
-      distParam.cur.buf         = geoTempBuf[mergeCand].Y().buf;
-      distParam.cur.stride      = geoTempBuf[mergeCand].Y().stride;
-      const Distortion sadLarge = distParam.distFunc( distParam );
+      const uint32_t* prefix = m_geoRowPrefix.data() + mergeCand * ( width + 1 ) * height;
+      Distortion sadLarge = 0;
+      for( int y = 0; y < height; y++, prefix += width + 1 )
+      {
+        sadLarge += prefix[runEnd[y]] - prefix[runStart[y]];
+      }
+      sadLarge >>= distShift;
       const Distortion sadSmall = sadWholeBlk[mergeCand] - sadLarge;
 
       const int bitsCand        = mergeCand + 1;
