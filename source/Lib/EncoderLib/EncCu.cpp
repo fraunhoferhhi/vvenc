@@ -853,8 +853,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   // Only attach the action when original QPA established a QP at this level.
   const bool rlQpaDecision = partitioner.currSubdiv == 0 ||
                               ( partitioner.currSubdiv > 0 && slice.isIntra() );
-  if( rl::QpActionMap::enabled() && m_pcEncCfg->m_usePerceptQPA &&
-      pps.useDQP && isLuma( partitioner.chType ) &&
+  // A live PPO policy is queried only during the final encode pass.
+  // Pre-analysis must never wait for an action (its state was not emitted).
+  if( rl::QpActionMap::enabled() && !slice.pic->isPreAnalysis &&
+      m_pcEncCfg->m_usePerceptQPA && pps.useDQP &&
+      isLuma( partitioner.chType ) &&
       partitioner.currQgEnable() && rlQpaDecision )
   {
     const PreCalcValues& pcv = *pps.pcv;
