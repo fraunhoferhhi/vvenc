@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncLib.h"
 #include "EncPicture.h"
 #include "BitAllocation.h"
+#include "RLObservation.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/TimeProfiler.h"
@@ -307,6 +308,11 @@ void EncSlice::initPic( Picture* pic )
 
   // set QP and lambda values
   xInitSliceLambdaQP( slice );
+
+  // Research-only pre-action observation. This is deliberately AFTER QPA
+  // but BEFORE the CTU search; no current-picture coded bits or final CU
+  // decisions can leak into the PPO observation.
+  rl::Observation::emit( *slice, *m_pcEncCfg, m_pcRateCtrl );
 
   for( auto* thrRsc : m_ThreadRsrc )
   {
