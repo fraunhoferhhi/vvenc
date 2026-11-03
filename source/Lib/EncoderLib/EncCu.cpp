@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "EncModeCtrl.h"
 #include "BitAllocation.h"
 #include "EncStage.h"
+#include "RLQpAction.h"
 
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/Picture.h"
@@ -810,6 +811,36 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
+  }
+
+  // Research extension: one fixed PPO-QP action map per POC (first-stage integration).
+  // Apply only where VVenC has already chosen a quantization-group QP.
+  // For nonzero actions, preserve VVenC's QPA-derived lambda baseline and
+  // update the RDO/quantization lambdas consistently with the new QP.
+  // The unconfigured and zero-action paths leave the original encoder intact.
+  if( rl::QpActionMap::enabled() && m_pcEncCfg->m_usePerceptQPA &&
+      pps.useDQP && isLuma( partitioner.chType ) && partitioner.currQgEnable() )
+  {
+    const PreCalcValues& pcv = *pps.pcv;
+    Picture* const pic = bestCS->picture;
+    const uint32_t ctuRsAddr = getCtuAddr( partitioner.currQgPos, pcv );
+    const int delta = rl::QpActionMap::deltaFor( slice.poc,
+                                                (unsigned) partitioner.currQgPos.x,
+                                                (unsigned) partitioner.currQgPos.y,
+                                                (unsigned) pcv.maxCUSize,
+                                                (unsigned) pcv.widthInCtus,
+                                                (unsigned) pcv.heightInCtus );
+    const int baseQp = tempCS->baseQP;
+    const int appliedQp = Clip3( -sps.qpBDOffset[CH_L], MAX_QP, baseQp + delta );
+    if( appliedQp != baseQp )
+    {
+      tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+      bestCS->currQP[partitioner.chType] = bestCS->baseQP = appliedQp;
+      updateLambda( slice, pic->ctuQpaLambda[ctuRsAddr],
+                    pic->ctuAdaptedQP[ctuRsAddr], appliedQp, true );
+    }
+    rl::QpActionMap::trace( slice.poc, (unsigned) partitioner.currQgPos.x,
+                            (unsigned) partitioner.currQgPos.y, baseQp, delta, appliedQp );
   }
 
   if (partitioner.currQtDepth == 0)
