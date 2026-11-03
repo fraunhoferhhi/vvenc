@@ -13,7 +13,8 @@
 // Environment variable set: require an explicit row for every encoded POC.
 // Thread safety: the immutable map is initialized once; subsequent reads are
 // safe for VVenC's parallel CTU workers.
-// VVENC_RL_ACTION_DIR adds an online mode: Python writes one atomic action\n// file named <POC>.txt after receiving the causal pre-encode observation.
+// VVENC_RL_ACTION_DIR adds an online mode: Python writes one atomic action
+// file named <POC>.txt after receiving the causal pre-encode observation.
 
 #pragma once
 
