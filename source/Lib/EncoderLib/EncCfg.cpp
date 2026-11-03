@@ -58,6 +58,7 @@ VVEncCfg::VVEncCfg()
   , m_cuTreeScale( 0.0 )
   , m_QPFraction( 0.0 )
   , m_fgaStrength( 0.0 )
+  , m_fgaInterval( 0 )
 {
   m_fg.m_fgcSEIEnabled = false;
   m_fg.m_fgcSEICompModelPresent[0] = false;
@@ -92,6 +93,7 @@ void VVEncCfg::xInitCfgMembers()
   m_bimCtuSize          = m_CTUSize;
   m_QPFraction          = m_QPFractionVal / 256.0;
   m_fgaStrength         = m_fgaStrengthVal / 64.0;
+  m_fgaInterval         = m_fgaIntervalLog2 >= 0 && m_fgaIntervalLog2 <= 6 ? 1 << m_fgaIntervalLog2 : m_GOPSize;
   m_MaxQT[0]            =
   m_MaxQT[1]            = 
   m_MaxQT[2]            = m_CTUSize;

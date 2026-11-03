@@ -329,12 +329,12 @@ int testLibParameterRanges()
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
 
-  // film grain analysis interval: 0 (automatic) or a power of 2 up to 64
-  testParamList( "FgaInterval",                            vvencParams.m_fgaInterval,                vvencParams, { 0,1,2,8,32,64 } );
-  testParamList( "FgaInterval",                            vvencParams.m_fgaInterval,                vvencParams, { -1,3,12,65 }, true );
-
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
+
+  // film grain analysis interval: -1 (automatic) or 0 to 6 (the interval's log2; with the analysis on see checkFgaIntervalLog2)
+  testParamList( "FgaIntervalLog2",                        vvencParams.m_fgaIntervalLog2,            vvencParams, { -1,0,3,6 } );
+  testParamList( "FgaIntervalLog2",                        vvencParams.m_fgaIntervalLog2,            vvencParams, { -2,7 }, true );
 
   testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 8,10 } );
   testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 0,1,7,9,11 }, true );
@@ -378,26 +378,33 @@ int testLibParameterRanges()
   return 0;
 }
 
-// The film grain analysis interval resolved by the first configuration init (here raised to MCTF's first filtered
-// picture, 12, which is not a power of 2) must pass the second init, which opening the encoder does.
-int checkFgaIntervalReinit()
+// The film grain analysis interval with the analysis on: 1 << FgaIntervalLog2 must divide the GOP size, and with the
+// look-ahead of the one-pass rate control only -1 (automatic) or the GOP size pass. Each refused setting passes at -1
+// (the same GOP size and rate control), so the refusal comes from the interval.
+int checkFgaIntervalLog2()
 {
-  vvenc_config c;
-  vvenc_config_default( &c );
-  fillEncoderParameters( c, false );
-  c.m_fga                        = 2;
-  c.m_vvencMCTF.MCTF             = 2;
-  c.m_vvencMCTF.numFrames        = 2;
-  c.m_vvencMCTF.numStrength      = 2;
-  c.m_vvencMCTF.MCTFFrames[ 0 ]  = 12;
-  c.m_vvencMCTF.MCTFFrames[ 1 ]  = 24;
-  c.m_vvencMCTF.MCTFStrengths[ 0 ] = 0.5;
-  c.m_vvencMCTF.MCTFStrengths[ 1 ] = 1.0;
-  if( vvenc_init_config_parameter( &c ) || c.m_fgaInterval != 12 )
+  struct Case { int gopSize; int targetBitrate; int log2Interval; bool valid; };
+  const Case cases[] = { { 32, 0, -1, true }, { 32, 0, 0, true }, { 32, 0, 5, true }, { 32, 0, 6, false },
+                         { 16, 0, -1, true }, { 16, 0, 4, true }, { 16, 0, 5, false },
+                         { 16, 500000, -1, true }, { 16, 500000, 4, true }, { 16, 500000, 3, false } };
+  vvencEncoder* enc = vvenc_encoder_create();
+  int result = 0;
+  for( const Case& t : cases )
   {
-    return -1;
+    vvenc_config c;
+    vvenc_config_default( &c );
+    fillEncoderParameters( c, false );
+    c.m_fga             = 2;
+    c.m_GOPSize         = t.gopSize;
+    c.m_RCTargetBitrate = t.targetBitrate;   // with one pass (the default) the look-ahead is on
+    c.m_fgaIntervalLog2 = t.log2Interval;
+    if( ( 0 == vvenc_check_config( enc, &c ) ) != t.valid )
+    {
+      result = -1;
+    }
   }
-  return vvenc_init_config_parameter( &c ) || c.m_fgaInterval != 12 ? -1 : 0;
+  vvenc_encoder_close( enc );
+  return result;
 }
 
 int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool expectedFail = false )
@@ -1305,7 +1312,7 @@ int testLibCallingOrder()
 int testSDKDefaultBehaviour()
 {
   testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
-  testfunc( "checkFgaIntervalReinit", &checkFgaIntervalReinit, false );
+  testfunc( "checkFgaIntervalLog2", &checkFgaIntervalLog2, false );
   testfunc( "checkSDKHdrChromaQpMappingTables", &checkSDKHdrChromaQpMappingTables, false );
   return 0;
 }

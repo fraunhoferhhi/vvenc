@@ -595,8 +595,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   IStreamToInt8                     toForceScc                    ( &c->m_forceScc );
   IStreamToInt8                     toIfpLines                    ( &c->m_ifpLines );
   IStreamToInt8                     toPOC0IDR                     ( &c->m_poc0idr );
+  IStreamToInt8                     toFgaIntervalLog2             ( &c->m_fgaIntervalLog2 );
   IStreamToInt8                     toFga                         ( &c->m_fga );
-  IStreamToInt8                     toFgaInterval                 ( &c->m_fgaInterval );
   IStreamToInt8                     toMaxDeltaQP                  ( &c->m_maxDeltaQP );
   IStreamToInt8                     toBIM                         ( &c->m_blockImportanceMapping );
   IStreamToFixedPointU8             toCuTreeStrength              ( &c->m_cuTreeStrength, 5 );
@@ -1202,8 +1202,8 @@ int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
   {
     opts.setSubSection("Film grain analysis");
     opts.addOptions()
+    ("fgaintervallog2",               toFgaIntervalLog2,         "Experimental: Film grain analysis interval: n >= 0 also analyses every (1 << n)-th picture of a GOP, 1 << n must divide the GOP size (-1: automatic, the GOP's first picture only). Each added picture costs a filtered copy and an analysis, plus an MCTF motion search where MCTF does not filter it, and keeps its buffers until its GOP's coding starts")
     ("fga",                           toFga,                     "Experimental: Film grain analysis generating the FGC SEI message (0: off, 1: the analysis of VTM, 2: (1) + grain measured from the temporal residual, calibrated scaling factors, 3: (2) + auto-regressive grain model)")
-    ("fgainterval",                   toFgaInterval,             "Experimental: Film grain analysis: pictures between analysed pictures in a GOP, a power of 2 up to 64 (0: automatic, 8 for --fga 2 and 3, one per GOP for --fga 1)")
     ("fgastrength",                   toFgaStrength,             "Experimental: Film grain strength in percent of the analysed strength [0...4.0), 0 disables the grain")
     ;
   }
