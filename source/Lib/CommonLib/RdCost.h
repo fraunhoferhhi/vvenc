@@ -202,7 +202,10 @@ public:
 #endif
   }
   Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return Distortion( m_motionLambda * getBitsOfVectorWithPredictor(x, y, imvShift )); }
-  uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x * (1 << m_iCostScale)) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y * (1 << m_iCostScale)) - m_mvPredictor.ver)>>imvShift); }
+  uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return getBitsOfVectorHor( x, imvShift ) + getBitsOfVectorVer( y, imvShift ); }
+  // the two halves of getBitsOfVectorWithPredictor: each depends on one component only
+  uint32_t       getBitsOfVectorHor( const int x, const unsigned imvShift ) const { return xGetExpGolombNumberOfBits( ( ( x * ( 1 << m_iCostScale ) ) - m_mvPredictor.hor ) >> imvShift ); }
+  uint32_t       getBitsOfVectorVer( const int y, const unsigned imvShift ) const { return xGetExpGolombNumberOfBits( ( ( y * ( 1 << m_iCostScale ) ) - m_mvPredictor.ver ) >> imvShift ); }
 
   void           saveUnadjustedLambda ();
   void           setChromaFormat      ( ChromaFormat cf )   { m_cf = cf; }

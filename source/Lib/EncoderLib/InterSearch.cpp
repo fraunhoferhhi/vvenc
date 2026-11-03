@@ -2211,9 +2211,18 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
 
   const SearchRange& sr = cStruct.searchRange;
 
+  // The motion vector bits are the sum of a horizontal and a vertical part: the horizontal part of every column once
+  // per search, the vertical part once per row (the cost is getCostOfVectorWithPredictor's on the same sum).
+  m_mvBitsHor.resize( std::max<size_t>( m_mvBitsHor.size(), sr.right - sr.left + 1 ) );
+  for( int x = sr.left; x <= sr.right; x++ )
+  {
+    m_mvBitsHor[x - sr.left] = m_pcRdCost->getBitsOfVectorHor( x, cStruct.imvShift );
+  }
+
   const Pel* piRef = cStruct.piRefY + (sr.top * cStruct.iRefStride);
   for ( int y = sr.top; y <= sr.bottom; y++ )
   {
+    const uint32_t bitsVer = m_pcRdCost->getBitsOfVectorVer( y, cStruct.imvShift );
     for ( int x = sr.left; x <= sr.right; x++ )
     {
       //  find min. distortion position
@@ -2222,7 +2231,7 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
       uiSad = m_cDistParam.distFunc( m_cDistParam );
 
       // motion cost
-      uiSad += m_pcRdCost->getCostOfVectorWithPredictor( x, y, cStruct.imvShift );
+      uiSad += m_pcRdCost->getCost( m_mvBitsHor[x - sr.left] + bitsVer );
 
       if ( uiSad < uiSadBest )
       {
