@@ -2006,6 +2006,200 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
   return (sad);
 }
 
+#ifdef USE_AVX2
+// The 8x4, 4x8 and 8x8 kernels below hold their whole block in two or four registers, two or four rows per register.
+// The butterfly stages between values of one register are a shuffle, a sign change and an add. Four stages run on
+// 16-bit values (see the bound above), and the last stage is never computed: |a + b| + |a - b| = 2 * max( |a|, |b| ).
+
+// The rows y and y + 1 of org - cur of a block 8 wide, one row per 128-bit lane.
+static inline __m256i xResidualRows8x2_AVX2( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+{
+  const __m256i org = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) piOrg ) ),
+                                               _mm_loadu_si128( ( const __m128i* ) ( piOrg + iStrideOrg ) ), 1 );
+  const __m256i cur = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) piCur ) ),
+                                               _mm_loadu_si128( ( const __m128i* ) ( piCur + iStrideCur ) ), 1 );
+  return _mm256_sub_epi16( org, cur );
+}
+
+// The rows y to y + 3 of org - cur of a block 4 wide: rows y and y + 1 in the low lane, y + 2 and y + 3 in the high lane.
+static inline __m256i xResidualRows4x4_AVX2( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+{
+  auto loadRows = []( const Pel* p, const int stride )
+  {
+    const __m128i rows01 = _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) p ),
+                                               _vv_loadl_epi64( ( const __m128i* ) ( p + stride ) ) );
+    const __m128i rows23 = _mm_unpacklo_epi64( _vv_loadl_epi64( ( const __m128i* ) ( p + 2 * stride ) ),
+                                               _vv_loadl_epi64( ( const __m128i* ) ( p + 3 * stride ) ) );
+    return _mm256_inserti128_si256( _mm256_castsi128_si256( rows01 ), rows23, 1 );
+  };
+  return _mm256_sub_epi16( loadRows( piOrg, iStrideOrg ), loadRows( piCur, iStrideCur ) );
+}
+
+// The butterfly stage between the two 128-bit lanes: the low lane becomes low + high, the high lane low - high.
+static inline __m256i xHadamardLaneStage16_AVX2( const __m256i x )
+{
+  const __m256i negateHighLane = _mm256_setr_epi16( 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1 );
+  return _mm256_add_epi16( _mm256_permute2x128_si256( x, x, 0x01 ), _mm256_sign_epi16( x, negateHighLane ) );
+}
+
+// The butterfly stage between the two 64-bit halves of each lane: the low half becomes low + high, the high half
+// low - high.
+static inline __m256i xHadamardHalfStage16_AVX2( const __m256i x )
+{
+  const __m256i negateHighHalves = _mm256_setr_epi16( 1, 1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1 );
+  return _mm256_add_epi16( _mm256_shuffle_epi32( x, 0x4E ), _mm256_sign_epi16( x, negateHighHalves ) );
+}
+
+// The butterfly stage between neighbouring 32-bit pairs of 16-bit values: values 0 and 1 become their sums with
+// values 2 and 3, values 2 and 3 the differences, and so on.
+static inline __m256i xHadamardPairStage16_AVX2( const __m256i x )
+{
+  const __m256i negateOddPairs = _mm256_setr_epi16( 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1 );
+  return _mm256_add_epi16( _mm256_shuffle_epi32( x, 0xB1 ), _mm256_sign_epi16( x, negateOddPairs ) );
+}
+
+// The sum of absolute values after a last butterfly stage between neighbouring 16-bit values, as 32-bit partial sums:
+// each pair's max( |a|, |b| ) is in both of its values, so the pair adds 2 * max( |a|, |b| ).
+static inline __m256i xSumAbsAfterNeighbourStage16_AVX2( const __m256i x )
+{
+  const __m256i swapNeighbours = _mm256_setr_epi8( 2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13,
+                                                   2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13 );
+  const __m256i absX   = _mm256_abs_epi16( x );
+  const __m256i maxAbs = _mm256_max_epi16( absX, _mm256_shuffle_epi8( absX, swapNeighbours ) );
+  return _mm256_madd_epi16( maxAbs, _mm256_set1_epi16( 1 ) );
+}
+
+// The same on 32-bit values: each pair's max( |a|, |b| ) in both of its values.
+static inline __m256i xMaxAbsOfNeighbours32_AVX2( const __m256i x )
+{
+  const __m256i absX = _mm256_abs_epi32( x );
+  return _mm256_max_epi32( absX, _mm256_shuffle_epi32( absX, 0xB1 ) );
+}
+
+static inline uint32_t xSumOfValues32_AVX2( const __m256i x )
+{
+  __m128i sum = _mm_add_epi32( _mm256_castsi256_si128( x ), _mm256_extracti128_si256( x, 1 ) );
+  sum = _mm_add_epi32( sum, _mm_shuffle_epi32( sum, 0x4E ) );
+  sum = _mm_add_epi32( sum, _mm_shuffle_epi32( sum, 0xB1 ) );
+  return _mm_cvtsi128_si32( sum );
+}
+
+// The absolute DC coefficient when the first two 16-bit values of x are the last stage's DC pair.
+static inline uint32_t xAbsDcOfFirstPair16_AVX2( const __m256i x )
+{
+  const int pair = _mm_cvtsi128_si32( _mm256_castsi256_si128( x ) );
+  return abs( ( int16_t ) pair + ( int16_t ) ( pair >> 16 ) );
+}
+
+// The 8x4 and 4x8 SATDs, normalized as xCalcHAD8x4_SSE and xCalcHAD4x8_SSE do.
+static inline uint32_t xNormalizedHAD32Samples( uint32_t sad, const uint32_t absDc )
+{
+  sad -= absDc;
+  sad += absDc >> 2;
+  return ( uint32_t ) ( sad / sqrt( 4.0 * 8 ) * 2 );
+}
+#endif //USE_AVX2
+
+static uint32_t xCalcHAD8x4_AVX2( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+{
+  uint32_t sad = 0;
+
+#ifdef USE_AVX2
+  const __m256i rows01 = xResidualRows8x2_AVX2( piOrg, piCur, iStrideOrg, iStrideCur );
+  const __m256i rows23 = xResidualRows8x2_AVX2( piOrg + 2 * iStrideOrg, piCur + 2 * iStrideCur, iStrideOrg, iStrideCur );
+
+  // the vertical transform: the stage between the registers (rows k and k + 2), then the one between the lanes (rows
+  // k and k + 1); then two horizontal stages, and the last one folded into the sum
+  __m256i sum = xHadamardLaneStage16_AVX2( _mm256_add_epi16( rows01, rows23 ) );
+  __m256i dif = xHadamardLaneStage16_AVX2( _mm256_sub_epi16( rows01, rows23 ) );
+  sum = xHadamardPairStage16_AVX2( xHadamardHalfStage16_AVX2( sum ) );
+  dif = xHadamardPairStage16_AVX2( xHadamardHalfStage16_AVX2( dif ) );
+
+  sad = xSumOfValues32_AVX2( _mm256_add_epi32( xSumAbsAfterNeighbourStage16_AVX2( sum ),
+                                               xSumAbsAfterNeighbourStage16_AVX2( dif ) ) );
+  sad = xNormalizedHAD32Samples( sad, xAbsDcOfFirstPair16_AVX2( sum ) );
+
+#endif //USE_AVX2
+
+  return sad;
+}
+
+static uint32_t xCalcHAD4x8_AVX2( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+{
+  uint32_t sad = 0;
+
+#ifdef USE_AVX2
+  const __m256i rows0to3 = xResidualRows4x4_AVX2( piOrg, piCur, iStrideOrg, iStrideCur );
+  const __m256i rows4to7 = xResidualRows4x4_AVX2( piOrg + 4 * iStrideOrg, piCur + 4 * iStrideCur, iStrideOrg, iStrideCur );
+
+  // the vertical transform: the stages between the registers (rows k and k + 4), between the lanes (k and k + 2) and
+  // between the halves (k and k + 1); then one horizontal stage, and the last one folded into the sum
+  __m256i sum = xHadamardHalfStage16_AVX2( xHadamardLaneStage16_AVX2( _mm256_add_epi16( rows0to3, rows4to7 ) ) );
+  __m256i dif = xHadamardHalfStage16_AVX2( xHadamardLaneStage16_AVX2( _mm256_sub_epi16( rows0to3, rows4to7 ) ) );
+  sum = xHadamardPairStage16_AVX2( sum );
+  dif = xHadamardPairStage16_AVX2( dif );
+
+  sad = xSumOfValues32_AVX2( _mm256_add_epi32( xSumAbsAfterNeighbourStage16_AVX2( sum ),
+                                               xSumAbsAfterNeighbourStage16_AVX2( dif ) ) );
+  sad = xNormalizedHAD32Samples( sad, xAbsDcOfFirstPair16_AVX2( sum ) );
+
+#endif //USE_AVX2
+
+  return sad;
+}
+
+static uint32_t xCalcHAD8x8_AVX2( const Pel* piOrg, const Pel* piCur, const int iStrideOrg, const int iStrideCur )
+{
+  uint32_t sad = 0;
+
+#ifdef USE_AVX2
+  // r[k] holds the rows 2k and 2k + 1
+  __m256i r[4];
+  for( int k = 0; k < 4; k++ )
+  {
+    r[k] = xResidualRows8x2_AVX2( piOrg + 2 * k * iStrideOrg, piCur + 2 * k * iStrideCur, iStrideOrg, iStrideCur );
+  }
+
+  // the vertical transform: the stages between the registers (rows k and k + 4, then k and k + 2), then the one
+  // between the lanes (k and k + 1); then the first horizontal stage, between the halves
+  const __m256i sum02 = _mm256_add_epi16( r[0], r[2] );
+  const __m256i sum13 = _mm256_add_epi16( r[1], r[3] );
+  const __m256i dif02 = _mm256_sub_epi16( r[0], r[2] );
+  const __m256i dif13 = _mm256_sub_epi16( r[1], r[3] );
+  r[0] = _mm256_add_epi16( sum02, sum13 );
+  r[1] = _mm256_sub_epi16( sum02, sum13 );
+  r[2] = _mm256_add_epi16( dif02, dif13 );
+  r[3] = _mm256_sub_epi16( dif02, dif13 );
+
+  // the fifth stage, between 16-bit neighbours, as the sums and differences of madd, which are 32-bit; the last
+  // stage, between their 32-bit neighbours, folded into the sum
+  const __m256i plus      = _mm256_set1_epi16( 1 );
+  const __m256i plusMinus = _mm256_setr_epi16( 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1 );
+  __m256i absSum = _mm256_setzero_si256();
+  uint32_t absDc = 0;
+  for( int k = 0; k < 4; k++ )
+  {
+    const __m256i x    = xHadamardHalfStage16_AVX2( xHadamardLaneStage16_AVX2( r[k] ) );
+    const __m256i sums = _mm256_madd_epi16( x, plus );
+    const __m256i difs = _mm256_madd_epi16( x, plusMinus );
+    absSum = _mm256_add_epi32( absSum, xMaxAbsOfNeighbours32_AVX2( sums ) );
+    absSum = _mm256_add_epi32( absSum, xMaxAbsOfNeighbours32_AVX2( difs ) );
+    if( k == 0 )
+    {
+      absDc = abs( _mm_cvtsi128_si32( _mm256_castsi256_si128( sums ) ) + _mm256_extract_epi32( sums, 1 ) );
+    }
+  }
+
+  sad = xSumOfValues32_AVX2( absSum );
+  sad -= absDc;
+  sad += absDc >> 2;
+  sad = ( ( sad + 2 ) >> 2 );   // as xCalcHAD8x8_SSE
+
+#endif //USE_AVX2
+
+  return sad;
+}
+
 template<X86_VEXT vext >
 Distortion RdCost::xGetHAD2SADs_SIMD( const DistParam &rcDtParam )
 {
@@ -2220,7 +2414,10 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
     {
       for( x = 0; x < iCols; x += 8 )
       {
-        uiSum += xCalcHAD8x4_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+        if( vext >= AVX2 && iBitDepth <= 10 )
+          uiSum += xCalcHAD8x4_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+        else
+          uiSum += xCalcHAD8x4_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 4*iStrideOrg;
       piCur += 4*iStrideCur;
@@ -2232,7 +2429,10 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
     {
       for( x = 0; x < iCols; x += 4 )
       {
-        uiSum += xCalcHAD4x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+        if( vext >= AVX2 && iBitDepth <= 10 )
+          uiSum += xCalcHAD4x8_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+        else
+          uiSum += xCalcHAD4x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
@@ -2280,7 +2480,10 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
     {
       for( x = 0; x < iCols; x += 8 )
       {
-        uiSum += xCalcHAD8x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
+        if( vext >= AVX2 && iBitDepth <= 10 )
+          uiSum += xCalcHAD8x8_AVX2( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur );
+        else
+          uiSum += xCalcHAD8x8_SSE( &piOrg[x], &piCur[x], iStrideOrg, iStrideCur, iBitDepth );
       }
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
