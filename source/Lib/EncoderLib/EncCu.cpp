@@ -518,8 +518,8 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
           cu->lumaPos().y >= pos.y && cu->lumaPos().y < pos.y + (int) pcv.maxCUSize )
       {
         ++nLumaCus;
-        minLumaQp = std::min( minLumaQp, cu->qp );
-        maxLumaQp = std::max( maxLumaQp, cu->qp );
+        minLumaQp = std::min( minLumaQp, (int) cu->qp );
+        maxLumaQp = std::max( maxLumaQp, (int) cu->qp );
       }
     }
     if( m_wppMutex ) m_wppMutex->unlock();
