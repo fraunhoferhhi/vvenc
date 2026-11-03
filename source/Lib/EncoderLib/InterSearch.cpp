@@ -5237,6 +5237,67 @@ void InterSearch::xCheckBestAffineMVP(CodingUnit& cu, AffineAMVPInfo &affineAMVP
   }
 }
 
+namespace
+{
+// The control-point MVs one affine motion search has predicted. Its refinement tests many of them again (a neighbour of
+// the new centre that was a neighbour of the old one); such a test cannot win, because a set's cost is fixed within the
+// search and the best cost only ever decreases, so its prediction and distortion can be skipped.
+class AffineCpmvTestedSet
+{
+public:
+  // the most tests of one search: 6-parameter model, 1 start + 4 gradient steps + 5 checkCPMVRdCost tests + 3 rounds x
+  // 3 MVs x 8 neighbours (the 4-parameter model needs at most 59)
+  static constexpr int MAX_TESTS = 82;
+
+  explicit AffineCpmvTestedSet( int numMv ) : m_numMv( numMv ) {}
+
+  // true if these control-point MVs were tested before in this search; otherwise records them and returns false
+  bool testedBefore( const Mv mv[3] )
+  {
+    for( int i = 0; i < m_numTested; i++ )
+    {
+      if( xEqual( m_tested[i], mv ) )
+      {
+        return true;
+      }
+    }
+    record( mv );
+    return false;
+  }
+
+  // records control-point MVs that were tested (while there is room: when full, a new set is simply tested again)
+  void record( const Mv mv[3] )
+  {
+    if( m_numTested < MAX_TESTS )
+    {
+      for( int k = 0; k < m_numMv; k++ )
+      {
+        m_tested[m_numTested][2 * k]     = mv[k].hor;
+        m_tested[m_numTested][2 * k + 1] = mv[k].ver;
+      }
+      m_numTested++;
+    }
+  }
+
+private:
+  bool xEqual( const int* tested, const Mv mv[3] ) const
+  {
+    for( int k = 0; k < m_numMv; k++ )
+    {
+      if( tested[2 * k] != mv[k].hor || tested[2 * k + 1] != mv[k].ver )
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const int m_numMv;            // 3 for the 6-parameter model, 2 for the 4-parameter one (its third MV is unused)
+  int       m_numTested = 0;
+  int       m_tested[MAX_TESTS][6];   // hor and ver of each MV; left uninitialised, only m_numTested entries are read
+};
+} // namespace
+
 void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   CPelUnitBuf&    origBuf,
   RefPicList      refPicList,
@@ -5307,6 +5368,12 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   Distortion uiCostBest = MAX_DISTORTION;
   uint32_t uiBitsBest = 0;
 
+  // Skip refinement tests of control-point MVs this search already tested. Not with IFP: there, when the start MV is
+  // out of range, the gradient below reads the prediction buffer left by the previous search, whose last test a skip
+  // would change.
+  const bool skipRepeatedTests = !m_pcEncCfg->m_ifpLines;
+  AffineCpmvTestedSet testedMvs( mvNum );
+
   // do motion compensation with origin mv
 
   clipMv(acMvTemp[0], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
@@ -5325,6 +5392,10 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
   {
     xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.cs->slice->clpRngs[COMP_Y], refPicList);
+    if( skipRepeatedTests )
+    {
+      testedMvs.record( acMvTemp );
+    }
 
     // get error
     uiCostBest = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
@@ -5463,6 +5534,10 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
     {
       xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+      if( skipRepeatedTests )
+      {
+        testedMvs.record( acMvTemp );   // the gradient steps never skip: the next step reads this prediction
+      }
 
       // get error
       Distortion uiCostTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
@@ -5493,6 +5568,12 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   {
     if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, ctrlPtMv, m_pcEncCfg->m_ifpLines ) )
     {
+      if( skipRepeatedTests && testedMvs.testedBefore( ctrlPtMv ) )
+      {
+        // cannot beat uiCostBest; xCalcAffineMVBits still runs: it leaves RdCost's MV predictor as the test would
+        xCalcAffineMVBits( cu, ctrlPtMv, acMvPred );
+        return;
+      }
       xPredAffineBlk(COMP_Y, cu, refPic, ctrlPtMv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
       // get error
       Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
@@ -5586,6 +5667,12 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
 
             if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
             {
+              if( skipRepeatedTests && testedMvs.testedBefore( acMvTemp ) )
+              {
+                // cannot beat uiCostBest; xCalcAffineMVBits still runs: it sets RdCost's MV predictor as the test would
+                xCalcAffineMVBits( cu, acMvTemp, acMvPred );
+                continue;
+              }
               xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
               Distortion costTemp = m_pcRdCost->getDistPart(predBuf.Y(), pBuf->Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD);
