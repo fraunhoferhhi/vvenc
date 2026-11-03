@@ -818,8 +818,14 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   // For nonzero actions, preserve VVenC's QPA-derived lambda baseline and
   // update the RDO/quantization lambdas consistently with the new QP.
   // The unconfigured and zero-action paths leave the original encoder intact.
+  // Inter CU descendants can inherit their parent QP without a fresh QPA
+  // decision. Re-applying delta in those descendants would compound the action.
+  // Only attach the action when original QPA established a QP at this level.
+  const bool rlQpaDecision = partitioner.currSubdiv == 0 ||
+                              ( partitioner.currSubdiv > 0 && slice.isIntra() );
   if( rl::QpActionMap::enabled() && m_pcEncCfg->m_usePerceptQPA &&
-      pps.useDQP && isLuma( partitioner.chType ) && partitioner.currQgEnable() )
+      pps.useDQP && isLuma( partitioner.chType ) &&
+      partitioner.currQgEnable() && rlQpaDecision )
   {
     const PreCalcValues& pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
