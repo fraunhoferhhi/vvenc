@@ -281,11 +281,11 @@ int main( int argc, char* argv[] )
     rlAuBitsFile.open( rlAuFilePath, std::ios::out | std::ios::trunc );
     if( !rlAuBitsFile.is_open() )
     {
-      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: cannot open RL AU-bits log %s\\n", rlAuFilePath );
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: cannot open RL AU-bits log %s\n", rlAuFilePath );
       vvenc_encoder_close( enc );
       return -1;
     }
-    rlAuBitsFile << "output_step,poc,au_bytes,au_bits\\n";
+    rlAuBitsFile << "output_step,poc,au_bytes,au_bits\n";
   }
 
   // --- allocate memory for output packets
@@ -444,7 +444,7 @@ int main( int argc, char* argv[] )
         {
           const uint64_t auBytes = (uint64_t) AU.payloadUsedSize;
           rlAuBitsFile << (uiFrames + 1) << ',' << AU.poc << ','
-                       << auBytes << ',' << (auBytes * 8) << '\\n';
+                       << auBytes << ',' << (auBytes * 8) << '\n';
           rlAuBitsFile.flush();
         }
         uiFrames++;
