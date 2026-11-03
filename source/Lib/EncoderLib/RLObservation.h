@@ -64,8 +64,8 @@ public:
         const int idx = row * 4 + col;
         const int x0 = col * (int) pcv.maxCUSize;
         const int y0 = row * (int) pcv.maxCUSize;
-        const int x1 = std::min(x0 + (int)pcv.maxCUSize, current.width);
-        const int y1 = std::min(y0 + (int)pcv.maxCUSize, current.height);
+        const int x1 = std::min(x0 + (int)pcv.maxCUSize, (int)current.width);
+        const int y1 = std::min(y0 + (int)pcv.maxCUSize, (int)current.height);
         const int qp = idx < (int) pic.ctuAdaptedQP.size()
                        ? pic.ctuAdaptedQP[idx] : slice.sliceQp;
         qpa[idx] = std::max(0.0, std::min(1.0, qp / 63.0));
