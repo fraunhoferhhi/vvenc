@@ -47,7 +47,7 @@ public:
 
     const CPelBuf current = pic.getOrigBuf( COMP_Y );
     const CPelBuf previous = pic.getOrigBufPrev( COMP_Y, (PrevFrameType) 0 );
-    const bool hasPrevious = previous.valid() && previous.width == current.width &&
+    const bool hasPrevious = previous.buf != nullptr && previous.width == current.width &&
                              previous.height == current.height;
 
     const int depth = cfg.m_internalBitDepth[CH_L];
@@ -56,7 +56,6 @@ public:
     std::array<double, 12> spatial = {};
     std::array<double, 12> temporal = {};
     std::array<double, 12> qpa = {};
-    double meanQP = 0.0;
 
     for( int row = 0; row < 3; ++row )
     {
@@ -70,7 +69,6 @@ public:
         const int qp = idx < (int) pic.ctuAdaptedQP.size()
                        ? pic.ctuAdaptedQP[idx] : slice.sliceQp;
         qpa[idx] = std::max(0.0, std::min(1.0, qp / 63.0));
-        meanQP += qpa[idx];
         int samples = 0;
         double gradients = 0.0;
         double temporalDifference = 0.0;
