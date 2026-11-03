@@ -70,11 +70,13 @@ class TestRewardJoin(unittest.TestCase):
     def test_join_does_not_confuse_poc_and_au_order(self):
         rows = self._join()
         self.assertEqual([r["poc"] for r in rows], [2,0,1])
-        self.assertEqual([r["reward_diagnostics"]["encoded_step"] for r in rows], [2,1,3])
+        self.assertEqual([r["reward_diagnostics"]["encoded_step"] for r in rows], [1,2,3])
+        self.assertEqual([r["au_output_step"] for r in rows], [2,1,3])
         self.assertEqual([r["reward_diagnostics"]["counts"]["fn"] for r in rows], [1,0,0])
         self.assertEqual([r["done"] for r in rows], [False, False, True])
         self.assertEqual([r["next_value"] for r in rows], [1.0, 2.0, 0.0])
-        self.assertEqual(rows[0]["reward_diagnostics"]["cumulative_bits"], 160)
+        self.assertEqual(rows[0]["reward_diagnostics"]["cumulative_bits"], 80)
+        self.assertEqual(rows[1]["reward_diagnostics"]["cumulative_bits"], 160)
         self.assertEqual(rows[2]["reward_diagnostics"]["cumulative_bits"], 240)
 
     def test_reject_duplicate_source_poc(self):
