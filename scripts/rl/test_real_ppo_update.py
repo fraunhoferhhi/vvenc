@@ -9,16 +9,20 @@ import torch
 from ppo_agent import PPOActorCritic
 from verify_real_ppo_update import (
     read_real_rollout, validate_unchanged_collecting_policy,
-    one_true_rollout_update,
+    one_true_rollout_update, sha256,
 )
 
 
 class TestRealPPOUpdate(unittest.TestCase):
-    def make_episode(self, root: Path, n: int = 32):
+    def make_episode(self, root: Path, n: int = 32,
+                     source_checkpoint: Path | None = None):
         torch.manual_seed(7)
         model = PPOActorCritic().eval()
+        if source_checkpoint is not None:
+            checkpoint_state = torch.load(source_checkpoint, map_location="cpu", weights_only=True)
+            model.load_state_dict(checkpoint_state["model_state"], strict=True)
         episode = root / "real_episode"
-        episode.mkdir()
+        episode.mkdir(parents=True)
         joined = []
         for i in range(n):
             gl = torch.rand(1, 8)
@@ -47,7 +51,11 @@ class TestRealPPOUpdate(unittest.TestCase):
         )
         (episode / "summary.json").write_text(json.dumps({
             "split": "train", "video_id": "train_only",
-            "validation_status": "UNTRAINED_POLICY_REWARD_DATA_COLLECTION",
+            "validation_status": (
+                "UPDATED_POLICY_REWARD_DATA_COLLECTION" if source_checkpoint
+                else "UNTRAINED_POLICY_REWARD_DATA_COLLECTION"
+            ),
+            "policy_checkpoint_sha256": sha256(source_checkpoint) if source_checkpoint else None,
             "ppo_policy_training": False, "target_kbps": 120,
             "au_sum_matches_stream": True,
             "frames": n, "baseline_lock_sha256": "unit_test_lock",
@@ -70,6 +78,32 @@ class TestRealPPOUpdate(unittest.TestCase):
             # A repeated update on the same rollout/checkpoint must be refused.
             with self.assertRaises(FileExistsError):
                 one_true_rollout_update(episode, checkpoint, seed=23)
+
+    def test_second_fresh_rollout_resumes_same_actor_and_adam_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = self.make_episode(root / "episode1")
+            ck1 = root / "first.pt"
+            one_true_rollout_update(first, ck1, seed=23)
+            new_episode = self.make_episode(
+                root / "episode2", source_checkpoint=ck1
+            )
+            ck2 = root / "second.pt"
+            with self.assertRaisesRegex(ValueError, "--checkpoint-in is REQUIRED"):
+                one_true_rollout_update(new_episode, ck2, seed=24)
+            result = one_true_rollout_update(
+                new_episode, ck2, seed=24, checkpoint_in=ck1
+            )
+            self.assertTrue(result["actor_changed"])
+            self.assertTrue(result["critic_changed"])
+            state2 = torch.load(ck2, map_location="cpu", weights_only=True)
+            self.assertEqual(state2["ppo_iteration"], 2)
+            self.assertEqual(state2["collector_checkpoint_sha256"], sha256(ck1))
+            self.assertNotEqual(sha256(ck1), sha256(ck2))
+            self.assertNotEqual(
+                state2["rollout_sha256"],
+                torch.load(ck1, map_location="cpu", weights_only=True)["rollout_sha256"],
+            )
 
     def test_tampered_action_or_logprob_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
