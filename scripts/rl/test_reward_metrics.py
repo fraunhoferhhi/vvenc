@@ -20,6 +20,17 @@ class RewardTests(unittest.TestCase):
         self.assertEqual((c.tp, c.fp, c.fn), (1, 1, 0))
         self.assertAlmostEqual(c.f1, 2.0 / 3.0)
 
+    def test_greedy_iou_tie_uses_baseline_lowest_reference_index(self):
+        # Equal-IoU first prediction must match GT index 0, leaving index 1
+        # available for the second prediction at IoU threshold 0.7.
+        reference = [Detection(0, 0, 10, 10), Detection(2, 0, 12, 10)]
+        candidates = [
+            Detection(1, 0, 11, 10, 0.99),
+            Detection(2, 0, 12, 10, 0.90),
+        ]
+        counts = match_one_to_one(reference, candidates, iou_threshold=0.7)
+        self.assertEqual((counts.tp, counts.fp, counts.fn), (2, 0, 0))
+
     def test_missed_boxes_reduce_f1(self):
         c = match_one_to_one(self.ref, [])
         self.assertEqual((c.tp, c.fp, c.fn), (0, 0, 1))
