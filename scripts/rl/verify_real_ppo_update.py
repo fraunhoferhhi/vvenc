@@ -211,6 +211,8 @@ def checkpoint_and_verify(
 
 
 def one_true_rollout_update(episode: Path, checkpoint: Path, seed: int = 20261103):
+    if checkpoint.exists():
+        raise FileExistsError("Checkpoint already exists; use new output, never replay one rollout")
     summary, rows, rollout_path = read_real_rollout(episode)
     torch.set_num_threads(2)
     torch.manual_seed(7)
@@ -224,7 +226,7 @@ def one_true_rollout_update(episode: Path, checkpoint: Path, seed: int = 2026110
     trainer = PPOTrainer(model, epochs=2, minibatch_size=32)
     before = {key: value.detach().clone() for key, value in model.state_dict().items()}
     metrics = trainer.update(rollout)
-    if not math.isfinite(metrics["loss"]) or not math.isfinite(metrics["mean_reward"]):
+    if not all(math.isfinite(metrics[k]) for k in ("loss", "mean_reward", "approx_kl")):
         raise ValueError("PPO loss/reward nonfinite")
     if metrics["optimizer_steps"] <= 0:
         raise ValueError("PPO never updated optimizer")
