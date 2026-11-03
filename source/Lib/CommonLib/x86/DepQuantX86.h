@@ -107,6 +107,18 @@ namespace vvenc {
         auto* absVal = &curr.absVal[0][0];
         auto* sum1st = &curr.sum1st[0][0];
 
+#if USE_AVX2
+        // the shuffle repeats every 16 bytes (four positions of four states), so both lanes use it
+        const __m256i vshuf256 = _mm256_broadcastsi128_si256( vshuf );
+        for( int i = 0; i < ctxSize; i += 2 * regSize )
+        {
+          for( uint8_t* ctx : { tplAcc, absVal, sum1st } )
+          {
+            const __m256i v = _mm256_loadu_si256( ( const __m256i* ) &ctx[i] );
+            _mm256_storeu_si256( ( __m256i* ) &ctx[i], _mm256_shuffle_epi8( v, vshuf256 ) );
+          }
+        }
+#else
         for( int i = 0; i < ctxSize; i += regSize )
         {
           __m128i vtpl = _mm_loadu_si128( ( const __m128i* ) &tplAcc[i]);
@@ -121,6 +133,7 @@ namespace vvenc {
           vsum = _mm_shuffle_epi8( vsum, vshuf );
           _mm_storeu_si128( ( __m128i* ) &sum1st[i], vsum );
         }
+#endif
 
         __m128i numSig = _mm_loadu_si32( curr.numSig );
         numSig = _mm_shuffle_epi8( numSig, vshuf );
