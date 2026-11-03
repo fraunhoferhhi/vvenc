@@ -11,8 +11,9 @@ coordinates, and underlying frame dimensions. An empty detection list is not
 equivalent to a missing frame. Class id 2 is COCO 'car'.
 
 The returned PPO transition list is in POLICY DECISION ORDER (observation
-file order); rate accumulation is in OUTPUT ACCESS UNIT ORDER. Neither
-may be assumed to be increasing POC. No learning occurs here.
+file order); rate accumulation for the RL reward is in POLICY DECISION ORDER, using
+true per-POC AU bits. Output AU order is audited separately; neither
+order may be assumed to be increasing POC. No learning occurs here.
 """
 from __future__ import annotations
 
@@ -127,26 +128,32 @@ def join_episode(
     decoded = read_detections(decoded_detections, video_id, expected)
     output_aus = read_au_bits(au_csv, bitstream, n)
 
-    rewards_by_poc = {}
-    for au in output_aus:
-        rewards_by_poc[au.poc] = calculate_frame_reward(
+    # Each reward belongs to a POLICY DECISION, not to the VVC output
+    # scheduler. Accumulate exact emitted AU bits by the SAME order in which
+    # observations/actions were sampled and in which GAE will be computed.
+    # AU output_step is retained separately for auditing reorder; it must
+    # not silently replace policy step in the bitrate penalty clock.
+    au_by_poc = {au.poc: au for au in output_aus}
+    policy_bits = 0
+    joined = []
+    for index, row in enumerate(trajectory):
+        poc = row["poc"]
+        au = au_by_poc[poc]
+        policy_bits += au.au_bits
+        reward = calculate_frame_reward(
             video_id=video_id,
-            poc=au.poc,
-            encoded_step=au.output_step,
-            pseudo_gt=source[au.poc],
-            reconstructed=decoded[au.poc],
+            poc=poc,
+            encoded_step=index + 1,
+            pseudo_gt=source[poc],
+            reconstructed=decoded[poc],
             actual_frame_bits=au.au_bits,
-            cumulative_bits=au.cumulative_bits,
+            cumulative_bits=policy_bits,
             frame_rate=frame_rate,
             target_bps=target_bps,
             beta=beta,
             iou_threshold=iou_threshold,
             empty_reference_fp_penalty=empty_reference_fp_penalty,
         )
-
-    joined = []
-    for index, row in enumerate(trajectory):
-        reward = rewards_by_poc[row["poc"]]
         next_value = float(trajectory[index + 1]["value"]) if index + 1 < n else 0.0
         result = dict(row)
         result["video_id"] = video_id
@@ -155,6 +162,7 @@ def join_episode(
         result["next_value"] = next_value
         result["reward_diagnostics"] = asdict(reward)
         result["policy_decision_step"] = index + 1
+        result["au_output_step"] = au.output_step
         joined.append(result)
 
     assert len(joined) == n and set(x["poc"] for x in joined) == expected
