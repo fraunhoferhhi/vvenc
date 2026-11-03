@@ -82,7 +82,8 @@ def checkpoint_bundle(folder: Path, manifest: dict) -> Path:
             summary = folder / record["episode_dir"] / "summary.json"
             if not summary.is_file():
                 raise RuntimeError("Missing completed episode summary: " + str(summary))
-            archive.write(summary, f"episode_summaries/{summary.parent.name}.json")
+            # Keep the original relative directory: extracted ZIP can resume.
+            archive.write(summary, f"{record['episode_dir']}/summary.json")
     os.replace(tmp, dst)
     return dst
 
@@ -259,6 +260,9 @@ def run_gate(args) -> None:
         )
         current_ckpt = ckpt_next
 
+    # Also rebuild a missing archive after a successful fully completed resume.
+    if progress["completed"]:
+        checkpoint_bundle(root, progress)
     print(f"BOUNDED_TRAIN_CONTINUATION_GATE_PASS: "
           f"{len(progress['completed'])} fresh Train episodes, "
           f"latest_checkpoint={current_ckpt}")
