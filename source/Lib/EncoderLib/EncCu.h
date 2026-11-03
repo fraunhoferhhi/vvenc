@@ -285,6 +285,7 @@ private:
 
   PelStorage            m_aTmpStorageLCU  [MAX_TMP_BUFS];     ///< used with CIIP, EDO, GEO
   PelStorage            m_acMergeTmpBuffer[MRG_MAX_NUM_CANDS];
+  std::vector<uint32_t> m_geoRowPrefix;                       ///< GEO: per candidate, the row prefix sums of |org - pred| (prepareGpmComboList)
 
   SortedPelUnitBufs<SORTED_BUFS>
                         m_SortedPelUnitBufs;
