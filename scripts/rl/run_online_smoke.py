@@ -14,6 +14,8 @@ import subprocess
 import sys
 import time
 
+from au_rate_audit import read_au_bits
+
 
 def run_case(phase, args, work):
     case = work / phase
@@ -24,8 +26,10 @@ def run_case(phase, args, work):
     trace = case / "encoder.log"
     encoder_env = dict(os.environ)
     for key in ("VVENC_RL_QP_MAP", "VVENC_RL_ACTION_DIR",
-                "VVENC_RL_STATE_FILE", "VVENC_RL_TRACE"):
+                "VVENC_RL_STATE_FILE", "VVENC_RL_TRACE", "VVENC_RL_AU_BITS_FILE"):
         encoder_env.pop(key, None)
+    au_bits_path = case / "au_bits.csv"
+    encoder_env["VVENC_RL_AU_BITS_FILE"] = str(au_bits_path)
 
     server = None
     if phase != "vanilla":
@@ -97,6 +101,13 @@ def run_case(phase, args, work):
     if not bitstream.is_file() or not bitstream.stat().st_size:
         raise RuntimeError(f"No {phase} bitstream")
     sha = hashlib.sha256(bitstream.read_bytes()).hexdigest()
+    au_records = read_au_bits(au_bits_path, bitstream, args.frames)
+    print(
+        f"  AU_RATE_ACCOUNTING_PASS mode={phase} frames={len(au_records)} "
+        f"total_bits={au_records[-1].cumulative_bits} "
+        f"output_order_pocs={[x.poc for x in au_records[:8]]}",
+        flush=True
+    )
 
     if args.decoder:
         decoded = case / "decoded.yuv"
