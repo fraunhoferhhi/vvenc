@@ -101,7 +101,8 @@ def match_one_to_one(
         viable = [(bbox_iou(p, pseudo_gt[i]), i) for i in unmatched]
         if not viable:
             continue
-        best_iou, best_idx = max(viable, key=lambda pair: pair[0])
+        # Baseline tie-break: equal IoU prefers the lower reference index.
+        best_iou, best_idx = max(viable, key=lambda pair: (pair[0], -pair[1]))
         if best_iou >= iou_threshold:
             unmatched.remove(best_idx)
             tp += 1
