@@ -2789,6 +2789,78 @@ static bool check_biDirOptFlow( InterPredInterpolation* ref, InterPredInterpolat
   return true;
 }
 
+// xApplyBDOF on predictions as xPredInterBlk leaves them (unpadded one-sample border); 16-wide blocks take
+// xFpBDOF16 (gradients, sums and average in one pass) where it is set
+class BDOFTester : public InterPredInterpolation
+{
+public:
+  void apply( const std::vector<Pel> pred[2], int width, int height, Pel* dst, int dstStride, const ClpRng& clpRng )
+  {
+    // copied for every call: the gradient path pads the predictions in place
+    for( int list = 0; list < 2; list++ )
+    {
+      std::copy( pred[list].begin(), pred[list].end(), m_filteredBlockTmp[2 + list][COMP_Y] );
+    }
+    PelBuf dstBuf( dst, dstStride, width, height );
+    xApplyBDOF( dstBuf, clpRng );
+  }
+};
+
+// a prediction (block and border) of one of the patterns: random, smooth ramp + small noise (unclipped motion), flat
+// (zero gradient sums), flat in one direction, extreme values
+static void fillBdofPrediction( std::vector<Pel>& pred, int stride, int pattern )
+{
+  const int gx = rand() % 401 - 200, gy = rand() % 401 - 200, base = rand() % 12001 - 6000;
+  for( size_t i = 0; i < pred.size(); i++ )
+  {
+    const int x = int( i % stride ), y = int( i / stride );
+    switch( pattern )
+    {
+    case 0:  pred[i] = Pel( rand() % 32768 - 16384 ); break;
+    case 1:  pred[i] = Pel( base + gx * x + gy * y + rand() % 7 - 3 ); break;
+    case 2:  pred[i] = Pel( base ); break;
+    case 3:  pred[i] = Pel( base + gx * x ); break;
+    default: pred[i] = rand() & 1 ? Pel( 32767 - rand() % 4 ) : Pel( -32768 + rand() % 4 ); break;
+    }
+  }
+}
+
+static bool check_BDOF16( unsigned num_cases, int width, int height )
+{
+  printf( "Testing InterPred::xApplyBDOF w=%d h=%d\n", width, height );
+  BDOFTester ref, opt;
+  ref.init( /*enableOpt=*/false );
+  opt.init( /*enableOpt=*/true );
+
+  const int predStride = width + 2 * BDOF_EXTEND_SIZE + 2;
+  std::vector<Pel> pred[2] = { std::vector<Pel>( predStride * ( height + 4 ) ), std::vector<Pel>( predStride * ( height + 4 ) ) };
+  const int dstStride = 128;
+  std::vector<Pel> dstRef( dstStride * height ), dstOpt( dstStride * height );
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    for( int pattern = 0; pattern < 5; pattern++ )
+    {
+      for( int bitDepth : { 8, 10 } )
+      {
+        fillBdofPrediction( pred[0], predStride, pattern );
+        fillBdofPrediction( pred[1], predStride, pattern );
+        const ClpRng clpRng{ bitDepth };
+        ref.apply( pred, width, height, dstRef.data(), dstStride, clpRng );
+        opt.apply( pred, width, height, dstOpt.data(), dstStride, clpRng );
+
+        std::ostringstream sstm;
+        sstm << "xApplyBDOF width=" << width << " height=" << height << " pattern=" << pattern << " bitDepth=" << bitDepth;
+        if( !compare_values_2d( sstm.str(), dstRef.data(), dstOpt.data(), height, width, dstStride ) )
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 template<typename G>
 static bool check_one_gradFilter( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
                                   int srcStride, int gradStride, G input_generator, bool padding )
@@ -3102,6 +3174,10 @@ static bool test_InterPred()
   passed = check_biDirOptFlow( &ref, &opt, num_cases, 8, 16 ) && passed;
   passed = check_biDirOptFlow( &ref, &opt, num_cases, 16, 8 ) && passed;
   passed = check_biDirOptFlow( &ref, &opt, num_cases, 16, 16 ) && passed;
+
+  passed = check_BDOF16( num_cases, 16, 16 ) && passed;
+  passed = check_BDOF16( num_cases, 16, 8 ) && passed;
+  passed = check_BDOF16( num_cases, 8, 16 ) && passed;
 
   for( unsigned w : { 4, 8, 16, 32 } )
   {

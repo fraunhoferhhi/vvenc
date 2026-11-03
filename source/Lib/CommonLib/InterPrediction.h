@@ -97,6 +97,9 @@ public:
   void(*xFpProfGradFilter)    ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth );
   void(*xFpApplyPROF)         ( Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng );
   void(*xFpPadDmvr)           ( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize );
+  // the whole BDOF of a 16-wide block in one pass (AVX2; nullptr: xApplyBDOF's gradient filter, padding and
+  // xFpBiDirOptFlow): pred0 / pred1 point at the block's first sample, inside its unpadded one-sample border
+  void(*xFpBDOF16)            ( const Pel* pred0, const Pel* pred1, const ptrdiff_t predStride, const int height, Pel* dst, const ptrdiff_t dstStride, const int shiftNum, const int offset, const int limit, const ClpRng& clpRng ) = nullptr;
 
   // The luma prediction of one affine CU, everything xPredAffineBlk's sub-block loop needs for it (its MV spread within
   // the limit: the other CUs, whose sub-blocks all take one MV, are predicted in one filter call before)
