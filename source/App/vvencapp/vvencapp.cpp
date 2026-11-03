@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <algorithm>
 #include <cstdarg>
+#include <cstdlib>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -269,6 +270,24 @@ int main( int argc, char* argv[] )
     }
   }
 
+  // Stage-3 RL research: the precise emitted payload bytes of each VVC
+  // access unit (AU), including Annex-B start-code prefixes, keyed by POC.
+  // Do not derive this from slice-only RC estimates or decoded YUV size.
+  // Output order is encoder/AU order, not necessarily display POC order.
+  std::ofstream rlAuBitsFile;
+  const char* rlAuFilePath = std::getenv( "VVENC_RL_AU_BITS_FILE" );
+  if( rlAuFilePath && rlAuFilePath[0] != '\0' )
+  {
+    rlAuBitsFile.open( rlAuFilePath, std::ios::out | std::ios::trunc );
+    if( !rlAuBitsFile.is_open() )
+    {
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: cannot open RL AU-bits log %s\\n", rlAuFilePath );
+      vvenc_encoder_close( enc );
+      return -1;
+    }
+    rlAuBitsFile << "output_step,poc,au_bytes,au_bits\\n";
+  }
+
   // --- allocate memory for output packets
   vvencAccessUnit AU;
   vvenc_accessUnit_default( &AU );
@@ -420,6 +439,13 @@ int main( int argc, char* argv[] )
             vvenc_encoder_close( enc );
             return VVENC_ERR_UNSPECIFIED;
           }
+        }
+        if( rlAuBitsFile.is_open() )
+        {
+          const uint64_t auBytes = (uint64_t) AU.payloadUsedSize;
+          rlAuBitsFile << (uiFrames + 1) << ',' << AU.poc << ','
+                       << auBytes << ',' << (auBytes * 8) << '\\n';
+          rlAuBitsFile.flush();
         }
         uiFrames++;
       }
