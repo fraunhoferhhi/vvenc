@@ -502,6 +502,36 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
   xCompressCtu( cs, ctuArea, ctuRsAddr, prevQP );
 
+  // Final-CTU audit is separate from xCompressCU candidate-QG traces.
+  // It only reads the winning CU tree, and does not alter encoding decisions.
+  // Lock the same mutex used by cs.useSubStructure in the threaded path.
+  if( rl::QpActionMap::enabled() && rl::QpActionMap::traceEnabled() && !pic->isPreAnalysis )
+  {
+    int minLumaQp = MAX_QP;
+    int maxLumaQp = -MAX_QP;
+    unsigned nLumaCus = 0;
+    if( m_wppMutex ) m_wppMutex->lock();
+    for( const CodingUnit* cu : cs.cus )
+    {
+      if( cu->chType == CH_L &&
+          cu->lumaPos().x >= pos.x && cu->lumaPos().x < pos.x + (int) pcv.maxCUSize &&
+          cu->lumaPos().y >= pos.y && cu->lumaPos().y < pos.y + (int) pcv.maxCUSize )
+      {
+        ++nLumaCus;
+        minLumaQp = std::min( minLumaQp, cu->qp );
+        maxLumaQp = std::max( maxLumaQp, cu->qp );
+      }
+    }
+    if( m_wppMutex ) m_wppMutex->unlock();
+
+    const int requestedDelta = rl::QpActionMap::deltaFor( slice->poc,
+      (unsigned) pos.x, (unsigned) pos.y, (unsigned) pcv.maxCUSize,
+      (unsigned) pcv.widthInCtus, (unsigned) pcv.heightInCtus );
+    rl::QpActionMap::traceFinalCtu( slice->poc, (unsigned) ctuRsAddr,
+      (unsigned) pos.x, (unsigned) pos.y, requestedDelta,
+      nLumaCus, nLumaCus ? minLumaQp : -1, nLumaCus ? maxLumaQp : -1 );
+  }
+
   m_CABACEstimator->resetBits();
   m_CABACEstimator->coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr, true, true );
 
@@ -846,7 +876,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
                     pic->ctuAdaptedQP[ctuRsAddr], appliedQp, true );
     }
     rl::QpActionMap::trace( slice.poc, (unsigned) partitioner.currQgPos.x,
-                            (unsigned) partitioner.currQgPos.y, baseQp, delta, appliedQp );
+                            (unsigned) partitioner.currQgPos.y, baseQp, delta, appliedQp,
+                            (unsigned) partitioner.currSubdiv,
+                            (unsigned) partitioner.currDepth,
+                            (unsigned) lumaArea.width, (unsigned) lumaArea.height );
   }
 
   if (partitioner.currQtDepth == 0)
