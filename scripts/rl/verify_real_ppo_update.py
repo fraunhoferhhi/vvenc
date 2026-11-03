@@ -42,7 +42,10 @@ def read_real_rollout(episode: Path):
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     if (
         summary.get("split") != "train"
-        or summary.get("validation_status") != "UNTRAINED_POLICY_REWARD_DATA_COLLECTION"
+        or summary.get("validation_status") not in (
+            "UNTRAINED_POLICY_REWARD_DATA_COLLECTION",
+            "UPDATED_POLICY_REWARD_DATA_COLLECTION",
+        )
         or summary.get("ppo_policy_training") is not False
         or summary.get("target_kbps") != 120
         or summary.get("au_sum_matches_stream") is not True
@@ -134,7 +137,8 @@ def validate_unchanged_collecting_policy(
 
 def checkpoint_and_verify(
     trainer: PPOTrainer, output: Path, summary: dict, metrics: dict,
-    rollout_path: Path, seed: int
+    rollout_path: Path, seed: int, collector_sha: str | None = None,
+    ppo_iteration: int = 1,
 ):
     if output.exists():
         raise FileExistsError("Checkpoint already exists; refuse double update on same rollout")
@@ -153,7 +157,10 @@ def checkpoint_and_verify(
         "rollout_sha256": sha256(rollout_path),
         "video_id": summary["video_id"], "split": "train",
         "frames": summary["frames"], "baseline_lock_sha256": summary["baseline_lock_sha256"],
-        "ppo_bridge_seed": 7, "optimizer_update_seed": seed,
+        "ppo_bridge_seed": int(summary.get("policy_bridge_seed", 7)),
+        "optimizer_update_seed": seed,
+        "ppo_iteration": ppo_iteration,
+        "collector_checkpoint_sha256": collector_sha,
         "metrics": metrics,
         "torch_rng_state": torch.get_rng_state(),
         "python_rng_state": random.getstate(),
@@ -210,20 +217,58 @@ def checkpoint_and_verify(
     return sha256(output)
 
 
-def one_true_rollout_update(episode: Path, checkpoint: Path, seed: int = 20261103):
+def one_true_rollout_update(
+    episode: Path, checkpoint: Path, seed: int = 20261103,
+    checkpoint_in: Path | None = None,
+):
     if checkpoint.exists():
         raise FileExistsError("Checkpoint already exists; use new output, never replay one rollout")
     summary, rows, rollout_path = read_real_rollout(episode)
     torch.set_num_threads(2)
     torch.manual_seed(7)
     model = PPOActorCritic()
+    collector_sha = None
+    prev = None
+    iteration = 1
+    if checkpoint_in is not None:
+        if not checkpoint_in.is_file():
+            raise FileNotFoundError("Collector checkpoint missing: " + str(checkpoint_in))
+        collector_sha = sha256(checkpoint_in)
+        if summary.get("policy_checkpoint_sha256") != collector_sha:
+            raise ValueError("Collector checkpoint hash mismatch: episode was sampled by another policy")
+        prev = torch.load(checkpoint_in, map_location="cpu", weights_only=True)
+        if (prev.get("schema") != "vvenc-ppo-single-real-rollout-gate/1"
+                or prev.get("split") != "train"
+                or prev.get("baseline_lock_sha256") != summary["baseline_lock_sha256"]):
+            raise ValueError("Collector checkpoint is not a compatible Train PPO checkpoint")
+        if prev.get("rollout_sha256") == sha256(rollout_path):
+            raise ValueError("Refusing PPO update with rollout already used in source checkpoint")
+        model.load_state_dict(prev["model_state"], strict=True)
+        iteration = int(prev.get("ppo_iteration", 1)) + 1
+    elif summary.get("policy_checkpoint_sha256") is not None:
+        raise ValueError("This episode used a trained policy: --checkpoint-in is REQUIRED")
+    elif summary.get("validation_status") != "UNTRAINED_POLICY_REWARD_DATA_COLLECTION":
+        raise ValueError("Updated-policy episode is missing collector checkpoint identity")
+
     rollout, verification = validate_unchanged_collecting_policy(model, rows)
 
     # Only AFTER checking that collector policy == current trainable policy:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    trainer = PPOTrainer(model, epochs=2, minibatch_size=32)
+    if prev is not None:
+        hp = prev["model_hparams"]
+        trainer = PPOTrainer(
+            model, learning_rate=hp["lr"], gamma=hp["gamma"],
+            gae_lambda=hp["gae_lambda"], clip_eps=hp["clip_eps"],
+            epochs=hp["epochs"], minibatch_size=hp["minibatch_size"],
+            target_kl=hp["target_kl"], value_coef=hp["value_coef"],
+            entropy_coef=hp["entropy_coef"],
+            max_grad_norm=hp["max_grad_norm"],
+        )
+        trainer.optimizer.load_state_dict(prev["optimizer_state"])
+    else:
+        trainer = PPOTrainer(model, epochs=2, minibatch_size=32)
     before = {key: value.detach().clone() for key, value in model.state_dict().items()}
     metrics = trainer.update(rollout)
     if not all(math.isfinite(metrics[k]) for k in ("loss", "mean_reward", "approx_kl")):
@@ -238,11 +283,16 @@ def one_true_rollout_update(episode: Path, checkpoint: Path, seed: int = 2026110
     metrics["actor_changed"] = actor_changed
     metrics["critic_changed"] = critic_changed
 
-    digest = checkpoint_and_verify(trainer, checkpoint, summary, metrics, rollout_path, seed)
+    digest = checkpoint_and_verify(
+        trainer, checkpoint, summary, metrics, rollout_path, seed,
+        collector_sha=collector_sha, ppo_iteration=iteration,
+    )
     print(json.dumps({
         "gate": "REAL_ROLLOUT_SINGLE_PPO_UPDATE_PASS",
         "video_id": summary["video_id"],
         "frames": len(rows),
+        "ppo_iteration": iteration,
+        "collector_checkpoint_sha256": collector_sha,
         "optimizer_steps": metrics["optimizer_steps"],
         "mean_real_reward": metrics["mean_reward"],
         "ppo_loss": metrics["loss"],
@@ -262,8 +312,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", type=Path, required=True)
     parser.add_argument("--checkpoint-out", type=Path, required=True)
+    parser.add_argument("--checkpoint-in", type=Path,
+                        help="Exactly the checkpoint used to collect this NEW rollout")
     args = parser.parse_args()
-    one_true_rollout_update(args.episode, args.checkpoint_out)
+    one_true_rollout_update(args.episode, args.checkpoint_out,
+                            checkpoint_in=args.checkpoint_in)
 
 
 if __name__ == "__main__":
