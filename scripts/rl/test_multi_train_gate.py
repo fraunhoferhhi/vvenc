@@ -40,7 +40,7 @@ class TestMultiTrainGate(unittest.TestCase):
                 self.assertEqual(
                     sorted(z.namelist()),
                     sorted(["progress.json", ckpt.name,
-                            "episode_summaries/episode_01_train_01.json"])
+                            "episode_01_train_01/summary.json"])
                 )
                 self.assertEqual(z.read(ckpt.name), ckpt.read_bytes())
             ckpt.write_bytes(b"tampered")
