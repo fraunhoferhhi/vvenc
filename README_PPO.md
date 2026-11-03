@@ -108,6 +108,49 @@ during this bridge smoke test. The training phase must include the
 frozen source/reconstructed YOLOv5n evaluation and bitrate reward,
 using the paper's TP/FP/FN protocol and consistent POC mapping.
 
+## Stage-2 Kaggle verification (2026-11-03)
+
+On the 16-frame 480x320 synthetic clip, the user verified:
+- VVenC and VVdeC builds complete.
+- PPO math unit tests 4/4 PASS.
+- Vanilla 16856 bits; online zero-action 16856 bits and bit-identical.
+- Untrained PPO inference generated 118 nonzero QP values and a 17160-bit stream.
+- 16 observations, 16 matching actions, and 192 unique final CTUs per run.
+- 99 of 192 final CTUs had different QP ranges under PPO.
+- Both PPO policy bridge and strict POC/CTU gate PASS.
+
+These are integration results only. In particular, the test video's tiny
+output bitrate and an untrained PPO action must NOT be used to claim improved
+detection, rate control or bitrate savings on BDD100K.
+
+## Stage-3 Reward implementation status
+
+`scripts/rl/reward_metrics.py` implements **standalone reward primitives**:
+one-to-one car-box matching (prediction confidence order, IoU>=0.5),
+TP/FP/FN and F1, an empty-reference rule (no free reward, FP penalty),
+and the cumulative actual-bps log penalty evaluated in encoding step order.
+
+`scripts/rl/test_reward_metrics.py` covers one-to-one matching, misses,
+rate over/undershoot, empty-car frames, input validation and POC vs
+encoding-order indexing. Run:
+
+```bash
+python3 -m unittest discover -s scripts/rl -p 'test_reward_metrics.py' -v
+```
+
+**NOT YET INTEGRATED:** actual YOLOv5n detector inference; frozen detector
+preprocessing/confidence/NMS parity with the locked 500-run Baseline;
+bit extraction by access-unit/POC; corresponding VVdeC display order;
+joining actual per-frame bits + source/decoded detections + PPO trajectory;
+Beta validation; frame-level and episode-level RL optimization; checkpoint
+saving/resumption. This code must not be presented as a finished reward
+pipeline or a trained PPO Agent.
+
+The reward assumes the inputs are already matched by (video ID, POC), and
+that actual bits are from the VVC access unit, not from YUV file size.
+The chosen one-to-one matching rule **must be verified against the Baseline**
+before it becomes an evaluation protocol; do not silently change it.
+
 ## Python PPO test commands
 
 ```bash
