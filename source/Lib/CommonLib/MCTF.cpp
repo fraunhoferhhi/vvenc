@@ -601,15 +601,18 @@ void MCTF::init( const VVEncCfg& encCfg, bool isFinalPass, NoMallocThreadPool* t
   m_mctfUnitSize     = m_encCfg->m_vvencMCTF.MCTFUnitSize;
 
   // The filter strength per MCTF index, from the GOP's key pictures (the last index, the pictures most others predict
-  // from) down the temporal levels: the configured strength, raised for the three upper levels by MCTFLevelTilt in
-  // percent of the tuned raise (0: off, the configured strength). A cleaner reference pays most where more pictures
-  // predict from it. BIM keeps the configured strength, the film grain analysis its own fixed strength.
-  static constexpr double LEVEL_RAISE[ 4 ] = { 0.6, 0.46, 0.21, 0.0 };   // the tuned raise (100 %) from the key pictures down
-  const int numFrames = m_encCfg->m_vvencMCTF.numFrames;
+  // from) down the temporal levels: the configured strength, raised for the three upper levels with MCTFLevelTilt. A
+  // cleaner reference pays most where more pictures predict from it. Random access only: with GOP size 1 (all intra)
+  // every picture has MCTF index 0 and none is predicted from another, and in low delay (no picture reordering) the
+  // raise costs bits (measured +0.8 to +0.9 % BD-rate on a grainy and a clean clip). BIM keeps the configured strength,
+  // the film grain analysis its own fixed strength.
+  static constexpr double LEVEL_RAISE[ 4 ] = { 0.6, 0.46, 0.21, 0.0 };   // from the key pictures down
+  const bool levelTilt = m_encCfg->m_vvencMCTF.MCTFLevelTilt && m_encCfg->m_GOPSize > 1 && m_encCfg->m_picReordering;
+  const int  numFrames = m_encCfg->m_vvencMCTF.numFrames;
   for( int i = 0; i < numFrames; i++ )
   {
     const int level     = std::min( numFrames - 1 - i, 3 );
-    m_filterStrength[i] = m_encCfg->m_vvencMCTF.MCTFStrengths[i] * ( 1.0 + m_encCfg->m_vvencMCTF.MCTFLevelTilt / 100.0 * LEVEL_RAISE[level] );
+    m_filterStrength[i] = m_encCfg->m_vvencMCTF.MCTFStrengths[i] * ( levelTilt ? 1.0 + LEVEL_RAISE[level] : 1.0 );
   }
 }
 
@@ -888,7 +891,8 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
       if( pic->useMCTF && filterStrength == FGA_FILTER_STRENGTH )
       {
-        // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on, without the tilt)
+        // the picture filtered for the encoding is exactly the one the analysis needs (from QP 20 on with MCTFLevelTilt
+        // off; the tilt raises the key pictures' strength, so the analysis filters its own copy)
         pic->m_picShared->fgaUsesFilteredBuf() = true;
       }
       else

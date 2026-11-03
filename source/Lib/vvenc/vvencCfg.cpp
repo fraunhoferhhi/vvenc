@@ -337,7 +337,7 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
   vvencMCTF->MCTFUnitSize = -1;
-  vvencMCTF->MCTFLevelTilt = 0;
+  vvencMCTF->MCTFLevelTilt = 1;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
@@ -2035,7 +2035,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF > 2 || c->m_vvencMCTF.MCTF < 0,                    "MCTF out of range" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,                "MCTF parameter list sizes differ" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4,          "MCTFSpeed exceeds supported range (0..4)" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFLevelTilt < 0 || c->m_vvencMCTF.MCTFLevelTilt > 300, "MCTFLevelTilt exceeds supported range (0..300)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFLevelTilt < 0 || c->m_vvencMCTF.MCTFLevelTilt > 1,  "MCTFLevelTilt must be 0 (off) or 1 (on)" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize < 8,                                       "MCTFUnitSize is smaller than 8" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize > 32,                                      "MCTFUnitSize is larger than 32" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFUnitSize & ( c->m_vvencMCTF.MCTFUnitSize - 1 ),     "MCTFUnitSize is not a power of 2" );
@@ -3389,7 +3389,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-    if( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFLevelTilt ) css << "(level tilt " << c->m_vvencMCTF.MCTFLevelTilt << " %) ";
+    if( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFLevelTilt && c->m_GOPSize > 1 && c->m_picReordering ) css << "(level tilt) ";
     css << "BIM:" << (int)c->m_blockImportanceMapping << " ";
     if( c->m_blockImportanceMapping == 1 ) css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize << ") ";
 
