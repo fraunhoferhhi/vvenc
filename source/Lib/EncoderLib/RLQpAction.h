@@ -68,22 +68,58 @@ public:
     return it->second[row * kWidth + column];
   }
 
-  static void trace( int poc, unsigned x, unsigned y,
-                     int baseQp, int requestedDelta, int appliedQp )
+  static bool traceEnabled()
   {
-    const char* traceFlag = std::getenv( "VVENC_RL_TRACE" );
-    if( traceFlag == nullptr || traceFlag[0] != '1' ) return;
+    const char* flag = std::getenv( "VVENC_RL_TRACE" );
+    return flag != nullptr && flag[0] == '1';
+  }
 
-    static std::mutex traceMutex;
-    std::lock_guard<std::mutex> lock( traceMutex );
+  // These are RDO candidate evaluations, NOT independent PPO actions.
+  // Multiple calls at the same QG position are expected while evaluating
+  // hypothetical CU partition trees.
+  static void trace( int poc, unsigned x, unsigned y,
+                     int baseQp, int requestedDelta, int appliedQp,
+                     unsigned currSubdiv, unsigned currDepth,
+                     unsigned cuWidth, unsigned cuHeight )
+  {
+    if( !traceEnabled() ) return;
+    std::lock_guard<std::mutex> lock( traceMutex() );
     std::cerr << "[VVENC_RL_QP] poc=" << poc
               << " x=" << x << " y=" << y
               << " qp_base=" << baseQp
               << " delta_requested=" << requestedDelta
-              << " qp_applied=" << appliedQp << '\n';
+              << " qp_applied=" << appliedQp
+              << " subdiv=" << currSubdiv
+              << " depth=" << currDepth
+              << " cu_w=" << cuWidth
+              << " cu_h=" << cuHeight << '\n';
+  }
+
+  // Recorded after the winning CU tree for this CTU has been selected.
+  // Unlike the candidate trace above, there must be exactly one final
+  // record for each POC / CTU raster address in the final encode pass.
+  static void traceFinalCtu( int poc, unsigned ctuAddr, unsigned x, unsigned y,
+                             int requestedDelta, unsigned numLumaCus,
+                             int minQp, int maxQp )
+  {
+    if( !traceEnabled() ) return;
+    std::lock_guard<std::mutex> lock( traceMutex() );
+    std::cerr << "[VVENC_RL_CTU_FINAL] poc=" << poc
+              << " ctu=" << ctuAddr
+              << " x=" << x << " y=" << y
+              << " delta_requested=" << requestedDelta
+              << " num_luma_cus=" << numLumaCus
+              << " min_qp=" << minQp
+              << " max_qp=" << maxQp << '\n';
   }
 
 private:
+  static std::mutex& traceMutex()
+  {
+    static std::mutex mutex;
+    return mutex;
+  }
+
   struct Config
   {
     bool enabled = false;
