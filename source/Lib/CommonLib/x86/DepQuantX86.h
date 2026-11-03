@@ -224,6 +224,56 @@ namespace vvenc {
       }
     }
 
+    // CommonCtx::updateTemplates for the 16 positions of a 4x4 SBB at once. absLevels points to the SBB's start; nbSbb
+    // and shuffle give where the outside neighbours of its positions lie (see Rom::xSetNbSbb16): each neighbour is a
+    // pshufb of the 16 levels of one neighbouring SBB, 0 where it has none. All sums fit bytes: sum1st = min( 255,
+    // sumAbs ) is a saturating byte sum, sumAbs1 <= 5 * 5 and sumNum <= 5.
+    template<X86_VEXT vext>
+    static inline void templateSums16( const uint8_t* absLevels, const DQIntern::NbSbbStarts& nbSbb,
+                                       const DQIntern::NbOutShuffle16& shuffle, __m128i& tplAcc, __m128i& sum1st )
+    {
+      using namespace DQIntern;
+      __m128i levels[NUM_NB_SBB];
+      for( int s = 0; s < NUM_NB_SBB; s++ )
+      {
+        levels[s] = nbSbb.start[s] >= 0 ? _mm_loadu_si128( ( const __m128i* ) ( absLevels + nbSbb.start[s] ) ) : _mm_setzero_si128();
+      }
+      auto neighbour = [&]( int k, int s ) { return _mm_shuffle_epi8( levels[s], _mm_loadu_si128( ( const __m128i* ) shuffle.idx[k][s] ) ); };
+
+      // (x+1,y) and (x+2,y) lie in the right SBB, (x,y+1) and (x,y+2) in the one below, (x+1,y+1) in any of the three
+      const __m128i nbLevel[5] = { neighbour( 0, NB_SBB_RIGHT ), neighbour( 1, NB_SBB_RIGHT ),
+                                   _mm_or_si128( _mm_or_si128( neighbour( 2, NB_SBB_RIGHT ), neighbour( 2, NB_SBB_BELOW ) ), neighbour( 2, NB_SBB_DIAG ) ),
+                                   neighbour( 3, NB_SBB_BELOW ), neighbour( 4, NB_SBB_BELOW ) };
+
+      const __m128i one  = _mm_set1_epi8( 1 );
+      const __m128i four = _mm_set1_epi8( 4 );
+      __m128i sumAbs  = _mm_setzero_si128();
+      __m128i sumAbs1 = _mm_setzero_si128();
+      __m128i sumNum  = _mm_setzero_si128();
+      for( int k = 0; k < 5; k++ )
+      {
+        const __m128i t = nbLevel[k];
+        sumAbs  = _mm_adds_epu8( sumAbs, t );
+        sumAbs1 = _mm_add_epi8( sumAbs1, _mm_min_epu8( t, _mm_add_epi8( _mm_and_si128( t, one ), four ) ) );   // min( 4 + ( t & 1 ), t )
+        sumNum  = _mm_add_epi8( sumNum, _mm_min_epu8( t, one ) );                                             // !!t
+      }
+      tplAcc = _mm_or_si128( _mm_slli_epi16( sumNum, 5 ), sumAbs1 );   // sumNum << 5 stays inside its byte
+      sum1st = sumAbs;
+    }
+
+    // Stores the 16 values of each state's register into its column of a [16][4] array.
+    static inline void storeStateColumns( const __m128i v[4], uint8_t dst[16][4] )
+    {
+      const __m128i v01lo = _mm_unpacklo_epi8( v[0], v[1] );
+      const __m128i v01hi = _mm_unpackhi_epi8( v[0], v[1] );
+      const __m128i v23lo = _mm_unpacklo_epi8( v[2], v[3] );
+      const __m128i v23hi = _mm_unpackhi_epi8( v[2], v[3] );
+      _mm_storeu_si128( ( __m128i* ) dst[ 0], _mm_unpacklo_epi16( v01lo, v23lo ) );
+      _mm_storeu_si128( ( __m128i* ) dst[ 4], _mm_unpackhi_epi16( v01lo, v23lo ) );
+      _mm_storeu_si128( ( __m128i* ) dst[ 8], _mm_unpacklo_epi16( v01hi, v23hi ) );
+      _mm_storeu_si128( ( __m128i* ) dst[12], _mm_unpackhi_epi16( v01hi, v23hi ) );
+    }
+
     template<X86_VEXT vext>
     static inline void updateStatesEOS( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx )
     {
@@ -322,17 +372,45 @@ namespace vvenc {
       }
 
       memset( curr.absVal, 0, sizeof( curr.absVal ) );
-      memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
-      memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
 
-      for( int i = 0; i < 4; i++ )
+      // the context each state continues from, or -2 for none (the state is not used)
+      auto refSbbCtxId = [&]( int i )
       {
-        int prevId = decisions.prevId[i];
+        const int prevId = decisions.prevId[i];
+        return prevId <= -2 ? -2 : ( prevId < 0 ? -1 : ( prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4 ) );
+      };
 
-        if( prevId > -2 )
+      if( const DQIntern::NbSbbStarts* nbSbb = commonCtx.nbSbbStarts( scanInfo ) )
+      {
+        // 4x4 SBBs: the template sums of the four states in registers, stored into the [16][4] arrays at once
+        __m128i tplAcc[4], sum1st[4];
+        for( int i = 0; i < 4; i++ )
         {
-          const int refId = prevId < 0 ? -1 : ( prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4 );
-          commonCtx.update( scanInfo, refId, i, curr );
+          tplAcc[i] = sum1st[i] = _mm_setzero_si128();
+          const int refId = refSbbCtxId( i );
+          if( refId > -2 )
+          {
+            if( const uint8_t* absLevels = commonCtx.updateSbbFlags( scanInfo, refId, i, curr ) )
+            {
+              templateSums16<vext>( absLevels, *nbSbb, commonCtx.nbOutShuffle16(), tplAcc[i], sum1st[i] );
+            }
+          }
+        }
+        storeStateColumns( tplAcc, curr.tplAcc );
+        storeStateColumns( sum1st, curr.sum1st );
+      }
+      else
+      {
+        memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
+        memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
+
+        for( int i = 0; i < 4; i++ )
+        {
+          const int refId = refSbbCtxId( i );
+          if( refId > -2 )
+          {
+            commonCtx.update( scanInfo, refId, i, curr );
+          }
         }
       }
 

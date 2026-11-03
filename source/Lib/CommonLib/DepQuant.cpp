@@ -80,6 +80,8 @@ namespace DQIntern
     }
     ::memset( m_scanId2NbInfoSbbArray, 0, sizeof(m_scanId2NbInfoSbbArray) );
     ::memset( m_scanId2NbInfoOutArray, 0, sizeof(m_scanId2NbInfoOutArray) );
+    ::memset( m_scanSbb2NbSbbStartsArray, 0, sizeof(m_scanSbb2NbSbbStartsArray) );
+    ::memset( m_nbOutShuffle16.idx,    0x80, sizeof(m_nbOutShuffle16.idx) );
     ::memset( m_tuParameters,          0, sizeof(m_tuParameters) );
 
     uint32_t raster2id[ MAX_CU_SIZE * MAX_CU_SIZE ];
@@ -112,6 +114,16 @@ namespace DQIntern
 
         sId2NbSbb = new NbInfoSbb[ totalValues ];
         sId2NbOut = new NbInfoOut[ totalValues ];
+
+        NbSbbStarts*&       sbb2NbStarts  = m_scanSbb2NbSbbStartsArray[hd][vd];
+        if( groupWidth == 4 && groupHeight == 4 )
+        {
+          sbb2NbStarts = new NbSbbStarts[ totalValues / groupSize ];
+          for( uint32_t sbb = 0; sbb < totalValues / groupSize; sbb++ )
+          {
+            std::fill_n( sbb2NbStarts[sbb].start, NUM_NB_SBB, -1 );
+          }
+        }
 
         for( uint32_t scanId = 0; scanId < totalValues; scanId++ )
         {
@@ -177,6 +189,11 @@ namespace DQIntern
             cpos[3] = ( posY + 1 < blkHeightNZOut                             ? ( raster2id[rpos+  blockWidth] >= groupSize + begSbb ? raster2id[rpos+  blockWidth] : 0 ) : 0 );
             cpos[4] = ( posY + 2 < blkHeightNZOut                             ? ( raster2id[rpos+2*blockWidth] >= groupSize + begSbb ? raster2id[rpos+2*blockWidth] : 0 ) : 0 );
 
+            if( sbb2NbStarts )
+            {
+              xSetNbSbb16( sbb2NbStarts[scanId / groupSize], cpos, posX & 3, posY & 3, scanId & 15, begSbb );
+            }
+
             for( nbOut.num = 0; true; )
             {
               int nk = -1;
@@ -228,7 +245,83 @@ namespace DQIntern
         }
       }
     }
+
+    // the shuffle table is complete only now
+    for( int hd = 0; hd < MAX_TU_SIZE_IDX; hd++ )
+    {
+      for( int vd = 0; vd < MAX_TU_SIZE_IDX; vd++ )
+      {
+        if( m_scanSbb2NbSbbStartsArray[hd][vd] )
+        {
+          const unsigned numCoeff = std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, 1 << hd ) * std::min<unsigned>( JVET_C0024_ZERO_OUT_TH, 1 << vd );
+          xCheckNbSbb16( m_scanSbb2NbSbbStartsArray[hd][vd], m_scanId2NbInfoOutArray[hd][vd], numCoeff );
+        }
+      }
+    }
     m_scansInitialized = true;
+  }
+
+  // Records for a position of a 4x4 SBB (x, y and insidePos inside it) in which neighbouring SBB each of its outside
+  // neighbours cpos[k] lies (absolute scan positions, 0 = none) and where inside it.
+  void Rom::xSetNbSbb16( NbSbbStarts& starts, const int cpos[5], int x, int y, int insidePos, int begSbb )
+  {
+    static const int dx[5] = { 1, 2, 1, 0, 0 };   // the order of cpos[]
+    static const int dy[5] = { 0, 0, 1, 1, 2 };
+    for( int k = 0; k < 5; k++ )
+    {
+      if( !cpos[k] )
+      {
+        continue;
+      }
+      const bool right = x + dx[k] >= 4;
+      const bool below = y + dy[k] >= 4;
+      CHECK( !right && !below, "An outside neighbour must lie in another SBB" );
+      const int nbSbb = right && below ? NB_SBB_DIAG : ( right ? NB_SBB_RIGHT : NB_SBB_BELOW );
+      const int start = ( cpos[k] & ~15 ) - begSbb;
+      CHECK( starts.start[nbSbb] >= 0 && starts.start[nbSbb] != start, "A neighbouring SBB must have one start" );
+      starts.start[nbSbb] = int16_t( start );
+      uint8_t& idx = m_nbOutShuffle16.idx[k][nbSbb][insidePos];
+      CHECK( idx != 0x80 && idx != ( cpos[k] & 15 ), "The scan inside a 4x4 SBB must be the same for every TU shape" );
+      idx = uint8_t( cpos[k] & 15 );
+    }
+  }
+
+  // Checks that the starts and the shuffle table give exactly the outside neighbours of NbInfoOut for every position,
+  // and that only the neighbours the SIMD code reads are used: (x+1,y) and (x+2,y) from the right SBB, (x,y+1) and
+  // (x,y+2) from the one below, (x+1,y+1) from any of the three.
+  void Rom::xCheckNbSbb16( const NbSbbStarts* starts, const NbInfoOut* nbOut, unsigned numCoeff ) const
+  {
+    static const bool used[5][NUM_NB_SBB] = { { true, false, false }, { true, false, false }, { true, true, true },
+                                              { false, true, false }, { false, true, false } };
+    for( int k = 0; k < 5; k++ )
+    {
+      for( int nbSbb = 0; nbSbb < NUM_NB_SBB; nbSbb++ )
+      {
+        for( int p = 0; p < 16 && !used[k][nbSbb]; p++ )
+        {
+          CHECK( m_nbOutShuffle16.idx[k][nbSbb][p] != 0x80, "Neighbour lies in an SBB the SIMD code does not read" );
+        }
+      }
+    }
+    for( unsigned scanId = 0; scanId < numCoeff; scanId++ )
+    {
+      const NbSbbStarts& sbb = starts[scanId >> 4];
+      std::vector<int> fromTable;
+      for( int k = 0; k < 5; k++ )
+      {
+        for( int nbSbb = 0; nbSbb < NUM_NB_SBB; nbSbb++ )
+        {
+          const uint8_t idx = m_nbOutShuffle16.idx[k][nbSbb][scanId & 15];
+          if( sbb.start[nbSbb] >= 0 && idx != 0x80 )
+          {
+            fromTable.push_back( sbb.start[nbSbb] + idx );
+          }
+        }
+      }
+      std::sort( fromTable.begin(), fromTable.end() );
+      const std::vector<int> expected( nbOut[scanId].outPos, nbOut[scanId].outPos + nbOut[scanId].num );
+      CHECK( fromTable != expected, "The neighbouring SBBs must give the outside neighbours" );
+    }
   }
 
   void Rom::xUninitScanArrays()
@@ -251,6 +344,7 @@ namespace DQIntern
         {
           delete [] sId2NbOut;
         }
+        delete [] m_scanSbb2NbSbbStartsArray[hd][vd];
         for( int chId = 0; chId < MAX_NUM_CH; chId++ )
         {
           TUParameters*& tuPars = m_tuParameters[hd][vd][chId];
@@ -291,6 +385,8 @@ namespace DQIntern
     int log2H             = Log2( m_height );
     m_scanId2NbInfoSbb    = rom.getNbInfoSbb( log2W, log2H );
     m_scanId2NbInfoOut    = rom.getNbInfoOut( log2W, log2H );
+    m_scanSbb2NbSbbStarts = rom.getNbSbbStarts( log2W, log2H );
+    m_nbOutShuffle16      = &rom.getNbOutShuffle16();
     m_scanInfo            = new ScanInfo[ m_numCoeff ];
     for( int scanIdx = 0; scanIdx < m_numCoeff; scanIdx++ )
     {
@@ -470,7 +566,7 @@ namespace DQIntern
     }
   }
 
-  void CommonCtx::update( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
+  const uint8_t* CommonCtx::updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
   {
     uint8_t*    sbbFlags  = m_currSbbCtx[stateId].sbbFlags;
     uint8_t*    levels    = m_currSbbCtx[stateId].levels;
@@ -498,34 +594,38 @@ namespace DQIntern
 
     if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
     {
-      const int         scanBeg = scanInfo.scanIdx - scanInfo.sbbSize;
-      const NbInfoOut* nbOut = m_nbInfo + scanBeg;
-      const uint8_t* absLevels = levels + scanBeg;
+      return levels + scanInfo.scanIdx - scanInfo.sbbSize;
+    }
+    return nullptr;
+  }
 
-      for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+  void CommonCtx::updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const
+  {
+    const NbInfoOut* nbOut = m_nbInfo + scanInfo.scanIdx - scanInfo.sbbSize;
+
+    for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+    {
+      if( nbOut->num )
       {
-        if( nbOut->num )
-        {
-          TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
+        TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
 #define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-          switch( nbOut->num )
-          {
-          default:
-          case 5:
-            UPDATE( 4 );
-          case 4:
-            UPDATE( 3 );
-          case 3:
-            UPDATE( 2 );
-          case 2:
-            UPDATE( 1 );
-          case 1:
-            UPDATE( 0 );
-          }
-#undef UPDATE
-          curr.tplAcc[id][stateId] = ( sumNum << 5 ) | sumAbs1;
-          curr.sum1st[id][stateId] = ( uint8_t ) std::min( 255, sumAbs );
+        switch( nbOut->num )
+        {
+        default:
+        case 5:
+          UPDATE( 4 );
+        case 4:
+          UPDATE( 3 );
+        case 3:
+          UPDATE( 2 );
+        case 2:
+          UPDATE( 1 );
+        case 1:
+          UPDATE( 0 );
         }
+#undef UPDATE
+        curr.tplAcc[id][stateId] = ( sumNum << 5 ) | sumAbs1;
+        curr.sum1st[id][stateId] = ( uint8_t ) std::min( 255, sumAbs );
       }
     }
   }
