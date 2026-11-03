@@ -2861,6 +2861,46 @@ static bool check_BDOF16( unsigned num_cases, int width, int height )
   return true;
 }
 
+// A bi-predicted block whose predictions are black and white (10-bit 0 and 1023, a flash between the references) on a
+// ramp seen in list 0 only: every 6x6 window sum of dI is 36 * 1023, above 16 bits, and the refinement moves the result.
+static bool check_biDirOptFlow_blackWhite( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height )
+{
+  printf( "Testing InterPred::xFpBiDirOptFlow black/white w=%d h=%d\n", width, height );
+  const int srcStride  = width + 2 * BDOF_EXTEND_SIZE + 2;
+  const int gradStride = width + 2 * BDOF_EXTEND_SIZE;
+
+  std::vector<Pel> srcY0 ( srcStride  * ( height + 2 ) + 2, -8192 );
+  std::vector<Pel> srcY1 ( srcStride  * ( height + 2 ) + 2,  8176 );
+  std::vector<Pel> gradX0( gradStride * ( height + 2 ) + 2,    64 );
+  std::vector<Pel> gradY0( gradX0 );
+  std::vector<Pel> gradX1( gradStride * ( height + 2 ) + 2,     0 );
+  std::vector<Pel> gradY1( gradX1 );
+  const ptrdiff_t  dstStride = width;
+  std::vector<Pel> dstYref( dstStride * height );
+  std::vector<Pel> dstYopt( dstStride * height );
+
+  for( int bitDepth : { 8, 10 } )
+  {
+    const unsigned shift  = IF_INTERNAL_PREC + 1 - bitDepth;
+    const int      offset = ( 1 << ( shift - 1 ) ) + 2 * IF_INTERNAL_OFFS;
+    const int      limit  = ( 1 << 4 ) - 1;
+    ClpRng clpRng{ bitDepth };
+
+    ref->xFpBiDirOptFlow( srcY0.data(), srcY1.data(), gradX0.data(), gradX1.data(), gradY0.data(), gradY1.data(), width,
+                          height, dstYref.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
+    opt->xFpBiDirOptFlow( srcY0.data(), srcY1.data(), gradX0.data(), gradX1.data(), gradY0.data(), gradY1.data(), width,
+                          height, dstYopt.data(), dstStride, shift, offset, limit, clpRng, bitDepth );
+
+    std::ostringstream sstm;
+    sstm << "biDirOptFlow black/white width=" << width << " height=" << height << " bitDepth=" << bitDepth;
+    if( !compare_values_2d( sstm.str(), dstYref.data(), dstYopt.data(), height, (unsigned) dstStride ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 template<typename G>
 static bool check_one_gradFilter( InterPredInterpolation* ref, InterPredInterpolation* opt, int width, int height,
                                   int srcStride, int gradStride, G input_generator, bool padding )
@@ -3178,6 +3218,10 @@ static bool test_InterPred()
   passed = check_BDOF16( num_cases, 16, 16 ) && passed;
   passed = check_BDOF16( num_cases, 16, 8 ) && passed;
   passed = check_BDOF16( num_cases, 8, 16 ) && passed;
+
+  passed = check_biDirOptFlow_blackWhite( &ref, &opt, 8, 16 ) && passed;
+  passed = check_biDirOptFlow_blackWhite( &ref, &opt, 16, 8 ) && passed;
+  passed = check_biDirOptFlow_blackWhite( &ref, &opt, 16, 16 ) && passed;
 
   for( unsigned w : { 4, 8, 16, 32 } )
   {
