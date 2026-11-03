@@ -219,7 +219,8 @@ def preprocess_mov(source: Path, output: Path, frames: int, log: Path):
 
 
 def encode_with_ppo(
-    repo: Path, encoder: Path, source_yuv: Path, out: Path, frames: int
+    repo: Path, encoder: Path, source_yuv: Path, out: Path, frames: int,
+    policy_checkpoint: Path | None = None, policy_seed: int = 7,
 ):
     import torch
     out.mkdir(parents=True, exist_ok=False)
@@ -228,13 +229,16 @@ def encode_with_ppo(
     trajectory = out / "trajectory.jsonl"
     ready = out / "ready.txt"
     bridge_log = (out / "bridge.log").open("w", encoding="utf-8")
-    bridge = subprocess.Popen([
+    bridge_cmd = [
         sys.executable, "-u", str(repo / "scripts/rl/ppo_policy_bridge.py"),
         "--state-file", str(state_file), "--action-dir", str(action_dir),
         "--trajectory-file", str(trajectory), "--frames", str(frames),
-        "--policy", "ppo", "--seed", "7",
+        "--policy", "ppo", "--seed", str(policy_seed),
         "--idle-timeout", "600", "--ready-file", str(ready)
-    ], stdout=bridge_log, stderr=subprocess.STDOUT)
+    ]
+    if policy_checkpoint is not None:
+        bridge_cmd.extend(["--checkpoint", str(policy_checkpoint)])
+    bridge = subprocess.Popen(bridge_cmd, stdout=bridge_log, stderr=subprocess.STDOUT)
     try:
         deadline = time.monotonic() + 60
         while not ready.exists() and bridge.poll() is None:
@@ -460,6 +464,10 @@ def main():
     parser.add_argument("--beta", type=float, default=0.1,
                         help="Pilot only; beta must later be chosen on Validation")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--policy-checkpoint", type=Path,
+                        help="Previously updated PPO checkpoint for a NEW on-policy episode")
+    parser.add_argument("--policy-seed", type=int, default=7,
+                        help="Sampling RNG seed; model weights must come from checkpoint")
     args = parser.parse_args()
 
     if args.frames < 32 or args.frames > 512:
@@ -468,8 +476,12 @@ def main():
         parser.error("Train index must be in [0,64]")
     if args.out.exists():
         parser.error("Output directory already exists; use a unique path")
-    if args.beta < 0:
-        parser.error("Beta must be nonnegative")
+    if not np.isfinite(args.beta) or args.beta < 0:
+        parser.error("Beta must be finite and nonnegative")
+    if args.policy_seed < 0:
+        parser.error("Policy seed must be nonnegative")
+    if args.policy_checkpoint and not args.policy_checkpoint.is_file():
+        parser.error("Policy checkpoint not found: " + str(args.policy_checkpoint))
     args.encoder = args.encoder or args.repo / "bin/release-static/vvencapp"
     for path in (args.encoder, args.decoder):
         if not path.is_file():
@@ -489,7 +501,8 @@ def main():
                                 args.frames, args.out / "ffmpeg_source.log")
     stream, observations, au = encode_with_ppo(
         args.repo, args.encoder, source_yuv, args.out / "online",
-        args.frames,
+        args.frames, policy_checkpoint=args.policy_checkpoint,
+        policy_seed=args.policy_seed,
     )
     decode = args.out / "decoded_10bit.yuv"
     run_cmd([str(args.decoder), "-b", str(stream), "-o", str(decode),
@@ -543,6 +556,11 @@ def main():
         "alignment_screen": alignment,
         "joined_path": str(joined_path),
         "ppo_policy_training": False,
+        "policy_checkpoint_sha256": (sha256_file(args.policy_checkpoint)
+                                    if args.policy_checkpoint else None),
+        "policy_checkpoint": (str(args.policy_checkpoint)
+                              if args.policy_checkpoint else None),
+        "policy_bridge_seed": args.policy_seed,
         "validation_status": "UNTRAINED_POLICY_REWARD_DATA_COLLECTION",
     }
     (args.out / "summary.json").write_text(
@@ -558,6 +576,7 @@ def main():
         "tp": stats["total_tp"], "fp": stats["total_fp"], "fn": stats["total_fn"],
         "mean_reward": round(stats["mean_reward"], 6),
         "output": str(args.out), "ppo_weights_updated": False,
+        "collector_checkpoint_sha256": stats["policy_checkpoint_sha256"],
     }, indent=2))
     print("REAL_REWARD_PILOT_PASS: detector and AU bits joined by locked Train video ID + POC")
     print("NOT TRAINED: no PPO parameter updates occurred")
