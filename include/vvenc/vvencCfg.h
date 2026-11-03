@@ -799,9 +799,10 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_fgaInterval;                                                     // Film grain analysis: pictures between analysed pictures in a GOP, a power of 2 up to 64 (0: automatic, 8 for --fga 2 and 3, one per GOP for --fga 1); the GOP's first picture is always analysed
-  int8_t              m_reservedInt8_2[1];
-  int32_t             m_reservedInt32;
+  int8_t              m_reservedInt8_2[2];
+  int8_t              m_reservedInt8_3[1];
+  int8_t              m_fgaIntervalLog2;                                                 // Film grain analysis interval: v >= 0 also analyses every (1 << v)-th picture of a GOP by its position, 1 << v must divide the GOP size (default -1: automatic, the GOP's first picture only); the GOP's first picture is always analysed
+  int8_t              m_reservedInt8_4[2];
   double              m_reservedDouble[7];
 
   // internal state variables

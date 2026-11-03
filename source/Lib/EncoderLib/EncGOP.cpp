@@ -196,10 +196,10 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     // auto-regressive grain model
     m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_internChromaFormat,
                          m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent, encCfg.m_fga == 2, encCfg.m_fga == 3 );
-    // one analysis every m_fgaInterval pictures of a GOP (at least the GOP's first picture)
-    const int spacing = std::min<int>( encCfg.m_fgaInterval, encCfg.m_GOPSize );
-    m_fgAnalyzer.setAnalysisSpacing( spacing, encCfg.m_GOPSize );
-    m_fgcParamSets = std::max<size_t>( 8, 2 * ( ( encCfg.m_GOPSize + spacing - 1 ) / spacing ) + 2 );
+    // one analysis every m_fgaInterval pictures of a GOP (automatic: the GOP size, its first picture only), which the
+    // configuration check makes a divisor of the GOP size
+    m_fgAnalyzer.setAnalysisSpacing( encCfg.m_fgaInterval, encCfg.m_GOPSize );
+    m_fgcParamSets = std::max<size_t>( 8, 2 * ( encCfg.m_GOPSize / encCfg.m_fgaInterval ) + 2 );
     m_fgcByStartPoc[ std::numeric_limits<int>::min() ] = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
   }
 
@@ -1459,7 +1459,8 @@ void EncGOP::xSetupPicAps( Picture* pic )
 // ones, and the parameter sets apply in output order. So at a picture, every picture that MCTF prepared for the
 // analysis (one every m_fgaInterval pictures in a GOP, see GOPCfg::xSetFgaPictures) after the last analysed one, up to
 // this picture's POC, is analysed, in POC order. They are in picList then, as the pictures reach this stage in POC
-// order (with the look-ahead, which passes them on in coding order, only GOP starts are analysed, see FgaInterval).
+// order (with the look-ahead, which passes them on in coding order, only GOP starts are analysed: the configuration
+// check allows no other interval there).
 // Their results are taken with this picture's access unit, the first of them written. Analyzing them here rather than
 // when their encoding starts keeps the choice of analyzed pictures, and the parameters each access unit signals,
 // independent of the parallel encoding order.
