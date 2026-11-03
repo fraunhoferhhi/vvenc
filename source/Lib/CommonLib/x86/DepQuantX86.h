@@ -619,6 +619,23 @@ namespace vvenc {
       _mm_storeu_si32( decisions.prevId, valIdxBest );
     }
 
+#if USE_AVX2
+    // The absLevel and prevId of the four decisions of checkAllRdCostsOdd1 for each set of bits "decision k takes its
+    // second candidate" (bit k): decisions 0 and 1 choose between level 0 (from states 0, 2) and level 1 (from 1, 3),
+    // decisions 2 and 3 between level 1 (from states 0, 2) and level 0 (from 1, 3).
+    struct Odd1Choice
+    {
+      TCoeffSig absLevel[4];
+      int8_t    prevId[4];
+    };
+    static const Odd1Choice odd1Choices[16] = {
+      { { 0, 0, 1, 1 }, { 0, 2, 0, 2 } }, { { 1, 0, 1, 1 }, { 1, 2, 0, 2 } }, { { 0, 1, 1, 1 }, { 0, 3, 0, 2 } }, { { 1, 1, 1, 1 }, { 1, 3, 0, 2 } },
+      { { 0, 0, 0, 1 }, { 0, 2, 1, 2 } }, { { 1, 0, 0, 1 }, { 1, 2, 1, 2 } }, { { 0, 1, 0, 1 }, { 0, 3, 1, 2 } }, { { 1, 1, 0, 1 }, { 1, 3, 1, 2 } },
+      { { 0, 0, 1, 0 }, { 0, 2, 0, 3 } }, { { 1, 0, 1, 0 }, { 1, 2, 0, 3 } }, { { 0, 1, 1, 0 }, { 0, 3, 0, 3 } }, { { 1, 1, 1, 0 }, { 1, 3, 0, 3 } },
+      { { 0, 0, 0, 0 }, { 0, 2, 1, 3 } }, { { 1, 0, 0, 0 }, { 1, 2, 1, 3 } }, { { 0, 1, 0, 0 }, { 0, 3, 1, 3 } }, { { 1, 1, 0, 0 }, { 1, 3, 1, 3 } },
+    };
+#endif
+
     // has to be called as a first check, assumes no decision has been made yet!!!
     template<X86_VEXT vext>
     static inline void checkAllRdCostsOdd1( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
@@ -629,6 +646,11 @@ namespace vvenc {
       // decision 2: either 1 from 0 (pqData[2]), or 0 from 1
       // decision 3: either 1 from 2 (pqData[1]), or 0 from 3
 
+#if USE_AVX2
+      // the four states' 64-bit costs in one register: Z for level 0, A for level 1 (pq_b for states 0, 1, pq_a for 2, 3)
+      __m256i rdCostZ = _mm256_loadu_si256( ( const __m256i* ) state.rdCost );
+      __m256i rdCostA = _mm256_add_epi64( rdCostZ, _mm256_setr_epi64x( pq_b_dist, pq_b_dist, pq_a_dist, pq_a_dist ) );
+#else
       __m128i mrd01 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[0] );
       __m128i mrd23 = _mm_loadu_si128( ( const __m128i* ) & state.rdCost[2] );
 
@@ -641,6 +663,7 @@ namespace vvenc {
 
       __m128i rdCostA01 = _mm_add_epi64( rdCostZ01, deltaDistB );
       __m128i rdCostA23 = _mm_add_epi64( rdCostZ23, deltaDistA );
+#endif
       __m128i sgbts1, addZ, addA = _mm_setzero_si128();
 
       {
@@ -699,16 +722,40 @@ namespace vvenc {
         // if last coeff and first significant coeff, no sig-flag signalled
         sgbts1 = _mm_andnot_si128( mask, sgbts1 );
 
+        // if last coeff in the so-far empty sbb, and sbb-sig-flag is 1, cannot be 0!
+#if USE_AVX2
+        rdCostZ = _mm256_blendv_epi8( rdCostZ, _mm256_set1_epi64x( DQIntern::rdCostInit ), _mm256_cvtepi32_epi64( mask ) );
+#else
         __m128i rdMax = _mm_loadu_si64( &DQIntern::rdCostInit );
         rdMax = _mm_unpacklo_epi64( rdMax, rdMax );
 
-        // if last coeff in the so-far empty sbb, and sbb-sig-flag is 1, cannot be 0!
         rdCostZ01 = _mm_blendv_epi8( rdCostZ01, rdMax, _mm_cvtepi32_epi64( mask ) );
         rdCostZ23 = _mm_blendv_epi8( rdCostZ23, rdMax, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( mask, mask ) ) );
+#endif
       }
 
       addA = _mm_add_epi32( addA, sgbts1 );
 
+#if USE_AVX2
+      rdCostZ = _mm256_add_epi64( rdCostZ, _mm256_cvtepi32_epi64( addZ ) );
+      rdCostA = _mm256_add_epi64( rdCostA, _mm256_cvtepi32_epi64( addA ) );
+
+      // decision k keeps its first candidate unless the second costs less. In-lane pairing (lanes hold states 0, 1 and
+      // 2, 3): first ( Z0, A0 | Z2, A2 ) against second ( A1, Z1 | A3, Z3 ) gives decisions ( 0, 2 | 1, 3 ). In-lane
+      // unpacks rather than cross-lane permutes: cores that split 256-bit operations (Intel Skymont) were slower than the
+      // 128-bit code with four permutes. The costs are stored as two 16-byte halves: the 8-byte loads that read them
+      // later do not forward from one 32-byte store on some cores (Intel Lion Cove: about 35 % slower per call).
+      const __m256i first  = _mm256_unpacklo_epi64( rdCostZ, rdCostA );
+      const __m256i second = _mm256_unpackhi_epi64( rdCostA, rdCostZ );
+      const __m256i chng   = _mm256_cmpgt_epi64( first, second );
+      const __m256i best   = _mm256_permute4x64_epi64( _mm256_blendv_epi8( first, second, chng ), 0xD8 );   // d0 d1 d2 d3
+      _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[0], _mm256_castsi256_si128( best ) );
+      _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[2], _mm256_extracti128_si256( best, 1 ) );
+      const int lanes = _mm256_movemask_pd( _mm256_castsi256_pd( chng ) );   // bits: decisions 0, 2, 1, 3
+      const Odd1Choice& choice = odd1Choices[( lanes & 9 ) | ( ( lanes & 2 ) << 1 ) | ( ( lanes & 4 ) >> 1 )];
+      memcpy( decisions.absLevel, choice.absLevel, sizeof( decisions.absLevel ) );
+      memcpy( decisions.prevId,   choice.prevId,   sizeof( decisions.prevId ) );
+#else
       rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( addZ ) );
       rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addZ, addZ ) ) );
       rdCostA01 = _mm_add_epi64( rdCostA01, _mm_cvtepi32_epi64( addA ) );
@@ -755,6 +802,7 @@ namespace vvenc {
       _mm_storeu_si64( decisions.absLevel, valIdxBest );
       valIdxBest = _mm_packs_epi16( _mm_unpackhi_epi64( valIdxBest, valIdxBest ), _mm_setzero_si128() );
       _mm_storeu_si32( decisions.prevId, valIdxBest );
+#endif
     }
 
     template<X86_VEXT vext>
