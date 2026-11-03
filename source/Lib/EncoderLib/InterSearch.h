@@ -373,6 +373,7 @@ protected:
   CtxCache*         m_CtxCache;
   DistParam         m_cDistParam;
   RdCost*           m_pcRdCost;
+  std::vector<uint32_t> m_mvBitsHor;   // xPatternSearch: the motion vector bits of each column's horizontal component
 
   Distortion        m_hevcCost;
   EncAffineMotion   m_affineMotion;
