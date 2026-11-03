@@ -157,7 +157,15 @@ def checkpoint_and_verify(
         "metrics": metrics,
         "torch_rng_state": torch.get_rng_state(),
         "python_rng_state": random.getstate(),
-        "numpy_rng_state": np.random.get_state(),
+        # Serialize numpy state as only primitive types: torch.load(weights_only=True)
+        # intentionally rejects arbitrary numpy objects.
+        "numpy_rng_state": (
+            np.random.get_state()[0],
+            np.random.get_state()[1].tolist(),
+            int(np.random.get_state()[2]),
+            int(np.random.get_state()[3]),
+            float(np.random.get_state()[4]),
+        ),
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     tmp = output.with_name(output.name + f".{os.getpid()}.tmp")
