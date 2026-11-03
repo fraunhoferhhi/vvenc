@@ -248,17 +248,6 @@ namespace vvenc {
       sum1st = sumAbs;
     }
 
-    // The same, stored to bytes, for the unit test.
-    template<X86_VEXT vext>
-    static void templateSums16Bytes( const uint8_t* absLevels, const DQIntern::NbSbbStarts& nbSbb,
-                                     const DQIntern::NbOutShuffle16& shuffle, uint8_t tplAcc[16], uint8_t sum1st[16] )
-    {
-      __m128i tpl, sum;
-      templateSums16<vext>( absLevels, nbSbb, shuffle, tpl, sum );
-      _mm_storeu_si128( ( __m128i* ) tplAcc, tpl );
-      _mm_storeu_si128( ( __m128i* ) sum1st, sum );
-    }
-
     // Stores the 16 values of each state's register into its column of a [16][4] array.
     static inline void storeStateColumns( const __m128i v[4], uint8_t dst[16][4] )
     {
@@ -830,7 +819,6 @@ void DepQuant::_initDepQuantX86()
   m_checkAllRdCosts     = DQInternSimd::checkAllRdCosts<vext>;
   m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1<vext>;
   m_updateStatesEOS     = DQInternSimd::updateStatesEOS<vext>;
-  m_templateSums16      = DQInternSimd::templateSums16Bytes<vext>;
   m_updateStates        = DQInternSimd::updateStates<vext>;
   m_findFirstPos        = DQInternSimd::findFirstPos<vext>;
 }

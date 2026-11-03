@@ -308,8 +308,6 @@ namespace DQIntern
     // The first part of update(). Returns the levels from the new SBB's start when its template sums are needed (a
     // neighbouring SBB has significant coefficients), else nullptr: the sums stay 0.
     const uint8_t* updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr );
-    // The second part: the template sums of the new SBB's 16 positions for stateId. Expects them to be 0 before.
-    void updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const;
 
     // For TUs with 4x4 SBBs, else nullptr: where the outside neighbours of the new SBB's positions lie.
     const NbSbbStarts* nbSbbStarts( const ScanInfo& scanInfo ) const
@@ -327,6 +325,9 @@ namespace DQIntern
     }
 
   private:
+    // The second part of update(): the template sums of the new SBB's 16 positions for stateId. Expects them to be 0.
+    void updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const;
+
     const NbInfoOut* m_nbInfo;
     const NbSbbStarts* m_nbSbbStarts;
     const NbOutShuffle16* m_nbOutShuffle16;
@@ -427,9 +428,6 @@ public:
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
-  // The SIMD template sums of a 4x4 SBB (CommonCtx::updateTemplates for 16 positions at once), which m_updateStatesEOS
-  // uses; exposed for the unit test. nullptr without SIMD.
-  void( *m_templateSums16 )( const uint8_t* absLevels, const DQIntern::NbSbbStarts& nb, const DQIntern::NbOutShuffle16& shuffle, uint8_t tplAcc[16], uint8_t sum1st[16] );
 
 };
 

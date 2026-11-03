@@ -1544,7 +1544,6 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
   m_updateStates        = DQIntern::updateStates;
   m_findFirstPos        = DQIntern::findFirstPos;
-  m_templateSums16      = nullptr;
 
   if( enableOpt )
   {
