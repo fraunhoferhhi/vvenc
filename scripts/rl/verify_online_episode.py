@@ -16,6 +16,8 @@ from pathlib import Path
 import re
 import sys
 
+from au_rate_audit import read_au_bits
+
 FINAL = re.compile(
     r"\[VVENC_RL_CTU_FINAL\] poc=(\d+) ctu=(\d+) x=(\d+) y=(\d+) "
     r"delta_requested=(-?\d+) num_luma_cus=(\d+) min_qp=(-?\d+) max_qp=(-?\d+)"
@@ -37,6 +39,10 @@ def assert_true(test, reason):
 
 
 def audit_case(case: Path, n: int, expected_delta=None):
+    au_data = read_au_bits(
+        case / "au_bits.csv", case / f"{case.name}.266", n
+    )
+    assert_true(len({r.poc for r in au_data}) == n, "Duplicate AU POC")
     raw_lines = (case / "states.txt").read_text().splitlines()
     records = [json.loads(s) for s in (case / "trajectory.jsonl").read_text().splitlines()]
     expected_pocs = set(range(n))
@@ -114,7 +120,8 @@ def audit_case(case: Path, n: int, expected_delta=None):
 
     print(
         f"PASS {case.name}: states={n}, actions={n}, "
-        f"final_ctus={len(finals)}, QG_candidates={len(candidates)}"
+        f"final_ctus={len(finals)}, QG_candidates={len(candidates)}, "
+        f"actual_bits={au_data[-1].cumulative_bits}"
     )
     return {(poc, ctu): (mn, mx) for poc, ctu, x, y, d, nc, mn, mx in finals}
 
