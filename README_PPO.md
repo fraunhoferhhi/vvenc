@@ -161,6 +161,68 @@ python3 scripts/rl/verify_online_episode.py \
   --directory /kaggle/working/rl_au_rate_check --frames 16
 ```
 
+## Second PPO update from fresh Train rollout — user-verified PASS (2026-11-03)
+
+User's Kaggle log on `17d9eec` confirms:
+- **23/23** Python unit tests PASS.
+- Fresh 64-frame episode, locked Train video `0000f77c-6257be58`,
+  sampled from *updated* PPO checkpoint #1 (SHA
+  `8368b8a67f4d4d504bfb6c5c4a4fa622cd95594e44ce22f5fad3160799cab23b`).
+- Target 120 kbps, actual 125.355 kbps, source boxes 119;
+  decoded boxes 93; TP=91 FP=2 FN=28; mean reward 0.784614.
+- On-policy collector logprob/value error 0, second PPO update:
+  4 optimizer steps, Actor and Critic both changed, KL 0.003494,
+  checkpoint reload EXACT.
+- Second checkpoint at user Kaggle path
+  `/kaggle/working/rl_second_fresh_1793704553/ppo_second_update.pt`,
+  SHA256 `8a7a84b92df00a9f589b0eac39bffa2b1062c4c996d1b4a4f4e5937362b1e622`.
+- The user produced `/kaggle/working/PPO_QP_PILOT_CHECKPOINTS.zip`.
+  Export off ephemeral Kaggle before session termination.
+
+CAUSALITY WARNING: first vs second sample used seed 7 vs 17,
+so better F1 (0.8095→0.8585) and slight bitrate decrease are
+NOT evidence of trained-policy generalization or rate gains.
+
+### Next step: bounded multi-VIDEO Train continuation gate
+
+`scripts/rl/run_multi_train_gate.py` implements a **3 distinct Train
+video pilot**, not full training. It loads the second checkpoint and
+keeps a SHA-verified policy + Adam chain over fresh Train clips.
+It takes only indices from the existing 65-ID locked Train manifest
+(default 1,2,3); cannot use Validation/Test. Each episode at 120kbps:
+frozen YOLOv5n → genuine per-POC AU bitrate/F1 Reward →
+single on-policy PPO update → new checkpoint. Saves progress.json
+atomically and checkpoint/provenance ZIP **after every successful video**.
+A partial failed episode is never silently recycled.
+
+On the *same* GPU Kaggle Session with the second checkpoint:
+
+```bash
+cd /kaggle/working/vvenc_rl_stage1
+git pull --ff-only origin rl-agent-dev
+python3 -m unittest discover -s scripts/rl -p 'test_*.py' -v
+python3 scripts/rl/run_multi_train_gate.py \
+  --repo /kaggle/working/vvenc_rl_stage1 \
+  --decoder /kaggle/working/vvdec_3_2_0/bin/release-static/vvdecapp \
+  --initial-checkpoint /kaggle/working/rl_second_fresh_1793704553/ppo_second_update.pt \
+  --train-indices 1,2,3 --frames 64 --beta 0.1 \
+  --output /kaggle/working/ppo_qp_multi_train_gate
+```
+
+Expected gate (must be verified on Kaggle):
+`BOUNDED_TRAIN_CONTINUATION_GATE_PASS`;
+3 fresh, distinct Train episodes, checkpoints at PPO iterations 3,4,5;
+archive `ppo_qp_multi_train_gate/PPO_QP_TRAIN_GATE_CHECKPOINTS.zip`.
+
+This is ACTUAL pilot training with small samples, not just unit tests,
+but NOT yet full training over 65 complete videos.
+`--frames 64` tests only the first 64 frames per Train clip, and
+`beta=0.1` is not a validated hyperparameter. Full training needs
+full-video/window sampling strategy, normalization and a fixed-seed,
+no-update Validation evaluation protocol, resource budgets,
+resume, and protected Test split. DO NOT directly interpret pilot
+F1 differences as proof of RL improvement.
+
 ## First PPO update from real Reward — user-verified PASS (2026-11-03)
 
 Kaggle GPU log on previous commit `6c17517` established:
