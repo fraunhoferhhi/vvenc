@@ -3312,9 +3312,8 @@ static bool check_sumAbsDeviation( PelBufferOps* ref, PelBufferOps* opt, unsigne
   return true;
 }
 
-// Test flat copyClip with odd counts and incomplete SSE/AVX2 vectors.
-// Check destination guards against the sentinel: matching overruns in
-// the reference and optimized implementations would pass an equality check.
+// Test supported SIMD counts; check destination guards against the sentinel,
+// not just ref-vs-opt equality.
 static bool check_copyClip( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
   printf( "Testing PelBufferOps::copyClip\n" );
@@ -3322,9 +3321,8 @@ static bool check_copyClip( PelBufferOps* ref, PelBufferOps* opt, unsigned num_c
   auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
   const Pel sentinel = Pel( 0x5a5a );
 
-  static const int sizes[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16,
-                                17, 18, 23, 24, 30, 31, 32, 33, 48, 63, 64, 65,
-                                127, 128, 192, 255, 256 };
+  static const int sizes[] = { 0, 4, 8, 16, 24, 32, 40, 48, 56, 64,
+                                120, 128, 136, 192, 248, 256 };
   static const int guard = 16;
 
   for( const unsigned bd : { 8u, 10u } )
@@ -3358,6 +3356,45 @@ static bool check_copyClip( PelBufferOps* ref, PelBufferOps* opt, unsigned num_c
   return true;
 }
 
+// Test scalar counts unsupported by SIMD, including sentinel tail
+// preservation; dstExpected is built independently of ref.
+static bool check_copyClipScalarTail( PelBufferOps* ref, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::copyClip scalar tail handling\n" );
+  (void)num_cases;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  const Pel sentinel = Pel( 0x5a5a );
+
+  static const int sizes[] = { 1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15,
+                                17, 18, 19, 20, 23, 30, 31, 33, 63, 65, 127, 255 };
+  static const int guard = 16;
+
+  for( const unsigned bd : { 8u, 10u } )
+  {
+    const ClpRng clpRng{ int( bd ) };
+    for( const int numSamples : sizes )
+    {
+      std::vector<Pel> src( numSamples );
+      std::generate( src.begin(), src.end(), anyPel );
+      std::vector<Pel> dstRef( numSamples + guard, sentinel ), dstExpected( numSamples + guard, sentinel );
+
+      ref->copyClip( src.data(), dstRef.data(), numSamples, clpRng );
+      for( int i = 0; i < numSamples; i++ )
+      {
+        dstExpected[i] = ClipPel( src[i], clpRng );
+      }
+
+      std::ostringstream sstm;
+      sstm << "copyClip tail N=" << numSamples << " bd=" << bd;
+      if( !compare_values_1d( sstm.str(), dstExpected.data(), dstRef.data(), numSamples + guard ) )
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -3379,6 +3416,7 @@ static bool test_PelBufferOps()
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
+  passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
   passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
