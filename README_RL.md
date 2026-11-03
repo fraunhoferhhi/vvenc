@@ -51,6 +51,42 @@ row-major deltas, e.g. `0 0 0 0 0 0 0 0 0 0 0 0 0`.
 The map must include **every POC that the encoder actually encodes**. An
 unknown POC, duplicate POC, invalid delta, or incorrect CTU grid fails fast.
 
+## Audit: why there are repeated QP-hook calls
+
+`xCompressCU()` recursively evaluates multiple hypothetical QT/MTT CU
+partitions during RDO. Therefore, a log entry from inside `xCompressCU()`
+is a **candidate evaluation**, not an independent RL policy step, and
+revisited POC/QG positions are expected. At the selected-QP branches, the
+original QPA code resets `baseQP` before the fixed action is added; the
+action is not accumulated by revisiting a candidate. The immutable map
+supplies only one logical action per frame/POC.
+
+To verify the final winning encoding decisions independently, this branch
+now emits `[VVENC_RL_CTU_FINAL]` records **after** `xCompressCtu()` has
+selected its CU tree. A CTU record contains the POC, CTU index, number
+of chosen luma CUs, and their min/max QP. Each final CTU must appear
+exactly once per POC in the final encoding pass.
+
+After pulling and rebuilding the updated branch (the old binary cannot
+emit final-CTU records), run:
+
+```bash
+python3 scripts/rl/verify_stage1.py \
+  --encoder bin/release-static/vvencapp \
+  --decoder /kaggle/working/vvdec_3_2_0/bin/release-static/vvdecapp \
+  --video /kaggle/working/rl_qp_smoke/smoke_480x320.yuv \
+  --output /kaggle/working/rl_qp_audit_final \
+  --frames 16 --width 480 --height 320 --ctu-size 128
+```
+
+Expected selected-CTU count: 16 frames * 4 columns * 3 rows = **192**,
+not the number of recursive RDO candidate calls (e.g. 464).
+The gate checks bit-identical zero actions, 0 / +/-2 action consistency,
+192 unique final CTU records, decoded output size, and that the chosen CU
+QP ranges respond to the nonzero actions. **Do not begin PPO training
+until the gate passes.** Passing this gate validates the test configuration,
+not all arbitrary codec modes and resolutions.
+
 ## Required verification before PPO
 
 1. `VVENC_RL_QP_MAP` unset: output identical to unmodified v1.14.0 for the
