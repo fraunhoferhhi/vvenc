@@ -161,6 +161,66 @@ python3 scripts/rl/verify_online_episode.py \
   --directory /kaggle/working/rl_au_rate_check --frames 16
 ```
 
+## Real frozen-YOLO Train reward pilot — user-verified PASS (2026-11-03)
+
+The GPU Kaggle log from commit `58a2d7e` verifies:
+- **20/20 code unit tests PASS** before the real test.
+- Correct locked manifest (65 Train / 7 Val / 100 Test), GPU Tesla T4
+  and Train-only clip `0000f77c-6257be58` (64 frames).
+- Correct encoder/decoder compilation and detector YOLOv5 v7.0 loading.
+- 119 reference/pseudo-GT car boxes, 91 decoded car boxes;
+  TP=85, FP=6, FN=34, micro F1=170/210=0.8095238.
+- Real measured bitrate: 125.6063 kbps, target 120 kbps.
+- Mean per-frame reward: 0.743877 for pilot beta=0.1.
+- Actual AU bits were joined by Train video ID + POC and the
+  complete read-only PPO reward rollout was written.
+- `ppo_weights_updated: false`. No learning claim is supported.
+
+Output episode location in the user Kaggle session:
+`/kaggle/working/rl_real_train_1793702575`.
+This path only exists if that Kaggle Session is still available or its
+output was persisted. Do NOT claim it survives a Session reset.
+
+## Next mandatory gate: one on-policy PPO update from genuine reward
+
+New `scripts/rl/verify_real_ppo_update.py` reads this complete
+real Train-only episode, reconstructs the exact seed=7 bridge model,
+re-evaluates all *unrounded* Gaussian actions and compares
+collector logprob, value, action quantization, POC, terminal boundary
+and next critic value. If any differ, it FAILS before training.
+
+After verifying collector policy identity it performs exactly ONE
+PPOTrainer.update on the actual frozen-detector reward, tests that
+both Actor and Critic weights changed, and atomically saves a
+`torch.load(weights_only=True)` compatible checkpoint containing
+model/optimizer/PRNG/provenance; new objects reload it and must match
+exactly. Reusing a checkpoint path is forbidden to prevent accidental
+multiple updates on one on-policy batch.
+
+Unit tests `test_real_ppo_update.py` cover real-schema synthetic
+collector parity, tampered collector logprob/action rejection, an
+optimizer update, checkpoint fidelity, and repeat-write refusal.
+**No Kaggle execution of this new update gate has been reported yet.**
+
+On the SAME Kaggle Session as the real 64-frame test:
+
+```bash
+cd /kaggle/working/vvenc_rl_stage1
+git pull --ff-only origin rl-agent-dev
+python3 -m unittest discover -s scripts/rl -p 'test_*.py' -v
+python3 scripts/rl/verify_real_ppo_update.py \
+  --episode /kaggle/working/rl_real_train_1793702575 \
+  --checkpoint-out /kaggle/working/rl_real_train_1793702575/ppo_first_update.pt
+```
+
+**IMPORTANT:** This is the LAST pre-training gate, not evidence of
+better task-rate behavior and NOT the full 65-video training loop.
+Even after PASS the next fresh rollout must load the saved updated
+model (policy bridge supports `--checkpoint`), and the full
+train/validation experiment requires repeated fresh rollout-then-update,
+logging and resume across Kaggle Sessions. Never reuse old trajectories
+after changing the policy.
+
 ## Next mandatory gate: real frozen-YOLOv5n Train reward pilot (not training)
 
 User-tested state-action integration passed on 2026-11-03, including
