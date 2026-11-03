@@ -161,6 +161,69 @@ python3 scripts/rl/verify_online_episode.py \
   --directory /kaggle/working/rl_au_rate_check --frames 16
 ```
 
+## Next mandatory gate: real frozen-YOLOv5n Train reward pilot (not training)
+
+User-tested state-action integration passed on 2026-11-03, including
+16/16 observations, 192/192 final CTUs and exact POC AU-bit totals.
+Standalone Reward F1 (6/6 tests), AU-accounting (4/4 tests) and
+Reward POC join (5/5 tests) passed on Kaggle CPU. These are NOT
+evidence of task-specific RL optimization.
+
+The newly implemented `scripts/rl/real_reward_pilot.py` runs a real
+**locked Train-only** sample at 120 kbps. This is still experimental
+code and has NOT yet been executed on Kaggle.
+
+A sample run needs three Kaggle Add Inputs:
+1. BDD100K Train00 video data: `robikscube/driving-video-with-object-tracking`.
+2. The existing **VCM_BDD100K_LOCK_v1** manifest with Train=65, Val=7,
+   Test=100. SHA-256 of `dataset_lock_v1.json` must match
+   `f7a600f501de622f66ace04bb0b12ec5da0dab988cd54732d614f6b16495aaea`.
+3. The existing **VVenC_Pilot_v1_2_QA_LOCKED_SNAPSHOT** (ZIP or
+   extracted): `baseline_config.lock.json` is required. The detector
+   YOLO commit/weight SHA and codec settings are checked against the
+   approved lock; refuse to substitute fresh/retrained weights.
+
+Preflight on a GPU Kaggle Session (CUDA is required by this pilot):
+
+```bash
+python3 scripts/rl/preflight_real_pilot.py --train-index 0
+```
+
+Then after building `vvencapp` and `vvdecapp`, and checking the
+updated Reward unit tests:
+
+```bash
+python3 scripts/rl/real_reward_pilot.py \
+  --repo /kaggle/working/vvenc_rl_stage1 \
+  --encoder /kaggle/working/vvenc_rl_stage1/bin/release-static/vvencapp \
+  --decoder /kaggle/working/vvdec_3_2_0/bin/release-static/vvdecapp \
+  --train-index 0 --frames 64 --beta 0.1 \
+  --out /kaggle/working/rl_real_train_64frames
+```
+
+The script preprocesses locked Train MOV exactly as in the Baseline
+with FFmpeg metadata-dependent colorspace conversion, 480x320 bicubic
+and CFR 30. It uses VVenC medium, 1-pass VBR/QPA, internal 10-bit,
+GOPSize=32, LookAhead=1, `--mtprofile -1` and freezes the original
+YOLOv5n v7.0 car detector (`conf=0.25`, NMS=0.45, IoU match=0.5).
+It checks decoded frame count and a temporal-alignment screen, writes
+one source and one reconstructed detection list per POC, joins exact
+AU bits, and writes a complete read-only reward rollout.
+
+This pilot **does not train PPO** or pick beta; `beta=0.1` is an
+illustrative diagnostic value. It only examines the first 64 frames,
+so the observed bitrate and detection metrics must not be compared
+with full-video 500-run Test results. The next gate must verify true
+PPO update on on-policy, detector-derived transitions, including
+checkpoint save/load/reproducibility, before training over 65 Train.
+
+Reward causal-accounting clarification: `reward_join.py` now computes
+the cumulative true AU bits along **policy decision order** for a
+per-decision reward/GAE trajectory; AU output order and its own
+cumulative bits remain in `au_bits.csv` as independent telemetry.
+The user-reported 5/5 reward_join PASS was before this correction;
+the updated tests must pass again.
+
 ## Reward-to-trajectory join (Stage 3 — code available, NOT validated on BDD100K)
 
 `scripts/rl/reward_join.py` now takes (a) `ppo_policy_bridge.py`
