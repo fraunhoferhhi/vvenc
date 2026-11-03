@@ -161,6 +161,68 @@ python3 scripts/rl/verify_online_episode.py \
   --directory /kaggle/working/rl_au_rate_check --frames 16
 ```
 
+## Reward-to-trajectory join (Stage 3 — code available, NOT validated on BDD100K)
+
+`scripts/rl/reward_join.py` now takes (a) `ppo_policy_bridge.py`
+trajectory, (b) a real output-AU CSV and exact VVC bitstream,
+(c) **frame-matched frozen YOLOv5n detections from the reference and
+decoded video**. Both detection files are JSON Lines with exactly one
+record per input frame, including no-car frames:
+
+```json
+{"video_id":"TRAIN_VIDEO","poc":0,"detections":[{"x1":10,"y1":10,"x2":40,"y2":40,"confidence":0.91,"class_id":2}]}
+```
+
+The join requires identical video_id and complete, unique POC sets.
+Rate penalty is computed from AU emission order. Returns are emitted in
+**policy decision order**, with `next_value` from the next policy
+observation, and `done` at the episode end; these orders can differ.
+It refuses Zero-policy trajectories because they lack a raw sampled
+Gaussian policy action/log probability.
+
+Unit tests `test_reward_join.py` deliberately use different POC orders
+for policy observations (2,0,1), AU emission (0,2,1), and detection JSONL
+(1,2,0) to catch accidental row-number pairing. Run:
+
+```bash
+python3 -m unittest discover -s scripts/rl -p 'test_reward_join.py' -v
+```
+
+The converter DOES NOT execute YOLO, preprocess frames, derive picture
+order from decoded YUV, or train a model. Those are required next.
+No task-rate result has been measured for PPO-QP.
+
+### Locked detector / codec evaluation protocol
+
+The newer completed 100-video/500-run archive
+`VVenC_Full_Baseline(1).zip` contains `baseline_config.lock.json`.
+Its locked settings, which take precedence over earlier 98-video draft
+notebooks, are:
+
+- **Video:** 480x320, 30 fps, YUV420p8 normalized using BT.709
+  limited range and the locked ffmpeg preprocessing pipeline.
+- **Encoder:** pinned VVenC v1.14.0, `medium`, 1-pass VBR, QPA=1,
+  intra=32, CRA, GOPSize=32, LookAhead=1, `--mtprofile -1`,
+  4 threads and internal 10-bit. Decoder VVdeC v3.2.0.
+- **Detector:** YOLOv5 v7.0, `yolov5n.pt`, FP32,
+  COCO class_id=2 (car), confidence=0.25, NMS IoU=0.45,
+  detection-match IoU>=0.5. On decoded 10-bit YUV use
+  `clip((YUV10 + 2)//4, 0, 255)` before the exact BT.709 limited
+  YUV420p-to-RGB transform used on the source.
+- **Pseudo-reference:** the frozen detector's results on the normalized
+  uncompressed encoder input (NOT human annotations). Preserve source
+  box reference and one-to-one confidence-ordered matching rules.
+- **Evaluation:** test split 100 videos x 5 targets; 50/80/120/160/200
+  kbps; locked Test is only for final evaluation. Train split has 65,
+  Validation 7.
+
+**Important discrepancy:** Stage-2 16-frame *synthetic* smoke CLI only
+validated integration; it omitted the explicit `--mtprofile -1` and
+`--additional GOPSize=32:LookAhead=1` needed for exact scientific
+protocol parity. Never treat the smoke bit counts as BDD100K results.
+The locked Baseline has an authoritative configuration/protocol lock.
+Use it for any future real Train/Val encoding, not the smoke settings.
+
 ## Stage-3 Reward implementation status
 
 `scripts/rl/reward_metrics.py` implements **standalone reward primitives**:
