@@ -123,6 +123,44 @@ These are integration results only. In particular, the test video's tiny
 output bitrate and an untrained PPO action must NOT be used to claim improved
 detection, rate control or bitrate savings on BDD100K.
 
+## AU bitstream accounting (Stage-3 prerequisite)
+
+The next gate reads the **actual output AU size**, rather than a bitrate
+estimate from QP. The modified `vvencapp` accepts the environment variable
+`VVENC_RL_AU_BITS_FILE=/path/au_bits.csv` and emits:
+`output_step,poc,au_bytes,au_bits`.
+
+- The AU size is `vvencAccessUnit.payloadUsedSize` after copying the
+  Annex-B bitstream, so its byte sum must exactly equal the output
+  `.266` file size.
+- `output_step` is the **emission/encoding order**. POC labels the
+  picture, which may not increase monotonically. The two must never be
+  treated as identical under B-frame reorder.
+- `scripts/rl/au_rate_audit.py` checks each row, unique POC, exact sum,
+  and output order. `scripts/rl/test_au_rate_audit.py` covers reordered
+  POC and bad logs.
+- The revised `run_online_smoke.py` sets the environment variable for
+  Vanilla, Zero and PPO and verifies AU byte sums. The strict
+  `verify_online_episode.py` also requires AU records.
+
+**Current status:** AU-logging code was added AFTER the Stage-2 online
+smoke passed, and has not yet been rebuilt or tested on Kaggle. This is
+not a completed YOLO Reward pipeline.
+
+Rebuild after pulling `rl-agent-dev`, then run the short smoke again:
+
+```bash
+python3 -m unittest discover -s scripts/rl -p 'test_au_rate_audit.py' -v
+python3 scripts/rl/run_online_smoke.py \
+  --repo /kaggle/working/vvenc_rl_stage1 \
+  --encoder /kaggle/working/vvenc_rl_stage1/bin/release-static/vvencapp \
+  --decoder /kaggle/working/vvdec_3_2_0/bin/release-static/vvdecapp \
+  --video /kaggle/working/smoke_480x320.yuv \
+  --frames 16 --output /kaggle/working/rl_au_rate_check
+python3 scripts/rl/verify_online_episode.py \
+  --directory /kaggle/working/rl_au_rate_check --frames 16
+```
+
 ## Stage-3 Reward implementation status
 
 `scripts/rl/reward_metrics.py` implements **standalone reward primitives**:
