@@ -161,6 +161,61 @@ python3 scripts/rl/verify_online_episode.py \
   --directory /kaggle/working/rl_au_rate_check --frames 16
 ```
 
+## First PPO update from real Reward — user-verified PASS (2026-11-03)
+
+Kaggle GPU log on previous commit `6c17517` established:
+- 22/22 unit tests PASS.
+- Real 64-frame Train episode `0000f77c-6257be58` is on-policy
+  for seed=7's untrained Actor/Critic, logprob/value max error 0.
+- PPOOptimizer steps=4; real mean Reward=0.743876934.
+- Both Actor and Critic weights changed; approx KL=0.00228209,
+  and model+optimizer checkpoint reloaded EXACTLY.
+- First checkpoint (user's active Kaggle Session):
+  `/kaggle/working/rl_real_train_1793702575/ppo_first_update.pt`;
+  SHA256 `8368b8a67f4d4d504bfb6c5c4a4fa622cd95594e44ce22f5fad3160799cab23b`.
+- This proves a single valid PPO update, not an improved rate-F1 curve.
+
+### Next gate: fresh episode sampled from the UPDATED policy
+
+The updated `real_reward_pilot.py` now takes
+`--policy-checkpoint /path/ppo_first_update.pt` and
+`--policy-seed 17`; the bridge loads the checkpoint before
+sampling actions. The pilot records the collecting checkpoint SHA
+in the reward episode summary.
+
+The updated `verify_real_ppo_update.py` takes
+`--checkpoint-in /path/ppo_first_update.pt` and
+`--checkpoint-out /path/ppo_second_update.pt`. The checkpoint SHA
+must match the new episode's recorded collecting policy. It restores
+BOTH model and Adam state, validates raw latent QP action, logprob/value,
+and performs one update on the NEW rollout. Reusing the same previous
+rollout or a mismatched checkpoint is forbidden. New checkpoint records
+the iteration count and collector provenance.
+
+```bash
+cd /kaggle/working/vvenc_rl_stage1
+git pull --ff-only origin rl-agent-dev
+python3 -m unittest discover -s scripts/rl -p 'test_*.py' -v
+python3 scripts/rl/real_reward_pilot.py \
+  --repo /kaggle/working/vvenc_rl_stage1 \
+  --decoder /kaggle/working/vvdec_3_2_0/bin/release-static/vvdecapp \
+  --train-index 0 --frames 64 --beta 0.1 \
+  --policy-checkpoint /kaggle/working/rl_real_train_1793702575/ppo_first_update.pt \
+  --policy-seed 17 \
+  --out /kaggle/working/rl_second_fresh_64frames
+python3 scripts/rl/verify_real_ppo_update.py \
+  --episode /kaggle/working/rl_second_fresh_64frames \
+  --checkpoint-in /kaggle/working/rl_real_train_1793702575/ppo_first_update.pt \
+  --checkpoint-out /kaggle/working/rl_second_fresh_64frames/ppo_second_update.pt
+```
+
+NOTE: These new changes are NOT YET Kaggle verified. The 64-frame
+Train pilot is not the full train split. Keep 100 Test holdout
+untouched. Save checkpoints out of ephemeral Kaggle /working.
+The real optimizer config is still the *gate* config (2 epochs,
+minibatch 32). Select full training hyperparameters on Train/Val,
+not on Test, after passing the fresh-collector gate.
+
 ## Real frozen-YOLO Train reward pilot — user-verified PASS (2026-11-03)
 
 The GPU Kaggle log from commit `58a2d7e` verifies:
