@@ -199,8 +199,8 @@ namespace DQIntern
   };
 
   // The memo of RateEstimator::initCtx: per channel type, the sig / gtx tables last built for it and the raw bytes of
-  // the coefficient-coding contexts they came from (equal bytes give equal tables). DepQuant keeps it as its last
-  // member, so the members the trellis uses keep their place in the object.
+  // the coefficient-coding contexts they came from (equal bytes give equal tables). DepQuant keeps it after the trellis
+  // and state arrays, so they keep their place in the object.
   struct RateTablesMemo
   {
     RateTablesMemo();
@@ -383,6 +383,7 @@ private:
   DQIntern::Decisions m_trellis[MAX_TB_SIZEY * MAX_TB_SIZEY][2];
   DQIntern::StateMem  m_state_curr;
   DQIntern::StateMem  m_state_skip;
+  DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
 
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
@@ -404,9 +405,6 @@ public:
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
-
-private:
-  DQIntern::RateTablesMemo m_rateTablesMemo;   // last: see RateTablesMemo
 };
 
 } // namespace vvenc
