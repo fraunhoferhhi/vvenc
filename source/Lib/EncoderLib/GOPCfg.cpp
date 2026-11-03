@@ -759,9 +759,12 @@ void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
   }
 }
 
-// The pictures the film grain analysis looks at: every m_fgaInterval-th picture of the GOP (by its position in the GOP,
-// which with POC0IDR 0 differs from the POC by one) that MCTF filters, as the analysis works on MCTF's pictures (see
-// MCTF::filter). The start of each GOP is analysed in any case (MCTF also checks m_isStartOfGop).
+// The pictures the film grain analysis looks at besides the GOP's first picture (analysed in any case, see
+// MCTF::filter): every m_fgaInterval-th picture of the GOP by its position in the GOP (which with POC0IDR 0 differs from
+// the POC by one). With the interval equal to the GOP size (automatic) no picture is added. MCTF prepares them for the
+// analysis also where it does not filter them for the coding, with the reference range of MCTF's temporal level for
+// their position (m_fgaLayer): the level test of the automatic MCTFFrames (the GOP size >> level), capped at 4 (MCTF
+// has a level 5 only for GOP 64 below QP 16).
 void GOPCfg::xSetFgaPictures( int maxGopSize, GOPEntryList& gopList ) const
 {
   if( m_fgaInterval <= 0 )
@@ -776,7 +779,18 @@ void GOPCfg::xSetFgaPictures( int maxGopSize, GOPEntryList& gopList ) const
     {
       poc = maxGopSize;
     }
-    gopEntry.m_isFgaPicture = gopEntry.m_mctfIndex >= 0 && poc % m_fgaInterval == 0;
+    if( gopEntry.m_isStartOfGop || poc % m_fgaInterval != 0 )
+    {
+      continue;
+    }
+    gopEntry.m_isFgaPicture = true;
+    // stops at the latest where maxGopSize >> level is 1, so it never divides by 0
+    int level = 0;
+    while( level < 4 && poc % ( maxGopSize >> level ) != 0 )
+    {
+      level++;
+    }
+    gopEntry.m_fgaLayer = level;
   }
 }
 

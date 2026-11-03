@@ -130,7 +130,7 @@ class GOPCfg
     {
     };
 
-    void initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int m_minIntraDist, int fgaInterval = 0 );
+    void initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int m_minIntraDist, int fgaInterval );
     void getNextGopEntry( GOPEntry& gopEntry );
     void startIntraPeriod( GOPEntry& gopEntry );
     void fixStartOfLastGop( GOPEntry& gopEntry );
