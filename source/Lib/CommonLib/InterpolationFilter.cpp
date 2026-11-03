@@ -230,9 +230,6 @@ InterpolationFilter::InterpolationFilter()
 
 //  m_weightedTriangleBlk = xWeightedTriangleBlk;
   m_weightedGeoBlk = xWeightedGeoBlk;
-
-  m_filterAffineLumaSubblocks[0] = nullptr;
-  m_filterAffineLumaSubblocks[1] = nullptr;
 }
 
 

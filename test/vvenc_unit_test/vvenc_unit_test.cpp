@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <limits.h>
 #include <numeric>
 #include <random>
+#include <set>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -2900,6 +2901,193 @@ static bool check_padDmvr( InterPredInterpolation* ref, InterPredInterpolation* 
   return true;
 }
 
+// The unfused PROF path of xPredAffineBlk: border copy into a 6x6 window, then xFpProfGradFilter and
+// xFpApplyPROF of the given implementation.
+static void affinePROF4x4_unfused( InterPredInterpolation* ip, Pel* dst, int dstStride, const Pel* pred, int predStride,
+                                   const Pel* ref, int refStride, int borderShift, const int16_t* dMvXY, bool bi,
+                                   int shiftNum, Pel offset, const ClpRng& clpRng )
+{
+  const int extStride = 8, gradStride = 6;
+  Pel ext[6 * extStride], gradX[6 * gradStride], gradY[6 * gradStride];
+  int dMvX[16], dMvY[16];
+  for( int y = -1; y < 5; y++ )
+  {
+    for( int x = -1; x < 5; x++ )
+    {
+      const bool inside = x >= 0 && x < 4 && y >= 0 && y < 4;
+      ext[( y + 1 ) * extStride + x + 1] =
+        inside ? pred[y * predStride + x] : Pel( ( ref[y * refStride + x] << borderShift ) - IF_INTERNAL_OFFS );
+    }
+  }
+  for( int i = 0; i < 16; i++ )
+  {
+    dMvX[i] = dMvXY[2 * i];
+    dMvY[i] = dMvXY[2 * i + 1];
+  }
+  ip->xFpProfGradFilter( ext, extStride, 6, 6, gradStride, gradX, gradY, clpRng.bd );
+  ip->xFpApplyPROF( dst, dstStride, ext + extStride + 1, extStride, 4, 4, gradX + gradStride + 1, gradY + gradStride + 1,
+                    gradStride, dMvX, dMvY, 4, bi, shiftNum, offset, clpRng );
+}
+
+// The per-sub-block luma loop that xFpAffineLumaCU replaces (xPredAffineBlk): MV per sub-block, m_if's 4x4 filters by
+// case, then the unfused PROF of the given implementation (its gradient filter and PROF).
+static void affineLumaCU_perSubblock( InterPredInterpolation* ip, InterpolationFilter& filter, const InterPredInterpolation::AffineLumaCU& cu,
+                                      bool prof, bool bi )
+{
+  const bool isLast = !prof && !bi;
+  Pel ext[8 * 6];
+  for( int h = 0; h < cu.height; h += 4 )
+  {
+    for( int w = 0; w < cu.width; w += 4 )
+    {
+      const int x = 2 + w, y = 2 + h;
+      int mvHor = cu.mvScaleHor + cu.dMvHorX * x + cu.dMvVerX * y;
+      int mvVer = cu.mvScaleVer + cu.dMvHorY * x + cu.dMvVerY * y;
+      roundAffineMv( mvHor, mvVer, cu.roundShift );
+      Mv mv( mvHor, mvVer );
+      mv.clipToStorageBitDepth();
+      cu.storedMv[( h / 4 ) * cu.storedMvStride + w / 4] = mv;
+      mvHor = std::min( cu.horMax, std::max( cu.horMin, mv.hor ) );
+      mvVer = std::min( cu.verMax, std::max( cu.verMin, mv.ver ) );
+      const int  xFrac = mvHor & 15, yFrac = mvVer & 15;
+      const Pel* ref   = cu.ref + ( h + ( mvVer >> 4 ) ) * cu.refStride + w + ( mvHor >> 4 );
+      Pel*       dst   = prof ? ext + 8 + 1 : cu.dst + h * cu.dstStride + w;
+      const int  dstStride = prof ? 8 : cu.dstStride;
+      if( xFrac && yFrac )
+        filter.filter4x4( COMP_Y, ref, cu.refStride, dst, dstStride, 4, 4, xFrac, yFrac, isLast, CHROMA_420, cu.clpRng );
+      else if( !yFrac )
+        filter.filterHor( COMP_Y, ref, cu.refStride, dst, dstStride, 4, 4, xFrac, isLast, CHROMA_420, cu.clpRng );
+      else
+        filter.filterVer( COMP_Y, ref, cu.refStride, dst, dstStride, 4, 4, yFrac, true, isLast, CHROMA_420, cu.clpRng );
+      const Pel* refNearest = ref + ( yFrac >> 3 ) * cu.refStride + ( xFrac >> 3 );
+      if( prof )
+        affinePROF4x4_unfused( ip, cu.dst + h * cu.dstStride + w, cu.dstStride, dst, 8, refNearest, cu.refStride, cu.shiftNum, cu.dMvXY,
+                               bi, cu.shiftNum, cu.offset, cu.clpRng );
+    }
+  }
+}
+
+static bool check_affineLumaCU( InterPredInterpolation* ref, InterPredInterpolation* opt )
+{
+  if( !opt->xFpAffineLumaCU[0][0] )
+  {
+    return true; // No CU kernel at this SIMD level: xPredAffineBlk keeps the per-sub-block loop.
+  }
+  printf( "Testing InterPred::xFpAffineLumaCU\n" );
+  InterpolationFilter filterOpt, filterRef;
+  filterOpt.initInterpolationFilter( true );
+  filterRef.initInterpolationFilter( false );
+  DimensionGenerator rng;
+
+  // A 256x256 picture with the encoder's margin for CTU 128 (CTUSize + 16), so every read of the MV clip window is in
+  // the buffer; MVs reach well past the window on every side.
+  const int picSize = 256, margin = 128 + 16, stride = picSize + 2 * margin;
+  std::vector<Pel> pic( stride * ( picSize + 2 * margin ) );
+  std::vector<Pel> dstOpt( 128 * 128 ), dstSimd( 128 * 128 ), dstScalar( 128 * 128 );
+  std::vector<Mv>  mvOpt( 32 * 32 ), mvSimd( 32 * 32 ), mvScalar( 32 * 32 );
+  int16_t dMvXY[32];
+
+  for( int content = 0; content < 4; content++ )   // random, all 0, all maximum, 0 / maximum checkerboard
+  {
+    for( int bitDepth : { 8, 10 } )
+    {
+      const int maxVal = ( 1 << bitDepth ) - 1;
+      for( int i = 0; i < int( pic.size() ); i++ )
+      {
+        pic[i] = Pel( content == 0 ? rand() & maxVal : content == 1 ? 0 : content == 2 ? maxVal : ( ( i + i / stride ) & 1 ) * maxVal );
+      }
+      for( int log2W = 3; log2W <= 7; log2W++ )
+      {
+        for( int log2H = 3; log2H <= 7; log2H++ )
+        {
+          for( int prof = 0; prof < 2; prof++ )
+          {
+            for( bool bi : { false, true } )
+            {
+              InterPredInterpolation::AffineLumaCU cu;
+              const int width = 1 << log2W, height = 1 << log2H;
+              const int x0 = rng.get( 0, picSize - width, 8 ), y0 = rng.get( 0, picSize - height, 8 );
+              cu.ref       = pic.data() + ( margin + y0 ) * stride + margin + x0;
+              cu.refStride = stride;
+              cu.dstStride = 128;
+              cu.width     = width;
+              cu.height    = height;
+              // control-point MVs in 1/16 sample, up to 400 samples away, so the window clip acts on every side; a 64x64
+              // CU takes the four-parameter model with mvLT (0, 0) and mvRT (16, 0) instead: its sub-block in column c
+              // and row r gets the MV (c, r), so the 256 sub-blocks cover every fraction pair once
+              auto randMv = [&] { return Mv( int( rand() % 12801 ) - 6400, int( rand() % 12801 ) - 6400 ); };
+              const bool everyFraction = log2W == 6 && log2H == 6;
+              const Mv mvLT = everyFraction ? Mv( 0, 0 ) : randMv();
+              const Mv mvRT = everyFraction ? Mv( 16, 0 ) : mvLT + Mv( int( rand() % 257 ) - 128, int( rand() % 257 ) - 128 );
+              const Mv mvLB = mvLT + Mv( int( rand() % 257 ) - 128, int( rand() % 257 ) - 128 );
+              const bool sixParam = !everyFraction && ( rand() & 1 );
+              cu.dMvHorX = ( mvRT - mvLT ).hor * ( 1 << ( MAX_CU_DEPTH - log2W ) );
+              cu.dMvHorY = ( mvRT - mvLT ).ver * ( 1 << ( MAX_CU_DEPTH - log2W ) );
+              cu.dMvVerX = sixParam ? ( mvLB - mvLT ).hor * ( 1 << ( MAX_CU_DEPTH - log2H ) ) : -cu.dMvHorY;
+              cu.dMvVerY = sixParam ? ( mvLB - mvLT ).ver * ( 1 << ( MAX_CU_DEPTH - log2H ) ) : cu.dMvHorX;
+              cu.mvScaleHor      = mvLT.hor * ( 1 << MAX_CU_DEPTH );
+              cu.mvScaleVer      = mvLT.ver * ( 1 << MAX_CU_DEPTH );
+              cu.roundShift      = MAX_CU_DEPTH - 4 + MV_FRACTIONAL_BITS_INTERNAL;
+              cu.horMin          = ( -128 - 8 - x0 + 1 ) * 16;
+              cu.horMax          = ( picSize + 8 - x0 - 1 ) * 16;
+              cu.verMin          = ( -128 - 8 - y0 + 1 ) * 16;
+              cu.verMax          = ( picSize + 8 - y0 - 1 ) * 16;
+              cu.storedMvStride  = 32;
+              std::generate( dMvXY, dMvXY + 32, [] { return int16_t( rand() % 63 - 31 ); } );
+              cu.dMvXY           = dMvXY;
+              cu.shiftNum        = std::max<int>( 2, IF_INTERNAL_PREC - bitDepth );
+              cu.offset          = ( 1 << ( cu.shiftNum - 1 ) ) + IF_INTERNAL_OFFS;
+              cu.clpRng          = ClpRng{ bitDepth };
+
+              InterPredInterpolation::AffineLumaCU a = cu, b = cu, c = cu;
+              a.dst = dstOpt.data();    a.storedMv = mvOpt.data();
+              b.dst = dstSimd.data();   b.storedMv = mvSimd.data();
+              c.dst = dstScalar.data(); c.storedMv = mvScalar.data();
+              const Pel guard = 0x5a5a;   // the kernel must write nothing outside the CU
+              std::fill( dstOpt.begin(), dstOpt.end(), guard );
+              opt->xFpAffineLumaCU[prof][bi]( a );
+              affineLumaCU_perSubblock( opt, filterOpt, b, prof, bi );
+              affineLumaCU_perSubblock( ref, filterRef, c, prof, bi );
+
+              std::ostringstream sstm;
+              sstm << "affineLumaCU " << width << "x" << height << " bd=" << bitDepth << " prof=" << prof << " bi=" << bi
+                   << " content=" << content << " sixParam=" << sixParam;
+              bool outsideKept = true;
+              for( int i = 0; i < int( dstOpt.size() ); i++ )
+              {
+                outsideKept &= ( i / 128 < height && i % 128 < width ) || dstOpt[i] == guard;
+              }
+              if( everyFraction )
+              {
+                std::set<int> fractionPairs;   // the test's own check: every pair once
+                for( int i = 0; i < 256; i++ )
+                {
+                  fractionPairs.insert( ( mvOpt[( i / 16 ) * 32 + i % 16].hor & 15 ) + 16 * ( mvOpt[( i / 16 ) * 32 + i % 16].ver & 15 ) );
+                }
+                CHECK( fractionPairs.size() != 256, "the 64x64 CU does not cover every fraction pair" );
+              }
+              if( !outsideKept )
+              {
+                printf( "%s: written outside the CU\n", sstm.str().c_str() );
+                return false;
+              }
+              if( !compare_values_2d( sstm.str() + " vs per-sub-block SIMD", dstSimd.data(), dstOpt.data(), height, width, 128 )
+                  || !compare_values_2d( sstm.str() + " vs per-sub-block scalar", dstScalar.data(), dstOpt.data(), height, width, 128 )
+                  || !compare_values_2d( sstm.str() + " MVs", ( const int* ) mvSimd.data(), ( const int* ) mvOpt.data(), height / 4,
+                                         2 * width / 4, 2 * 32 ) )
+              {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 static bool test_InterPred()
 {
   InterPredInterpolation ref;
@@ -2922,6 +3110,8 @@ static bool test_InterPred()
       passed = check_gradFilter( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
+
+  passed = check_affineLumaCU( &ref, &opt ) && passed;
 
   // padSize=1
   for( unsigned width : { 7, 11 } )
@@ -4122,6 +4312,33 @@ static bool test_PelBufferOps()
 #endif // ENABLE_SIMD_OPT_BUFFER
 
 #if ENABLE_SIMD_OPT_MCIF
+// The last passes' clip coverage of check_filter, per filter and bit depth (8, 10): bit 0 set when an extremes case
+// had an unclipped output below 0, bit 1 when one had an output above the maximum sample. check_filterClipCoverage
+// requires both, so the kernels' clipping is compared in both directions.
+template<int N, bool isVertical, bool isFirst, bool isLast>
+static unsigned& filterClipHits( unsigned bd )
+{
+  static unsigned hits[2] = { 0, 0 };
+  return hits[bd == 10];
+}
+
+template<int N, bool isVertical, bool isFirst, bool isLast>
+static bool check_filterClipCoverage()
+{
+  static_assert( isLast, "only last passes clip" );
+  bool passed = true;
+  for( unsigned bd : { 8, 10 } )
+  {
+    if( filterClipHits<N, isVertical, isFirst, isLast>( bd ) != 3 )
+    {
+      std::cout << "failed: InterpolationFilter::filter" << ( isVertical ? "Ver" : "Hor" ) << "_N" << N << "[" << isFirst
+                << "][" << isLast << "] bitDepth=" << bd << ": the extremes cases never clipped both below 0 and above the maximum\n";
+      passed = false;
+    }
+  }
+  return passed;
+}
+
 template<int N, bool isVertical, bool isFirst, bool isLast>
 static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, unsigned width, unsigned height )
 {
@@ -4129,8 +4346,6 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
 
   std::string str_VerHor = isVertical ? "Ver" : "Hor";
 
-  static constexpr unsigned bd = 10; // default bit-depth
-  ClpRng clpRng{ ( int )bd };
   DimensionGenerator dim;
 
   // Max buffer size is ( height + 8 ) * srcStride.
@@ -4146,9 +4361,12 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
 
   bool passed = true;
 
+  // The x86 kernels take their shifts as immediates per bit depth: test both of VVenC's internal bit depths.
   // A first pass reads samples: random ones, then 0 or the maximum. A second pass reads what a first pass outputs.
+  for( unsigned bd : { 8, 10 } )
   for( bool extremes : { false, true } )
   {
+    ClpRng clpRng{ ( int )bd };
     unsigned srcStride = dim.get( width, MAX_CU_SIZE + 8 );
     unsigned dstStride = dim.get( width, MAX_CU_SIZE + 8 );
 
@@ -4159,9 +4377,9 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
     else
       std::generate( src.begin(), src.end(), FirstPassGenerator{ bd, extremes } );
 
-    // Clear output blocks.
-    std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-    std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+    // The same canary in both outputs, compared over the whole stride, catches writes past the block.
+    std::fill( dst_ref.begin(), dst_ref.end(), Pel( 0x5a5a ) );
+    std::fill( dst_opt.begin(), dst_opt.end(), Pel( 0x5a5a ) );
 
     int cStride = isVertical ? srcStride : 1;
     ptrdiff_t src_offset = ( N / 2 - 1 ) * cStride;
@@ -4211,10 +4429,30 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
     }
 
     std::ostringstream sstm_subtest;
-    sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " frac=" << frac
-                 << " extremes=" << extremes;
+    sstm_subtest << sstm_test.str() << " bitDepth=" << bd << " srcStride=" << srcStride << " dstStride=" << dstStride
+                 << " frac=" << frac << " extremes=" << extremes;
 
     passed = compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride ) && passed;
+
+    if( isLast && extremes )
+    {
+      // The output before ClipPel, with the scalar last pass's shift and offset (N != 2)
+      const int shift  = IF_FILTER_PREC + ( isFirst ? 0 : std::max<int>( 2, IF_INTERNAL_PREC - ( int )bd ) );
+      const int offset = ( 1 << ( shift - 1 ) ) + ( isFirst ? 0 : IF_INTERNAL_OFFS << IF_FILTER_PREC );
+      const Pel* firstTap = src.data() + src_offset - ( N / 2 - 1 ) * cStride;
+      const TFilterCoeff* taps = pCoeff + ( N == 6 ? 1 : 0 );   // the 6-tap tables keep their taps in entries 1..6
+      for( unsigned y = 0; y < height; y++ )
+      {
+        for( unsigned x = 0; x < width; x++ )
+        {
+          int sum = 0;
+          for( int k = 0; k < N; k++ )
+            sum += firstTap[y * srcStride + x + k * cStride] * taps[k];
+          const int v = ( sum + offset ) >> shift;
+          filterClipHits<N, isVertical, isFirst, isLast>( bd ) |= ( v < 0 ? 1 : 0 ) | ( v > clpRng.max() ? 2 : 0 );
+        }
+      }
+    }
   }
 
   return passed;
@@ -4274,9 +4512,9 @@ static bool check_filterWxH_N8( InterpolationFilter* ref, InterpolationFilter* o
       // Fill input buffers with unsigned data.
       std::generate( src.begin(), src.end(), inp_gen );
 
-      // Clear output blocks.
-      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+      // The same canary in both outputs, compared over the whole stride, catches writes past the block.
+      std::fill( dst_ref.begin(), dst_ref.end(), Pel( 0x5a5a ) );
+      std::fill( dst_opt.begin(), dst_opt.end(), Pel( 0x5a5a ) );
 
       ptrdiff_t src_offset = 3 * ( 1 + srcStride );
 
@@ -4306,7 +4544,7 @@ static bool check_filterWxH_N8( InterpolationFilter* ref, InterpolationFilter* o
       sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride;
 
       passed =
-          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride, dstStride ) && passed;
     }
   }
 
@@ -4351,9 +4589,9 @@ static bool check_filterWxH_N4( InterpolationFilter* ref, InterpolationFilter* o
       // Fill input buffers with unsigned data.
       std::generate( src.begin(), src.end(), inp_gen );
 
-      // Clear output blocks.
-      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+      // The same canary in both outputs, compared over the whole stride, catches writes past the block.
+      std::fill( dst_ref.begin(), dst_ref.end(), Pel( 0x5a5a ) );
+      std::fill( dst_opt.begin(), dst_opt.end(), Pel( 0x5a5a ) );
 
       ptrdiff_t src_offset = 1 + srcStride;
 
@@ -4383,7 +4621,7 @@ static bool check_filterWxH_N4( InterpolationFilter* ref, InterpolationFilter* o
       sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride;
 
       passed =
-          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride, dstStride ) && passed;
     }
   }
 
@@ -4417,7 +4655,9 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
     for( unsigned n = 0; n < num_cases; n++ )
     {
       unsigned height    = dim.get( 1, MAX_CU_SIZE );
-      unsigned width     = dim.get( 1, MAX_CU_SIZE );
+      // DMVR's bilinear search copies blocks of its width + 4: test 20, 36 and 68 first
+      static const unsigned dmvrWidths[3] = { 20, 36, 68 };
+      unsigned width     = biMCForDMVR && n < 3 ? dmvrWidths[n] : dim.get( 1, MAX_CU_SIZE );
       unsigned srcStride = dim.get( width, MAX_CU_SIZE );
       unsigned dstStride = dim.get( width, MAX_CU_SIZE );
 
@@ -4428,9 +4668,9 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
       else
         std::generate( src.begin(), src.end(), FirstPassGenerator{ bd, ( n & 1 ) != 0 } );
 
-      // Clear output blocks.
-      std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-      std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+      // The same canary in both outputs, compared over the whole stride, catches writes past the block.
+      std::fill( dst_ref.begin(), dst_ref.end(), Pel( 0x5a5a ) );
+      std::fill( dst_opt.begin(), dst_opt.end(), Pel( 0x5a5a ) );
 
       ref->m_filterCopy[isFirst][isLast]( clpRng, src.data(), ( int )srcStride, dst_ref.data(), ( int )dstStride,
                                           ( int )width, ( int )height, biMCForDMVR );
@@ -4442,7 +4682,7 @@ static bool check_filterCopy( InterpolationFilter* ref, InterpolationFilter* opt
                    << " h=" << height;
 
       passed =
-          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, width, dstStride ) && passed;
+          compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), height, dstStride, dstStride ) && passed;
     }
   }
 
@@ -4558,10 +4798,7 @@ static bool check_xWeightedGeoBlk( InterpolationFilter* ref, InterpolationFilter
 static bool check_filterN2_2D( InterpolationFilter* ref, InterpolationFilter* opt, unsigned width, unsigned height,
                                unsigned num_cases )
 {
-  static constexpr unsigned bd = 10;
-  ClpRng clpRng{ ( int )bd };
   DimensionGenerator dim;
-  InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
   const int w = width + 4;  // Input width is the CU width + 4.
   const int h = height + 4; // Input height is the CU height + 4.
 
@@ -4576,8 +4813,12 @@ static bool check_filterN2_2D( InterpolationFilter* ref, InterpolationFilter* op
   sstm_test << "InterpolationFilter::filterN2_2D " << width << "x" << height;
   std::cout << "Testing " << sstm_test.str() << std::endl;
 
+  // the first pass's shift depends on the bit depth: test 8 and 10 bit
+  for( unsigned bd : { 8, 10 } )
   for( unsigned n = 0; n < num_cases; n++ )
   {
+    ClpRng clpRng{ ( int )bd };
+    InputGenerator<Pel> inp_gen{ bd, /*is_signed=*/false };
     unsigned srcStride = dim.get( w, MAX_CU_SIZE + 4 );
     unsigned dstStride = dim.get( w, MAX_CU_SIZE + 4 );
 
@@ -4587,17 +4828,18 @@ static bool check_filterN2_2D( InterpolationFilter* ref, InterpolationFilter* op
     const TFilterCoeff* cv = InterpolationFilter::m_bilinearFilterPrec4[fracY];
 
     std::generate( src.begin(), src.end(), inp_gen );
-    std::fill( dst_ref.begin(), dst_ref.end(), 0 );
-    std::fill( dst_opt.begin(), dst_opt.end(), 0 );
+    // the same canary in both outputs, compared over the whole stride, catches writes past the block
+    std::fill( dst_ref.begin(), dst_ref.end(), Pel( 0x5a5a ) );
+    std::fill( dst_opt.begin(), dst_opt.end(), Pel( 0x5a5a ) );
 
     ref->m_filterN2_2D( clpRng, src.data(), ( int )srcStride, dst_ref.data(), ( int )dstStride, w, h, ch, cv );
     opt->m_filterN2_2D( clpRng, src.data(), ( int )srcStride, dst_opt.data(), ( int )dstStride, w, h, ch, cv );
 
     std::ostringstream sstm_subtest;
-    sstm_subtest << sstm_test.str() << " width=" << w << " height=" << h << " srcStride=" << srcStride
+    sstm_subtest << sstm_test.str() << " bitDepth=" << bd << " width=" << w << " height=" << h << " srcStride=" << srcStride
                  << " dstStride=" << dstStride << " fracX=" << fracX << " fracY=" << fracY;
 
-    passed = compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), h, w, dstStride ) && passed;
+    passed = compare_values_2d( sstm_subtest.str(), dst_ref.data(), dst_opt.data(), h, dstStride ) && passed;
   }
 
   return passed;
@@ -4684,107 +4926,6 @@ static bool check_filterAffineLumaBlock( InterpolationFilter* filter, const char
   return passed;
 }
 
-// m_filterAffineLumaSubblocks (AVX2 only) must equal the per-subblock calls of xPredAffineBlk it replaces (filter4x4,
-// filterHor, filterVer at 4x4): blocks 8x8 to 128x128, also non-square; every fraction pair (a 64x64 block takes all 256
-// pairs in a random order, the other sizes random pairs); reference offsets of up to 8 samples around each subblock,
-// negative too; isLast both; 8 and 10 bits; random and extreme samples; nothing written outside the block.
-static bool check_filterAffineLumaSubblocks( InterpolationFilter* filter )
-{
-  if( !filter->m_filterAffineLumaSubblocks[0] )
-  {
-    std::cout << "Skipping InterpolationFilter::m_filterAffineLumaSubblocks (no kernel for this SIMD level)" << std::endl;
-    return true;
-  }
-  std::cout << "Testing InterpolationFilter::m_filterAffineLumaSubblocks" << std::endl;
-
-  const int maxMvInt  = 8;                         // largest integer MV offset of a subblock
-  const int pad       = maxMvInt + 8;              // the 6-tap 2-D filter reads 2 samples before and 3 after
-  const int refStride = MAX_CU_SIZE + 2 * pad;
-  std::vector<Pel> refPic( refStride * ( MAX_CU_SIZE + 2 * pad ) );
-  const Pel* refOrigin = refPic.data() + pad * refStride + pad;   // the block's position in the reference
-  const int dstStride  = MAX_CU_SIZE + 8;                         // wider than the block: the rest must stay untouched
-  const Pel guard      = 0x5a5a;
-  std::vector<Pel> dstKernel( dstStride * MAX_CU_SIZE ), dstRef( dstStride * MAX_CU_SIZE );
-  std::vector<AffineSubblockRef> subblocks( ( MAX_CU_SIZE / 4 ) * ( MAX_CU_SIZE / 4 ) );
-  DimensionGenerator rng;
-
-  bool passed = true;
-  for( int bd : { 8, 10 } )
-  {
-    const ClpRng clpRng{ bd };
-    for( bool extreme : { false, true } )
-    {
-      if( extreme )
-      {
-        std::generate( refPic.begin(), refPic.end(), MinMaxGenerator<Pel>( bd, /*is_signed=*/false ) );
-      }
-      else
-      {
-        std::generate( refPic.begin(), refPic.end(), InputGenerator<Pel>( bd, /*is_signed=*/false ) );
-      }
-      for( const Size& size : { Size( 8, 8 ), Size( 32, 8 ), Size( 8, 32 ), Size( 64, 64 ), Size( 128, 128 ) } )
-      {
-        const int numSubX = size.width / 4;
-        const int numSubY = size.height / 4;
-        const int num     = numSubX * numSubY;
-        std::vector<int> fracPairs( num );
-        if( num == 256 )
-        {
-          std::iota( fracPairs.begin(), fracPairs.end(), 0 );
-          std::shuffle( fracPairs.begin(), fracPairs.end(), std::mt19937( rand() ) );
-        }
-        else
-        {
-          std::generate( fracPairs.begin(), fracPairs.end(), [&]() { return int( rng.get( 0, 255 ) ); } );
-        }
-        for( int i = 0; i < num; i++ )
-        {
-          const int x = 4 * ( i % numSubX ) + int( rng.get( 0, 2 * maxMvInt ) ) - maxMvInt;
-          const int y = 4 * ( i / numSubX ) + int( rng.get( 0, 2 * maxMvInt ) ) - maxMvInt;
-          subblocks[i].refOffset = x + y * refStride;
-          subblocks[i].fracX     = uint8_t( fracPairs[i] & 15 );
-          subblocks[i].fracY     = uint8_t( fracPairs[i] >> 4 );
-        }
-        for( bool isLast : { false, true } )
-        {
-          std::fill( dstKernel.begin(), dstKernel.end(), guard );
-          std::fill( dstRef.begin(), dstRef.end(), guard );
-          filter->m_filterAffineLumaSubblocks[isLast]( clpRng, refOrigin, refStride, dstKernel.data(), dstStride, numSubX,
-                                                      numSubY, subblocks.data() );
-          // the reference: xPredAffineBlk's per-subblock calls
-          for( int i = 0; i < num; i++ )
-          {
-            const Pel* src   = refOrigin + subblocks[i].refOffset;
-            Pel*       dst   = dstRef.data() + 4 * ( i % numSubX ) + 4 * ( i / numSubX ) * dstStride;
-            const int  fracX = subblocks[i].fracX;
-            const int  fracY = subblocks[i].fracY;
-            if( fracX && fracY )
-            {
-              filter->filter4x4( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracX, fracY, isLast, CHROMA_420, clpRng );
-            }
-            else if( !fracY )
-            {
-              filter->filterHor( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracX, isLast, CHROMA_420, clpRng );
-            }
-            else
-            {
-              filter->filterVer( COMP_Y, src, refStride, dst, dstStride, 4, 4, fracY, true, isLast, CHROMA_420, clpRng );
-            }
-          }
-          // the whole buffers, so that a write outside the block shows too
-          if( dstKernel != dstRef )
-          {
-            printf( "m_filterAffineLumaSubblocks %dx%d isLast %d bd %d extreme %d: differs from the per-subblock calls\n",
-                    size.width, size.height, isLast, bd, extreme );
-            passed = false;
-          }
-        }
-      }
-    }
-  }
-  return passed;
-}
-
 static bool test_InterpolationFilter()
 {
   InterpolationFilter ref;
@@ -4796,7 +4937,6 @@ static bool test_InterpolationFilter()
   unsigned num_cases = NUM_CASES;
   bool passed = check_filterAffineLumaBlock( &ref, "C" );
   passed      = check_filterAffineLumaBlock( &opt, "SIMD" ) && passed;
-  passed      = check_filterAffineLumaSubblocks( &opt ) && passed;
 
   for( int height : { 4, 8, 16, 32, 64 } )
   {
@@ -4853,6 +4993,11 @@ static bool test_InterpolationFilter()
       passed = check_filter<2, 1, 1, 0>( &ref, &opt, width + 4, height + 4 ) && passed;
     }
   }
+
+  // every last pass clipped below 0 and above the maximum at both bit depths in some extremes case
+  passed = check_filterClipCoverage<6, 0, 1, 1>() && check_filterClipCoverage<6, 1, 0, 1>() && check_filterClipCoverage<6, 1, 1, 1>() && passed;
+  passed = check_filterClipCoverage<8, 0, 1, 1>() && check_filterClipCoverage<8, 1, 0, 1>() && check_filterClipCoverage<8, 1, 1, 1>() && passed;
+  passed = check_filterClipCoverage<4, 0, 1, 1>() && check_filterClipCoverage<4, 1, 0, 1>() && check_filterClipCoverage<4, 1, 1, 1>() && passed;
 
   // The width = 4 case is only called with height = 4.
   passed = check_filterWxH_N8<false, 4>( &ref, &opt, 4, num_cases ) && passed;
