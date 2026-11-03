@@ -1719,6 +1719,20 @@ static uint32_t xCalcHAD4x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
 // +-2046. Each butterfly stage can double the values, so at most four stages run on 16-bit values
 // (16 * 2047 = 32752) and the others on 32-bit values.
 
+// The normalization ( uint32_t )( sad / sqrt( n ) * 2 ) of the n = 16 * 8 and n = 4 * 8 SATDs without the double
+// division: ( sad * M ) >> 42 with M = ceil( 2^43 / c ), c the double sqrt( n ). The result is identical for every sad
+// below 7095941 (checked exhaustively), and these SATDs stay far below: the transform is orthogonal up to sqrt( n ), so
+// the sum of absolute coefficients is at most n * sqrt( n ) * 2047 < 3 million.
+static constexpr uint32_t HAD_SCALE_MAX_SAD   = 7095940;
+static constexpr uint64_t HAD_SCALE_16x8_MULT = 777472127994ull;    // n = 128
+static constexpr uint64_t HAD_SCALE_8x4_MULT  = 1554944255988ull;   // n = 32
+
+static inline uint32_t xScaleHAD( const uint32_t sad, const uint64_t mult )
+{
+  CHECKD( sad > HAD_SCALE_MAX_SAD, "SATD outside the range of the fixed-point normalization" );
+  return uint32_t( ( uint64_t( sad ) * mult ) >> 42 );
+}
+
 // Transposes the 8x8 block of 16-bit values in each 128-bit lane: afterwards register k holds column k of both blocks.
 static inline void xTranspose8x8Lanes_AVX2( __m256i r[8] )
 {
@@ -1884,7 +1898,7 @@ static inline uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
   uint32_t sad = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
   sad -= absDc;
   sad += absDc >> 2;
-  return (uint32_t)(sad / sqrt(16.0 * 8) * 2);
+  return xScaleHAD( sad, HAD_SCALE_16x8_MULT );
 }
 #endif //USE_AVX2
 
@@ -2096,7 +2110,7 @@ static inline uint32_t xNormalizedHAD32Samples( uint32_t sad, const uint32_t abs
 {
   sad -= absDc;
   sad += absDc >> 2;
-  return ( uint32_t ) ( sad / sqrt( 4.0 * 8 ) * 2 );
+  return xScaleHAD( sad, HAD_SCALE_8x4_MULT );
 }
 #endif //USE_AVX2
 
