@@ -949,6 +949,17 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   Pel*          dstY = yuvDst.buf;
   const int dstStride = yuvDst.stride;
 
+  const unsigned shiftNum = IF_INTERNAL_PREC + 1 - bitDepth;
+  const int   offset = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
+  const int   limit = (1 << 4) - 1;
+
+  if( width == 16 && height <= MAX_BDOF_APPLICATION_REGION && xFpBDOF16 )
+  {
+    // gradients, sums and average in one pass, without the gradient planes and the padding below
+    xFpBDOF16( srcY0 + stridePredMC + 1, srcY1 + stridePredMC + 1, stridePredMC, height, dstY, dstStride, shiftNum, offset, limit, clpRng );
+    return;
+  }
+
   for (int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
   {
     Pel* dstTempPtr = m_filteredBlockTmp[2 + refList][COMP_Y] + stridePredMC + 1;
@@ -968,10 +979,6 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
     ::memcpy(padStr - stridePredMC, padStr, sizeof(Pel)*(widthG));
     ::memcpy(padStr + height*stridePredMC, padStr + (height - 1)*stridePredMC, sizeof(Pel)*(widthG));
   }
-
-  const unsigned shiftNum = IF_INTERNAL_PREC + 1 - bitDepth;
-  const int   offset = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
-  const int   limit = (1 << 4) - 1;
 
   xFpBiDirOptFlow( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset,
                    limit, clpRng, bitDepth );

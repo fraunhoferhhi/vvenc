@@ -445,6 +445,181 @@ void BiOptFlowCoreSIMD( const Pel* srcY0,
   dispatchBitDepth( clpRng.bd, [&]( auto bd ) { BiOptFlowCoreSIMDBitDepth<vext, decltype( bd )::value>( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset, limit, clpRng, bitDepth ); } );
 }
 
+#if USE_AVX2
+// BDOF of a 16-wide block (16x16 or 16x8) in one pass: the gradients, the 6x6 window sums of every 4x4 subblock and
+// the corrected average, one row of 16 samples per register. Same output as gradFilter_SSE + the padding in
+// xApplyBDOF + BiOptFlowCoreSIMD, but without writing gradient planes or padding the predictions:
+// - the padding makes every border sample and border gradient a copy of the adjacent inner one, so the per-sample
+//   terms of row -1 equal those of row 0, row H those of row H-1, column -1 those of column 0 and column 16 those of
+//   column 15; the windows (rows 4yu-1..4yu+4, columns 4xu-1..4xu+4) count those inner rows and columns twice;
+// - the gradients still read the unpadded one-sample border of the predictions, as gradFilter_SSE does;
+// - each row's terms are computed once (BiOptFlowCoreSIMD computes the two rows shared by vertically adjacent windows
+//   twice, and 8 columns for every 6 it uses); each column's sum is an int16 sum of the same 6 values as there.
+
+// the five per-sample terms BDOF sums, for 16 columns (int16)
+struct BdofTerms16
+{
+  __m256i absGX, absGY, dIX, dIY, signGYGX;
+};
+
+static inline void addBdofTerms16( BdofTerms16& sum, const BdofTerms16& terms )
+{
+  sum.absGX    = _mm256_add_epi16( sum.absGX,    terms.absGX );
+  sum.absGY    = _mm256_add_epi16( sum.absGY,    terms.absGY );
+  sum.dIX      = _mm256_add_epi16( sum.dIX,      terms.dIX );
+  sum.dIY      = _mm256_add_epi16( sum.dIY,      terms.dIY );
+  sum.signGYGX = _mm256_add_epi16( sum.signGYGX, terms.signGYGX );
+}
+
+// the gradient differences of one row that the average needs
+struct BdofGradDiff16
+{
+  int16_t x[16];   // gradX0 - gradX1
+  int16_t y[16];   // gradY0 - gradY1
+};
+
+static inline __m256i loadPel16( const Pel* src )
+{
+  return _mm256_loadu_si256( ( const __m256i* ) src );
+}
+
+// the gradients of one prediction at 16 samples of a row, as gradFilter_SSE: differences of the neighbours >> 6
+static inline void bdofGradients16( const Pel* pred, const ptrdiff_t stride, __m256i& gradX, __m256i& gradY )
+{
+  gradX = _mm256_sub_epi16( _mm256_srai_epi16( loadPel16( pred + 1 ),      6 ), _mm256_srai_epi16( loadPel16( pred - 1 ),      6 ) );
+  gradY = _mm256_sub_epi16( _mm256_srai_epi16( loadPel16( pred + stride ), 6 ), _mm256_srai_epi16( loadPel16( pred - stride ), 6 ) );
+}
+
+// Returns the terms of one row (calcBIOSums2x_AVX2's operations) and also stores the row's gradient differences for
+// the average to gradDiff.
+static inline BdofTerms16 bdofRowTerms16( const Pel* pred0, const Pel* pred1, const ptrdiff_t stride, BdofGradDiff16& gradDiff )
+{
+  __m256i gradX0, gradY0, gradX1, gradY1;
+  bdofGradients16( pred0, stride, gradX0, gradY0 );
+  bdofGradients16( pred1, stride, gradX1, gradY1 );
+  _mm256_storeu_si256( ( __m256i* ) gradDiff.x, _mm256_sub_epi16( gradX0, gradX1 ) );
+  _mm256_storeu_si256( ( __m256i* ) gradDiff.y, _mm256_sub_epi16( gradY0, gradY1 ) );
+
+  const __m256i gX = _mm256_srai_epi16( _mm256_add_epi16( gradX0, gradX1 ), 1 );
+  const __m256i gY = _mm256_srai_epi16( _mm256_add_epi16( gradY0, gradY1 ), 1 );
+  const __m256i dI = _mm256_sub_epi16( _mm256_srai_epi16( loadPel16( pred1 ), 4 ), _mm256_srai_epi16( loadPel16( pred0 ), 4 ) );
+  return { _mm256_abs_epi16( gX ), _mm256_abs_epi16( gY ), _mm256_sign_epi16( dI, gX ), _mm256_sign_epi16( dI, gY ), _mm256_sign_epi16( gX, gY ) };
+}
+
+// Partial window sums (int32) of the four subblocks of a subblock row from its 16 column sums v (int16). Subblock k
+// covers columns 4k-1..4k+4, with column -1 = column 0 and column 16 = column 15. Per 128-bit half, 'outer' holds
+// subblock 0 | 3 and 'inner' subblock 1 | 2, each spread over 4 lanes.
+static inline void bdofWindowPartials16( const __m256i v, __m256i& outer, __m256i& inner )
+{
+  // v holds columns 0-7 | 8-15: subblock 0 is columns 0..4 with column 0 twice, subblock 3 columns 11..15 with 15 twice
+  outer = _mm256_madd_epi16( v, _mm256_setr_epi16( 2, 1, 1, 1, 1, 0, 0, 0,   0, 0, 0, 1, 1, 1, 1, 2 ) );
+  // subblocks 1 and 2 are columns 3..8 and 7..12: per half, alignr by 3 samples joins lanes 3..7 of 'low'
+  // (columns 0-7 | 4-11) with lanes 0..2 of 'high' (columns 8-15 | 12-15) to columns 3-10 | 7-14
+  const __m256i low  = _mm256_permute4x64_epi64( v, 0x94 );   // 64-bit quarters 0, 1 | 1, 2
+  const __m256i high = _mm256_permute4x64_epi64( v, 0xfe );   // quarters 2, 3 | 3, 3
+  inner = _mm256_madd_epi16( _mm256_alignr_epi8( high, low, 6 ), _mm256_setr_epi16( 1, 1, 1, 1, 1, 1, 0, 0,   1, 1, 1, 1, 1, 1, 0, 0 ) );
+}
+
+// the window sums of the four subblocks for two terms: lanes 0..3 = subblocks 0..3 of a, lanes 4..7 those of b
+static inline __m256i bdofWindowSums16( const __m256i a, const __m256i b )
+{
+  __m256i outerA, innerA, outerB, innerB;
+  bdofWindowPartials16( a, outerA, innerA );
+  bdofWindowPartials16( b, outerB, innerB );
+  // per half: subblocks 0 | 3 of a, 1 | 2 of a, 0 | 3 of b, 1 | 2 of b
+  const __m256i sums = _mm256_hadd_epi32( _mm256_hadd_epi32( outerA, innerA ), _mm256_hadd_epi32( outerB, innerB ) );
+  return _mm256_permutevar8x32_epi32( sums, _mm256_setr_epi32( 0, 1, 5, 4, 2, 3, 7, 6 ) );
+}
+
+// The motion refinements (tmpx, tmpy) of the four subblocks, computed as calcBIOSums2x_AVX2 does for each, from the
+// window sums absG = absGX | absGY, dI = dIX | dIY and signGYGX (lanes 0..3 | 4..7 = subblocks 0..3). Returns per
+// subblock the (tmpx, tmpy) int16 pair the average's madd uses: (tmpx & 0xffff) | (tmpy << 16).
+static inline __m128i bdofMotion16( const __m256i absG, const __m256i dI, const __m256i signGYGX, const int limit )
+{
+  // rightShiftMSB( n, d ) = n >> floor( log2( d ) ): the exponent of d as a float (exact, d < 2^24); a zero sum
+  // means no refinement
+  const __m256i msbPos = _mm256_sub_epi32( _mm256_srli_epi32( _mm256_castps_si256( _mm256_cvtepi32_ps( absG ) ), 23 ), _mm256_set1_epi32( 127 ) );
+  const __m256i isZero = _mm256_cmpeq_epi32( absG, _mm256_setzero_si256() );
+  const __m256i vMin   = _mm256_set1_epi32( -limit );
+  const __m256i vMax   = _mm256_set1_epi32( limit );
+  auto refine = [&]( const __m256i numer ) { return _mm256_andnot_si256( isZero, _mm256_min_epi32( vMax, _mm256_max_epi32( vMin, _mm256_srav_epi32( numer, msbPos ) ) ) ); };
+
+  const __m256i dI4  = _mm256_slli_epi32( dI, 2 );
+  const __m256i tmpx = refine( dI4 );   // lanes 0..3
+  // tmpData = sumSignGYGX * tmpx >> 1 with tmpx copied to lanes 4..7 (|product| < 2^20: equals the split form)
+  const __m256i tmpData = _mm256_srai_epi32( _mm256_mullo_epi32( signGYGX, _mm256_permute2x128_si256( tmpx, tmpx, 0x00 ) ), 1 );
+  const __m256i tmpy    = refine( _mm256_sub_epi32( dI4, tmpData ) );   // lanes 4..7
+  return _mm_or_si128( _mm_and_si128( _mm256_castsi256_si128( tmpx ), _mm_set1_epi32( 0xffff ) ), _mm_slli_epi32( _mm256_extracti128_si256( tmpy, 1 ), 16 ) );
+}
+
+// the corrected average of 4 rows (addBIOAvg4_2x_AVX2's operations); motion: the four subblocks' (tmpx, tmpy) pairs
+static inline void bdofAverage4Rows16( const Pel* pred0, const Pel* pred1, const ptrdiff_t predStride, const BdofGradDiff16* gradDiff, Pel* dst, const ptrdiff_t dstStride,
+                                       const __m128i motion, const int shiftNum, const int offset, const ClpRng& clpRng )
+{
+  // unpacklo / unpackhi of a row give columns 0-3 | 8-11 and 4-7 | 12-15, which belong to subblocks 0 | 2 and 1 | 3
+  const __m256i motionLo = _mm256_permutevar8x32_epi32( _mm256_castsi128_si256( motion ), _mm256_setr_epi32( 0, 0, 0, 0, 2, 2, 2, 2 ) );
+  const __m256i motionHi = _mm256_permutevar8x32_epi32( _mm256_castsi128_si256( motion ), _mm256_setr_epi32( 1, 1, 1, 1, 3, 3, 3, 3 ) );
+  const __m256i ones     = _mm256_set1_epi16( 1 );
+  const __m256i vOffset  = _mm256_set1_epi32( offset );
+  const __m256i vMin     = _mm256_set1_epi32( clpRng.min() );
+  const __m256i vMax     = _mm256_set1_epi32( clpRng.max() );
+
+  for( int y = 0; y < 4; y++, pred0 += predStride, pred1 += predStride, gradDiff++, dst += dstStride )
+  {
+    const __m256i gradDiffX = _mm256_loadu_si256( ( const __m256i* ) gradDiff->x );
+    const __m256i gradDiffY = _mm256_loadu_si256( ( const __m256i* ) gradDiff->y );
+    const __m256i src0      = loadPel16( pred0 );
+    const __m256i src1      = loadPel16( pred1 );
+    // tmpx * gradDiffX + tmpy * gradDiffY + src0 + src1 in int32: madd of the interleaved pairs (with ones: src0 + src1)
+    __m256i lo = _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpacklo_epi16( gradDiffX, gradDiffY ), motionLo ), _mm256_madd_epi16( _mm256_unpacklo_epi16( src0, src1 ), ones ) );
+    __m256i hi = _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpackhi_epi16( gradDiffX, gradDiffY ), motionHi ), _mm256_madd_epi16( _mm256_unpackhi_epi16( src0, src1 ), ones ) );
+    lo = _mm256_min_epi32( vMax, _mm256_max_epi32( vMin, _mm256_srai_epi32( _mm256_add_epi32( lo, vOffset ), shiftNum ) ) );
+    hi = _mm256_min_epi32( vMax, _mm256_max_epi32( vMin, _mm256_srai_epi32( _mm256_add_epi32( hi, vOffset ), shiftNum ) ) );
+    // packs restores the column order; the values are clipped already, so it does not saturate
+    _mm256_storeu_si256( ( __m256i* ) dst, _mm256_packs_epi32( lo, hi ) );
+  }
+}
+
+// pred0, pred1: the blocks' first samples in the unpadded predictions (one-sample border around them)
+static void BDOF16_AVX2( const Pel* pred0, const Pel* pred1, const ptrdiff_t predStride, const int height, Pel* dst, const ptrdiff_t dstStride,
+                         const int shiftNum, const int offset, const int limit, const ClpRng& clpRng )
+{
+  CHECKD( height != 8 && height != 16, "BDOF16_AVX2: height" );
+  alignas( 32 ) BdofGradDiff16 gradDiff[MAX_BDOF_APPLICATION_REGION];
+
+  // the sum of rows y0-1 and y0 of the next window; row -1 is a copy of row 0
+  BdofTerms16 carry = bdofRowTerms16( pred0, pred1, predStride, gradDiff[0] );
+  addBdofTerms16( carry, carry );
+
+  for( int y0 = 0; y0 < height; y0 += 4 )
+  {
+    BdofTerms16 window = carry;
+    for( int y = y0 + 1; y < y0 + 3; y++ )
+    {
+      addBdofTerms16( window, bdofRowTerms16( pred0 + y * predStride, pred1 + y * predStride, predStride, gradDiff[y] ) );
+    }
+    const BdofTerms16 lastRow = bdofRowTerms16( pred0 + ( y0 + 3 ) * predStride, pred1 + ( y0 + 3 ) * predStride, predStride, gradDiff[y0 + 3] );
+    addBdofTerms16( window, lastRow );
+    if( y0 + 4 < height )
+    {
+      const BdofTerms16 below = bdofRowTerms16( pred0 + ( y0 + 4 ) * predStride, pred1 + ( y0 + 4 ) * predStride, predStride, gradDiff[y0 + 4] );
+      addBdofTerms16( window, below );
+      carry = lastRow;
+      addBdofTerms16( carry, below );
+    }
+    else
+    {
+      addBdofTerms16( window, lastRow );   // row H is a copy of row H-1
+    }
+
+    const __m128i motion = bdofMotion16( bdofWindowSums16( window.absGX, window.absGY ), bdofWindowSums16( window.dIX, window.dIY ),
+                                         bdofWindowSums16( window.signGYGX, window.signGYGX ), limit );
+    bdofAverage4Rows16( pred0 + y0 * predStride, pred1 + y0 * predStride, predStride, gradDiff + y0, dst + y0 * dstStride, dstStride, motion, shiftNum, offset, clpRng );
+  }
+  _mm256_zeroupper();
+}
+#endif
+
 template< X86_VEXT vext, bool PAD = true>
 void gradFilter_SSE(const Pel* src, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth)
 {
@@ -1233,6 +1408,9 @@ void InterPredInterpolation::_initInterPredictionX86()
   xFpAffineLumaCU[0][1] = affineLumaCU_SSE<vext, false, true>;
   xFpAffineLumaCU[1][0] = affineLumaCU_SSE<vext, true, false>;
   xFpAffineLumaCU[1][1] = affineLumaCU_SSE<vext, true, true>;
+#endif
+#if USE_AVX2
+  xFpBDOF16           = BDOF16_AVX2;
 #endif
 }
 template void InterPredInterpolation::_initInterPredictionX86<SIMDX86>();
