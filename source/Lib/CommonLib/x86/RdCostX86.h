@@ -1716,8 +1716,9 @@ static uint32_t xCalcHAD4x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
 #ifdef USE_AVX2
 // The helpers below compute SATDs of residuals of at most 12 bits (|value| <= 2047): 10-bit input gives 11 bits,
 // and bi-prediction motion estimation compares against 2 * org - pred, which is not clipped, so its residuals reach
-// +-2046. Each butterfly stage can double the values, so at most four stages run on 16-bit values
-// (16 * 2047 = 32752) and the others on 32-bit values.
+// +-2046. Each butterfly stage can double the values, so four stages always fit 16-bit values (16 * 2047 = 32752).
+// The later stages stay in 16 bits when the values after those four allow it, which nearly all blocks do, and run
+// on 32-bit values otherwise.
 
 // The normalization ( uint32_t )( sad / sqrt( n ) * 2 ) of the n = 16 * 8 and n = 4 * 8 SATDs without the double
 // division: ( sad * M ) >> 42 with M = ceil( 2^43 / c ), c the double sqrt( n ). The result is identical for every sad
@@ -1814,9 +1815,37 @@ static inline void xAddMaxAbsOfPairs32_AVX2( const __m256i r[8], __m256i& sum )
   }
 }
 
+// The same on 16-bit values, which must be below 2^15 in magnitude. The sum is still 32 bits per value.
+static inline void xAddMaxAbsOfPairs16_AVX2( const __m256i r[8], __m256i& sum )
+{
+  const __m256i one = _mm256_set1_epi16( 1 );
+  for( int k = 0; k < 8; k += 2 )
+  {
+    const __m256i maxAbs = _mm256_max_epi16( _mm256_abs_epi16( r[k] ), _mm256_abs_epi16( r[k + 1] ) );
+    sum = _mm256_add_epi32( sum, _mm256_madd_epi16( maxAbs, one ) );
+  }
+}
+
+// Whether all 16-bit values have a magnitude below limit, a power of two: no magnitude has a bit from limit upwards.
+static inline bool xAllMagnitudesBelow_AVX2( const __m256i r[8], const int16_t limit )
+{
+  __m256i bits = _mm256_setzero_si256();
+  for( int k = 0; k < 8; k++ )
+  {
+    bits = _mm256_or_si256( bits, _mm256_abs_epi16( r[k] ) );
+  }
+  return _mm256_testz_si256( bits, _mm256_set1_epi16( -limit ) ) != 0;
+}
+
+// a + b as 32 bits, for the first 16-bit value of a and of b in each lane, in the first 32-bit value of that lane.
+static inline __m256i xAddFirstValues16_AVX2( const __m256i a, const __m256i b )
+{
+  return _mm256_madd_epi16( _mm256_unpacklo_epi16( a, b ), _mm256_set1_epi16( 1 ) );
+}
+
 // The SATDs of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both), added up as the
 // 16x16 and 32x32 kernels do: ( SATD + 2 ) >> 2 per block.
-static inline uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
+static ALWAYS_INLINE uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
 {
   // the vertical transform and the first horizontal stage on 16-bit values
   xHadamardStage16_AVX2( rows, 4 );
@@ -1825,25 +1854,34 @@ static inline uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
   xTranspose8x8Lanes_AVX2( rows );
   xHadamardStage16_AVX2( rows, 4 );
 
-  // the rest on 32-bit values, each block staying in its lane: low[k] holds values 0 to 3 of both lanes of rows[k],
-  // high[k] values 4 to 7
-  __m256i low[8], high[8];
-  for( int k = 0; k < 8; k++ )
+  // the DC coefficient of each block is the first value of its lane in registers 0 and 1, added after the next stage
+  __m256i dc, iSum = _mm256_setzero_si256();
+  if( xAllMagnitudesBelow_AVX2( rows, 1 << 14 ) )
   {
-    const __m256i sign = _mm256_srai_epi16( rows[k], 15 );
-    low[k]  = _mm256_unpacklo_epi16( rows[k], sign );
-    high[k] = _mm256_unpackhi_epi16( rows[k], sign );
+    // the next stage stays below 2^15
+    xHadamardStage16_AVX2( rows, 2 );
+    dc = xAddFirstValues16_AVX2( rows[0], rows[1] );
+    xAddMaxAbsOfPairs16_AVX2( rows, iSum );
   }
-  xHadamardStage32_AVX2( low, 2 );
-  xHadamardStage32_AVX2( high, 2 );
-
-  // the DC coefficient of each block is the lane's first value of low[0] + low[1]
-  const __m256i dc       = _mm256_add_epi32( low[0], low[1] );
+  else
+  {
+    // on 32-bit values, each block staying in its lane: low[k] holds values 0 to 3 of both lanes of rows[k], high[k]
+    // values 4 to 7
+    __m256i low[8], high[8];
+    for( int k = 0; k < 8; k++ )
+    {
+      const __m256i sign = _mm256_srai_epi16( rows[k], 15 );
+      low[k]  = _mm256_unpacklo_epi16( rows[k], sign );
+      high[k] = _mm256_unpackhi_epi16( rows[k], sign );
+    }
+    xHadamardStage32_AVX2( low, 2 );
+    xHadamardStage32_AVX2( high, 2 );
+    dc = _mm256_add_epi32( low[0], low[1] );
+    xAddMaxAbsOfPairs32_AVX2( low, iSum );
+    xAddMaxAbsOfPairs32_AVX2( high, iSum );
+  }
   const uint32_t absDc[2] = { (uint32_t) abs( _mm256_extract_epi32( dc, 0 ) ), (uint32_t) abs( _mm256_extract_epi32( dc, 4 ) ) };
 
-  __m256i iSum = _mm256_setzero_si256();
-  xAddMaxAbsOfPairs32_AVX2( low, iSum );
-  xAddMaxAbsOfPairs32_AVX2( high, iSum );
   iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
   iSum = _mm256_hadd_epi32( iSum, iSum );
   iSum = _mm256_hadd_epi32( iSum, iSum );   // the sum of each block in the first value of its lane
@@ -1863,7 +1901,7 @@ static inline uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
 // register k is row k, columns 0 to 7 in the low lane and 8 to 15 in the high lane; for 8x16, register k is row k in
 // the low lane and row k + 8 in the high lane. Either way the block's Hadamard transform is the 8x8 transform of each
 // lane plus one stage between the lanes, and the stages may run in any order.
-static inline uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
+static ALWAYS_INLINE uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
 {
   // the vertical transform of both lanes and the first horizontal stage on 16-bit values
   xHadamardStage16_AVX2( rows, 4 );
@@ -1872,24 +1910,40 @@ static inline uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
   xTranspose8x8Lanes_AVX2( rows );
   xHadamardStage16_AVX2( rows, 4 );
 
-  // the rest on 32-bit values, starting with the stage between the lanes: their sum and their difference
-  __m256i sum[8], dif[8];
-  for( int k = 0; k < 8; k++ )
-  {
-    const __m256i low  = _mm256_cvtepi16_epi32( _mm256_castsi256_si128   ( rows[k] ) );
-    const __m256i high = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( rows[k], 1 ) );
-    sum[k] = _mm256_add_epi32( low, high );
-    dif[k] = _mm256_sub_epi32( low, high );
-  }
-  xHadamardStage32_AVX2( sum, 2 );
-  xHadamardStage32_AVX2( dif, 2 );
-
-  // the DC coefficient is the first value of sum[0] + sum[1]
-  const uint32_t absDc = abs( _mm256_extract_epi32( sum[0], 0 ) + _mm256_extract_epi32( sum[1], 0 ) );
-
+  // Next the stage between the lanes, their sum and their difference, and one more stage. The DC coefficient is the
+  // first value of the sums in registers 0 and 1 after them.
+  uint32_t absDc;
   __m256i iSum = _mm256_setzero_si256();
-  xAddMaxAbsOfPairs32_AVX2( sum, iSum );
-  xAddMaxAbsOfPairs32_AVX2( dif, iSum );
+  if( xAllMagnitudesBelow_AVX2( rows, 1 << 13 ) )
+  {
+    // Both stages stay below 2^15. With r = [a|b], r + [b|-a] = [a + b|b - a] needs no second register: the low lane
+    // gets the sum, the high lane the difference, whose sign does not matter as only absolute values are used.
+    const __m256i lowPlusHighMinus = _mm256_setr_epi16( 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1 );
+    for( int k = 0; k < 8; k++ )
+    {
+      const __m256i swapped = _mm256_permute2x128_si256( rows[k], rows[k], 0x01 );
+      rows[k] = _mm256_add_epi16( rows[k], _mm256_sign_epi16( swapped, lowPlusHighMinus ) );
+    }
+    xHadamardStage16_AVX2( rows, 2 );
+    absDc = abs( _mm256_extract_epi32( xAddFirstValues16_AVX2( rows[0], rows[1] ), 0 ) );
+    xAddMaxAbsOfPairs16_AVX2( rows, iSum );
+  }
+  else
+  {
+    __m256i sum[8], dif[8];
+    for( int k = 0; k < 8; k++ )
+    {
+      const __m256i low  = _mm256_cvtepi16_epi32( _mm256_castsi256_si128   ( rows[k] ) );
+      const __m256i high = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( rows[k], 1 ) );
+      sum[k] = _mm256_add_epi32( low, high );
+      dif[k] = _mm256_sub_epi32( low, high );
+    }
+    xHadamardStage32_AVX2( sum, 2 );
+    xHadamardStage32_AVX2( dif, 2 );
+    absDc = abs( _mm256_extract_epi32( sum[0], 0 ) + _mm256_extract_epi32( sum[1], 0 ) );
+    xAddMaxAbsOfPairs32_AVX2( sum, iSum );
+    xAddMaxAbsOfPairs32_AVX2( dif, iSum );
+  }
   iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
   iSum = _mm256_hadd_epi32( iSum, iSum );
   iSum = _mm256_hadd_epi32( iSum, iSum );
