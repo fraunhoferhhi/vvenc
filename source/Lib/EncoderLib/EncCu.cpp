@@ -2034,9 +2034,10 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
     if( pumpReducQP != 0 ) // subtract QP offset, reduces Intra-period pumping or overcoding
     {
-      encTestMode.qp = Clip3( 0, MAX_QP, encTestMode.qp - pumpReducQP );
+      const int minQP = BitAllocation::getMinAdaptedQP( &slice, m_pcEncCfg );
+      encTestMode.qp = Clip3( minQP, MAX_QP, encTestMode.qp - pumpReducQP );
       tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-      bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( 0, MAX_QP, tempCS->baseQP - pumpReducQP );
+      bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3( minQP, MAX_QP, tempCS->baseQP - pumpReducQP );
 
       updateLambda( slice, pic->ctuQpaLambda[rsAddr], pic->ctuAdaptedQP[rsAddr], tempCS->baseQP, true );
     }
