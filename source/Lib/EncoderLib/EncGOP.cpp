@@ -312,16 +312,16 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-void EncGOP::waitForFreeEncoders()
+bool EncGOP::waitForFreeEncoders()
 {
+  std::unique_lock<std::mutex> lock( m_gopEncMutex );
+  if( xEncodersFinished() )
   {
-    std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    if( ! xEncodersFinished() )
-    {
-      CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-      m_gopEncCond.wait( lock );
-    }
+    return false;
   }
+  CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+  m_gopEncCond.wait( lock );
+  return true;
 }
 
 void EncGOP::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )

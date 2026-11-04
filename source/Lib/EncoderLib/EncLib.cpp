@@ -430,7 +430,8 @@ void EncLib::xInitRCCfg()
 // The current I/O work flow consists of three main parts:
 //   1. At the beginning, the encoder can consume input YUV buffers without an output.
 //   2. After the first encoded picture/access unit is output, on each next call: one yuv-buffer IN / one encoded access unit (AU) OUT.
-//      Hence, in stage-parallel mode, we must wait until next encoded picture (AU) is going to be output
+//      Hence, in stage-parallel mode, we must wait until next encoded picture (AU) is going to be output,
+//      unless nothing can progress without more input (then the call returns a buffered AU; none only when the buffer has run dry)
 //   3. When no more input is available, the top level goes into flushing mode: nullptr IN / one encoded access unit (AU) OUT. 
 //      The encoder flushes the encoded AUs until the queues are empty.
 
@@ -454,12 +455,18 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   // CU-tree passes its pictures on a GOP at a time, and the GOP encoder only starts with a GOP and one picture queued.
   // When the intra period cuts a GOP short, the GOP encoder waits for CU-tree's next batch, at most a GOP of input.
-  // Without stage parallel processing, a buffer of that many access units covers the wait, so every call still
-  // returns one; with it, the delayed output below already does.
-  const size_t auBuffer = ( m_encCfg.useCuTree() && ! m_encCfg.m_stageParallelProc ) ? m_encCfg.m_GOPSize + 1 : 0;
+  // A buffer of that many access units covers the wait, so that every call, once the output has started, takes its
+  // input picture and returns one access unit: with CU-tree the output starts once more than GOP + 1 access units
+  // (and never fewer than the usual 4) are queued, in both modes. Without stage parallel processing the loop also
+  // refills the buffer before it returns; with it the loop only waits while no access unit is buffered, so the stages
+  // keep running in parallel with the input.
+  const size_t cuTreeBuffer = m_encCfg.useCuTree() ? m_encCfg.m_GOPSize + 1 : 0;
+  const size_t outputDelay  = m_encCfg.useCuTree() ? std::max<size_t>( cuTreeBuffer, 4 ) : ( m_encCfg.m_stageParallelProc ? 4 : 0 );
+  const size_t auBuffer     = m_encCfg.m_stageParallelProc ? 0 : cuTreeBuffer;
 
   PicShared* picShared = nullptr;
   bool inputPending    = ( yuvInBuf != nullptr );
+  bool stalledBefore   = false;
   while( true )
   {
     // send new YUV input buffer to first encoder stage
@@ -492,9 +499,9 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
       au.detachNalUnitList();
       au.clearAu();
-      // NOTE: delay AU output in stage parallel mode, and by the CU-tree buffer without it
+      // NOTE: delay AU output in stage parallel mode, and by the CU-tree buffer
       if( !m_accessUnitOutputStarted )
-        m_accessUnitOutputStarted = ( !m_encCfg.m_stageParallelProc && m_AuList.size() > auBuffer ) || m_AuList.size() > 4 || flush;
+        m_accessUnitOutputStarted = m_AuList.size() > outputDelay || flush;
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
@@ -513,11 +520,23 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     if( m_encCfg.m_stageParallelProc )
     {
+      bool picInCoding = false;
       for( auto encStage : m_encStages )
       {
         if( encStage->isNonBlocking() )
-          encStage->waitForFreeEncoders();
+          picInCoding |= encStage->waitForFreeEncoders();
       }
+      // With no picture in coding, no stage passing a picture on and the input taken, nothing changes until more
+      // input arrives: the GOP encoder waits for a GOP and one picture, which CU-tree passes on only with its
+      // look-ahead. Return for more input rather than wait for an access unit that cannot come: a buffered one if
+      // there is one (the CU-tree buffer above), none only as the fallback when the buffer has run dry. The second
+      // such pass in a row decides, so that a picture finished after the GOP encoder looked at it is collected first.
+      const bool stalled = ! picInCoding && ! progress && ! inputPending && ! flush;
+      if( stalled && stalledBefore )
+      {
+        break;
+      }
+      stalledBefore = stalled;
     }
   }
 

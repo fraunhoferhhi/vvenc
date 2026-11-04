@@ -262,7 +262,8 @@ protected:
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 
 public:
-  virtual void waitForFreeEncoders() {}
+  // Waits until a picture in coding is finished; returns false at once when no picture is in coding.
+  virtual bool waitForFreeEncoders() { return false; }
 
   void freePicList()
   {
