@@ -199,7 +199,7 @@ Picture::Picture()
     , useQtbttSpeedUpMode ( 0 )
     , actualHeadBits      ( 0 )
     , actualTotalBits     ( 0 )
-    , encRCPic            ( nullptr )
+    , encRCPic            ()
     , picApsGlobal        ( nullptr )
     , refApsGlobal        ( nullptr )
 {
@@ -244,7 +244,7 @@ void Picture::reset()
   isSceneCutCheckAdjQP = false;
   actualHeadBits       = 0;
   actualTotalBits      = 0;
-  encRCPic             = nullptr;
+  encRCPic             . reset();
   picApsGlobal         = nullptr;
   refApsGlobal         = nullptr;
 
