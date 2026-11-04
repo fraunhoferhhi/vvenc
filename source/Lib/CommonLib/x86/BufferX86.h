@@ -3379,6 +3379,64 @@ uint32_t pictureChecksum_SIMD( const Pel* plane, const ptrdiff_t stride, const i
   return tail + uint32_t( _mm_cvtsi128_si32( _mm_hadd_epi32( acc, acc ) ) );
 }
 
+#if USE_AVX2
+// A group of eight columns gives each lane's eight absolute differences, which transposed are per column the differences
+// of all lanes; those add to one vector of running sums, stored whole, so each position takes one store.
+static void geoPrefixSums_AVX2( const Pel* org, int orgStride, const Pel* const* pred, int predStride, int width, int height, const bool* /*all lanes are computed*/, uint32_t* prefix )
+{
+  CHECKD( width % 8 != 0, "GEO widths are multiples of 8" );
+  static_assert( GEO_PREFIX_LANES == 8, "one vector of 32-bit sums" );
+
+  for( int y = 0; y < height; y++ )
+  {
+    __m256i sums = _mm256_setzero_si256();
+    _mm256_storeu_si256( ( __m256i* ) prefix, sums );
+    prefix += GEO_PREFIX_LANES;
+
+    for( int x = 0; x < width; x += 8 )
+    {
+      const __m128i orgs = _mm_loadu_si128( ( const __m128i* ) &org[x] );
+      __m128i r[8];
+      for( int lane = 0; lane < 8; lane++ )
+      {
+        const __m128i preds = _mm_loadu_si128( ( const __m128i* ) &pred[lane][y * predStride + x] );
+        r[lane] = _mm_abs_epi16( _mm_sub_epi16( orgs, preds ) );
+      }
+
+      const __m128i a0 = _mm_unpacklo_epi16( r[0], r[1] ), a1 = _mm_unpackhi_epi16( r[0], r[1] );
+      const __m128i a2 = _mm_unpacklo_epi16( r[2], r[3] ), a3 = _mm_unpackhi_epi16( r[2], r[3] );
+      const __m128i a4 = _mm_unpacklo_epi16( r[4], r[5] ), a5 = _mm_unpackhi_epi16( r[4], r[5] );
+      const __m128i a6 = _mm_unpacklo_epi16( r[6], r[7] ), a7 = _mm_unpackhi_epi16( r[6], r[7] );
+      const __m128i b0 = _mm_unpacklo_epi32( a0, a2 ), b1 = _mm_unpackhi_epi32( a0, a2 );
+      const __m128i b2 = _mm_unpacklo_epi32( a1, a3 ), b3 = _mm_unpackhi_epi32( a1, a3 );
+      const __m128i b4 = _mm_unpacklo_epi32( a4, a6 ), b5 = _mm_unpackhi_epi32( a4, a6 );
+      const __m128i b6 = _mm_unpacklo_epi32( a5, a7 ), b7 = _mm_unpackhi_epi32( a5, a7 );
+      const __m128i columns[8] = { _mm_unpacklo_epi64( b0, b4 ), _mm_unpackhi_epi64( b0, b4 ), _mm_unpacklo_epi64( b1, b5 ), _mm_unpackhi_epi64( b1, b5 ),
+                                   _mm_unpacklo_epi64( b2, b6 ), _mm_unpackhi_epi64( b2, b6 ), _mm_unpacklo_epi64( b3, b7 ), _mm_unpackhi_epi64( b3, b7 ) };
+      for( int k = 0; k < 8; k++ )
+      {
+        sums = _mm256_add_epi32( sums, _mm256_cvtepu16_epi32( columns[k] ) );
+        _mm256_storeu_si256( ( __m256i* ) prefix, sums );
+        prefix += GEO_PREFIX_LANES;
+      }
+    }
+    org += orgStride;
+  }
+}
+
+static void geoRunSads_AVX2( const uint32_t* prefix, const uint8_t* runStart, const uint8_t* runEnd, int width, int height, const bool* /*all lanes are computed*/, uint32_t* sad )
+{
+  __m256i sums = _mm256_setzero_si256();
+  for( int y = 0; y < height; y++, prefix += ( width + 1 ) * GEO_PREFIX_LANES )
+  {
+    const __m256i atEnd   = _mm256_loadu_si256( ( const __m256i* ) ( prefix + runEnd  [y] * GEO_PREFIX_LANES ) );
+    const __m256i atStart = _mm256_loadu_si256( ( const __m256i* ) ( prefix + runStart[y] * GEO_PREFIX_LANES ) );
+    sums = _mm256_add_epi32( sums, _mm256_sub_epi32( atEnd, atStart ) );
+  }
+  _mm256_storeu_si256( ( __m256i* ) sad, sums );
+}
+#endif // USE_AVX2
+
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
 {
@@ -3386,6 +3444,10 @@ void PelBufferOps::_initPelBufOpsX86()
   reco     = recoCore_SSE<vext>;
   copyClip = copyClip_SSE<vext>;
   roundGeo = roundGeo_SSE<vext>;
+#if USE_AVX2
+  geoPrefixSums = geoPrefixSums_AVX2;
+  geoRunSads    = geoRunSads_AVX2;
+#endif
 
   addAvg4  = addAvg_SSE<vext, 4>;
   addAvg8  = addAvg_SSE<vext, 8>;
