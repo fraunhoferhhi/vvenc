@@ -166,6 +166,7 @@ private:
 
   void   xForEachRow         ( int numRows, const std::function<void( int )>& fn ) const;
   void   xDownsample         ( const PelStorage& src, PelStorage& dst ) const;
+  double xMeanAbsDiff        ( const PelStorage& a, const PelStorage& b ) const;
   bool   xIsBatchReady       ( const PicList& picList, int& batchEndPoc ) const;
   Frame* xFindFrame          ( int poc ) const;
   void   xAnalyse            ( Frame& frame, Picture* pic, bool flush );

@@ -73,6 +73,7 @@ public:
   int              m_picAuxQpOffset; // auxiliary QP offset per frame, for combination of RC and BIM (and possibly other tools)
   double           m_mctfNoiseVar;   // CuTreePicStrength: mean squared luma change by MCTF's filter (temporal layer 2), -1: none
   int              m_noiseFloorQp;   // CuTreePicStrength: lowest slice QP of a picture MCTF does not filter, -1: none
+  bool             m_capIntraQp;      // CuTreePicStrength: an I picture at a change of content, see CuTree::xSetQpOffsets
   int              m_noiseFloorRaise; // at most this many QP up: the decrease the dependency model gave the picture
 
 private:
@@ -104,6 +105,7 @@ public:
   , m_picAuxQpOffset ( 0 )
   , m_mctfNoiseVar   ( -1.0 )
   , m_noiseFloorQp   ( -1 )
+  , m_capIntraQp     ( false )
   , m_noiseFloorRaise( 0 )
   , m_cts            ( 0 )
   , m_maxFrames      ( -1 )
@@ -175,6 +177,7 @@ public:
     m_picAuxQpOffset = 0;
     m_mctfNoiseVar   = -1.0;
     m_noiseFloorQp   = -1;
+    m_capIntraQp     = false;
     m_noiseFloorRaise = 0;
     std::fill_n( m_prevShared, NUM_QPA_PREV_FRAMES, nullptr );
     std::fill_n( m_minNoiseLevels, QPA_MAX_NOISE_LEVELS, 255u );
