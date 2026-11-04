@@ -178,10 +178,12 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
   if( !useHadamard )
   {
     rcDP.distFunc = m_afpDistortFunc[base][ DF_SAD + Log2( org.width ) ];
+    rcDP.sadFourPositions = base == 0 ? m_afpSadFourPositions[Log2( org.width )] : nullptr;
   }
   else
   {
     rcDP.distFunc = m_afpDistortFunc[base][( useHadamard == 1 ? DF_HAD : DF_HAD_fast ) + Log2( org.width ) ];
+    rcDP.sadFourPositions = nullptr;
   }
 
   // initialize

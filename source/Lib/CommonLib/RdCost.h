@@ -73,6 +73,8 @@ class DistParam;
 // for function pointer
 typedef Distortion( *FpDistFunc   )( const DistParam& );
 typedef void      ( *FpDistFuncX5 )( const DistParam&, Distortion*, bool );
+// The SADs of four reference positions. A result above maximumDistortionForEarlyExit may be a partial sum.
+typedef void      ( *FpSadFourPositions )( const DistParam&, const Pel* const*, Distortion* );
 
 // ====================================================================================================================
 // Class definition
@@ -86,6 +88,7 @@ public:
   CPelBuf               cur;
   FpDistFunc            distFunc  = nullptr;
   FpDistFuncX5          dmvrSadX5 = nullptr;
+  FpSadFourPositions    sadFourPositions = nullptr; // SADs of four reference positions; null where no kernel exists
 #if ENABLE_MEASURE_SEARCH_SPACE
   FpDistFunc            xDistFunc = nullptr;
 #endif
@@ -121,6 +124,7 @@ public:
   // for distortion
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
   FpDistFuncX5            m_afpDistortFuncX5[2]; // [eDFunc]
+  FpSadFourPositions      m_afpSadFourPositions[8] = {}; // [log2 of the width], SAD at bit depths up to 10 without weights
 
 private:
   vvencCostMode           m_costMode;

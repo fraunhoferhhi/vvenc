@@ -418,17 +418,77 @@ inline void InterSearch::xTZSearchHelp( TZSearchStruct& rcStruct, const int iSea
 
   m_cDistParam.cur.buf = rcStruct.piRefY + iSearchY * rcStruct.iRefStride + iSearchX;
 
-  const Distortion uiSad = m_cDistParam.distFunc( m_cDistParam ) + mvCost;
-  if( uiSad < rcStruct.uiBestSad )
+  const TZCandidate candidate{ iSearchX, iSearchY, mvCost, uiDistance, ucPointNr };
+  xTZAcceptIfBetter( rcStruct, candidate, m_cDistParam.distFunc( m_cDistParam ) );
+}
+
+inline void InterSearch::xTZAcceptIfBetter( TZSearchStruct& rcStruct, const TZCandidate& candidate, const Distortion sad )
+{
+  const Distortion cost = sad + candidate.mvCost;
+  if( cost < rcStruct.uiBestSad )
   {
-    rcStruct.uiBestSad      = uiSad;
-    rcStruct.iBestX         = iSearchX;
-    rcStruct.iBestY         = iSearchY;
-    rcStruct.uiBestDistance = uiDistance;
+    rcStruct.uiBestSad      = cost;
+    rcStruct.iBestX         = candidate.x;
+    rcStruct.iBestY         = candidate.y;
+    rcStruct.uiBestDistance = candidate.distance;
     rcStruct.uiBestRound    = 0;
-    rcStruct.ucPointNr      = ucPointNr;
-    m_cDistParam.maximumDistortionForEarlyExit = uiSad;
+    rcStruct.ucPointNr      = candidate.pointNr;
+    m_cDistParam.maximumDistortionForEarlyExit = cost;
   }
+}
+
+// As xTZSearchHelp, but with a four-position kernel the SADs wait until four candidates are queued. The results are the
+// same: the candidates are compared in their original order, and one that the MV cost check would have rejected against
+// a better cost found meanwhile cannot win that comparison either.
+inline void InterSearch::xTZSearchQueued( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance )
+{
+  if( !m_cDistParam.sadFourPositions )
+  {
+    xTZSearchHelp( rcStruct, iSearchX, iSearchY, ucPointNr, uiDistance );
+    return;
+  }
+
+  const Distortion mvCost = m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY, rcStruct.imvShift );
+  if( mvCost < rcStruct.uiBestSad )
+  {
+    TZCandidate& candidate = m_tzQueue[m_tzQueued++];
+    candidate.x        = iSearchX;
+    candidate.y        = iSearchY;
+    candidate.mvCost   = mvCost;
+    candidate.distance = uiDistance;
+    candidate.pointNr  = ucPointNr;
+    if( m_tzQueued == 4 )
+    {
+      xTZSearchFlush( rcStruct );
+    }
+  }
+}
+
+inline void InterSearch::xTZSearchFlush( TZSearchStruct& rcStruct )
+{
+  const auto refOf = [&]( const TZCandidate& c ) { return rcStruct.piRefY + c.y * rcStruct.iRefStride + c.x; };
+  if( m_tzQueued == 4 )
+  {
+    Distortion sads[4];
+    const Pel* const refs[4] = { refOf( m_tzQueue[0] ), refOf( m_tzQueue[1] ), refOf( m_tzQueue[2] ), refOf( m_tzQueue[3] ) };
+    m_cDistParam.sadFourPositions( m_cDistParam, refs, sads );
+    for( int k = 0; k < 4; k++ )
+    {
+      xTZAcceptIfBetter( rcStruct, m_tzQueue[k], sads[k] );
+    }
+  }
+  else
+  {
+    for( int k = 0; k < m_tzQueued; k++ )
+    {
+      if( m_tzQueue[k].mvCost < rcStruct.uiBestSad )
+      {
+        m_cDistParam.cur.buf = refOf( m_tzQueue[k] );
+        xTZAcceptIfBetter( rcStruct, m_tzQueue[k], m_cDistParam.distFunc( m_cDistParam ) );
+      }
+    }
+  }
+  m_tzQueued = 0;
 }
 
 
@@ -477,24 +537,25 @@ inline void InterSearch::xTZ4PointSquareSearch( TZSearchStruct & rcStruct, const
   {
     if ( iLeft >= sr.left ) // check top left
     {
-      xTZSearchHelp( rcStruct, iLeft, iTop, 1, iDist );
+      xTZSearchQueued( rcStruct, iLeft, iTop, 1, iDist );
     }
     if ( iRight <= sr.right ) // check top right
     {
-      xTZSearchHelp( rcStruct, iRight, iTop, 3, iDist );
+      xTZSearchQueued( rcStruct, iRight, iTop, 3, iDist );
     }
   }
   if ( iBottom <= sr.bottom )
   {
     if ( iLeft >= sr.left ) // check bottom left
     {
-      xTZSearchHelp( rcStruct, iLeft, iBottom, 6, iDist );
+      xTZSearchQueued( rcStruct, iLeft, iBottom, 6, iDist );
     }
     if ( iRight <= sr.right ) // check bottom right
     {
-      xTZSearchHelp( rcStruct, iRight, iBottom, 8, iDist );
+      xTZSearchQueued( rcStruct, iRight, iBottom, 8, iDist );
     }
   }
+  xTZSearchFlush( rcStruct );
 }
 
 inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist )
@@ -514,38 +575,39 @@ inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const 
   {
     if ( iLeft >= sr.left ) // check top left
     {
-      xTZSearchHelp( rcStruct, iLeft, iTop, 1, iDist );
+      xTZSearchQueued( rcStruct, iLeft, iTop, 1, iDist );
     }
     // top middle
-    xTZSearchHelp( rcStruct, iStartX, iTop, 2, iDist );
+    xTZSearchQueued( rcStruct, iStartX, iTop, 2, iDist );
 
     if ( iRight <= sr.right ) // check top right
     {
-      xTZSearchHelp( rcStruct, iRight, iTop, 3, iDist );
+      xTZSearchQueued( rcStruct, iRight, iTop, 3, iDist );
     }
   } // check top
   if ( iLeft >= sr.left ) // check middle left
   {
-    xTZSearchHelp( rcStruct, iLeft, iStartY, 4, iDist );
+    xTZSearchQueued( rcStruct, iLeft, iStartY, 4, iDist );
   }
   if ( iRight <= sr.right ) // check middle right
   {
-    xTZSearchHelp( rcStruct, iRight, iStartY, 5, iDist );
+    xTZSearchQueued( rcStruct, iRight, iStartY, 5, iDist );
   }
   if ( iBottom <= sr.bottom ) // check bottom
   {
     if ( iLeft >= sr.left ) // check bottom left
     {
-      xTZSearchHelp( rcStruct, iLeft, iBottom, 6, iDist );
+      xTZSearchQueued( rcStruct, iLeft, iBottom, 6, iDist );
     }
     // check bottom middle
-    xTZSearchHelp( rcStruct, iStartX, iBottom, 7, iDist );
+    xTZSearchQueued( rcStruct, iStartX, iBottom, 7, iDist );
 
     if ( iRight <= sr.right ) // check bottom right
     {
-      xTZSearchHelp( rcStruct, iRight, iBottom, 8, iDist );
+      xTZSearchQueued( rcStruct, iRight, iBottom, 8, iDist );
     }
   } // check bottom
+  xTZSearchFlush( rcStruct );
 }
 
 inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
@@ -573,26 +635,26 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
       {
         if ( iLeft >= sr.left) // check top-left
         {
-          xTZSearchHelp( rcStruct, iLeft, iTop, 1, iDist );
+          xTZSearchQueued( rcStruct, iLeft, iTop, 1, iDist );
         }
-        xTZSearchHelp( rcStruct, iStartX, iTop, 2, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iTop, 2, iDist );
         if ( iRight <= sr.right ) // check middle right
         {
-          xTZSearchHelp( rcStruct, iRight, iTop, 3, iDist );
+          xTZSearchQueued( rcStruct, iRight, iTop, 3, iDist );
         }
       }
       else
       {
-        xTZSearchHelp( rcStruct, iStartX, iTop, 2, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iTop, 2, iDist );
       }
     }
     if ( iLeft >= sr.left ) // check middle left
     {
-      xTZSearchHelp( rcStruct, iLeft, iStartY, 4, iDist );
+      xTZSearchQueued( rcStruct, iLeft, iStartY, 4, iDist );
     }
     if ( iRight <= sr.right ) // check middle right
     {
-      xTZSearchHelp( rcStruct, iRight, iStartY, 5, iDist );
+      xTZSearchQueued( rcStruct, iRight, iStartY, 5, iDist );
     }
     if ( iBottom <= sr.bottom ) // check bottom
     {
@@ -600,17 +662,17 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
       {
         if ( iLeft >= sr.left) // check top-left
         {
-          xTZSearchHelp( rcStruct, iLeft, iBottom, 6, iDist );
+          xTZSearchQueued( rcStruct, iLeft, iBottom, 6, iDist );
         }
-        xTZSearchHelp( rcStruct, iStartX, iBottom, 7, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iBottom, 7, iDist );
         if ( iRight <= sr.right ) // check middle right
         {
-          xTZSearchHelp( rcStruct, iRight, iBottom, 8, iDist );
+          xTZSearchQueued( rcStruct, iRight, iBottom, 8, iDist );
         }
       }
       else
       {
-        xTZSearchHelp( rcStruct, iStartX, iBottom, 7, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iBottom, 7, iDist );
       }
     }
   }
@@ -626,54 +688,54 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
       if (  iTop >= sr.top && iLeft >= sr.left &&
            iRight <= sr.right && iBottom <= sr.bottom ) // check border
       {
-        xTZSearchHelp( rcStruct, iStartX,  iTop,      2, iDist    );
-        xTZSearchHelp( rcStruct, iLeft_2,  iTop_2,    1, iDist>>1 );
-        xTZSearchHelp( rcStruct, iRight_2, iTop_2,    3, iDist>>1 );
-        xTZSearchHelp( rcStruct, iLeft,    iStartY,   4, iDist    );
-        xTZSearchHelp( rcStruct, iRight,   iStartY,   5, iDist    );
-        xTZSearchHelp( rcStruct, iLeft_2,  iBottom_2, 6, iDist>>1 );
-        xTZSearchHelp( rcStruct, iRight_2, iBottom_2, 8, iDist>>1 );
-        xTZSearchHelp( rcStruct, iStartX,  iBottom,   7, iDist    );
+        xTZSearchQueued( rcStruct, iStartX,  iTop,      2, iDist    );
+        xTZSearchQueued( rcStruct, iLeft_2,  iTop_2,    1, iDist>>1 );
+        xTZSearchQueued( rcStruct, iRight_2, iTop_2,    3, iDist>>1 );
+        xTZSearchQueued( rcStruct, iLeft,    iStartY,   4, iDist    );
+        xTZSearchQueued( rcStruct, iRight,   iStartY,   5, iDist    );
+        xTZSearchQueued( rcStruct, iLeft_2,  iBottom_2, 6, iDist>>1 );
+        xTZSearchQueued( rcStruct, iRight_2, iBottom_2, 8, iDist>>1 );
+        xTZSearchQueued( rcStruct, iStartX,  iBottom,   7, iDist    );
       }
       else // check border
       {
         if ( iTop >= sr.top ) // check top
         {
-          xTZSearchHelp( rcStruct, iStartX, iTop, 2, iDist );
+          xTZSearchQueued( rcStruct, iStartX, iTop, 2, iDist );
         }
         if ( iTop_2 >= sr.top ) // check half top
         {
           if ( iLeft_2 >= sr.left ) // check half left
           {
-            xTZSearchHelp( rcStruct, iLeft_2, iTop_2, 1, (iDist>>1) );
+            xTZSearchQueued( rcStruct, iLeft_2, iTop_2, 1, (iDist>>1) );
           }
           if ( iRight_2 <= sr.right ) // check half right
           {
-            xTZSearchHelp( rcStruct, iRight_2, iTop_2, 3, (iDist>>1) );
+            xTZSearchQueued( rcStruct, iRight_2, iTop_2, 3, (iDist>>1) );
           }
         } // check half top
         if ( iLeft >= sr.left ) // check left
         {
-          xTZSearchHelp( rcStruct, iLeft, iStartY, 4, iDist );
+          xTZSearchQueued( rcStruct, iLeft, iStartY, 4, iDist );
         }
         if ( iRight <= sr.right ) // check right
         {
-          xTZSearchHelp( rcStruct, iRight, iStartY, 5, iDist );
+          xTZSearchQueued( rcStruct, iRight, iStartY, 5, iDist );
         }
         if ( iBottom_2 <= sr.bottom ) // check half bottom
         {
           if ( iLeft_2 >= sr.left ) // check half left
           {
-            xTZSearchHelp( rcStruct, iLeft_2, iBottom_2, 6, (iDist>>1) );
+            xTZSearchQueued( rcStruct, iLeft_2, iBottom_2, 6, (iDist>>1) );
           }
           if ( iRight_2 <= sr.right ) // check half right
           {
-            xTZSearchHelp( rcStruct, iRight_2, iBottom_2, 8, (iDist>>1) );
+            xTZSearchQueued( rcStruct, iRight_2, iBottom_2, 8, (iDist>>1) );
           }
         } // check half bottom
         if ( iBottom <= sr.bottom ) // check bottom
         {
-          xTZSearchHelp( rcStruct, iStartX, iBottom, 7, iDist );
+          xTZSearchQueued( rcStruct, iStartX, iBottom, 7, iDist );
         }
       } // check border
     }
@@ -682,39 +744,39 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
       if ( iTop >= sr.top && iLeft >= sr.left &&
            iRight <= sr.right && iBottom <= sr.bottom ) // check border
       {
-        xTZSearchHelp( rcStruct, iStartX, iTop,    0, iDist );
-        xTZSearchHelp( rcStruct, iLeft,   iStartY, 0, iDist );
-        xTZSearchHelp( rcStruct, iRight,  iStartY, 0, iDist );
-        xTZSearchHelp( rcStruct, iStartX, iBottom, 0, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iTop,    0, iDist );
+        xTZSearchQueued( rcStruct, iLeft,   iStartY, 0, iDist );
+        xTZSearchQueued( rcStruct, iRight,  iStartY, 0, iDist );
+        xTZSearchQueued( rcStruct, iStartX, iBottom, 0, iDist );
         for ( int index = 1; index < 4; index++ )
         {
           const int iPosYT = iTop    + ((iDist>>2) * index);
           const int iPosYB = iBottom - ((iDist>>2) * index);
           const int iPosXL = iStartX - ((iDist>>2) * index);
           const int iPosXR = iStartX + ((iDist>>2) * index);
-          xTZSearchHelp( rcStruct, iPosXL, iPosYT, 0, iDist );
-          xTZSearchHelp( rcStruct, iPosXR, iPosYT, 0, iDist );
-          xTZSearchHelp( rcStruct, iPosXL, iPosYB, 0, iDist );
-          xTZSearchHelp( rcStruct, iPosXR, iPosYB, 0, iDist );
+          xTZSearchQueued( rcStruct, iPosXL, iPosYT, 0, iDist );
+          xTZSearchQueued( rcStruct, iPosXR, iPosYT, 0, iDist );
+          xTZSearchQueued( rcStruct, iPosXL, iPosYB, 0, iDist );
+          xTZSearchQueued( rcStruct, iPosXR, iPosYB, 0, iDist );
         }
       }
       else // check border
       {
         if ( iTop >= sr.top ) // check top
         {
-          xTZSearchHelp( rcStruct, iStartX, iTop, 0, iDist );
+          xTZSearchQueued( rcStruct, iStartX, iTop, 0, iDist );
         }
         if ( iLeft >= sr.left ) // check left
         {
-          xTZSearchHelp( rcStruct, iLeft, iStartY, 0, iDist );
+          xTZSearchQueued( rcStruct, iLeft, iStartY, 0, iDist );
         }
         if ( iRight <= sr.right ) // check right
         {
-          xTZSearchHelp( rcStruct, iRight, iStartY, 0, iDist );
+          xTZSearchQueued( rcStruct, iRight, iStartY, 0, iDist );
         }
         if ( iBottom <= sr.bottom ) // check bottom
         {
-          xTZSearchHelp( rcStruct, iStartX, iBottom, 0, iDist );
+          xTZSearchQueued( rcStruct, iStartX, iBottom, 0, iDist );
         }
         for ( int index = 1; index < 4; index++ )
         {
@@ -727,28 +789,29 @@ inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
           {
             if ( iPosXL >= sr.left ) // check left
             {
-              xTZSearchHelp( rcStruct, iPosXL, iPosYT, 0, iDist );
+              xTZSearchQueued( rcStruct, iPosXL, iPosYT, 0, iDist );
             }
             if ( iPosXR <= sr.right ) // check right
             {
-              xTZSearchHelp( rcStruct, iPosXR, iPosYT, 0, iDist );
+              xTZSearchQueued( rcStruct, iPosXR, iPosYT, 0, iDist );
             }
           } // check top
           if ( iPosYB <= sr.bottom ) // check bottom
           {
             if ( iPosXL >= sr.left ) // check left
             {
-              xTZSearchHelp( rcStruct, iPosXL, iPosYB, 0, iDist );
+              xTZSearchQueued( rcStruct, iPosXL, iPosYB, 0, iDist );
             }
             if ( iPosXR <= sr.right ) // check right
             {
-              xTZSearchHelp( rcStruct, iPosXR, iPosYB, 0, iDist );
+              xTZSearchQueued( rcStruct, iPosXR, iPosYB, 0, iDist );
             }
           } // check bottom
         } // for ...
       } // check border
     } // iDist <= 8
   } // iDist == 1
+  xTZSearchFlush( rcStruct );
 }
 
 Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
@@ -2219,19 +2282,18 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
     m_mvBitsHor[x - sr.left] = m_pcRdCost->getBitsOfVectorHor( x, cStruct.imvShift );
   }
 
+  const FpSadFourPositions sadFourPositions = m_cDistParam.sadFourPositions;
+
   const Pel* piRef = cStruct.piRefY + (sr.top * cStruct.iRefStride);
   for ( int y = sr.top; y <= sr.bottom; y++ )
   {
     const uint32_t bitsVer = m_pcRdCost->getBitsOfVectorVer( y, cStruct.imvShift );
-    for ( int x = sr.left; x <= sr.right; x++ )
+
+    //  find min. distortion position
+    const auto checkPosition = [&]( const int x, const Distortion sad )
     {
-      //  find min. distortion position
-      m_cDistParam.cur.buf = piRef + x;
-
-      uiSad = m_cDistParam.distFunc( m_cDistParam );
-
       // motion cost
-      uiSad += m_pcRdCost->getCost( m_mvBitsHor[x - sr.left] + bitsVer );
+      uiSad = sad + m_pcRdCost->getCost( m_mvBitsHor[x - sr.left] + bitsVer );
 
       if ( uiSad < uiSadBest )
       {
@@ -2240,6 +2302,26 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
         iBestY    = y;
         m_cDistParam.maximumDistortionForEarlyExit = uiSad;
       }
+    };
+
+    int x = sr.left;
+    if( sadFourPositions )
+    {
+      for( ; x + 3 <= sr.right; x += 4 )
+      {
+        Distortion sads[4];
+        const Pel* const refs[4] = { piRef + x, piRef + x + 1, piRef + x + 2, piRef + x + 3 };
+        sadFourPositions( m_cDistParam, refs, sads );
+        for( int k = 0; k < 4; k++ )
+        {
+          checkPosition( x + k, sads[k] );
+        }
+      }
+    }
+    for( ; x <= sr.right; x++ )
+    {
+      m_cDistParam.cur.buf = piRef + x;
+      checkPosition( x, m_cDistParam.distFunc( m_cDistParam ) );
     }
     piRef += cStruct.iRefStride;
   }
@@ -2478,9 +2560,10 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     {
       for( iStartX = localsr.left; iStartX <= localsr.right; iStartX += iWindowSize )
       {
-        xTZSearchHelp( cStruct, iStartX, iStartY, 0, iWindowSize );
+        xTZSearchQueued( cStruct, iStartX, iStartY, 0, iWindowSize );
       }
     }
+    xTZSearchFlush( cStruct );
   }
   else
   {
@@ -2492,9 +2575,10 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
       {
         for( iStartX = sr.left; iStartX <= sr.right; iStartX += iRaster )
         {
-          xTZSearchHelp( cStruct, iStartX, iStartY, 0, iRaster );
+          xTZSearchQueued( cStruct, iStartX, iStartY, 0, iRaster );
         }
       }
+      xTZSearchFlush( cStruct );
     }
   }
 

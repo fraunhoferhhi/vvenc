@@ -475,6 +475,19 @@ private:
 
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
+  inline void xTZSearchQueued       ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
+  inline void xTZSearchFlush        ( TZSearchStruct& rcStruct );
+  struct TZCandidate
+  {
+    int        x;
+    int        y;
+    Distortion mvCost;
+    uint32_t   distance;
+    uint8_t    pointNr;
+  };
+  TZCandidate m_tzQueue[4];
+  int         m_tzQueued = 0;
+  inline void xTZAcceptIfBetter     ( TZSearchStruct& rcStruct, const TZCandidate& candidate, const Distortion sad );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
   inline void xTZ4PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
