@@ -621,18 +621,19 @@ namespace vvenc {
 
 #if USE_AVX2
     // The absLevel and prevId of the four decisions of checkAllRdCostsOdd1 for each set of bits "decision k takes its
-    // second candidate" (bit k): decisions 0 and 1 choose between level 0 (from states 0, 2) and level 1 (from 1, 3),
-    // decisions 2 and 3 between level 1 (from states 0, 2) and level 0 (from 1, 3).
+    // second candidate", indexed directly by the compare's movemask, whose bits are decisions 0, 2, 1, 3: decisions 0 and
+    // 1 choose between level 0 (from states 0, 2) and level 1 (from 1, 3), decisions 2 and 3 between level 1 (from states
+    // 0, 2) and level 0 (from 1, 3).
     struct Odd1Choice
     {
       TCoeffSig absLevel[4];
       int8_t    prevId[4];
     };
     static const Odd1Choice odd1Choices[16] = {
-      { { 0, 0, 1, 1 }, { 0, 2, 0, 2 } }, { { 1, 0, 1, 1 }, { 1, 2, 0, 2 } }, { { 0, 1, 1, 1 }, { 0, 3, 0, 2 } }, { { 1, 1, 1, 1 }, { 1, 3, 0, 2 } },
-      { { 0, 0, 0, 1 }, { 0, 2, 1, 2 } }, { { 1, 0, 0, 1 }, { 1, 2, 1, 2 } }, { { 0, 1, 0, 1 }, { 0, 3, 1, 2 } }, { { 1, 1, 0, 1 }, { 1, 3, 1, 2 } },
-      { { 0, 0, 1, 0 }, { 0, 2, 0, 3 } }, { { 1, 0, 1, 0 }, { 1, 2, 0, 3 } }, { { 0, 1, 1, 0 }, { 0, 3, 0, 3 } }, { { 1, 1, 1, 0 }, { 1, 3, 0, 3 } },
-      { { 0, 0, 0, 0 }, { 0, 2, 1, 3 } }, { { 1, 0, 0, 0 }, { 1, 2, 1, 3 } }, { { 0, 1, 0, 0 }, { 0, 3, 1, 3 } }, { { 1, 1, 0, 0 }, { 1, 3, 1, 3 } },
+      { { 0, 0, 1, 1 }, { 0, 2, 0, 2 } }, { { 1, 0, 1, 1 }, { 1, 2, 0, 2 } }, { { 0, 0, 0, 1 }, { 0, 2, 1, 2 } }, { { 1, 0, 0, 1 }, { 1, 2, 1, 2 } },
+      { { 0, 1, 1, 1 }, { 0, 3, 0, 2 } }, { { 1, 1, 1, 1 }, { 1, 3, 0, 2 } }, { { 0, 1, 0, 1 }, { 0, 3, 1, 2 } }, { { 1, 1, 0, 1 }, { 1, 3, 1, 2 } },
+      { { 0, 0, 1, 0 }, { 0, 2, 0, 3 } }, { { 1, 0, 1, 0 }, { 1, 2, 0, 3 } }, { { 0, 0, 0, 0 }, { 0, 2, 1, 3 } }, { { 1, 0, 0, 0 }, { 1, 2, 1, 3 } },
+      { { 0, 1, 1, 0 }, { 0, 3, 0, 3 } }, { { 1, 1, 1, 0 }, { 1, 3, 0, 3 } }, { { 0, 1, 0, 0 }, { 0, 3, 1, 3 } }, { { 1, 1, 0, 0 }, { 1, 3, 1, 3 } },
     };
 #endif
 
@@ -751,8 +752,7 @@ namespace vvenc {
       const __m256i best   = _mm256_permute4x64_epi64( _mm256_blendv_epi8( first, second, chng ), 0xD8 );   // d0 d1 d2 d3
       _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[0], _mm256_castsi256_si128( best ) );
       _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[2], _mm256_extracti128_si256( best, 1 ) );
-      const int lanes = _mm256_movemask_pd( _mm256_castsi256_pd( chng ) );   // bits: decisions 0, 2, 1, 3
-      const Odd1Choice& choice = odd1Choices[( lanes & 9 ) | ( ( lanes & 2 ) << 1 ) | ( ( lanes & 4 ) >> 1 )];
+      const Odd1Choice& choice = odd1Choices[_mm256_movemask_pd( _mm256_castsi256_pd( chng ) )];   // bits: decisions 0, 2, 1, 3
       memcpy( decisions.absLevel, choice.absLevel, sizeof( decisions.absLevel ) );
       memcpy( decisions.prevId,   choice.prevId,   sizeof( decisions.prevId ) );
 #else
