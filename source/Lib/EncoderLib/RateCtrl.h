@@ -142,9 +142,8 @@ namespace vvenc {
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg);
+    void   clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg);
     void   updateAfterPicture (const int picActualBits, const int averageQP);
-    void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
     int     tmpTargetBits;
@@ -178,13 +177,13 @@ namespace vvenc {
     void updateAfterPicEncRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
-    std::list<EncRCPic*>&    getPicList()        { return m_listRCPictures; }
+    std::list<std::shared_ptr<EncRCPic>>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
     std::vector<uint8_t>*    getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
     const uint8_t*           getMinNoiseLevels() { return m_minNoiseLevels; }
     int                      lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
-    std::list<EncRCPic*>    m_listRCPictures;
+    std::list<std::shared_ptr<EncRCPic>> m_listRCPictures;
     EncRCSeq*               encRCSeq;
     int                     flushPOC;
     int                     rcPass;

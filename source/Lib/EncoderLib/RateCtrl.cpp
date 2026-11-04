@@ -152,17 +152,14 @@ EncRCPic::~EncRCPic()
   destroy();
 }
 
-void EncRCPic::addToPictureList( std::list<EncRCPic*>& listPreviousPictures )
+static void addToPictureList( const EncRCSeq* encRCSeq, std::list<std::shared_ptr<EncRCPic>>& listPreviousPictures, std::shared_ptr<EncRCPic> thisPtr )
 {
   if ( listPreviousPictures.size() > std::min( VVENC_MAX_GOP, 2 * encRCSeq->gopSize ) )
   {
-    EncRCPic* p = listPreviousPictures.front();
     listPreviousPictures.pop_front();
-    p->destroy();
-    delete p;
   }
 
-  listPreviousPictures.push_back( this );
+  listPreviousPictures.push_back( thisPtr );
 }
 
 void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
@@ -178,7 +175,7 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg)
+void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg)
 {
   const int rShift = (resRatio < 0.03125 ? 12 : (resRatio < 0.125 ? 13 : (resRatio < 0.5 ? 14 : 15)));
   const int initQP = qp;
@@ -186,7 +183,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   int lastPrevTLQP = -1;
   int lastMaxTLBits = 0;
   int halvedAvgQP  = -1;
-  std::list<EncRCPic*>::iterator it;
+  std::list<std::shared_ptr<EncRCPic>>::iterator it;
 
   for (it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++)
   {
@@ -308,12 +305,7 @@ void RateCtrl::destroy()
     delete encRCSeq;
     encRCSeq = NULL;
   }
-  while ( m_listRCPictures.size() > 0 )
-  {
-    EncRCPic* p = m_listRCPictures.front();
-    m_listRCPictures.pop_front();
-    delete p;
-  }
+  m_listRCPictures.clear();
 
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   if ( m_rcStatsFHandle.is_open() )
@@ -1160,7 +1152,7 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
   const int clipBits = std::max( pic->encRCPic->targetBits, pic->actualTotalBits );
 
   pic->encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
-  pic->encRCPic->addToPictureList( getPicList() );
+  addToPictureList( encRCSeq, m_listRCPictures, pic->encRCPic );
   encRCSeq->updateAfterPic( pic->actualTotalBits, pic->encRCPic->tmpTargetBits );
 
   if ( encRCSeq->isLookAhead )
