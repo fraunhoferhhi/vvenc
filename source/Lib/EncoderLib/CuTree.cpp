@@ -82,6 +82,11 @@ static constexpr double MAX_LOG2_PIC_DEP = 8.0;
 // knee was measured at 7.0-8.9 steps per sigma on film grain and sensor noise (old_town, meridian), while textured,
 // clean or animated content lies above 10 at the same QPs (crowd, csgo, pedestrian, sintel) and is not touched.
 static constexpr double NOISE_FLOOR_STEPS = 9.0;
+// A change of content: the difference to the previous picture is this many times the difference before it. On the full
+// size luma of the test clips: 4.4 to 36 at I pictures on a cut, at most 2.9 at the others. Below the floor (in 8-bit
+// sample units) the previous difference counts as the floor: a static picture has next to none.
+static constexpr double CONTENT_CHANGE_RATIO = 3.0;
+static constexpr double CONTENT_CHANGE_FLOOR = 0.25;
 
 enum CuTreePred : uint8_t
 {
@@ -104,6 +109,8 @@ struct CuTree::Frame
   bool                  hasImages = true;    // lowRes and recon are kept while other pictures can reference them
   int                   refPoc[2] = { NO_REF, NO_REF };
   int                   picQpOffset = 0;     // BIM 2's picture-level QP offset, see xSetPicQpOffsets
+  double                diffToPrev = 0.0;    // mean absolute difference to the previous picture, in 8-bit sample units
+  bool                  contentChange = false; // see CONTENT_CHANGE_RATIO
   PelStorage            lowRes[NUM_LEVELS];
   PelStorage            recon;               // half-resolution reconstruction at the picture's QP
   Array2D<MotionVector> mvs[2];              // half-resolution motion towards refPoc[0] and refPoc[1]
@@ -565,7 +572,31 @@ void CuTree::initPicture( Picture* pic )
     xDownsample( frame->lowRes[level - 1], frame->lowRes[level] );
   }
 
+  if( m_encCfg->m_cuTreePicScale > 0.0 && ! m_frames.empty() && m_frames.rbegin()->first == pic->poc - 1 && m_frames.rbegin()->second->hasImages )
+  {
+    const Frame& prev = *m_frames.rbegin()->second;
+    frame->diffToPrev    = xMeanAbsDiff( frame->lowRes[1], prev.lowRes[1] );
+    frame->contentChange = frame->diffToPrev > CONTENT_CHANGE_RATIO * std::max( prev.diffToPrev, CONTENT_CHANGE_FLOOR );
+  }
   m_frames[pic->poc] = std::move( frame );
+}
+
+double CuTree::xMeanAbsDiff( const PelStorage& a, const PelStorage& b ) const
+{
+  const CPelBuf picA = a.Y();
+  const CPelBuf picB = b.Y();
+  int64_t sum = 0;
+  for( int y = 0; y < int( picA.height ); y++ )
+  {
+    const Pel* rowA = picA.bufAt( 0, y );
+    const Pel* rowB = picB.bufAt( 0, y );
+    for( int x = 0; x < int( picA.width ); x++ )
+    {
+      sum += std::abs( rowA[x] - rowB[x] );
+    }
+  }
+  const double scaleTo8Bit = 1.0 / double( 1 << ( m_encCfg->m_internalBitDepth[CH_L] - 8 ) );
+  return scaleTo8Bit * double( sum ) / double( picA.width * picA.height );
 }
 
 void CuTree::processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList )
@@ -1386,6 +1417,9 @@ void CuTree::xSetQpOffsets( const Frame& frame, Picture* pic ) const
   {
     const int tplOffset = int( std::lround( -m_encCfg->m_cuTreePicScale * std::min( MAX_LOG2_PIC_DEP, std::log2( 1.0 + alphaPic ) ) ) );
     picShared->m_picAuxQpOffset = tplOffset;
+    // only at a change of content: elsewhere the model's coarser I picture is right, as little of it carries over; and
+    // not on the sequence's last picture, as nothing predicts from it later
+    picShared->m_capIntraQp = frame.isIntra && frame.contentChange && m_frames.rbegin()->first > frame.poc;
 
     // noise floor for the pictures of the layers MCTF does not filter, where the dependency model lowered the QP:
     // the QP whose quantiser step, 2^(bitDepth - 8) * 2^((QP - 4) / 6), is NOISE_FLOOR_STEPS noise sigmas; applied after

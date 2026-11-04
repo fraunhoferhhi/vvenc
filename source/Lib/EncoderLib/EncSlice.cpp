@@ -531,6 +531,14 @@ int EncSlice::xGetQPForPicture( const Slice* slice, const int baseQP )
     {
       qp += slice->pic->m_picShared->m_picAuxQpOffset;
     }
+
+    // An intra picture at a change of content (film credits: a new card) comes out of the dependency model little
+    // reused, and would be coded coarser than the pictures that predict from it: never above the configured QP plus one.
+    if( m_pcEncCfg->m_cuTreePicScale > 0.0 && hasBlockOffsets && slice->isIntra() && slice->pic->m_picShared->m_capIntraQp )
+    {
+      const int configuredQp = baseQP - ( m_pcEncCfg->m_QP - m_pcEncCfg->m_configuredQP ) + slice->pic->gopAdaptedQP;
+      qp = std::min( qp, configuredQp + 1 );
+    }
   }
   qp = Clip3( -lumaQpBDOffset, MAX_QP, qp );
   return qp;
