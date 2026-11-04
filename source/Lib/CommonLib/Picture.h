@@ -280,7 +280,7 @@ public:
   int                           useQtbttSpeedUpMode;
   int                           actualHeadBits;
   int                           actualTotalBits;
-  EncRCPic*                     encRCPic;
+  std::shared_ptr<EncRCPic>     encRCPic;
   PicApsGlobal*                 picApsGlobal;
   PicApsGlobal*                 refApsGlobal;
 

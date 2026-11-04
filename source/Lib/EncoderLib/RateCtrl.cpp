@@ -152,17 +152,14 @@ EncRCPic::~EncRCPic()
   destroy();
 }
 
-void EncRCPic::addToPictureList( std::list<EncRCPic*>& listPreviousPictures )
+static void addToPictureList( const EncRCSeq* encRCSeq, std::list<std::shared_ptr<EncRCPic>>& listPreviousPictures, std::shared_ptr<EncRCPic> thisPtr )
 {
   if ( listPreviousPictures.size() > std::min( VVENC_MAX_GOP, 2 * encRCSeq->gopSize ) )
   {
-    EncRCPic* p = listPreviousPictures.front();
     listPreviousPictures.pop_front();
-    p->destroy();
-    delete p;
   }
 
-  listPreviousPictures.push_back( this );
+  listPreviousPictures.push_back( thisPtr );
 }
 
 void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
@@ -178,7 +175,7 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg)
+void EncRCPic::clipTargetQP (std::list<std::shared_ptr<EncRCPic>>& listPreviousPictures, const int baseQP, const int refrIncrFac, const int maxTL, const double resRatio, int &qp, int* qpAvg)
 {
   const int rShift = (resRatio < 0.03125 ? 12 : (resRatio < 0.125 ? 13 : (resRatio < 0.5 ? 14 : 15)));
   const int initQP = qp;
@@ -186,7 +183,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
   int lastPrevTLQP = -1;
   int lastMaxTLBits = 0;
   int halvedAvgQP  = -1;
-  std::list<EncRCPic*>::iterator it;
+  std::list<std::shared_ptr<EncRCPic>>::iterator it;
 
   for (it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++)
   {
@@ -308,12 +305,7 @@ void RateCtrl::destroy()
     delete encRCSeq;
     encRCSeq = NULL;
   }
-  while ( m_listRCPictures.size() > 0 )
-  {
-    EncRCPic* p = m_listRCPictures.front();
-    m_listRCPictures.pop_front();
-    delete p;
-  }
+  m_listRCPictures.clear();
 
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   if ( m_rcStatsFHandle.is_open() )
@@ -1157,12 +1149,11 @@ void RateCtrl::addRCPassStats( const int poc,
 
 void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 {
-  EncRCPic* encRCPic = pic->encRCPic;
-  const int clipBits = std::max( encRCPic->targetBits, pic->actualTotalBits );
+  const int clipBits = std::max( pic->encRCPic->targetBits, pic->actualTotalBits );
 
-  encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
-  encRCPic->addToPictureList( getPicList() );
-  encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
+  pic->encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
+  addToPictureList( encRCSeq, m_listRCPictures, pic->encRCPic );
+  encRCSeq->updateAfterPic( pic->actualTotalBits, pic->encRCPic->tmpTargetBits );
 
   if ( encRCSeq->isLookAhead )
   {
@@ -1174,12 +1165,11 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
 {
   const int frameLevel = ( slice->isIntra() ? 0 : slice->TLayer + 1 );
-  EncRCPic*   encRcPic = new EncRCPic;
   double lambda = encRCSeq->maxEstLambda;
   int   sliceQP = MAX_QP;
 
-  encRcPic->create( encRCSeq, frameLevel, slice->poc );
-  pic.encRCPic = encRcPic;
+  pic.encRCPic = std::make_shared<EncRCPic>();
+  pic.encRCPic->create( encRCSeq, frameLevel, slice->poc );
 
   if ( frameLevel <= 7 )
   {
@@ -1199,7 +1189,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           const double dLimit = ( isRateCapperMax ? 3.0 : 0.5 * budgetRelaxScale + 0.5 );
           double d = (double)it->targetBits, tmpVal;
 
-          encRcPic->visActSteady = it->visActY;
+          pic.encRCPic->visActSteady = it->visActY;
 
           if ( it->refreshParameters ) // reset counters for budget usage in subsequent frames
           {
@@ -1208,7 +1198,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
             }
-            encRcPic->refreshParams = true;
+            pic.encRCPic->refreshParams = true;
           }
           if ( it->isIntra ) // update temp stationarity for budget usage in subsequent frames
           {
@@ -1252,23 +1242,23 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           {
             it->targetBits = int( it->targetBits * encRCSeq->rateBoostFac + 0.5 ); // boosting
           }
-          encRcPic->tmpTargetBits = it->targetBits;
+          pic.encRCPic->tmpTargetBits = it->targetBits;
 
           // calculate the difference of under or overspent bits and adjust the current target bits based on the GOP and frame ratio
-          d = encRcPic->tmpTargetBits + std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * tmpVal * it->frameInGopRatio;
+          d = pic.encRCPic->tmpTargetBits + std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * tmpVal * it->frameInGopRatio;
 
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change
           if ( isEndOfSequence )
           {
             d += std::min( (int64_t) encRCSeq->maxGopRate, encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * ( 1.0 - tmpVal ) * it->frameInGopRatio;
           }
-          else if ( d > dLimit * encRcPic->tmpTargetBits )
+          else if ( d > dLimit * pic.encRCPic->tmpTargetBits )
           {
-            d = encRcPic->tmpTargetBits * dLimit; // prevent large spendings after easy scenes
+            d = pic.encRCPic->tmpTargetBits * dLimit; // prevent large spendings after easy scenes
           }
-          else if ( d * dLimit < encRcPic->tmpTargetBits )
+          else if ( d * dLimit < pic.encRCPic->tmpTargetBits )
           {
-            d = encRcPic->tmpTargetBits / dLimit; // prevent small spendings after hard scenes
+            d = pic.encRCPic->tmpTargetBits / dLimit; // prevent small spendings after hard scenes
           }
 
           if ( !isEndOfSequence && it->isStartOfGop && it->poc > 0 ) // target bitrate capping
@@ -1279,7 +1269,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             if ( d > fBits * encRCSeq->maxGopRate ) d = fBits * encRCSeq->maxGopRate;
           }
           d = std::max( 1.0, d );
-          encRcPic->targetBits = int( d + 0.5 );
+          pic.encRCPic->targetBits = int( d + 0.5 );
 
           tmpVal = updateQPstartModelVal() + log (sqrOfResRatio) / log (2.0); // GOP's QPstart
           d /= (double)it->numBits;
@@ -1287,7 +1277,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           sliceQP = int( 0.5 + d + ( it->isIntra ? 0.375 : 0.5 ) * std::max( 0.0, tmpVal - d ) + encRCSeq->qpCorrection[ frameLevel ] );
 
           const int sqp_bckp = sliceQP;
-          encRcPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
+          pic.encRCPic->clipTargetQP( getPicList(), ( m_pcEncCfg->m_LookAhead ? getBaseQP() : m_pcEncCfg->m_QP ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), 5 - budgetRelaxScale,
                                   ( it->poc < encRCSeq->gopSize ? 0 : ( m_pcEncCfg->m_maxTLayer + 1 ) >> 1 ), sqrOfResRatio, sliceQP, &encRCSeq->lastAverageQP );
           
           if( it->isIntra && sliceQP >= sqp_bckp )
@@ -1313,9 +1303,9 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
                 }
                 encRCSeq->lastIntraSM = (double)it->numBits / gopBits;
               }
-              else if ( it->isIntra && !it->isStartOfIntra && !isEndOfSequence && !encRCSeq->isRateSavingMode && encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed < encRcPic->targetBits )
+              else if ( it->isIntra && !it->isStartOfIntra && !isEndOfSequence && !encRCSeq->isRateSavingMode && encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed < pic.encRCPic->targetBits )
               {
-                encRCSeq->bitsUsedQPLimDiff += ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed - encRcPic->targetBits ) >> 1;
+                encRCSeq->bitsUsedQPLimDiff += ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed - pic.encRCPic->targetBits ) >> 1;
               }
             }
           }
