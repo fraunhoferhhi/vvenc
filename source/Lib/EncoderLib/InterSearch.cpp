@@ -3638,12 +3638,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   const TempCtx ctxStart  ( m_CtxCache, m_CABACEstimator->getCtx() );
   TempCtx       ctxBest   ( m_CtxCache );
 
-  PelUnitBuf    orgResiBuf;
-  orgResiBuf = m_tmpStorageLCU.getCompactBuf( currArea );
-  orgResiBuf.copyFrom(cs.getResiBuf(currArea));
-
   if (bCheckFull)
   {
+    // Only this branch reads the saved residual; a split saves its own in each sub-block.
+    PelUnitBuf orgResiBuf = m_tmpStorageLCU.getCompactBuf( currArea );
+    orgResiBuf.copyFrom(cs.getResiBuf(currArea));
+
     TransformUnit& tu = csFull->addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, &cu);
     tu.depth          = currDepth;
     tu.mtsIdx[COMP_Y] = MTS_DCT2_DCT2;
@@ -3706,8 +3706,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       {
         const bool isFirstMode = transformMode == 0;
 
-        // copy the original residual into the residual buffer
-        csFull->getResiBuf(compArea).copyFrom(orgResiBuf.get(compID));
+        // copy the original residual into the residual buffer; before the first mode it still holds that residual
+        if( !isFirstMode )
+        {
+          csFull->getResiBuf(compArea).copyFrom(orgResiBuf.get(compID));
+        }
 
 
         if( !ctxIsStart )
