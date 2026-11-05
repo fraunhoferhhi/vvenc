@@ -108,8 +108,17 @@ public:
   DistParam() = default;
 
   DistParam( const CPelBuf& _org, const CPelBuf& _cur,  FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
-    : org(_org), cur(_cur), distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
+    : distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
   {
+    // field by field: the callers have usually just built these buffers, and a wider load can't take narrower stores' data
+    org.buf    = _org.buf;
+    org.stride = _org.stride;
+    org.width  = _org.width;
+    org.height = _org.height;
+    cur.buf    = _cur.buf;
+    cur.stride = _cur.stride;
+    cur.width  = _cur.width;
+    cur.height = _cur.height;
   }
 };
 
