@@ -2266,9 +2266,36 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   int                      scanPosLast = tu.lastPos[compID];
   std::bitset<MLS_GRP_NUM> sigGroupFlags;
 
-  for( int subSetId = 0; subSetId <= ( scanPosLast >> cctx.log2CGSize() ); subSetId++ )
+  CHECK( scanPosLast < 0, "Coefficient coding called for empty TU" );
+
+  // the last subset holds the last coefficient, which isn't zero
+  const int lastSubSet = scanPosLast >> cctx.log2CGSize();
+  sigGroupFlags.set( lastSubSet );
+
+  const bool     cg4x4 = cctx.log2CGWidth() == 2 && cctx.log2CGHeight() == 2;
+  const unsigned width = cctx.width();
+  static_assert( sizeof( TCoeffSig ) == 2, "four coefficients in 8 bytes" );
+
+  for( int subSetId = 0; subSetId < lastSubSet; subSetId++ )
   {
     const int scanPosStart = subSetId << cctx.log2CGSize();
+
+    if( cg4x4 )
+    {
+      // the subset's first position is the top left of its 4x4 group: its four rows, read together
+      const TCoeffSig* row = coeff + cctx.blockPos( scanPosStart );
+      uint64_t r0, r1, r2, r3;
+      memcpy( &r0, row, 8 );
+      memcpy( &r1, row + width, 8 );
+      memcpy( &r2, row + 2 * width, 8 );
+      memcpy( &r3, row + 3 * width, 8 );
+      if( r0 | r1 | r2 | r3 )
+      {
+        sigGroupFlags.set( subSetId );
+      }
+      continue;
+    }
+
     const int scanPosEnd   = scanPosStart + ( 1 << cctx.log2CGSize() ) - 1;
 
     for( int scanPos = scanPosEnd; scanPos >= scanPosStart; scanPos-- )
@@ -2282,7 +2309,6 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
       }
     }
   }
-  CHECK( scanPosLast < 0, "Coefficient coding called for empty TU" );
   cctx.setScanPosLast(scanPosLast);
 
   if( cuCtx && tu.mtsIdx[compID] != MTS_SKIP && tu.blocks[ compID ].height >= 4 && tu.blocks[ compID ].width >= 4 )
