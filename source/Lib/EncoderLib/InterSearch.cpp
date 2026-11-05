@@ -2050,8 +2050,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     PelUnitBuf  origBufTmp = m_tmpStorageLCU.getCompactBuf( cu );
     // NOTE: Other buf contains predicted signal from another direction
     PelUnitBuf otherBuf = m_tmpPredStorage[1 - (int)refPicList].getCompactBuf( cu );
-    origBufTmp.copyFrom(origBuf);
-    origBufTmp.removeHighFreq( otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs );
+    origBufTmp.removeHighFreq( origBuf, otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs );
    
     origBufTmpCnst = origBufTmp;
     pBuf           = &origBufTmpCnst;
@@ -2851,8 +2850,7 @@ Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf,
   const CPelUnitBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
 
   PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
-  bufTmp.copyFrom( origBuf );
-  bufTmp.removeHighFreq( predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
+  bufTmp.removeHighFreq( origBuf, predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
   double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
 
   // calc distortion
@@ -4446,8 +4444,7 @@ void InterSearch::xSymMvdCheckBestMvp(
   const CPelUnitBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
 
   bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
-  bufTmp.copyFrom( origBuf );
-  bufTmp.removeHighFreq( predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, tarRefList )*/ );
+  bufTmp.removeHighFreq( origBuf, predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, tarRefList )*/ );
   fWeight = xGetMEDistortionWeight( cu.BcwIdx, tarRefList );
 
   int32_t skipMvpIdx[2];
@@ -5428,8 +5425,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     PelUnitBuf  origBufTmp = m_tmpStorageLCU.getCompactBuf(cu);
     // NOTE: Other buf contains predicted signal from another direction
     PelUnitBuf otherBuf = m_tmpPredStorage[1 - (int)refPicList].getCompactBuf( cu );
-    origBufTmp.copyFrom(origBuf);
-    origBufTmp.removeHighFreq(otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs);
+    origBufTmp.removeHighFreq(origBuf, otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs);
 
     origBufTmpCnst = origBufTmp;
     pBuf           = &origBufTmpCnst;

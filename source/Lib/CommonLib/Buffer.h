@@ -122,8 +122,8 @@ struct PelBufferOps
   // the checksum of the decoded picture hash SEI for one plane: the sum, modulo 2^32, of ( p & 0xff ) ^ m and, with
   // twoBytes, ( p >> 8 ) ^ m, where m = ( x & 0xff ) ^ ( y & 0xff ) ^ ( x >> 8 ) ^ ( y >> 8 )
   uint32_t ( *pictureChecksum ) ( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes );
-  void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
-  void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
+  void ( *removeHighFreq8)( Pel* dst, int dstStride, const Pel* org, int orgStride, const Pel* other, int otherStride, int width, int height);
+  void ( *removeHighFreq4)( Pel* dst, int dstStride, const Pel* org, int orgStride, const Pel* other, int otherStride, int width, int height);
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *transpose8x8 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *roundIntVector) ( int* v, int size, unsigned int nShift, const int dmvLimit);
@@ -225,7 +225,7 @@ struct AreaBuf : public Size
   T    getAvg               () const;
   void padBorderPel         ( unsigned marginX, unsigned marginY, int dir );
   void addWeightedAvg       ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng, const int8_t BcwIdx );
-  void removeHighFreq       ( const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng);
+  void removeHighFreq       ( const AreaBuf<const T>& org, const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng);
   void extendBorderPelTop   ( int x, int size, int margin );
   void extendBorderPelBot   ( int x, int size, int margin );
   void extendBorderPelLft   ( int y, int size, int margin );
@@ -491,10 +491,12 @@ template<>
 void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const int offset, bool bClip, const ClpRng& clpRng );
 
 template<typename T>
-void AreaBuf<T>::removeHighFreq( const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng )
+void AreaBuf<T>::removeHighFreq( const AreaBuf<const T>& org, const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng )
 {
   const T*  src       = other.buf;
   const int srcStride = other.stride;
+  const T*  orgBuf    = org.buf;
+  const int orgStride = org.stride;
 
         T*  dst       = buf;
   const int dstStride = stride;
@@ -503,9 +505,9 @@ void AreaBuf<T>::removeHighFreq( const AreaBuf<const T>& other, const bool bClip
   if (!bClip)
   {
     if(!(width & 7))
-      g_pelBufOP.removeHighFreq8(dst, dstStride, src, srcStride, width, height);
+      g_pelBufOP.removeHighFreq8(dst, dstStride, orgBuf, orgStride, src, srcStride, width, height);
     else if (!(width & 3))
-      g_pelBufOP.removeHighFreq4(dst, dstStride, src, srcStride, width, height);
+      g_pelBufOP.removeHighFreq4(dst, dstStride, orgBuf, orgStride, src, srcStride, width, height);
     else
       CHECK(true, "Not supported");
   }
@@ -515,10 +517,11 @@ void AreaBuf<T>::removeHighFreq( const AreaBuf<const T>& other, const bool bClip
 
 #define REM_HF_INC  \
   src += srcStride; \
+  orgBuf += orgStride; \
   dst += dstStride; \
 
-#define REM_HF_OP_CLIP( ADDR ) dst[ADDR] = ClipPel<T>( 2 * dst[ADDR] - src[ADDR], clpRng )
-#define REM_HF_OP( ADDR )      dst[ADDR] =             2 * dst[ADDR] - src[ADDR]
+#define REM_HF_OP_CLIP( ADDR ) dst[ADDR] = ClipPel<T>( 2 * orgBuf[ADDR] - src[ADDR], clpRng )
+#define REM_HF_OP( ADDR )      dst[ADDR] =             2 * orgBuf[ADDR] - src[ADDR]
 
   if( bClip )
   {
@@ -784,7 +787,7 @@ struct UnitBuf
   void extendBorderPelLft   ( int y, int size, int margin );
   void extendBorderPelRgt   ( int y, int size, int margin );
 
-  void removeHighFreq       ( const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs);
+  void removeHighFreq       ( const UnitBuf<const T>& org, const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs);
 
         UnitBuf<      T> subBuf (const UnitArea& subArea);
   const UnitBuf<const T> subBuf (const UnitArea& subArea) const;
@@ -961,9 +964,9 @@ void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 }
 
 template<typename T>
-void UnitBuf<T>::removeHighFreq( const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs)
+void UnitBuf<T>::removeHighFreq( const UnitBuf<const T>& org, const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs)
 {
-  bufs[0].removeHighFreq(other.bufs[0], bClip, clpRngs[0]);
+  bufs[0].removeHighFreq(org.bufs[0], other.bufs[0], bClip, clpRngs[0]);
 }
 
 template<typename T>
