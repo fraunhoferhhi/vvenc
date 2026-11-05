@@ -1399,28 +1399,36 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   //===== find best path =====
   int       prevId      = -1;
   int64_t   minPathCost =  0;
-  for( int8_t stateId = 0; stateId < 4; stateId++ )
+  for( int stateId = 0; stateId < 4; stateId++ )
   {
-    int64_t pathCost = m_trellis[0][0].rdCost[stateId];
-    if( pathCost < minPathCost )
-    {
-      prevId      = stateId;
-      minPathCost = pathCost;
-    }
+    // Which state wins is close to random, so a branch here mispredicts often. Without one, this does the same as
+    //   if( rdCost[stateId] < minPathCost ) { prevId = stateId; minPathCost = rdCost[stateId]; }
+    // lower is all ones if this path is cheaper, so each addition moves its variable or adds nothing. GCC turns ?: back into branches.
+    // The difference fits: a cost is at most about rdCostInit (2^62), and minPathCost is 0 or a small negative cost.
+    const int64_t costDiff = m_trellis[0][0].rdCost[stateId] - minPathCost;
+    const int64_t lower    = costDiff >> 63;
+    prevId                += int( ( stateId - prevId ) & lower );
+    minPathCost           += costDiff & lower;
   }
 
   //===== backward scanning =====
-  int scanIdx = 0;
-  for( ; prevId >= 0; scanIdx++ )
+  // Each load's address depends on the prevId just loaded, so the walk runs at the speed of that chain. The row comes from a
+  // pointer and a compare, which add less to the chain than working it out from prevId and scanIdx together.
+  const Decisions* row = m_trellis[0];
+  TCoeff           sum = 0;
+  int              scanIdx = 0;
+  for( ; prevId >= 0; scanIdx++, row += 2 )
   {
-    TCoeffSig absLevel = m_trellis[scanIdx][prevId >> 2].absLevel[prevId & 3];
+    const Decisions& dec = prevId < 4 ? row[0] : row[1];
+    TCoeffSig absLevel = dec.absLevel[prevId & 3];
     int32_t blkpos     = tuPars.m_scanId2BlkPos[scanIdx].idx;
     // apply the coefficient's sign without a branch: (absLevel ^ m) - m is -absLevel for m = -1 and absLevel for m = 0
     const int signMask = -int( tCoeff[blkpos] < 0 );
     qCoeff[ blkpos ]   = TCoeffSig( ( absLevel ^ signMask ) - signMask );
-    absSum            += absLevel;
-    prevId             = m_trellis[scanIdx][prevId >> 2].prevId[prevId & 3];
+    sum               += absLevel;
+    prevId             = dec.prevId[prevId & 3];
   }
+  absSum = sum;
 
   tu.lastPos[compID] = scanIdx - 1;
 }
