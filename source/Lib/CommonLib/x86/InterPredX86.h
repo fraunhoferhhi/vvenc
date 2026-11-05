@@ -912,19 +912,12 @@ static inline Mv affineLumaSubblockMv( const InterPredInterpolation::AffineLumaC
   return mv;
 }
 
-// The 6-tap 4x4 luma filter of m_filter4x4[0][isLast] without the call; src points at the sub-block.
+// The 6-tap 4x4 luma filter of m_filter4x4[0][isLast] without the call, below AVX2; src points at the sub-block.
 template<X86_VEXT vext, bool isLast>
 static ALWAYS_INLINE void affineLumaFilter4x4( const ClpRng& clpRng, const Pel* src, int srcStride, Pel* dst, int dstStride,
                                                const TFilterCoeff* coeffH, const TFilterCoeff* coeffV, const Filter4x4N6Rounding& rnd )
 {
   src -= 2 + 2 * srcStride;
-#if USE_AVX2
-  if( vext >= AVX2 )
-  {
-    simdFilter4x4_N6_AVX2<isLast>( clpRng, src, srcStride, dst, dstStride, coeffH, coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
-    return;
-  }
-#endif
   simdFilter4x4_N6_SSE<isLast, false>( clpRng, src, srcStride, dst, dstStride, coeffH, coeffV, rnd.offset1st, rnd.shift1st, rnd.offset2nd, rnd.shift2nd );
 }
 
@@ -970,17 +963,19 @@ static ALWAYS_INLINE __m256i coeffPairLanes( const TFilterCoeff* left, const TFi
                                   _mm_set1_epi32( xCoeffPair( right + k ) ), 1 );
 }
 
-// The 14-bit (not last) 4x4 6-tap filter of two side-by-side sub-blocks in one pass, the left one in the low 128-bit
-// lane and the right one in the high lane, each with its own fractions. Per lane these are the sums of
-// simdFilter4x4_N6_AVX2<false>: the same sample pairs and coefficient pairs, the same multiply-add order and the same
-// saturating packs, so the results are identical. The output is in the layout affinePROF4x4Pair_AVX2 works in:
+// The 4x4 6-tap filter of two side-by-side sub-blocks in one pass, the left one in the low 128-bit lane and the right
+// one in the high lane, each with its own fractions. Per lane these are the sums of simdFilter4x4_N6_AVX2<isLast>: the
+// same sample pairs and coefficient pairs, the same multiply-add order and the same saturating packs and clip, so the
+// results are identical. Used for all luma sub-blocks at AVX2: without PROF it stores through storeRowsOfPair_AVX2, in
+// four rows of 8 samples each per pair. The output is in the layout affinePROF4x4Pair_AVX2 works in:
 // pred[0] holds rows 0 and 1 of each sub-block (row 0 in the low 64 bits of its lane), pred[1] rows 2 and 3. Unlike
 // a filter per sub-block, the hand-off to PROF needs no reorder across the lanes and no trip through memory.
 // srcLeft and srcRight point at the sub-blocks; the reads are those of the single 4x4 filter.
+template<bool isLast>
 static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, const Pel* srcRight, int srcStride,
                                                         const TFilterCoeff* coeffHLeft, const TFilterCoeff* coeffHRight,
                                                         const TFilterCoeff* coeffVLeft, const TFilterCoeff* coeffVRight,
-                                                        const Filter4x4N6Rounding& rnd, __m256i* pred )
+                                                        const Filter4x4N6Rounding& rnd, const ClpRng& clpRng, __m256i* pred )
 {
   srcLeft  -= 2 + 2 * srcStride;
   srcRight -= 2 + 2 * srcStride;
@@ -1029,8 +1024,25 @@ static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, cons
     sum = _mm256_add_epi32( sum, _mm256_madd_epi16( rowPairs[y + 4], v56 ) );
     out[y] = _mm256_srai_epi32( sum, rnd.shift2nd );
   }
-  pred[0] = _mm256_packs_epi32( out[0], out[1] );
-  pred[1] = _mm256_packs_epi32( out[2], out[3] );
+  if( isLast )
+  {
+    const __m256i maxSample = _mm256_set1_epi16( clpRng.max() );
+    pred[0] = packClipLast_AVX2( out[0], out[1], maxSample );
+    pred[1] = packClipLast_AVX2( out[2], out[3], maxSample );
+  }
+  else
+  {
+    pred[0] = _mm256_packs_epi32( out[0], out[1] );
+    pred[1] = _mm256_packs_epi32( out[2], out[3] );
+  }
+}
+
+// Stores two rows of two side-by-side sub-blocks, given in the lanes as (left r, left r + 1) and (right r, right r + 1).
+static ALWAYS_INLINE void storeRowsOfPair_AVX2( Pel* dst, int dstStride, __m256i rows )
+{
+  rows = _mm256_permute4x64_epi64( rows, 0xD8 );   // whole rows of 8 samples
+  _mm_storeu_si128( ( __m128i* ) dst, _mm256_castsi256_si128( rows ) );
+  _mm_storeu_si128( ( __m128i* ) ( dst + dstStride ), _mm256_extracti128_si256( rows, 1 ) );
 }
 
 // profBorderRow for two side-by-side sub-blocks, one per 128-bit lane.
@@ -1088,10 +1100,7 @@ static ALWAYS_INLINE void affinePROF4x4Pair_AVX2( Pel* dst, int dstStride, const
       res = _mm256_srai_epi16( _mm256_adds_epi16( res, vOffset ), shiftNum );
       res = _mm256_min_epi16( vMax, _mm256_max_epi16( vMin, res ) );
     }
-    // the lanes hold (left r, left r + 1) and (right r, right r + 1): reorder to whole rows of 8 samples
-    res = _mm256_permute4x64_epi64( res, 0xD8 );
-    _mm_storeu_si128( ( __m128i* ) ( dst + r * dstStride ), _mm256_castsi256_si128( res ) );
-    _mm_storeu_si128( ( __m128i* ) ( dst + ( r + 1 ) * dstStride ), _mm256_extracti128_si256( res, 1 ) );
+    storeRowsOfPair_AVX2( dst + r * dstStride, dstStride, res );
   }
 }
 #endif
@@ -1130,9 +1139,9 @@ static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu
         const AffineLumaSubblockRef left  = affineLumaSubblockRef( cu, w, h );
         const AffineLumaSubblockRef right = affineLumaSubblockRef( cu, w + AFFINE_MIN_BLOCK_SIZE, h );
         __m256i pred[2];
-        affineLumaFilter4x4Pair_AVX2( left.ref, right.ref, cu.refStride,
+        affineLumaFilter4x4Pair_AVX2<false>( left.ref, right.ref, cu.refStride,
                                       InterpolationFilter::m_lumaFilter4x4[left.xFrac], InterpolationFilter::m_lumaFilter4x4[right.xFrac],
-                                      InterpolationFilter::m_lumaFilter4x4[left.yFrac], InterpolationFilter::m_lumaFilter4x4[right.yFrac], rnd, pred );
+                                      InterpolationFilter::m_lumaFilter4x4[left.yFrac], InterpolationFilter::m_lumaFilter4x4[right.yFrac], rnd, cu.clpRng, pred );
         affinePROF4x4Pair_AVX2<bi, shiftNum>( cu.dst + h * cu.dstStride + w, cu.dstStride, pred, left.nearest, right.nearest,
                                               cu.refStride, dMvRows, shiftNum, cu.offset, cu.clpRng );
       }
@@ -1155,6 +1164,25 @@ static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu
         rowRefs[i] = affineLumaSubblockRef( cu, i * AFFINE_MIN_BLOCK_SIZE, h );
       }
       Pel* dst = cu.dst + h * cu.dstStride;
+#if USE_AVX2
+      if( vext >= AVX2 )
+      {
+        // two sub-blocks per pass, one per 128-bit lane; every row of an affine CU holds an even number of them
+        for( int i = 0; i < numSub; i += 2, dst += 2 * AFFINE_MIN_BLOCK_SIZE )
+        {
+          const AffineLumaSubblockRef& left  = rowRefs[i];
+          const AffineLumaSubblockRef& right = rowRefs[i + 1];
+          __m256i pred[2];
+          affineLumaFilter4x4Pair_AVX2<isLast>( left.ref, right.ref, cu.refStride,
+                                                InterpolationFilter::m_lumaFilter4x4[left.xFrac], InterpolationFilter::m_lumaFilter4x4[right.xFrac],
+                                                InterpolationFilter::m_lumaFilter4x4[left.yFrac], InterpolationFilter::m_lumaFilter4x4[right.yFrac],
+                                                rnd, cu.clpRng, pred );
+          storeRowsOfPair_AVX2( dst, cu.dstStride, pred[0] );
+          storeRowsOfPair_AVX2( dst + 2 * cu.dstStride, cu.dstStride, pred[1] );
+        }
+        continue;
+      }
+#endif
       for( int i = 0; i < numSub; i++, dst += AFFINE_MIN_BLOCK_SIZE )
       {
         affineLumaFilter4x4<vext, isLast>( cu.clpRng, rowRefs[i].ref, cu.refStride, dst, cu.dstStride,
