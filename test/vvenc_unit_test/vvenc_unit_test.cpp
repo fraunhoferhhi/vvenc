@@ -3346,6 +3346,85 @@ static bool check_SAD( RdCost* ref, RdCost* opt, unsigned num_cases, int width, 
   return passed;
 }
 
+// The motion search's four-position SADs against one call per position. Besides random samples, the largest difference
+// in both signs: bi-prediction search doubles the original and subtracts the other prediction, so it reaches 2046 - 0
+// and -1023 - 1023. With a threshold, a result may be a partial sum, as long as it is on the same side of the threshold
+// as the full one, which is all the callers check.
+static bool check_SADFourPositions( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
+{
+  const int log2Width = log2( width );
+  const FpSadFourPositions sadFourPositions = opt->m_afpSadFourPositions[log2Width];
+  if( sadFourPositions == nullptr )
+  {
+    return true;
+  }
+
+  std::ostringstream sstm;
+  sstm << "RdCost::m_afpSadFourPositions " << " w=" << width << " h=" << height;
+  printf( "Testing %s\n", sstm.str().c_str() );
+
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int org_stride = rng.get( width, 256 );
+    const int cur_stride = rng.get( width, 256 );
+    std::vector<Pel> orgBuf( org_stride * height );
+    std::vector<Pel> curBuf( 4 * cur_stride * height );
+    switch( i % 3 )
+    {
+      case 0:
+        // each position with its own amplitude, over a small original, so their SADs differ widely
+        std::generate( orgBuf.begin(), orgBuf.end(), [&]() { return Pel( g10() >> 7 ); } );
+        for( size_t n = 0; n < curBuf.size(); n++ )
+        {
+          curBuf[n] = g10() >> ( 3 * ( n / ( cur_stride * height ) ) );
+        }
+        break;
+      case 1:
+        std::fill( orgBuf.begin(), orgBuf.end(), 2046 );
+        std::fill( curBuf.begin(), curBuf.end(), 0 );
+        break;
+      default:
+        std::fill( orgBuf.begin(), orgBuf.end(), -1023 );
+        std::fill( curBuf.begin(), curBuf.end(), 1023 );
+        break;
+    }
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.org.stride = org_stride;
+    dtParam.cur.buf = curBuf.data();
+    dtParam.cur.stride = cur_stride;
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.bitDepth = 10;
+    dtParam.subShift = rng.get( 0, 1 );
+
+    const Pel* const firstRef = curBuf.data();
+    const int blockSize = cur_stride * height;
+    const Pel* const refs[4] = { firstRef, firstRef + blockSize, firstRef + 2 * blockSize, firstRef + 3 * blockSize };
+    Distortion sads[4], sadsWithThreshold[4];
+    sadFourPositions( dtParam, refs, sads );
+    // just below one position's SAD, so that position must not lose its place because another one is above already
+    dtParam.maximumDistortionForEarlyExit = sads[rng.get( 0, 3 )];
+    dtParam.maximumDistortionForEarlyExit -= dtParam.maximumDistortionForEarlyExit > 0 ? 1 : 0;
+    sadFourPositions( dtParam, refs, sadsWithThreshold );
+    const Distortion threshold = dtParam.maximumDistortionForEarlyExit;
+    dtParam.maximumDistortionForEarlyExit = MAX_DISTORTION;
+    for( int k = 0; k < 4; k++ )
+    {
+      dtParam.cur.buf = refs[k];
+      const Distortion full = ref->m_afpDistortFunc[0][DF_SAD + log2Width]( dtParam );
+      passed = compare_value( sstm.str(), full, sads[k] ) && passed;
+      passed = compare_value( sstm.str() + " above maximumDistortionForEarlyExit", full > threshold, sadsWithThreshold[k] > threshold ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool check_SSE( RdCost* ref, RdCost* opt, unsigned num_cases, int width, int height )
 {
   std::ostringstream sstm;
@@ -3646,6 +3725,7 @@ static bool test_RdCost()
     {
       passed = check_fixWeightedSSE( &ref, &opt, num_cases, w, h ) && passed;
       passed = check_SAD( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_SADFourPositions( &ref, &opt, num_cases, w, h ) && passed;
 
       if( w >= 2 )
       {

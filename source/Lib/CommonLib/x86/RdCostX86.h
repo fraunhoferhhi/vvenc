@@ -635,6 +635,131 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
   return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth);
 }
 
+#ifdef USE_AVX2
+// The SADs of four reference positions, for the full search and the TZ search: the same values as four calls of
+// xGetSAD_NxN_SIMD. One call per position would load each original row four times and sum
+// across the vector four times; here both happen once. From width 64 on it stops early like that kernel, once all four
+// sums are above maximumDistortionForEarlyExit: the callers only compare the results with that threshold.
+// An absolute difference is below 2^11 (10-bit samples, and the doubled original minus the other prediction in
+// bi-prediction search), so 16 of them added in one element stay below 2^15, the limit of madd's signed input.
+
+static inline void xStoreFourSads( const __m128i sums, const DistParam& rcDtParam, Distortion* sads )
+{
+  uint32_t values[4];
+  _mm_storeu_si128( ( __m128i* ) values, sums );
+  for( int k = 0; k < 4; k++ )
+  {
+    sads[k] = ( values[k] << rcDtParam.subShift ) >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+  }
+}
+
+static inline __m256i xAddAbsDiff_AVX2( const __m256i sum16, const __m256i orgRow, const short* ref )
+{
+  return _mm256_add_epi16( sum16, _mm256_abs_epi16( _mm256_sub_epi16( orgRow, _mm256_loadu_si256( ( const __m256i* ) ref ) ) ) );
+}
+
+static inline __m128i xAddAbsDiff_SSE( const __m128i sum16, const __m128i orgRow, const short* ref )
+{
+  return _mm_add_epi16( sum16, _mm_abs_epi16( _mm_sub_epi16( orgRow, _mm_loadu_si128( ( const __m128i* ) ref ) ) ) );
+}
+
+// widths 16 and up
+template<int iWidth>
+static void xGetFourSads_AVX2( const DistParam& rcDtParam, const Pel* const* refs, Distortion* sads )
+{
+  const short* org       = ( const short* ) rcDtParam.org.buf;
+  const short* ref0 = refs[0], *ref1 = refs[1], *ref2 = refs[2], *ref3 = refs[3];
+  const int    rows      = rcDtParam.org.height;
+  const int    rowStep   = 1 << rcDtParam.subShift;
+  const int    orgStride = rcDtParam.org.stride * rowStep;
+  const int    refStride = rcDtParam.cur.stride * rowStep;
+  const int    rowsPerWidening = 16 * 16 / iWidth;   // each row adds iWidth / 16 differences to one element
+  const __m256i one = _mm256_set1_epi16( 1 );
+
+  // two horizontal adds leave the sum of each position's lane in element k of both lanes
+  const auto storeSums = [&]( const __m256i s0, const __m256i s1, const __m256i s2, const __m256i s3 )
+  {
+    const __m256i sums = _mm256_hadd_epi32( _mm256_hadd_epi32( s0, s1 ), _mm256_hadd_epi32( s2, s3 ) );
+    xStoreFourSads( _mm_add_epi32( _mm256_castsi256_si128( sums ), _mm256_extracti128_si256( sums, 1 ) ), rcDtParam, sads );
+  };
+
+  int blocksUntilCheck = 8 / rowsPerWidening;
+  __m256i sum32_0 = _mm256_setzero_si256(), sum32_1 = sum32_0, sum32_2 = sum32_0, sum32_3 = sum32_0;
+  for( int y = 0; y < rows; )
+  {
+    const int yEnd = std::min( rows, y + rowsPerWidening * rowStep );
+    __m256i sum16_0 = _mm256_setzero_si256(), sum16_1 = sum16_0, sum16_2 = sum16_0, sum16_3 = sum16_0;
+    for( ; y < yEnd; y += rowStep )
+    {
+      for( int x = 0; x < iWidth; x += 16 )
+      {
+        const __m256i orgRow = _mm256_loadu_si256( ( const __m256i* ) ( org + x ) );
+        sum16_0 = xAddAbsDiff_AVX2( sum16_0, orgRow, ref0 + x );
+        sum16_1 = xAddAbsDiff_AVX2( sum16_1, orgRow, ref1 + x );
+        sum16_2 = xAddAbsDiff_AVX2( sum16_2, orgRow, ref2 + x );
+        sum16_3 = xAddAbsDiff_AVX2( sum16_3, orgRow, ref3 + x );
+      }
+      org += orgStride;
+      ref0 += refStride;
+      ref1 += refStride;
+      ref2 += refStride;
+      ref3 += refStride;
+    }
+    sum32_0 = _mm256_add_epi32( sum32_0, _mm256_madd_epi16( sum16_0, one ) );
+    sum32_1 = _mm256_add_epi32( sum32_1, _mm256_madd_epi16( sum16_1, one ) );
+    sum32_2 = _mm256_add_epi32( sum32_2, _mm256_madd_epi16( sum16_2, one ) );
+    sum32_3 = _mm256_add_epi32( sum32_3, _mm256_madd_epi16( sum16_3, one ) );
+
+    if( iWidth >= 64 && --blocksUntilCheck == 0 && y < rows )
+    {
+      blocksUntilCheck = 8 / rowsPerWidening;
+      storeSums( sum32_0, sum32_1, sum32_2, sum32_3 );
+      if( std::min( std::min( sads[0], sads[1] ), std::min( sads[2], sads[3] ) ) > rcDtParam.maximumDistortionForEarlyExit )
+      {
+        return;   // all four lose whatever the remaining rows add, and the caller only compares
+      }
+    }
+  }
+  storeSums( sum32_0, sum32_1, sum32_2, sum32_3 );
+}
+
+static void xGetFourSads8_AVX2( const DistParam& rcDtParam, const Pel* const* refs, Distortion* sads )
+{
+  const short* org       = ( const short* ) rcDtParam.org.buf;
+  const short* ref0 = refs[0], *ref1 = refs[1], *ref2 = refs[2], *ref3 = refs[3];
+  const int    rows      = rcDtParam.org.height;
+  const int    rowStep   = 1 << rcDtParam.subShift;
+  const int    orgStride = rcDtParam.org.stride * rowStep;
+  const int    refStride = rcDtParam.cur.stride * rowStep;
+  const __m128i one = _mm_set1_epi16( 1 );
+
+  __m128i sum32_0 = _mm_setzero_si128(), sum32_1 = sum32_0, sum32_2 = sum32_0, sum32_3 = sum32_0;
+  for( int y = 0; y < rows; )
+  {
+    const int yEnd = std::min( rows, y + 16 * rowStep );
+    __m128i sum16_0 = _mm_setzero_si128(), sum16_1 = sum16_0, sum16_2 = sum16_0, sum16_3 = sum16_0;
+    for( ; y < yEnd; y += rowStep )
+    {
+      const __m128i orgRow = _mm_loadu_si128( ( const __m128i* ) org );
+      sum16_0 = xAddAbsDiff_SSE( sum16_0, orgRow, ref0 );
+      sum16_1 = xAddAbsDiff_SSE( sum16_1, orgRow, ref1 );
+      sum16_2 = xAddAbsDiff_SSE( sum16_2, orgRow, ref2 );
+      sum16_3 = xAddAbsDiff_SSE( sum16_3, orgRow, ref3 );
+      org += orgStride;
+      ref0 += refStride;
+      ref1 += refStride;
+      ref2 += refStride;
+      ref3 += refStride;
+    }
+    sum32_0 = _mm_add_epi32( sum32_0, _mm_madd_epi16( sum16_0, one ) );
+    sum32_1 = _mm_add_epi32( sum32_1, _mm_madd_epi16( sum16_1, one ) );
+    sum32_2 = _mm_add_epi32( sum32_2, _mm_madd_epi16( sum16_2, one ) );
+    sum32_3 = _mm_add_epi32( sum32_3, _mm_madd_epi16( sum16_3, one ) );
+  }
+  xStoreFourSads( _mm_hadd_epi32( _mm_hadd_epi32( sum32_0, sum32_1 ), _mm_hadd_epi32( sum32_2, sum32_3 ) ), rcDtParam, sads );
+}
+#endif // USE_AVX2
+
 static uint32_t xCalcHAD4x4_SSE( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur )
 {
   __m128i r0 = ( sizeof( Torg ) > 1 ) ? ( _vv_loadl_epi64( ( const __m128i* )&piOrg[0] ) ) : ( _mm_unpacklo_epi8( _mm_cvtsi32_si128( *(const int*)&piOrg[0] ), _mm_setzero_si128() ) );
@@ -3238,6 +3363,17 @@ void RdCost::_initRdCostX86()
 
   m_afpDistortFuncX5[0] = xGetSADX5_8xN_SIMD <vext>;
   m_afpDistortFuncX5[1] = xGetSADX5_16xN_SIMD_X86<vext>;
+
+#ifdef USE_AVX2
+  if( vext >= AVX2 )
+  {
+    m_afpSadFourPositions[3] = xGetFourSads8_AVX2;
+    m_afpSadFourPositions[4] = xGetFourSads_AVX2<16>;
+    m_afpSadFourPositions[5] = xGetFourSads_AVX2<32>;
+    m_afpSadFourPositions[6] = xGetFourSads_AVX2<64>;
+    m_afpSadFourPositions[7] = xGetFourSads_AVX2<128>;
+  }
+#endif
 }
 
 template void RdCost::_initRdCostX86<SIMDX86>();
