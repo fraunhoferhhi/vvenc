@@ -2017,11 +2017,11 @@ Distortion InterSearch::xGetTemplateCost( const CodingUnit& cu,
   clipMv( cMvCand, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
 
   // prediction pattern
-  xPredInterBlk( COMP_Y, cu, picRef, cMvCand, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false);
+  const CPelUnitBuf pred = xPredLumaReadOnly( cu, picRef, cMvCand, predBuf );
 
   // calc distortion
 
-  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_SAD);
+  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), pred.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_SAD);
   uiCost += m_pcRdCost->getCost( m_auiMVPIdxCost[iMVPIdx][iMVPNum] );
 
   return uiCost;
@@ -2806,24 +2806,34 @@ void InterSearch::xPatternSearchFracDIF(
 
 }
 
-// The luma prediction of the symmetric MVD search for an already clipped MV. At an integer MV the prediction is a plain
-// copy of the reference block (xPredInterBlk: filterHor with fraction 0 and isLast), and the SMVD cost only reads it,
-// so the reference picture is read in place instead. Not with IFP and a fast inter search mode below 2: there the
-// affine bi-prediction search can skip its first prediction (an MV outside the IFP lines) and then read a prediction
-// buffer it did not write, so the buffer has to hold what this function would have written into it.
+// The luma prediction of the symmetric MVD search for an already clipped MV. Not read in place with IFP and a fast inter
+// search mode below 2: there the affine bi-prediction search can skip its first prediction (an MV outside the IFP lines)
+// and then read a prediction buffer it did not write, so the buffer has to hold what this function would have written.
 CPelUnitBuf InterSearch::xPredSymLuma( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
 {
-  static constexpr int FRAC_MASK = ( 1 << MV_FRACTIONAL_BITS_INTERNAL ) - 1;
-  const bool integerMv            = ( mv.hor & FRAC_MASK ) == 0 && ( mv.ver & FRAC_MASK ) == 0;
   const bool bufferMayBeReadLater = m_pcEncCfg->m_ifpLines && m_pcEncCfg->m_fastInterSearchMode < VVENC_FASTINTERSEARCH_MODE2;
-  if( integerMv && !bufferMayBeReadLater )
+  if( bufferMayBeReadLater )
+  {
+    xPredInterBlk( COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false );
+    return predBuf;
+  }
+  return xPredLumaReadOnly( cu, refPic, mv, predBuf );
+}
+
+// A luma prediction for an already clipped MV that the caller only reads. At an integer MV the prediction is a plain copy
+// of the reference block (xPredInterBlk: filterHor with fraction 0 and isLast), so the reference picture is read in place.
+CPelUnitBuf InterSearch::xPredLumaReadOnly( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
+{
+  static constexpr int FRAC_MASK = ( 1 << MV_FRACTIONAL_BITS_INTERNAL ) - 1;
+  const bool integerMv = ( mv.hor & FRAC_MASK ) == 0 && ( mv.ver & FRAC_MASK ) == 0;
+  if( integerMv )
   {
     // the block xPredInterBlk would copy: the CU's position moved by the integer MV, in the picture's own stride
     const int  stride = refPic->getRecoBufStride( COMP_Y );
     const Pel* ref    = refPic->getRecoBufPtr( COMP_Y ) + cu.lumaPos().x + ( mv.hor >> MV_FRACTIONAL_BITS_INTERNAL )
                         + ( cu.lumaPos().y + ( mv.ver >> MV_FRACTIONAL_BITS_INTERNAL ) ) * stride;
     CHECKD( m_ifpLines && cu.cs->picture != refPic && !CU::isMvInRangeFPP( cu.lumaPos().y, cu.lumaSize().height, mv.ver, m_ifpLines, *cu.cs->pcv ),
-            "xPredSymLuma: CTU line-wise FPP MV restriction failed!\n" );   // as xPredInterBlk checks it
+            "xPredLumaReadOnly: CTU line-wise FPP MV restriction failed!\n" );   // as xPredInterBlk checks it
     return CPelUnitBuf( cu.chromaFormat, CPelBuf( ref, stride, cu.lumaSize() ) );
   }
   xPredInterBlk( COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false );
