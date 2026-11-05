@@ -120,8 +120,7 @@ struct BlockSatd
 
   int operator()( const Pel* org, ptrdiff_t orgStride, const Pel* pred, ptrdiff_t predStride ) const
   {
-    const DistParam dp( CPelBuf( org, ( int ) orgStride, size, size ), CPelBuf( pred, ( int ) predStride, size, size ),
-                        func, bitDepth, 0, COMP_Y );
+    const DistParam dp( org, ( int ) orgStride, pred, ( int ) predStride, size, size, func, bitDepth, 0, COMP_Y );
     return ( int ) func( dp );
   }
 };

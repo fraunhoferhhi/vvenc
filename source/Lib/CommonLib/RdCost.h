@@ -107,18 +107,16 @@ public:
 
   DistParam() = default;
 
-  DistParam( const CPelBuf& _org, const CPelBuf& _cur,  FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
+  // org and cur have the same size and the kernels only read org's, so cur's width and height stay 0
+  DistParam( const Pel* _org, int _orgStride, const Pel* _cur, int _curStride, int _width, int _height, FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
     : distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
   {
-    // field by field: the callers have usually just built these buffers, and a wider load can't take narrower stores' data
-    org.buf    = _org.buf;
-    org.stride = _org.stride;
-    org.width  = _org.width;
-    org.height = _org.height;
-    cur.buf    = _cur.buf;
-    cur.stride = _cur.stride;
-    cur.width  = _cur.width;
-    cur.height = _cur.height;
+    org.buf    = _org;
+    org.stride = _orgStride;
+    org.width  = _width;
+    org.height = _height;
+    cur.buf    = _cur;
+    cur.stride = _curStride;
   }
 };
 
