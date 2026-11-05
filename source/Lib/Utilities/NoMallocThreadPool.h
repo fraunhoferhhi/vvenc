@@ -393,7 +393,7 @@ public:
   // For tests: how long the idle thread that looks for work busy-waits before it sleeps, and how long it sleeps at
   // most before it looks again (safety net).
   NoMallocThreadPool( int numThreads, const char *threadPoolName, const VVEncCfg* encCfg,
-                      std::chrono::microseconds idleBusyWait, std::chrono::milliseconds safetyWait );
+                      std::chrono::microseconds idleBusyWait, std::chrono::milliseconds safetyWakeInterval );
   ~NoMallocThreadPool();
 
   bool addBarrierTask( bool             ( *func )( int, void* ),
@@ -463,7 +463,7 @@ public:
           t.counter    = counter;
           t.barriers   = std::move( barriers );
           t.state      = WAITING;
-          xWakeIdleThread();
+          wakeIdleThread();
 
 #if ADD_TASK_THREAD_SAFE
           l.lock();
@@ -484,9 +484,9 @@ public:
   bool processTasksOnMainThread();
 
   // For a task that makes other tasks ready before it returns: lets a sleeping idle thread look for them.
-  void signalProgress() { xWakeIdleThread(); }
-  // Wake-ups caught by the safety net: lost ones, or ones delayed longer than the safety wait by preemption of the
-  // producer. 0 in the unit test, whose safety wait is long.
+  void signalProgress() { wakeIdleThread(); }
+  // Wake-ups caught by the safety net: lost ones, or ones delayed longer than the safety interval by preemption of the
+  // producer. 0 in the unit test, whose interval is long.
   unsigned numWakeUpsMissed() const { return m_wakeUpsMissed.load( std::memory_order_relaxed ); }
 
   void shutdown( bool block );
@@ -531,23 +531,23 @@ private:
   using TaskIterator = ChunkedTaskQueue::Iterator;
 
   // members
-  std::string              m_poolName;
-  std::atomic_bool         m_exitThreads{ false };
-  std::vector<ThreadImpl>  m_threads;
-  ChunkedTaskQueue         m_tasks;
-  TaskIterator             m_nextFillSlot = m_tasks.begin();
+  std::string               m_poolName;
+  std::atomic_bool          m_exitThreads{ false };
+  std::vector<ThreadImpl>   m_threads;
+  ChunkedTaskQueue          m_tasks;
+  TaskIterator              m_nextFillSlot = m_tasks.begin();
 #if ADD_TASK_THREAD_SAFE
-  std::mutex               m_nextFillSlotMutex;
+  std::mutex                m_nextFillSlotMutex;
 #endif
-  std::mutex               m_idleMutex;             // owned by the idle thread that looks for work
+  std::mutex                m_idleMutex;             // owned by the idle thread that looks for work
   std::chrono::microseconds m_idleBusyWait;          // how long that thread busy-waits before it sleeps
-  std::chrono::milliseconds m_safetyWait;            // how long it sleeps at most before it looks again
-  std::mutex               m_sleepMutex;
-  std::condition_variable  m_sleepCond;
-  std::atomic_bool         m_idleThreadSleeps{ false };
-  std::atomic_uint         m_wakeUpsMissed{ 0 };     // safety-net timeouts after which work was found
+  std::chrono::milliseconds m_safetyWakeInterval;    // how long it sleeps at most before it looks again
+  std::mutex                m_sleepMutex;
+  std::condition_variable   m_sleepCond;
+  std::atomic_bool          m_idleThreadSleeps{ false };
+  std::atomic_uint          m_wakeUpsMissed{ 0 };    // safety-net timeouts after which work was found
 #if ENABLE_VALGRIND_CODE
-  std::mutex               m_extraMutex;
+  std::mutex                m_extraMutex;
 #endif
 #if ENABLE_TIME_PROFILING_MT_MODE
   std::vector< TProfiler* > profilers;
@@ -556,8 +556,8 @@ private:
   // internal functions
   void         threadProc  ( int threadId, const VVEncCfg& encCfg );
   TaskIterator findNextTask( int threadId, TaskIterator startSearch, bool* rescheduled = nullptr );
-  TaskIterator xWaitForTask( int threadId, TaskIterator startSearch );
-  void         xWakeIdleThread();
+  TaskIterator waitForTask ( int threadId, TaskIterator startSearch );
+  void         wakeIdleThread();
   bool         processTask ( int threadId, Slot& task );
 };
 

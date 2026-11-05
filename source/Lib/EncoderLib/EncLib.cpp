@@ -318,6 +318,12 @@ void EncLib::xUninitLib()
   if( m_threadPool )
   {
     m_threadPool->shutdown( true );
+    // A task that makes other tasks ready mid-run without signalProgress() shows up here instead of only as a slowdown.
+    // Not always an error: a wake-up delayed past the safety interval by preemption of the producer counts as well.
+    if( m_threadPool->numWakeUpsMissed() != 0 )
+    {
+      msg.log( VVENC_INFO, "Thread pool: %u wake-ups caught by the safety interval\n", m_threadPool->numWakeUpsMissed() );
+    }
   }
 
   // sub modules
