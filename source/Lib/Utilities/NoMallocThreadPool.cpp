@@ -63,7 +63,15 @@ thread_local std::unique_ptr<TProfiler> ptls;
 #endif
 
 NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName, const VVEncCfg* encCfg )
+  : NoMallocThreadPool( numThreads, threadPoolName, encCfg, BUSY_WAIT_TIME, std::chrono::milliseconds( 50 ) )
+{
+}
+
+NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName, const VVEncCfg* encCfg,
+                                        std::chrono::microseconds idleBusyWait, std::chrono::milliseconds safetyWakeInterval )
   : m_poolName( threadPoolName )
+  , m_idleBusyWait( idleBusyWait )
+  , m_safetyWakeInterval( safetyWakeInterval )
 {
   if( numThreads < 0 )
   {
@@ -79,6 +87,7 @@ NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolN
 NoMallocThreadPool::~NoMallocThreadPool()
 {
   m_exitThreads = true;
+  wakeIdleThread();
 
   waitForThreads();
 }
@@ -125,6 +134,7 @@ bool NoMallocThreadPool::processTasksOnMainThread()
 void NoMallocThreadPool::shutdown( bool block )
 {
   m_exitThreads = true;
+  wakeIdleThread();
   if( block )
   {
     waitForThreads();
@@ -161,52 +171,104 @@ void NoMallocThreadPool::threadProc( int threadId, const VVEncCfg& encCfg )
   auto nextTaskIt = m_tasks.begin();
   while( !m_exitThreads )
   {
-    auto taskIt = findNextTask( threadId, nextTaskIt );
+    bool rescheduled = false;
+    auto taskIt      = findNextTask( threadId, nextTaskIt, &rescheduled );
+    if( rescheduled )
+    {
+      // a slot this thread held for its ready check was invisible to the idle thread's last scan
+      wakeIdleThread();
+    }
     if( !taskIt.isValid() )
     {
-      std::unique_lock<std::mutex> l( m_idleMutex, std::defer_lock );
-
-      ITT_TASKSTART( itt_domain_thrd, itt_handle_TPspinWait );
-      m_waitingThreads.fetch_add( 1, std::memory_order_relaxed );
-      const auto startWait = std::chrono::steady_clock::now();
-      while( !m_exitThreads )
-      {
-        taskIt = findNextTask( threadId, nextTaskIt );
-        if( taskIt.isValid() || m_exitThreads )
-        {
-          break;
-        }
-
-        if( !l.owns_lock()
-            && m_waitingThreads.load( std::memory_order_relaxed ) > 1
-            && ( BUSY_WAIT_TIME.count() == 0 || std::chrono::steady_clock::now() - startWait > BUSY_WAIT_TIME )
-            && !m_exitThreads )
-        {
-          ITT_TASKSTART(itt_domain_thrd, itt_handle_TPblocked);
-          l.lock();
-          ITT_TASKEND(itt_domain_thrd, itt_handle_TPblocked);
-        }
-        else
-        {
-          std::this_thread::yield();
-        }
-      }
-      m_waitingThreads.fetch_sub( 1, std::memory_order_relaxed );
-      ITT_TASKEND( itt_domain_thrd, itt_handle_TPspinWait );
+      taskIt = waitForTask( threadId, nextTaskIt );
     }
-    if( m_exitThreads )
+    if( m_exitThreads || !taskIt.isValid() )
     {
       return;
     }
 
     processTask( threadId, *taskIt );
+    // a task that ran, finished or not, may have made other tasks ready
+    wakeIdleThread();
 
     nextTaskIt = taskIt;
     nextTaskIt.incWrap();
   }
 }
 
-NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId, TaskIterator startSearch )
+// Called when a scan found nothing to run. One idle thread at a time looks for work: the owner of m_idleMutex; the
+// others wait for the mutex. The owner busy-waits m_idleBusyWait (while the pool is busy, tasks become ready within
+// microseconds), then sleeps until a task is added, runs or makes progress (wakeIdleThread), so the CPU stays free
+// while the encoder waits, e.g. for input.
+NoMallocThreadPool::TaskIterator NoMallocThreadPool::waitForTask( int threadId, TaskIterator startSearch )
+{
+  ITT_TASKSTART( itt_domain_thrd, itt_handle_TPblocked );
+  std::unique_lock<std::mutex> idleLock( m_idleMutex );
+  ITT_TASKEND( itt_domain_thrd, itt_handle_TPblocked );
+
+  ITT_TASKSTART( itt_domain_thrd, itt_handle_TPspinWait );
+  TaskIterator taskIt;
+  bool afterTimeout = false;
+  auto sleepAt      = std::chrono::steady_clock::now() + m_idleBusyWait;
+  while( !m_exitThreads )
+  {
+    taskIt = findNextTask( threadId, startSearch );
+    if( taskIt.isValid() )
+    {
+      if( afterTimeout )
+      {
+        m_wakeUpsMissed.fetch_add( 1, std::memory_order_relaxed );
+      }
+      break;
+    }
+    afterTimeout = false;
+    if( std::chrono::steady_clock::now() < sleepAt )
+    {
+      std::this_thread::yield();
+      continue;
+    }
+
+    // Sleep. The flag is set before the last scan and producers check it after publishing their change, both behind
+    // a full fence: either the scan sees the change or the producer sees the flag, so no wake-up is lost.
+    m_idleThreadSleeps.store( true );
+    std::atomic_thread_fence( std::memory_order_seq_cst );
+    taskIt = findNextTask( threadId, startSearch );
+    if( taskIt.isValid() || m_exitThreads )
+    {
+      m_idleThreadSleeps.store( false );   // a notify that may still come finds no sleeper, which is harmless
+      break;
+    }
+    {
+      std::unique_lock<std::mutex> sleepLock( m_sleepMutex );
+      // safety net: look again at least every m_safetyWakeInterval (50 ms)
+      const bool woken = m_sleepCond.wait_for( sleepLock, m_safetyWakeInterval, [this] { return !m_idleThreadSleeps.load() || m_exitThreads; } );
+      // false from the exchange: a producer took the flag just now, so it did not miss this sleep
+      afterTimeout = !woken && m_idleThreadSleeps.exchange( false );
+    }
+    sleepAt = std::chrono::steady_clock::now() + m_idleBusyWait;
+  }
+  ITT_TASKEND( itt_domain_thrd, itt_handle_TPspinWait );
+  return taskIt;   // unlocking m_idleMutex lets the next waiting thread look for work
+}
+
+// After a change that can make a task ready: wake the idle thread if it sleeps (one fence and one load otherwise).
+void NoMallocThreadPool::wakeIdleThread()
+{
+  std::atomic_thread_fence( std::memory_order_seq_cst );
+  if( m_idleThreadSleeps.load( std::memory_order_relaxed ) && m_idleThreadSleeps.exchange( false ) )
+  {
+    {
+      // Empty on purpose. The sleeper checks the flag while it holds this mutex and gives the mutex up only inside
+      // wait_for. So once this thread had the mutex, the sleeper either finds the flag cleared and does not wait, or
+      // it is inside wait_for already and gets the notify. No wake-up is lost, and it need not wait for this mutex
+      // when it wakes up, as it would if the notify came under the lock.
+      std::lock_guard<std::mutex> sleepLock( m_sleepMutex );
+    }
+    m_sleepCond.notify_one();
+  }
+}
+
+NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId, TaskIterator startSearch, bool* rescheduled )
 {
   if( !startSearch.isValid() )
   {
@@ -231,6 +293,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
         {
           // reschedule
           t.state.store( WAITING );
+          if( rescheduled ) *rescheduled = true;
           continue;
         }
         t.barriers.clear();   // clear barriers, so we don't need to check them on the next try (we assume they won't get locked again)
@@ -239,6 +302,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
       {
         // reschedule
         t.state.store( WAITING );
+        if( rescheduled ) *rescheduled = true;
         continue;
       }
 

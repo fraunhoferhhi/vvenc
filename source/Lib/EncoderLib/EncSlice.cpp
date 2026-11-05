@@ -1307,6 +1307,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_recon );
         processStates[ctuRsAddr] = CCALF_GET_STATISTICS;
+        // neighbours waiting for this state may run now, while this task goes on with the next stage
+        if( encSlice->m_threadPool )
+        {
+          encSlice->m_threadPool->signalProgress();
+        }
       }
       // dont break, no additional deps, can continue straigt away!
       //break;
@@ -1452,6 +1457,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           return true;
         }
         processStates[ctuRsAddr] = FINISH_SLICE;
+        // the last row may make other pictures' CTU tasks ready, while this task goes on to finish the slice
+        if( encSlice->m_threadPool )
+        {
+          encSlice->m_threadPool->signalProgress();
+        }
       }
 
     case FINISH_SLICE:

@@ -7069,6 +7069,8 @@ static bool test_RefreshMarking()
   return passed;
 }
 
+bool test_ThreadPool();   // test_ThreadPool.cpp
+
 struct UnitTestEntry
 {
   std::string name;
@@ -7124,6 +7126,7 @@ static const UnitTestEntry test_suites[] = {
     { "CuTree", test_CuTree },
 #endif
     { "CuTreeRefs", test_CuTreeRefs },
+    { "ThreadPool", test_ThreadPool },
     { "RefreshMarking", test_RefreshMarking },
 };
 
