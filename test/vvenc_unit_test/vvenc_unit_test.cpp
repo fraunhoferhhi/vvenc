@@ -4500,7 +4500,7 @@ static bool check_SAOcalcSaoStatisticsEo0( SampleAdaptiveOffset* ref, SampleAdap
     const int orgStride = width + orgStrideExtra;
     // extra row keeps the final row-pointer increment within the allocation
     std::vector<Pel> srcBlk( srcStride * ( MAX_CU_SIZE + 1 ) );
-    std::vector<Pel> orgBlk( orgStride * MAX_CU_SIZE );
+    std::vector<Pel> orgBlk( orgStride * ( MAX_CU_SIZE + 1 ) );
 
     for( unsigned endY : { 1u, 2u, (unsigned)( MAX_CU_SIZE / 2 ), (unsigned)MAX_CU_SIZE } )
     {
@@ -4674,12 +4674,14 @@ static bool check_SAOcalcSaoStatisticsEo135( SampleAdaptiveOffset* ref, SampleAd
             signUpLineOpt[x] = v;
           }
 
-          // pass bin-2 pointers, matching getBlkStats
-          std::vector<int64_t> countRefBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> diffRefBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> countOptBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> diffOptBase( NUM_SAO_EO_CLASSES, 0 );
+          // seeded non-zero so a kernel that overwrites instead of accumulating onto the caller's
+          // first-row totals (the real contract) would diverge from the reference, not just match it
+          const std::vector<int64_t> countSeed{ 10, 20, 30, 40, 50 };
+          const std::vector<int64_t> diffSeed{ 101, -202, 303, -404, 505 };
+          std::vector<int64_t> countRefBase = countSeed, diffRefBase = diffSeed;
+          std::vector<int64_t> countOptBase = countSeed, diffOptBase = diffSeed;
 
+          // pass bin-2 pointers, matching getBlkStats
           ref->calcSaoStatisticsEo135( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
                                         countRefBase.data() + 2, diffRefBase.data() + 2, signUpLineRef.data(),
                                         signDownLineRef.data() );
@@ -4747,10 +4749,12 @@ static bool check_SAOcalcSaoStatisticsEo45( SampleAdaptiveOffset* ref, SampleAda
             signUpLineOptBase[x + 1] = v;
           }
 
-          std::vector<int64_t> countRefBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> diffRefBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> countOptBase( NUM_SAO_EO_CLASSES, 0 );
-          std::vector<int64_t> diffOptBase( NUM_SAO_EO_CLASSES, 0 );
+          // seeded non-zero so a kernel that overwrites instead of accumulating onto the caller's
+          // first-row totals (the real contract) would diverge from the reference, not just match it
+          const std::vector<int64_t> countSeed{ 10, 20, 30, 40, 50 };
+          const std::vector<int64_t> diffSeed{ 101, -202, 303, -404, 505 };
+          std::vector<int64_t> countRefBase = countSeed, diffRefBase = diffSeed;
+          std::vector<int64_t> countOptBase = countSeed, diffOptBase = diffSeed;
 
           ref->calcSaoStatisticsEo45( width, startX, endX, endY, srcPtr, orgBlk.data(), srcStride, orgStride,
                                        countRefBase.data() + 2, diffRefBase.data() + 2, signUpLineRefBase.data() + 1 );
