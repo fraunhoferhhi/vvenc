@@ -96,11 +96,13 @@ void calcSaoStatisticsBo_neon( int width, int endX, int endY, Pel* srcLine, Pel*
   }
 }
 
-static inline int16x8_t sgn_s16( const int16x8_t v )
+// sign(a - b) without materializing the subtraction
+static inline int16x8_t sign_s16( const int16x8_t a, const int16x8_t b )
 {
-  const int16x8_t isPos = vreinterpretq_s16_u16( vcgtq_s16( v, vdupq_n_s16( 0 ) ) );
-  const int16x8_t isNeg = vreinterpretq_s16_u16( vcltq_s16( v, vdupq_n_s16( 0 ) ) );
-  return vsubq_s16( isNeg, isPos );
+  // vcgtq_s16 returns all-ones (-1) on true, so the difference needs this order to land on +1/-1
+  const int16x8_t isGreater = vreinterpretq_s16_u16( vcgtq_s16( a, b ) );
+  const int16x8_t isLess    = vreinterpretq_s16_u16( vcgtq_s16( b, a ) );
+  return vsubq_s16( isLess, isGreater );
 }
 
 // right-edge exclusion mask for 0..8 samples
@@ -119,10 +121,10 @@ void calcSaoStatisticsEo0_neon( int width, int startX, int endX, int endY, Pel* 
 
     for( int y = 0; y < endY; y++ )
     {
-      int signLeft = sgn( *srcLine - *( srcLine - 1 ) );
+      int signLeft = sgn( srcLine[0] - srcLine[-1] );
       for( int x = 0; x < width - naWidth; x++, srcLine++, orgLine++ )
       {
-        int signRight = sgn( *srcLine - *( srcLine + 1 ) );
+        int signRight = sgn( srcLine[0] - srcLine[1] );
         int type      = signLeft + signRight;
         signLeft      = -signRight;
         diff[type]  += *orgLine - *srcLine;
@@ -151,17 +153,20 @@ void calcSaoStatisticsEo0_neon( int width, int startX, int endX, int endY, Pel* 
 
     for( int x = 0; x < width; x += 16 )
     {
-      const int16x8_t vmaskLast = ( x >= width - 16 ) ? vrightMask : vdupq_n_s16( 0 );
+      const int16x8_t vmaskLast = x >= width - 16 ? vrightMask : vdupq_n_s16( 0 );
 
       const int16x8_t vcurA = vld1q_s16( srcLine + x );
       const int16x8_t vcurB = vld1q_s16( srcLine + x + 8 );
       const int16x8_t vorgA = vld1q_s16( orgLine + x );
       const int16x8_t vorgB = vld1q_s16( orgLine + x + 8 );
 
-      int16x8_t vtypeA = vaddq_s16( sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x - 1 ) ) ),
-                                    sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x + 1 ) ) ) );
-      int16x8_t vtypeB = vaddq_s16( sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 - 1 ) ) ),
-                                    sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 + 1 ) ) ) );
+      const int16x8_t vleftA  = vld1q_s16( srcLine + x - 1 );
+      const int16x8_t vrightA = vld1q_s16( srcLine + x + 1 );
+      const int16x8_t vleftB  = vld1q_s16( srcLine + x + 8 - 1 );
+      const int16x8_t vrightB = vld1q_s16( srcLine + x + 8 + 1 );
+
+      int16x8_t vtypeA = vaddq_s16( sign_s16( vcurA, vleftA ), sign_s16( vcurA, vrightA ) );
+      int16x8_t vtypeB = vaddq_s16( sign_s16( vcurB, vleftB ), sign_s16( vcurB, vrightB ) );
       vtypeA = vorrq_s16( vaddq_s16( vtypeA, vdupq_n_s16( 2 ) ), vmaskFirst );
       vtypeB = vorrq_s16( vaddq_s16( vtypeB, vdupq_n_s16( 2 ) ), vmaskLast );
 
@@ -177,8 +182,9 @@ void calcSaoStatisticsEo0_neon( int width, int startX, int endX, int endY, Pel* 
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpA ), vdiffA ) );
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpB ), vdiffB ) );
 
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpA, 15 ) ) );
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpB, 15 ) ) );
+        // vcmpA/B are all-ones (-1) on a match, so this sum is the negated count; negate once at the end
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpA ) );
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpB ) );
       }
 
       vmaskFirst = vdupq_n_s16( 0 );
@@ -191,7 +197,7 @@ void calcSaoStatisticsEo0_neon( int width, int startX, int endX, int endY, Pel* 
   for( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
   {
     diff[i]  = horizontal_add_s32x4( vdiffSum[i] );
-    count[i] = horizontal_add_s32x4( vcountSum[i] );
+    count[i] = -horizontal_add_s32x4( vcountSum[i] );
   }
 }
 
@@ -235,8 +241,8 @@ void calcSaoStatisticsEo90_neon( int width, int endX, int startY, int endY, Pel*
     const Pel* srcLineAbove = srcLine - srcStride;
     for( int x = 0; x < width; x += 16 )
     {
-      vsignAboveA[x / 16] = sgn_s16( vsubq_s16( vld1q_s16( srcLineAbove + x ), vld1q_s16( srcLine + x ) ) );
-      vsignAboveB[x / 16] = sgn_s16( vsubq_s16( vld1q_s16( srcLineAbove + x + 8 ), vld1q_s16( srcLine + x + 8 ) ) );
+      vsignAboveA[x / 16] = sign_s16( vld1q_s16( srcLineAbove + x ), vld1q_s16( srcLine + x ) );
+      vsignAboveB[x / 16] = sign_s16( vld1q_s16( srcLineAbove + x + 8 ), vld1q_s16( srcLine + x + 8 ) );
     }
   }
 
@@ -252,15 +258,15 @@ void calcSaoStatisticsEo90_neon( int width, int endX, int startY, int endY, Pel*
   {
     for( int x = 0; x < width; x += 16 )
     {
-      const int16x8_t vmaskLast = ( x >= width - 16 ) ? vrightMask : vdupq_n_s16( 0 );
+      const int16x8_t vmaskLast = x >= width - 16 ? vrightMask : vdupq_n_s16( 0 );
 
       const int16x8_t vcurA = vld1q_s16( srcLine + x );
       const int16x8_t vcurB = vld1q_s16( srcLine + x + 8 );
       const int16x8_t vorgA = vld1q_s16( orgLine + x );
       const int16x8_t vorgB = vld1q_s16( orgLine + x + 8 );
 
-      const int16x8_t vsignDownA = sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x + srcStride ) ) );
-      const int16x8_t vsignDownB = sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 + srcStride ) ) );
+      const int16x8_t vsignDownA = sign_s16( vcurA, vld1q_s16( srcLine + x + srcStride ) );
+      const int16x8_t vsignDownB = sign_s16( vcurB, vld1q_s16( srcLine + x + 8 + srcStride ) );
 
       int16x8_t vtypeA = vaddq_s16( vsubq_s16( vsignDownA, vsignAboveA[x / 16] ), vdupq_n_s16( 2 ) );
       int16x8_t vtypeB = vorrq_s16( vaddq_s16( vsubq_s16( vsignDownB, vsignAboveB[x / 16] ), vdupq_n_s16( 2 ) ),
@@ -281,8 +287,9 @@ void calcSaoStatisticsEo90_neon( int width, int endX, int startY, int endY, Pel*
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpA ), vdiffA ) );
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpB ), vdiffB ) );
 
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpA, 15 ) ) );
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpB, 15 ) ) );
+        // vcmpA/B are all-ones (-1) on a match, so this sum is the negated count; negate once at the end
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpA ) );
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpB ) );
       }
     }
 
@@ -293,7 +300,7 @@ void calcSaoStatisticsEo90_neon( int width, int endX, int startY, int endY, Pel*
   for( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
   {
     diff[i]  = horizontal_add_s32x4( vdiffSum[i] );
-    count[i] = horizontal_add_s32x4( vcountSum[i] );
+    count[i] = -horizontal_add_s32x4( vcountSum[i] );
   }
 }
 
@@ -343,7 +350,7 @@ void calcSaoStatisticsEo135_neon( int width, int startX, int endX, int endY, Pel
 
     for( int x = 0; x < width; x += 16 )
     {
-      const int16x8_t vmaskLast = ( x >= width - 16 ) ? vrightMask : vdupq_n_s16( 0 );
+      const int16x8_t vmaskLast = x >= width - 16 ? vrightMask : vdupq_n_s16( 0 );
 
       const int16x8_t vcurA = vld1q_s16( srcLine + x );
       const int16x8_t vcurB = vld1q_s16( srcLine + x + 8 );
@@ -351,10 +358,13 @@ void calcSaoStatisticsEo135_neon( int width, int startX, int endX, int endY, Pel
       const int16x8_t vorgB = vld1q_s16( orgLine + x + 8 );
 
       // type = sign(cur - aboveLeft) + sign(cur - belowRight) + 2
-      int16x8_t vtypeA = vaddq_s16( sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x - 1 - srcStride ) ) ),
-                                     sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x + 1 + srcStride ) ) ) );
-      int16x8_t vtypeB = vaddq_s16( sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 - 1 - srcStride ) ) ),
-                                     sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 + 1 + srcStride ) ) ) );
+      const int16x8_t vaboveLeftA  = vld1q_s16( srcLine + x - 1 - srcStride );
+      const int16x8_t vbelowRightA = vld1q_s16( srcLine + x + 1 + srcStride );
+      const int16x8_t vaboveLeftB  = vld1q_s16( srcLine + x + 8 - 1 - srcStride );
+      const int16x8_t vbelowRightB = vld1q_s16( srcLine + x + 8 + 1 + srcStride );
+
+      int16x8_t vtypeA = vaddq_s16( sign_s16( vcurA, vaboveLeftA ), sign_s16( vcurA, vbelowRightA ) );
+      int16x8_t vtypeB = vaddq_s16( sign_s16( vcurB, vaboveLeftB ), sign_s16( vcurB, vbelowRightB ) );
       vtypeA = vorrq_s16( vaddq_s16( vtypeA, vdupq_n_s16( 2 ) ), vmaskFirst );
       vtypeB = vorrq_s16( vaddq_s16( vtypeB, vdupq_n_s16( 2 ) ), vmaskLast );
 
@@ -370,8 +380,9 @@ void calcSaoStatisticsEo135_neon( int width, int startX, int endX, int endY, Pel
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpA ), vdiffA ) );
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpB ), vdiffB ) );
 
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpA, 15 ) ) );
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpB, 15 ) ) );
+        // vcmpA/B are all-ones (-1) on a match, so this sum is the negated count; negate once at the end
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpA ) );
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpB ) );
       }
 
       vmaskFirst = vdupq_n_s16( 0 );
@@ -384,7 +395,7 @@ void calcSaoStatisticsEo135_neon( int width, int startX, int endX, int endY, Pel
   for( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
   {
     diff[i]  += horizontal_add_s32x4( vdiffSum[i] );
-    count[i] += horizontal_add_s32x4( vcountSum[i] );
+    count[i] -= horizontal_add_s32x4( vcountSum[i] );
   }
 }
 
@@ -432,7 +443,7 @@ void calcSaoStatisticsEo45_neon( int width, int startX, int endX, int endY, Pel*
 
     for( int x = 0; x < width; x += 16 )
     {
-      const int16x8_t vmaskLast = ( x >= width - 16 ) ? vrightMask : vdupq_n_s16( 0 );
+      const int16x8_t vmaskLast = x >= width - 16 ? vrightMask : vdupq_n_s16( 0 );
 
       const int16x8_t vcurA = vld1q_s16( srcLine + x );
       const int16x8_t vcurB = vld1q_s16( srcLine + x + 8 );
@@ -440,10 +451,13 @@ void calcSaoStatisticsEo45_neon( int width, int startX, int endX, int endY, Pel*
       const int16x8_t vorgB = vld1q_s16( orgLine + x + 8 );
 
       // type = sign(cur - aboveRight) + sign(cur - belowLeft) + 2
-      int16x8_t vtypeA = vaddq_s16( sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x - srcStride + 1 ) ) ),
-                                     sgn_s16( vsubq_s16( vcurA, vld1q_s16( srcLine + x + srcStride - 1 ) ) ) );
-      int16x8_t vtypeB = vaddq_s16( sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 - srcStride + 1 ) ) ),
-                                     sgn_s16( vsubq_s16( vcurB, vld1q_s16( srcLine + x + 8 + srcStride - 1 ) ) ) );
+      const int16x8_t vaboveRightA = vld1q_s16( srcLine + x - srcStride + 1 );
+      const int16x8_t vbelowLeftA  = vld1q_s16( srcLine + x + srcStride - 1 );
+      const int16x8_t vaboveRightB = vld1q_s16( srcLine + x + 8 - srcStride + 1 );
+      const int16x8_t vbelowLeftB  = vld1q_s16( srcLine + x + 8 + srcStride - 1 );
+
+      int16x8_t vtypeA = vaddq_s16( sign_s16( vcurA, vaboveRightA ), sign_s16( vcurA, vbelowLeftA ) );
+      int16x8_t vtypeB = vaddq_s16( sign_s16( vcurB, vaboveRightB ), sign_s16( vcurB, vbelowLeftB ) );
       vtypeA = vorrq_s16( vaddq_s16( vtypeA, vdupq_n_s16( 2 ) ), vmaskFirst );
       vtypeB = vorrq_s16( vaddq_s16( vtypeB, vdupq_n_s16( 2 ) ), vmaskLast );
 
@@ -459,8 +473,9 @@ void calcSaoStatisticsEo45_neon( int width, int startX, int endX, int endY, Pel*
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpA ), vdiffA ) );
         vdiffSum[i] = vpadalq_s16( vdiffSum[i], vandq_s16( vreinterpretq_s16_u16( vcmpB ), vdiffB ) );
 
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpA, 15 ) ) );
-        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vshrq_n_u16( vcmpB, 15 ) ) );
+        // vcmpA/B are all-ones (-1) on a match, so this sum is the negated count; negate once at the end
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpA ) );
+        vcountSum[i] = vpadalq_s16( vcountSum[i], vreinterpretq_s16_u16( vcmpB ) );
       }
 
       vmaskFirst = vdupq_n_s16( 0 );
@@ -473,7 +488,7 @@ void calcSaoStatisticsEo45_neon( int width, int startX, int endX, int endY, Pel*
   for( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
   {
     diff[i]  += horizontal_add_s32x4( vdiffSum[i] );
-    count[i] += horizontal_add_s32x4( vcountSum[i] );
+    count[i] -= horizontal_add_s32x4( vcountSum[i] );
   }
 }
 
