@@ -260,7 +260,8 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
     m_tmpPredStorage[i].create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
   }
   m_tmpStorageLCU.create( UnitArea( cform, Area( 0, 0, ctuSize, ctuSize ) ) );
-  m_pTempPel = new Pel[ctuSize * ctuSize];
+  // The zero residual of the distortion checks: nothing writes to it, so clearing it here is enough.
+  m_pTempPel = new Pel[ctuSize * ctuSize]();
   m_tmpAffiStorage.create(UnitArea(cform, Area(0, 0, ctuSize, ctuSize + 2)));  // allow overread by 2 samples
   m_tmpAffiError = new Pel[ctuSize * ctuSize];
   m_tmpAffiDeri[0] = new Pel[ctuSize * ctuSize];
@@ -3658,8 +3659,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
     m_CABACEstimator->resetBits();
 
-    memset(m_pTempPel, 0, sizeof(Pel) * tu.Y().area()); // not necessary needed for inside of recursion (only at the beginning)
-
     for (uint32_t i = 0; i < numTBlocks; i++)
     {
       minCost[i] = MAX_DOUBLE;
@@ -3836,7 +3835,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           // copy component
           if (isFirstMode && ((nonCoeffCost < currCompCost) || (currAbsSum == 0))) // check for forced null
           {
-            tu.getCoeffs( compID ).fill( 0 );
+            // The coefficients are not cleared: with a zero cbf nothing reads them.
             csFull->getResiBuf( compArea ).fill( 0 );
             tu.cbf[compID]   = 0;
 

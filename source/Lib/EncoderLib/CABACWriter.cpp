@@ -2259,7 +2259,7 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   bool signHiding  = cu.cs->slice->signDataHidingEnabled;
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, signHiding, false, m_tplBuf );
+  CoeffCodingContext  cctx    ( tu, compID, signHiding, false, m_tplBuf, tu.lastPos[compID] );
   const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
 
   // determine and set last coeff position and sig group flags
