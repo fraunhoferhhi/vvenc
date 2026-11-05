@@ -730,6 +730,25 @@ namespace DQIntern
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
   }
 
+  void Quantizer::initQuantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo )
+  {
+    CHECKD( tu.mtsIdx[compID] == MTS_SKIP, "the memo does not cover transform skip" );
+
+    const int       qpDQ = cQP.Qp( false ) + 1;
+    const CompArea& area = tu.blocks[compID];
+    QuantBlockMemo::Entry& kept = memo.entry[toChannelType( compID )][Log2( area.width ) + Log2( area.height )];
+    if( kept.qpDQ == qpDQ && kept.lambda == lambda )
+    {
+      static_cast<QuantBlockParams&>( *this ) = kept.params;
+      return;
+    }
+    initQuantBlock( tu, compID, cQP, lambda );
+    m_thresDefault = TCoeff( m_thresLast / ( TCoeff( m_QScale ) << 2 ) );
+    kept.qpDQ      = qpDQ;
+    kept.lambda    = lambda;
+    kept.params    = *this;
+  }
+
   void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef) const
   {
 
@@ -1290,7 +1309,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   
   //===== reset / pre-init =====
   const TUParameters& tuPars  = *m_scansRom->getTUPars( tu.blocks[compID], compID );
-  m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
+  m_quant.initQuantBlock    ( tu, compID, cQP, lambda, m_quantBlockMemo );
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
   const int     numCoeff    = tu.blocks[compID].area();
@@ -1342,9 +1361,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   }
   else
   {
-    const TCoeff defaultTh = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
-
-    m_findFirstPos( firstTestPos, tCoeff, tuPars, defaultTh, zeroOutforThres, zeroOutWidth, zeroOutHeight );
+    m_findFirstPos( firstTestPos, tCoeff, tuPars, m_quant.m_thresDefault, zeroOutforThres, zeroOutWidth, zeroOutHeight );
   }
 
   if( firstTestPos < 0 )
@@ -1682,6 +1699,7 @@ void DepQuant::init( int rdoq, bool useRDOQTS, int thrVal )
 {
   QuantRDOQ2::init( rdoq, useRDOQTS, thrVal );
   m_quant.init( thrVal );
+  m_quantBlockMemo = DQIntern::QuantBlockMemo();   // the threshold value is part of what it keeps
 }
 
 } // namespace vvenc

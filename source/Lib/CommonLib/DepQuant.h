@@ -250,11 +250,45 @@ namespace DQIntern
     int64_t deltaDist;
   };
 
-  class Quantizer
+  // What Quantizer::initQuantBlock works out for a block.
+  struct QuantBlockParams
+  {
+    // quantization
+    int               m_QShift;
+    int64_t           m_QAdd;
+    int64_t           m_QScale;
+    TCoeff            m_maxQIdx;
+    TCoeff            m_thresLast;
+    TCoeff            m_thresSSbb;
+    TCoeff            m_thresDefault;   // the threshold on absolute coefficients without scaling lists
+    // distortion normalization
+    int               m_DistShift;
+    int64_t           m_DistAdd;
+    int64_t           m_DistStepAdd;
+    int64_t           m_DistOrgFact;
+  };
+
+  // The memo of Quantizer::initQuantBlock with no gValue. With the transform skip path excluded, the result depends
+  // only on the channel type, the block size, QP and lambda, and on values fixed for the sequence, and those four rarely
+  // change from one block of a size to the next. Log2( width ) + Log2( height ) is enough for the size: it gives the transform
+  // shift and whether the sqrt(2) adjustment applies.
+  struct QuantBlockMemo
+  {
+    struct Entry
+    {
+      double           lambda = 0;
+      int              qpDQ   = std::numeric_limits<int>::min();
+      QuantBlockParams params;
+    };
+    Entry entry[ MAX_NUM_CH ][ 2 * 6 + 1 ];
+  };
+
+  class Quantizer : public QuantBlockParams
   {
   public:
     Quantizer() {}
     void   init            ( int dqThrVal ) { m_DqThrVal = dqThrVal; }
+    void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo );
     void   dequantBlock    ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef ) const;
     void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue = -1 );
     bool   preQuantCoeff   ( const TCoeff absCoeff, PQData *pqData, int quanCoeff ) const;
@@ -263,19 +297,7 @@ namespace DQIntern
 
     int64_t getQScale      () const { return m_QScale; }
 
-    // quantization
     int               m_DqThrVal;
-    int               m_QShift;
-    int64_t           m_QAdd;
-    int64_t           m_QScale;
-    TCoeff            m_maxQIdx;
-    TCoeff            m_thresLast;
-    TCoeff            m_thresSSbb;
-    // distortion normalization
-    int               m_DistShift;
-    int64_t           m_DistAdd;
-    int64_t           m_DistStepAdd;
-    int64_t           m_DistOrgFact;
   };
 
 #define RICEMAX 32
@@ -432,6 +454,7 @@ private:
   DQIntern::StateMem  m_state_curr;
   DQIntern::StateMem  m_state_skip;
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
+  DQIntern::QuantBlockMemo m_quantBlockMemo;
 
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
