@@ -4395,6 +4395,54 @@ static bool check_copyClipScalarTail( PelBufferOps* ref, unsigned num_cases )
   return true;
 }
 
+static bool check_geoSads( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::geoPrefixSums, geoRunSads\n" );
+  DimensionGenerator rng;
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+
+  std::vector<uint32_t> prefixRef( GEO_PREFIX_LANES * ( GEO_MAX_CU_SIZE + 1 ) * GEO_MAX_CU_SIZE ), prefixOpt( prefixRef.size() );
+  std::vector<Pel> org( GEO_MAX_CU_SIZE * GEO_MAX_CU_SIZE ), preds( GEO_PREFIX_LANES * GEO_MAX_CU_SIZE * GEO_MAX_CU_SIZE );
+
+  bool passed = true;
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int width  = 8 << rng.get( 0, 3 );
+    const int height = 8 << rng.get( 0, 3 );
+    std::generate( org.begin(), org.end(), g10 );
+    std::generate( preds.begin(), preds.end(), g10 );
+    const Pel* lanes[GEO_PREFIX_LANES];
+    for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+    {
+      lanes[lane] = preds.data() + lane * GEO_MAX_CU_SIZE * GEO_MAX_CU_SIZE;
+    }
+    // every lane may be unused: such lanes are left out of the comparison
+    bool laneUsed[GEO_PREFIX_LANES];
+    for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+    {
+      laneUsed[lane] = rng.get( 0, 3 ) != 0;
+    }
+    ref->geoPrefixSums( org.data(), GEO_MAX_CU_SIZE, lanes, GEO_MAX_CU_SIZE, width, height, laneUsed, prefixRef.data() );
+    opt->geoPrefixSums( org.data(), GEO_MAX_CU_SIZE, lanes, GEO_MAX_CU_SIZE, width, height, laneUsed, prefixOpt.data() );
+
+    uint8_t runStart[GEO_MAX_CU_SIZE], runEnd[GEO_MAX_CU_SIZE];
+    for( int y = 0; y < height; y++ )
+    {
+      const int a = rng.get( 0, width ), b = rng.get( 0, width );
+      runStart[y] = ( uint8_t ) std::min( a, b );
+      runEnd[y]   = ( uint8_t ) std::max( a, b );
+    }
+    uint32_t sadRef[GEO_PREFIX_LANES], sadOpt[GEO_PREFIX_LANES];
+    ref->geoRunSads( prefixRef.data(), runStart, runEnd, width, height, laneUsed, sadRef );
+    opt->geoRunSads( prefixOpt.data(), runStart, runEnd, width, height, laneUsed, sadOpt );
+    for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+    {
+      passed = ( !laneUsed[lane] || compare_value( "PelBufferOps::geoRunSads", sadRef[lane], sadOpt[lane] ) ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool test_PelBufferOps()
 {
   PelBufferOps ref;
@@ -4415,6 +4463,7 @@ static bool test_PelBufferOps()
 
   passed = check_addAvg( &ref, &opt, num_cases ) && passed;
   passed = check_reco( &ref, &opt, num_cases ) && passed;
+  passed = check_geoSads( &ref, &opt, num_cases ) && passed;
   passed = check_copyClip( &ref, &opt, num_cases ) && passed;
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;

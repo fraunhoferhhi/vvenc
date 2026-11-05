@@ -705,12 +705,57 @@ static uint32_t sumAbsDeviationCore( const Pel* src, const ptrdiff_t stride, con
   return sum;
 }
 
+// One candidate after the other: the prefix sums of lane l start at prefix + l * ( width + 1 ) * height.
+static void geoPrefixSumsCore( const Pel* org, int orgStride, const Pel* const* pred, int predStride, int width, int height, const bool* laneUsed, uint32_t* prefix )
+{
+  for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+  {
+    if( !laneUsed[lane] )
+    {
+      continue;
+    }
+    uint32_t* out = prefix + lane * ( width + 1 ) * height;
+    for( int y = 0; y < height; y++ )
+    {
+      const Pel* o = org + y * orgStride;
+      const Pel* p = pred[lane] + y * predStride;
+      uint32_t sum = 0;
+      *out++ = 0;
+      for( int x = 0; x < width; x++ )
+      {
+        sum += abs( o[x] - p[x] );
+        *out++ = sum;
+      }
+    }
+  }
+}
+
+static void geoRunSadsCore( const uint32_t* prefix, const uint8_t* runStart, const uint8_t* runEnd, int width, int height, const bool* laneUsed, uint32_t* sad )
+{
+  for( int lane = 0; lane < GEO_PREFIX_LANES; lane++, prefix += ( width + 1 ) * height )
+  {
+    if( !laneUsed[lane] )
+    {
+      continue;
+    }
+    const uint32_t* row = prefix;
+    uint32_t sum = 0;
+    for( int y = 0; y < height; y++, row += width + 1 )
+    {
+      sum += row[runEnd[y]] - row[runStart[y]];
+    }
+    sad[lane] = sum;
+  }
+}
+
 PelBufferOps::PelBufferOps()
 {
   addAvg            = addAvgCore<Pel>;
   reco              = recoCore<Pel>;
   copyClip          = copyClipCore<Pel>;
   roundGeo          = roundGeoCore<Pel>;
+  geoPrefixSums     = geoPrefixSumsCore;
+  geoRunSads        = geoRunSadsCore;
 
   addAvg4           = addAvgCore<Pel>;
   addAvg8           = addAvgCore<Pel>;

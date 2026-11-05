@@ -355,7 +355,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
 void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, RateCtrl* pRateCtrl, TrQuant* otherTrQuant )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
-  m_geoRowPrefix.resize( MRG_MAX_NUM_CANDS * ( GEO_MAX_CU_SIZE + 1 ) * GEO_MAX_CU_SIZE );
+  m_geoRowPrefix.resize( GEO_PREFIX_LANES * ( GEO_MAX_CU_SIZE + 1 ) * GEO_MAX_CU_SIZE );
   m_cRdCost.create     ();
   m_cRdCost.setCostMode( encCfg.m_costMode );
   if ( encCfg.m_lumaLevelToDeltaQPEnabled == 1 )
@@ -2704,23 +2704,6 @@ static const GeoSadMaskRuns& geoSadMaskRuns()
   return runs;
 }
 
-// Per row, the prefix sums of |org - pred|: prefix[y * ( width + 1 ) + x] is the sum over the row's first x samples.
-static void geoRowPrefixSums( const CPelBuf& org, const CPelBuf& pred, uint32_t* prefix )
-{
-  for( int y = 0; y < (int) org.height; y++ )
-  {
-    const Pel* o = org.bufAt( 0, y );
-    const Pel* p = pred.bufAt( 0, y );
-    uint32_t   sum = 0;
-    *prefix++ = 0;
-    for( int x = 0; x < (int) org.width; x++ )
-    {
-      sum += abs( o[x] - p[x] );
-      *prefix++ = sum;
-    }
-  }
-}
-
 bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &localUnitArea, double sqrtLambdaForFirstPass,
                                  GeoComboCostList& comboList, MergeBufVector& geoBuffer, CodingUnit& pu )
 {
@@ -2804,7 +2787,6 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
 
     distParamWholeBlk.cur  = geoTempBuf[mergeCand].Y();
     sadWholeBlk[mergeCand] = distParamWholeBlk.distFunc( distParamWholeBlk );
-    geoRowPrefixSums( pu.cs->getOrgBuf().Y(), geoTempBuf[mergeCand].Y(), m_geoRowPrefix.data() + mergeCand * ( pu.lwidth() + 1 ) * pu.lheight() );
 
     if( sadWholeBlk[mergeCand] < bestWholeBlkSad )
     {
@@ -2832,12 +2814,27 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
   const uint32_t distShift      = DISTORTION_PRECISION_ADJUSTMENT( pu.cs->sps->bitDepths[CH_L] );
   const GeoSadMaskRuns& maskRuns = geoSadMaskRuns();
 
+  // One lane per candidate. Lanes without a prediction use the original: their sums are never used.
+  static_assert( MRG_MAX_NUM_CANDS <= GEO_PREFIX_LANES, "every merge candidate needs a lane" );
+  const CPelBuf orgLuma = pu.cs->getOrgBuf().Y();
+  const Pel* lanePred[GEO_PREFIX_LANES];
+  bool       laneUsed[GEO_PREFIX_LANES];
+  for( int lane = 0; lane < GEO_PREFIX_LANES; lane++ )
+  {
+    laneUsed[lane] = lane < maxNumMergeCandidates && !sameMV[lane];
+    lanePred[lane] = laneUsed[lane] ? geoTempBuf[lane].Y().buf : orgLuma.buf;
+  }
+  g_pelBufOP.geoPrefixSums( orgLuma.buf, orgLuma.stride, lanePred, width, width, height, laneUsed, m_geoRowPrefix.data() );
+
   for( int splitDir = 0; splitDir < GEO_NUM_PARTITION_MODE; )
   {
     // The masked SAD of the larger part (xGetSADwMask's sum with subShift 0): the mask is one side of a straight line,
     // so in every row its samples are one run, and the sum over it is one difference of the row's prefix sums.
     const uint8_t* runStart = maskRuns.start[hIdx][wIdx][splitDir];
     const uint8_t* runEnd   = maskRuns.end  [hIdx][wIdx][splitDir];
+
+    uint32_t sadLargeOfLane[GEO_PREFIX_LANES];
+    g_pelBufOP.geoRunSads( m_geoRowPrefix.data(), runStart, runEnd, width, height, laneUsed, sadLargeOfLane );
 
     for( uint8_t mergeCand = 0; mergeCand < maxNumMergeCandidates; mergeCand++ )
     {
@@ -2846,13 +2843,7 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
         continue;
       }
 
-      const uint32_t* prefix = m_geoRowPrefix.data() + mergeCand * ( width + 1 ) * height;
-      Distortion sadLarge = 0;
-      for( int y = 0; y < height; y++, prefix += width + 1 )
-      {
-        sadLarge += prefix[runEnd[y]] - prefix[runStart[y]];
-      }
-      sadLarge >>= distShift;
+      const Distortion sadLarge = sadLargeOfLane[mergeCand] >> distShift;
       const Distortion sadSmall = sadWholeBlk[mergeCand] - sadLarge;
 
       const int bitsCand        = mergeCand + 1;

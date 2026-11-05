@@ -473,6 +473,7 @@ static constexpr int GEO_MIN_CU_LOG2 =                                  3;
 static constexpr int GEO_MAX_CU_LOG2 =                                  6;
 static constexpr int GEO_MIN_CU_SIZE =               1 << GEO_MIN_CU_LOG2;
 static constexpr int GEO_MAX_CU_SIZE =               1 << GEO_MAX_CU_LOG2;
+static constexpr int GEO_PREFIX_LANES =              8; ///< candidates in one vector of GEO's row prefix sums, see PelBufferOps::geoPrefixSums
 static constexpr int GEO_NUM_CU_SIZE = ( GEO_MAX_CU_LOG2 - GEO_MIN_CU_LOG2 ) + 1;
 static constexpr int GEO_NUM_PARTITION_MODE =                          64;
 static constexpr int GEO_NUM_ANGLES =                                  32;

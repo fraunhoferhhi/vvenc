@@ -94,6 +94,12 @@ struct PelBufferOps
 
   void ( *roundGeo )      ( const Pel* src, Pel* dest, const int numSamples, unsigned rshift, int offset, const ClpRng &clpRng);
   void ( *addAvg )        ( const Pel* src0, const Pel* src1, Pel* dst, int numsamples, unsigned shift, int offset, const ClpRng& clpRng );
+  // GEO: per row, the prefix sums of |org - pred| of GEO_PREFIX_LANES candidates into prefix, and from them the sums over
+  // one run per row. The layout of prefix is private to each pair of functions; it holds GEO_PREFIX_LANES * ( width + 1 )
+  // * height values. Lanes that laneUsed marks as unused may be left out, and their sums are undefined; their pred must
+  // still be readable.
+  void ( *geoPrefixSums ) ( const Pel* org, int orgStride, const Pel* const* pred, int predStride, int width, int height, const bool* laneUsed, uint32_t* prefix );
+  void ( *geoRunSads )    ( const uint32_t* prefix, const uint8_t* runStart, const uint8_t* runEnd, int width, int height, const bool* laneUsed, uint32_t* sad );
   void ( *reco  )         ( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, const ClpRng& clpRng );
   void ( *copyClip )      ( const Pel* src0,                  Pel* dst, int numSamples, const ClpRng& clpRng );
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
