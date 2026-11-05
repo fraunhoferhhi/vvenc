@@ -1275,7 +1275,7 @@ uint64_t IntraSearch::xGetIntraFracBitsQTChroma(const TransformUnit& currTU, con
   return fracBits;
 }
 
-void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig, PelUnitBuf *predBuf, const bool loadTr)
+void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig, PelUnitBuf *predBuf, const bool loadTr, const QpParam* lumaQP)
 {
   if (!tu.blocks[compID].valid())
   {
@@ -1362,7 +1362,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   //--- init rate estimation arrays for RDOQ ---
   //--- transform and quantization           ---
   TCoeff uiAbsSum = 0;
-  const QpParam cQP(tu, compID);
 
   m_pcTrQuant->selectLambda(compID);
 
@@ -1380,6 +1379,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
   if( isLuma(compID) )
   {
+    const QpParam cQP = lumaQP ? *lumaQP : QpParam( tu, compID );
     m_pcTrQuant->transformNxN(tu, compID, cQP, uiAbsSum, m_CABACEstimator->getCtx(), loadTr);
 
     DTRACE( g_trace_ctx, D_TU_ABS_SUM, "%d: comp=%d, abssum=%d\n", DTRACE_GET_COUNTER( g_trace_ctx, D_TU_ABS_SUM ), compID, uiAbsSum );
@@ -1625,6 +1625,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     }
 
     bool NStopMTS = true;
+    const QpParam lumaQP( tu, COMP_Y );   // the CU's QP doesn't change in these loops
 
     for (int modeId = 0; modeId <= EndMTS && NStopMTS; modeId++)
     {
@@ -1707,7 +1708,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
         {
           bool TrLoad = (EndMTS && !m_pcEncCfg->m_LFNST) || (tsAllowed && !mtsAllowed && (lfnstIdx == 0)) ? true : false;
 
-          xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad);
+          xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad, &lumaQP);
 
           cuCtx.mtsLastScanPos = false;
           //----- determine rate and r-d cost -----

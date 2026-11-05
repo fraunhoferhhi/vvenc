@@ -3935,7 +3935,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             tu.mtsIdx[codeCompId] = trModes[modeId].first;
           }
           tu.mtsIdx[otherCompId] = MTS_DCT2_DCT2;
-          const QpParam cQP(tu, COMP_Cb);  // note: uses tu.transformSkip[compID]
           m_pcTrQuant->selectLambda(COMP_Cb);
 
           // Lambda is loosened for the joint mode with respect to single modes as the same residual is used for both chroma blocks
