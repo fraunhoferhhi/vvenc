@@ -3574,6 +3574,29 @@ static bool check_HADs( RdCost* ref, RdCost* opt, unsigned num_cases, int width,
     Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
     passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
   }
+
+  // Constant residuals put everything into the DC coefficient, whose value can pass 16 bits while all others are 0.
+  // These lie on both sides of the values where that coefficient leaves 16 bits in the later butterfly stages.
+  for( const int residual : { 511, -511, 512, -512, 1023, -1023, 1024, -1024 } )
+  {
+    std::vector<Pel> orgBuf( width * height, Pel( std::max( residual, 0 ) ) );
+    std::vector<Pel> curBuf( width * height, Pel( std::max( -residual, 0 ) ) );
+
+    DistParam dtParam;
+    dtParam.org.buf = orgBuf.data();
+    dtParam.org.stride = width;
+    dtParam.cur.buf = curBuf.data();
+    dtParam.cur.stride = width;
+    dtParam.org.width = width;
+    dtParam.org.height = height;
+    dtParam.bitDepth = 10;
+    dtParam.applyWeight = 0;
+
+    const int index = ( fast ? DF_HAD_fast : DF_HAD ) + ( generic ? 0 : log2( width ) );
+    Distortion sum_ref = ref->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
+    Distortion sum_opt = opt->m_afpDistortFunc[0][( DFunc )( index )]( dtParam );
+    passed = compare_value( sstm.str(), sum_ref, sum_opt ) && passed;
+  }
   return passed;
 }
 
