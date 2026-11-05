@@ -2573,6 +2573,7 @@ void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* c
   unsigned  signPattern   =  0;
   int       remRegBins    = cctx.remRegBins;
   int       firstPosMode2 = minSubPos - 1;
+  unsigned  absLevelsOr   = 0;
 
   for( ; nextSigPos >= minSubPos && remRegBins >= 4; nextSigPos-- )
   {
@@ -2598,6 +2599,7 @@ void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* c
       firstNZPos  = nextSigPos;
       lastNZPos   = std::max<int>( lastNZPos, nextSigPos );
       int absLevel= abs( Coeff );
+      absLevelsOr |= absLevel;
       remAbsLevel = absLevel - 1;
 
       if( nextSigPos != cctx.scanPosLast() ) signPattern <<= 1;
@@ -2632,17 +2634,21 @@ void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* c
 
 
   //===== 2nd PASS: Go-rice codes =====
-  for( int scanPos = firstSigPos; scanPos > firstPosMode2; scanPos-- )
+  // only a level of 4 or more has bins here, and most subblocks have none
+  if( absLevelsOr >= 4 )
   {
-    unsigned absLevel = abs( coeff[cctx.blockPos( scanPos )] );
-
-    if( absLevel >= 4 )
+    for( int scanPos = firstSigPos; scanPos > firstPosMode2; scanPos-- )
     {
-      int      sumAll   = cctx.templateAbsSum( scanPos, coeff, 4 );
-      unsigned ricePar  = g_auiGoRiceParsCoeff[sumAll];
-      unsigned rem      = ( absLevel - 4 ) >> 1;
-      binCoder.encodeRemAbsEP( rem, ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
-      DTRACE( g_trace_ctx, D_SYNTAX_RESI, "rem_val() bin=%d ctx=%d\n", rem, ricePar );
+      unsigned absLevel = abs( coeff[cctx.blockPos( scanPos )] );
+
+      if( absLevel >= 4 )
+      {
+        int      sumAll   = cctx.templateAbsSum( scanPos, coeff, 4 );
+        unsigned ricePar  = g_auiGoRiceParsCoeff[sumAll];
+        unsigned rem      = ( absLevel - 4 ) >> 1;
+        binCoder.encodeRemAbsEP( rem, ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
+        DTRACE( g_trace_ctx, D_SYNTAX_RESI, "rem_val() bin=%d ctx=%d\n", rem, ricePar );
+      }
     }
   }
 
