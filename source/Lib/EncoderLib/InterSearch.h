@@ -611,8 +611,8 @@ private:
   uint32_t    xCalcAffineMVBits       ( CodingUnit& cu, Mv mvCand[3], Mv mvPred[3]);
 
   Distortion  xGetSymCost             ( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField , int BcwIdx );
-  CPelUnitBuf xPredSymLuma            ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
-  CPelUnitBuf xPredLumaReadOnly       ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
+  CPelBuf     xPredSymLuma            ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
+  CPelBuf     xPredLumaReadOnly       ( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf );
   Distortion  xSymRefineMvSearch      ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
                                         MvField& rCurMvField, MvField& rTarMvField, Distortion uiMinCost, int searchPattern, int nSearchStepShift, uint32_t uiMaxSearchRounds, int BcwIdx );
   void        xSymMotionEstimation    ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, MvField& rTarMvField, Distortion& ruiCost, int BcwIdx );

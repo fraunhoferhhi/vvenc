@@ -789,7 +789,7 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
 
-  CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
+  CPelUnitBuf subRecoBuf = static_cast<const CodingStructure&>( subStruct ).getRecoBuf( clippedArea ); // const overload: no conversion from PelUnitBuf
 
   if( parent )
   {

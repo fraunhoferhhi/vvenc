@@ -774,12 +774,17 @@ struct UnitBuf
   bool valid          () const { return bufs.size() != 0; }
 
   void fill                 ( const T& val );
-  void copyFrom             ( const UnitBuf<const T> &other, const bool luma = true, const bool chroma = true );
+  // the sources are templates so that a UnitBuf<T> needs no conversion to a UnitBuf<const T> temporary
+  template<typename U>
+  void copyFrom             ( const UnitBuf<U> &other, const bool luma = true, const bool chroma = true );
   void reconstruct          ( const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs );
-  void copyClip             ( const UnitBuf<const T> &src, const ClpRngs& clpRngs, const bool lumaOnly = false, const bool chromaOnly = false );
+  template<typename U>
+  void copyClip             ( const UnitBuf<U> &src, const ClpRngs& clpRngs, const bool lumaOnly = false, const bool chromaOnly = false );
   void subtract             ( const UnitBuf<const T>& minuend, const UnitBuf<const T>& subtrahend );
-  void addAvg               ( const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const bool chromaOnly = false, const bool lumaOnly = false);
-  void addWeightedAvg       ( const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx = BCW_DEFAULT, const bool chromaOnly = false, const bool lumaOnly = false);
+  template<typename U, typename V>
+  void addAvg               ( const UnitBuf<U>& other1, const UnitBuf<V>& other2, const ClpRngs& clpRngs, const bool chromaOnly = false, const bool lumaOnly = false);
+  template<typename U, typename V>
+  void addWeightedAvg       ( const UnitBuf<U>& other1, const UnitBuf<V>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx = BCW_DEFAULT, const bool chromaOnly = false, const bool lumaOnly = false);
   void padBorderPel         ( unsigned margin, int dir );
   void extendBorderPel      ( unsigned margin, bool scale = false);
   void extendBorderPelTop   ( int x, int size, int margin );
@@ -787,7 +792,8 @@ struct UnitBuf
   void extendBorderPelLft   ( int y, int size, int margin );
   void extendBorderPelRgt   ( int y, int size, int margin );
 
-  void removeHighFreq       ( const UnitBuf<const T>& org, const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs);
+  template<typename U, typename V>
+  void removeHighFreq       ( const UnitBuf<U>& org, const UnitBuf<V>& other, const bool bClip, const ClpRngs& clpRngs);
 
         UnitBuf<      T> subBuf (const UnitArea& subArea);
   const UnitBuf<const T> subBuf (const UnitArea& subArea) const;
@@ -810,7 +816,8 @@ void UnitBuf<T>::fill( const T &val )
 
 
 template<typename T>
-void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other, const bool luma, const bool chroma)
+template<typename U>
+void UnitBuf<T>::copyFrom(const UnitBuf<U> &other, const bool luma, const bool chroma)
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
   CHECK( !luma && !chroma, "At least one channel has to be selected" );
@@ -838,7 +845,8 @@ void UnitBuf<T>::subtract( const UnitBuf<const T>& minuend, const UnitBuf<const 
 }
 
 template<typename T>
-void UnitBuf<T>::copyClip(const UnitBuf<const T> &src, const ClpRngs &clpRngs, const bool lumaOnly, const bool chromaOnly)
+template<typename U>
+void UnitBuf<T>::copyClip(const UnitBuf<U> &src, const ClpRngs &clpRngs, const bool lumaOnly, const bool chromaOnly)
 {
   CHECK( chromaFormat != src.chromaFormat, "Incompatible formats" );
 
@@ -864,7 +872,8 @@ void UnitBuf<T>::reconstruct(const UnitBuf<const T>& pred, const UnitBuf<const T
 }
 
 template<typename T>
-void UnitBuf<T>::addAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
+template<typename U, typename V>
+void UnitBuf<T>::addAvg(const UnitBuf<U>& other1, const UnitBuf<V>& other2, const ClpRngs& clpRngs, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
   const int istart = chromaOnly ? 1 : 0;
   const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
@@ -878,7 +887,8 @@ void UnitBuf<T>::addAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& 
 }
 
 template<typename T>
-void UnitBuf<T>::addWeightedAvg(const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx /* = BCW_DEFAULT */, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
+template<typename U, typename V>
+void UnitBuf<T>::addWeightedAvg(const UnitBuf<U>& other1, const UnitBuf<V>& other2, const ClpRngs& clpRngs, const uint8_t BcwIdx /* = BCW_DEFAULT */, const bool chromaOnly /* = false */, const bool lumaOnly /* = false */)
 {
   const int istart = chromaOnly ? 1 : 0;
   const int iend   = lumaOnly   ? 1 : ( int ) bufs.size();
@@ -964,7 +974,8 @@ void UnitBuf<T>::padBorderPel( unsigned margin, int dir )
 }
 
 template<typename T>
-void UnitBuf<T>::removeHighFreq( const UnitBuf<const T>& org, const UnitBuf<const T>& other, const bool bClip, const ClpRngs& clpRngs)
+template<typename U, typename V>
+void UnitBuf<T>::removeHighFreq( const UnitBuf<U>& org, const UnitBuf<V>& other, const bool bClip, const ClpRngs& clpRngs)
 {
   bufs[0].removeHighFreq(org.bufs[0], other.bufs[0], bClip, clpRngs[0]);
 }
