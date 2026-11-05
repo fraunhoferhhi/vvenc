@@ -532,9 +532,27 @@ template<> inline SizeType perpSize<EDGE_HOR>( const Size& size ) { return size.
 template<> inline SizeType parlSize<EDGE_VER>( const Size& size ) { return size.height; }
 template<> inline SizeType perpSize<EDGE_VER>( const Size& size ) { return size.width; }
 
+// The chroma QPs of the TUs on the P and Q side of an edge. Most edges of a CU have the same TUs as the edge before, and
+// nothing changes a TU's QPs while its CU's filter strengths are set.
+struct LfChromaQps
+{
+  const TransformUnit* tu[2] = { nullptr, nullptr };
+  int                  qp[2][2];
+
+  void set( const int side, const TransformUnit& t )
+  {
+    if( tu[side] == &t ) return;
+    tu[side] = &t;
+    const QpParam cb( t, COMP_Cb, false );
+    const QpParam cr( t, COMP_Cr, false );
+    qp[side][0] = cb.Qp( 0 );
+    qp[side][1] = cr.Qp( 0 );
+  }
+};
+
 // filtering functions
 template<DeblockEdgeDir edgeDir>
-void xGetBoundaryStrengthSingle             ( LoopFilterParam& lfp, const CodingUnit& cu, const Position &localPos, const CodingUnit &cuP );
+void xGetBoundaryStrengthSingle             ( LoopFilterParam& lfp, const CodingUnit& cu, const Position &localPos, const CodingUnit &cuP, LfChromaQps& chromaQps );
 template<DeblockEdgeDir edgeDir>
 void xSetEdgeFilterInsidePu                 ( const CodingUnit &cu, const Area &area, const bool bValue );
 
@@ -678,6 +696,7 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
   const CodingUnit* cuP        = CU::getLeft( cu );
   const ChannelType chType     = cu.chType;
+  LfChromaQps chromaQps;
 
   {
     LoopFilterParam* lfpPtrV   = cu.cs->picture->cs->getLFPMapPtr( EDGE_VER );
@@ -692,7 +711,7 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
       for( int x = 0; x < area.width; x += uiPelsInPartX )
       {
-        if( lineLfpPtrV->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_VER>( *lineLfpPtrV, cu, Position{ area.x + x, area.y + y }, x ? cu : *cuP );
+        if( lineLfpPtrV->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_VER>( *lineLfpPtrV, cu, Position{ area.x + x, area.y + y }, x ? cu : *cuP, chromaQps );
 
         lineLfpPtrV->bs &= ~BsSet( 3, MAX_NUM_COMP );
         INCX( lineLfpPtrV, lfpStride );
@@ -717,7 +736,7 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
       {
         cuP = ( y || ( cuP && cuP->blocks[chType].x + cuP->blocks[chType].width > area.x + x ) ) ? cuP : cu.cs->getCU( Position{ area.x + x, area.y - 1 }, chType, TREE_D );
 
-        if( lineLfpPtrH->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_HOR>( *lineLfpPtrH, cu, Position{ area.x + x, area.y + y }, y ? cu : *cuP );
+        if( lineLfpPtrH->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_HOR>( *lineLfpPtrH, cu, Position{ area.x + x, area.y + y }, y ? cu : *cuP, chromaQps );
 
         lineLfpPtrH->bs &= ~BsSet( 3, MAX_NUM_COMP );
         INCX( lineLfpPtrH, lfpStride );
@@ -804,6 +823,7 @@ bool canFilterCUBdry( const Slice& slice, const Position& pos, const ChannelType
 template<DeblockEdgeDir edgeDir>
 void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const TransformUnit& currTU, const bool bValue, bool deriveBdStrngt )
 {
+  LfChromaQps chromaQps;
   const PreCalcValues &pcv = *cu.cs->pcv;
 
   ChannelType start = CH_L;
@@ -918,7 +938,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
 
         if( ct == end && deriveBdStrngt )
         {
-          if( lfp.filterEdge( cu.chType ) ) xGetBoundaryStrengthSingle<edgeDir>( lfp, cu, Position( ( area.x + edgeDir * d ) << csx, ( area.y + ( 1 - edgeDir ) * d ) << csy ), *cuPfstCh );
+          if( lfp.filterEdge( cu.chType ) ) xGetBoundaryStrengthSingle<edgeDir>( lfp, cu, Position( ( area.x + edgeDir * d ) << csx, ( area.y + ( 1 - edgeDir ) * d ) << csy ), *cuPfstCh, chromaQps );
           lfp.bs &= ~BsSet( 3, MAX_NUM_COMP );
         }
 
@@ -1019,7 +1039,7 @@ void xSetEdgeFilterInsidePu( const CodingUnit &cu, const Area &area, const bool 
 }
 
 template<DeblockEdgeDir edgeDir>
-void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, const Position &localPos, const CodingUnit& cuP )
+void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, const Position &localPos, const CodingUnit& cuP, LfChromaQps& chromaQps )
 {
   const Slice      &sliceQ = *cuQ.slice;
   const ChannelType chType = cuQ.chType;
@@ -1050,13 +1070,13 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     const TransformUnit &tuPc = isPQDiffCh ? *    CU::getTU( cuPc, posPc, CH_C )         : ( cuP.ispMode ? *cuP.lastTU : tuP );
     const int qpBdOffset      = cuQ.cs->sps->qpBDOffset[1];
 
+    chromaQps.set( 0, tuPc );
+    chromaQps.set( 1, tuQc );
+
     for( int chromaIdx = 1; chromaIdx <= 2; chromaIdx++ )
     {
-      const QpParam cQP( tuPc, ComponentID( chromaIdx ), false );
-      const QpParam cQQ( tuQc, ComponentID( chromaIdx ), false );
-
-      const int baseQp_P = cQP.Qp( 0 ) - qpBdOffset;
-      const int baseQp_Q = cQQ.Qp( 0 ) - qpBdOffset;
+      const int baseQp_P = chromaQps.qp[0][chromaIdx - 1] - qpBdOffset;
+      const int baseQp_Q = chromaQps.qp[1][chromaIdx - 1] - qpBdOffset;
       lfp.qp[chromaIdx] = ( ( baseQp_Q + baseQp_P + 1 ) >> 1 );
     }
 
