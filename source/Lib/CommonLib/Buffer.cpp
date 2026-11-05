@@ -1266,17 +1266,23 @@ void AreaBuf<Pel>::weightCiip( const AreaBuf<const Pel>& intra, const int numInt
 template<>
 void AreaBuf<MotionInfo>::fill( const MotionInfo& val )
 {
-  if( width == stride )
-  {
-    std::fill_n( buf, width * height, val );
-  }
-  else
-  {
-    MotionInfo* dst = buf;
+  // Field by field, with the values read once: assigning the whole struct (std::fill_n) makes GCC build the two refIdx
+  // bytes on the stack for every element and read them back as 16 bits, a failed store forward per element.
+  const Mv     mv0  = val.mv[0];
+  const Mv     mv1  = val.mv[1];
+  const int8_t ref0 = val.miRefIdx[0];
+  const int8_t ref1 = val.miRefIdx[1];
 
-    for( int y = 0; y < height; y++, dst += stride )
+  MotionInfo* dst = buf;
+
+  for( int y = 0; y < height; y++, dst += stride )
+  {
+    for( int x = 0; x < width; x++ )
     {
-      std::fill_n( dst, width, val );
+      dst[x].mv[0]       = mv0;
+      dst[x].mv[1]       = mv1;
+      dst[x].miRefIdx[0] = ref0;
+      dst[x].miRefIdx[1] = ref1;
     }
   }
 }
