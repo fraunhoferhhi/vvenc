@@ -3835,8 +3835,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           // copy component
           if (isFirstMode && ((nonCoeffCost < currCompCost) || (currAbsSum == 0))) // check for forced null
           {
-            // Nothing is cleared: with a zero cbf nobody reads the coefficients, and encodeResAndCalcRdInterCU clears the
-            // residual of the blocks it reconstructs from.
             tu.cbf[compID]   = 0;
 
             currAbsSum       = 0;
