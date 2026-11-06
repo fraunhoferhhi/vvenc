@@ -3430,7 +3430,19 @@ void InterSearch::xEncodeInterResidualQT(CodingStructure &cs, Partitioner &parti
         }
         if( TU::getCbf( currTU, compID ) )
         {
-          m_CABACEstimator->residual_coding( currTU, compID );
+          if( cu.sbtInfo && compID == COMP_Y )
+          {
+            m_CABACEstimator->addEstFracBits( m_tuResiBits[COMP_Y] );
+          }
+          else
+          {
+            const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
+            m_CABACEstimator->residual_coding( currTU, compID );
+            if( cu.sbtInfo )
+            {
+              m_tuResiBits[compID] = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
+            }
+          }
         }
       }
     }
@@ -4153,8 +4165,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     // caller goes back to ctxStart.
     const bool reuseLumaBits = currDepth == 0 && !cu.sbtInfo && tu.mtsIdx[COMP_Y] != MTS_SKIP;
     // The TU of an SBT CU: the caller codes the bits of the whole CU again after its TUs, and the other TU codes nothing, so these bits
-    // and the contexts they leave behind are never read.
+    // and the contexts they leave behind are never read. The caller takes luma's coefficients from here: they start from ctxStart in both
+    // places, and the cbfs before them there use other contexts. An SBT TU has no transform skip.
     const bool bitsUnused = cu.sbtInfo && currDepth > 0;
+    if( bitsUnused && !tu.noResidual )
+    {
+      m_tuResiBits[COMP_Y] = bestLumaResiBits;
+    }
     m_CABACEstimator->getCtx() = ctxStart;
     m_CABACEstimator->resetBits();
     if( !tu.noResidual && !bitsUnused )
@@ -4273,6 +4290,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       csSplit->fracBits = m_CABACEstimator->getEstFracBits();
       csSplit->cost     = m_pcRdCost->calcRdCost(csSplit->fracBits, csSplit->dist);
+      m_tuResiBitsValid = cu.sbtInfo != 0;   // only one TU has coefficients, and what it coded above is what the CU will code
     }
   }
 }
@@ -4438,11 +4456,14 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // The contexts after the CU are only kept if it wins, and the bits still to come can't lower its cost.
   if( useTuResiBits && cs.cost < bestCost )
   {
-    for( uint32_t ch = 0; ch < numValidComponents; ch++ )
+    for( const TransformUnit* tu : cs.tus )
     {
-      if( TU::getCbf( firstTU, ComponentID( ch ) ) )
+      for( uint32_t ch = 0; ch < numValidComponents; ch++ )
       {
-        m_CABACEstimator->residual_coding( firstTU, ComponentID( ch ) );
+        if( TU::getCbf( *tu, ComponentID( ch ) ) )
+        {
+          m_CABACEstimator->residual_coding( *tu, ComponentID( ch ) );
+        }
       }
     }
   }
