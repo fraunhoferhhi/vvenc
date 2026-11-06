@@ -159,11 +159,11 @@ namespace vvenc {
         rrb = _mm_sub_epi16( rrb, v01 );
         rrb = _mm_blendv_epi8( rrb, _mm_set1_epi16( curr.initRemRegBins ), vshuf );
         __m128i mlvl = _mm_loadu_si32( l );
-        __m128i mbins = _mm_min_epi8( mlvl, _mm_set1_epi8( 2 ) );
+        __m128i mbins = _mm_min_epi8( mlvl, _mm_cvtsi32_si128( 0x02020202 ) );
         __m128i mlutb = _mm_setr_epi8( 0, 1, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 );
         rrb = _mm_sub_epi16( rrb, _mm_cvtepi8_epi16( _mm_shuffle_epi8( mlutb, mbins ) ) );
         _mm_storeu_si64( ( __m128i* ) curr.remRegBins, rrb );
-        rrb = _mm_cmplt_epi16( rrb, _mm_set1_epi16( 4 ) );
+        rrb = _mm_cmplt_epi16( rrb, _mm_cvtsi64_si128( 0x0004000400040004 ) );
 
         curr.anyRemRegBinsLt4 = !!_mm_cvtsi128_si64( rrb );
 
@@ -206,17 +206,19 @@ namespace vvenc {
       {
         __m128i tplAcc = _mm_loadu_si32( &curr.tplAcc[scanInfo.nextInsidePos][0]);
 
-        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_set1_epi8( 31 ) );
-        __m128i sumNum = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_set1_epi8( 7 ) );
+        // these use the low four bytes only, and a constant in the low lane loads in one step where GCC builds a set1
+        // through a general register and a broadcast
+        __m128i sumAbs1 = _mm_and_si128( tplAcc, _mm_cvtsi32_si128( 0x1f1f1f1f ) );
+        __m128i sumNum = _mm_and_si128( _mm_srli_epi32( tplAcc, 5 ), _mm_cvtsi32_si128( 0x07070707 ) );
         __m128i sumGt1 = _mm_sub_epi8( sumAbs1, sumNum );
-        sumGt1 = _mm_min_epi8( sumGt1, _mm_set1_epi8( 4 ) );
+        sumGt1 = _mm_min_epi8( sumGt1, _mm_cvtsi32_si128( 0x04040404 ) );
         sumGt1 = _mm_add_epi8( _mm_set1_epi8( scanInfo.gtxCtxOffsetNext ), sumGt1 );
         _mm_storeu_si32( curr.ctx.cff, sumGt1 );
 
-        sumAbs1 = _mm_add_epi8( sumAbs1, _mm_set1_epi8( 1 ) );
+        sumAbs1 = _mm_add_epi8( sumAbs1, _mm_cvtsi32_si128( 0x01010101 ) );
         sumAbs1 = _mm_srli_epi32( sumAbs1, 1 );
-        sumAbs1 = _mm_and_si128( sumAbs1, _mm_set1_epi8( 127 ) );
-        sumAbs1 = _mm_min_epi8( sumAbs1, _mm_set1_epi8( 3 ) );
+        sumAbs1 = _mm_and_si128( sumAbs1, _mm_cvtsi32_si128( 0x7f7f7f7f ) );
+        sumAbs1 = _mm_min_epi8( sumAbs1, _mm_cvtsi32_si128( 0x03030303 ) );
         sumAbs1 = _mm_add_epi8( _mm_set1_epi8( scanInfo.sigCtxOffsetNext ), sumAbs1 );
         _mm_storeu_si32( curr.ctx.sig, sumAbs1 );
 
