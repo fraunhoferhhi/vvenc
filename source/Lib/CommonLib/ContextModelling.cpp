@@ -57,6 +57,10 @@ namespace vvenc {
 
 static const int prefix_ctx[7]  = { 0, 0, 0, 3, 6, 10, 15 };
 
+const uint8_t g_sigCtxOfsSum [32] = { 0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };
+const uint8_t g_sigCtxOfsDiag[MAX_NUM_CH][128] = { { 8, 8, 4, 4, 4 }, { 4, 4 } };   // 0 from there on
+const uint8_t g_absCtxOfsDiag[MAX_NUM_CH][128] = { { 15, 10, 10, 5, 5, 5, 5, 5, 5, 5 }, { 5 } };
+
 CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf )
   : m_compID                    (component)
   , m_chType                    (toChannelType(m_compID))
@@ -93,7 +97,7 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_sigGroupCtxId             (-1)
   , m_tmplCpSum1                (-1)
   , m_tmplCpDiag                (-1)
-  , m_sigFlagCtxSet             { Ctx::SigFlag[m_chType], Ctx::SigFlag[m_chType+2], Ctx::SigFlag[m_chType+4] }
+  , m_sigFlagCtxSet             { Ctx::SigFlag[m_chType], Ctx::SigFlag[m_chType], Ctx::SigFlag[m_chType+2], Ctx::SigFlag[m_chType+4] }
   , m_parFlagCtxSet             ( Ctx::ParFlag[m_chType] )
   , m_gtxFlagCtxSet             { Ctx::GtxFlag[m_chType], Ctx::GtxFlag[m_chType+2] }
   , m_sigGroupCtxIdTS           (-1)

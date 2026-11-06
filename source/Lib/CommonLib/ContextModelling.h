@@ -65,6 +65,11 @@ struct CtxTpl
   uint8_t ctxTpl;
 };
 
+// The part of the context offset of sig_coeff_flag that comes from the template sum (5 bits) and from the diagonal, by channel type; g_absCtxOfsDiag: the diagonal's part for the parity and greater flags
+extern const uint8_t g_sigCtxOfsSum [32];
+extern const uint8_t g_sigCtxOfsDiag[MAX_NUM_CH][128];
+extern const uint8_t g_absCtxOfsDiag[MAX_NUM_CH][128];
+
 struct CoeffCodingContext
 {
 public:
@@ -112,6 +117,7 @@ public:
   unsigned        sigGroupCtxId   ( bool ts = false     )   const { return ts ? m_sigGroupCtxIdTS : m_sigGroupCtxId; }
   bool            bdpcm           ()                        const { return m_bdpcm; }
 
+  // only RDOQ calls this, with state 0
   unsigned sigCtxIdAbs( int scanPos, const TCoeffSig* coeff, const int state )
   {
     const uint32_t   posY      = m_scan[scanPos].y;
@@ -152,30 +158,36 @@ public:
 
     m_tmplCpDiag = diag;
     m_tmplCpSum1 = sumAbs - numPos;
-    return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+    return m_sigFlagCtxSet[state]( ctxOfs );
   }
 
-  // sigCtxIdAbsWithAcc and absVal1stPass run for every coefficient position of residual coding
+  // sigCtxIdAbsOnly and absVal1stPass run for every coefficient position of residual coding; sigCtxIdAbsWithAcc is for RDOQ2
   ALWAYS_INLINE unsigned sigCtxIdAbsWithAcc( const int scanPos, const int state )
   {
     const auto scanEl       = m_scan[scanPos];
-    const uint32_t posY     = scanEl.y;
-    const uint32_t posX     = scanEl.x;
-    const int32_t blkPos    = scanEl.idx;
-    const int      diag     = posX + posY;
-    const int      tplVal   = m_tplBuf[-blkPos].ctxTpl;
-    const int      numPos   = tplVal >> 5u;
+    const int      diag     = scanEl.x + scanEl.y;
+    const int      tplVal   = m_tplBuf[-int( scanEl.idx )].ctxTpl;
     const int      sumAbs   = tplVal & 31;
 
-    int ctxOfs = std::min( ( sumAbs + 1 ) >> 1, 3 ) + ( diag < 2 ? 4 : 0 );
-
-    if( isLuma( m_chType ) )
-    {
-      ctxOfs += diag < 5 ? 4 : 0;
-    }
     m_tmplCpDiag = diag;
-    m_tmplCpSum1 = sumAbs - numPos;
-    return m_sigFlagCtxSet[std::max( 0, state-1 )]( ctxOfs );
+    m_tmplCpSum1 = sumAbs - ( tplVal >> 5u );
+    return m_sigFlagCtxSet[state]( g_sigCtxOfsSum[sumAbs] + g_sigCtxOfsDiag[m_chType][diag] );
+  }
+
+  // As sigCtxIdAbsWithAcc and ctxOffsetAbs together, for residual_coding_subblock: nothing is stored per position
+  ALWAYS_INLINE unsigned sigCtxIdAbsOnly( const int scanPos, const int state ) const
+  {
+    const auto scanEl       = m_scan[scanPos];
+    const int  diag         = scanEl.x + scanEl.y;
+    const int  sumAbs       = m_tplBuf[-int( scanEl.idx )].ctxTpl & 31;
+    return m_sigFlagCtxSet[state]( g_sigCtxOfsSum[sumAbs] + g_sigCtxOfsDiag[m_chType][diag] );
+  }
+
+  ALWAYS_INLINE uint8_t ctxOffsetAbsAt( const int scanPos ) const
+  {
+    const auto scanEl       = m_scan[scanPos];
+    const int  tplVal       = m_tplBuf[-int( scanEl.idx )].ctxTpl;
+    return uint8_t( std::min( ( tplVal & 31 ) - ( tplVal >> 5u ), 4 ) + 1 + g_absCtxOfsDiag[m_chType][scanEl.x + scanEl.y] );
   }
 
   ALWAYS_INLINE void absVal1stPass( const int scanPos, const TCoeffSig absLevel1 )
@@ -468,7 +480,7 @@ private:
   unsigned                  m_sigGroupCtxId;
   int                       m_tmplCpSum1;
   int                       m_tmplCpDiag;
-  CtxSet                    m_sigFlagCtxSet[3];
+  CtxSet                    m_sigFlagCtxSet[4];   // by state
   CtxSet                    m_parFlagCtxSet;
   CtxSet                    m_gtxFlagCtxSet[2];
   unsigned                  m_sigGroupCtxIdTS;
