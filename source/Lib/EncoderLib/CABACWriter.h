@@ -181,7 +181,7 @@ private:
   const ScanElement* m_scanOrder;
 
   Partitioner        m_partitioner[2];
-  CtxTpl             m_tplBuf[MAX_TB_SIZEY * MAX_TB_SIZEY];
+  CtxTpl             m_tplBuf[CTX_TPL_BUF_SIZE];
  };
 
 

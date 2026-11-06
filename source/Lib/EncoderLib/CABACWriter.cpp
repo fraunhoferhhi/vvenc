@@ -2608,19 +2608,15 @@ void residual_coding_subblock_bins( CoeffCodingContext& cctx, const TCoeffSig* c
     unsigned  sigFlag    = ( Coeff != 0 );
     if( numNonZero || nextSigPos != inferSigPos )
     {
-      const unsigned sigCtxId = cctx.sigCtxIdAbsWithAcc( nextSigPos, state );
+      const unsigned sigCtxId = cctx.sigCtxIdAbsOnly( nextSigPos, state );
       binCoder.encodeBin( sigFlag, sigCtxId );
       DTRACE( g_trace_ctx, D_SYNTAX_RESI, "sig_bin() bin=%d ctx=%d\n", sigFlag, sigCtxId );
       remRegBins--;
     }
-    else if( nextSigPos != cctx.scanPosLast() )
-    {
-      cctx.sigCtxIdAbsWithAcc( nextSigPos, state ); // required for setting variables that are needed for gtx/par context selection
-    }
 
     if( sigFlag )
     {
-      uint8_t ctxOff = cctx.ctxOffsetAbs();
+      uint8_t ctxOff = nextSigPos != cctx.scanPosLast() ? cctx.ctxOffsetAbsAt( nextSigPos ) : uint8_t( 0 );   // the last position has no selection before it
       numNonZero++;
       firstNZPos  = nextSigPos;
       lastNZPos   = std::max<int>( lastNZPos, nextSigPos );

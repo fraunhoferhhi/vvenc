@@ -73,6 +73,8 @@ class ProbModelTables
 protected:
   static const BinFracBits m_binFracBits[256];
   static const uint8_t      m_RenormTable_32  [ 32];          // Std         MP   MPI
+  static const uint16_t     m_upMove0         [ 16];          // ( 0x7fff >> rate ) & MASK_0
+  static const uint16_t     m_upMove1         [ 16];          // ( 0x7fff >> rate ) & MASK_1
 };
 
 
@@ -106,8 +108,9 @@ public:
     m_state[0] -= ( m_state[0] >> rate0 ) & MASK_0;
     m_state[1] -= ( m_state[1] >> rate1 ) & MASK_1;
 
-    m_state[0] += ( ( -static_cast< int >( bin ) & 0x7fffu ) >> rate0 ) & MASK_0;
-    m_state[1] += ( ( -static_cast< int >( bin ) & 0x7fffu ) >> rate1 ) & MASK_1;
+    const int mask = -static_cast< int >( bin );
+    m_state[0] += m_upMove0[rate0] & mask;
+    m_state[1] += m_upMove1[rate1] & mask;
   }
   void setLog2WindowSize(uint8_t log2WindowSize)
   {
