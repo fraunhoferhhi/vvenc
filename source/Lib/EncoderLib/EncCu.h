@@ -397,6 +397,7 @@ private:
   CodingUnit* getCuForInterPrediction ( CodingStructure* cs, const EncTestMode& encTestMode );
   unsigned int updateRdCheckingNum    ( MergeItemList&, double threshold, unsigned int numMergeSatdCand );
 
+  void    generateGeoCandChroma       ( CodingStructure* tempCS, Partitioner& partitioner, const EncTestMode& encTestMode, const MergeCtx& gpmMergeCtx, int mergeCand, PelUnitBuf& geoBuffer );
   void    generateMergePrediction     ( const UnitArea& unitArea, MergeItem* mergeItem, CodingUnit& cu, bool luma, bool chroma,
                                         PelUnitBuf& dstBuf, bool finalRd, bool forceNoResidual, PelUnitBuf* predBuf1, PelUnitBuf* predBuf2 );
   double  calcLumaCost4MergePrediction( const TempCtx& ctxStart, const PelUnitBuf& predBuf, double lambda, CodingUnit& pu, DistParam& distParam );

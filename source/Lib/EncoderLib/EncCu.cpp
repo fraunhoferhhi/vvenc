@@ -2065,6 +2065,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
   bool ciipChromaDone                           =   false;
   bool isRegularTestedAsSkip[MRG_MAX_NUM_CANDS] = { false, };
   bool geoWasTested                             =   false;
+  bool geoChromaReady[GEO_MAX_NUM_UNI_CANDS]    = { false, };
   int  stopCand                                 =   numMergeSatdCand;
 
   CHECK( numMergeSatdCand > 0 && m_mergeItemList.size() == 0, "Empty merge item list is not expected" );
@@ -2100,6 +2101,19 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
         }
 
         geoWasTested = true;
+
+        // The first pass compared only luma, and few candidates get this far.
+        uint8_t      splitDir;
+        MergeIdxPair geoMergeIdx;
+        MergeItem::updateGpmIdx( mergeItem->mergeIdx, splitDir, geoMergeIdx );
+        for( const int mergeCand : geoMergeIdx )
+        {
+          if( !geoChromaReady[mergeCand] )
+          {
+            generateGeoCandChroma( tempCS, partitioner, encTestMode, gpmMergeCtx, mergeCand, geoBuffer[mergeCand] );
+            geoChromaReady[mergeCand] = true;
+          }
+        }
       }
 
       cu = getCuForInterPrediction( tempCS, encTestMode );
@@ -2209,6 +2223,18 @@ unsigned int EncCu::updateRdCheckingNum( MergeItemList &mergeItemList, double th
     }
   }
   return std::min( numMergeSatdCand, ( unsigned ) mergeItemList.size() );
+}
+
+// The CU used here has the state the RD loop's own CU starts from, which clearing the structure brings back.
+void EncCu::generateGeoCandChroma( CodingStructure* tempCS, Partitioner& partitioner, const EncTestMode& encTestMode, const MergeCtx& gpmMergeCtx, int mergeCand, PelUnitBuf& geoBuffer )
+{
+  CodingUnit* cu = getCuForInterPrediction( tempCS, encTestMode );
+  partitioner.setCUData( *cu );
+  cu->geo = true;
+  gpmMergeCtx.setMergeInfo( *cu, mergeCand );
+  cu->mcControl = 4;
+  m_cInterSearch.motionCompensation( *cu, geoBuffer, REF_PIC_LIST_X );
+  tempCS->initStructData( encTestMode.qp );
 }
 
 void EncCu::generateMergePrediction( const UnitArea &unitArea, MergeItem *mergeItem, CodingUnit &pu, bool luma, bool chroma,
@@ -2791,6 +2817,7 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
     }
 
     mergeCtx.setMergeInfo            ( pu, mergeCand );
+    pu.mcControl = 2;   // chroma waits for the RD pass
     m_cInterSearch.motionCompensation( pu, geoBuffer[mergeCand], REF_PIC_LIST_X );
 
     g_pelBufOP.roundGeo( geoBuffer[mergeCand].Y().buf, geoTempBuf[mergeCand].Y().buf, numSamples, rshift, offset, lclpRng );
