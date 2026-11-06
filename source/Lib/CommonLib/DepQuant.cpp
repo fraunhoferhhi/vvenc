@@ -1486,7 +1486,9 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
   else
   {
     /// start inline prequant
-    qIdx = std::max<TCoeff>( 1, std::min<TCoeff>( m_quant.m_maxQIdx, qIdx ) );
+    // at least 1. qIdx is not negative here, and how often it is 0 is hard to predict: no branch for it
+    qIdx  = std::min<TCoeff>( m_quant.m_maxQIdx, qIdx );
+    qIdx += TCoeff( qIdx == 0 );
     int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
 
     PQData  pqData[4];
