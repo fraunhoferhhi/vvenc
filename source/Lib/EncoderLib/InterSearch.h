@@ -474,6 +474,9 @@ private:
   } TZSearchStruct;
 
   // sub-functions for ME
+  struct StartPositions;
+  template<typename OnCost>
+  void xCostsOfStartPositions       ( const StartPositions& startPositions, const int first, const TZSearchStruct& cStruct, OnCost&& onCost );
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZSearchQueued       ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZSearchFlush        ( TZSearchStruct& rcStruct );
