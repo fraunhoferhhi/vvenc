@@ -1390,11 +1390,18 @@ void EncGOP::xSetupPicAps( Picture* pic )
   m_globalApsList.push_back( new PicApsGlobal( pic->poc, pic->TLayer ) );
   CHECK( pic->picApsGlobal != nullptr, "Top level APS ptr must be nullptr" );
 
-  // the max size of global APS list is more than enough to support parallelization 
-  // additional +2 offset, due two max possible processing delay of two GOPs (Threads=1 mode)
-  if( m_globalApsList.size() > ( std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 ) ) )
+  // The list is kept near this size; the +2 covers up to two GOPs of processing delay (Threads=1 mode). The pictures in
+  // flight are not bounded by this size (GOP read-ahead, look-ahead stages), so an entry is deleted only after its last
+  // use: no picture set up later references it, and its own picture is finished (initalized), as finalizePicture still
+  // writes into it. (Pictures skipped in a first pass never finish, but they have no entry: the first pass runs without
+  // ALF.)
+  const size_t maxListSize = std::max( (int)MAX_NUM_APS, m_pcEncCfg->m_GOPSize ) * ( m_pcEncCfg->m_maxParallelFrames + 2 );
+  if( m_globalApsList.size() > maxListSize )
   {
-    if( m_globalApsList.front()->refCnt == 0 )
+    // the finish task sets initalized under this mutex
+    std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
+    if( m_pcEncCfg->m_numThreads > 0 ) lock.lock();
+    while( m_globalApsList.size() > maxListSize && m_globalApsList.front()->refCnt == 0 && m_globalApsList.front()->initalized )
     {
       delete m_globalApsList.front();
       m_globalApsList.pop_front();
