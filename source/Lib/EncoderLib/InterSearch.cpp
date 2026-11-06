@@ -2173,7 +2173,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
       addStartMv( m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i )->uniMvs[refPicList][iRefIdxPred] );
     }
 
-    Mv         bestInitMv;
+    Mv         bestInitMv, bestStartPosition;
     Distortion uiBestSad = MAX_DISTORTION;
     xCostsOfStartPositions( startPositions, 0, cStruct, [&]( const int index, const Distortion cost )
     {
@@ -2181,12 +2181,13 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
       {
         uiBestSad  = cost;
         bestInitMv = startMvs[index];
+        bestStartPosition = startPositions.positions[index];
         m_cDistParam.maximumDistortionForEarlyExit = cost;
       }
     } );
 
     xSetSearchRange( cu, bestInitMv, iSrchRng, cStruct.searchRange );
-    xPatternSearch ( cStruct, rcMv, ruiCost);
+    xPatternSearch ( cStruct, rcMv, ruiCost, bestStartPosition, uiBestSad );
   }
   else if( bQTBTMV )
   {
@@ -2304,7 +2305,9 @@ void InterSearch::xSetSearchRange ( const CodingUnit& cu,
 
 void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
                                   Mv&                 rcMv,
-                                  Distortion&         ruiSAD )
+                                  Distortion&         ruiSAD,
+                                  const Mv&           knownPosition,
+                                  const Distortion    knownCost )
 {
   Distortion  uiSad;
   Distortion  uiSadBest = MAX_DISTORTION;
@@ -2315,6 +2318,14 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
   m_pcRdCost->setDistParam( m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode );
 
   const SearchRange& sr = cStruct.searchRange;
+
+  // A position in the range whose cost is known bounds the result, so a position above that cost can stop its SAD at
+  // once and cannot be taken. The first position that reaches the lowest cost still wins, as in a scan without a bound.
+  if( knownPosition.hor >= sr.left && knownPosition.hor <= sr.right && knownPosition.ver >= sr.top && knownPosition.ver <= sr.bottom )
+  {
+    uiSadBest = knownCost + 1;
+    m_cDistParam.maximumDistortionForEarlyExit = knownCost;
+  }
 
   // The motion vector bits are the sum of a horizontal and a vertical part: the horizontal part of every column once
   // per search, the vertical part once per row (the cost is getCostOfVectorWithPredictor's on the same sum).

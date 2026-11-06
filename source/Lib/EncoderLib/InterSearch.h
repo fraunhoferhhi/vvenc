@@ -556,7 +556,9 @@ private:
 
   void xPatternSearch             ( TZSearchStruct&       cStruct,
                                     Mv&                   rcMv,
-                                    Distortion&           ruiSAD
+                                    Distortion&           ruiSAD,
+                                    const Mv&             knownPosition,
+                                    const Distortion      knownCost
                                   );
 
   void xPatternSearchIntRefine    ( CodingUnit&         cu,
