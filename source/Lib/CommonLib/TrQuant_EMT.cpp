@@ -96,11 +96,6 @@ inline void _fastInverseMM<2>( const TCoeff *src, TCoeff *dst, int shift, int li
       *dstPtr = Clip3( outputMinimum, outputMaximum, ( int ) ( *dstPtr + rnd_factor ) >> shift );
     }
   }
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine << 1 ), 0, ( iSkipLine << 1 ) * sizeof( TCoeff ) );
-  }
 }
 
 template<>
@@ -140,11 +135,6 @@ inline void _fastInverseMM<4>( const TCoeff *src, TCoeff *dst, int shift, int li
     }
   }
 #endif
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine << 2 ), 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
-  }
 }
 
 #endif
@@ -186,11 +176,6 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
     }
   }
 #endif
-
-  if( iSkipLine )
-  {
-    memset( dst + ( reducedLine*uiTrSize ), 0, ( iSkipLine*uiTrSize ) * sizeof( TCoeff ) );
-  }
 }
 
 //Fast DCT-II transforms
@@ -249,10 +234,6 @@ static void fastInverseDCT2_B2_Core(const TCoeff *src, TCoeff *dst, int shift, i
 
     src++;
     dst += 2;
-  }
-  if (iSkipLine)
-  {
-    memset(dst, 0, (iSkipLine << 1) * sizeof(TCoeff));
   }
 }
 
@@ -332,11 +313,6 @@ static void fastInverseDCT2_B4_Core( const TCoeff *src, TCoeff *dst, int shift, 
 
     src++;
     dst += 4;
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst, 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
   }
 }
 
@@ -502,11 +478,6 @@ static void fastInverseDCT2_B8_Core(const TCoeff *src, TCoeff *dst, int shift, i
     }
     src++;
     dst += 8;
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst, 0, ( iSkipLine << 3 ) * sizeof( TCoeff ) );
   }
 }
 

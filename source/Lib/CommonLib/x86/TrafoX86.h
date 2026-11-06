@@ -1387,11 +1387,6 @@ void fastInverseDCT2_B2_SIMD( const TCoeff *src, TCoeff *dst, int shift, int lin
     dst[2 * j    ] = Clip3( outputMinimum, outputMaximum, ( E + add ) >> shift );
     dst[2 * j + 1] = Clip3( outputMinimum, outputMaximum, ( O + add ) >> shift );
   }
-
-  if( iSkipLine )
-  {
-    memset( dst + 2 * reducedLine, 0, ( iSkipLine << 1 ) * sizeof( TCoeff ) );
-  }
 }
 
 template<X86_VEXT vext>
@@ -1459,11 +1454,6 @@ void fastInverseDCT2_B4_SIMD( const TCoeff *src, TCoeff *dst, int shift, int lin
     {
       dst[4 * j + r] = Clip3( outputMinimum, outputMaximum, ( d[r] + add ) >> shift );
     }
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst + 4 * reducedLine, 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
   }
 }
 
@@ -1558,11 +1548,6 @@ void fastInverseDCT2_B8_SIMD( const TCoeff *src, TCoeff *dst, int shift, int lin
     {
       dst[8 * j + r] = Clip3( outputMinimum, outputMaximum, ( d[r] + add ) >> shift );
     }
-  }
-
-  if( iSkipLine )
-  {
-    memset( dst + 8 * reducedLine, 0, ( iSkipLine << 3 ) * sizeof( TCoeff ) );
   }
 }
 

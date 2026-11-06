@@ -629,6 +629,15 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
+#if ENABLE_SIMD_TRAFO
+    // the matrix kernels stop at their cutoff, so only the butterflies read the lines the first stage skips
+    if( width <= 8 && skipWidth )
+#else
+    if( skipWidth )
+#endif
+    {
+      memset( tmp + ( width - skipWidth ) * height, 0, skipWidth * height * sizeof( TCoeff ) );
+    }
     fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
   }
   else if (width == 1)   // 1-D vertical transform
