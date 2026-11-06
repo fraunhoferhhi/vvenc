@@ -1426,6 +1426,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
                                         // prohibits some paths
 
   //===== populate trellis =====
+  m_firstScanIdx = firstTestPos;
   for( int scanIdx = firstTestPos; scanIdx >= 0; scanIdx-- )
   {
     const ScanInfo& scanInfo = tuPars.m_scanInfo[ scanIdx ];
@@ -1510,17 +1511,21 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
     {
       ::memcpy( &decisions, startDec, sizeof( Decisions ) );
 
-      setRiceParam( 0, scanInfo, prev, false );
-      checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
+      // at a block's first position all states still hold rdCostInit, so none of them can beat startDec's cost
+      if( scanInfo.scanIdx != m_firstScanIdx )
+      {
+        setRiceParam( 0, scanInfo, prev, false );
+        checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
 
-      setRiceParam( 1, scanInfo, prev, false );
-      checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
+        setRiceParam( 1, scanInfo, prev, false );
+        checkRdCostsOdd1( 1, scanInfo.spt, pq_b_dist, decisions, 0, 2, prev );
 
-      setRiceParam( 2, scanInfo, prev, false );
-      checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
+        setRiceParam( 2, scanInfo, prev, false );
+        checkRdCostsOdd1( 2, scanInfo.spt, pq_a_dist, decisions, 3, 1, prev );
 
-      setRiceParam( 3, scanInfo, prev, false );
-      checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
+        setRiceParam( 3, scanInfo, prev, false );
+        checkRdCostsOdd1( 3, scanInfo.spt, pq_a_dist, decisions, 1, 3, prev );
+      }
     }
     else
     {
@@ -1563,22 +1568,26 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
     {
       ::memcpy( &decisions, startDec, sizeof( Decisions ) );
 
-      if( prev.anyRemRegBinsLt4 || cff02ge4 )
+      // at a block's first position all states still hold rdCostInit, so none of them can beat startDec's cost
+      if( scanInfo.scanIdx != m_firstScanIdx )
       {
-        setRiceParam( 0, scanInfo, prev, cff02ge4 );
-        setRiceParam( 1, scanInfo, prev, cff02ge4 );
-      }
+        if( prev.anyRemRegBinsLt4 || cff02ge4 )
+        {
+          setRiceParam( 0, scanInfo, prev, cff02ge4 );
+          setRiceParam( 1, scanInfo, prev, cff02ge4 );
+        }
 
-      if( prev.anyRemRegBinsLt4 || cff13ge4 )
-      {
-        setRiceParam( 2, scanInfo, prev, cff13ge4 );
-        setRiceParam( 3, scanInfo, prev, cff13ge4 );
-      }
+        if( prev.anyRemRegBinsLt4 || cff13ge4 )
+        {
+          setRiceParam( 2, scanInfo, prev, cff13ge4 );
+          setRiceParam( 3, scanInfo, prev, cff13ge4 );
+        }
 
-      checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
-      checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
-      checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
-      checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
+        checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
+        checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
+        checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
+        checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
+      }
     }
     else
     {

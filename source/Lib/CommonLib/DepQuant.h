@@ -459,6 +459,7 @@ private:
   DQIntern::StateMem  m_state_skip;
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
   DQIntern::QuantBlockMemo m_quantBlockMemo;
+  int                 m_firstScanIdx = 0;   // the scan position the current block's trellis starts at
 
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
