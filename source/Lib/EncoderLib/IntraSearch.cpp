@@ -1633,6 +1633,8 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
       {
         trGrpBestCost = MAX_DOUBLE;
       }
+      // LFNST is only tested with the first transform, and ISP transforms a different block each time
+      m_pcTrQuant->keepPrimaryCoeffs( modeId == 0 && !cu.ispMode && startLfnstIdx != endLfnstIdx );
       for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
       {
         if (lfnstIdx && modeId)
@@ -1853,6 +1855,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
         }
       }
     }
+    m_pcTrQuant->keepPrimaryCoeffs( false );
 
     cu.lfnstIdx = bestLfnstIdx;
     if (dSingleCost != MAX_DOUBLE)
@@ -2092,6 +2095,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
     double dSingleCostAll = MAX_DOUBLE;
     double singleCostTmpAll = 0;
+
+    m_pcTrQuant->keepPrimaryCoeffs( startLfnstIdx != endLfnstIdx );
 
     for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
     {
@@ -2472,6 +2477,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
       }
       currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) || TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
     } // jointCbCr
+
+    m_pcTrQuant->keepPrimaryCoeffs( false );
 
     cs.dist += bestDistCbCr;
     cuCtx.violatesLfnstConstrained[CH_L] = false;
