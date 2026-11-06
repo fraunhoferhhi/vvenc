@@ -1018,7 +1018,7 @@ void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const PelUn
     {
       pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
     }
-    else
+    else if( !lumaOnly )   // with BDOF the luma is done above, and only chroma is left to average
     {
       pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, bdofApplied );
     }
@@ -1230,6 +1230,11 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
     const Mv& startMv = mergeMv[refId];
     for (int compID = 0; compID < getNumberValidComponents(cu.chromaFormat); compID++)
     {
+      if( compID == COMP_Y ? cu.mccNoLuma() : cu.mccNoChroma() )
+      {
+        continue;
+      }
+
       int mvshiftTemp = mvShift + getComponentScaleX((ComponentID)compID, cu.chromaFormat);
       int deltaIntMvX = (cMv.hor >> mvshiftTemp) - (startMv.hor >> mvshiftTemp);
       int deltaIntMvY = (cMv.ver >> mvshiftTemp) - (startMv.ver >> mvshiftTemp);
@@ -1288,9 +1293,11 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
 
   const Position& puPos = cu.lumaPos();
 
-  bool bioAppliedType[MAX_NUM_SUBCU_DMVR];
+  bool bioAppliedType[MAX_NUM_SUBCU_DMVR] = { false, };
 
-  // Do refinement search
+  // Do refinement search. A chroma-only call comes after a luma call for this CU, whose refinement the caller restored,
+  // and BDOF only touches luma.
+  if( !cu.mccNoLuma() )
   {
     const int bilinearBufStride = (cu.Y().width + (2 * DMVR_NUM_ITERATION));
     const int padSize = DMVR_NUM_ITERATION << 1;
@@ -1457,8 +1464,10 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       bool padBufL1  = (mv1.hor >> mvShift)  != (mergeMv[1].hor >> mvShift)  || (mv1.ver >> mvShift)  != (mergeMv[1].ver >> mvShift);
       bool padBufL1C = (mv1.hor >> mvShiftC) != (mergeMv[1].hor >> mvShiftC) || (mv1.ver >> mvShiftC) != (mergeMv[1].ver >> mvShiftC);
 
-      padBufL0C &= cu.chromaFormat != CHROMA_400;
-      padBufL1C &= cu.chromaFormat != CHROMA_400;
+      padBufL0  &= !cu.mccNoLuma();
+      padBufL1  &= !cu.mccNoLuma();
+      padBufL0C &= cu.chromaFormat != CHROMA_400 && !cu.mccNoChroma();
+      padBufL1C &= cu.chromaFormat != CHROMA_400 && !cu.mccNoChroma();
 
       if (padBufL0)  xCopyAndPad(subCu, padBuf[L0], L0, true);
       if (padBufL0C) xCopyAndPad(subCu, padBuf[L0], L0, false);

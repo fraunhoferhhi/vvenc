@@ -2128,7 +2128,14 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
       if( resetCiip2Regular )
       {
-        dstPredBuf.copyFrom( mrgPredBufNoCiip[mergeItem->mergeIdx] );
+        // the pruning pass predicted only the luma of the regular candidate
+        dstPredBuf.copyFrom( mrgPredBufNoCiip[mergeItem->mergeIdx], true, false );
+        const uint8_t mcControl = cu->mcControl;
+        cu->mcControl = 4;
+        cu->mvRefine  = true;
+        m_cInterSearch.motionCompensation( *cu, dstPredBuf, REF_PIC_LIST_X );
+        cu->mvRefine  = false;
+        cu->mcControl = mcControl;
       }
       else
       {
@@ -2314,7 +2321,8 @@ void EncCu::addRegularCandsToPruningList( const MergeCtx &mergeCtx, const UnitAr
     MergeItem *regularMerge = m_mergeItemList.allocateNewMergeItem();
     regularMerge->importMergeInfo( mergeCtx, uiMergeCand, MergeItem::MergeItemType::REGULAR, pu );
     auto dstBuf             = regularMerge->getPredBuf( localUnitArea );
-    generateMergePrediction ( localUnitArea, regularMerge, pu, true, true, dstBuf, false, false, &regularPred[uiMergeCand], nullptr );
+    // The SATD of this pass reads luma only, and most candidates end here. Chroma waits for the RD pass, as with the other merge types.
+    generateMergePrediction ( localUnitArea, regularMerge, pu, true, false, dstBuf, false, false, &regularPred[uiMergeCand], nullptr );
     regularMerge->cost      = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam );
     if( CU::checkDMVRCondition( pu ) ) std::copy_n( pu.mvdL0SubPu, getDmvrMvdNum( pu ), m_subPuMvOffset[uiMergeCand].data() );
     m_mergeItemList         . insertMergeItemToList( regularMerge );
