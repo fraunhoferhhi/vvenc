@@ -81,6 +81,9 @@ struct TCoeffOps
   void( *fastFwdDCT2[5] )   ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDST7_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
   void( *fastFwdDCT8_4 )    ( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2 );
+  // The first stage of a 2-D forward transform reading the residual itself, by transform type and log2 of the size minus 1.
+  // Where there's none (nullptr), xT widens the residual and takes fastFwdTrans.
+  void( *fastFwdPel[NUM_TRANS_TYPE][6] )( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 );
 
 private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO

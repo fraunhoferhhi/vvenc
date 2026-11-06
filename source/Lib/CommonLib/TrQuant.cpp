@@ -520,7 +520,10 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   const int  resiStride = resi.stride;
 
 #if ENABLE_SIMD_TRAFO
-  if( width & 3 )
+  // the first stage of a 2-D transform may read the residual as it is
+  const auto fwdPel = width > 1 && height > 1 ? g_tCoeffOps.fastFwdPel[trTypeHor][transformWidthIndex] : nullptr;
+
+  if( !fwdPel && ( width & 3 ) )
 #endif
   {
     for( int y = 0; y < height; y++ )
@@ -532,11 +535,11 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     }
   }
 #if ENABLE_SIMD_TRAFO
-  else if( width & 7 )
+  else if( !fwdPel && ( width & 7 ) )
   {
     g_tCoeffOps.cpyCoeff4( resiBuf, resiStride, block, width, height );
   }
-  else
+  else if( !fwdPel )
   {
     g_tCoeffOps.cpyCoeff8( resiBuf, resiStride, block, width, height );
   }
@@ -548,7 +551,16 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT;
     CHECK( shift_1st < 0, "Negative shift" );
     CHECK( shift_2nd < 0, "Negative shift" );
-    fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+#if ENABLE_SIMD_TRAFO
+    if( fwdPel )
+    {
+      fwdPel( resiBuf, resiStride, tmp, shift_1st, height, skipWidth );
+    }
+    else
+#endif
+    {
+      fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+    }
     fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
     // The kernels leave the rows past the cut-off as they were. The second stage never reads those of the first stage. In the
     // coefficients, the RDOQ check reads 32 rows and the comparison of transforms reads blocks up to 32 rows, so 64 rows need no clear.

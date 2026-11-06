@@ -2050,6 +2050,7 @@ TCoeffOps::TCoeffOps()
   fastFwdDCT2[4]    = fastForwardDCT2_MM<64>;
   fastFwdDST7_4     = fastForwardDST7_B4_Core;
   fastFwdDCT8_4     = fastForwardDCT8_B4_Core;
+  memset( fastFwdPel, 0, sizeof( fastFwdPel ) );
 }
 
 void TCoeffOps::initTCoeffOps( bool enableOpt )

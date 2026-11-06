@@ -1713,6 +1713,236 @@ void fastForward4_SIMD( const TCoeff *src, TCoeff *dst, int shift, int line, int
   }
 }
 
+#if USE_AVX2
+// The first stage of a 2-D forward transform, reading the residual itself instead of a widened copy of it. Its values
+// are int16 already, so what the kernels above do to int32 inputs isn't needed: no packing, which only saturates values
+// outside int16, and no range test before the even/odd split, as a residual of pels of 10 bits at most, or the mix of
+// two of them in the joint Cb-Cr modes, stays far inside [-16384, 16383]. line is even, and a multiple of 4 unless it's 2.
+
+// 2 points
+static void fastFwdPelDCT2_B2( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  const int add = ( shift > 0 ) ? ( 1 << ( shift - 1 ) ) : 0;
+
+  for( int j = 0; j < line; j++, src += stride )
+  {
+    dst[       j] = ( ( src[0] + src[1] ) * 64 + add ) >> shift;
+    dst[line + j] = ( ( src[0] - src[1] ) * 64 + add ) >> shift;
+  }
+}
+
+// 4 points: the 4 values of 4 lines, as [value 0 of the lines, value 1 of the lines] and [value 2, value 3]
+static ALWAYS_INLINE void fwdPelLoad4Lines4( const Pel* src, ptrdiff_t stride, __m128i& v01, __m128i& v23 )
+{
+  const __m128i t0 = _mm_unpacklo_epi16( _vv_loadl_epi64( ( const __m128i* ) &src[0 * stride] ), _vv_loadl_epi64( ( const __m128i* ) &src[1 * stride] ) );
+  const __m128i t1 = _mm_unpacklo_epi16( _vv_loadl_epi64( ( const __m128i* ) &src[2 * stride] ), _vv_loadl_epi64( ( const __m128i* ) &src[3 * stride] ) );
+  v01 = _mm_unpacklo_epi32( t0, t1 );
+  v23 = _mm_unpackhi_epi32( t0, t1 );
+}
+
+template<int trType>
+static void fastFwdPel4( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  const TMatrixCoeff *iT = trType == DCT2 ? g_trCoreDCT2P4[TRANSFORM_FORWARD][0] : trType == DST7 ? g_trCoreDST7P4[TRANSFORM_FORWARD][0] : g_trCoreDCT8P4[TRANSFORM_FORWARD][0];
+  // same rounding offset as fastForward4_SIMD
+  const TCoeff  add    = trType == DCT8 ? ( 1 << ( shift - 1 ) ) : ( shift > 0 ) ? ( 1 << ( shift - 1 ) ) : 0;
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+  int j = 0;
+
+  if( line >= 8 )
+  {
+    const __m256i vadd = _mm256_set1_epi32( add );
+
+    for( ; j + 8 <= line; j += 8, src += 8 * stride )
+    {
+      __m128i a01, a23, b01, b23;
+      fwdPelLoad4Lines4( src,              stride, a01, a23 );
+      fwdPelLoad4Lines4( src + 4 * stride, stride, b01, b23 );
+
+      __m256i d0, d1, d2, d3;
+      fwdButterfly4<trType, __m256i, Int32x8Ops>( iT, _mm256_cvtepi16_epi32( _mm_unpacklo_epi64( a01, b01 ) ), _mm256_cvtepi16_epi32( _mm_unpackhi_epi64( a01, b01 ) ),
+                                                      _mm256_cvtepi16_epi32( _mm_unpacklo_epi64( a23, b23 ) ), _mm256_cvtepi16_epi32( _mm_unpackhi_epi64( a23, b23 ) ),
+                                                  vadd, d0, d1, d2, d3 );
+      _mm256_storeu_si256( ( __m256i* ) &dst[           j], _mm256_sra_epi32( d0, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[    line + j], _mm256_sra_epi32( d1, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[2 * line + j], _mm256_sra_epi32( d2, vshift ) );
+      _mm256_storeu_si256( ( __m256i* ) &dst[3 * line + j], _mm256_sra_epi32( d3, vshift ) );
+    }
+
+    _mm256_zeroupper();
+  }
+  else if( line == 4 )
+  {
+    const __m128i vadd = _mm_set1_epi32( add );
+
+    __m128i v01, v23;
+    fwdPelLoad4Lines4( src, stride, v01, v23 );
+
+    __m128i d0, d1, d2, d3;
+    fwdButterfly4<trType, __m128i, Int32x4Ops>( iT, _mm_cvtepi16_epi32( v01 ), _mm_cvtepi16_epi32( _mm_unpackhi_epi64( v01, v01 ) ),
+                                                    _mm_cvtepi16_epi32( v23 ), _mm_cvtepi16_epi32( _mm_unpackhi_epi64( v23, v23 ) ),
+                                                vadd, d0, d1, d2, d3 );
+    _mm_storeu_si128( ( __m128i* ) &dst[       0], _mm_sra_epi32( d0, vshift ) );
+    _mm_storeu_si128( ( __m128i* ) &dst[    line], _mm_sra_epi32( d1, vshift ) );
+    _mm_storeu_si128( ( __m128i* ) &dst[2 * line], _mm_sra_epi32( d2, vshift ) );
+    _mm_storeu_si128( ( __m128i* ) &dst[3 * line], _mm_sra_epi32( d3, vshift ) );
+  }
+  else
+  {
+    for( ; j < line; j++, src += stride )
+    {
+      int d0, d1, d2, d3;
+      fwdButterfly4<trType, int, Int32Ops>( iT, src[0], src[1], src[2], src[3], add, d0, d1, d2, d3 );
+      dst[           j] = d0 >> shift;
+      dst[    line + j] = d1 >> shift;
+      dst[2 * line + j] = d2 >> shift;
+      dst[3 * line + j] = d3 >> shift;
+    }
+  }
+}
+
+// The matrix multiply, 8 points and up
+template<int N>
+static ALWAYS_INLINE void fwdPelMatMul_avx2( const TMatrixCoeff* tc, const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int cutoff )
+{
+  const int rnd_factor = 1 << ( shift - 1 );
+
+  if( N == 8 )
+  {
+    for( int i = 0; i < line; i += 2, src += 2 * stride )
+    {
+      const __m256i vsrc = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) src ) ),
+                                                    _mm_loadu_si128( ( const __m128i* ) ( src + stride ) ), 1 );
+      fwdMatMul8Cols2Lines_avx2<N>( tc, vsrc, cutoff, dst + i, line, rnd_factor, shift );
+    }
+  }
+  else
+  {
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+    // lines 2 and 3 of the array below are not set for two-line groups, and not read either
+#endif
+    static constexpr unsigned trLoops = N >> 4 ? N >> 4 : 1;
+    const bool fourLines  = line != 2;
+    const int  groupLines = fourLines ? 4 : 2;
+
+    for( int i = 0; i < line; i += groupLines, src += groupLines * stride )
+    {
+      __m256i vx[4][trLoops];
+
+      for( int l = 0; l < groupLines; l++ )
+      {
+        for( unsigned k = 0; k < trLoops; k++ )
+        {
+          vx[l][k] = _mm256_loadu_si256( ( const __m256i* ) &src[l * stride + ( k << 4 )] );
+        }
+      }
+
+      fwdMatMulRows_avx2<N, trLoops>( tc, vx, fourLines, cutoff, dst + i, line, rnd_factor, shift );
+    }
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic pop
+#endif
+  }
+}
+
+template<int trType, int N>
+static void fastFwdPelMatMul( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  const TMatrixCoeff* tc = trType == DST7 ? ( N == 8 ? g_trCoreDST7P8[TRANSFORM_FORWARD][0] : N == 16 ? g_trCoreDST7P16[TRANSFORM_FORWARD][0] : g_trCoreDST7P32[TRANSFORM_FORWARD][0] )
+                         : trType == DCT8 ? ( N == 8 ? g_trCoreDCT8P8[TRANSFORM_FORWARD][0] : N == 16 ? g_trCoreDCT8P16[TRANSFORM_FORWARD][0] : g_trCoreDCT8P32[TRANSFORM_FORWARD][0] )
+                         :                    g_trCoreDCT2P8[TRANSFORM_FORWARD][0];
+
+  fwdPelMatMul_avx2<N>( tc, src, stride, dst, shift, line, N - iSkipLine2 );
+  _mm256_zeroupper();
+}
+
+// DCT-II, 16 points, with the even/odd split of fastForwardDCT2_EvenOdd16_SIMD
+static void fastFwdPelDCT2_16( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  const TMatrixCoeff* tc = g_trCoreDCT2P16[TRANSFORM_FORWARD][0];
+  const int cutoff       = 16 - iSkipLine2;
+  const int rnd_factor   = 1 << ( shift - 1 );
+
+  if( cutoff & 7 )
+  {
+    fwdPelMatMul_avx2<16>( tc, src, stride, dst, shift, line, cutoff );
+    _mm256_zeroupper();
+    return;
+  }
+
+  // reverses the 8 int16 within each 128-bit half
+  const __m256i vrev = _mm256_setr_epi8( 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1,
+                                         14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 );
+
+  for( int i = 0; i < line; i += 2, src += 2 * stride )
+  {
+    // [x[0..7] of line i | of line i + 1] and [x[15..8] of line i | of line i + 1]
+    const __m256i vfirst  = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) &src[0] ) ),
+                                                     _mm_loadu_si128( ( const __m128i* ) &src[stride] ), 1 );
+    const __m256i vmirror = _mm256_shuffle_epi8( _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i* ) &src[8] ) ),
+                                                                          _mm_loadu_si128( ( const __m128i* ) &src[stride + 8] ), 1 ), vrev );
+
+    fwdMatMul8Cols2Lines_avx2<32>( tc,      _mm256_add_epi16( vfirst, vmirror ), cutoff >> 1, dst + i,        2 * line, rnd_factor, shift );
+    fwdMatMul8Cols2Lines_avx2<32>( tc + 16, _mm256_sub_epi16( vfirst, vmirror ), cutoff >> 1, dst + i + line, 2 * line, rnd_factor, shift );
+  }
+
+  _mm256_zeroupper();
+}
+
+// DCT-II, N = 32 or 64, with the even/odd split of fastForwardDCT2_EvenOdd_SIMD
+template<int N>
+static void fastFwdPelDCT2_EvenOdd( const Pel* src, ptrdiff_t stride, TCoeff* dst, int shift, int line, int iSkipLine2 )
+{
+  static constexpr unsigned trLoops   = N >> 4;
+  static constexpr unsigned halfLoops = N >> 5;
+  const TMatrixCoeff* tc = N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
+  const int cutoff       = N - iSkipLine2;
+
+  if( cutoff & 7 )
+  {
+    fwdPelMatMul_avx2<N>( tc, src, stride, dst, shift, line, cutoff );
+    _mm256_zeroupper();
+    return;
+  }
+
+  const int  rnd_factor = 1 << ( shift - 1 );
+  const bool fourLines  = line != 2;
+  const int  groupLines = fourLines ? 4 : 2;
+
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+  // lines 2 and 3 of the arrays below are not set for two-line groups, and not read either
+#endif
+  for( int i = 0; i < line; i += groupLines, src += groupLines * stride )
+  {
+    __m256i ve[4][halfLoops], vo[4][halfLoops];
+
+    for( int l = 0; l < groupLines; l++ )
+    {
+      __m256i vx[trLoops];
+
+      for( unsigned k = 0; k < trLoops; k++ )
+      {
+        vx[k] = _mm256_loadu_si256( ( const __m256i* ) &src[l * stride + ( k << 4 )] );
+      }
+
+      fwdEvenOdd_avx2<trLoops>( vx, ve[l], vo[l] );
+    }
+
+    fwdMatMulRows_avx2<2 * N, halfLoops>( tc,     ve, fourLines, cutoff >> 1, dst + i,        2 * line, rnd_factor, shift );
+    fwdMatMulRows_avx2<2 * N, halfLoops>( tc + N, vo, fourLines, cutoff >> 1, dst + i + line, 2 * line, rnd_factor, shift );
+  }
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic pop
+#endif
+
+  _mm256_zeroupper();
+}
+
+#endif
 // forward matrix multiplication for a single line (1D transforms of 1xN / Nx1 blocks)
 template<X86_VEXT vext, unsigned trSize>
 void fastFwd1D_SIMD( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
@@ -2178,6 +2408,22 @@ void TCoeffOps::_initTCoeffOpsX86()
 #endif
   fastFwdDST7_4  = fastForward4_SIMD<vext, DST7>;
   fastFwdDCT8_4  = fastForward4_SIMD<vext, DCT8>;
+#if USE_AVX2
+  fastFwdPel[DCT2][0] = fastFwdPelDCT2_B2;
+  fastFwdPel[DCT2][1] = fastFwdPel4<DCT2>;
+  fastFwdPel[DCT2][2] = fastFwdPelMatMul<DCT2, 8>;
+  fastFwdPel[DCT2][3] = fastFwdPelDCT2_16;
+  fastFwdPel[DCT2][4] = fastFwdPelDCT2_EvenOdd<32>;
+  fastFwdPel[DCT2][5] = fastFwdPelDCT2_EvenOdd<64>;
+  fastFwdPel[DST7][1] = fastFwdPel4<DST7>;
+  fastFwdPel[DST7][2] = fastFwdPelMatMul<DST7, 8>;
+  fastFwdPel[DST7][3] = fastFwdPelMatMul<DST7, 16>;
+  fastFwdPel[DST7][4] = fastFwdPelMatMul<DST7, 32>;
+  fastFwdPel[DCT8][1] = fastFwdPel4<DCT8>;
+  fastFwdPel[DCT8][2] = fastFwdPelMatMul<DCT8, 8>;
+  fastFwdPel[DCT8][3] = fastFwdPelMatMul<DCT8, 16>;
+  fastFwdPel[DCT8][4] = fastFwdPelMatMul<DCT8, 32>;
+#endif
 }
 
 template<X86_VEXT vext>
