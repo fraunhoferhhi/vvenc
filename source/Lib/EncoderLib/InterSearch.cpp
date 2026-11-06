@@ -1102,7 +1102,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
     uint32_t         bitsValidList1   = MAX_UINT;
     Distortion   costValidList1   = MAX_DISTORTION;
 
-    CPelUnitBuf origBuf = cu.cs->getOrgBuf( cu );
+    CPelUnitBuf origBuf = static_cast<const CodingStructure*>( cu.cs )->getOrgBuf( cu ); // const overload: no conversion from PelUnitBuf
 
     xGetBlkBits( cs.slice->isInterP(), puIdx, uiLastMode, uiMbBits );
 
@@ -2017,11 +2017,11 @@ Distortion InterSearch::xGetTemplateCost( const CodingUnit& cu,
   clipMv( cMvCand, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
 
   // prediction pattern
-  const CPelUnitBuf pred = xPredLumaReadOnly( cu, picRef, cMvCand, predBuf );
+  const CPelBuf pred = xPredLumaReadOnly( cu, picRef, cMvCand, predBuf );
 
   // calc distortion
 
-  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), pred.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_SAD);
+  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), pred, cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_SAD);
   uiCost += m_pcRdCost->getCost( m_auiMVPIdxCost[iMVPIdx][iMVPNum] );
 
   return uiCost;
@@ -2042,8 +2042,8 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   int    iSrchRng   = (bBi ? m_bipredSearchRange : m_iSearchRange);
   double fWeight    = 1.0;
 
-  CPelUnitBuf  origBufTmpCnst;
-  CPelUnitBuf* pBuf      = &origBuf;
+  //  Search key pattern initialization
+  CPelBuf  tmpPattern   = origBuf.Y();
 
   if(bBi) // Bi-predictive ME
   {
@@ -2052,13 +2052,10 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     PelUnitBuf otherBuf = m_tmpPredStorage[1 - (int)refPicList].getCompactBuf( cu );
     origBufTmp.removeHighFreq( origBuf, otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs );
    
-    origBufTmpCnst = origBufTmp;
-    pBuf           = &origBufTmpCnst;
+    tmpPattern     = origBufTmp.Y();
     fWeight        = xGetMEDistortionWeight( cu.BcwIdx, refPicList );
   }
 
-  //  Search key pattern initialization
-  CPelBuf  tmpPattern   = pBuf->Y();
   CPelBuf* pcPatternKey = &tmpPattern;
 
   m_lumaClpRng = cu.cs->slice->clpRngs[ COMP_Y ];
@@ -2809,20 +2806,20 @@ void InterSearch::xPatternSearchFracDIF(
 // The luma prediction of the symmetric MVD search for an already clipped MV. Not read in place with IFP and a fast inter
 // search mode below 2: there the affine bi-prediction search can skip its first prediction (an MV outside the IFP lines)
 // and then read a prediction buffer it did not write, so the buffer has to hold what this function would have written.
-CPelUnitBuf InterSearch::xPredSymLuma( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
+CPelBuf InterSearch::xPredSymLuma( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
 {
   const bool bufferMayBeReadLater = m_pcEncCfg->m_ifpLines && m_pcEncCfg->m_fastInterSearchMode < VVENC_FASTINTERSEARCH_MODE2;
   if( bufferMayBeReadLater )
   {
     xPredInterBlk( COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false );
-    return predBuf;
+    return predBuf.Y();
   }
   return xPredLumaReadOnly( cu, refPic, mv, predBuf );
 }
 
 // A luma prediction for an already clipped MV that the caller only reads. At an integer MV the prediction is a plain copy
 // of the reference block (xPredInterBlk: filterHor with fraction 0 and isLast), so the reference picture is read in place.
-CPelUnitBuf InterSearch::xPredLumaReadOnly( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
+CPelBuf InterSearch::xPredLumaReadOnly( const CodingUnit& cu, const Picture* refPic, const Mv& mv, PelUnitBuf& predBuf )
 {
   static constexpr int FRAC_MASK = ( 1 << MV_FRACTIONAL_BITS_INTERNAL ) - 1;
   const bool integerMv = ( mv.hor & FRAC_MASK ) == 0 && ( mv.ver & FRAC_MASK ) == 0;
@@ -2834,10 +2831,10 @@ CPelUnitBuf InterSearch::xPredLumaReadOnly( const CodingUnit& cu, const Picture*
                         + ( cu.lumaPos().y + ( mv.ver >> MV_FRACTIONAL_BITS_INTERNAL ) ) * stride;
     CHECKD( m_ifpLines && cu.cs->picture != refPic && !CU::isMvInRangeFPP( cu.lumaPos().y, cu.lumaSize().height, mv.ver, m_ifpLines, *cu.cs->pcv ),
             "xPredLumaReadOnly: CTU line-wise FPP MV restriction failed!\n" );   // as xPredInterBlk checks it
-    return CPelUnitBuf( cu.chromaFormat, CPelBuf( ref, stride, cu.lumaSize() ) );
+    return CPelBuf( ref, stride, cu.lumaSize() );
   }
   xPredInterBlk( COMP_Y, cu, refPic, mv, predBuf, false, cu.slice->clpRngs[ COMP_Y ], false, false );
-  return predBuf;
+  return predBuf.Y();
 }
 
 Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField, int BcwIdx )
@@ -2850,21 +2847,21 @@ Distortion InterSearch::xGetSymCost( const CodingUnit& cu, CPelUnitBuf& origBuf,
   const Picture* picRefA = cu.slice->getRefPic( eCurRefPicList, cCurMvField.refIdx );
   Mv mvA = cCurMvField.mv;
   clipMv( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  const CPelUnitBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
+  const CPelBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
 
   // get prediction of eTarRefPicList
   PelUnitBuf predStorageB = m_tmpPredStorage[eTarRefPicList].getCompactBuf( cu );
   const Picture* picRefB = cu.slice->getRefPic( eTarRefPicList, cTarMvField.refIdx );
   Mv mvB = cTarMvField.mv;
   clipMv( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv );
-  const CPelUnitBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
+  const CPelBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
 
   PelUnitBuf bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
-  bufTmp.removeHighFreq( origBuf, predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
+  bufTmp.Y().removeHighFreq( origBuf.Y(), predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs[ COMP_Y ]/*, getBcwWeight( cu.BcwIdx, eTarRefPicList )*/ );
   double fWeight = xGetMEDistortionWeight( cu.BcwIdx, eTarRefPicList );
 
   // calc distortion
-  cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
+  cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB, cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
 
   return(cost);
 }
@@ -4451,10 +4448,10 @@ void InterSearch::xSymMvdCheckBestMvp(
   const Picture* picRefA = cu.slice->getRefPic(curRefList, cCurMvField.refIdx);
   Mv mvA = cCurMvField.mv;
   xClipMvSearch( mvA, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_ifpLines );
-  const CPelUnitBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
+  const CPelBuf predBufA = xPredSymLuma( cu, picRefA, mvA, predStorageA );
 
   bufTmp = m_tmpStorageLCU.getCompactBuf( cu );
-  bufTmp.removeHighFreq( origBuf, predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs/*, getBcwWeight( cu.BcwIdx, tarRefList )*/ );
+  bufTmp.Y().removeHighFreq( origBuf.Y(), predBufA, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs[ COMP_Y ]/*, getBcwWeight( cu.BcwIdx, tarRefList )*/ );
   fWeight = xGetMEDistortionWeight( cu.BcwIdx, tarRefList );
 
   int32_t skipMvpIdx[2];
@@ -4476,10 +4473,10 @@ void InterSearch::xSymMvdCheckBestMvp(
       const Picture* picRefB = cu.slice->getRefPic(tarRefList, cTarMvField.refIdx);
       Mv mvB = cTarMvField.mv;
       xClipMvSearch( mvB, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_ifpLines );
-      const CPelUnitBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
+      const CPelBuf predBufB = xPredSymLuma( cu, picRefB, mvB, predStorageB );
 
       // calc distortion
-      cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB.Y(), cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
+      cost = ( Distortion ) floor( fWeight * ( double ) m_pcRdCost->getDistPart( bufTmp.Y(), predBufB, cu.cs->sps->bitDepths[ CH_L ], COMP_Y, DF_HAD ) );
 
       Mv pred = amvpCur.mvCand[i];
       pred.changeTransPrecInternal2Amvr(cu.imv);
