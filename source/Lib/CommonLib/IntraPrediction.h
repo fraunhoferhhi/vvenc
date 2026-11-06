@@ -220,6 +220,7 @@ public:
   void loadLMLumaRecPels      ( const CodingUnit& cu, const CompArea& chromaArea );
   /// set parameters from CU data for accessing intra data
   void initIntraPatternChType ( const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag = false); // use forceRefFilterFlag to get both filtered and unfiltered buffers
+  void keepIntraPatternChType ( const CodingUnit &cu, const CompArea& area );   // for another mode of the block initIntraPatternChType was last called for
   void initIntraPatternChTypeISP( const CodingUnit& cu, const CompArea& area, PelBuf& piReco, const bool forceRefFilterFlag = false );
 
   // Matrix-based intra prediction

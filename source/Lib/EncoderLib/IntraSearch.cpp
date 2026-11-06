@@ -2000,12 +2000,25 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
     PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
 
-    initIntraPatternChType(*currTU.cu, cbArea);
-    initIntraPatternChType(*currTU.cu, crArea);
+    // estIntraPredChromaQT has read the samples around the whole chroma block, and only writes inside the block
+    const bool samplesKept = cbArea == cu.Cb();
+    if( samplesKept )
+    {
+      keepIntraPatternChType(*currTU.cu, cbArea);
+      keepIntraPatternChType(*currTU.cu, crArea);
+    }
+    else
+    {
+      initIntraPatternChType(*currTU.cu, cbArea);
+      initIntraPatternChType(*currTU.cu, crArea);
+    }
 
     if (CU::isLMCMode(predMode))
     {
-      loadLMLumaRecPels(cu, cbArea);
+      if( !samplesKept )
+      {
+        loadLMLumaRecPels(cu, cbArea);
+      }
       predIntraChromaLM(COMP_Cb, piPredCb, cu, cbArea, predMode);
       predIntraChromaLM(COMP_Cr, piPredCr, cu, crArea, predMode);
     }
