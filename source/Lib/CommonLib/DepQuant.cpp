@@ -1401,10 +1401,8 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   int64_t   minPathCost =  0;
   for( int stateId = 0; stateId < 4; stateId++ )
   {
-    // Which state wins is close to random, so a branch here mispredicts often. Without one, this does the same as
+    // No branch, as which state wins is close to random. It does the same as
     //   if( rdCost[stateId] < minPathCost ) { prevId = stateId; minPathCost = rdCost[stateId]; }
-    // lower is all ones if this path is cheaper, so each addition moves its variable or adds nothing. GCC turns ?: back into branches.
-    // The difference fits: a cost is at most about rdCostInit (2^62), and minPathCost is 0 or a small negative cost.
     const int64_t costDiff = m_trellis[0][0].rdCost[stateId] - minPathCost;
     const int64_t lower    = costDiff >> 63;
     prevId                += int( ( stateId - prevId ) & lower );
@@ -1412,13 +1410,12 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   }
 
   //===== backward scanning =====
-  // Each load's address depends on the prevId just loaded, so the walk runs at the speed of that chain. The row comes from a
-  // pointer and a compare, which add less to the chain than working it out from prevId and scanIdx together.
   const Decisions* row = m_trellis[0];
   TCoeff           sum = 0;
   int              scanIdx = 0;
   for( ; prevId >= 0; scanIdx++, row += 2 )
   {
+    // Not row[prevId >> 2]: that multiplies by sizeof(Decisions) on the prevId load chain, and the walk runs 10-12 % slower.
     const Decisions& dec = prevId < 4 ? row[0] : row[1];
     TCoeffSig absLevel = dec.absLevel[prevId & 3];
     int32_t blkpos     = tuPars.m_scanId2BlkPos[scanIdx].idx;
