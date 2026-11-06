@@ -896,6 +896,22 @@ namespace DQIntern
     state.sbbBits1[stateId]       =  0;
   }
 
+  static const Decisions startDec[2] =
+  {
+    Decisions
+    {
+      { rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2 },
+      { -1, -1, -1, -1 },
+      { -2, -2, -2, -2 },
+    },
+    Decisions
+    {
+      { rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2, rdCostInit >> 2 },
+      { 0, 0, 0, 0 },
+      { 4, 5, 6, 7 },
+    }
+  };
+
   template<bool rrgEnsured = false>
   static inline void checkRdCosts( const int stateId, const DQIntern::ScanPosType spt, const DQIntern::PQData& pqDataA, const DQIntern::PQData& pqDataB, DQIntern::Decisions& decisions, int idxAZ, int idxB, const DQIntern::StateMem& state )
   {
@@ -978,6 +994,7 @@ namespace DQIntern
 
   void checkAllRdCosts( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
   {
+    ::memcpy( &decisions, startDec, sizeof( Decisions ) );
     checkRdCosts<true>( 0, spt, pqData[0], pqData[2], decisions, 0, 2, state );
     checkRdCosts<true>( 1, spt, pqData[0], pqData[2], decisions, 2, 0, state );
     checkRdCosts<true>( 2, spt, pqData[3], pqData[1], decisions, 1, 3, state );
@@ -1041,6 +1058,7 @@ namespace DQIntern
 
   static void checkAllRdCostsOdd1( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
   {
+    ::memcpy( &decisions, startDec, sizeof( Decisions ) );
     checkRdCostsOdd1<true>( 0, spt, pq_b_dist, decisions, 2, 0, state );
     checkRdCostsOdd1<true>( 1, spt, pq_b_dist, decisions, 0, 2, state );
     checkRdCostsOdd1<true>( 2, spt, pq_a_dist, decisions, 3, 1, state );
@@ -1312,22 +1330,6 @@ namespace DQIntern
   }
 }; // namespace DQIntern
 
-static const DQIntern::Decisions startDec[2] =
-{
-  DQIntern::Decisions
-  {
-    { DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2 },
-    { -1, -1, -1, -1 },
-    { -2, -2, -2, -2 },
-  },
-  DQIntern::Decisions
-  {
-    { DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2, DQIntern::rdCostInit >> 2 },
-    { 0, 0, 0, 0 },
-    { 4, 5, 6, 7 },
-  }
-};
-
 void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
 {
   using namespace DQIntern;
@@ -1474,12 +1476,13 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
 {
   using namespace DQIntern;
 
-  ::memcpy( &decisions, startDec, sizeof( Decisions ) );
-
+  // m_checkAllRdCosts and m_checkAllRdCostsOdd1 set all of decisions themselves, and this runs for every coefficient:
+  // only the paths that compare against it start from startDec
   StateMem& skip = m_state_skip;
 
   if( zeroOut )
   {
+    ::memcpy( &decisions, startDec, sizeof( Decisions ) );
     if( scanInfo.spt == SCAN_EOCSBB )
     {
       checkRdCostSkipSbbZeroOut( 0, decisions, 0, skip );
@@ -1505,6 +1508,8 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
 
     if( prev.anyRemRegBinsLt4 )
     {
+      ::memcpy( &decisions, startDec, sizeof( Decisions ) );
+
       setRiceParam( 0, scanInfo, prev, false );
       checkRdCostsOdd1( 0, scanInfo.spt, pq_b_dist, decisions, 2, 0, prev );
 
@@ -1556,6 +1561,8 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
 
     if( cff02ge4 || cff13ge4 || prev.anyRemRegBinsLt4 )
     {
+      ::memcpy( &decisions, startDec, sizeof( Decisions ) );
+
       if( prev.anyRemRegBinsLt4 || cff02ge4 )
       {
         setRiceParam( 0, scanInfo, prev, cff02ge4 );
@@ -1642,7 +1649,7 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
 
   for( int t = 0; t < ( MAX_TB_SIZEY * MAX_TB_SIZEY ); t++ )
   {
-    memcpy( m_trellis[t], startDec, sizeof( startDec ) );
+    memcpy( m_trellis[t], DQIntern::startDec, sizeof( DQIntern::startDec ) );
   }
 
   m_checkAllRdCosts     = DQIntern::checkAllRdCosts;
