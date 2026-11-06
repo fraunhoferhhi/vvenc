@@ -70,6 +70,9 @@ extern const uint8_t g_sigCtxOfsSum [32];
 extern const uint8_t g_sigCtxOfsDiag[MAX_NUM_CH][128];
 extern const uint8_t g_absCtxOfsDiag[MAX_NUM_CH][128];
 
+// A template buffer holds a block and two more rows' room, since CoeffCodingContext::absVal1stPass writes neighbours without testing for the block's edge
+static const int CTX_TPL_BUF_SIZE = MAX_TB_SIZEY * MAX_TB_SIZEY + 2 * MAX_TB_SIZEY;
+
 struct CoeffCodingContext
 {
 public:
@@ -195,22 +198,22 @@ public:
     CHECKD( !absLevel1, "Shound not be called if '0'!" );
 
     const auto scanEl     = m_scan[scanPos];
-    const uint32_t posY   = scanEl.y;
-    const uint32_t posX   = scanEl.x;
-    const int32_t  blkPos = scanEl.idx;
+    const int  posY       = scanEl.y;
+    const int  posX       = scanEl.x;
+    const int  add        = 32 + absLevel1;
 
-    auto update_deps = [&]( int offset )
-    {
-      auto& ctx   = m_tplBuf[-blkPos + offset];
-      ctx.ctxTpl += uint8_t( 32 + absLevel1 );
-    };
+    // all ones if the neighbour exists; one that doesn't gets 0 added, in the block or in the room left by CTX_TPL_BUF_SIZE
+    const int  hasX1      = ( -posX ) >> 31;
+    const int  hasX2      = ( 1 - posX ) >> 31;
+    const int  hasY1      = ( -posY ) >> 31;
+    const int  hasY2      = ( 1 - posY ) >> 31;
+    CtxTpl*    tpl        = m_tplBuf - int( scanEl.idx );
 
-    if( posY > 1 ) update_deps( 2 * m_width );
-    if( posY > 0
-     && posX > 0 ) update_deps( m_width + 1 );
-    if( posY > 0 ) update_deps( m_width );
-    if( posX > 1 ) update_deps( 2 );
-    if( posX > 0 ) update_deps( 1 );
+    tpl[2 * m_width].ctxTpl += uint8_t( add & hasY2 );
+    tpl[m_width + 1].ctxTpl += uint8_t( add & hasY1 & hasX1 );
+    tpl[m_width    ].ctxTpl += uint8_t( add & hasY1 );
+    tpl[2          ].ctxTpl += uint8_t( add & hasX2 );
+    tpl[1          ].ctxTpl += uint8_t( add & hasX1 );
   }
   
 
