@@ -4186,10 +4186,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           if( reuseLumaBits && compID == COMP_Y )
           {
             m_CABACEstimator->addEstFracBits( bestLumaResiBits );
+            m_tuResiBits[COMP_Y] = bestLumaResiBits;
           }
           else
           {
+            const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
             m_CABACEstimator->residual_coding( tu, compID );
+            m_tuResiBits[compID] = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
           }
         }
         uiSingleDist += uiSingleDistComp[compID];
@@ -4199,6 +4202,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     {
       CHECK( m_CABACEstimator->getEstFracBits() > 0, "no residual TU's bits shall be 0" );
     }
+    m_tuResiBitsValid = reuseLumaBits;
 
     csFull->fracBits += m_CABACEstimator->getEstFracBits();
     csFull->dist     += uiSingleDist;
@@ -4273,7 +4277,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   }
 }
 
-void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual )
+void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual, const double bestCost )
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
@@ -4340,6 +4344,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
 
+  m_tuResiBitsValid = false;
   xEstimateInterResidualQT(cs, partitioner, &zeroDistortion );
   TransformUnit& firstTU = *cs.getTU( partitioner.chType );
 
@@ -4373,7 +4378,12 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // all decisions now made. Fully encode the CU, including the headers:
   m_CABACEstimator->getCtx() = ctxStart;
 
+  // The headers before the residuals use other contexts, and with no transform skip (see reuseLumaBits) chroma shares none with luma, so the
+  // residuals cost the bits they did in xEstimateInterResidualQT. mts_idx would read what residual_coding leaves in CUCtx.
+  const bool useTuResiBits = m_tuResiBitsValid && cu.rootCbf && !CU::isMTSAllowed( cu, COMP_Y );
+  m_CABACEstimator->setTuResiBits( useTuResiBits ? m_tuResiBits : nullptr );
   uint64_t finalFracBits = xGetSymbolFracBitsInter( cs, partitioner );
+  m_CABACEstimator->setTuResiBits( nullptr );
   // we've now encoded the CU, and so have a valid bit cost
   if (!cu.rootCbf)
   {
@@ -4424,6 +4434,18 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   cs.dist     = finalDistortion;
   cs.fracBits = finalFracBits;
   cs.cost     = m_pcRdCost->calcRdCost(cs.fracBits, cs.dist);
+
+  // The contexts after the CU are only kept if it wins, and the bits still to come can't lower its cost.
+  if( useTuResiBits && cs.cost < bestCost )
+  {
+    for( uint32_t ch = 0; ch < numValidComponents; ch++ )
+    {
+      if( TU::getCbf( firstTU, ComponentID( ch ) ) )
+      {
+        m_CABACEstimator->residual_coding( firstTU, ComponentID( ch ) );
+      }
+    }
+  }
 
   CHECK(cs.tus.size() == 0, "No TUs present");
 }
