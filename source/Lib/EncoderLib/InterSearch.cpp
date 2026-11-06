@@ -5455,15 +5455,15 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   Mv acMvTemp[3];
   ::memcpy(acMvTemp, acMv, sizeof(Mv) * 3);
   // Set delta mv
-  // malloc buffer
   int iParaNum = cu.affineType ? 7 : 5;
   int affineParaNum = iParaNum - 1;
   int mvNum = cu.affineType ? 3 : 2;
-  double **pdEqualCoeff;
-  pdEqualCoeff = new double *[iParaNum];
+  // solveEqual takes row pointers. The matrix stays on the stack, since the heap takes longer than the small matrix is worth.
+  double  equalCoeffRows[7][7];
+  double* pdEqualCoeff[7];
   for (int i = 0; i < iParaNum; i++)
   {
-    pdEqualCoeff[i] = new double[iParaNum];
+    pdEqualCoeff[i] = equalCoeffRows[i];
   }
 
   int64_t  i64EqualCoeff[7][7];
@@ -5809,11 +5809,6 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   acMvPred[0] = aamvpi.mvCandLT[mvpIdx];
   acMvPred[1] = aamvpi.mvCandRT[mvpIdx];
   acMvPred[2] = aamvpi.mvCandLB[mvpIdx];
-
-  // free buffer
-  for (int i = 0; i<iParaNum; i++)
-    delete[]pdEqualCoeff[i];
-  delete[]pdEqualCoeff;
 
   ruiBits = uiBitsBest;
   ruiCost = uiCostBest;
