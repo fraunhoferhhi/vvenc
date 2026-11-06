@@ -381,7 +381,7 @@ inline void _fastForwardMM( const TCoeff *src, TCoeff *dst, int shift, int line,
   }
 #endif
 
-  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine, iSkipLine2 );
+  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine );
 }
 
 template<int N>

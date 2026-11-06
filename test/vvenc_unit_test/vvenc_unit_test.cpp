@@ -1771,7 +1771,7 @@ static bool check_dct2_matrix_symmetry()
   return true;
 }
 
-// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed parts) against the scalar
+// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed columns) against the scalar
 // matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values that trip
 // its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine / cutoff
 // combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, 12).
@@ -1814,9 +1814,9 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );
           const int shift = rng.get( 1, 16 );
 
-          // the reference: scalar matrix multiply, then the zeroed parts
+          // the reference: scalar matrix multiply, then the zeroed columns; the rows past the cut-off keep the marker
           ref->fastFwdCore_2D[coreIdx]( tc, src, dst0, line, reducedLine, cutoff, shift );
-          fastForwardZeroSkipped( dst0, line, reducedLine, cutoff, line - reducedLine, trSize - cutoff );
+          fastForwardZeroSkipped( dst0, line, reducedLine, cutoff, line - reducedLine );
           opt->fastFwdDCT2[idx]( src, dst1, shift, line, line - reducedLine, trSize - cutoff );
 
           std::ostringstream sstm;
