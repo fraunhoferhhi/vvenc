@@ -2226,7 +2226,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           {
             saveCS.getRecoBuf(area).copyFrom(cs.getRecoBuf(area));
             tmpTU.copyComponentFrom(currTU, compID);
-            ctxBest = m_CABACEstimator->getCtx();
+            // Without a transform skip test only the save after Cr is ever read
+            if( compID != COMP_Cb || testTS )
+            {
+              ctxBest = m_CABACEstimator->getCtx();
+            }
           }
         }
         }
