@@ -4152,9 +4152,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     // transform skip. Only a TU at depth 0 can skip them: a following TU would start from the contexts they leave behind, and here the
     // caller goes back to ctxStart.
     const bool reuseLumaBits = currDepth == 0 && !cu.sbtInfo && tu.mtsIdx[COMP_Y] != MTS_SKIP;
+    // The TU of an SBT CU: the caller codes the bits of the whole CU again after its TUs, and the other TU codes nothing, so these bits
+    // and the contexts they leave behind are never read.
+    const bool bitsUnused = cu.sbtInfo && currDepth > 0;
     m_CABACEstimator->getCtx() = ctxStart;
     m_CABACEstimator->resetBits();
-    if( !tu.noResidual )
+    if( !tu.noResidual && !bitsUnused )
     {
       static const ComponentID cbf_getComp[3] = { COMP_Cb, COMP_Cr, COMP_Y };
       for( unsigned c = 0; c < numTBlocks; c++)
@@ -4173,12 +4176,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       const ComponentID compID = ComponentID(ch);
       if (tu.blocks[compID].valid())
       {
-        if( compID == COMP_Cr )
+        if( compID == COMP_Cr && !bitsUnused )
         {
           const int cbfMask = ( TU::getCbf( tu, COMP_Cb ) ? 2 : 0 ) + ( TU::getCbf( tu, COMP_Cr ) ? 1 : 0 );
           m_CABACEstimator->joint_cb_cr(tu, cbfMask);
         }
-        if( TU::getCbf( tu, compID ) )
+        if( TU::getCbf( tu, compID ) && !bitsUnused )
         {
           if( reuseLumaBits && compID == COMP_Y )
           {
