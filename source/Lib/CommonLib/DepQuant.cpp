@@ -457,9 +457,7 @@ namespace DQIntern
   }
 
   // true when the two spans of context bytes are equal: an OR of the XORed 64-bit words, which the compiler can
-  // vectorize; unlike memcmp it needs no ordering and no library call (whose speed differs between C runtimes). The
-  // span includes each context model's padding byte, which is never written: memory checkers may report it as
-  // uninitialized, and where it differs it only causes a needless rebuild, never a wrong table.
+  // vectorize; unlike memcmp it needs no ordering and no library call (whose speed differs between C runtimes).
   static inline bool equalCoeffCtxStates( const uint8_t* a, const uint8_t* b )
   {
     uint64_t diff = 0;
