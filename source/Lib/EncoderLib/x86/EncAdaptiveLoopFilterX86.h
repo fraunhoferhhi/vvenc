@@ -146,30 +146,75 @@ void simdGetPreBlkStatsWeightedAccum( AlfCovariance& alfCovariance, const AlfFil
   alfCovariance.pixAcc += _mm_cvtss_f32( xacc );
 }
 
-// Products of the 16 Pels of an ELocal row (melocalk0: Pels 0-7, melocalk8: Pels 8-15) with the 16 Pels at row, summed
-// pairwise into 4 int32 partial sums of their dot product
-static inline __m128i alfRowDotPartials( const __m128i melocalk0, const __m128i melocalk8, const Pel* row )
+// A row of 16 Pels of ELocal is loaded once and multiplied with many other rows.
+// alfRowDotPartials: its products with the 16 Pels at row, summed pairwise into 4 int32 partial sums of their dot product.
+// alfRowDots4: its dot products with the 4 rows of 16 Pels from rows on, one in each int32.
+// Integer sums don't depend on their order, so both builds give the same values.
+#ifdef USE_AVX2
+typedef __m256i AlfRow;
+
+static inline AlfRow alfLoadRow( const Pel* row )
 {
-  const __m128i mmacc0 = _mm_madd_epi16( melocalk0, _mm_loadu_si128( ( const __m128i* )&row[0] ) );
-  const __m128i mmacc8 = _mm_madd_epi16( melocalk8, _mm_loadu_si128( ( const __m128i* )&row[8] ) );
+  return _mm256_loadu_si256( ( const __m256i* )row );
+}
+
+static inline __m128i alfAddLanes( const __m256i value )
+{
+  return _mm_add_epi32( _mm256_castsi256_si128( value ), _mm256_extracti128_si256( value, 1 ) );
+}
+
+static inline __m128i alfRowDotPartials( const AlfRow rowK, const Pel* row )
+{
+  return alfAddLanes( _mm256_madd_epi16( rowK, alfLoadRow( row ) ) );
+}
+
+static inline __m128i alfRowDots4( const AlfRow rowK, const Pel* rows )
+{
+  const __m256i dot0 = _mm256_madd_epi16( rowK, alfLoadRow( rows + 0 * NL_COVAR_kstride ) );
+  const __m256i dot1 = _mm256_madd_epi16( rowK, alfLoadRow( rows + 1 * NL_COVAR_kstride ) );
+  const __m256i dot2 = _mm256_madd_epi16( rowK, alfLoadRow( rows + 2 * NL_COVAR_kstride ) );
+  const __m256i dot3 = _mm256_madd_epi16( rowK, alfLoadRow( rows + 3 * NL_COVAR_kstride ) );
+  return alfAddLanes( _mm256_hadd_epi32( _mm256_hadd_epi32( dot0, dot1 ), _mm256_hadd_epi32( dot2, dot3 ) ) );
+}
+#else
+struct AlfRow
+{
+  __m128i pels0, pels8;
+};
+
+static inline AlfRow alfLoadRow( const Pel* row )
+{
+  return { _mm_loadu_si128( ( const __m128i* )&row[0] ), _mm_loadu_si128( ( const __m128i* )&row[8] ) };
+}
+
+static inline __m128i alfRowDotPartials( const AlfRow& rowK, const Pel* row )
+{
+  const __m128i mmacc0 = _mm_madd_epi16( rowK.pels0, _mm_loadu_si128( ( const __m128i* )&row[0] ) );
+  const __m128i mmacc8 = _mm_madd_epi16( rowK.pels8, _mm_loadu_si128( ( const __m128i* )&row[8] ) );
   return _mm_add_epi32( mmacc0, mmacc8 );
 }
+
+static inline __m128i alfRowDots4( const AlfRow& rowK, const Pel* rows )
+{
+  const __m128i dot0 = alfRowDotPartials( rowK, rows + 0 * NL_COVAR_kstride );
+  const __m128i dot1 = alfRowDotPartials( rowK, rows + 1 * NL_COVAR_kstride );
+  const __m128i dot2 = alfRowDotPartials( rowK, rows + 2 * NL_COVAR_kstride );
+  const __m128i dot3 = alfRowDotPartials( rowK, rows + 3 * NL_COVAR_kstride );
+  return _mm_hadd_epi32( _mm_hadd_epi32( dot0, dot1 ), _mm_hadd_epi32( dot2, dot3 ) );
+}
+#endif
 
 template<X86_VEXT vext>
 void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                               const Pel yLocal[4][4], const int numBins )
 {
-  const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i* )&yLocal[0][0] );
-  const __m128i mylocal8 = _mm_loadu_si128( ( const __m128i* )&yLocal[2][0] );
-
   for( int b0 = 0; b0 < numBins; b0++ )
   {
     for( int k = 0; k < shape.numCoeff; k++ )
     {
       const Pel* Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
 
-      const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* )&Elocalk[0] );
-      const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* )&Elocalk[8] );
+      const AlfRow rowK = alfLoadRow( Elocalk );
 
       for( int b1 = 0; b1 < numBins; b1++ )
       {
@@ -179,14 +224,7 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
 
         for( ; l < ( shape.numCoeff - 3 ); l += 4 )
         {
-          __m128i vmacc[4];
-
-          for( int ll = 0; ll < 4; ll++ )
-          {
-            vmacc[ll] = alfRowDotPartials( melocalk0, melocalk8, &GET_ALF_COVAR( ELocal, b1, l + ll, 0 ) );
-          }
-
-          __m128i mmacc = _mm_hadd_epi32( _mm_hadd_epi32( vmacc[0], vmacc[1] ), _mm_hadd_epi32( vmacc[2], vmacc[3] ) );
+          const __m128i mmacc = alfRowDots4( rowK, &GET_ALF_COVAR( ELocal, b1, l, 0 ) );
 
           __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
 
@@ -199,7 +237,7 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
 
         for( ; l < shape.numCoeff; l++ )
         {
-          __m128i mmacc = alfRowDotPartials( melocalk0, melocalk8, &GET_ALF_COVAR( ELocal, b1, l, 0 ) );
+          __m128i mmacc = alfRowDotPartials( rowK, &GET_ALF_COVAR( ELocal, b1, l, 0 ) );
           mmacc = _mm_hadd_epi32( mmacc, mmacc );
           mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
@@ -209,10 +247,7 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
         }
       }
 
-      const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
-      const __m128i mmacc8 = _mm_madd_epi16( melocalk8, mylocal8 );
-
-      __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+      __m128i mmacc = alfRowDotPartials( rowK, &yLocal[0][0] );
       mmacc = _mm_hadd_epi32( mmacc, mmacc );
       mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
@@ -220,10 +255,7 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
     }
   }
 
-  const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
-  const __m128i mmacc8 = _mm_madd_epi16( mylocal8, mylocal8 );
-
-  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+  __m128i mmacc = alfRowDotPartials( alfLoadRow( &yLocal[0][0] ), &yLocal[0][0] );
   mmacc = _mm_hadd_epi32( mmacc, mmacc );
   mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
@@ -239,9 +271,6 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
 {
   const AlfEqualBinRuns runs( equalBinsMask );
 
-  const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i* )&yLocal[0][0] );
-  const __m128i mylocal8 = _mm_loadu_si128( ( const __m128i* )&yLocal[2][0] );
-
   for( int r0 = 0; r0 < runs.numRuns; r0++ )
   {
     const int firstBin0 = runs.first[r0], endBin0 = firstBin0 + runs.size[r0];
@@ -250,8 +279,7 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
     {
       const Pel* Elocalk = &GET_ALF_COVAR( ELocal, firstBin0, k, 0 );
 
-      const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* )&Elocalk[0] );
-      const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* )&Elocalk[8] );
+      const AlfRow rowK = alfLoadRow( Elocalk );
 
       for( int r1 = 0; r1 < runs.numRuns; r1++ )
       {
@@ -261,14 +289,7 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
 
         for( ; l < ( shape.numCoeff - 3 ); l += 4 )
         {
-          __m128i vmacc[4];
-
-          for( int ll = 0; ll < 4; ll++ )
-          {
-            vmacc[ll] = alfRowDotPartials( melocalk0, melocalk8, &GET_ALF_COVAR( ELocal, firstBin1, l + ll, 0 ) );
-          }
-
-          __m128i mmacc = _mm_hadd_epi32( _mm_hadd_epi32( vmacc[0], vmacc[1] ), _mm_hadd_epi32( vmacc[2], vmacc[3] ) );
+          const __m128i mmacc = alfRowDots4( rowK, &GET_ALF_COVAR( ELocal, firstBin1, l, 0 ) );
 
           const __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
 
@@ -284,7 +305,7 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
 
         for( ; l < shape.numCoeff; l++ )
         {
-          __m128i mmacc = alfRowDotPartials( melocalk0, melocalk8, &GET_ALF_COVAR( ELocal, firstBin1, l, 0 ) );
+          __m128i mmacc = alfRowDotPartials( rowK, &GET_ALF_COVAR( ELocal, firstBin1, l, 0 ) );
           mmacc = _mm_hadd_epi32( mmacc, mmacc );
           mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
@@ -300,10 +321,7 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
         }
       }
 
-      const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
-      const __m128i mmacc8 = _mm_madd_epi16( melocalk8, mylocal8 );
-
-      __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+      __m128i mmacc = alfRowDotPartials( rowK, &yLocal[0][0] );
       mmacc = _mm_hadd_epi32( mmacc, mmacc );
       mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
@@ -316,10 +334,7 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
     }
   }
 
-  const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
-  const __m128i mmacc8 = _mm_madd_epi16( mylocal8, mylocal8 );
-
-  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+  __m128i mmacc = alfRowDotPartials( alfLoadRow( &yLocal[0][0] ), &yLocal[0][0] );
   mmacc = _mm_hadd_epi32( mmacc, mmacc );
   mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
