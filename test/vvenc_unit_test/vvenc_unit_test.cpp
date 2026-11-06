@@ -1835,6 +1835,91 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
   return passed;
 }
 
+static const TMatrixCoeff* trCoreMatrix( int dir, int trType, int sizeIdx )
+{
+  switch( trType * 10 + sizeIdx )
+  {
+  case  0: return g_trCoreDCT2P2 [dir][0];
+  case  1: return g_trCoreDCT2P4 [dir][0];
+  case  2: return g_trCoreDCT2P8 [dir][0];
+  case  3: return g_trCoreDCT2P16[dir][0];
+  case  4: return g_trCoreDCT2P32[dir][0];
+  case  5: return g_trCoreDCT2P64[dir][0];
+  case 11: return g_trCoreDCT8P4 [dir][0];
+  case 12: return g_trCoreDCT8P8 [dir][0];
+  case 13: return g_trCoreDCT8P16[dir][0];
+  case 14: return g_trCoreDCT8P32[dir][0];
+  case 21: return g_trCoreDST7P4 [dir][0];
+  case 22: return g_trCoreDST7P8 [dir][0];
+  case 23: return g_trCoreDST7P16[dir][0];
+  case 24: return g_trCoreDST7P32[dir][0];
+  default: return nullptr;
+  }
+}
+
+// TCoeffOps::fastFwdPel against the matrix multiply it stands for, for all transform types and sizes and every line
+// count and cutoff. The inputs reach the range the even/odd split takes. The whole destination is compared: stray
+// writes fail.
+static bool check_fastPelKernels( TCoeffOps* opt )
+{
+  printf( "Testing TCoeffOps::fastFwdPel\n" );
+  DimensionGenerator rng;
+  bool passed = true;
+
+  for( int trType = 0; trType < NUM_TRANS_TYPE; trType++ )
+  {
+    for( int sizeIdx = 0; sizeIdx < 6; sizeIdx++ )
+    {
+      const int N = 2 << sizeIdx;
+
+      for( int line : { 2, 4, 8, 16, 32, 64 } )
+      {
+        const int stride = N + 3;
+
+        for( int cutoff = N <= 4 ? N : 4; cutoff <= std::min( N, 32 ); cutoff += N <= 4 ? N : 4 )
+        {
+          for( int dist = 0; dist < 2; dist++ )
+          {
+            if( opt->fastFwdPel[trType][sizeIdx] )
+            {
+              const TMatrixCoeff* tc = trCoreMatrix( TRANSFORM_FORWARD, trType, sizeIdx );
+              const int shift = rng.get( N == 2 ? 0 : 1, 16 );
+              const int rnd   = shift ? 1 << ( shift - 1 ) : 0;
+
+              std::vector<Pel> src( stride * line + 8 );
+              for( Pel& v : src )
+              {
+                v = Pel( dist ? ( rng.get( 0, 1 ) ? 16383 : -16384 ) : int( rng.get( 0, 4095 ) ) - 2048 );
+              }
+
+              std::vector<TCoeff> dst0( N * line, 0x5a5a5a5a ), dst1( N * line, 0x5a5a5a5a );
+              for( int i = 0; i < line; i++ )
+              {
+                for( int j = 0; j < cutoff; j++ )
+                {
+                  int sum = 0;
+                  for( int k = 0; k < N; k++ )
+                  {
+                    sum += src[i * stride + k] * tc[j * N + k];
+                  }
+                  dst0[j * line + i] = ( sum + rnd ) >> shift;
+                }
+              }
+              opt->fastFwdPel[trType][sizeIdx]( src.data(), stride, dst1.data(), shift, line, N - cutoff );
+
+              std::ostringstream sstm;
+              sstm << "fastFwdPel trType=" << trType << " N=" << N << " line=" << line << " cutoff=" << cutoff << " shift=" << shift << " inputs=" << dist;
+              passed = compare_values_1d( sstm.str(), dst0.data(), dst1.data(), N * line ) && passed;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return passed;
+}
+
 typedef void InvTrFn( const TCoeff*, TCoeff*, int, int, int, int, const TCoeff, const TCoeff );
 typedef void FwdTrFn( const TCoeff*, TCoeff*, int, int, int, int );
 
@@ -1997,6 +2082,7 @@ static bool test_TCoeffOps()
   passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
+  passed = check_fastPelKernels( &opt ) && passed;
 
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;
