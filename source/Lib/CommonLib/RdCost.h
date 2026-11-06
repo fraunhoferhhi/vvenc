@@ -107,9 +107,16 @@ public:
 
   DistParam() = default;
 
-  DistParam( const CPelBuf& _org, const CPelBuf& _cur,  FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
-    : org(_org), cur(_cur), distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
+  // org and cur have the same size and the kernels only read org's, so cur's width and height stay 0
+  DistParam( const Pel* _org, int _orgStride, const Pel* _cur, int _curStride, int _width, int _height, FpDistFunc _distFunc, int _bitDepth, int _subShift, ComponentID _compID )
+    : distFunc(_distFunc), bitDepth(_bitDepth), subShift(_subShift), compID(_compID)
   {
+    org.buf    = _org;
+    org.stride = _orgStride;
+    org.width  = _width;
+    org.height = _height;
+    cur.buf    = _cur;
+    cur.stride = _curStride;
   }
 };
 

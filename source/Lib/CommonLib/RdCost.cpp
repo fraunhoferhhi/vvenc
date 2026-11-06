@@ -153,7 +153,7 @@ void RdCost::create( bool enableOpt )
 #if ENABLE_MEASURE_SEARCH_SPACE
 static Distortion xMeasurePredSearchSpaceInterceptor( const DistParam& dp )
 {
-  g_searchSpaceAcc.addPrediction( dp.cur.width, dp.cur.height, toChannelType( dp.compID ) );
+  g_searchSpaceAcc.addPrediction( dp.org.width, dp.org.height, toChannelType( dp.compID ) );
   return dp.xDistFunc( dp );
 }
 
@@ -221,12 +221,12 @@ DistParam RdCost::setDistParam( const CPelBuf& org, const CPelBuf& cur, int bitD
 
   const int base = bitDepth > 10 ? 1:0; //TBD: check does SDA ever overflow
 #if ENABLE_MEASURE_SEARCH_SPACE
-  DistParam rcDP( org, cur, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
+  DistParam rcDP( org.buf, org.stride, cur.buf, cur.stride, org.width, org.height, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
   rcDP.xDistFunc = rcDP.distFunc;
   rcDP.distFunc  = xMeasurePredSearchSpaceInterceptor;
   return rcDP;
 #else
-  return DistParam( org, cur, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
+  return DistParam( org.buf, org.stride, cur.buf, cur.stride, org.width, org.height, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
 #endif
 }
 
@@ -271,9 +271,9 @@ DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStri
 
 Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc )
 {
-  DistParam dp( org, cur, nullptr, bitDepth, 0, compId );
+  DistParam dp( org.buf, org.stride, cur.buf, cur.stride, org.width, org.height, nullptr, bitDepth, 0, compId );
 # if ENABLE_MEASURE_SEARCH_SPACE
-  g_searchSpaceAcc.addPrediction( dp.cur.width, dp.cur.height, toChannelType( dp.compID ) );
+  g_searchSpaceAcc.addPrediction( dp.org.width, dp.org.height, toChannelType( dp.compID ) );
 #endif
   Distortion dist;
   if( ( org.width == 1 ) )
