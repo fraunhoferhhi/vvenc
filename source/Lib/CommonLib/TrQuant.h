@@ -74,6 +74,14 @@ typedef std::pair<int, int>  TrCost;
 typedef static_vector<TrMode, NUM_TRAFO_MODES_MTS> TrModeList;
 typedef static_vector<TrCost, NUM_TRAFO_MODES_MTS> TrCostList;
 
+// The primary transform an LFNST candidate works on, for the transforms of one TU with the same residual
+enum LfnstPrimary
+{
+  LFNST_PRIMARY_NEW,    // transform the residual
+  LFNST_PRIMARY_KEEP,   // transform the residual, and keep what an LFNST of this TU will take from it
+  LFNST_PRIMARY_KNOWN   // an earlier call on this TU kept it: the residual isn't read
+};
+
 /// transform and quantization class
 class TrQuant
 {
@@ -93,7 +101,7 @@ public:
 
 public:
   void invTransformNxN    ( TransformUnit& tu, const ComponentID compID, PelBuf& pResi, const QpParam& cQPs);
-  void transformNxN       ( TransformUnit& tu, const ComponentID compID, const QpParam& cQP, TCoeff &uiAbsSum, const Ctx& ctx, const bool loadTr = false);
+  void transformNxN       ( TransformUnit& tu, const ComponentID compID, const QpParam& cQP, TCoeff &uiAbsSum, const Ctx& ctx, const bool loadTr = false, const LfnstPrimary lfnstPrimary = LFNST_PRIMARY_NEW);
   void checktransformsNxN ( TransformUnit& tu, TrModeList *trModes, const int maxCand, const ComponentID compID = COMP_Y);
 
   void                        invTransformICT     ( const TransformUnit& tu, PelBuf& resCb, PelBuf& resCr );
@@ -122,6 +130,7 @@ protected:
 private:
   DepQuant* m_quant;          //!< Quantizer
   TCoeff    m_tempInMatrix[48];
+  TCoeff    m_lfnstFwdIn[48];     // what the forward LFNST takes from the primary transform; only xFwdLfnst writes it
   TCoeff    m_tempOutMatrix[48];
   TCoeff   *m_mtsCoeffs[NUM_TRAFO_MODES_MTS];
 
@@ -133,7 +142,7 @@ private:
 
   uint32_t xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode );
   bool     xGetTransposeFlag(uint32_t intraMode);
-  void     xFwdLfnst    ( const TransformUnit &tu, const ComponentID compID, const bool loadTr = false);
+  void     xFwdLfnst    ( const TransformUnit &tu, const ComponentID compID, const bool loadTr, const LfnstPrimary lfnstPrimary );
   void     xInvLfnst    ( const TransformUnit &tu, const ComponentID compID);
   void     xSetTrTypes  ( const TransformUnit& tu, const ComponentID compID, const int width, const int height, int &trTypeHor, int &trTypeVer );
 

@@ -698,7 +698,7 @@ void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBu
 }
 
 
-void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const QpParam &cQP, TCoeff &uiAbsSum, const Ctx &ctx, const bool loadTr)
+void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const QpParam &cQP, TCoeff &uiAbsSum, const Ctx &ctx, const bool loadTr, const LfnstPrimary lfnstPrimary)
 {
         CodingStructure &cs = *tu.cs;
   const CompArea& rect      = tu.blocks[compID];
@@ -722,7 +722,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   CHECK( cs.sps->getMaxTbSize() < uiWidth, "Unsupported transformation size" );
 
   CoeffBuf tempCoeff(loadTr ? m_mtsCoeffs[tu.mtsIdx[compID]] : m_plTempCoeff, rect);
-  if (!loadTr)
+  if (!loadTr && lfnstPrimary != LFNST_PRIMARY_KNOWN)
   {
     DTRACE_PEL_BUF( D_RESIDUALS, resiBuf, tu, tu.cu->predMode, compID );
     if (tu.mtsIdx[compID] == MTS_SKIP)
@@ -736,7 +736,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   }
   if (cs.sps->LFNST)
   {
-    xFwdLfnst(tu, compID, loadTr);
+    xFwdLfnst(tu, compID, loadTr, lfnstPrimary);
   }
   DTRACE_COEFF_BUF( D_TCOEFF, tempCoeff, tu, tu.cu->predMode, compID );
 
@@ -952,13 +952,13 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
 }
 
 
-void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const bool loadTr)
+void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const bool loadTr, const LfnstPrimary lfnstPrimary)
 {
   const CompArea &area     = tu.blocks[compID];
   const uint32_t  width    = area.width;
   const uint32_t  height   = area.height;
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
-  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
+  if ((lfnstIdx || lfnstPrimary == LFNST_PRIMARY_KEEP) && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
     const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
@@ -997,10 +997,14 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
       TCoeff*   tempCoeff     = loadTr ? m_mtsCoeffs[tu.mtsIdx[compID]] : m_plTempCoeff;
 
       int y;
-      lfnstTemp = m_tempInMatrix;   // forward low frequency non-separable transform
+      lfnstTemp = m_lfnstFwdIn;   // forward low frequency non-separable transform
       coeffTemp = tempCoeff;
 
-      if (transposeFlag)
+      if (lfnstPrimary == LFNST_PRIMARY_KNOWN)
+      {
+        // m_lfnstFwdIn holds it, and only the first coefficient group is quantized: the rest of the block isn't read
+      }
+      else if (transposeFlag)
       {
         if (sbSize == 4)
         {
@@ -1045,7 +1049,12 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         }
       }
 
-      m_fwdLfnstNxN( m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
+      if (!lfnstIdx)
+      {
+        return;
+      }
+
+      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
 
       lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
       coeffTemp                        = tempCoeff;
