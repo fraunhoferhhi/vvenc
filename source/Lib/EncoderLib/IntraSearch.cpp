@@ -1822,7 +1822,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
             }
             else
             {
-              saveCS.getPredBuf(tu.Y()).copyFrom(cs.getPredBuf(tu.Y()));
               saveCS.getRecoBuf(tu.Y()).copyFrom(cs.getRecoBuf(tu.Y()));
 
               tmpTU->copyComponentFrom(tu, COMP_Y);
