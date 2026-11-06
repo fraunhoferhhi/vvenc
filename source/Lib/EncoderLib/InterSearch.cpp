@@ -5201,11 +5201,20 @@ Distortion InterSearch::xGetAffineTemplateCost(CodingUnit& cu, CPelUnitBuf& orig
     return MAX_DISTORTION>>1;  
   }
 
-  xPredAffineBlk(COMP_Y, cu, picRef, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+  // What the prediction depends on besides the reference picture and the MVs.
+  const int predSettings = cu.affineType | int( cu.interDir == 3 ) << 1 | int( m_isBi ) << 2 | int( m_skipPROF ) << 3 | int( m_encOnly ) << 4;
+  const int mvNum        = cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2;
+  Distortion dist = 0;
+  m_affineTemplateDists.startCu( cu.cs->picture, cu.slice->poc, cu.Y() );
+  if( !m_affineTemplateDists.find( picRef, mv, mvNum, predSettings, dist ) )
+  {
+    xPredAffineBlk(COMP_Y, cu, picRef, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
-  // calc distortion
-  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD );
-  uiCost += m_pcRdCost->getCost(m_auiMVPIdxCost[iMVPIdx][iMVPNum]);
+    // calc distortion
+    dist = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD );
+    m_affineTemplateDists.add( picRef, mv, predSettings, dist );
+  }
+  uiCost = dist + m_pcRdCost->getCost(m_auiMVPIdxCost[iMVPIdx][iMVPNum]);
 
   DTRACE(g_trace_ctx, D_COMMON, " (%d) affineTemplateCost=%d\n", DTRACE_GET_COUNTER(g_trace_ctx, D_COMMON), uiCost);
   return uiCost;
