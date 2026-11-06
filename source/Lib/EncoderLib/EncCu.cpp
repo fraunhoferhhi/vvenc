@@ -2104,7 +2104,7 @@ void EncCu::xCheckRDCostUnifiedMerge( CodingStructure *&tempCS, CodingStructure 
 
       cu = getCuForInterPrediction( tempCS, encTestMode );
       partitioner.setCUData( *cu );
-      const bool resetCiip2Regular = mergeItem->exportMergeInfo( *cu, forceNoResidual );
+      const bool resetCiip2Regular = mergeItem->exportMergeInfo( *cu, forceNoResidual, gpmMergeCtx );
 
       if( isRglr || resetCiip2Regular )
       {
@@ -2578,7 +2578,6 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
     pu.mergeIdx            = gpmIndex;
     pu.geoMergeIdx         = mergeIdxPair;
     pu.geoSplitDir         = splitDir;
-    CU::spanGeoMotionInfo  ( pu, mergeCtx, pu.geoSplitDir, pu.geoMergeIdx[0], pu.geoMergeIdx[1] );
 
     MergeItem *mergeItem   = m_mergeItemList.allocateNewMergeItem();
     mergeItem->importMergeInfo( mergeCtx, gpmIndex, MergeItem::MergeItemType::GPM, pu );
@@ -2595,7 +2594,6 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
     }
     else if( m_pcEncCfg->m_Geo < 2 )
     {
-      mergeItem->getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
       m_mergeItemList      . insertMergeItemToList( mergeItem );
     }
     else
@@ -2607,7 +2605,6 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
       }
       else
       {
-        mergeItem->getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
         if( !best2geo[0] || mergeItem->cost < best2geo[0]->cost )
         {
           if( best2geo[1] )
@@ -4339,8 +4336,8 @@ void MergeItem::importMergeInfo(const MergeCtx& mergeCtx, int _mergeIdx, MergeIt
     THROW( "Wrong merge item type" );
   }
 
-  // Regular, CIIP and MMVD candidates have one motion for the whole CU, which mvField holds, and exportMergeInfo
-  // regenerates their motion buffer. A GPM candidate saves its motion buffer only once it is kept.
+  // exportMergeInfo regenerates the motion of all these candidates: regular, CIIP and MMVD have one motion
+  // for the whole CU, which mvField holds, and GPM's comes from the split and the merge indices it stores
 }
 
 void MergeItem::importMergeInfo( const AffineMergeCtx &mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& pu )
@@ -4381,7 +4378,7 @@ void MergeItem::importMergeInfo( const AffineMergeCtx &mergeCtx, int _mergeIdx, 
   getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
 }
 
-bool MergeItem::exportMergeInfo( CodingUnit &pu, bool forceNoResidual ) const
+bool MergeItem::exportMergeInfo( CodingUnit &pu, bool forceNoResidual, const MergeCtx& gpmMergeCtx ) const
 {
   pu.mergeFlag        = true;
   pu.mmvdMergeFlag    = false;
@@ -4469,6 +4466,10 @@ bool MergeItem::exportMergeInfo( CodingUnit &pu, bool forceNoResidual ) const
   if( updatedType == MergeItemType::REGULAR || updatedType == MergeItemType::CIIP || updatedType == MergeItemType::MMVD )
   {
     CU::spanMotionInfo( pu );
+  }
+  else if( updatedType == MergeItemType::GPM )
+  {
+    CU::spanGeoMotionInfo( pu, gpmMergeCtx, pu.geoSplitDir, pu.geoMergeIdx[0], pu.geoMergeIdx[1] );
   }
   else
   {
