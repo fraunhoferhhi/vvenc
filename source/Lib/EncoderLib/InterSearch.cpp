@@ -3738,6 +3738,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     tu.checkTuNoResidual( partitioner.currPartIdx() );
 
     double minCost [MAX_NUM_TBLOCKS];
+    uint64_t resiBits = 0, bestLumaResiBits = 0;
 
     m_CABACEstimator->resetBits();
 
@@ -3886,7 +3887,9 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           CUCtx cuCtx;
           cuCtx.isDQPCoded = true;
           cuCtx.isChromaQpAdjCoded = true;
+          const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
           m_CABACEstimator->residual_coding(tu, compID, &cuCtx);
+          resiBits = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
           m_CABACEstimator->mts_idx(cu, &cuCtx);
 
           currCompFracBits = m_CABACEstimator->getEstFracBits();
@@ -3927,6 +3930,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           uiSingleDistComp[compID] = currCompDist;
           minCost[compID]          = currCompCost;
+          if( compID == COMP_Y )
+          {
+            bestLumaResiBits = resiBits;
+          }
           if (transformMode != (nNumTransformCands - 1))
           {
             bestTU.copyComponentFrom(tu, compID);
@@ -4141,6 +4148,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
     }
 
+    // The bits of the TU. Luma's coefficients were coded above from the same contexts, and chroma's share none with them unless in
+    // transform skip. Only a TU at depth 0 can skip them: a following TU would start from the contexts they leave behind, and here the
+    // caller goes back to ctxStart.
+    const bool reuseLumaBits = currDepth == 0 && !cu.sbtInfo && tu.mtsIdx[COMP_Y] != MTS_SKIP;
     m_CABACEstimator->getCtx() = ctxStart;
     m_CABACEstimator->resetBits();
     if( !tu.noResidual )
@@ -4169,7 +4180,14 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
         if( TU::getCbf( tu, compID ) )
         {
-          m_CABACEstimator->residual_coding( tu, compID );
+          if( reuseLumaBits && compID == COMP_Y )
+          {
+            m_CABACEstimator->addEstFracBits( bestLumaResiBits );
+          }
+          else
+          {
+            m_CABACEstimator->residual_coding( tu, compID );
+          }
         }
         uiSingleDist += uiSingleDistComp[compID];
       }

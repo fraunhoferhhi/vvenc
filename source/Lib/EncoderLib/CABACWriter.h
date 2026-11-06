@@ -72,6 +72,7 @@ public:
 
   void        start                     ()                                                    { m_BinEncoder.start(); }
   void        resetBits                 ()                                                    { m_BinEncoder.resetBits(); }
+  void        addEstFracBits            ( uint64_t fracBits )                                 { static_cast<BitEstimatorBase&>( m_BinEncoder ).addEstFracBits( fracBits ); }
   uint64_t    getEstFracBits            ()                                            const   { return m_BinEncoder.getEstFracBits(); }
   uint32_t    getNumBins                ()                                                    { return m_BinEncoder.getNumBins(); }
   bool        isEncoding                ()                                                    { return m_BinEncoder.isEncoding(); }
