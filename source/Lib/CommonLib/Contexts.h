@@ -93,6 +93,7 @@ public:
     m_state[0]    = half;
     m_state[1]    = half;
     m_rate        = DWS;
+    m_padding     = 0;
   }
 
 public:
@@ -150,6 +151,7 @@ public:
 private:
   uint16_t m_state[2];
   uint8_t  m_rate;
+  uint8_t  m_padding;   // named and set so that all six bytes are defined: RateEstimator::initCtx compares them
 };
 
 
