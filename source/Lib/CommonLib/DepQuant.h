@@ -184,12 +184,12 @@ namespace DQIntern
     void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                     RateTablesMemo& memo );
 
-    inline const BinFracBits *sigSbbFracBits() const { return m_sigSbbFracBits; }
+    inline const BinFracBits *sigSbbFracBits() const { return m_tables->sigSbb; }
     inline const BinFracBits *sigFlagBits(unsigned stateId) const
     {
-      return m_sigFracBits[std::max(((int) stateId) - 1, 0)];
+      return m_tables->sig[std::max(((int) stateId) - 1, 0)];
     }
-    inline const CoeffFracBits *gtxFracBits() const { return m_gtxFracBits; }
+    inline const CoeffFracBits *gtxFracBits() const { return m_tables->gtx; }
     inline int32_t              lastOffset(unsigned scanIdx) const
     {
       return m_lastBitsX[m_scanId2Pos[scanIdx].x] + m_lastBitsY[m_scanId2Pos[scanIdx].y];
@@ -197,9 +197,6 @@ namespace DQIntern
 
   private:
     void  xSetLastCoeffOffset ( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID );
-    void  xSetSigSbbFracBits  ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
-    void  xSetSigFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
-    void  xSetGtxFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
 
   public:
     static const unsigned sm_numCtxSetsSig    = 3;
@@ -212,13 +209,23 @@ namespace DQIntern
     static const unsigned sm_numCoeffCtx      = 4 + 60 + 32 + 64;
     static const unsigned sm_coeffCtxBytes    = sm_numCoeffCtx * sizeof( BinProbModel );
 
+    // the tables of one channel type
+    struct RateTables
+    {
+      BinFracBits   sigSbb[ sm_maxNumSigSbbCtx ];
+      BinFracBits   sig   [ sm_numCtxSetsSig ][ sm_maxNumSigCtx ];
+      CoeffFracBits gtx   [ sm_maxNumGtxCtx ];
+    };
+
   private:
+    void  xSetSigSbbFracBits  ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+    void  xSetSigFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+    void  xSetGtxFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+
     const ScanElement * m_scanId2Pos;
     int32_t             m_lastBitsX      [ MAX_TB_SIZEY ];
     int32_t             m_lastBitsY      [ MAX_TB_SIZEY ];
-    BinFracBits         m_sigSbbFracBits [ sm_maxNumSigSbbCtx ];
-    BinFracBits         m_sigFracBits    [ sm_numCtxSetsSig   ][ sm_maxNumSigCtx ];
-    CoeffFracBits       m_gtxFracBits                          [ sm_maxNumGtxCtx ];
+    const RateTables*   m_tables = nullptr;   // the tables of the current block's channel type, held in the memo
   };
 
   // The memo of RateEstimator::initCtx: per channel type, the sig / gtx tables last built for it and the raw bytes of
@@ -229,13 +236,10 @@ namespace DQIntern
     RateTablesMemo();
     struct Channel
     {
-      uint8_t       ctxStates[ RateEstimator::sm_coeffCtxBytes ];
-      BinFracBits   sigSbb   [ RateEstimator::sm_maxNumSigSbbCtx ];
-      BinFracBits   sig      [ RateEstimator::sm_numCtxSetsSig ][ RateEstimator::sm_maxNumSigCtx ];
-      CoeffFracBits gtx      [ RateEstimator::sm_maxNumGtxCtx ];
+      uint8_t                   ctxStates[ RateEstimator::sm_coeffCtxBytes ];
+      RateEstimator::RateTables tables;
     };
     Channel channel[ MAX_NUM_CH ];
-    int     current = -1;   // the channel type whose tables RateEstimator holds now (-1: none yet)
   };
 
   /*================================================================================*/

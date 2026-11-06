@@ -479,29 +479,18 @@ namespace DQIntern
 
     // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
     // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when the bytes are
-    // unchanged, as they mostly are, the kept tables are still valid, and copying them in (only when the other channel
-    // type's tables are loaded) costs far less than building them. The result is identical to building them every time.
+    // unchanged, as they mostly are, the kept tables are still valid. The result is identical to building them every time.
     const ChannelType chType = tuPars.m_chType;
     RateTablesMemo::Channel& kept = memo.channel[ chType ];
     const uint8_t* ctxStates = reinterpret_cast<const uint8_t*>( &fracBitsAccess[ Ctx::SigCoeffGroup[ 0 ].Offset ] );
     if( !equalCoeffCtxStates( kept.ctxStates, ctxStates ) )
     {
-      xSetSigSbbFracBits( fracBitsAccess, chType );
-      xSetSigFlagBits   ( fracBitsAccess, chType );
-      xSetGtxFlagBits   ( fracBitsAccess, chType );
+      xSetSigSbbFracBits( fracBitsAccess, chType, kept.tables );
+      xSetSigFlagBits   ( fracBitsAccess, chType, kept.tables );
+      xSetGtxFlagBits   ( fracBitsAccess, chType, kept.tables );
       memcpy( kept.ctxStates, ctxStates, sizeof( kept.ctxStates ) );
-      memcpy( kept.sigSbb, m_sigSbbFracBits, sizeof( kept.sigSbb ) );
-      memcpy( kept.sig,    m_sigFracBits,    sizeof( kept.sig ) );
-      memcpy( kept.gtx,    m_gtxFracBits,    sizeof( kept.gtx ) );
-      memo.current = chType;
     }
-    else if( memo.current != chType )
-    {
-      memcpy( m_sigSbbFracBits, kept.sigSbb, sizeof( kept.sigSbb ) );
-      memcpy( m_sigFracBits,    kept.sig,    sizeof( kept.sig ) );
-      memcpy( m_gtxFracBits,    kept.gtx,    sizeof( kept.gtx ) );
-      memo.current = chType;
-    }
+    m_tables = &kept.tables;
     xSetLastCoeffOffset( fracBitsAccess, tuPars, tu, compID );
   }
 
@@ -579,20 +568,20 @@ namespace DQIntern
     }
   }
 
-  void RateEstimator::xSetSigSbbFracBits( const FracBitsAccess& fracBitsAccess, ChannelType chType )
+  void RateEstimator::xSetSigSbbFracBits( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables )
   {
     const CtxSet& ctxSet = Ctx::SigCoeffGroup[ chType ];
     for( unsigned ctxId = 0; ctxId < sm_maxNumSigSbbCtx; ctxId++ )
     {
-      m_sigSbbFracBits[ ctxId ] = fracBitsAccess.getFracBitsArray( ctxSet( ctxId ) );
+      tables.sigSbb[ ctxId ] = fracBitsAccess.getFracBitsArray( ctxSet( ctxId ) );
     }
   }
 
-  void RateEstimator::xSetSigFlagBits( const FracBitsAccess& fracBitsAccess, ChannelType chType )
+  void RateEstimator::xSetSigFlagBits( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables )
   {
     for( unsigned ctxSetId = 0; ctxSetId < sm_numCtxSetsSig; ctxSetId++ )
     {
-      BinFracBits*    bits    = m_sigFracBits [ ctxSetId ];
+      BinFracBits*    bits    = tables.sig    [ ctxSetId ];
       const CtxSet&   ctxSet  = Ctx::SigFlag  [ chType + 2*ctxSetId ];
       const unsigned  numCtx  = ( chType == CH_L ? 12 : 8 );
       for( unsigned ctxId = 0; ctxId < numCtx; ctxId++ )
@@ -602,7 +591,7 @@ namespace DQIntern
     }
   }
 
-  void RateEstimator::xSetGtxFlagBits( const FracBitsAccess& fracBitsAccess, ChannelType chType )
+  void RateEstimator::xSetGtxFlagBits( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables )
   {
     const CtxSet&   ctxSetPar   = Ctx::ParFlag [     chType ];
     const CtxSet&   ctxSetGt1   = Ctx::GtxFlag [ 2 + chType ];
@@ -613,7 +602,7 @@ namespace DQIntern
       BinFracBits     fbPar = fracBitsAccess.getFracBitsArray( ctxSetPar( ctxId ) );
       BinFracBits     fbGt1 = fracBitsAccess.getFracBitsArray( ctxSetGt1( ctxId ) );
       BinFracBits     fbGt2 = fracBitsAccess.getFracBitsArray( ctxSetGt2( ctxId ) );
-      CoeffFracBits&  cb    = m_gtxFracBits[ ctxId ];
+      CoeffFracBits&  cb    = tables.gtx[ ctxId ];
       int32_t         par0  = (1<<SCALE_BITS) + int32_t(fbPar.intBits[0]);
       int32_t         par1  = (1<<SCALE_BITS) + int32_t(fbPar.intBits[1]);
       cb.bits[0] = 0;
