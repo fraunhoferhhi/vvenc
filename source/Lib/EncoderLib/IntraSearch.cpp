@@ -168,6 +168,14 @@ double IntraSearch::xFindInterCUCost( CodingUnit &cu )
   return COST_UNKNOWN;
 }
 
+// The bits of a mode only add to its cost, so a mode whose distortion alone reaches the last entry of the full cost list
+// cannot enter that list, whatever its bits. The list is the only reader of the bits, and coding them takes longer than this test.
+template<size_t N>
+static inline bool xCostCannotEnterList( const Distortion dist, const static_vector<double, N>& costs, const size_t numCands )
+{
+  return costs.size() >= numCands && ( double ) dist >= costs[numCands - 1];
+}
+
 void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
@@ -279,6 +287,13 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         // SAD is scaled by 2 to align with the scaling of HAD
         Distortion minSadHad = distParam.distFunc( distParam );
 
+        if( xCostCannotEnterList( minSadHad, CandCostList, numModesForFullRD ) )
+        {
+          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+          satdChecked[mode] = true;
+          continue;
+        }
+
         uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
 
         //restore ctx
@@ -324,6 +339,12 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         // Use the min between SAD and SATD as the cost criterion
         // SAD is scaled by 2 to align with the scaling of HAD
         Distortion minSadHad = distParam.distFunc(distParam);
+
+        if( xCostCannotEnterList( minSadHad, CandCostList, numModesForFullRD ) )
+        {
+          updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+          continue;
+        }
 
         // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
         uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
