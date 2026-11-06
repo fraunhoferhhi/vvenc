@@ -3835,8 +3835,8 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           // copy component
           if (isFirstMode && ((nonCoeffCost < currCompCost) || (currAbsSum == 0))) // check for forced null
           {
-            // The coefficients are not cleared: with a zero cbf nothing reads them.
-            csFull->getResiBuf( compArea ).fill( 0 );
+            // Nothing is cleared: with a zero cbf nobody reads the coefficients, and encodeResAndCalcRdInterCU clears the
+            // residual of the blocks it reconstructs from.
             tu.cbf[compID]   = 0;
 
             currAbsSum       = 0;
@@ -4194,7 +4194,6 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     cu.skip    = true;
     cu.rootCbf = false;
     CHECK( cu.sbtInfo != 0, "sbtInfo shall be 0 if CU has no residual" );
-    cs.getResiBuf().fill(0);
     cs.getRecoBuf().copyFrom(cs.getPredBuf() );
 
     // add new "empty" TU(s) spanning the whole CU
@@ -4277,24 +4276,33 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // we've now encoded the CU, and so have a valid bit cost
   if (!cu.rootCbf)
   {
+    // Without residual the reconstruction is the prediction, which is already within the clip range.
+    cs.getRecoBuf().copyFrom( cs.getPredBuf(), luma, chroma );
+  }
+  else
+  {
+    // The search leaves blocks with a zero cbf uncleared. With joint CbCr a zero cbf can still have a residual.
+    for( const TransformUnit* tu : cs.tus )
+    {
+      for( int comp = 0; comp < numValidComponents; comp++ )
+      {
+        const ComponentID compID = ComponentID( comp );
+        const bool        wanted = isLuma( compID ) ? luma : chroma;
+        if( wanted && tu->blocks[compID].valid() && !TU::getCbf( *tu, compID ) && !( isChroma( compID ) && tu->jointCbCr ) )
+        {
+          cs.getResiBuf( tu->blocks[compID] ).fill( 0 );
+        }
+      }
+    }
     if (luma)
     {
-      cs.getResiBuf().bufs[0].fill(0); // Clear the residual image, if we didn't code it.
+      cs.getRecoBuf().bufs[0].reconstruct(cs.getPredBuf().bufs[0], cs.getResiBuf().bufs[0], cs.slice->clpRngs[COMP_Y]);
     }
-    if (chroma && isChromaEnabled(cs.pcv->chrFormat))
+    if (chroma)
     {
-      cs.getResiBuf().bufs[1].fill(0); // Clear the residual image, if we didn't code it.
-      cs.getResiBuf().bufs[2].fill(0); // Clear the residual image, if we didn't code it.
+      cs.getRecoBuf().bufs[1].reconstruct(cs.getPredBuf().bufs[1], cs.getResiBuf().bufs[1], cs.slice->clpRngs[COMP_Cb]);
+      cs.getRecoBuf().bufs[2].reconstruct(cs.getPredBuf().bufs[2], cs.getResiBuf().bufs[2], cs.slice->clpRngs[COMP_Cr]);
     }
-  }
-  if (luma)
-  {
-    cs.getRecoBuf().bufs[0].reconstruct(cs.getPredBuf().bufs[0], cs.getResiBuf().bufs[0], cs.slice->clpRngs[COMP_Y]);
-  }
-  if (chroma)
-  {
-    cs.getRecoBuf().bufs[1].reconstruct(cs.getPredBuf().bufs[1], cs.getResiBuf().bufs[1], cs.slice->clpRngs[COMP_Cb]);
-    cs.getRecoBuf().bufs[2].reconstruct(cs.getPredBuf().bufs[2], cs.getResiBuf().bufs[2], cs.slice->clpRngs[COMP_Cr]);
   }
   // update with clipped distortion and cost (previously unclipped reconstruction values were used)
   Distortion finalDistortion = 0;
