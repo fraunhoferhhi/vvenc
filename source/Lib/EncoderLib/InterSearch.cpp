@@ -215,8 +215,29 @@ InterSearch::~InterSearch()
   destroy();
 }
 
+// residual_coding, outside transform skip, changes only these contexts of its channel type and its transform skip flag. They lie back to
+// back (checked in InterSearch::init in debug builds).
+static CtxSet coeffCtxSpan()
+{
+  return CtxSet( Ctx::SigCoeffGroup[0].Offset, Ctx::LastY[1].Offset + Ctx::LastY[1].Size - Ctx::SigCoeffGroup[0].Offset );
+}
+
+static void saveCoeffCtx( Ctx& dst, const Ctx& src )
+{
+  dst = SubCtx( coeffCtxSpan(), src );
+  dst = SubCtx( Ctx::TransformSkipFlag, src );
+}
+
 void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
+#if _DEBUG
+  for( const CtxSet* set : { &Ctx::SigCoeffGroup[1], &Ctx::SigFlag[0], &Ctx::SigFlag[1], &Ctx::SigFlag[2], &Ctx::SigFlag[3], &Ctx::SigFlag[4], &Ctx::SigFlag[5],
+                             &Ctx::ParFlag[0], &Ctx::ParFlag[1], &Ctx::GtxFlag[0], &Ctx::GtxFlag[1], &Ctx::GtxFlag[2], &Ctx::GtxFlag[3], &Ctx::LastX[0], &Ctx::LastX[1], &Ctx::LastY[0] } )
+  {
+    CHECKD( set->Offset < coeffCtxSpan().Offset || set->Offset + set->Size > coeffCtxSpan().Offset + coeffCtxSpan().Size, "a coefficient context lies outside the span" );
+  }
+#endif
+
   InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_ifpLines );
   m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
@@ -3945,6 +3966,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           if( compID == COMP_Y )
           {
             bestLumaResiBits = resiBits;
+            if( currDepth == 0 && !cu.sbtInfo && currAbsSum > 0 )
+            {
+              saveCoeffCtx( m_tuLumaCtx, m_CABACEstimator->getCtx() );
+            }
           }
           if (transformMode != (nNumTransformCands - 1))
           {
@@ -4220,6 +4245,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       CHECK( m_CABACEstimator->getEstFracBits() > 0, "no residual TU's bits shall be 0" );
     }
     m_tuResiBitsValid = reuseLumaBits;
+    if( reuseLumaBits )
+    {
+      saveCoeffCtx( m_tuChromaCtx, m_CABACEstimator->getCtx() );
+    }
 
     csFull->fracBits += m_CABACEstimator->getEstFracBits();
     csFull->dist     += uiSingleDist;
@@ -4456,13 +4485,38 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // The contexts after the CU are only kept if it wins, and the bits still to come can't lower its cost.
   if( useTuResiBits && cs.cost < bestCost )
   {
-    for( const TransformUnit* tu : cs.tus )
+    const TransformUnit& firstTU = *cs.tus.front();
+    const bool chromaCbf = numValidComponents > 1 && ( TU::getCbf( firstTU, COMP_Cb ) || TU::getCbf( firstTU, COMP_Cr ) );
+    // The one TU of a CU without SBT coded them from these same contexts in xEstimateInterResidualQT: luma's, and then chroma's after it,
+    // which share none. In transform skip chroma uses other contexts.
+    if( !cu.sbtInfo && ( !chromaCbf || ( firstTU.mtsIdx[COMP_Cb] != MTS_SKIP && firstTU.mtsIdx[COMP_Cr] != MTS_SKIP ) ) )
     {
-      for( uint32_t ch = 0; ch < numValidComponents; ch++ )
+      Ctx& ctx = m_CABACEstimator->getCtx();
+      if( chromaCbf )
       {
-        if( TU::getCbf( *tu, ComponentID( ch ) ) )
+        ctx = SubCtx( coeffCtxSpan(), m_tuChromaCtx );
+        ctx = SubCtx( CtxSet( Ctx::TransformSkipFlag.Offset + 1, 1 ), m_tuChromaCtx );
+      }
+      if( TU::getCbf( firstTU, COMP_Y ) )
+      {
+        // luma's sets: SigFlag and GtxFlag take turns between the channel types (luma at the even indices), the others are [ ChannelType ]
+        for( const CtxSet* set : { &Ctx::SigCoeffGroup[0], &Ctx::SigFlag[0], &Ctx::SigFlag[2], &Ctx::SigFlag[4], &Ctx::ParFlag[0], &Ctx::GtxFlag[0], &Ctx::GtxFlag[2], &Ctx::LastX[0], &Ctx::LastY[0] } )
         {
-          m_CABACEstimator->residual_coding( *tu, ComponentID( ch ) );
+          ctx = SubCtx( *set, m_tuLumaCtx );
+        }
+        ctx = SubCtx( CtxSet( Ctx::TransformSkipFlag.Offset, 1 ), m_tuLumaCtx );
+      }
+    }
+    else
+    {
+      for( const TransformUnit* tu : cs.tus )
+      {
+        for( uint32_t ch = 0; ch < numValidComponents; ch++ )
+        {
+          if( TU::getCbf( *tu, ComponentID( ch ) ) )
+          {
+            m_CABACEstimator->residual_coding( *tu, ComponentID( ch ) );
+          }
         }
       }
     }

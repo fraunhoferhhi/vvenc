@@ -457,6 +457,8 @@ protected:
   uint8_t           m_sbtRdoOrder[NUMBER_SBT_MODE];       // order of SBT mode in RDO
   uint64_t          m_tuResiBits[MAX_NUM_TBLOCKS];        // residual bits per component of the CU's single TU
   bool              m_tuResiBitsValid = false;
+  Ctx               m_tuLumaCtx;                          // what luma's coefficients of that TU left in the coefficient contexts
+  Ctx               m_tuChromaCtx;                        // what chroma's left there
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
   BcwMotionParam    m_uniMotions;
