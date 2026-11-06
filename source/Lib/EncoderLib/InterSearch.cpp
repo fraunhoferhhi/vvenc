@@ -5638,6 +5638,28 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
       clipMv(acMvTemp[i], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     }
 
+    if( skipRepeatedTests )
+    {
+      // Back on MVs this loop already stood on: the step they gave is fixed by them, so from here it only repeats steps, and
+      // none of those can beat uiCostBest. The last of them would leave RdCost's MV predictor as xCalcAffineMVBits does here.
+      int repeatOf = -1;
+      for( int prevIter = 0; prevIter <= iter && repeatOf < 0; prevIter++ )
+      {
+        bool isSame = true;
+        for( int i = 0; i < mvNum; i++ )
+        {
+          isSame = isSame && prevIterMv[prevIter][i] == acMvTemp[i];
+        }
+        repeatOf = isSame ? prevIter : -1;
+      }
+      if( repeatOf >= 0 )
+      {
+        const int lastRepeat = m_pcEncCfg->m_Affine > 1 ? repeatOf : repeatOf + ( iIterTime - 1 - iter ) % ( iter + 1 - repeatOf );
+        xCalcAffineMVBits( cu, prevIterMv[lastRepeat], acMvPred );
+        break;
+      }
+    }
+
     if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
     {
       xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
