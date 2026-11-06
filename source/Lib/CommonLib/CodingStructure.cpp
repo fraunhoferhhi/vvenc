@@ -354,18 +354,18 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   uint32_t idx = ++m_numTUs;
   tu->idx = idx;
 
-  TCoeffSig *coeffs[3] = { nullptr, nullptr, nullptr };
-
   uint32_t numCh = getNumberValidComponents( area.chromaFormat );
 
+  // the pointers go straight into the TU: TransformUnit::init reading a local array just written here would be a wide load after narrow stores, on a path this hot
   for( uint32_t i = 0; i < numCh; i++ )
   {
     if( !tu->blocks[i].valid() )
     {
+      tu->m_coeffs[i] = nullptr;
       continue;
     }
 
-    coeffs[i] = m_coeffs[i] + m_offsets[i];
+    TCoeffSig* const coeffs = m_coeffs[i] + m_offsets[i];
 
     unsigned areaSize = tu->blocks[i].area();
     m_offsets[i] += areaSize;
@@ -376,10 +376,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
                       );
 
     if( cpyRsi )
-      memcpy( coeffs[i], tu->m_coeffs[i], areaSize * sizeof( TCoeffSig ) );
-  }
+      memcpy( coeffs, tu->m_coeffs[i], areaSize * sizeof( TCoeffSig ) );
 
-  tu->init( coeffs );
+    tu->m_coeffs[i] = coeffs;
+  }
 
   return *tu;
 }
