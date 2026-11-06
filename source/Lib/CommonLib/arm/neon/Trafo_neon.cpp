@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "sum_neon.h"
 
 #include <cstdint>
+#include <cstring>
 
 //! \ingroup CommonLib
 //! \{
@@ -185,6 +186,8 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
   static_assert( trSize % 4 == 0, "trSize should be a multiple of four" );
   CHECK( rows % 4 != 0, "rows should be a multiple of four" );
   CHECK( rows == 0, "rows should be non-zero" );
+
+  memset( dst, 0, reducedLines * trSize * sizeof( TCoeff ) );
 
   unsigned i = 0;
   for( ; i != ( reducedLines & ~3U ); i += 4 )

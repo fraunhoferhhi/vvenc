@@ -110,12 +110,12 @@ inline void _fastInverseMM<4>( const TCoeff *src, TCoeff *dst, int shift, int li
   const int reducedLine = line - iSkipLine;
   const int cutoff      = 4 - iSkipLine2;
 
-  memset( dst, 0, reducedLine * 4 * sizeof( TCoeff ) );
-
 #if ENABLE_SIMD_TRAFO
   g_tCoeffOps.fastInvCore[0]( iT, src, dst, line, reducedLine, cutoff );
   g_tCoeffOps.roundClip4( dst, 4, reducedLine, 4, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
+  memset( dst, 0, reducedLine * 4 * sizeof( TCoeff ) );
+
   for( int k = 0; k < cutoff; k++ )
   {
     const TCoeff* srcPtr = &src[k * line];
@@ -156,12 +156,12 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
   const int  reducedLine = line - iSkipLine;
   const int  cutoff      = uiTrSize - iSkipLine2;
 
-  memset( dst, 0, reducedLine * uiTrSize * sizeof( TCoeff ) );
-
 #if ENABLE_SIMD_TRAFO
   g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff );
   g_tCoeffOps.roundClip8( dst, uiTrSize, reducedLine, uiTrSize, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
+  memset( dst, 0, reducedLine * uiTrSize * sizeof( TCoeff ) );
+
   for( int k = 0; k < cutoff; k++ )
   {
     const TCoeff* srcPtr = &src[k * line];
@@ -1984,7 +1984,22 @@ void clipCore( TCoeff *dst, unsigned width, unsigned height, unsigned stride, co
 template<unsigned trSize>
 void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
 {
-  for( int k = 0; k < rows; k++ )
+  if( rows == 0 )
+  {
+    memset( dst, 0, reducedLines * trSize * sizeof( TCoeff ) );
+    return;
+  }
+
+  // dst isn't set yet: the first row writes it, the others add to it
+  for( int i = 0; i < reducedLines; i++ )
+  {
+    for( int j = 0; j < trSize; j++ )
+    {
+      dst[i * trSize + j] = src[i] * it[j];
+    }
+  }
+
+  for( int k = 1; k < rows; k++ )
   {
     const TCoeff* srcPtr = &src[k * lines];
     for( int i = 0; i < reducedLines; i++ )

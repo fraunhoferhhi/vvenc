@@ -1583,8 +1583,8 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
 
   // Initialize source and destination buffers.
   std::generate_n( src, trSize * lines, input_generator );
-  memset( dst0, 0, trSize * lines * sizeof( TCoeff ) );
-  memset( dst1, 0, trSize * lines * sizeof( TCoeff ) );
+  std::generate_n( dst0, trSize * lines, input_generator );  // Kernels set dst themselves.
+  std::copy_n( dst0, trSize * lines, dst1 );
 
   ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows );
   opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows );
