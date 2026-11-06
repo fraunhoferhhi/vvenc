@@ -1747,7 +1747,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
           cuCtx.mtsLastScanPos = false;
           //----- determine rate and r-d cost -----
-        if ((sps.LFNST ? (modeId == EndMTS && modeId != 0 && checkTransformSkip) : (trModes[modeId].first != 0)) && !TU::getCbfAtDepth(tu, COMP_Y, currDepth))
+        // the bits of a later transform are only compared with the best so far, and can't help if its distortion alone doesn't beat that.
+        const bool lostOnDist = dSingleCost != MAX_DOUBLE && m_pcRdCost->calcRdCost( 0, singleDistTmpLuma ) >= dSingleCost;
+        if (lostOnDist || ((sps.LFNST ? (modeId == EndMTS && modeId != 0 && checkTransformSkip) : (trModes[modeId].first != 0)) && !TU::getCbfAtDepth(tu, COMP_Y, currDepth)))
         {
           singleCostTmp = MAX_DOUBLE;
         }
