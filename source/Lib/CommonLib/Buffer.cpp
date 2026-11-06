@@ -274,13 +274,14 @@ void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* 
 #undef SUBS_INC
 }
 
-void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
+void removeHighFreq(int16_t* dst, int dstStride, const int16_t* org, int orgStride, const int16_t* src, int srcStride, int width, int height)
 {
 #define REM_HF_INC  \
  src += srcStride; \
+ org += orgStride; \
  dst += dstStride; \
 
-#define REM_HF_OP( ADDR )      dst[ADDR] =             2 * dst[ADDR] - src[ADDR]
+#define REM_HF_OP( ADDR )      dst[ADDR] =             2 * org[ADDR] - src[ADDR]
 
  SIZE_AWARE_PER_EL_OP(REM_HF_OP, REM_HF_INC);
 

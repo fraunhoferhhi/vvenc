@@ -1258,7 +1258,7 @@ void copyBufferSimd( const char* src, int srcStride, char* dst, int dstStride, i
 
 #if ENABLE_SIMD_OPT_BCW
 template< X86_VEXT vext, int W >
-void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int src1Stride, int width, int height)
+void removeHighFreq_SSE(int16_t* dst, int dstStride, const int16_t* src0, int src0Stride, const int16_t* src1, int src1Stride, int width, int height)
 {
  if (W == 8)
  {
@@ -1268,13 +1268,14 @@ void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int 
      {
        for (int col = 0; col < width; col += 8)
        {
-         __m128i vsrc0 = _mm_load_si128((const __m128i *)&src0[col]);
+         __m128i vsrc0 = _mm_loadu_si128((const __m128i *)&src0[col]);   // the original may be a view into a picture
          __m128i vsrc1 = _mm_loadu_si128((const __m128i *)&src1[col]);   // may be a view into a picture (SMVD cost)
 
          vsrc0 = _mm_sub_epi16(_mm_slli_epi16(vsrc0, 1), vsrc1);
-         _mm_store_si128((__m128i *)&src0[col], vsrc0);
+         _mm_store_si128((__m128i *)&dst[col], vsrc0);
        }
 
+       dst  += dstStride;
        src0 += src0Stride;
        src1 += src1Stride;
      }
@@ -1293,9 +1294,10 @@ void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int 
      vsrc1 = _mm_unpacklo_epi64(vsrc1, vsrc1_2);
 
      vsrc0 = _mm_sub_epi16(_mm_slli_epi16(vsrc0, 1), vsrc1);
-     _vv_storel_epi64((__m128i *)src0, vsrc0);
-     _vv_storel_epi64((__m128i *)(src0 + src0Stride), _mm_unpackhi_epi64(vsrc0, vsrc0));
+     _vv_storel_epi64((__m128i *)dst, vsrc0);
+     _vv_storel_epi64((__m128i *)(dst + dstStride), _mm_unpackhi_epi64(vsrc0, vsrc0));
 
+     dst  += (dstStride << 1);
      src0 += (src0Stride << 1);
      src1 += (src1Stride << 1);
    }

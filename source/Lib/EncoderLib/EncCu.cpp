@@ -2595,6 +2595,7 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
     }
     else if( m_pcEncCfg->m_Geo < 2 )
     {
+      mergeItem->getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
       m_mergeItemList      . insertMergeItemToList( mergeItem );
     }
     else
@@ -2606,6 +2607,7 @@ void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &
       }
       else
       {
+        mergeItem->getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
         if( !best2geo[0] || mergeItem->cost < best2geo[0]->cost )
         {
           if( best2geo[1] )
@@ -4337,12 +4339,8 @@ void MergeItem::importMergeInfo(const MergeCtx& mergeCtx, int _mergeIdx, MergeIt
     THROW( "Wrong merge item type" );
   }
 
-  // Regular, CIIP and MMVD candidates have one motion for the whole CU, which mvField holds. Only
-  // GPM candidates need the motion buffer copied; exportMergeInfo regenerates the others.
-  if( mergeItemType == MergeItemType::GPM )
-  {
-    getMvBuf( pu ).copyFrom( pu.getMotionBuf() );
-  }
+  // Regular, CIIP and MMVD candidates have one motion for the whole CU, which mvField holds, and exportMergeInfo
+  // regenerates their motion buffer. A GPM candidate saves its motion buffer only once it is kept.
 }
 
 void MergeItem::importMergeInfo( const AffineMergeCtx &mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& pu )
