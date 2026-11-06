@@ -423,6 +423,21 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
 
 // ====================================================================================================================
 
+/* vvencMotionHintFunc
+  Optional motion hints from outside the encoder, e.g. a platform's motion-estimation hardware.
+  Called at most once per (current, reference) picture pair, from encoder threads; the encoder
+  caches the result. cur/ref are luma planes at the internal bit depth (cur: original, ref:
+  reconstruction), strides in samples. Fill ((width+blockSize-1)/blockSize) x
+  ((height+blockSize-1)/blockSize) (dx, dy) pairs, row by row, in whole luma samples pointing
+  from the current block into the reference picture. Return 0 on success, non-zero to skip the pair.
+  Hints are not used while inter-frame parallelism (m_ifp) is enabled.
+*/
+typedef int (*vvencMotionHintFunc)( void* ctx, int curPoc, int refPoc,
+                                    const int16_t* cur, int curStride,
+                                    const int16_t* ref, int refStride,
+                                    int width, int height, int bitDepth,
+                                    int blockSize, int16_t* field );
+
 typedef struct vvenc_config
 {
   // core config params
@@ -808,6 +823,10 @@ typedef struct vvenc_config
   bool                m_confirmFailed;                                                   // state variable, Private context used for internal data ( do not change )
   vvencLoggingCallback m_msgFnc;                                                         // logger callback function (internal info/errors will use this function to return log messages)
   void                *m_msgCtx;                                                         // caller context ( if not needed null )
+
+  vvencMotionHintFunc  m_motionHintFnc;                                                  // optional motion hints, used as motion search start points (default: null, off)
+  void                *m_motionHintCtx;                                                  // context passed to m_motionHintFnc
+  int8_t               m_motionHintRangeShift;                                           // when a hint exists, search range >> n around the best start (default: 0)
 
 }vvenc_config;
 

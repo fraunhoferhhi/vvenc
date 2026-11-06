@@ -73,6 +73,7 @@ int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
 int testStringApiInterface();  // check behaviour when using in sdk by using string api
 int testTimestamps();          // check behaviour when using in sdk by using string api
+int testMotionHints();         // check the optional motion hint callback
 
 int main( int argc, char* argv[] )
 {
@@ -87,12 +88,12 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 6 );
+      printHelp = ( testId < 1 || testId > 7 );
     }
 
     if( printHelp )
     {
-      printf( "venclibtest <test> [1..5]\n");
+      printf( "venclibtest <test> [1..7]\n");
       return -1;
     }
   }
@@ -133,6 +134,11 @@ int main( int argc, char* argv[] )
     testTimestamps();
     break;
   }
+  case 7:
+  {
+    testMotionHints();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
@@ -140,6 +146,7 @@ int main( int argc, char* argv[] )
     testSDKDefaultBehaviour();
     testStringApiInterface();
     testTimestamps();
+    testMotionHints();
     break;
   }
 
@@ -1327,6 +1334,74 @@ int testTimestamps()
   testfunc( "checkTimestampsDefaultInvalid", &checkTimestampsInvalid, true );
   testfunc( "checkDtsDefault", &checkDtsDefault, false );
   testfunc( "checkCuTreeAccessUnits", &checkCuTreeAccessUnits, false );
+
+  return 0;
+}
+
+struct MotionHintCounter
+{
+  int calls      = 0;
+  int returnCode = 0;
+};
+
+static int countingMotionHint( void* ctx, int curPoc, int refPoc, const int16_t* cur, int curStride,
+                               const int16_t* ref, int refStride, int width, int height, int bitDepth,
+                               int blockSize, int16_t* field )
+{
+  MotionHintCounter* counter = static_cast<MotionHintCounter*>( ctx );
+  counter->calls++;
+  if( !cur || !ref || curStride < width || refStride < width || blockSize <= 0 || bitDepth < 8 || curPoc == refPoc )
+  {
+    return -1;
+  }
+  const int blocks = ( ( width + blockSize - 1 ) / blockSize ) * ( ( height + blockSize - 1 ) / blockSize );
+  for( int i = 0; i < 2 * blocks; i++ )
+  {
+    field[i] = 0;   // no motion: the encoder must still produce a valid stream
+  }
+  return counter->returnCode;
+}
+
+static int runMotionHintEncoder( MotionHintCounter& counter, int ifp )
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 176, 144, 60, VVENC_RC_OFF, 32, vvencPresetMode::VVENC_MEDIUM );
+  c.m_internChromaFormat    = VVENC_CHROMA_420;
+  c.m_mtProfile             = 0;
+  c.m_ifp                   = ifp;
+  c.m_motionHintFnc         = &countingMotionHint;
+  c.m_motionHintCtx         = &counter;
+  c.m_motionHintRangeShift  = 2;
+  return runEncoder( c, 17 );
+}
+
+int checkMotionHintsUsed()
+{
+  MotionHintCounter counter;
+  if( 0 != runMotionHintEncoder( counter, 0 ) ) return -1;
+  return counter.calls > 0 ? 0 : -1;
+}
+
+int checkMotionHintsDeclined()
+{
+  MotionHintCounter counter;
+  counter.returnCode = 1;   // the application cannot supply hints: encoding continues without them
+  if( 0 != runMotionHintEncoder( counter, 0 ) ) return -1;
+  return counter.calls > 0 ? 0 : -1;
+}
+
+int checkMotionHintsOffWithIfp()
+{
+  MotionHintCounter counter;
+  if( 0 != runMotionHintEncoder( counter, 1 ) ) return -1;
+  return counter.calls == 0 ? 0 : -1;
+}
+
+int testMotionHints()
+{
+  testfunc( "checkMotionHintsUsed",       &checkMotionHintsUsed,       false );
+  testfunc( "checkMotionHintsDeclined",   &checkMotionHintsDeclined,   false );
+  testfunc( "checkMotionHintsOffWithIfp", &checkMotionHintsOffWithIfp, false );
 
   return 0;
 }
