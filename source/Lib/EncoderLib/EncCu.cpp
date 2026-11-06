@@ -63,6 +63,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <mutex>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 //! \ingroup EncoderLib
 //! \{
@@ -2411,6 +2412,10 @@ void EncCu::addMmvdCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     }
   }
 
+  // A candidate's bits depend on its base and step only: the position costs two bins at equal probability, whichever it is.
+  uint64_t  fracBitsOfStep[MMVD_BASE_MV_NUM][MMVD_REFINE_STEP];
+  std::fill_n( &fracBitsOfStep[0][0], MMVD_BASE_MV_NUM * MMVD_REFINE_STEP, std::numeric_limits<uint64_t>::max() );
+
   for( int mmvdMergeCand = shiftCandStart; mmvdMergeCand < mmvdTestNum; mmvdMergeCand++ )
   {
     MmvdIdx mmvdIdx;
@@ -2454,7 +2459,7 @@ void EncCu::addMmvdCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea 
     mmvdMerge->importMergeInfo( mergeCtx, mmvdIdx.val, MergeItem::MergeItemType::MMVD, pu );
     auto dstBuf               = mmvdMerge->getPredBuf( localUnitArea );
     generateMergePrediction   ( localUnitArea, mmvdMerge, pu, true, false, dstBuf, false, false, nullptr, nullptr );
-    mmvdMerge->cost           = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam );
+    mmvdMerge->cost           = calcLumaCost4MergePrediction( ctxStart, dstBuf, sqrtLambdaForFirstPassIntra, pu, distParam, &fracBitsOfStep[mmvdIdx.pos.baseIdx][mmvdIdx.pos.step] );
     m_mergeItemList           . insertMergeItemToList( mmvdMerge );
 
     if( m_pcEncCfg->m_MMVD > 1 && mmvdMerge->cost < bestCostOffset )
@@ -2932,13 +2937,25 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
   return true;
 }
 
-double EncCu::calcLumaCost4MergePrediction( const TempCtx &ctxStart, const PelUnitBuf &predBuf, double lambda, CodingUnit &cu, DistParam &distParam )
+double EncCu::calcLumaCost4MergePrediction( const TempCtx &ctxStart, const PelUnitBuf &predBuf, double lambda, CodingUnit &cu, DistParam &distParam, uint64_t* knownFracBits )
 {
   distParam.cur = predBuf.Y();
   auto dist     = distParam.distFunc(distParam);
 
-  m_CABACEstimator->getCtx() = SubCtx( Ctx::MergeData, ctxStart );   // ctxStart holds the merge contexts only
-  auto fracBits = xCalcPuMeBits( cu );
+  uint64_t fracBits;
+  if( knownFracBits && *knownFracBits != std::numeric_limits<uint64_t>::max() )
+  {
+    fracBits = *knownFracBits;
+  }
+  else
+  {
+    m_CABACEstimator->getCtx() = SubCtx( Ctx::MergeData, ctxStart );   // ctxStart holds the merge contexts only
+    fracBits = xCalcPuMeBits( cu );
+    if( knownFracBits )
+    {
+      *knownFracBits = fracBits;
+    }
+  }
 
   double cost   = ( double ) dist + ( double ) fracBits * lambda;
 
