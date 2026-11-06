@@ -635,12 +635,19 @@ namespace DQIntern
     if( prevId >= 0 )
     {
       ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize, setCpSize );
+      if( setCpSize )
+      {
+        ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize, setCpSize );
+      }
     }
     else
     {
-      ::memset( sbbFlags, 0, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
+      // A constant size lets the compiler write the flag clear inline, and a quarter of the level clears are empty.
+      ::memset( sbbFlags, 0, sm_maxNumSbb * sizeof( uint8_t ) );
+      if( setCpSize )
+      {
+        ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
+      }
     }
     sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
 

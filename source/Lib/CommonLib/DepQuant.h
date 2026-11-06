@@ -310,13 +310,13 @@ namespace DQIntern
       m_nbSbbStarts = tuPars.m_scanSbb2NbSbbStarts;
       m_nbOutShuffle16 = tuPars.m_nbOutShuffle16;
       ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2 * sizeof( BinFracBits ) );
-      const int numSbb = tuPars.m_numSbb;
-      const int chunkSize = numSbb + tuPars.m_numCoeff;
+      CHECKD( tuPars.m_numSbb > sm_maxNumSbb, "more sub-blocks than the space for their flags" );
+      const int chunkSize = sm_maxNumSbb + tuPars.m_numCoeff;
       uint8_t* nextMem = m_memory;
       for( int k = 0; k < 8; k++, nextMem += chunkSize )
       {
         m_allSbbCtx[k].sbbFlags = nextMem;
-        m_allSbbCtx[k].levels = nextMem + numSbb;
+        m_allSbbCtx[k].levels = nextMem + sm_maxNumSbb;
       }
     }
 
@@ -356,6 +356,8 @@ namespace DQIntern
     const NbSbbStarts* m_nbSbbStarts;
     const NbOutShuffle16* m_nbOutShuffle16;
     BinFracBits      m_sbbFlagBits[2];
+    // The flags have room for all the sub-blocks of the largest non-zero area, so clearing them has one size.
+    static const unsigned sm_maxNumSbb = 64;
     SbbCtx           m_allSbbCtx[8];
     SbbCtx*          m_currSbbCtx;
     SbbCtx*          m_prevSbbCtx;
