@@ -1087,11 +1087,25 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
   }
 }
 
+TransformUnit& IntraSearch::xCurrTU( CodingStructure& cs, Partitioner& partitioner ) const
+{
+  const int subTu = m_ispTestedModes[0].subTuCounter;
+  if( subTu >= 0 && isLuma( partitioner.chType ) )
+  {
+    return *cs.tus[subTu];
+  }
+  if( cs.tus.size() == 1 )
+  {
+    return *cs.tus[0];
+  }
+  return *cs.getTU( partitioner.currArea().blocks[partitioner.chType], partitioner.chType );
+}
+
 void IntraSearch::xEncSubdivCbfQT( CodingStructure &cs, Partitioner &partitioner, const bool luma )
 {
   const UnitArea& currArea = partitioner.currArea();
   int subTuCounter = m_ispTestedModes[0].subTuCounter;
-  TransformUnit  &currTU   = *cs.getTU(currArea.blocks[partitioner.chType], partitioner.chType, subTuCounter);
+  TransformUnit  &currTU   = xCurrTU( cs, partitioner );
   CodingUnit     &currCU   = *currTU.cu;
   const uint32_t currDepth = partitioner.currTrDepth;
   const bool  subdiv = currTU.depth > currDepth;
@@ -1180,7 +1194,7 @@ void IntraSearch::xEncCoeffQT(CodingStructure& cs, Partitioner& partitioner, con
   const UnitArea& currArea  = partitioner.currArea();
 
   int subTuCounter          = m_ispTestedModes[0].subTuCounter;
-  TransformUnit& currTU     = *cs.getTU(currArea.blocks[partitioner.chType], partitioner.chType, subTuCounter);
+  TransformUnit& currTU     = xCurrTU( cs, partitioner );
   uint32_t   currDepth      = partitioner.currTrDepth;
   const bool subdiv         = currTU.depth > currDepth;
 
@@ -2797,7 +2811,7 @@ double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner,
 
     subTuCounter++;
 
-    splitCbfLuma |= TU::getCbfAtDepth( *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), 
+    splitCbfLuma |= TU::getCbfAtDepth( tmpTUcur, 
                                        COMP_Y, subTuPartitioner.currTrDepth);
     int nSubPartitions = m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1];
     bool doStop = (m_pcEncCfg->m_ISP != 1) || (subTuCounter < nSubPartitions);
