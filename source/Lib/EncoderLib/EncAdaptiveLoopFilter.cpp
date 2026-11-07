@@ -6403,7 +6403,8 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           const __m128i mylocal0 = _mm_loadu_si128((const __m128i*) & yLocal[0][0]);
           const __m128i mylocal8 = _mm_loadu_si128((const __m128i*) & yLocal[2][0]);
 
-          for (int k = 0; k < shape.numCoeff; k++)
+          // ELocal holds numCoeff - 1 rows, the ones the C branch below reads too
+          for (int k = 0; k < shape.numCoeff - 1; k++)
           {
             const Pel* Elocalk = &ELocal[k][0];
             alf_float_t* cov = &alfCovariance.E[0][0][k][k];
@@ -6411,7 +6412,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
             const __m128i melocalk0 = _mm_loadu_si128((const __m128i*) & Elocalk[0]);
             const __m128i melocalk8 = _mm_loadu_si128((const __m128i*) & Elocalk[8]);
 
-            for (int l = k; l < shape.numCoeff; l++)
+            for (int l = k; l < shape.numCoeff - 1; l++)
             {
               const Pel* Elocall = &ELocal[l][0];
 
