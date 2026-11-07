@@ -2551,11 +2551,15 @@ void EncCu::addAffineCandsToPruningList( AffineMergeCtx &affineMergeCtx, const U
   }
 }
 
+static int numGpmCombosToTry( const VVEncCfg& encCfg )
+{
+  return encCfg.m_Geo > 2 ? 10 : GEO_MAX_TRY_WEIGHTED_SAD;
+}
+
 void EncCu::addGpmCandsToPruningList( const MergeCtx &mergeCtx, const UnitArea &localUnitArea, double sqrtLambdaForFirstPass,
                                       const TempCtx& ctxStart, const GeoComboCostList& comboList, MergeBufVector& geoBuffer, DistParam& distParam, CodingUnit& pu)
 {
-  int geoNumMrgSadCand    = std::min( GEO_MAX_TRY_WEIGHTED_SAD, ( int ) comboList.list.size() );
-  geoNumMrgSadCand        = std::min( geoNumMrgSadCand, m_pcEncCfg->m_Geo > 2 ? 10 : GEO_MAX_TRY_WEIGHTED_SAD );
+  const int geoNumMrgSadCand = std::min( numGpmCombosToTry( *m_pcEncCfg ), ( int ) comboList.list.size() );
   double bestGeoCost      = MAX_DOUBLE / 2.0;
   MergeItem* best2geo[2]  = { nullptr, nullptr };
 
@@ -2899,7 +2903,7 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
       }
 
       tempCost = tempCost + ( double ) bitsForPartitionIdx * sqrtLambdaForFirstPass;
-      comboList.list.push_back( GeoMergeCombo{ splitDir, mergeIdxPair[0], mergeIdxPair[1], tempCost } );
+      comboList.list.push_back( GeoMergeCombo{ splitDir, mergeIdxPair[0], mergeIdxPair[1], ( uint16_t ) comboList.list.size(), tempCost } );
     }
 
     if( m_pcEncCfg->m_Geo == 4 )
@@ -2928,7 +2932,7 @@ bool EncCu::prepareGpmComboList( const MergeCtx &mergeCtx, const UnitArea &local
     return false;
   }
 
-  comboList.sortByCost();
+  comboList.sortFirstByCost( numGpmCombosToTry( *m_pcEncCfg ) );
   return true;
 }
 

@@ -74,6 +74,7 @@ class EncPicture;
     int    splitDir  =  0;
     int8_t mergeIdx0 = -1;
     int8_t mergeIdx1 = -1;
+    uint16_t order   = 0;     // position in the list as built, which decides between equal costs
     double cost      = 0.0;
   };
 
@@ -81,14 +82,23 @@ class EncPicture;
   {
     inline bool operator()(const GeoMergeCombo &first, const GeoMergeCombo &second)
     {
-      return (first.cost < second.cost);
+      return first.cost < second.cost || ( first.cost == second.cost && first.order < second.order );
     }
   };
 
   struct GeoComboCostList
   {
     std::vector<GeoMergeCombo> list;
-    void                       sortByCost() { std::stable_sort(list.begin(), list.end(), SmallerThanComboCost()); };
+    // Only the first entries are tried, so only those need to be in order. A list can hold 1920 combos, though most are short.
+    void                       sortFirstByCost( const int numFirst )
+    {
+      const auto firstEnd = list.begin() + std::min<size_t>( numFirst, list.size() );
+      if( firstEnd != list.end() )
+      {
+        std::nth_element( list.begin(), firstEnd, list.end(), SmallerThanComboCost() );
+      }
+      std::sort( list.begin(), firstEnd, SmallerThanComboCost() );
+    }
   };
 
   class FastGeoCostList
