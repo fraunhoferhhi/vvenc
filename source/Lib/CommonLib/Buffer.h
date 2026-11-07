@@ -143,9 +143,9 @@ struct PelBufferOps
   uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
   // block statistics; the sums of squares are exact for samples in 0 ... 2^15 - 1
   uint64_t ( *sumSquaredError )  ( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height );
-  // the sums of squares of the numX x numY parts of lengthX x lengthY samples of a block, in sums[j][i], in one pass; for
+  // the sums of squared errors of the numX x numY parts of lengthX x lengthY samples of a block, in sums[j][i]; for
   // samples of up to 12 bits and parts of up to 16 x 16 samples, whose sums fit 32 bits. numX is 4 for the widths from
-  // 8 up, or 2 or 1 for the widths up to 8. Nullptr without AVX2: the caller then sums each part with sumSquaredError.
+  // 8 up, or 2 or 1 for the widths up to 8.
   void     ( *sumSquaredErrorParts )( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int lengthX, const int lengthY, const int numX, const int numY, uint32_t sums[][4] );
   int64_t  ( *sum )              ( const Pel* src, const ptrdiff_t stride, const int width, const int height );
   void     ( *sumAndSumSquares ) ( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares );

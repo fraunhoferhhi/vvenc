@@ -4160,10 +4160,6 @@ static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigne
 // extremes of 12 bits, where a part of 16 x 16 samples nearly fills its 32 bits
 static bool check_sumSquaredErrorParts( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
-  if( !opt->sumSquaredErrorParts )
-  {
-    return true;
-  }
   printf( "Testing PelBufferOps::sumSquaredErrorParts\n" );
   static const int shapes[][2] = { { 16, 4 }, { 8, 4 }, { 4, 4 }, { 2, 4 }, { 4, 2 }, { 2, 2 }, { 4, 1 }, { 2, 1 } };
   DimensionGenerator rng;
