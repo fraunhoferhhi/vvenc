@@ -411,7 +411,8 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFUnitSize;
-  int                 mctfUnused;                                                        // TODO: remove unused memory from configuration
+  int                 MCTFLevelTilt;                                                     // MCTF filter strength raised for the three upper temporal levels
+                                                                                         // (0: off, 1: on, default; random access only; also raises explicit MCTFStrength values)
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
