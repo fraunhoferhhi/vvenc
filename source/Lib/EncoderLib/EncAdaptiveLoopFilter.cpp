@@ -124,6 +124,22 @@ void AlfCovariance::reduceClipCost(const AlfFilterShape& alfShape, int *clip) co
   }
 }
 
+// A clip trial changes one row and column of a matrix whose factor is known. The factor's rows above that row change only in that column, and the forward
+// substitution's values above it not at all, so a trial computes the same numbers as a whole solve, from that row on.
+struct AlfClipSolver
+{
+  explicit AlfClipSolver( const int _size ) : size( _size ) {}
+  bool setBase ( AlfCovariance::TE kE, AlfCovariance::Ty ky );
+  bool trial   ( AlfCovariance::TE kE, AlfCovariance::Ty ky, const int k, alf_float_t* f );
+  void useTrial( const int k );
+  void baseCoeffs( alf_float_t* f );
+
+  const int         size;
+  bool              valid = false;
+  AlfCovariance::TE U, baseU;
+  AlfCovariance::Ty aux, baseAux, baseInv;
+};
+
 alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, alf_float_t *f, bool optimize_clip) const
 {
   const int size = alfShape.numCoeff;
@@ -147,7 +163,18 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
 
   setEyFromClip( clip, kE, ky, size );
 
-  m_gnsSolveByChol( kE, ky, f, size );
+  AlfClipSolver solver( size );
+  // a singular matrix gets a regularised diagonal that stays in kE: from then on each solve is whole
+  // the trials repeat the C solver's arithmetic, so a platform with its own solver keeps whole solves
+  solver.valid = optimize_clip && m_gnsSolveByChol == static_cast<decltype( m_gnsSolveByChol )>( &AlfCovariance::gnsSolveByChol ) && solver.setBase( kE, ky );
+  if( solver.valid )
+  {
+    solver.baseCoeffs( f );
+  }
+  else
+  {
+    m_gnsSolveByChol( kE, ky, f, size );
+  }
   err_best = calculateError( clip, f, size );
 
   int step = optimize_clip ? (numBins+1)/2 : 0;
@@ -170,7 +197,11 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
           kE[l][k] = E[clip[l]][clip[k]][l][k];
         }
 
-        m_gnsSolveByChol( kE, ky, f, size );
+        if( !solver.valid || !solver.trial( kE, ky, k, f ) )
+        {
+          solver.valid = false;
+          m_gnsSolveByChol( kE, ky, f, size );
+        }
         err_last = calculateError( clip, f, size );
 
         if( err_last < err_min )
@@ -191,7 +222,11 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
           kE[l][k] = E[clip[l]][clip[k]][l][k];
         }
 
-        m_gnsSolveByChol( kE, ky, f, size );
+        if( !solver.valid || !solver.trial( kE, ky, k, f ) )
+        {
+          solver.valid = false;
+          m_gnsSolveByChol( kE, ky, f, size );
+        }
         err_last = calculateError( clip, f, size );
 
         if( err_last < err_min )
@@ -220,6 +255,14 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
       {
         kE[idx_min][l] = E[clip[idx_min]][clip[l]][idx_min][l];
         kE[l][idx_min] = E[clip[l]][clip[idx_min]][l][idx_min];
+      }
+      if( solver.valid )
+      {
+        solver.valid = solver.trial( kE, ky, idx_min, nullptr );
+        if( solver.valid )
+        {
+          solver.useTrial( idx_min );
+        }
       }
     }
     else
@@ -254,7 +297,14 @@ alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* c
       reduceClipCost(alfShape, clip);
 
       // update f with best solution
-      m_gnsSolveByChol( kE, ky, f, size );
+      if( solver.valid )
+      {
+        solver.baseCoeffs( f );
+      }
+      else
+      {
+        m_gnsSolveByChol( kE, ky, f, size );
+      }
     }
   }
 
@@ -973,6 +1023,110 @@ static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_
     }
 
     A[i] = ( z[i] - sum ) / R[i][i];
+  }
+}
+
+template<int NumEq>
+static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs, const int k, alf_float_t* f )
+{
+  AlfCovariance::TE& U = s.U;
+  for( int i = 0; i < k; i++ )
+  {
+    std::memcpy( U[i], s.baseU[i], sizeof( U[i] ) );
+    alf_float_t scale = inp[i][k];
+    for( int m = i - 1; m >= 0; m-- )
+    {
+      scale -= U[m][k] * U[m][i];
+    }
+    U[i][k] = scale * s.baseInv[i];
+  }
+  for( int i = k; i < NumEq; i++ )
+  {
+    alf_float_t invDiag = 0.0f;
+    for( int j = i; j < NumEq; j++ )
+    {
+      alf_float_t scale = inp[i][j];
+      for( int m = i - 1; m >= 0; m-- )
+      {
+        scale -= U[m][j] * U[m][i];
+      }
+      if( i == j )
+      {
+        if( scale <= REG_SQR )
+        {
+          return false;
+        }
+        invDiag = alf_float_t( 1.0 ) / ( U[i][i] = sqrt( scale ) );
+      }
+      else
+      {
+        U[i][j] = scale * invDiag;
+      }
+    }
+  }
+  std::memcpy( s.aux, s.baseAux, k * sizeof( alf_float_t ) );
+  for( int i = k; i < NumEq; i++ )
+  {
+    alf_float_t sum = 0;
+    for( int j = 0; j < i; j++ )
+    {
+      sum += s.aux[j] * U[j][i];
+    }
+    s.aux[i] = ( rhs[i] - sum ) / U[i][i];
+  }
+  if( f )
+  {
+    gnsBacksubstitution<NumEq>( U, s.aux, f );
+  }
+  return true;
+}
+
+bool AlfClipSolver::setBase( AlfCovariance::TE kE, AlfCovariance::Ty ky )
+{
+  const int ok = size == 13 ? gnsCholeskyDec<13>( kE, baseU ) : gnsCholeskyDec<7>( kE, baseU );
+  if( !ok )
+  {
+    return false;
+  }
+  if( size == 13 )
+  {
+    gnsTransposeBacksubstitution<13>( baseU, ky, baseAux );
+  }
+  else
+  {
+    gnsTransposeBacksubstitution<7>( baseU, ky, baseAux );
+  }
+  for( int i = 0; i < size; i++ )
+  {
+    baseInv[i] = alf_float_t( 1.0 ) / baseU[i][i];
+  }
+  return true;
+}
+
+bool AlfClipSolver::trial( AlfCovariance::TE kE, AlfCovariance::Ty ky, const int k, alf_float_t* f )
+{
+  return size == 13 ? clipTrial<13>( *this, kE, ky, k, f ) : clipTrial<7>( *this, kE, ky, k, f );
+}
+
+void AlfClipSolver::useTrial( const int k )
+{
+  std::memcpy( baseU, U, sizeof( U ) );
+  std::memcpy( baseAux, aux, size * sizeof( alf_float_t ) );
+  for( int i = k; i < size; i++ )
+  {
+    baseInv[i] = alf_float_t( 1.0 ) / baseU[i][i];
+  }
+}
+
+void AlfClipSolver::baseCoeffs( alf_float_t* f )
+{
+  if( size == 13 )
+  {
+    gnsBacksubstitution<13>( baseU, baseAux, f );
+  }
+  else
+  {
+    gnsBacksubstitution<7>( baseU, baseAux, f );
   }
 }
 
