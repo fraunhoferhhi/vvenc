@@ -192,7 +192,7 @@ class EncPicture;
     void          init            ();
     void          importMergeInfo (const MergeCtx&       mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& cu);
     void          importMergeInfo (const AffineMergeCtx& mergeCtx, int _mergeIdx, MergeItemType _mergeItemType, CodingUnit& cu);
-    bool          exportMergeInfo (CodingUnit& cu, bool forceNoResidual) const;
+    bool          exportMergeInfo (CodingUnit& cu, bool forceNoResidual, const MergeCtx& gpmMergeCtx) const;
     PelUnitBuf    getPredBuf      (const UnitArea& unitArea) { return m_pelStorage.getCompactBuf( unitArea ); }
     CMotionBuf    getMvBuf        (const UnitArea &unitArea) const { return CMotionBuf( m_mvStorage.data(), g_miScaling.scale( unitArea.lumaSize() ) ); }
     MotionBuf     getMvBuf        (const UnitArea &unitArea)       { return  MotionBuf( m_mvStorage.data(), g_miScaling.scale( unitArea.lumaSize() ) ); }
