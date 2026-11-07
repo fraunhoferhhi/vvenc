@@ -401,6 +401,162 @@ private:
   int            m_next    = 0;
 };
 
+// What affine motion searches of one block found at the control-point MVs they tested: the distortion of the prediction
+// and the gradient step from there. A block is searched many times (per reference and list, per model, again when other
+// split paths reach it), and the searches come back to the same MVs. Both numbers depend only on the key, so they are read
+// back. A direct-mapped table: a new set takes the slot of an old one, and a new picture empties the table.
+class AffineMeResultCache
+{
+public:
+  static constexpr int NUM_ENTRIES_LOG2 = 10;
+  static constexpr int NUM_ENTRIES      = 1 << NUM_ENTRIES_LOG2;
+
+  void startSearch( const Picture* picture, const int poc, const Picture* ref, const Area& area, const int settings, const int otherRefIdx, const Mv* otherMv, const int mvNum )
+  {
+    if( m_entries.empty() )
+    {
+      m_entries.resize( NUM_ENTRIES );
+    }
+    if( picture != m_picture || poc != m_poc )
+    {
+      m_picture = picture;
+      m_poc     = poc;
+      m_generation++;
+    }
+    m_search.ref         = ref;
+    m_search.x           = area.x;
+    m_search.y           = area.y;
+    m_search.width       = area.width;
+    m_search.height      = area.height;
+    m_search.settings    = settings;
+    m_search.otherRefIdx = otherRefIdx;
+    for( int i = 0; i < 3; i++ )
+    {
+      m_search.otherMv[i] = otherMv && i < mvNum ? otherMv[i] : Mv();
+    }
+    m_mvNum = mvNum;
+    uint64_t h = ( uint64_t( uintptr_t( ref ) ) >> 4 ) ^ ( uint64_t( uint32_t( area.x ) ) << 40 ) ^ ( uint64_t( uint32_t( area.y ) ) << 24 ) ^ ( uint64_t( uint32_t( area.width ) ) << 12 ) ^ uint64_t( uint32_t( area.height ) );
+    h = ( h ^ uint64_t( uint32_t( settings ) ) ) * HASH_MUL;
+    if( otherMv )
+    {
+      h = ( h ^ uint64_t( uint32_t( otherRefIdx ) ) ) * HASH_MUL;
+      for( int i = 0; i < mvNum; i++ )
+      {
+        h = ( h ^ uint64_t( uint32_t( otherMv[i].hor ) ) ^ ( uint64_t( uint32_t( otherMv[i].ver ) ) << 32 ) ) * HASH_MUL;
+      }
+    }
+    m_searchHash = h;
+  }
+
+  bool findDist( const Mv* mv, Distortion& dist ) const
+  {
+    const Entry& entry = m_entries[slot( mv )];
+    if( entry.hasDist && isFor( entry, mv ) )
+    {
+      dist = entry.dist;
+      return true;
+    }
+    return false;
+  }
+
+  void addDist( const Mv* mv, const Distortion dist )
+  {
+    Entry& entry   = claim( mv );
+    entry.dist     = dist;
+    entry.hasDist  = true;
+  }
+
+  bool findStep( const Mv* mv, double* step, const int numParams ) const
+  {
+    const Entry& entry = m_entries[slot( mv )];
+    if( entry.hasStep && isFor( entry, mv ) )
+    {
+      std::copy_n( entry.step, numParams, step );
+      return true;
+    }
+    return false;
+  }
+
+  void addStep( const Mv* mv, const double* step, const int numParams )
+  {
+    Entry& entry = claim( mv );
+    std::copy_n( step, numParams, entry.step );
+    entry.hasStep = true;
+  }
+
+private:
+  static constexpr uint64_t HASH_MUL = 0x9E3779B97F4A7C15ull;
+
+  struct Search
+  {
+    const Picture* ref = nullptr;
+    int            x = 0, y = 0, width = 0, height = 0;
+    int            settings = 0, otherRefIdx = 0;
+    Mv             otherMv[3];
+  };
+
+  struct Entry
+  {
+    Search     search;
+    Mv         mv[3];
+    uint32_t   generation = 0;
+    bool       hasDist    = false;
+    bool       hasStep    = false;
+    Distortion dist       = 0;
+    double     step[6];
+  };
+
+  int slot( const Mv* mv ) const
+  {
+    uint64_t h = m_searchHash;
+    for( int i = 0; i < m_mvNum; i++ )
+    {
+      h = ( h ^ uint64_t( uint32_t( mv[i].hor ) ) ^ ( uint64_t( uint32_t( mv[i].ver ) ) << 32 ) ) * HASH_MUL;
+    }
+    return int( h >> ( 64 - NUM_ENTRIES_LOG2 ) );
+  }
+
+  bool isFor( const Entry& entry, const Mv* mv ) const
+  {
+    for( int i = 0; i < m_mvNum; i++ )
+    {
+      if( entry.mv[i] != mv[i] )
+      {
+        return false;
+      }
+    }
+    const Search& a = entry.search;
+    const Search& b = m_search;
+    return entry.generation == m_generation && a.ref == b.ref && a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height
+        && a.settings == b.settings && a.otherRefIdx == b.otherRefIdx && a.otherMv[0] == b.otherMv[0] && a.otherMv[1] == b.otherMv[1] && a.otherMv[2] == b.otherMv[2];
+  }
+
+  Entry& claim( const Mv* mv )
+  {
+    Entry& entry = m_entries[slot( mv )];
+    if( !isFor( entry, mv ) )
+    {
+      entry.search     = m_search;
+      entry.generation = m_generation;
+      for( int i = 0; i < 3; i++ )
+      {
+        entry.mv[i] = i < m_mvNum ? mv[i] : Mv();
+      }
+      entry.hasDist = false;
+      entry.hasStep = false;
+    }
+    return entry;
+  }
+
+  std::vector<Entry> m_entries;
+  Search             m_search;
+  uint64_t           m_searchHash = 0;
+  int                m_mvNum      = 0;
+  const Picture*     m_picture    = nullptr;
+  int                m_poc        = 0;
+  uint32_t           m_generation = 1;
+};
+
 /// encoder search class
 class InterSearch : public InterPrediction, AffineGradientSearch
 {
@@ -410,6 +566,7 @@ private:
   PelStorage        m_tmpPredStorage[NUM_REF_PIC_LIST_01];
   PelStorage        m_tmpStorageLCU;
   AffineTemplateDistCache m_affineTemplateDists;
+  AffineMeResultCache     m_affineMeResults;
   CodingStructure** m_pSaveCS;
 
   ClpRng            m_lumaClpRng;
