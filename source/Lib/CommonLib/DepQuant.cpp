@@ -1397,28 +1397,33 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   //===== find best path =====
   int       prevId      = -1;
   int64_t   minPathCost =  0;
-  for( int8_t stateId = 0; stateId < 4; stateId++ )
+  for( int stateId = 0; stateId < 4; stateId++ )
   {
-    int64_t pathCost = m_trellis[0][0].rdCost[stateId];
-    if( pathCost < minPathCost )
-    {
-      prevId      = stateId;
-      minPathCost = pathCost;
-    }
+    // No branch, as which state wins is close to random. It does the same as
+    //   if( rdCost[stateId] < minPathCost ) { prevId = stateId; minPathCost = rdCost[stateId]; }
+    const int64_t costDiff = m_trellis[0][0].rdCost[stateId] - minPathCost;
+    const int64_t lower    = costDiff >> 63;
+    prevId                += int( ( stateId - prevId ) & lower );
+    minPathCost           += costDiff & lower;
   }
 
   //===== backward scanning =====
-  int scanIdx = 0;
-  for( ; prevId >= 0; scanIdx++ )
+  const Decisions* row = m_trellis[0];
+  TCoeff           sum = 0;
+  int              scanIdx = 0;
+  for( ; prevId >= 0; scanIdx++, row += 2 )
   {
-    TCoeffSig absLevel = m_trellis[scanIdx][prevId >> 2].absLevel[prevId & 3];
+    // Not row[prevId >> 2]: that multiplies by sizeof(Decisions) on the prevId load chain, and the walk runs 10-12 % slower.
+    const Decisions& dec = prevId < 4 ? row[0] : row[1];
+    TCoeffSig absLevel = dec.absLevel[prevId & 3];
     int32_t blkpos     = tuPars.m_scanId2BlkPos[scanIdx].idx;
     // apply the coefficient's sign without a branch: (absLevel ^ m) - m is -absLevel for m = -1 and absLevel for m = 0
     const int signMask = -int( tCoeff[blkpos] < 0 );
     qCoeff[ blkpos ]   = TCoeffSig( ( absLevel ^ signMask ) - signMask );
-    absSum            += absLevel;
-    prevId             = m_trellis[scanIdx][prevId >> 2].prevId[prevId & 3];
+    sum               += absLevel;
+    prevId             = dec.prevId[prevId & 3];
   }
+  absSum = sum;
 
   tu.lastPos[compID] = scanIdx - 1;
 }
