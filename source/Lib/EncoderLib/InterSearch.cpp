@@ -420,6 +420,26 @@ struct InterSearch::StartPositions
   void add( const Mv& position ) { positions[size++] = position; }
 };
 
+// xClipMvSearch for one block, with its bounds worked out once. The clip is a clamp per component, so the bounds are the
+// clip of the extremes, and clamping to them is the same clip for every MV, also when a block's bounds cross.
+struct InterSearch::BlockMvClip
+{
+  Mv lo, hi;
+
+  BlockMvClip( InterSearch& search, const CodingUnit& cu, const int ifpLines )
+    : lo( std::numeric_limits<int>::min(), std::numeric_limits<int>::min() )
+    , hi( std::numeric_limits<int>::max(), std::numeric_limits<int>::max() )
+  {
+    search.xClipMvSearch( lo, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, ifpLines );
+    search.xClipMvSearch( hi, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, ifpLines );
+  }
+
+  Mv operator()( const Mv& mv ) const
+  {
+    return Mv( std::min( hi.hor, std::max( lo.hor, mv.hor ) ), std::min( hi.ver, std::max( lo.ver, mv.ver ) ) );
+  }
+};
+
 // Passes the cost of each position from first on, in list order. Two or more positions take a four-position SAD call,
 // padded with the last position, which costs less than separate calls.
 template<typename OnCost>
@@ -2167,20 +2187,17 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     // The search range is centred on the start candidate of the lowest cost.
     StartPositions startPositions;
     Mv             startMvs[BlkUniMvInfoBuffer::m_uniMvListMaxSize + 1];
+    const BlockMvClip clip( *this, cu, m_pcEncCfg->m_ifpLines );
     const auto addStartMv = [&]( const Mv& mv )
     {
-      Mv cTmpMv = mv;
-      xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines );
+      Mv cTmpMv = clip( mv );
       cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
       startMvs[startPositions.size] = mv;
       startPositions.add( cTmpMv );
     };
 
     addStartMv( bBi ? rcMv : rcMvPred );
-    for( int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++ )
-    {
-      addStartMv( m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i )->uniMvs[refPicList][iRefIdxPred] );
-    }
+    m_BlkUniMvInfoBuffer->forEachNewestFirst( [&]( const BlkUniMvInfo& info ) { addStartMv( info.uniMvs[refPicList][iRefIdxPred] ); } );
 
     Mv         bestInitMv, bestStartPosition;
     Distortion uiBestSad = MAX_DISTORTION;
@@ -2501,14 +2518,13 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     startPositions.add( Mv( 0, 0 ) );
   }
   const int numTested = startPositions.size;
-  for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
+  const BlockMvClip clip( *this, cu, m_pcEncCfg->m_ifpLines );
+  m_BlkUniMvInfoBuffer->forEachNewestFirst( [&]( const BlkUniMvInfo& info )
   {
-    Mv cTmpMv = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i)->uniMvs[refPicList][iRefIdxPred];
-
-    xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines);
+    Mv cTmpMv = clip( info.uniMvs[refPicList][iRefIdxPred] );
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
     startPositions.add( cTmpMv );
-  }
+  } );
 
   xCostsOfStartPositions( startPositions, numTested, cStruct, [&]( const int index, const Distortion cost )
   {
