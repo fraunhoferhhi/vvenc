@@ -129,6 +129,12 @@ public:
   // (--fga 1). arModel: the improved analysis with the auto-regressive grain model (--fga 3). See m_improved.
   void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ], bool improved, bool arModel = false );
 
+  // One analysis every spacing pictures in GOPs of gopSize pictures. The failed fits that end the grain
+  // (m_maxFailedFits, three per GOP) are scaled to the spacing, so that the grain ends after as many pictures as with
+  // one analysis per GOP. The data's ageing stays per analysis (ACCUMULATION_DECAY): it then follows a change of the
+  // grain faster, which measured better than keeping its span in pictures.
+  void setAnalysisSpacing( int spacing, int gopSize );
+
   // Analyses one picture: orig is the original, denoised its temporally filtered version (same size). residual is the
   // temporal residual of FgaTemporalResidual, whose variance is residualWeight times the grain variance; without it
   // the grain is estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped
@@ -164,6 +170,9 @@ private:
   // Weight of the data accumulated so far when a picture is added. VTM sums the data of all pictures without limit,
   // so a new scene hardly changes the estimate; halving the old data lets it follow the scene within a few analyses.
   static constexpr double ACCUMULATION_DECAY = 0.5;
+  // After this many analyses in a row whose scaling function fit failed, a component's grain is no longer signalled
+  // (three GOPs, see setAnalysisSpacing).
+  int    m_maxFailedFits     = 3;
 
   // Squared DCT coefficients of the grain, summed over the blocks with one block mean.
   typedef std::vector<double> SquaredDctSum;   // BLOCK_SIZE * BLOCK_SIZE entries, [horizontal][vertical]

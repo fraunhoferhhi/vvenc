@@ -55,11 +55,12 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist )
+void GOPCfg::initGopList( int refreshType, bool poc0idr, int intraPeriod, int gopSize, int leadFrames, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg, int firstPassMode, int minIntraDist, int fgaInterval )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
   m_mctfCfg            = &mctfCfg;
+  m_fgaInterval        = fgaInterval;
   m_refreshType        = refreshType;
   m_picReordering      = bPicReordering;
   m_poc0idr            = poc0idr;
@@ -592,6 +593,7 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
   xSetMctfIndex( maxGopSize, gopList );
+  xSetFgaPictures( maxGopSize, gopList );
   xSetVTL      ( gopList );
   if( m_firstPassMode == 2 || m_firstPassMode == 4 )
   {
@@ -754,6 +756,41 @@ void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
         break;
       }
     }
+  }
+}
+
+// The pictures the film grain analysis looks at besides the GOP's first picture (analysed in any case, see
+// MCTF::filter): every m_fgaInterval-th picture of the GOP by its position in the GOP (which with POC0IDR 0 differs from
+// the POC by one). With the interval equal to the GOP size (automatic) no picture is added. MCTF prepares them for the
+// analysis also where it does not filter them for the coding, with the reference range of MCTF's temporal level for
+// their position (m_fgaLayer): the level test of the automatic MCTFFrames (the GOP size >> level), capped at 4 (MCTF
+// has a level 5 only for GOP 64 below QP 16).
+void GOPCfg::xSetFgaPictures( int maxGopSize, GOPEntryList& gopList ) const
+{
+  if( m_fgaInterval <= 0 )
+  {
+    return;
+  }
+  for( auto& gopEntry : gopList )
+  {
+    int poc = gopEntry.m_POC;
+    // as in xSetMctfIndex: the last picture of a pruned GOP stands for the end of the full GOP
+    if( (int)gopList.size() < maxGopSize && poc == (int)gopList.size() )
+    {
+      poc = maxGopSize;
+    }
+    if( gopEntry.m_isStartOfGop || poc % m_fgaInterval != 0 )
+    {
+      continue;
+    }
+    gopEntry.m_isFgaPicture = true;
+    // stops at the latest where maxGopSize >> level is 1, so it never divides by 0
+    int level = 0;
+    while( level < 4 && poc % ( maxGopSize >> level ) != 0 )
+    {
+      level++;
+    }
+    gopEntry.m_fgaLayer = level;
   }
 }
 

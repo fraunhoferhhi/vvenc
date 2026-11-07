@@ -196,6 +196,10 @@ void EncGOP::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateC
     // auto-regressive grain model
     m_fgAnalyzer.init( m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_internChromaFormat,
                          m_pcEncCfg->m_internalBitDepth, m_pcEncCfg->m_fg.m_fgcSEICompModelPresent, encCfg.m_fga == 2, encCfg.m_fga == 3 );
+    // one analysis every m_fgaInterval pictures of a GOP (automatic: the GOP size, its first picture only), which the
+    // configuration check makes a divisor of the GOP size
+    m_fgAnalyzer.setAnalysisSpacing( encCfg.m_fgaInterval, encCfg.m_GOPSize );
+    m_fgcParamSets = std::max<size_t>( 8, 2 * ( encCfg.m_GOPSize / encCfg.m_fgaInterval ) + 2 );
     m_fgcByStartPoc[ std::numeric_limits<int>::min() ] = FilmGrainParam( m_fgAnalyzer, m_pcEncCfg->m_fgaStrength );   // no grain, until the first analysis measures it
   }
 
@@ -1451,20 +1455,41 @@ void EncGOP::xSetupPicAps( Picture* pic )
   pic->refApsGlobal = refAps;
 }
 
-void EncGOP::xAnalyzeFilmGrain( Picture& pic )
+// Pictures come here in coding order, but the analyses run in POC order: each adds to the statistics of the previous
+// ones, and the parameter sets apply in output order. So at a picture, every picture that MCTF prepared for the
+// analysis (one every m_fgaInterval pictures in a GOP, see GOPCfg::xSetFgaPictures) after the last analysed one, up to
+// this picture's POC, is analysed, in POC order. They are in picList then, as the pictures reach this stage in POC
+// order (with the look-ahead, which passes them on in coding order, only GOP starts are analysed: the configuration
+// check allows no other interval there).
+// Their results are taken with this picture's access unit, the first of them written. Analyzing them here rather than
+// when their encoding starts keeps the choice of analyzed pictures, and the parameters each access unit signals,
+// independent of the parallel encoding order.
+void EncGOP::xAnalyzeFilmGrain( const Picture& current, const PicList& picList )
 {
-  // Pictures come here in coding order. Analyzing them here rather than when their encoding starts keeps the choice
-  // of analyzed pictures, and the parameters each access unit signals, independent of the parallel encoding order.
-  // The analysis looks at the first picture of every GOP, which MCTF filtered for it.
-  if( !pic.m_picShared->getFgaFilteredBuf().valid() && !pic.m_picShared->fgaUsesFilteredBuf() )
+  std::vector<Picture*> pics;
+  for( Picture* pic : picList )
   {
-    return;
+    const bool prepared = pic->m_picShared->getFgaFilteredBuf().valid() || pic->m_picShared->fgaUsesFilteredBuf();
+    if( prepared && pic->poc > m_fgaPrevAnalysedPoc && pic->poc <= current.poc )
+    {
+      pics.push_back( pic );
+    }
   }
+  std::sort( pics.begin(), pics.end(), []( const Picture* a, const Picture* b ) { return a->poc < b->poc; } );
+  for( Picture* pic : pics )
+  {
+    xIssueFgaTask( *pic, current.gopEntry->m_codingNum );
+  }
+}
+
+void EncGOP::xIssueFgaTask( Picture& pic, int codingNum )
+{
+  CHECK( pic.poc <= m_fgaPrevAnalysedPoc, "film grain analyses must run in POC order" );
   m_fgaTasks.emplace_back( new FgaTask );
   FgaTask* task  = m_fgaTasks.back().get();
   task->gop        = this;
   task->pic        = &pic;
-  task->codingNum  = pic.gopEntry->m_codingNum;
+  task->codingNum  = codingNum;
 
   // The result applies from the picture after the previously analysed one; when PreProcess found a scene cut in
   // between, from the cut, so that the pictures before it keep the parameters of their scene. The first analysis
@@ -1587,7 +1612,7 @@ void EncGOP::xInitPicsInCodingOrder( const PicList& picList )
 
     if( m_pcEncCfg->m_fga && !m_isPreAnalysis && m_pcRateCtrl->rcIsFinalPass )
     {
-      xAnalyzeFilmGrain( *pic );
+      xAnalyzeFilmGrain( *pic, picList );
     }
 
     // continue with next picture
@@ -2611,7 +2636,7 @@ void EncGOP::xAddFilmGrainParameters( const FgaTask& task )
   }
   m_fgcByStartPoc.erase( m_fgcByStartPoc.lower_bound( task.startPoc ), m_fgcByStartPoc.end() );
   m_fgcByStartPoc[ task.startPoc ] = param;
-  while( m_fgcByStartPoc.size() > FGC_PARAM_SETS )
+  while( m_fgcByStartPoc.size() > m_fgcParamSets )
   {
     // the oldest set is dropped; the next one then applies to all earlier pictures, all of them written long ago
     m_fgcByStartPoc.erase( m_fgcByStartPoc.begin() );
@@ -2716,8 +2741,9 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   // film grain SEI
   if ( m_pcEncCfg->m_fg.m_fgcSEIEnabled && !m_pcEncCfg->m_fg.m_fgcSEIPerPictureSEI )
   {
-    // Access units are written in coding order. An analysis result is added with the access unit of the analyzed
-    // picture, the first coded picture of its GOP, and applies from its start picture on (xAddFilmGrainParameters).
+    // Access units are written in coding order. The results of the analyses issued with a picture (xAnalyzeFilmGrain:
+    // the analysed pictures up to its POC, in POC order) are added with its access unit, each applying from its start
+    // picture on (xAddFilmGrainParameters).
     while( !m_fgaTasks.empty() && m_fgaTasks.front()->codingNum <= pic.gopEntry->m_codingNum )
     {
       m_fgaTasks.front()->counter.wait();

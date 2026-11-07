@@ -76,7 +76,7 @@ PreProcess::~PreProcess()
 
 void PreProcess::init( const VVEncCfg& encCfg, bool isFinalPass )
 {
-  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode, encCfg.m_minIntraDist );
+  m_gopCfg.initGopList( encCfg.m_DecodingRefreshType, encCfg.m_poc0idr, encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_leadFrames, encCfg.m_picReordering, encCfg.m_GOPList, encCfg.m_vvencMCTF, encCfg.m_FirstPassMode, encCfg.m_minIntraDist, encCfg.m_fga ? encCfg.m_fgaInterval : 0 );
   CHECK( m_gopCfg.getMaxTLayer() != encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   m_encCfg             = &encCfg;
@@ -476,8 +476,8 @@ void PreProcess::xDetectSTA( Picture* pic, const PicList& picList )
 // stays within a quarter of that of it, so that a single flash frame is no cut. On three minutes of The Beekeeper (4316
 // pictures) the distance is 0.014 at the median; the 41 cuts found are the same from thresholds 0.15 to 0.3, and
 // no GOP of 32 pictures has two of them. The cut is marked on the picture once the next one is processed, and every
-// picture carries the latest cut found before it, so that the film grain analysis of a GOP's first coded picture knows
-// the cuts among the pictures it covers.
+// picture carries the latest cut found before it, so that each film grain analysis knows the cuts among the pictures
+// it covers.
 void PreProcess::xDetectFgaSceneCut( Picture* pic )
 {
   const CPelBuf y     = pic->getOrigBuf( COMP_Y );
