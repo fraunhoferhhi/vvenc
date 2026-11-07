@@ -57,6 +57,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
 
+#include <algorithm>
 #include <math.h>
 
  //! \ingroup EncoderLib
@@ -407,6 +408,60 @@ void InterSearch::getBestSbt( CodingStructure* tempCS, CodingUnit* cu, uint8_t& 
   }
 }
 
+
+// The integer start positions of a motion search. Different MVs often round to one position, and its second test could
+// not win: the costs are compared strictly, and the best cost only falls. A SAD that stops early is above the best cost too.
+struct InterSearch::StartPositions
+{
+  Mv  positions[BlkUniMvInfoBuffer::m_uniMvListMaxSize + 2];   // room for the search's start, zero and the whole list
+  int size = 0;
+
+  bool addIfNew( const Mv& position )
+  {
+    if( std::find( positions, positions + size, position ) != positions + size )
+    {
+      return false;
+    }
+    positions[size++] = position;
+    return true;
+  }
+};
+
+// Passes the cost of each position from first on, in list order. Two or more positions take a four-position SAD call,
+// padded with the last position, which costs less than separate calls.
+template<typename OnCost>
+void InterSearch::xCostsOfStartPositions( const StartPositions& startPositions, const int first, const TZSearchStruct& cStruct, OnCost&& onCost )
+{
+  const auto refOf  = [&]( const Mv& position ) { return cStruct.piRefY + position.ver * cStruct.iRefStride + position.hor; };
+  const auto costOf = [&]( const Mv& position, const Distortion sad ) { return sad + m_pcRdCost->getCostOfVectorWithPredictor( position.hor, position.ver, cStruct.imvShift ); };
+
+  const Mv*  positions = startPositions.positions;
+  const int  size      = startPositions.size;
+  int        index     = first;
+  if( m_cDistParam.sadFourPositions )
+  {
+    while( size - index >= 2 )
+    {
+      const int  count = std::min( size - index, 4 );
+      const Pel* refs[4];
+      for( int k = 0; k < 4; k++ )
+      {
+        refs[k] = refOf( positions[index + std::min( k, count - 1 )] );
+      }
+      Distortion sads[4];
+      m_cDistParam.sadFourPositions( m_cDistParam, refs, sads );
+      for( int k = 0; k < count; k++, index++ )
+      {
+        onCost( index, costOf( positions[index], sads[k] ) );
+      }
+    }
+  }
+  for( ; index < size; index++ )
+  {
+    m_cDistParam.cur.buf = refOf( positions[index] );
+    onCost( index, costOf( positions[index], m_cDistParam.distFunc( m_cDistParam ) ) );
+  }
+}
 
 inline void InterSearch::xTZSearchHelp( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance )
 {
@@ -2099,49 +2154,41 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     cStruct.subShiftMode = m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ? 1 : 0;
     m_pcRdCost->setDistParam( m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode );
 
-    Mv bestInitMv = (bBi ? rcMv : rcMvPred);
-    Mv cTmpMv     = bestInitMv;
-    xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines );
-    cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
-    m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
-    Distortion uiBestSad = m_cDistParam.distFunc(m_cDistParam);
-    uiBestSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
+    // The search range is centred on the start candidate of the lowest cost.
+    StartPositions startPositions;
+    Mv             startMvs[BlkUniMvInfoBuffer::m_uniMvListMaxSize + 1];
+    const auto addStartMv = [&]( const Mv& mv )
+    {
+      Mv cTmpMv = mv;
+      xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines );
+      cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
+      if( startPositions.addIfNew( cTmpMv ) )
+      {
+        startMvs[startPositions.size - 1] = mv;
+      }
+    };
 
-    Mv prevMv[BlkUniMvInfoBuffer::m_uniMvListMaxSize];
-
+    addStartMv( bBi ? rcMv : rcMvPred );
     for( int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++ )
     {
-      const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i );
-      cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
-      prevMv[i] = cTmpMv;
-
-      int j = 0;
-      for( ; j < i; j++ )
-      {
-        if( cTmpMv == prevMv[j] )
-        {
-          break;
-        }
-      }
-      if( j < i )
-        continue;
-
-      xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines);
-      cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
-      m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
-
-      Distortion uiSad = m_cDistParam.distFunc(m_cDistParam);
-      uiSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
-      if( uiSad < uiBestSad )
-      {
-        uiBestSad = uiSad;
-        bestInitMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
-        m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-      }
+      addStartMv( m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i )->uniMvs[refPicList][iRefIdxPred] );
     }
 
+    Mv         bestInitMv, bestStartPosition;
+    Distortion uiBestSad = MAX_DISTORTION;
+    xCostsOfStartPositions( startPositions, 0, cStruct, [&]( const int index, const Distortion cost )
+    {
+      if( cost < uiBestSad )
+      {
+        uiBestSad  = cost;
+        bestInitMv = startMvs[index];
+        bestStartPosition = startPositions.positions[index];
+        m_cDistParam.maximumDistortionForEarlyExit = cost;
+      }
+    } );
+
     xSetSearchRange( cu, bestInitMv, iSrchRng, cStruct.searchRange );
-    xPatternSearch ( cStruct, rcMv, ruiCost);
+    xPatternSearch ( cStruct, rcMv, ruiCost, bestStartPosition, uiBestSad );
   }
   else if( bQTBTMV )
   {
@@ -2259,7 +2306,9 @@ void InterSearch::xSetSearchRange ( const CodingUnit& cu,
 
 void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
                                   Mv&                 rcMv,
-                                  Distortion&         ruiSAD )
+                                  Distortion&         ruiSAD,
+                                  const Mv&           knownPosition,
+                                  const Distortion    knownCost )
 {
   Distortion  uiSad;
   Distortion  uiSadBest = MAX_DISTORTION;
@@ -2270,6 +2319,14 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
   m_pcRdCost->setDistParam( m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode );
 
   const SearchRange& sr = cStruct.searchRange;
+
+  // A position in the range whose cost is known bounds the result, so a position above that cost can stop its SAD at
+  // once and cannot be taken. The first position that reaches the lowest cost still wins, as in a scan without a bound.
+  if( knownPosition.hor >= sr.left && knownPosition.hor <= sr.right && knownPosition.ver >= sr.top && knownPosition.ver <= sr.bottom )
+  {
+    uiSadBest = knownCost + 1;
+    m_cDistParam.maximumDistortionForEarlyExit = knownCost;
+  }
 
   // The motion vector bits are the sum of a horizontal and a vertical part: the horizontal part of every column once
   // per search, the vertical part once per row (the cost is getCostOfVectorWithPredictor's on the same sum).
@@ -2428,25 +2485,33 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
 
   SearchRange& sr = cStruct.searchRange;
 
+  // The start and the zero vector had their tests above, or found out that they cannot win.
+  StartPositions startPositions;
+  startPositions.addIfNew( Mv( rcMv.hor, rcMv.ver ) );
+  if( bTestZeroVector )
+  {
+    startPositions.addIfNew( Mv( 0, 0 ) );
+  }
+  const int numTested = startPositions.size;
   for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
   {
-    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
-    Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
+    Mv cTmpMv = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i)->uniMvs[refPicList][iRefIdxPred];
 
     xClipMvSearch(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv, m_pcEncCfg->m_ifpLines);
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
-    m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
-
-    Distortion uiSad = m_cDistParam.distFunc(m_cDistParam);
-    uiSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
-    if (uiSad < cStruct.uiBestSad)
-    {
-      cStruct.uiBestSad = uiSad;
-      cStruct.iBestX = cTmpMv.hor;
-      cStruct.iBestY = cTmpMv.ver;
-      m_cDistParam.maximumDistortionForEarlyExit = uiSad;
-    }
+    startPositions.addIfNew( cTmpMv );
   }
+
+  xCostsOfStartPositions( startPositions, numTested, cStruct, [&]( const int index, const Distortion cost )
+  {
+    if( cost < cStruct.uiBestSad )
+    {
+      cStruct.uiBestSad = cost;
+      cStruct.iBestX = startPositions.positions[index].hor;
+      cStruct.iBestY = startPositions.positions[index].ver;
+      m_cDistParam.maximumDistortionForEarlyExit = cost;
+    }
+  } );
 
   {
     // set search range
