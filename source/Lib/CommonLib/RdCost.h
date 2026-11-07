@@ -151,6 +151,9 @@ private:
   Mv                      m_mvPredictor;
   Mv                      m_bvPredictors[2];
   double                  m_motionLambda;
+  // The motion search asks for the cost of a bit count at every position it tests. A multiplication and a conversion back take longer than this lookup.
+  static const uint32_t   MOTION_COST_TABLE_SIZE = 128;
+  Distortion              m_motionCost[MOTION_COST_TABLE_SIZE];
   int                     m_iCostScale;
   double                  m_dCostIBC;
 public:
@@ -188,10 +191,10 @@ public:
   void          setDistParamGeo     ( DistParam &rcDP, const CPelBuf& org, const Pel *piRefY, int iRefStride, const Pel *mask, int iMaskStride, int stepX, int iMaskStride2, int bitDepth, ComponentID compID );
 
   double        getMotionLambda     ()                      const { return m_dLambdaMotionSAD; }
-  void          selectMotionLambda  ()                            { m_motionLambda = getMotionLambda(); }
+  void          selectMotionLambda  ()                            { if( m_motionLambda != getMotionLambda() ) { setMotionLambda( getMotionLambda() ); } }
   void          setPredictor        ( const Mv& rcMv )            { m_mvPredictor = rcMv; }
   void          setCostScale        ( int iCostScale )            { m_iCostScale = iCostScale; }
-  Distortion    getCost             ( uint32_t b )          const { return Distortion( m_motionLambda * b ); }
+  Distortion    getCost             ( uint32_t b )          const { return b < MOTION_COST_TABLE_SIZE ? m_motionCost[b] : Distortion( m_motionLambda * b ); }
   // for motion cost
   static uint32_t    xGetExpGolombNumberOfBits( int iVal )
   {
@@ -212,13 +215,14 @@ public:
     return uiLength2 + ( Log2(uiTemp2) << 1 );
 #endif
   }
-  Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return Distortion( m_motionLambda * getBitsOfVectorWithPredictor(x, y, imvShift )); }
+  Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return getCost( getBitsOfVectorWithPredictor( x, y, imvShift ) ); }
   uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return getBitsOfVectorHor( x, imvShift ) + getBitsOfVectorVer( y, imvShift ); }
   // the two halves of getBitsOfVectorWithPredictor: each depends on one component only
   uint32_t       getBitsOfVectorHor( const int x, const unsigned imvShift ) const { return xGetExpGolombNumberOfBits( ( ( x * ( 1 << m_iCostScale ) ) - m_mvPredictor.hor ) >> imvShift ); }
   uint32_t       getBitsOfVectorVer( const int y, const unsigned imvShift ) const { return xGetExpGolombNumberOfBits( ( ( y * ( 1 << m_iCostScale ) ) - m_mvPredictor.ver ) >> imvShift ); }
 
   void           saveUnadjustedLambda ();
+  void           setMotionLambda      ( double motionLambda );
   void           setChromaFormat      ( ChromaFormat cf )   { m_cf = cf; }
   void           setPredictorsIBC     (Mv* pcMv)
   {

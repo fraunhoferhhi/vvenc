@@ -146,7 +146,7 @@ void RdCost::create( bool enableOpt )
 #endif
 
   m_costMode      = VVENC_COST_STANDARD_LOSSY;
-  m_motionLambda  = 0;
+  setMotionLambda( 0 );
   m_iCostScale    = 0;
 }
 
@@ -1942,6 +1942,15 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
   return (uiSum >> DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth));
 }
 
+
+void RdCost::setMotionLambda( double motionLambda )
+{
+  m_motionLambda = motionLambda;
+  for( uint32_t bits = 0; bits < MOTION_COST_TABLE_SIZE; bits++ )
+  {
+    m_motionCost[bits] = Distortion( motionLambda * bits );
+  }
+}
 
 void RdCost::saveUnadjustedLambda()
 {
