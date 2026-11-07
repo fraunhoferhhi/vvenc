@@ -799,7 +799,12 @@ typedef struct vvenc_config
   uint8_t             m_QPFractionVal;                                                   // fractional part of the QP in constant-QP mode in 1/256 steps (0..255, default: 0), the effective QP is m_QP + m_QPFraction / 256
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
-  int8_t              m_reservedInt8_2[2];
+  int8_t              m_reservedInt8_2[1];
+#define VVENC_SET_CUTREE_PIC_STRENGTH(s) ((uint8_t)((s)*32+0.5))
+  uint8_t             m_cuTreePicStrength;                                               // CU-tree (BIM 1), random access, constant QP: picture QPs from the CU tree's dependency estimate
+                                                                                         // in place of the temporal layers' QP offsets, scaled by this 5-bit fixed point value (default 0: off),
+                                                                                         // e.g. VVENC_SET_CUTREE_PIC_STRENGTH(2.0); the encoder then codes at QP + round( 3 + 2 * strength ),
+                                                                                         // to offset the lower QPs of the referenced pictures (calibrated at strength 2, GOP 32)
   int32_t             m_reservedInt32;
   double              m_reservedDouble[7];
 

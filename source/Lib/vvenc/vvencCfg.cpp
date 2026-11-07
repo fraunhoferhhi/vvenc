@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/ProfileLevelTier.h"
 #include "Utilities/MsgLog.h"
 #include "EncoderLib/GOPCfg.h"
+#include "EncoderLib/EncCfg.h"
 
 #include <math.h>
 #include <thread>
@@ -642,6 +643,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_blockImportanceMapping                  = 2;
   c->m_cuTreeStrength                         = VVENC_SET_CUTREE_STRENGTH( 2.0 );
   c->m_cuTreeBlockSize                        = -1;
+  c->m_cuTreePicStrength                      = 0;
 
   c->m_maxDeltaQP                              = -1;
 
@@ -1271,7 +1273,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if (c->m_internalBitDepth[ch]>10)
       {
-        c->m_log2SaoOffsetScale[ch]=uint32_t(vvenc::Clip3<int>(0, c->m_internalBitDepth[ch]-10, int(c->m_internalBitDepth[ch]-10 + 0.165*c->m_QP - 3.22 + 0.5) ) );
+        c->m_log2SaoOffsetScale[ch]=uint32_t(vvenc::Clip3<int>(0, c->m_internalBitDepth[ch]-10, int(c->m_internalBitDepth[ch]-10 + 0.165*vvenc::getCodingQp( *c ) - 3.22 + 0.5) ) );
       }
       else
       {
@@ -1523,14 +1525,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     const int log2GopSize = std::min<int>( 6, vvenc::floorLog2( c->m_GOPSize ) );
 
-    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, log2GopSize - ( ( c->m_QP - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
+    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, log2GopSize - ( ( vvenc::getCodingQp( *c ) - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
 
     for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
     {
       c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
-      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
+      c->m_vvencMCTF.MCTFStrengths[i] = vvenc::Clip3( 0.0, 2.0, ( vvenc::getCodingQp( *c ) + c->m_QPFractionVal / 256.0 - 4.0 ) / 8.0 ) / double ( c->m_vvencMCTF.numFrames - i );
     }
-    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( c->m_QP + c->m_QPFractionVal / 256.0 - 4.0 ) * 3.0 / 32.0 );
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = vvenc::Clip3( 0.0, 1.5, ( vvenc::getCodingQp( *c ) + c->m_QPFractionVal / 256.0 - 4.0 ) * 3.0 / 32.0 );
   }
 
   if( c->m_cuTreeBlockSize == -1 )
@@ -1555,7 +1557,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
   if ( c->m_usePerceptQPATempFiltISlice == 2
-      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_INIT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
+      && ( vvenc::getCodingQp( *c ) <= 27 || vvenc::getCodingQp( *c ) > vvenc::MAX_QP_INIT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize ) )
   {
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
@@ -1573,7 +1575,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_cuQpDeltaSubdiv = 0;
     if ( c->m_usePerceptQPA
-        && c->m_QP <= vvenc::MAX_QP_INIT_QPA
+        && vvenc::getCodingQp( *c ) <= vvenc::MAX_QP_INIT_QPA
         && ( c->m_CTUSize == 128 || ( c->m_CTUSize == 64 && std::min( c->m_SourceWidth, c->m_SourceHeight ) < 720 ) )
         && std::min( c->m_SourceWidth, c->m_SourceHeight ) <= 1280 )
     {
@@ -1603,7 +1605,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
     if( c->m_maxDeltaQP == -2 )
     {
-      c->m_maxDeltaQP = 15 - (c->m_QP >> 2);
+      c->m_maxDeltaQP = 15 - (vvenc::getCodingQp( *c ) >> 2);
     }
   }
 
@@ -2150,6 +2152,10 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, !( c->m_usePerceptQPA || c->m_blockImportanceMapping || c->m_lumaLevelToDeltaQPEnabled == 1 ) && (c->m_maxDeltaQP != -1), "MaxDeltaQP cannot be set without PerceptQPA, BIM or LumaLevelToDeltaQPMode" );
   vvenc_confirmParameter(c, c->m_blockImportanceMapping < 0 || c->m_blockImportanceMapping > 2,                 "BIM must be 0 (off), 1 (CU-tree) or 2 (from MCTF)" );
   vvenc_confirmParameter(c, c->m_cuTreeBlockSize != 16 && c->m_cuTreeBlockSize != 32,                            "CuTreeBlockSize must be 16, 32 or -1 (automatic)" );
+  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && c->m_blockImportanceMapping != 1,                      "CuTreePicStrength needs the CU tree (BIM 1)" );
+  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_IntraPeriod == 1 || ! c->m_picReordering ),   "CuTreePicStrength needs random access (picture reordering, not all intra)" );
+  vvenc_confirmParameter(c, c->m_cuTreePicStrength > 0 && ( c->m_RCTargetBitrate > 0 || ( c->m_RCMaxBitrate > 0 && c->m_RCMaxBitrate < INT32_MAX ) ),
+                                                                                                                  "CuTreePicStrength supports constant QP only, without rate control or a maximum rate" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_maxDeltaQP < 0 || c->m_maxDeltaQP > vvenc::MAX_QP),             "MaxDeltaQP must be in range of 0 - 63" );
   vvenc_confirmParameter(c, c->m_usePerceptQPA && c->m_lumaLevelToDeltaQPEnabled == 1,                                  "LumaLevelToDeltaQPMode cannot be enabled when PerceptQPA is on" );
 
@@ -3388,7 +3394,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "EDO:" << c->m_EDO << " ";
     css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
     css << "BIM:" << (int)c->m_blockImportanceMapping << " ";
-    if( c->m_blockImportanceMapping == 1 ) css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize << ") ";
+    if( c->m_blockImportanceMapping == 1 )
+    {
+      css << "(CU-tree, strength " << c->m_cuTreeStrength / 32.0 << ", blocks " << (int)c->m_cuTreeBlockSize;
+      if( c->m_cuTreePicStrength > 0 ) css << ", picture strength " << c->m_cuTreePicStrength / 32.0 << ", coded at QP " << vvenc::getCodingQp( *c );
+      css << ") ";
+    }
 
     css << "\n" << loglvl << "PRE-ANALYSIS CFG: ";
     css << "STA:" << (int)c->m_sliceTypeAdapt << " ";

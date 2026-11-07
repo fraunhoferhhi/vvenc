@@ -317,6 +317,69 @@ void tplPredBlock16x16_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy
   }
 }
 
+// The squared error of an 8x8 block against its bilinear prediction, the prediction computed as in
+// tplPredBlock8x8_SIMD and kept in registers.
+template<X86_VEXT vext>
+int tplPredError8x8_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride )
+{
+  const __m128i wx0 = _mm_set1_epi16( short( 16 - fx ) );
+  const __m128i wx1 = _mm_set1_epi16( short( fx ) );
+  const __m256i wy  = _mm256_set1_epi32( ( fy << 16 ) | ( 16 - fy ) );
+  const __m256i rnd = _mm256_set1_epi32( 128 );
+
+  __m128i rows[9];
+  for( int j = 0; j < 9; j++ )
+  {
+    const __m128i a = _mm_loadu_si128( ( const __m128i* ) ( src + j * srcStride ) );
+    const __m128i b = _mm_loadu_si128( ( const __m128i* ) ( src + j * srcStride + 1 ) );
+    rows[j] = _mm_add_epi16( _mm_mullo_epi16( a, wx0 ), _mm_mullo_epi16( b, wx1 ) );
+  }
+  __m128i sum = _mm_setzero_si128();
+  for( int j = 0; j < 8; j++ )
+  {
+    const __m256i pairs = _mm256_set_m128i( _mm_unpackhi_epi16( rows[j], rows[j + 1] ), _mm_unpacklo_epi16( rows[j], rows[j + 1] ) );
+    const __m256i pred  = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( pairs, wy ), rnd ), 8 );
+    const __m128i diff  = _mm_sub_epi16( _mm_loadu_si128( ( const __m128i* ) ( org + j * orgStride ) ),
+                                         _mm_packs_epi32( _mm256_castsi256_si128( pred ), _mm256_extracti128_si256( pred, 1 ) ) );
+    sum = _mm_add_epi32( sum, _mm_madd_epi16( diff, diff ) );
+  }
+  sum = _mm_hadd_epi32( sum, sum );
+  sum = _mm_hadd_epi32( sum, sum );
+  return _mm_cvtsi128_si32( sum );
+}
+
+// The squared error of a 16x16 block against its bilinear prediction, the prediction computed as in
+// tplPredBlock16x16_SIMD and kept in registers.
+template<X86_VEXT vext>
+int tplPredError16x16_SIMD( const Pel* src, ptrdiff_t srcStride, int fx, int fy, const Pel* org, ptrdiff_t orgStride )
+{
+  const __m256i wx0 = _mm256_set1_epi16( short( 16 - fx ) );
+  const __m256i wx1 = _mm256_set1_epi16( short( fx ) );
+  const __m256i wy  = _mm256_set1_epi32( ( fy << 16 ) | ( 16 - fy ) );
+  const __m256i rnd = _mm256_set1_epi32( 128 );
+
+  __m256i sum = _mm256_setzero_si256();
+  __m256i prev;
+  for( int j = 0; j <= 16; j++ )
+  {
+    const __m256i a   = _mm256_loadu_si256( ( const __m256i* ) ( src + j * srcStride ) );
+    const __m256i b   = _mm256_loadu_si256( ( const __m256i* ) ( src + j * srcStride + 1 ) );
+    const __m256i row = _mm256_add_epi16( _mm256_mullo_epi16( a, wx0 ), _mm256_mullo_epi16( b, wx1 ) );
+    if( j > 0 )
+    {
+      const __m256i lo   = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpacklo_epi16( prev, row ), wy ), rnd ), 8 );
+      const __m256i hi   = _mm256_srai_epi32( _mm256_add_epi32( _mm256_madd_epi16( _mm256_unpackhi_epi16( prev, row ), wy ), rnd ), 8 );
+      const __m256i diff = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) ( org + ( j - 1 ) * orgStride ) ), _mm256_packs_epi32( lo, hi ) );
+      sum = _mm256_add_epi32( sum, _mm256_madd_epi16( diff, diff ) );
+    }
+    prev = row;
+  }
+  __m128i s = _mm_add_epi32( _mm256_castsi256_si128( sum ), _mm256_extracti128_si256( sum, 1 ) );
+  s = _mm_hadd_epi32( s, s );
+  s = _mm_hadd_epi32( s, s );
+  return _mm_cvtsi128_si32( s );
+}
+
 // AVX2 version of tplDownsampleRowCore: 16 output samples per step, the rest scalar.
 template<X86_VEXT vext>
 void tplDownsampleRow_SIMD( const Pel* src, ptrdiff_t srcStride, Pel* dst, int dstWidth )
@@ -351,6 +414,8 @@ void CuTree::_initCuTree_X86()
   m_codeBlock[TPL_BLK_16] = tplCodeBlock16x16_SIMD<vext>;
   m_predBlock[TPL_BLK_8]  = tplPredBlock8x8_SIMD<vext>;
   m_predBlock[TPL_BLK_16] = tplPredBlock16x16_SIMD<vext>;
+  m_predError[TPL_BLK_8]  = tplPredError8x8_SIMD<vext>;
+  m_predError[TPL_BLK_16] = tplPredError16x16_SIMD<vext>;
   m_downsampleRow         = tplDownsampleRow_SIMD<vext>;
 #endif
 }
