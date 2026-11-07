@@ -116,6 +116,8 @@ namespace vvenc {
   // BitAllocation functions
   namespace BitAllocation
   {
+    static constexpr int QPA_QP_NOT_SET = -128; // below every valid QP
+
     int applyQPAdaptationSlice ( const Slice* slice,
                                  const VVEncCfg* encCfg,
                                  const int sliceQP,
@@ -127,6 +129,7 @@ namespace vvenc {
                                  const uint8_t* minNoiseLevels,
                                  const uint32_t ctuStartAddr,
                                  const uint32_t ctuBoundingAddr );
+    int getMinAdaptedQP( const Slice* slice, const VVEncCfg* encCfg );
     int applyQPAdaptationSubCtu( const Slice* slice,
                                  const VVEncCfg* encCfg,
                                  const Area& lumaArea,

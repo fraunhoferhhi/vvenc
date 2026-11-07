@@ -392,7 +392,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice )
     if ((iQP = BitAllocation::applyQPAdaptationSlice (slice, m_pcEncCfg, iQP, dLambda, &slice->pic->picVA.visAct, // updates pic->picInitialQP
                                                       *m_globalCtuQpVector, m_pcRateCtrl->getIntraPQPAStats(),
                                                       (slice->pps->sliceChromaQpFlag && cqp ? sliceChromaQpOffsetIntraOrPeriodic : nullptr),
-                                                      m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) >= 0) // QP OK?
+                                                      m_pcRateCtrl->getMinNoiseLevels(), startCtuTsAddr, boundingCtuTsAddr)) != BitAllocation::QPA_QP_NOT_SET) // QP OK?
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }
