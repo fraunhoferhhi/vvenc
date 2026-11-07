@@ -2719,6 +2719,84 @@ uint64_t sumSquaredError_SIMD( const Pel* src0, const ptrdiff_t stride0, const P
   return sum + uint64_t( _vv_sum_epi64( acc ) );
 }
 
+#if USE_AVX2
+// adds the squares of height rows of 16 * numVecs columns to acc, as 32-bit pair sums
+template<int numVecs>
+static inline void addSquaresOfRows_AVX2( __m256i* acc, const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int height )
+{
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    for( int v = 0; v < numVecs; v++ )
+    {
+      const __m256i diff = _mm256_sub_epi16( _mm256_loadu_si256( ( const __m256i* ) &src0[16 * v] ), _mm256_loadu_si256( ( const __m256i* ) &src1[16 * v] ) );
+      acc[v] = _mm256_add_epi32( acc[v], _mm256_madd_epi16( diff, diff ) );
+    }
+  }
+}
+
+// the squares of height rows of 2, 4 or 8 columns, as 32-bit pair sums
+template<int width>
+static inline __m128i squaresOfRows_128( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int height )
+{
+  __m128i acc = _mm_setzero_si128();
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    const __m128i a    = width == 8 ? _mm_loadu_si128( ( const __m128i* ) src0 ) : width == 4 ? _vv_loadl_epi64( ( const __m128i* ) src0 ) : _mm_loadu_si32( src0 );
+    const __m128i b    = width == 8 ? _mm_loadu_si128( ( const __m128i* ) src1 ) : width == 4 ? _vv_loadl_epi64( ( const __m128i* ) src1 ) : _mm_loadu_si32( src1 );
+    const __m128i diff = _mm_sub_epi16( a, b );
+    acc = _mm_add_epi32( acc, _mm_madd_epi16( diff, diff ) );
+  }
+  return acc;
+}
+
+static void sumSquaredErrorParts_AVX2( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int lengthX, const int lengthY, const int numX, const int numY, uint32_t sums[][4] )
+{
+  const int width = lengthX * numX;
+  CHECKD( width > 8 && numX != 4, "only four parts in a row from width 16 up" );
+  for( int j = 0; j < numY; j++, src0 += lengthY * stride0, src1 += lengthY * stride1 )
+  {
+    __m128i parts;
+    if( width == 16 )
+    {
+      // each part is a 64-bit lane
+      __m256i acc = _mm256_setzero_si256();
+      addSquaresOfRows_AVX2<1>( &acc, src0, stride0, src1, stride1, lengthY );
+      acc   = _mm256_add_epi32( acc, _mm256_srli_epi64( acc, 32 ) );
+      parts = _mm256_castsi256_si128( _mm256_permutevar8x32_epi32( acc, _mm256_setr_epi32( 0, 2, 4, 6, 0, 2, 4, 6 ) ) );
+    }
+    else if( width == 32 )
+    {
+      // each part is a 128-bit lane
+      __m256i acc[2] = { _mm256_setzero_si256(), _mm256_setzero_si256() };
+      addSquaresOfRows_AVX2<2>( acc, src0, stride0, src1, stride1, lengthY );
+      __m256i sum = _mm256_hadd_epi32( acc[0], acc[1] );
+      sum   = _mm256_hadd_epi32( sum, sum );
+      parts = _mm_unpacklo_epi32( _mm256_castsi256_si128( sum ), _mm256_extracti128_si256( sum, 1 ) );
+    }
+    else if( width == 64 )
+    {
+      // each part is a vector
+      __m256i acc[4] = { _mm256_setzero_si256(), _mm256_setzero_si256(), _mm256_setzero_si256(), _mm256_setzero_si256() };
+      addSquaresOfRows_AVX2<4>( acc, src0, stride0, src1, stride1, lengthY );
+      const __m256i sum = _mm256_hadd_epi32( _mm256_hadd_epi32( acc[0], acc[1] ), _mm256_hadd_epi32( acc[2], acc[3] ) );
+      parts = _mm_add_epi32( _mm256_castsi256_si128( sum ), _mm256_extracti128_si256( sum, 1 ) );
+    }
+    else
+    {
+      parts = width == 8 ? squaresOfRows_128<8>( src0, stride0, src1, stride1, lengthY )
+            : width == 4 ? squaresOfRows_128<4>( src0, stride0, src1, stride1, lengthY )
+                         : squaresOfRows_128<2>( src0, stride0, src1, stride1, lengthY );
+      // the parts of width 2 are a pair sum each, those of width 4 two of them
+      if( lengthX == 4 )
+      {
+        parts = _mm_hadd_epi32( parts, parts );
+      }
+    }
+    _mm_storeu_si128( ( __m128i* ) sums[j], parts );
+  }
+}
+#endif
+
 // sum of the samples of a block and, if withSquares, of their squares
 template<X86_VEXT vext, bool withSquares>
 static inline void sumBlock_SIMD( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum, int64_t& sumSquares )
@@ -3507,6 +3585,9 @@ void PelBufferOps::_initPelBufOpsX86()
   HDHighPass2 = HDHighPass2_SIMD<vext>;
 
   sumSquaredError  = sumSquaredError_SIMD<vext>;
+#if USE_AVX2
+  sumSquaredErrorParts = sumSquaredErrorParts_AVX2;
+#endif
   sum              = sum_SIMD<vext>;
   sumAndSumSquares = sumAndSumSquares_SIMD<vext>;
   padHorizontal    = padHorizontal_SIMD<vext>;
