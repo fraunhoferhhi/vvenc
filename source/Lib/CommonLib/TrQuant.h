@@ -95,6 +95,9 @@ public:
   void invTransformNxN    ( TransformUnit& tu, const ComponentID compID, PelBuf& pResi, const QpParam& cQPs);
   void transformNxN       ( TransformUnit& tu, const ComponentID compID, const QpParam& cQP, TCoeff &uiAbsSum, const Ctx& ctx, const bool loadTr = false);
   void checktransformsNxN ( TransformUnit& tu, TrModeList *trModes, const int maxCand, const ComponentID compID = COMP_Y);
+  // Called with true before transforming the residuals of one block with several LFNST indices, which leave these residuals as
+  // they are, and with false afterwards. Forgets what was kept.
+  void keepPrimaryCoeffs  ( const bool keep );
 
   void                        invTransformICT     ( const TransformUnit& tu, PelBuf& resCb, PelBuf& resCr );
   std::pair<int64_t,int64_t>  fwdTransformICT     ( const TransformUnit& tu, const PelBuf& resCb, const PelBuf& resCr, PelBuf& resC1, PelBuf& resC2, int jointCbCr = -1 );
@@ -125,6 +128,17 @@ private:
   TCoeff    m_tempOutMatrix[48];
   TCoeff   *m_mtsCoeffs[NUM_TRAFO_MODES_MTS];
 
+  // The coefficients LFNST reads from a primary transform, and the transform they came from
+  struct KeptPrimaryCoeffs
+  {
+    TCoeff coeffs[8 * 8];
+    int    trTypeHor;
+    int    trTypeVer;
+    bool   valid;
+  };
+  KeptPrimaryCoeffs m_keptPrimary[MAX_NUM_COMP + 3];   // per component, then per joint Cb-Cr mode 1 to 3
+  bool              m_keepPrimary = false;
+
   void                      (*m_invICTMem[1+2*maxAbsIctMode])(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(*m_fwdICTMem[1+2*maxAbsIctMode])(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
 
@@ -139,6 +153,7 @@ private:
 
   // forward Transform
   void xT               (const TransformUnit& tu, const ComponentID compID, const CPelBuf& resi, CoeffBuf& dstCoeff, const int width, const int height);
+  void xTOrKept         (const TransformUnit& tu, const ComponentID compID, const CPelBuf& resi, CoeffBuf& dstCoeff, const int width, const int height);
 
   // quantization
   void xQuant           (TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx);

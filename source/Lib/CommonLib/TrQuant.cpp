@@ -745,6 +745,10 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
     {
       xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
     }
+    else if( m_keepPrimary )
+    {
+      xTOrKept(tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight);
+    }
     else
     {
       xT(tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight);
@@ -762,6 +766,69 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
 
   // set coded block flag (CBF)
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
+}
+
+void TrQuant::keepPrimaryCoeffs( const bool keep )
+{
+  m_keepPrimary = keep;
+  for( KeptPrimaryCoeffs& kept : m_keptPrimary )
+  {
+    kept.valid = false;
+  }
+}
+
+// The size is a template parameter because compilers inline a memcpy of known size. A call per row would cost about as much
+// as the transform this is there to save.
+template<int size>
+static inline void copyCoeffSquare( TCoeff* dst, const int dstStride, const TCoeff* src, const int srcStride )
+{
+  for( int y = 0; y < size; y++ )
+  {
+    memcpy( dst + y * dstStride, src + y * srcStride, size * sizeof( TCoeff ) );
+  }
+}
+
+// With an LFNST index the primary transform stops at the coefficients LFNST reads, and these don't depend on the index.
+// They are kept from the first transform of a residual, with or without LFNST, if the next one has the same transform type.
+void TrQuant::xTOrKept( const TransformUnit& tu, const ComponentID compID, const CPelBuf& resi, CoeffBuf& dstCoeff, const int width, const int height )
+{
+  int trTypeHor = DCT2;
+  int trTypeVer = DCT2;
+  xSetTrTypes( tu, compID, width, height, trTypeHor, trTypeVer );
+
+  KeptPrimaryCoeffs& kept   = m_keptPrimary[tu.jointCbCr ? MAX_NUM_COMP + tu.jointCbCr - 1 : compID];
+  const int          keptW  = 8;   // kept.coeffs has room for 8 x 8 coefficients
+  const bool         big    = width >= 8 && height >= 8;
+  const int          sbSize = big ? 8 : 4;
+
+  if( tu.cu->lfnstIdx && kept.valid && kept.trTypeHor == trTypeHor && kept.trTypeVer == trTypeVer )
+  {
+    // Like xT, which doesn't clear the rows past the cut-off of a block of 64 rows.
+    memset( dstCoeff.buf, 0, sizeof( TCoeff ) * width * ( height < 64 ? height : sbSize ) );
+    if( big )
+    {
+      copyCoeffSquare<8>( dstCoeff.buf, width, kept.coeffs, keptW );
+    }
+    else
+    {
+      copyCoeffSquare<4>( dstCoeff.buf, width, kept.coeffs, keptW );
+    }
+    return;
+  }
+
+  xT( tu, compID, resi, dstCoeff, width, height );
+
+  if( big )
+  {
+    copyCoeffSquare<8>( kept.coeffs, keptW, dstCoeff.buf, width );
+  }
+  else
+  {
+    copyCoeffSquare<4>( kept.coeffs, keptW, dstCoeff.buf, width );
+  }
+  kept.trTypeHor = trTypeHor;
+  kept.trTypeVer = trTypeVer;
+  kept.valid     = true;
 }
 
 void TrQuant::checktransformsNxN( TransformUnit &tu, TrModeList *trModes, const int maxCand, const ComponentID compID)
