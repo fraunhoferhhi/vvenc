@@ -238,6 +238,7 @@ protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, AccessUnitList& auList, PicList& doneList, PicList& freeList );
   virtual bool waitForFreeEncoders();
+  virtual bool xReadyToProcess() const;
 
 private:
   void xUpdateRasInit                 ( Slice* slice );

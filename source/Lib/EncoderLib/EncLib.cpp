@@ -243,9 +243,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   // pre processing
   m_preProcess = new PreProcess( msg );
   m_preProcess->initStage( m_encCfg, 1, -m_encCfg.m_leadFrames, true, true, false );
-  m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass );
+  m_preProcess->init( m_encCfg, m_rateCtrl->rcIsFinalPass, m_threadPool );
   m_encStages.push_back( m_preProcess );
-  m_maxNumPicShared += 1;
+  m_maxNumPicShared += 1 + m_preProcess->lookahead();   // the pictures held ahead of the GOP structure
 
   // MCTF
   if( m_encCfg.m_vvencMCTF.MCTF || m_encCfg.m_usePerceptQPA )

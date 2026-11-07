@@ -515,6 +515,7 @@ static int refineDeltaQpDistribution (Picture* const pic, const VVEncCfg* encCfg
 int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
                                            const double sliceLambda, uint16_t* const picVisActLuma,
                                            std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
+                                           const int ctuRCQPMemoryIndex,
                                            int* const optChromaQPOffsets, const uint8_t* minNoiseLevels,
                                            const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
@@ -670,17 +671,26 @@ int BitAllocation::applyQPAdaptationSlice (const Slice* slice, const VVEncCfg* e
     }
   }
 
-  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra())
+  if (encCfg->m_RCNumPasses == 2 && (encCfg->m_RCTargetBitrate > 0) && (ctuRCQPMemory != nullptr) && slice->pps->useDQP && (encCfg->m_internalUsePerceptQPATempFiltISlice == 2) && slice->isIntra() && ctuRCQPMemoryIndex >= 0)
   {
+    // The first pass stores one block per I picture, a 4-bit value per CTU of its own picture. A downscaled first pass
+    // (FirstPassMode 3 and 4) codes the half-size picture with the same CTU size, so its block holds that smaller
+    // picture's CTUs and its CTU (i, j) covers the CTUs (2i .. 2i + 1, 2j .. 2j + 1) here; the clamp covers a last row
+    // or column that the half size, rounded down to a multiple of 8, leaves out.
+    const bool halfSize = encCfg->m_FirstPassMode > 2;
+    const int  memW     = halfSize ? int ((((encCfg->m_SourceWidth  >> 1) & ~7) + pcv.maxCUSize - 1) / pcv.maxCUSize) : 0;
+    const int  memH     = halfSize ? int ((((encCfg->m_SourceHeight >> 1) & ~7) + pcv.maxCUSize - 1) / pcv.maxCUSize) : 0;
     const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
-    const int offs = (slice->poc / encCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
+    const int memBytes = halfSize ? ((memW * memH + 1) >> 1) : ((nCtu + 1) >> 1);
+    const int offs = ctuRCQPMemoryIndex * memBytes; // this I picture's first-pass memory (RateCtrl::getIntraPQPAIndex)
     std::vector<uint8_t>& ctuQPMem = *ctuRCQPMemory; // unpack 1st-pass reduction QPs
 
-    if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
+    if ((ctuPumpRedQP.size() >= nCtu) && (memBytes > 0) && (ctuQPMem.size() >= offs + memBytes))
     {
       for (uint32_t ctuRsAddr = ctuStartAddr; ctuRsAddr < ctuBoundingAddr; ctuRsAddr++)
       {
-        ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
+        const uint32_t src = halfSize ? std::min (int (ctuRsAddr % pcv.widthInCtus) >> 1, memW - 1) + std::min (int (ctuRsAddr / pcv.widthInCtus) >> 1, memH - 1) * memW : ctuRsAddr;
+        ctuPumpRedQP[ctuRsAddr] = int ((src & 1) ? ctuQPMem[offs + (src >> 1)] >> 4 : ctuQPMem[offs + (src >> 1)] & 15) - 8;
       }
     }
   }
