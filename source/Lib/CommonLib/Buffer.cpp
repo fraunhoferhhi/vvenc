@@ -803,6 +803,7 @@ PelBufferOps::PelBufferOps()
   HDHighPass = HDHighPassCore;
   HDHighPass2 = HDHighPass2Core;
   sumSquaredError  = sumSquaredErrorCore;
+  sumSquaredErrorParts = nullptr;
   sum              = sumCore;
   sumAndSumSquares = sumAndSumSquaresCore;
   pictureChecksum  = pictureChecksumCore;
