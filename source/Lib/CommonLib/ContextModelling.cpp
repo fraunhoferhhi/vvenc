@@ -61,7 +61,7 @@ const uint8_t g_sigCtxOfsSum [32] = { 0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
 const uint8_t g_sigCtxOfsDiag[MAX_NUM_CH][128] = { { 8, 8, 4, 4, 4 }, { 4, 4 } };   // 0 from there on
 const uint8_t g_absCtxOfsDiag[MAX_NUM_CH][128] = { { 15, 10, 10, 5, 5, 5, 5, 5, 5, 5 }, { 5 } };
 
-CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf )
+CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm, CtxTpl* tplBuf, int scanPosLast )
   : m_compID                    (component)
   , m_chType                    (toChannelType(m_compID))
   , m_width                     (tu.block(m_compID).width)
@@ -111,7 +111,18 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_tplBuf                    (tplBuf + m_width * m_height - 1)
 {
   if( tplBuf && ( tu.mtsIdx[ component ] != MTS_SKIP || tu.cu->slice->tsResidualCodingDisabled ) )
-    memset( tplBuf, 0, m_width * m_height * sizeof( CtxTpl ) );
+  {
+    // With a known last position (scanPosLast >= 0) only positions up to it are read, and the templates only write to
+    // positions before those. The diagonal scan of the groups bounds their rows. The buffer runs backwards from position 0,
+    // so these rows are at its end.
+    unsigned rows = m_height;
+    if( scanPosLast >= 0 )
+    {
+      const auto& lastGroup = m_scanCG[scanPosLast >> m_log2CGSize];
+      rows = std::min<unsigned>( m_height, ( lastGroup.x + lastGroup.y + 1u ) << m_log2CGHeight );
+    }
+    memset( tplBuf + ( m_height - rows ) * m_width, 0, rows * m_width * sizeof( CtxTpl ) );
+  }
 }
 
 void CoeffCodingContext::initSubblock( int SubsetId, bool sigGroupFlag )

@@ -76,7 +76,7 @@ static const int CTX_TPL_BUF_SIZE = MAX_TB_SIZEY * MAX_TB_SIZEY + 2 * MAX_TB_SIZ
 struct CoeffCodingContext
 {
 public:
-  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false, CtxTpl* tplBuf = nullptr );
+  CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false, CtxTpl* tplBuf = nullptr, int scanPosLast = -1 );
 public:
   void  initSubblock    ( int SubsetId, bool sigGroupFlag = false );
 public:

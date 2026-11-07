@@ -808,7 +808,7 @@ void fastForwardDCT2_EvenOdd_SIMD( const TCoeff* src, TCoeff* dst, int shift, in
 
   _mm256_zeroupper();
 
-  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine, iSkipLine2 );
+  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine );
 }
 
 // Forward DCT-II, N = 16, AVX2, with the even/odd split of fastForwardDCT2_EvenOdd_SIMD. E and O have 8 values per
@@ -861,7 +861,7 @@ void fastForwardDCT2_EvenOdd16_SIMD( const TCoeff* src, TCoeff* dst, int shift, 
 
   _mm256_zeroupper();
 
-  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine, iSkipLine2 );
+  fastForwardZeroSkipped( dst, line, reducedLine, cutoff, iSkipLine );
 }
 
 #endif

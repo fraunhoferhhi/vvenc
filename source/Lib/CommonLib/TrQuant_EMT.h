@@ -104,9 +104,9 @@ extern TCoeffOps g_tCoeffOps;
 template<int N>
 void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 
-// Zeroes what a forward 1D transform leaves out: columns reducedLine .. line - 1 of the first cutoff rows, and all
-// rows from cutoff on (dst holds the transform's rows of line coefficients each).
-static inline void fastForwardZeroSkipped( TCoeff *dst, int line, int reducedLine, int cutoff, int iSkipLine, int iSkipLine2 )
+// Zeroes columns reducedLine .. line - 1 of the first cutoff rows, which a forward 1D transform leaves out (dst holds the
+// transform's rows of line coefficients each). The rows from cutoff on stay as they are: TrQuant::xT clears those that are read.
+static inline void fastForwardZeroSkipped( TCoeff *dst, int line, int reducedLine, int cutoff, int iSkipLine )
 {
   if( iSkipLine )
   {
@@ -116,11 +116,6 @@ static inline void fastForwardZeroSkipped( TCoeff *dst, int line, int reducedLin
       memset( pCoef, 0, sizeof( TCoeff ) * iSkipLine );
       pCoef += line;
     }
-  }
-
-  if( iSkipLine2 )
-  {
-    memset( dst + line * cutoff, 0, sizeof( TCoeff ) * line * iSkipLine2 );
   }
 }
 

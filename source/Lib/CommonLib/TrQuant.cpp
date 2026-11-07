@@ -550,12 +550,23 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     CHECK( shift_2nd < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
     fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
+    // The kernels leave the rows past the cut-off as they were. The second stage never reads those of the first stage. In the
+    // coefficients, the RDOQ check reads 32 rows and the comparison of transforms reads blocks up to 32 rows, so 64 rows need no clear.
+    if( skipHeight && height < 64 )
+    {
+      memset( dstCoeff.buf + width * ( height - skipHeight ), 0, sizeof( TCoeff ) * width * skipHeight );
+    }
   }
   else if (height == 1)   // 1-D horizontal transform
   {
     const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
     CHECK( shift < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift, 1, 0, skipWidth);
+    // The RDOQ check reads the coefficients past the cut-off of a single row.
+    if( skipWidth )
+    {
+      memset( dstCoeff.buf + width - skipWidth, 0, sizeof( TCoeff ) * skipWidth );
+    }
   }
   else   // if (iWidth == 1) //1-D vertical transform
   {
@@ -563,6 +574,11 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     CHECK(shift < 0, "Negative shift");
     CHECKD((transformHeightIndex < 0), "There is a problem with the height.");
     fastFwdTrans[trTypeVer][transformHeightIndex](block, dstCoeff.buf, shift, 1, 0, skipHeight);
+    // The RDOQ check reads the coefficients past the cut-off of a single column up to row 32.
+    if( skipHeight )
+    {
+      memset( dstCoeff.buf + height - skipHeight, 0, sizeof( TCoeff ) * skipHeight );
+    }
   }
 }
 
