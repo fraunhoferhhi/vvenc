@@ -1918,6 +1918,17 @@ void InterSearch::xEstimateMvPredAMVP( CodingUnit& cu, CPelUnitBuf& origBuf, Ref
 
   AMVPInfo*  pcAMVPInfo = &rAMVPInfo;
 
+  AmvpResult& known = m_amvpResults[cu.imv][refPicList][iRefIdx];
+  if( known.modeTestId == m_modeTestId )
+  {
+    rAMVPInfo             = known.info;
+    rcMvPred              = known.mvPred;
+    distBiP               = known.dist;
+    cu.mvpIdx[refPicList] = known.mvpIdx;
+    cu.mvpNum[refPicList] = known.info.numCand;
+    return;
+  }
+
   // Fill the MV Candidates
   CU::fillMvpCand( cu, refPicList, iRefIdx, *pcAMVPInfo );
 
@@ -1948,6 +1959,12 @@ void InterSearch::xEstimateMvPredAMVP( CodingUnit& cu, CPelUnitBuf& origBuf, Ref
   rcMvPred = cBestMv;
   cu.mvpIdx[refPicList] = iBestIdx;
   cu.mvpNum[refPicList] = pcAMVPInfo->numCand;
+
+  known.modeTestId = m_modeTestId;
+  known.info       = rAMVPInfo;
+  known.mvPred     = rcMvPred;
+  known.dist       = distBiP;
+  known.mvpIdx     = iBestIdx;
 
   return;
 }

@@ -391,6 +391,19 @@ protected:
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
   BcwMotionParam    m_uniMotions;
+  uint64_t          m_modeTestId = 1;
+
+  // The BCW passes of a mode test repeat the AMVP derivation with the same inputs: the block, its neighbours, the list, the reference
+  // and the MV resolution. So each result holds for the mode test it was found in.
+  struct AmvpResult
+  {
+    uint64_t   modeTestId = 0;
+    AMVPInfo   info;
+    Mv         mvPred;
+    Distortion dist;
+    int        mvpIdx;
+  };
+  AmvpResult        m_amvpResults[IMV_HPEL + 1][NUM_REF_PIC_LIST_01][MAX_REF_PICS];
   uint8_t           m_estWeightIdxBits[BCW_NUM] = { 4, 3, 1, 2, 4 };
   bool              m_affineModeSelected;
 
@@ -433,7 +446,7 @@ public:
 
   void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
 
-  void       resetBufferedUniMotions() { m_uniMotions.reset(); }
+  void       resetBufferedUniMotions() { m_uniMotions.reset(); m_modeTestId++; }
   uint8_t    getWeightIdxBits       ( uint8_t bcwIdx ) { return m_estWeightIdxBits[bcwIdx]; }
   void       setAffineModeSelected  ( bool flag ) { m_affineModeSelected = flag; }
 
