@@ -840,6 +840,20 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   m_refGeneration++;
 }
 
+// The samples around a block don't change while the encoder tests its modes, so only what depends on the mode is redone.
+void IntraPrediction::keepIntraPatternChType(const CodingUnit &cu, const CompArea& area)
+{
+  const SPS& sps = *cu.cs->sps;
+
+  initPredIntraParams(cu, area, sps);
+
+  if( m_ipaParam.refFilterFlag )
+  {
+    xFilterReferenceSamples( m_refBuffer[area.compID][PRED_BUF_UNFILTERED], m_refBuffer[area.compID][PRED_BUF_FILTERED], area, sps, cu.multiRefIdx );
+    m_refGeneration++;
+  }
+}
+
 void IntraPrediction::reset()
 {
   m_lastCh = MAX_NUM_CH;

@@ -1999,12 +1999,25 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
     PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
 
-    initIntraPatternChType(*currTU.cu, cbArea);
-    initIntraPatternChType(*currTU.cu, crArea);
+    // estIntraPredChromaQT has read the samples around the whole chroma block, and only writes inside the block
+    const bool samplesKept = cbArea == cu.Cb();
+    if( samplesKept )
+    {
+      keepIntraPatternChType(*currTU.cu, cbArea);
+      keepIntraPatternChType(*currTU.cu, crArea);
+    }
+    else
+    {
+      initIntraPatternChType(*currTU.cu, cbArea);
+      initIntraPatternChType(*currTU.cu, crArea);
+    }
 
     if (CU::isLMCMode(predMode))
     {
-      loadLMLumaRecPels(cu, cbArea);
+      if( !samplesKept )
+      {
+        loadLMLumaRecPels(cu, cbArea);
+      }
       predIntraChromaLM(COMP_Cb, piPredCb, cu, cbArea, predMode);
       predIntraChromaLM(COMP_Cr, piPredCr, cu, crArea, predMode);
     }
@@ -2212,7 +2225,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           {
             saveCS.getRecoBuf(area).copyFrom(cs.getRecoBuf(area));
             tmpTU.copyComponentFrom(currTU, compID);
-            ctxBest = m_CABACEstimator->getCtx();
+            // Without a transform skip test only the save after Cr is ever read
+            if( compID != COMP_Cb || testTS )
+            {
+              ctxBest = m_CABACEstimator->getCtx();
+            }
           }
         }
         }
@@ -2327,6 +2344,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         }
       }
 
+      // The candidates and their residuals don't depend on the LFNST index, so the rounds after the first don't select again
+      std::vector<int> jointCbfCandidates;
+      const std::vector<int> noJointCbfCandidates;
+      bool jointCbfSelected = false;
+
       for (int lfnstIdxj = startLfnstIdx; lfnstIdxj <= endLfnstIdx; lfnstIdxj++)
       {
         if (rapidLFNST && noLFNST1 && (lfnstIdxj == 1))
@@ -2334,11 +2356,13 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           continue;
         }
         currTU.cu->lfnstIdx = lfnstIdxj;
-        std::vector<int> jointCbfMasksToTest;
-        if (TU::getCbf(tmpTU, COMP_Cb) || TU::getCbf(tmpTU, COMP_Cr))
+        const bool testJointCbf = TU::getCbf(tmpTU, COMP_Cb) || TU::getCbf(tmpTU, COMP_Cr);
+        if( testJointCbf && !jointCbfSelected )
         {
-          jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, m_orgResiCb, m_orgResiCr);
+          jointCbfCandidates = m_pcTrQuant->selectICTCandidates(currTU, m_orgResiCb, m_orgResiCr);
+          jointCbfSelected   = true;
         }
+        const std::vector<int>& jointCbfMasksToTest = testJointCbf ? jointCbfCandidates : noJointCbfCandidates;
         for (int cbfMask : jointCbfMasksToTest)
         {
           currTU.jointCbCr = (uint8_t)cbfMask;
