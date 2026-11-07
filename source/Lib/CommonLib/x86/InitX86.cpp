@@ -212,6 +212,10 @@ void EncAdaptiveLoopFilter::initEncAdaptiveLoopFilter_X86()
   switch (vext){
     case AVX512:
     case AVX2:
+#if ENABLE_AVX2_IMPLEMENTATIONS
+      _initEncAdaptiveLoopFilter_X86<AVX2>();
+      break;
+#endif
     case AVX:
     case SSE42:
     case SSE41:
