@@ -1158,7 +1158,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
     uint32_t         bitsValidList1   = MAX_UINT;
     Distortion   costValidList1   = MAX_DISTORTION;
 
-    CPelUnitBuf origBuf = static_cast<const CodingStructure*>( cu.cs )->getOrgBuf( cu ); // const overload: no conversion from PelUnitBuf
+    CPelUnitBuf origBuf = static_cast<const CodingStructure*>( cu.cs )->getOrgBuf(); // const overload: no conversion from PelUnitBuf
 
     xGetBlkBits( cs.slice->isInterP(), puIdx, uiLastMode, uiMbBits );
 
@@ -1900,7 +1900,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
     m_skipPROF = false;
     m_encOnly  = false;
     //  MC
-    PelUnitBuf predBuf = cu.cs->getPredBuf(cu);
+    PelUnitBuf predBuf = cu.cs->getPredBuf();
     motionCompensation( cu, predBuf, REF_PIC_LIST_X );
     puIdx++;
   }
@@ -3488,8 +3488,10 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
   {
     const ComponentID compID   = ComponentID( c );
     const CompArea&   compArea = cu.blocks[compID];
-    const CPelBuf orgPel  = cs.getOrgBuf( compArea );
-    const CPelBuf predPel = cs.getPredBuf( compArea );
+    // the structure holds this CU alone
+    CHECKD( compArea.pos() != cs.area.blocks[compID].pos() || compArea.size() != cs.area.blocks[compID].size(), "not the whole structure" );
+    const CPelBuf orgPel  = cs.getOrgBuf( compID );
+    const CPelBuf predPel = cs.getPredBuf( compID );
     int lengthX = compArea.width / numPartX;
     int lengthY = compArea.height / numPartY;
     static_assert( DISTORTION_PRECISION_ADJUSTMENT( 2 ) == 0, "the squared errors of the sub parts are not scaled" );
