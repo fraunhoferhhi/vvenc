@@ -329,8 +329,10 @@ void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& c
     CHECKD(!canSplit(split, cs), "Trying to apply a prohibited split!");
   }
 
-  bool isImplicit = isSplitImplicit( split, cs );
-  bool canQtSplit = canSplit( CU_QUAD_SPLIT, cs );
+  // only a BT or TT split keeps these
+  const bool isMtSplit = split == CU_HORZ_SPLIT || split == CU_VERT_SPLIT || split == CU_TRIH_SPLIT || split == CU_TRIV_SPLIT;
+  bool isImplicit = isMtSplit && isSplitImplicit( split, cs );
+  bool canQtSplit = isMtSplit && canSplit( CU_QUAD_SPLIT, cs );
   bool qgEnable = currQgEnable();
   bool qgChromaEnable = currQgChromaEnable();
 
@@ -528,8 +530,17 @@ void Partitioner::canSplit( const CodingStructure &cs, bool& canNo, bool& canQt,
 
 bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
 {
-  const CompArea area       = currArea().Y();
-  const unsigned maxTrSize  = cs.sps->getMaxTbSize();
+  // the TU splits read none of the CU splits' flags
+  if( split == TU_MAX_TR_SPLIT )
+  {
+    const CompArea& area      = currArea().Y();
+    const unsigned  maxTrSize = cs.sps->getMaxTbSize();
+    return area.width > maxTrSize || area.height > maxTrSize;
+  }
+  if( split >= SBT_VER_HALF_POS0_SPLIT && split <= SBT_HOR_QUAD_POS1_SPLIT )
+  {
+    return currTrDepth == 0;
+  }
 
   bool canNo, canQt, canBh, canTh, canBv, canTv;
 
@@ -540,19 +551,6 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
   case CTU_LEVEL:
     THROW( "Checking if top level split is possible" );
     return true;
-    break;
-  case TU_MAX_TR_SPLIT:
-    return area.width > maxTrSize || area.height > maxTrSize;
-    break;
-  case SBT_VER_HALF_POS0_SPLIT:
-  case SBT_VER_HALF_POS1_SPLIT:
-  case SBT_HOR_HALF_POS0_SPLIT:
-  case SBT_HOR_HALF_POS1_SPLIT:
-  case SBT_VER_QUAD_POS0_SPLIT:
-  case SBT_VER_QUAD_POS1_SPLIT:
-  case SBT_HOR_QUAD_POS0_SPLIT:
-  case SBT_HOR_QUAD_POS1_SPLIT:
-    return currTrDepth == 0;
     break;
   case CU_QUAD_SPLIT:
     return canQt;
