@@ -5288,11 +5288,20 @@ Distortion InterSearch::xGetAffineTemplateCost(CodingUnit& cu, CPelUnitBuf& orig
     return MAX_DISTORTION>>1;  
   }
 
-  xPredAffineBlk(COMP_Y, cu, picRef, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
+  // What the prediction depends on besides the reference picture and the MVs.
+  const int predSettings = cu.affineType | int( cu.interDir == 3 ) << 1 | int( m_isBi ) << 2 | int( m_skipPROF ) << 3 | int( m_encOnly ) << 4;
+  const int mvNum        = cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2;
+  Distortion dist = 0;
+  m_affineTemplateDists.startCu( cu.cs->picture, cu.slice->poc, cu.Y() );
+  if( !m_affineTemplateDists.find( picRef, mv, mvNum, predSettings, dist ) )
+  {
+    xPredAffineBlk(COMP_Y, cu, picRef, mv, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
-  // calc distortion
-  uiCost = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD );
-  uiCost += m_pcRdCost->getCost(m_auiMVPIdxCost[iMVPIdx][iMVPNum]);
+    // calc distortion
+    dist = m_pcRdCost->getDistPart(origBuf.Y(), predBuf.Y(), cu.cs->sps->bitDepths[CH_L], COMP_Y, DF_HAD );
+    m_affineTemplateDists.add( picRef, mv, predSettings, dist );
+  }
+  uiCost = dist + m_pcRdCost->getCost(m_auiMVPIdxCost[iMVPIdx][iMVPNum]);
 
   DTRACE(g_trace_ctx, D_COMMON, " (%d) affineTemplateCost=%d\n", DTRACE_GET_COUNTER(g_trace_ctx, D_COMMON), uiCost);
   return uiCost;
@@ -5533,15 +5542,15 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   Mv acMvTemp[3];
   ::memcpy(acMvTemp, acMv, sizeof(Mv) * 3);
   // Set delta mv
-  // malloc buffer
   int iParaNum = cu.affineType ? 7 : 5;
   int affineParaNum = iParaNum - 1;
   int mvNum = cu.affineType ? 3 : 2;
-  double **pdEqualCoeff;
-  pdEqualCoeff = new double *[iParaNum];
+  // solveEqual takes row pointers. The matrix stays on the stack, since the heap takes longer than the small matrix is worth.
+  double  equalCoeffRows[7][7];
+  double* pdEqualCoeff[7];
   for (int i = 0; i < iParaNum; i++)
   {
-    pdEqualCoeff[i] = new double[iParaNum];
+    pdEqualCoeff[i] = equalCoeffRows[i];
   }
 
   int64_t  i64EqualCoeff[7][7];
@@ -5716,6 +5725,28 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
       clipMv(acMvTemp[i], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     }
 
+    if( skipRepeatedTests )
+    {
+      // Back on MVs this loop already stood on: the step they gave is fixed by them, so from here it only repeats steps, and
+      // none of those can beat uiCostBest. The last of them would leave RdCost's MV predictor as xCalcAffineMVBits does here.
+      int repeatOf = -1;
+      for( int prevIter = 0; prevIter <= iter && repeatOf < 0; prevIter++ )
+      {
+        bool isSame = true;
+        for( int i = 0; i < mvNum; i++ )
+        {
+          isSame = isSame && prevIterMv[prevIter][i] == acMvTemp[i];
+        }
+        repeatOf = isSame ? prevIter : -1;
+      }
+      if( repeatOf >= 0 )
+      {
+        const int lastRepeat = m_pcEncCfg->m_Affine > 1 ? repeatOf : repeatOf + ( iIterTime - 1 - iter ) % ( iter + 1 - repeatOf );
+        xCalcAffineMVBits( cu, prevIterMv[lastRepeat], acMvPred );
+        break;
+      }
+    }
+
     if( !m_pcEncCfg->m_ifpLines || xIsAffineMvInRangeFPP( cu, acMvTemp, m_pcEncCfg->m_ifpLines ) )
     {
       xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
@@ -5887,11 +5918,6 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
   acMvPred[0] = aamvpi.mvCandLT[mvpIdx];
   acMvPred[1] = aamvpi.mvCandRT[mvpIdx];
   acMvPred[2] = aamvpi.mvCandLB[mvpIdx];
-
-  // free buffer
-  for (int i = 0; i<iParaNum; i++)
-    delete[]pdEqualCoeff[i];
-  delete[]pdEqualCoeff;
 
   ruiBits = uiBitsBest;
   ruiCost = uiCostBest;

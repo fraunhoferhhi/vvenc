@@ -335,6 +335,72 @@ struct ReuseUniMv
   void resetReusedUniMvs();
 };
 
+// The SATDs of the affine AMVP candidates tested for the CU under test. Later searches of the CU bring many candidates
+// back, and the same inputs give the same prediction and SATD. A full table overwrites its oldest entry: a lost entry
+// only costs the test again.
+class AffineTemplateDistCache
+{
+public:
+  void startCu( const Picture* picture, const int poc, const Area& area )
+  {
+    if( picture != m_picture || poc != m_poc || !( area == m_area ) )
+    {
+      m_picture = picture;
+      m_poc     = poc;
+      m_area    = area;
+      m_size    = 0;
+      m_next    = 0;
+    }
+  }
+
+  bool find( const Picture* ref, const Mv* mv, const int mvNum, const int predSettings, Distortion& dist ) const
+  {
+    for( int i = 0; i < m_size; i++ )
+    {
+      const Entry& entry = m_entries[i];
+      if( entry.ref == ref && entry.predSettings == predSettings && entry.mv[0] == mv[0] && entry.mv[1] == mv[1] && ( mvNum == 2 || entry.mv[2] == mv[2] ) )
+      {
+        dist = entry.dist;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void add( const Picture* ref, const Mv* mv, const int predSettings, const Distortion dist )
+  {
+    Entry& entry = m_entries[m_next];
+    entry.ref          = ref;
+    entry.mv[0]        = mv[0];
+    entry.mv[1]        = mv[1];
+    entry.mv[2]        = mv[2];
+    entry.predSettings = predSettings;
+    entry.dist         = dist;
+    m_next             = ( m_next + 1 ) % NUM_ENTRIES;
+    if( m_size < NUM_ENTRIES )
+    {
+      m_size++;
+    }
+  }
+
+private:
+  struct Entry
+  {
+    const Picture* ref;
+    Mv             mv[3];
+    int            predSettings;
+    Distortion     dist;
+  };
+  static const int NUM_ENTRIES = 32;
+
+  Entry          m_entries[NUM_ENTRIES];
+  const Picture* m_picture = nullptr;
+  int            m_poc     = 0;
+  Area           m_area;
+  int            m_size    = 0;
+  int            m_next    = 0;
+};
+
 /// encoder search class
 class InterSearch : public InterPrediction, AffineGradientSearch
 {
@@ -343,6 +409,7 @@ private:
 
   PelStorage        m_tmpPredStorage[NUM_REF_PIC_LIST_01];
   PelStorage        m_tmpStorageLCU;
+  AffineTemplateDistCache m_affineTemplateDists;
   CodingStructure** m_pSaveCS;
 
   ClpRng            m_lumaClpRng;
