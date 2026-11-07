@@ -3400,6 +3400,7 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
   int numPartY = cuHeight >= 16 ? 4 : ( cuHeight == 4 ? 1 : 2 );
   Distortion dist[4][4];
   memset( dist, 0, sizeof( Distortion ) * 16 );
+  const double chromaWeight = m_pcRdCost->getChromaWeight();
 
   for( uint32_t c = 0; c < getNumberValidTBlocks( *cs.pcv ); c++ )
   {
@@ -3411,6 +3412,21 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
     int lengthY = compArea.height / numPartY;
     static_assert( DISTORTION_PRECISION_ADJUSTMENT( 2 ) == 0, "the squared errors of the sub parts are not scaled" );
 
+    if( g_pelBufOP.sumSquaredErrorParts )
+    {
+      uint32_t sums[4][4];
+      g_pelBufOP.sumSquaredErrorParts( orgPel.buf, orgPel.stride, predPel.buf, predPel.stride, lengthX, lengthY, numPartX, numPartY, sums );
+      for( int j = 0; j < numPartY; j++ )
+      {
+        for( int i = 0; i < numPartX; i++ )
+        {
+          // each part rounded for itself, as below
+          dist[j][i] += isChroma( compID ) ? (Distortion)( sums[j][i] * chromaWeight ) : (Distortion) sums[j][i];
+        }
+      }
+      continue;
+    }
+
     //calc distY of 16 sub parts
     for( int j = 0; j < numPartY; j++ )
     {
@@ -3421,7 +3437,7 @@ void InterSearch::xCalcMinDistSbt( CodingStructure &cs, const CodingUnit& cu, co
         Distortion uiSum = g_pelBufOP.sumSquaredError( orgPel.bufAt( posX, posY ), orgPel.stride, predPel.bufAt( posX, posY ), predPel.stride, lengthX, lengthY );
         if( isChroma( compID ) )
         {
-          uiSum = (Distortion)( uiSum * m_pcRdCost->getChromaWeight() );
+          uiSum = (Distortion)( uiSum * chromaWeight );
         }
         dist[j][i] += uiSum;
       }
