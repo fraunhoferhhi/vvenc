@@ -328,6 +328,9 @@ int testLibParameterRanges()
   testParamList( "BIM",                                    vvencParams.m_blockImportanceMapping,     vvencParams, { -1,3 }, true );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { -1,16,32 } );
   testParamList( "CuTreeBlockSize",                        vvencParams.m_cuTreeBlockSize,            vvencParams, { 0,8,64 }, true );
+  // CU-tree look-ahead: 1 to 4 GOPs or automatic
+  testParamList( "CuTreeLookAheadGOPs",                    vvencParams.m_cuTreeLookAheadGOPs,        vvencParams, { -1,1,2,3,4 } );
+  testParamList( "CuTreeLookAheadGOPs",                    vvencParams.m_cuTreeLookAheadGOPs,        vvencParams, { -2,0,5 }, true );
 
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
   testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );

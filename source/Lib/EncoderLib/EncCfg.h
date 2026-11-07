@@ -110,6 +110,9 @@ private:
   void xInitCfgMembers();
 };
 
+// The GOPs the CU tree looks ahead: CuTreeLookAheadGOPs, or 1 for -1 (automatic).
+int getCuTreeLookAheadGops( const vvenc_config& c );
+
 }
 
 

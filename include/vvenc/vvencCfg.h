@@ -767,7 +767,7 @@ typedef struct vvenc_config
   int8_t              m_poc0idr;                                                         // encoding with first IRAP at POC 0 (0: off, 1: on, -1: default automatic setting (on for idr_no_radl, disabled picture reorderding and non-first segments; off otherwise))
   int8_t              m_ifpLines;
   int8_t              m_blockImportanceMapping;                                          // block importance mapping, the QP of blocks that later pictures predict from (0: off,
-                                                                                         // 1: CU-tree with the TPL model and one GOP of look-ahead, 2: from MCTF's motion error)
+                                                                                         // 1: CU-tree with the TPL model and m_cuTreeLookAheadGOPs of look-ahead, 2: from MCTF's motion error)
   bool                m_saoScc;
   bool                m_addGOP32refPics;
   bool                m_fastHad;
@@ -800,7 +800,10 @@ typedef struct vvenc_config
 #define VVENC_SET_FGA_STRENGTH(s) ((uint8_t)((s)*64+0.5))
   uint8_t             m_fgaStrengthVal;                                                  // Film grain strength as the fraction of the analysed strength, as a fixed point value with 6 fractional bits (default 1.0, 0 disables the grain)
   int8_t              m_reservedInt8_2[2];
-  int32_t             m_reservedInt32;
+  int8_t              m_cuTreeLookAheadGOPs;                                             // GOPs the CU tree looks ahead (BIM 1), never more than the intra period (at least 1 GOP): 1 to 4
+                                                                                         // (default -1: automatic, 1); each extra GOP costs one GOP of pictures in memory and of delay,
+                                                                                         // none once the window reaches the intra period
+  int8_t              m_reservedInt8_3[3];
   double              m_reservedDouble[7];
 
   // internal state variables
