@@ -557,6 +557,17 @@ uint64_t sumSquaredErrorCore( const Pel* src0, const ptrdiff_t stride0, const Pe
   return sum;
 }
 
+static void sumSquaredErrorPartsCore( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int lengthX, const int lengthY, const int numX, const int numY, uint32_t sums[][4] )
+{
+  for( int j = 0; j < numY; j++, src0 += lengthY * stride0, src1 += lengthY * stride1 )
+  {
+    for( int i = 0; i < numX; i++ )
+    {
+      sums[j][i] = uint32_t( sumSquaredErrorCore( src0 + i * lengthX, stride0, src1 + i * lengthX, stride1, lengthX, lengthY ) );
+    }
+  }
+}
+
 static uint32_t pictureChecksumCore( const Pel* plane, const ptrdiff_t stride, const int width, const int height, const bool twoBytes )
 {
   uint32_t checksum = 0;
@@ -803,7 +814,7 @@ PelBufferOps::PelBufferOps()
   HDHighPass = HDHighPassCore;
   HDHighPass2 = HDHighPass2Core;
   sumSquaredError  = sumSquaredErrorCore;
-  sumSquaredErrorParts = nullptr;
+  sumSquaredErrorParts = sumSquaredErrorPartsCore;
   sum              = sumCore;
   sumAndSumSquares = sumAndSumSquaresCore;
   pictureChecksum  = pictureChecksumCore;
