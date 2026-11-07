@@ -1333,8 +1333,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, void* taskParam )
           const int firstCtuInRow = ctuRsAddr + 1 - slice.pps->tileColWidth[slice.pps->ctuToTileCol[ctuPosX]];
           for( int ctu = firstCtuInRow; ctu <= ctuRsAddr; ctu++ )
           {
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
+            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, ctu, encSlice->m_threadRsrc->get( threadIdx ).m_alfTempCtuBuf );
           }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
