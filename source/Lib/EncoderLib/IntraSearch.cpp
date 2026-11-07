@@ -168,6 +168,14 @@ double IntraSearch::xFindInterCUCost( CodingUnit &cu )
   return COST_UNKNOWN;
 }
 
+// The bits of a mode only add to its cost, so a mode whose distortion alone reaches the last entry of the full cost list
+// cannot enter that list, whatever its bits. The list is the only reader of the bits, and coding them takes longer than this test.
+template<size_t N>
+static inline bool xCostCannotEnterList( const Distortion dist, const static_vector<double, N>& costs, const size_t numCands )
+{
+  return costs.size() >= numCands && ( double ) dist >= costs[numCands - 1];
+}
+
 void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
@@ -279,6 +287,13 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         // SAD is scaled by 2 to align with the scaling of HAD
         Distortion minSadHad = distParam.distFunc( distParam );
 
+        if( xCostCannotEnterList( minSadHad, CandCostList, numModesForFullRD ) )
+        {
+          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+          satdChecked[mode] = true;
+          continue;
+        }
+
         uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
 
         //restore ctx
@@ -324,6 +339,12 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         // Use the min between SAD and SATD as the cost criterion
         // SAD is scaled by 2 to align with the scaling of HAD
         Distortion minSadHad = distParam.distFunc(distParam);
+
+        if( xCostCannotEnterList( minSadHad, CandCostList, numModesForFullRD ) )
+        {
+          updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+          continue;
+        }
 
         // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
         uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
@@ -1275,7 +1296,7 @@ uint64_t IntraSearch::xGetIntraFracBitsQTChroma(const TransformUnit& currTU, con
   return fracBits;
 }
 
-void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig, PelUnitBuf *predBuf, const bool loadTr, const QpParam* lumaQP)
+void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig, PelUnitBuf *predBuf, const bool loadTr, const QpParam* lumaQP, const bool predKnown, const LfnstPrimary lfnstPrimary)
 {
   if (!tu.blocks[compID].valid())
   {
@@ -1335,7 +1356,11 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     }
     else
     {
-      if( predBuf )
+      if( predKnown )
+      {
+        // this TU's previous transform left it in piPred
+      }
+      else if( predBuf )
       {
         piPred.copyFrom( predBuf->Y() );
       }
@@ -1355,7 +1380,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   if (isLuma(compID))
   {
     //===== get residual signal =====
-    piResi.subtract( piOrg, piPred );
+    if( lfnstPrimary != LFNST_PRIMARY_KNOWN )
+    {
+      piResi.subtract( piOrg, piPred );
+    }
   }
 
   //===== transform and quantization =====
@@ -1380,7 +1408,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   if( isLuma(compID) )
   {
     const QpParam cQP = lumaQP ? *lumaQP : QpParam( tu, compID );
-    m_pcTrQuant->transformNxN(tu, compID, cQP, uiAbsSum, m_CABACEstimator->getCtx(), loadTr);
+    m_pcTrQuant->transformNxN(tu, compID, cQP, uiAbsSum, m_CABACEstimator->getCtx(), loadTr, lfnstPrimary);
 
     DTRACE( g_trace_ctx, D_TU_ABS_SUM, "%d: comp=%d, abssum=%d\n", DTRACE_GET_COUNTER( g_trace_ctx, D_TU_ABS_SUM ), compID, uiAbsSum );
     if (tu.cu->ispMode && isLuma(compID) && CU::isISPLast(*tu.cu, area, area.compID) && CU::allLumaCBFsAreZero(*tu.cu))
@@ -1625,6 +1653,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     }
 
     bool NStopMTS = true;
+    // All candidates here have the same residual. Without implicit MTS the first one's primary transform is the DCT2 that LFNST
+    // works on, otherwise only the second LFNST can use the first one's.
+    const LfnstPrimary lfnstPrimaryOfDct2 = endLfnstIdx && !sps.getUseImplicitMTS() ? LFNST_PRIMARY_KEEP : LFNST_PRIMARY_NEW;
     const QpParam lumaQP( tu, COMP_Y );   // the CU's QP doesn't change in these loops
 
     for (int modeId = 0; modeId <= EndMTS && NStopMTS; modeId++)
@@ -1710,7 +1741,9 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
         {
           bool TrLoad = (EndMTS && !m_pcEncCfg->m_LFNST) || (tsAllowed && !mtsAllowed && (lfnstIdx == 0)) ? true : false;
 
-          xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad, &lumaQP);
+          const LfnstPrimary lfnstPrimary = lfnstIdx == 0 ? ( modeId == 0 ? lfnstPrimaryOfDct2 : LFNST_PRIMARY_NEW )
+                                          : lfnstIdx == 2 || lfnstPrimaryOfDct2 == LFNST_PRIMARY_KEEP ? LFNST_PRIMARY_KNOWN : LFNST_PRIMARY_KEEP;
+          xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad, &lumaQP, modeId != 0 || lfnstIdx != 0, lfnstPrimary);
 
           cuCtx.mtsLastScanPos = false;
           //----- determine rate and r-d cost -----
