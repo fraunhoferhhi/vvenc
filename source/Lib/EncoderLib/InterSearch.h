@@ -662,6 +662,8 @@ private:
                                     Distortion&           ruiCost
                                   );
 
+  // the bi search reads only the luma of the other list's prediction (2 * org - other)
+  void xPredOtherListLuma( CodingUnit& cu, PelUnitBuf& pred, const RefPicList list );
   void xPredAffineInterSearch     ( CodingUnit&           cu,
                                     CPelUnitBuf&          origBuf,
                                     int                   puIdx,

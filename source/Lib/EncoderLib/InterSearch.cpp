@@ -1319,7 +1319,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
           cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
           cu.mvpIdx[REF_PIC_LIST_1] = bestBiPMvpL1;
           PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_1].getCompactBuf( cu );
-          motionCompensation( cu, predBufTmp, REF_PIC_LIST_1 );
+          xPredOtherListLuma( cu, predBufTmp, REF_PIC_LIST_1 );
 
           uiMotBits[0] = uiBits[0] - uiMbBits[0];
           uiMotBits[1] = uiMbBits[1];
@@ -1385,7 +1385,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
             cu.refIdx[1 - iRefList]    = iRefIdx[1 - iRefList];
 
             PelUnitBuf predBufTmp = m_tmpPredStorage[1 - iRefList].getCompactBuf( cu );
-            motionCompensation( cu, predBufTmp, RefPicList(1 - iRefList) );
+            xPredOtherListLuma( cu, predBufTmp, RefPicList(1 - iRefList) );
           }
 
           RefPicList  refPicList = ( iRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0 );
@@ -1440,7 +1440,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
                 cu.refIdx[refPicList]    = iRefIdxBi[iRefList];
 
                 PelUnitBuf predBufTmp = m_tmpPredStorage[iRefList].getCompactBuf( cu );
-                motionCompensation( cu, predBufTmp, refPicList );
+                xPredOtherListLuma( cu, predBufTmp, refPicList );
               }
             }
           } // for loop-iRefIdxTemp
@@ -2884,6 +2884,14 @@ void InterSearch::xPatternSearchFracDIF(
     ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 1, rcMvQter, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
   }
 
+}
+
+void InterSearch::xPredOtherListLuma( CodingUnit& cu, PelUnitBuf& pred, const RefPicList list )
+{
+  const uint8_t mcControl = cu.mcControl;
+  cu.mcControl = 2;
+  motionCompensation( cu, pred, list );
+  cu.mcControl = mcControl;
 }
 
 // The luma prediction of the symmetric MVD search for an already clipped MV. Not read in place with IFP and a fast inter
@@ -5019,7 +5027,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
         cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
 
         PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_1].getCompactBuf( cu );
-        motionCompensation(cu, predBufTmp, REF_PIC_LIST_1);
+        xPredOtherListLuma( cu, predBufTmp, REF_PIC_LIST_1 );
 
         // Update bits
         uiMotBits[0] = uiBits[0] - uiMbBits[0];
@@ -5086,7 +5094,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
           cu.refIdx[1 - iRefList] = iRefIdx[1 - iRefList];
 
           PelUnitBuf predBufTmp = m_tmpPredStorage[1 - iRefList].getCompactBuf( cu );
-          motionCompensation(cu, predBufTmp, RefPicList(1 - iRefList));
+          xPredOtherListLuma( cu, predBufTmp, RefPicList(1 - iRefList) );
         }
 
         RefPicList refPicList = (iRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
@@ -5146,7 +5154,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
               CU::setAllAffineMv(cu, cMvBi[iRefList][0], cMvBi[iRefList][1], cMvBi[iRefList][2], refPicList);
               cu.refIdx[refPicList] = iRefIdxBi[refPicList];
               PelUnitBuf predBufTmp = m_tmpPredStorage[iRefList].getCompactBuf( cu );
-              motionCompensation(cu, predBufTmp, refPicList);
+              xPredOtherListLuma( cu, predBufTmp, refPicList );
             }
           }
         } // for loop-iRefIdxTemp
