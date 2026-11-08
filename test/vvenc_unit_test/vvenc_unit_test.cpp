@@ -4105,7 +4105,8 @@ static bool check_width2Ops( PelBufferOps* ref, PelBufferOps* opt, unsigned num_
 }
 
 // Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
-// 15 bit (the documented range of the SIMD sums of squares), and signed 16-bit values for the sums.
+// 15 bit (the documented range of the SIMD sums of squares) plus one case of differences of -32768, and signed 16-bit
+// values for the sums.
 static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
 {
   printf( "Testing PelBufferOps::sumSquaredError, sum, sumAndSumSquares\n" );
@@ -4144,6 +4145,12 @@ static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigne
     opt->sumAndSumSquares( a.data(), stride, width, height, sumOpt, sumSqOpt );
     ok = ok && compare_value( "sumAndSumSquares sum " + sstm.str(), sumRef, sumOpt )
             && compare_value( "sumAndSumSquares squares " + sstm.str(), sumSqRef, sumSqOpt );
+
+    // differences of -32768, whose two squares fill a 32-bit lane up to 2^31
+    std::generate( a.begin(), a.end(), []() { return Pel( rand() & 1 ? INT16_MIN : 0 ); } );
+    std::fill( b.begin(), b.end(), Pel( 0 ) );
+    ok = ok && compare_value( "sumSquaredError -32768 " + sstm.str(), ref->sumSquaredError( a.data(), stride, b.data(), stride, width, height ),
+                                                                      opt->sumSquaredError( a.data(), stride, b.data(), stride, width, height ) );
 
     // the plain sum is exact for any Pel
     std::generate( a.begin(), a.end(), anyPel );

@@ -337,6 +337,167 @@ static void geoRunSads_neon( const uint32_t* prefix, const uint8_t* runStart, co
   vst1q_u32( sad + 4, sumHigh );
 }
 
+// sumSquaredError with the arithmetic of sumSquaredError_SIMD at SSE4.1: the differences in 16 bits (they wrap like
+// _mm_sub_epi16), their squares (at most 2^30) widened to 64 bits, unsigned; the columns past the last vector of 4 in C
+// with int differences. Integer addition does not depend on the order, so the sum is the same as x86's for any input.
+
+// adds the squares of the four differences a - b to acc
+static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x4_t a, const int16x4_t b )
+{
+  const int16x4_t diff = vsub_s16( a, b );
+  return vpadalq_u32( acc, vreinterpretq_u32_s32( vmull_s16( diff, diff ) ) );
+}
+
+// adds the squares of the eight differences a - b to acc; two squares share a 32-bit lane first, at most 2^31, so the
+// lane is exact as an unsigned value
+static inline uint64x2_t addSquares_neon( const uint64x2_t acc, const int16x8_t a, const int16x8_t b )
+{
+  const int16x8_t  diff = vsubq_s16( a, b );
+  const uint32x4_t lo   = vreinterpretq_u32_s32( vmull_s16( vget_low_s16( diff ), vget_low_s16( diff ) ) );
+  const uint32x4_t hi   = vreinterpretq_u32_s32( vmull_s16( vget_high_s16( diff ), vget_high_s16( diff ) ) );
+  return vpadalq_u32( acc, vaddq_u32( lo, hi ) );
+}
+
+// the two samples of each of up to four rows in one vector, the lanes of missing rows zero (like _vv_loadWidth2Rows)
+static inline int16x8_t loadWidth2Rows_neon( const Pel* p, const ptrdiff_t stride, const int numRows )
+{
+  uint32_t   row;
+  uint32x4_t v = vdupq_n_u32( 0 );
+  memcpy( &row, p, sizeof( row ) );
+  v = vsetq_lane_u32( row, v, 0 );
+  if( numRows > 1 )
+  {
+    memcpy( &row, &p[stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 1 );
+  }
+  if( numRows > 2 )
+  {
+    memcpy( &row, &p[2 * stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 2 );
+  }
+  if( numRows > 3 )
+  {
+    memcpy( &row, &p[3 * stride], sizeof( row ) );
+    v = vsetq_lane_u32( row, v, 3 );
+  }
+  return vreinterpretq_s16_u32( v );
+}
+
+static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, const Pel* src1, const ptrdiff_t stride1, const int width, const int height )
+{
+  if( width != 2 && width < 4 )
+  {
+    return sumSquaredErrorCore( src0, stride0, src1, stride1, width, height );
+  }
+
+  uint64x2_t acc = vdupq_n_u64( 0 );
+
+  if( width == 2 )
+  {
+    for( int y = 0; y < height; y += 4, src0 += 4 * stride0, src1 += 4 * stride1 )
+    {
+      const int       numRows = std::min( 4, height - y );
+      const int16x8_t a       = loadWidth2Rows_neon( src0, stride0, numRows );
+      const int16x8_t b       = loadWidth2Rows_neon( src1, stride1, numRows );
+      acc = addSquares_neon( acc, a, b );
+    }
+    return horizontal_add_u64x2( acc );
+  }
+
+  if( width == 4 )
+  {
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    {
+      const int16x4_t a0 = vld1_s16( src0 );
+      const int16x4_t a1 = vld1_s16( src0 + stride0 );
+      const int16x4_t b0 = vld1_s16( src1 );
+      const int16x4_t b1 = vld1_s16( src1 + stride1 );
+      acc = addSquares_neon( acc, vcombine_s16( a0, a1 ), vcombine_s16( b0, b1 ) );
+    }
+    if( y < height )
+    {
+      const int16x4_t a = vld1_s16( src0 );
+      const int16x4_t b = vld1_s16( src1 );
+      acc = addSquares_neon( acc, a, b );
+    }
+    return horizontal_add_u64x2( acc );
+  }
+
+  // widths 8 and above: two accumulators, for two rows (width 8) or the two halves of 16 columns
+  uint64x2_t acc2 = vdupq_n_u64( 0 );
+
+  if( width == 8 )
+  {
+    int y = 0;
+    for( ; y + 2 <= height; y += 2, src0 += 2 * stride0, src1 += 2 * stride1 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 );
+      const int16x8_t b0 = vld1q_s16( src1 );
+      const int16x8_t a1 = vld1q_s16( src0 + stride0 );
+      const int16x8_t b1 = vld1q_s16( src1 + stride1 );
+      acc  = addSquares_neon( acc, a0, b0 );
+      acc2 = addSquares_neon( acc2, a1, b1 );
+    }
+    if( y < height )
+    {
+      const int16x8_t a = vld1q_s16( src0 );
+      const int16x8_t b = vld1q_s16( src1 );
+      acc = addSquares_neon( acc, a, b );
+    }
+    return horizontal_add_u64x2( vaddq_u64( acc, acc2 ) );
+  }
+
+  if( width == 16 )
+  {
+    for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 );
+      const int16x8_t b0 = vld1q_s16( src1 );
+      const int16x8_t a1 = vld1q_s16( src0 + 8 );
+      const int16x8_t b1 = vld1q_s16( src1 + 8 );
+      acc  = addSquares_neon( acc, a0, b0 );
+      acc2 = addSquares_neon( acc2, a1, b1 );
+    }
+    return horizontal_add_u64x2( vaddq_u64( acc, acc2 ) );
+  }
+
+  uint64_t sum = 0;
+  for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
+  {
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t a0 = vld1q_s16( &src0[x] );
+      const int16x8_t b0 = vld1q_s16( &src1[x] );
+      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
+      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
+      acc  = addSquares_neon( acc, a0, b0 );
+      acc2 = addSquares_neon( acc2, a1, b1 );
+    }
+    if( x + 8 <= width )
+    {
+      const int16x8_t a = vld1q_s16( &src0[x] );
+      const int16x8_t b = vld1q_s16( &src1[x] );
+      acc = addSquares_neon( acc, a, b );
+      x += 8;
+    }
+    if( x + 4 <= width )
+    {
+      const int16x4_t a = vld1_s16( &src0[x] );
+      const int16x4_t b = vld1_s16( &src1[x] );
+      acc = addSquares_neon( acc, a, b );
+      x += 4;
+    }
+    for( ; x < width; x++ )
+    {
+      const int diff = src0[x] - src1[x];
+      sum += uint64_t( diff * diff );
+    }
+  }
+  return sum + horizontal_add_u64x2( vaddq_u64( acc, acc2 ) );
+}
+
 template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
@@ -349,6 +510,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   // a pair: geoRunSads_neon reads geoPrefixSums_neon's layout
   geoPrefixSums = geoPrefixSums_neon;
   geoRunSads    = geoRunSads_neon;
+
+  sumSquaredError = sumSquaredError_neon;
 }
 
 } // namespace vvenc
