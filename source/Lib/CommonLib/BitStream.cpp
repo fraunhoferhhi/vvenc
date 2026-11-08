@@ -191,9 +191,17 @@ void OutputBitstream::addSubstream( const OutputBitstream* pcSubstream )
   uint32_t uiNumBits = pcSubstream->getNumberOfWrittenBits();
 
   const std::vector<uint8_t>& rbsp = pcSubstream->getFIFO();
-  for (std::vector<uint8_t>::const_iterator it = rbsp.begin(); it != rbsp.end();)
+  if( m_num_held_bits == 0 )
   {
-    write(*it++, 8);
+    // byte-aligned, as after a slice header or a whole substream: the bytes go in unchanged, so append them at once
+    m_fifo.insert( m_fifo.end(), rbsp.begin(), rbsp.end() );
+  }
+  else
+  {
+    for (std::vector<uint8_t>::const_iterator it = rbsp.begin(); it != rbsp.end();)
+    {
+      write(*it++, 8);
+    }
   }
   if (uiNumBits&0x7)
   {
