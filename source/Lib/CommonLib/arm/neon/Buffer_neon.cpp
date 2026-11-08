@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
@@ -282,38 +283,6 @@ void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, i
 // per run end. The two only work as a pair (the C pair keeps one lane after the other). All lanes are computed: the
 // caller points unused lanes at the original and ignores their sums.
 
-// Transposes rows[lane][column] (8 x 8 16-bit values) into columns[column][lane], with vtrn only (armv7 has it too):
-// the 16-bit vtrn pairs rows 0-1, 2-3, ... per column, the 32-bit vtrn those pairs of rows 0-3 and 4-7, and the halves
-// of rows 0-3 and 4-7 then combine into one column each.
-static inline void transpose8x8_u16( const uint16x8_t* rows, uint16x8_t* columns )
-{
-  const uint16x8x2_t r01 = vtrnq_u16( rows[0], rows[1] );
-  const uint16x8x2_t r23 = vtrnq_u16( rows[2], rows[3] );
-  const uint16x8x2_t r45 = vtrnq_u16( rows[4], rows[5] );
-  const uint16x8x2_t r67 = vtrnq_u16( rows[6], rows[7] );
-
-  // e.g. top02.val[0] holds column 0 (rows 0-3) then column 4 (rows 0-3), top02.val[1] columns 2 and 6
-  const uint32x4x2_t top02    = vtrnq_u32( vreinterpretq_u32_u16( r01.val[0] ), vreinterpretq_u32_u16( r23.val[0] ) );
-  const uint32x4x2_t top13    = vtrnq_u32( vreinterpretq_u32_u16( r01.val[1] ), vreinterpretq_u32_u16( r23.val[1] ) );
-  const uint32x4x2_t bottom02 = vtrnq_u32( vreinterpretq_u32_u16( r45.val[0] ), vreinterpretq_u32_u16( r67.val[0] ) );
-  const uint32x4x2_t bottom13 = vtrnq_u32( vreinterpretq_u32_u16( r45.val[1] ), vreinterpretq_u32_u16( r67.val[1] ) );
-
-  const auto column = [&]( const uint32x4_t top, const uint32x4_t bottom, const bool high )
-  {
-    const uint32x2_t t = high ? vget_high_u32( top ) : vget_low_u32( top );
-    const uint32x2_t b = high ? vget_high_u32( bottom ) : vget_low_u32( bottom );
-    return vreinterpretq_u16_u32( vcombine_u32( t, b ) );
-  };
-  columns[0] = column( top02.val[0], bottom02.val[0], false );
-  columns[1] = column( top13.val[0], bottom13.val[0], false );
-  columns[2] = column( top02.val[1], bottom02.val[1], false );
-  columns[3] = column( top13.val[1], bottom13.val[1], false );
-  columns[4] = column( top02.val[0], bottom02.val[0], true );
-  columns[5] = column( top13.val[0], bottom13.val[0], true );
-  columns[6] = column( top02.val[1], bottom02.val[1], true );
-  columns[7] = column( top13.val[1], bottom13.val[1], true );
-}
-
 // Per group of 8 columns: each lane's 8 absolute differences, transposed to per column the differences of all lanes,
 // added to the running sums of lanes 0-3 and 4-7 and stored as one position. |org - pred| <= 1023 (both are samples),
 // so a row's sums stay far below 2^32.
@@ -339,7 +308,7 @@ static void geoPrefixSums_neon( const Pel* org, int orgStride, const Pel* const*
         diffs[lane] = vreinterpretq_u16_s16( vabdq_s16( orgs, vld1q_s16( pred[lane] + y * predStride + x ) ) );
       }
       uint16x8_t columns[8];
-      transpose8x8_u16( diffs, columns );
+      transpose_8x8_u16( diffs, columns );
       for( int k = 0; k < 8; k++ )
       {
         sumLow  = vaddw_u16( sumLow, vget_low_u16( columns[k] ) );
