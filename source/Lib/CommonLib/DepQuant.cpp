@@ -632,9 +632,11 @@ namespace DQIntern
     uint16_t    maxDist   = m_nbInfo[scanInfo.scanIdx - 1].maxDist;
     uint16_t    sbbSize   = scanInfo.sbbSize;
     std::size_t setCpSize = ( maxDist > sbbSize ? maxDist - sbbSize : 0 ) * sizeof( uint8_t );
+    // The flags are copied and cleared in full (sm_maxNumSbb bytes, the space each context has for them): a constant size
+    // lets the compiler write both inline, and flags past numSbb are never read. A quarter of the level ranges are empty.
     if( prevId >= 0 )
     {
-      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, scanInfo.numSbb * sizeof( uint8_t ) );
+      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, sm_maxNumSbb * sizeof( uint8_t ) );
       if( setCpSize )
       {
         ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize, setCpSize );
@@ -642,7 +644,6 @@ namespace DQIntern
     }
     else
     {
-      // A constant size lets the compiler write the flag clear inline, and a quarter of the level clears are empty.
       ::memset( sbbFlags, 0, sm_maxNumSbb * sizeof( uint8_t ) );
       if( setCpSize )
       {
