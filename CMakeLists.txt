@@ -28,7 +28,7 @@ if( VVENC_TARGET_ARCH MATCHES "ARM\|AARCH64" )
   set( VVENC_ARM_SIMD_DEFAULT TRUE )
 
   # Avoid non-portable type casting in Arm vector kernels.
-  if( CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+  if( CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$" )
     set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-lax-vector-conversions" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-lax-vector-conversions" )
   endif()
@@ -58,7 +58,7 @@ set( VVENC_ENABLE_UNSTABLE_API            OFF        CACHE BOOL "Enable unstable
 # Avoid non-portable fp contractions leading to cross-platform bit-differences.
 if ( VVENC_FFP_CONTRACT_OFF )
   if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
-      CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+      CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$" )
     set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off" )
   endif()
@@ -219,7 +219,7 @@ set( VVENC_ENABLE_WERROR                    ON  CACHE BOOL   "Treat warnings as 
 set( VVENC_USE_ADDRESS_SANITIZER            OFF CACHE BOOL   "Enable or disable address sanitizer" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
-    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$" )
   set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
 endif()
 
