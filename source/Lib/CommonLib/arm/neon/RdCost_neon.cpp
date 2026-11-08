@@ -1598,6 +1598,109 @@ Distortion fixWeightedSSE_neon( const DistParam& rcDtParam, uint32_t fixedPTweig
   return uiSum;
 }
 
+// The squared differences of one vector of 8: the products of its low half into lo, of its high half into hi.
+static inline void sseAccumulate8_neon( const Pel* org, const Pel* cur, int32x4_t& lo, int32x4_t& hi )
+{
+  const int16x8_t o    = vld1q_s16( org );
+  const int16x8_t c    = vld1q_s16( cur );
+  const int16x8_t diff = vsubq_s16( o, c );
+  lo = vmlal_s16( lo, vget_low_s16( diff ), vget_low_s16( diff ) );
+  hi = vmlal_s16( hi, vget_high_s16( diff ), vget_high_s16( diff ) );
+}
+
+// DF_SSE4 .. DF_SSE128 with the arithmetic of xGetSSE_NxN_SIMD at SSE4.1 (what Arm builds ran through SIMDe): the
+// difference in 16 bits, then for W >= 8 four 32-bit lanes that wrap, lane k the sum of the pairs of squares of
+// columns 8 c + 2 k and 8 c + 2 k + 1, added as unsigned 64-bit values; for W = 4 one 32-bit sum, returned as an int.
+// The squares go into up to 8 independent accumulators (the multiply-add chains are latency bound); since addition mod
+// 2^32 does not depend on the order, adding them at the end gives each SIMDe lane, so the result is the same for any
+// input.
+template<int iWidth>
+Distortion xGetSSE_NxN_neon( const DistParam& rcDtParam )
+{
+  const Pel*     org       = rcDtParam.org.buf;
+  const Pel*     cur       = rcDtParam.cur.buf;
+  const int      rows      = rcDtParam.org.height;
+  const int      orgStride = rcDtParam.org.stride;
+  const int      curStride = rcDtParam.cur.stride;
+  const uint32_t shift     = DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) << 1;
+
+  if( iWidth == 4 )
+  {
+    // two rows per vector
+    int32x4_t acc0 = vdupq_n_s32( 0 );
+    int32x4_t acc1 = vdupq_n_s32( 0 );
+    int       y    = 0;
+    for( ; y + 2 <= rows; y += 2, org += 2 * orgStride, cur += 2 * curStride )
+    {
+      const int16x4_t o0   = vld1_s16( org );
+      const int16x4_t o1   = vld1_s16( org + orgStride );
+      const int16x4_t c0   = vld1_s16( cur );
+      const int16x4_t c1   = vld1_s16( cur + curStride );
+      const int16x8_t diff = vsubq_s16( vcombine_s16( o0, o1 ), vcombine_s16( c0, c1 ) );
+      acc0 = vmlal_s16( acc0, vget_low_s16( diff ), vget_low_s16( diff ) );
+      acc1 = vmlal_s16( acc1, vget_high_s16( diff ), vget_high_s16( diff ) );
+    }
+    if( y < rows )
+    {
+      const int16x4_t o    = vld1_s16( org );
+      const int16x4_t c    = vld1_s16( cur );
+      const int16x4_t diff = vsub_s16( o, c );
+      acc0 = vmlal_s16( acc0, diff, diff );
+    }
+    const int sum = int( horizontal_add_u32x4( vreinterpretq_u32_s32( vaddq_s32( acc0, acc1 ) ) ) );
+    return Distortion( sum >> shift );
+  }
+
+  int32x4_t lo[4], hi[4];
+  for( int k = 0; k < 4; k++ )
+  {
+    lo[k] = vdupq_n_s32( 0 );
+    hi[k] = vdupq_n_s32( 0 );
+  }
+
+  if( iWidth == 8 || iWidth == 16 )
+  {
+    // two rows per step: 4 (W 8) or 8 (W 16) chains
+    constexpr int perRow = iWidth / 8;
+    int           y      = 0;
+    for( ; y + 2 <= rows; y += 2, org += 2 * orgStride, cur += 2 * curStride )
+    {
+      for( int r = 0; r < 2; r++ )
+      {
+        for( int x = 0; x < perRow; x++ )
+        {
+          sseAccumulate8_neon( org + r * orgStride + 8 * x, cur + r * curStride + 8 * x, lo[r * perRow + x], hi[r * perRow + x] );
+        }
+      }
+    }
+    if( y < rows )
+    {
+      for( int x = 0; x < perRow; x++ )
+      {
+        sseAccumulate8_neon( org + 8 * x, cur + 8 * x, lo[x], hi[x] );
+      }
+    }
+  }
+  else
+  {
+    // one row per step, the vectors of 8 in turn on 4 pairs of chains
+    for( int y = 0; y < rows; y++, org += orgStride, cur += curStride )
+    {
+      for( int x = 0; x < iWidth; x += 8 )
+      {
+        sseAccumulate8_neon( org + x, cur + x, lo[( x >> 3 ) & 3], hi[( x >> 3 ) & 3] );
+      }
+    }
+  }
+
+  const uint32x4_t loSum = vreinterpretq_u32_s32( vaddq_s32( vaddq_s32( lo[0], lo[1] ), vaddq_s32( lo[2], lo[3] ) ) );
+  const uint32x4_t hiSum = vreinterpretq_u32_s32( vaddq_s32( vaddq_s32( hi[0], hi[1] ), vaddq_s32( hi[2], hi[3] ) ) );
+  // the SIMDe lanes: 0 and 1 from the low halves, 2 and 3 from the high halves
+  const uint32x4_t lanes = vcombine_u32( vpadd_u32( vget_low_u32( loSum ), vget_high_u32( loSum ) ),
+                                         vpadd_u32( vget_low_u32( hiSum ), vget_high_u32( hiSum ) ) );
+  return Distortion( horizontal_add_u64x2( vpaddlq_u32( lanes ) ) ) >> shift;
+}
+
 template<>
 void RdCost::_initRdCostARM<NEON>()
 {
@@ -1633,6 +1736,13 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD128] = xGetSAD_NxN_neon<128>;
 
   m_fxdWtdPredPtr = fixWeightedSSE_neon;
+
+  m_afpDistortFunc[0][DF_SSE4] = xGetSSE_NxN_neon<4>;
+  m_afpDistortFunc[0][DF_SSE8] = xGetSSE_NxN_neon<8>;
+  m_afpDistortFunc[0][DF_SSE16] = xGetSSE_NxN_neon<16>;
+  m_afpDistortFunc[0][DF_SSE32] = xGetSSE_NxN_neon<32>;
+  m_afpDistortFunc[0][DF_SSE64] = xGetSSE_NxN_neon<64>;
+  m_afpDistortFunc[0][DF_SSE128] = xGetSSE_NxN_neon<128>;
 }
 
 #endif  // defined( TARGET_SIMD_ARM )
