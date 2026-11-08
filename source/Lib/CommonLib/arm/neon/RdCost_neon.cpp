@@ -1313,6 +1313,98 @@ Distortion xGetSAD_neon( const DistParam& rcDtParam )
   return xGetSAD_generic_neon( rcDtParam, rcDtParam.org.width );
 }
 
+static inline void xStoreFourSads_neon( const uint32x4_t* sum32, const DistParam& rcDtParam, Distortion* sads )
+{
+  uint32_t values[4];
+  vst1q_u32( values, horizontal_add_4d_u32x4( sum32[0], sum32[1], sum32[2], sum32[3] ) );
+  for( int k = 0; k < 4; k++ )
+  {
+    sads[k] = ( Distortion( values[k] ) << rcDtParam.subShift ) >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+  }
+}
+
+// The SADs of one original block against four reference positions, the NEON version of xGetFourSads_AVX2 (see
+// RdCostX86.h). Four DF_SAD calls would load each original row four times and sum across the vector four times; here
+// both happen once. Each result equals xGetSAD_generic_neon's for that position.
+// Every row adds width / 16 absolute differences (one for width 8) to each 16-bit lane: per position, one accumulator
+// takes the even 8-sample chunks of the row and one the odd ones. An absolute difference is at most 2046 (10-bit
+// samples, and the doubled original minus the other prediction in bi-prediction search), so 32 of them fit in a lane
+// before it is widened to 32 bits, the same bound as xGetSAD_generic_neon's.
+// From width 64 on it stops early like the AVX2 kernel, once all four sums are above maximumDistortionForEarlyExit: the
+// callers only compare the results with that threshold.
+template<int iWidth>
+static void xGetFourSads_neon( const DistParam& rcDtParam, const Pel* const* refs, Distortion* sads )
+{
+  static_assert( iWidth >= 8 && iWidth <= 128 && ( iWidth & ( iWidth - 1 ) ) == 0, "widths 8 to 128" );
+  constexpr int numAccumulators   = iWidth >= 16 ? 2 : 1;
+  constexpr int diffsPerLaneRow   = iWidth >= 16 ? iWidth / 16 : 1;
+  constexpr int rowsPerWidening   = 32 / diffsPerLaneRow;
+  constexpr int wideningsPerCheck = rowsPerWidening >= 8 ? 1 : 8 / rowsPerWidening;   // a check every 8 rows
+
+  CHECKD( rcDtParam.bitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
+
+  const Pel* org       = rcDtParam.org.buf;
+  const Pel* ref[4]    = { refs[0], refs[1], refs[2], refs[3] };
+  const int  rows      = rcDtParam.org.height;
+  const int  rowStep   = 1 << rcDtParam.subShift;
+  const int  orgStride = rcDtParam.org.stride * rowStep;
+  const int  refStride = rcDtParam.cur.stride * rowStep;
+
+  uint32x4_t sum32[4] = { vdupq_n_u32( 0 ), vdupq_n_u32( 0 ), vdupq_n_u32( 0 ), vdupq_n_u32( 0 ) };
+  int wideningsUntilCheck = wideningsPerCheck;
+  for( int y = 0; y < rows; )
+  {
+    const int yEnd = std::min( rows, y + rowsPerWidening * rowStep );
+    uint16x8_t sum16[4][numAccumulators];
+    for( int k = 0; k < 4; k++ )
+    {
+      for( int a = 0; a < numAccumulators; a++ )
+      {
+        sum16[k][a] = vdupq_n_u16( 0 );
+      }
+    }
+
+    for( ; y < yEnd; y += rowStep )
+    {
+      for( int x = 0; x < iWidth; x += 8 * numAccumulators )
+      {
+        for( int a = 0; a < numAccumulators; a++ )
+        {
+          const int16x8_t orgChunk = vld1q_s16( org + x + 8 * a );
+          for( int k = 0; k < 4; k++ )
+          {
+            sum16[k][a] = vvenc_vabaq_s16( sum16[k][a], orgChunk, vld1q_s16( ref[k] + x + 8 * a ) );
+          }
+        }
+      }
+      org += orgStride;
+      for( int k = 0; k < 4; k++ )
+      {
+        ref[k] += refStride;
+      }
+    }
+
+    for( int k = 0; k < 4; k++ )
+    {
+      for( int a = 0; a < numAccumulators; a++ )
+      {
+        sum32[k] = vpadalq_u16( sum32[k], sum16[k][a] );
+      }
+    }
+
+    if( iWidth >= 64 && --wideningsUntilCheck == 0 && y < rows )
+    {
+      wideningsUntilCheck = wideningsPerCheck;
+      xStoreFourSads_neon( sum32, rcDtParam, sads );
+      if( std::min( std::min( sads[0], sads[1] ), std::min( sads[2], sads[3] ) ) > rcDtParam.maximumDistortionForEarlyExit )
+      {
+        return;   // all four lose whatever the remaining rows add, and the caller only compares
+      }
+    }
+  }
+  xStoreFourSads_neon( sum32, rcDtParam, sads );
+}
+
 Distortion xGetSADwMask_neon( const DistParam& rcDtParam )
 {
   if (rcDtParam.org.width < 4 || rcDtParam.bitDepth > 10 || rcDtParam.applyWeight)
@@ -1631,6 +1723,12 @@ void RdCost::_initRdCostARM<NEON>()
   m_afpDistortFunc[0][DF_SAD32] = xGetSAD_NxN_neon<32>;
   m_afpDistortFunc[0][DF_SAD64] = xGetSAD_NxN_neon<64>;
   m_afpDistortFunc[0][DF_SAD128] = xGetSAD_NxN_neon<128>;
+
+  m_afpSadFourPositions[3] = xGetFourSads_neon<8>;
+  m_afpSadFourPositions[4] = xGetFourSads_neon<16>;
+  m_afpSadFourPositions[5] = xGetFourSads_neon<32>;
+  m_afpSadFourPositions[6] = xGetFourSads_neon<64>;
+  m_afpSadFourPositions[7] = xGetFourSads_neon<128>;
 
   m_fxdWtdPredPtr = fixWeightedSSE_neon;
 }
