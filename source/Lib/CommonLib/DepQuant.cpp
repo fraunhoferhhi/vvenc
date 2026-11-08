@@ -689,6 +689,15 @@ namespace DQIntern
     }
   }
 
+  // The coefficient rows dequantBlock clears. A block of 64 rows has coefficients only in its first 32 (JVET-C0024
+  // zero-out), and nothing reads the rows past them: neither the inverse transform (TrQuant::xIT) nor the encoder's next
+  // forward transform and quantization of the buffer. The LFNST cut (xIT reads 4 or 8 rows) can't be used the same way:
+  // the encoder reuses this buffer in its next forward LFNST pass, and the streams change without the full clear there.
+  static int rowsToClear( const int height )
+  {
+    return std::min( height, JVET_C0024_ZERO_OUT_TH );
+  }
+
   void Quantizer::initQuantBlock(const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue)
   {
     CHECKD( lambda <= 0.0, "Lambda must be greater than 0" );
@@ -735,15 +744,14 @@ namespace DQIntern
 
     //----- set basic parameters -----
     const CompArea&     area      = tu.blocks[ compID ];
-    const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
     const ScanElement  *scan      = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
     const TCoeffSig*    qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 
-    //----- reset coefficients and get last scan index -----
-    ::memset( tCoeff, 0, numCoeff * sizeof( TCoeff ) );
+    //----- reset the coefficients that are read and get last scan index -----
+    ::memset( tCoeff, 0, rowsToClear( area.height ) * area.width * sizeof( TCoeff ) );
     int lastScanIdx = tu.lastPos[compID];
     if( lastScanIdx < 0 )
     {
