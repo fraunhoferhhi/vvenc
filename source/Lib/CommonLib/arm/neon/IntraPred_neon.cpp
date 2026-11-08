@@ -102,7 +102,6 @@ static inline int16x4_t intraCubic4_neon( const int16x4_t p0, const int16x4_t p1
 // 10-bit << 6, so uint16_t, and needs no clip.
 static inline uint16x4_t intraSmoothingFilter_neon( const int deltaFract )
 {
-  // in registers: lanes built through a stack array would stall store forwarding on every row
   static const int16_t base[4] = { 16, 32, 16, 0 };
   static const int16_t sign[4] = { -1, -1, 1, 1 };
   return vreinterpret_u16_s16( vmla_n_s16( vld1_s16( base ), vld1_s16( sign ), int16_t( deltaFract >> 1 ) ) );
@@ -111,21 +110,21 @@ static inline uint16x4_t intraSmoothingFilter_neon( const int deltaFract )
 static inline int16x8_t intraSmooth8_neon( const int16x8_t p0, const int16x8_t p1, const int16x8_t p2, const int16x8_t p3,
                                            const uint16x4_t filter )
 {
-  uint16x8_t sum = vmlaq_lane_u16( vdupq_n_u16( 32 ), vreinterpretq_u16_s16( p0 ), filter, 0 );
+  uint16x8_t sum = vmulq_lane_u16( vreinterpretq_u16_s16( p0 ), filter, 0 );
   sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p1 ), filter, 1 );
   sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p2 ), filter, 2 );
   sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p3 ), filter, 3 );
-  return vreinterpretq_s16_u16( vshrq_n_u16( sum, 6 ) );
+  return vreinterpretq_s16_u16( vrshrq_n_u16( sum, 6 ) );
 }
 
 static inline int16x4_t intraSmooth4_neon( const int16x4_t p0, const int16x4_t p1, const int16x4_t p2, const int16x4_t p3,
                                            const uint16x4_t filter )
 {
-  uint16x4_t sum = vmla_lane_u16( vdup_n_u16( 32 ), vreinterpret_u16_s16( p0 ), filter, 0 );
+  uint16x4_t sum = vmul_lane_u16( vreinterpret_u16_s16( p0 ), filter, 0 );
   sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p1 ), filter, 1 );
   sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p2 ), filter, 2 );
   sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p3 ), filter, 3 );
-  return vreinterpret_s16_u16( vshr_n_u16( sum, 6 ) );
+  return vreinterpret_s16_u16( vrshr_n_u16( sum, 6 ) );
 }
 
 void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refMain, int width, int height,
@@ -151,14 +150,20 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
       const Pel* pRef = refMain + deltaInt;
       for( int w = 0; w <= width - 8; w += 8 )
       {
-        vst1q_s16( pDstBuf + w, intraCubic8_neon( vld1q_s16( pRef + 0 ), vld1q_s16( pRef + 1 ), vld1q_s16( pRef + 2 ),
-                                                  vld1q_s16( pRef + 3 ), filter, vmax ) );
+        const int16x8_t p0 = vld1q_s16( pRef + 0 );
+        const int16x8_t p1 = vld1q_s16( pRef + 1 );
+        const int16x8_t p2 = vld1q_s16( pRef + 2 );
+        const int16x8_t p3 = vld1q_s16( pRef + 3 );
+        vst1q_s16( pDstBuf + w, intraCubic8_neon( p0, p1, p2, p3, filter, vmax ) );
         pRef += 8;
       }
       if( width == 4 )
       {
-        vst1_s16( pDstBuf, intraCubic4_neon( vld1_s16( pRef + 0 ), vld1_s16( pRef + 1 ), vld1_s16( pRef + 2 ),
-                                             vld1_s16( pRef + 3 ), filter, vget_low_u16( vmax ) ) );
+        const int16x4_t p0 = vld1_s16( pRef + 0 );
+        const int16x4_t p1 = vld1_s16( pRef + 1 );
+        const int16x4_t p2 = vld1_s16( pRef + 2 );
+        const int16x4_t p3 = vld1_s16( pRef + 3 );
+        vst1_s16( pDstBuf, intraCubic4_neon( p0, p1, p2, p3, filter, vget_low_u16( vmax ) ) );
       }
 
       pDstBuf += dstStride;
@@ -177,61 +182,26 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
       const Pel* pRef = refMain + deltaInt;
       for( int w = 0; w <= width - 8; w += 8 )
       {
-        vst1q_s16( pDstBuf + w, intraSmooth8_neon( vld1q_s16( pRef + 0 ), vld1q_s16( pRef + 1 ), vld1q_s16( pRef + 2 ),
-                                                   vld1q_s16( pRef + 3 ), filter ) );
+        const int16x8_t p0 = vld1q_s16( pRef + 0 );
+        const int16x8_t p1 = vld1q_s16( pRef + 1 );
+        const int16x8_t p2 = vld1q_s16( pRef + 2 );
+        const int16x8_t p3 = vld1q_s16( pRef + 3 );
+        vst1q_s16( pDstBuf + w, intraSmooth8_neon( p0, p1, p2, p3, filter ) );
         pRef += 8;
       }
       if( width == 4 )
       {
-        vst1_s16( pDstBuf, intraSmooth4_neon( vld1_s16( pRef + 0 ), vld1_s16( pRef + 1 ), vld1_s16( pRef + 2 ),
-                                              vld1_s16( pRef + 3 ), filter ) );
+        const int16x4_t p0 = vld1_s16( pRef + 0 );
+        const int16x4_t p1 = vld1_s16( pRef + 1 );
+        const int16x4_t p2 = vld1_s16( pRef + 2 );
+        const int16x4_t p3 = vld1_s16( pRef + 3 );
+        vst1_s16( pDstBuf, intraSmooth4_neon( p0, p1, p2, p3, filter ) );
       }
 
       pDstBuf += dstStride;
       deltaPos += intraPredAngle;
     } while( --height != 0 );
   }
-}
-
-// Transposes 8 vectors of 8 16-bit values in place (v[i] lane j -> v[j] lane i), with vtrn and 64-bit halves only.
-static inline void transpose8x8_s16( int16x8_t* v )
-{
-  const int16x8x2_t t01 = vtrnq_s16( v[0], v[1] );
-  const int16x8x2_t t23 = vtrnq_s16( v[2], v[3] );
-  const int16x8x2_t t45 = vtrnq_s16( v[4], v[5] );
-  const int16x8x2_t t67 = vtrnq_s16( v[6], v[7] );
-
-  // e.g. u02.val[0] holds lane 0 of v[0..3], then lane 4 of v[0..3]; w02 the same of v[4..7]
-  const int32x4x2_t u02 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[0] ), vreinterpretq_s32_s16( t23.val[0] ) );
-  const int32x4x2_t u13 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[1] ), vreinterpretq_s32_s16( t23.val[1] ) );
-  const int32x4x2_t w02 = vtrnq_s32( vreinterpretq_s32_s16( t45.val[0] ), vreinterpretq_s32_s16( t67.val[0] ) );
-  const int32x4x2_t w13 = vtrnq_s32( vreinterpretq_s32_s16( t45.val[1] ), vreinterpretq_s32_s16( t67.val[1] ) );
-
-  const int16x8x2_t c04 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u02.val[0] ), vreinterpretq_s16_s32( w02.val[0] ) );
-  const int16x8x2_t c15 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u13.val[0] ), vreinterpretq_s16_s32( w13.val[0] ) );
-  const int16x8x2_t c26 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u02.val[1] ), vreinterpretq_s16_s32( w02.val[1] ) );
-  const int16x8x2_t c37 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u13.val[1] ), vreinterpretq_s16_s32( w13.val[1] ) );
-  v[0] = c04.val[0];
-  v[1] = c15.val[0];
-  v[2] = c26.val[0];
-  v[3] = c37.val[0];
-  v[4] = c04.val[1];
-  v[5] = c15.val[1];
-  v[6] = c26.val[1];
-  v[7] = c37.val[1];
-}
-
-// Transposes 4 vectors of 4 16-bit values (in[i] lane j -> out[j] lane i).
-static inline void transpose4x4_s16( const int16x4_t* in, int16x4_t* out )
-{
-  const int16x4x2_t t01 = vtrn_s16( in[0], in[1] );
-  const int16x4x2_t t23 = vtrn_s16( in[2], in[3] );
-  const int32x2x2_t u02 = vtrn_s32( vreinterpret_s32_s16( t01.val[0] ), vreinterpret_s32_s16( t23.val[0] ) );
-  const int32x2x2_t u13 = vtrn_s32( vreinterpret_s32_s16( t01.val[1] ), vreinterpret_s32_s16( t23.val[1] ) );
-  out[0] = vreinterpret_s16_s32( u02.val[0] );
-  out[1] = vreinterpret_s16_s32( u13.val[0] );
-  out[2] = vreinterpret_s16_s32( u02.val[1] );
-  out[3] = vreinterpret_s16_s32( u13.val[1] );
 }
 
 // IntraAnglePDPC's blend of one row in the block's own orientation: pred + ( ( wL * ( left - pred ) + 32 ) >> 6 ) with
@@ -287,19 +257,28 @@ static void intraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, con
 
     if( height == 4 )
     {
-      int16x4_t cols[8], rowsLeft[4], rowsRight[4];
+      int16x4_t cols[8];
       for( int j = 0; j < 8; j++ )
       {
-        const Pel*      r = ref[j];
-        const int16x4_t f = filter[j];
-        cols[j] = cubic ? intraCubic4_neon( vld1_s16( r ), vld1_s16( r + 1 ), vld1_s16( r + 2 ), vld1_s16( r + 3 ), f, vget_low_u16( vmax ) )
-                        : intraSmooth4_neon( vld1_s16( r ), vld1_s16( r + 1 ), vld1_s16( r + 2 ), vld1_s16( r + 3 ), vreinterpret_u16_s16( f ) );
+        const Pel*      r  = ref[j];
+        const int16x4_t f  = filter[j];
+        const int16x4_t p0 = vld1_s16( r );
+        const int16x4_t p1 = vld1_s16( r + 1 );
+        const int16x4_t p2 = vld1_s16( r + 2 );
+        const int16x4_t p3 = vld1_s16( r + 3 );
+        cols[j] = cubic ? intraCubic4_neon( p0, p1, p2, p3, f, vget_low_u16( vmax ) )
+                        : intraSmooth4_neon( p0, p1, p2, p3, vreinterpret_u16_s16( f ) );
       }
-      transpose4x4_s16( cols, rowsLeft );
-      transpose4x4_s16( cols + 4, rowsRight );
+      // t[0], t[1]: rows 0-1 and 2-3 of columns 0-3; t[2], t[3]: the same of columns 4-7
+      int16x8_t t[4];
+      transpose_concat_8x4_s16( vcombine_s16( cols[0], cols[4] ), vcombine_s16( cols[1], cols[5] ), vcombine_s16( cols[2], cols[6] ),
+                                vcombine_s16( cols[3], cols[7] ), t[0], t[1], t[2], t[3] );
+      const int16x8x2_t rows01 = vvenc_vtrnq_s64_to_s16( t[0], t[2] );
+      const int16x8x2_t rows23 = vvenc_vtrnq_s64_to_s16( t[1], t[3] );
+      const int16x8_t   rows[4] = { rows01.val[0], rows01.val[1], rows23.val[0], rows23.val[1] };
       for( int y = 0; y < 4; y++ )
       {
-        int16x8_t row = vcombine_s16( rowsLeft[y], rowsRight[y] );
+        int16x8_t row = rows[y];
         if( pdpc )
         {
           row = intraPdpcRow_neon( row, refSide + x0 + off[y], wgt[y] );
@@ -314,12 +293,16 @@ static void intraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, con
       int16x8_t v[8];
       for( int j = 0; j < 8; j++ )
       {
-        const Pel*      r = ref[j] + y0;
-        const int16x4_t f = filter[j];
-        v[j] = cubic ? intraCubic8_neon( vld1q_s16( r ), vld1q_s16( r + 1 ), vld1q_s16( r + 2 ), vld1q_s16( r + 3 ), f, vmax )
-                     : intraSmooth8_neon( vld1q_s16( r ), vld1q_s16( r + 1 ), vld1q_s16( r + 2 ), vld1q_s16( r + 3 ), vreinterpret_u16_s16( f ) );
+        const Pel*      r  = ref[j] + y0;
+        const int16x4_t f  = filter[j];
+        const int16x8_t p0 = vld1q_s16( r );
+        const int16x8_t p1 = vld1q_s16( r + 1 );
+        const int16x8_t p2 = vld1q_s16( r + 2 );
+        const int16x8_t p3 = vld1q_s16( r + 3 );
+        v[j] = cubic ? intraCubic8_neon( p0, p1, p2, p3, f, vmax )
+                     : intraSmooth8_neon( p0, p1, p2, p3, vreinterpret_u16_s16( f ) );
       }
-      transpose8x8_s16( v );   // v[y]: row y0 + y of the 8 columns
+      transpose_8x8_s16( v );   // v[y]: row y0 + y of the 8 columns
 
       if( pdpc && y0 < n )
       {
