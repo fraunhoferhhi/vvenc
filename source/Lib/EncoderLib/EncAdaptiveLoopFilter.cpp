@@ -932,10 +932,27 @@ alf_float_t AlfCovariance::calculateError( const int *clip ) const
 #define REG              alf_float_t( 0.0001    )
 #define REG_SQR          alf_float_t( 0.0000001 )
 
+// A clip trial (AlfClipSolver) must give the same numbers as a whole solve, bit for bit. Both evaluate the same
+// expressions, but a compiler that fuses multiply-adds (FP contraction: Apple clang and GCC by default on Arm) may fuse
+// them differently in the two paths, so the solver functions below are compiled without contraction. clang marks each
+// operation, which survives inlining; GCC decides in the function the code ends up in, so these stay out of line there.
+// MSVC does not contract by default. Only the functions with multiply-adds need it: these three and clipTrial.
+#if defined( __clang__ )
+#define ALF_SOLVER_FUNC
+#define ALF_SOLVER_NO_CONTRACT _Pragma( "clang fp contract(off)" )
+#elif defined( __GNUC__ ) && defined( __FP_FAST_FMAF )   // without hardware FMA nothing is fused: keep the code as is
+#define ALF_SOLVER_FUNC        __attribute__( ( noinline, optimize( "fp-contract=off" ) ) )
+#define ALF_SOLVER_NO_CONTRACT
+#else
+#define ALF_SOLVER_FUNC
+#define ALF_SOLVER_NO_CONTRACT
+#endif
+
 //Find filter coeff related
 template<int NumEq>
-static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr )
+ALF_SOLVER_FUNC static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
   for( int i = 0; i < NumEq; i++ )
@@ -978,8 +995,9 @@ static int gnsCholeskyDec( AlfCovariance::TE inpMatr, AlfCovariance::TE outMatr 
 }
 
 template<int NumEq>
-static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs, alf_float_t* x )
+ALF_SOLVER_FUNC static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs, alf_float_t* x )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
 #if __GNUC__ == 7
@@ -1006,8 +1024,9 @@ static void gnsTransposeBacksubstitution( AlfCovariance::TE U, alf_float_t* rhs,
 }
 
 template<int NumEq>
-static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_t* A )
+ALF_SOLVER_FUNC static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_t* A )
 {
+  ALF_SOLVER_NO_CONTRACT
   static_assert( NumEq == 7 || NumEq == 13, "Unsupported ALF Cholesky order" );
 
   const int size = NumEq - 1;
@@ -1027,8 +1046,9 @@ static void gnsBacksubstitution( AlfCovariance::TE R, alf_float_t* z, alf_float_
 }
 
 template<int NumEq>
-static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs, const int k, alf_float_t* f )
+ALF_SOLVER_FUNC static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs, const int k, alf_float_t* f )
 {
+  ALF_SOLVER_NO_CONTRACT
   AlfCovariance::TE& U = s.U;
   for( int i = 0; i < k; i++ )
   {
