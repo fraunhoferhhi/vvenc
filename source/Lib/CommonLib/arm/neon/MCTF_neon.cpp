@@ -221,7 +221,8 @@ template<FilterCoeffType4 yType>
 static int columnVerticalError_neon( const Pel* org, const ptrdiff_t origStride, const Pel* rows, const int w, const int h,
                                      const int16_t* yFilter, const Pel maxSampleValue )
 {
-  const int16x4_t yf = vrshr_n_s16( vld1_s16( yFilter ), 1 );
+  const int16x4_t yFilterTaps = vld1_s16( yFilter );
+  const int16x4_t yf          = vrshr_n_s16( yFilterTaps, 1 );
   int32x4_t diffSq0 = vdupq_n_s32( 0 );
   int32x4_t diffSq1 = vdupq_n_s32( 0 );
 
@@ -235,7 +236,8 @@ static int columnVerticalError_neon( const Pel* org, const ptrdiff_t origStride,
     {
       v[3] = vld1q_s16( rows + ( y + 3 ) * w + x );
       const int16x8_t pred = motionErrorLumaFrac_loRes1D_neon<yType>( v, yf, maxSampleValue );
-      const int16x8_t diff = vabdq_s16( pred, vld1q_s16( org + y * origStride + x ) );
+      const int16x8_t orgRow = vld1q_s16( org + y * origStride + x );
+      const int16x8_t diff   = vabdq_s16( pred, orgRow );
       diffSq0 = vmlal_s16( diffSq0, vget_low_s16( diff ), vget_low_s16( diff ) );
       diffSq1 = vmlal_s16( diffSq1, vget_high_s16( diff ), vget_high_s16( diff ) );
       v[0] = v[1];
