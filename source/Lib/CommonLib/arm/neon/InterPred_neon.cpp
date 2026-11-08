@@ -543,10 +543,198 @@ void padDmvr_neon( const Pel* src, const int srcStride, Pel* dst, const int dstS
   }
 }
 
+// The five per-sample terms BDOF sums, for the 16 columns of a row (int16, columns 0-7 in [0] and 8-15 in [1])
+struct BdofTerms16
+{
+  int16x8_t absGX[2], absGY[2], dIX[2], dIY[2], signGYGX[2];
+};
+
+static inline void addBdofTerms16( BdofTerms16& sum, const BdofTerms16& terms )
+{
+  for( int h = 0; h < 2; h++ )
+  {
+    sum.absGX[h]    = vaddq_s16( sum.absGX[h], terms.absGX[h] );
+    sum.absGY[h]    = vaddq_s16( sum.absGY[h], terms.absGY[h] );
+    sum.dIX[h]      = vaddq_s16( sum.dIX[h], terms.dIX[h] );
+    sum.dIY[h]      = vaddq_s16( sum.dIY[h], terms.dIY[h] );
+    sum.signGYGX[h] = vaddq_s16( sum.signGYGX[h], terms.signGYGX[h] );
+  }
+}
+
+// the gradient differences of one row that the average needs
+struct BdofGradDiff16
+{
+  int16_t x[16];   // gradX0 - gradX1
+  int16_t y[16];   // gradY0 - gradY1
+};
+
+// a * signum( b ), as _mm_sign_epi16: 0 where b is 0
+static inline int16x8_t bdofSign( const int16x8_t a, const int16x8_t b )
+{
+  return vmulq_s16( a, signum_neon( b ) );
+}
+
+// The terms of one row and its gradient differences: gradients as gradFilter_neon (differences of the neighbours
+// >> 6), the terms as calcBIOSums_neon.
+static inline BdofTerms16 bdofRowTerms16( const Pel* pred0, const Pel* pred1, const ptrdiff_t stride, BdofGradDiff16& gradDiff )
+{
+  BdofTerms16 terms;
+  for( int h = 0; h < 2; h++ )
+  {
+    const Pel*      p0     = pred0 + 8 * h;
+    const Pel*      p1     = pred1 + 8 * h;
+    const int16x8_t left0  = vld1q_s16( p0 - 1 );
+    const int16x8_t right0 = vld1q_s16( p0 + 1 );
+    const int16x8_t above0 = vld1q_s16( p0 - stride );
+    const int16x8_t below0 = vld1q_s16( p0 + stride );
+    const int16x8_t left1  = vld1q_s16( p1 - 1 );
+    const int16x8_t right1 = vld1q_s16( p1 + 1 );
+    const int16x8_t above1 = vld1q_s16( p1 - stride );
+    const int16x8_t below1 = vld1q_s16( p1 + stride );
+    const int16x8_t s0     = vld1q_s16( p0 );
+    const int16x8_t s1     = vld1q_s16( p1 );
+
+    const int16x8_t gradX0 = vsubq_s16( vshrq_n_s16( right0, 6 ), vshrq_n_s16( left0, 6 ) );
+    const int16x8_t gradY0 = vsubq_s16( vshrq_n_s16( below0, 6 ), vshrq_n_s16( above0, 6 ) );
+    const int16x8_t gradX1 = vsubq_s16( vshrq_n_s16( right1, 6 ), vshrq_n_s16( left1, 6 ) );
+    const int16x8_t gradY1 = vsubq_s16( vshrq_n_s16( below1, 6 ), vshrq_n_s16( above1, 6 ) );
+    vst1q_s16( gradDiff.x + 8 * h, vsubq_s16( gradX0, gradX1 ) );
+    vst1q_s16( gradDiff.y + 8 * h, vsubq_s16( gradY0, gradY1 ) );
+
+    const int16x8_t gX = vhaddq_s16( gradX0, gradX1 );
+    const int16x8_t gY = vhaddq_s16( gradY0, gradY1 );
+    const int16x8_t dI = vsubq_s16( vshrq_n_s16( s1, 4 ), vshrq_n_s16( s0, 4 ) );
+    terms.absGX[h]    = vabsq_s16( gX );
+    terms.absGY[h]    = vabsq_s16( gY );
+    terms.dIX[h]      = bdofSign( dI, gX );
+    terms.dIY[h]      = bdofSign( dI, gY );
+    terms.signGYGX[h] = bdofSign( gX, gY );
+  }
+  return terms;
+}
+
+// The window sums of the four subblocks of a subblock row (int32, lane k = subblock k) from the 16 column sums:
+// subblock k covers columns 4k-1 .. 4k+4, with column -1 = column 0 and column 16 = column 15. With the extended row
+// e = c0, c0, c1, .., c15, c15 and its pair sums p_j = e_2j + e_2j+1, the window of subblock k is p_2k + p_2k+1 +
+// p_2k+2.
+static inline int32x4_t bdofWindowSums16( const int16x8_t* v )
+{
+  const int16x8_t  first   = vextq_s16( vdupq_lane_s16( vget_low_s16( v[0] ), 0 ), v[0], 7 );   // c0, c0, c1 .. c6
+  const int16x8_t  second  = vextq_s16( v[0], v[1], 7 );                                        // c7 .. c14
+  const int32x4_t  pairs03 = vpaddlq_s16( first );                                              // p0 .. p3
+  const int32x4_t  pairs47 = vpaddlq_s16( second );                                             // p4 .. p7
+  const int32x4_t  p8      = vdupq_n_s32( 2 * vgetq_lane_s16( v[1], 7 ) );                       // 2 c15
+  const int32x4x2_t evenOdd = vuzpq_s32( pairs03, pairs47 );   // p0, p2, p4, p6 | p1, p3, p5, p7
+  const int32x4_t  next    = vextq_s32( evenOdd.val[0], p8, 1 );                                 // p2, p4, p6, p8
+  return vaddq_s32( vaddq_s32( evenOdd.val[0], evenOdd.val[1] ), next );
+}
+
+// n >> floor( log2( d ) ) per lane, clipped to [-limit, limit], 0 where d is 0 (calcBIOSums_neon's rightShiftMSB)
+static inline int32x4_t bdofRefine( const int32x4_t numer, const int32x4_t denom, const int32x4_t vLimit )
+{
+  const int32x4_t  msb    = vsubq_s32( vdupq_n_s32( 31 ), vclzq_s32( denom ) );
+  const int32x4_t  shifted = vshlq_s32( numer, vnegq_s32( msb ) );
+  const int32x4_t  clipped = vminq_s32( vLimit, vmaxq_s32( vnegq_s32( vLimit ), shifted ) );
+  const uint32x4_t isZero  = vceqq_s32( denom, vdupq_n_s32( 0 ) );
+  return vbicq_s32( clipped, vreinterpretq_s32_u32( isZero ) );
+}
+
+// the corrected average of 4 samples of subblock k (columns 4k .. 4k+3) of one row (addBIOAvg4_x2_neon's arithmetic)
+template<int k>
+static inline int16x4_t bdofAverage4( const Pel* pred0, const Pel* pred1, const BdofGradDiff16& gradDiff, const int16x4_t tmpx,
+                                      const int16x4_t tmpy, const int32x4_t vOffset, const int32x4_t vShift,
+                                      const int32x4_t vMin, const int32x4_t vMax )
+{
+  const int16x4_t gradDiffX = vld1_s16( gradDiff.x + 4 * k );
+  const int16x4_t gradDiffY = vld1_s16( gradDiff.y + 4 * k );
+  const int16x4_t src0      = vld1_s16( pred0 + 4 * k );
+  const int16x4_t src1      = vld1_s16( pred1 + 4 * k );
+  int32x4_t sum = vaddl_s16( src0, src1 );
+  sum = vmlal_lane_s16( sum, gradDiffX, tmpx, k );
+  sum = vmlal_lane_s16( sum, gradDiffY, tmpy, k );
+  sum = vshlq_s32( vaddq_s32( sum, vOffset ), vShift );
+  return vmovn_s32( vminq_s32( vMax, vmaxq_s32( vMin, sum ) ) );
+}
+
+// the corrected average of 4 rows; tmpx, tmpy: lane k = subblock k
+static inline void bdofAverage4Rows16( const Pel* pred0, const Pel* pred1, const ptrdiff_t predStride, const BdofGradDiff16* gradDiff,
+                                       Pel* dst, const ptrdiff_t dstStride, const int16x4_t tmpx, const int16x4_t tmpy,
+                                       const int shiftNum, const int offset, const ClpRng& clpRng )
+{
+  const int32x4_t vOffset = vdupq_n_s32( offset );
+  const int32x4_t vShift  = vdupq_n_s32( -shiftNum );
+  const int32x4_t vMin    = vdupq_n_s32( clpRng.min() );
+  const int32x4_t vMax    = vdupq_n_s32( clpRng.max() );
+
+  for( int y = 0; y < 4; y++, pred0 += predStride, pred1 += predStride, gradDiff++, dst += dstStride )
+  {
+    const int16x4_t avg0 = bdofAverage4<0>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
+    const int16x4_t avg1 = bdofAverage4<1>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
+    const int16x4_t avg2 = bdofAverage4<2>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
+    const int16x4_t avg3 = bdofAverage4<3>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
+    vst1q_s16( dst, vcombine_s16( avg0, avg1 ) );
+    vst1q_s16( dst + 8, vcombine_s16( avg2, avg3 ) );
+  }
+}
+
+// BDOF of a 16-wide block (16x16 or 16x8) in one pass, the NEON version of BDOF16_AVX2 (InterPredX86.h, which
+// explains why it equals the gradient filter + padding + BiOptFlow path): the gradients, the window sums of every 4x4
+// subblock and the corrected average, without gradient planes or padded predictions. Each row's terms are computed
+// once; a window (rows 4yu-1 .. 4yu+4) counts row 0 twice at the top and row H-1 twice at the bottom.
+// pred0, pred1: the blocks' first samples in the unpadded predictions (one-sample border around them)
+static void BDOF16_neon( const Pel* pred0, const Pel* pred1, const ptrdiff_t predStride, const int height, Pel* dst, const ptrdiff_t dstStride,
+                         const int shiftNum, const int offset, const int limit, const ClpRng& clpRng )
+{
+  CHECKD( height != 8 && height != 16, "BDOF16_neon: height" );
+  BdofGradDiff16 gradDiff[MAX_BDOF_APPLICATION_REGION];
+  const int32x4_t vLimit = vdupq_n_s32( limit );
+
+  // the sum of rows y0-1 and y0 of the next window; row -1 is a copy of row 0
+  BdofTerms16 carry = bdofRowTerms16( pred0, pred1, predStride, gradDiff[0] );
+  addBdofTerms16( carry, carry );
+
+  for( int y0 = 0; y0 < height; y0 += 4 )
+  {
+    BdofTerms16 window = carry;
+    for( int y = y0 + 1; y < y0 + 3; y++ )
+    {
+      addBdofTerms16( window, bdofRowTerms16( pred0 + y * predStride, pred1 + y * predStride, predStride, gradDiff[y] ) );
+    }
+    const BdofTerms16 lastRow = bdofRowTerms16( pred0 + ( y0 + 3 ) * predStride, pred1 + ( y0 + 3 ) * predStride, predStride, gradDiff[y0 + 3] );
+    addBdofTerms16( window, lastRow );
+    if( y0 + 4 < height )
+    {
+      const BdofTerms16 below = bdofRowTerms16( pred0 + ( y0 + 4 ) * predStride, pred1 + ( y0 + 4 ) * predStride, predStride, gradDiff[y0 + 4] );
+      addBdofTerms16( window, below );
+      carry = lastRow;
+      addBdofTerms16( carry, below );
+    }
+    else
+    {
+      addBdofTerms16( window, lastRow );   // row H is a copy of row H-1
+    }
+
+    const int32x4_t sumAbsGX    = bdofWindowSums16( window.absGX );
+    const int32x4_t sumAbsGY    = bdofWindowSums16( window.absGY );
+    const int32x4_t sumDIX      = bdofWindowSums16( window.dIX );
+    const int32x4_t sumDIY      = bdofWindowSums16( window.dIY );
+    const int32x4_t sumSignGYGX = bdofWindowSums16( window.signGYGX );
+
+    // calcBIOSums_neon's motion: tmpData = sumSignGYGX * tmpx >> 1 (|product| < 2^20: the split form there is equal)
+    const int32x4_t tmpx    = bdofRefine( vshlq_n_s32( sumDIX, 2 ), sumAbsGX, vLimit );
+    const int32x4_t tmpData = vshrq_n_s32( vmulq_s32( sumSignGYGX, tmpx ), 1 );
+    const int32x4_t tmpy    = bdofRefine( vsubq_s32( vshlq_n_s32( sumDIY, 2 ), tmpData ), sumAbsGY, vLimit );
+
+    bdofAverage4Rows16( pred0 + y0 * predStride, pred1 + y0 * predStride, predStride, gradDiff + y0, dst + y0 * dstStride, dstStride,
+                        vmovn_s32( tmpx ), vmovn_s32( tmpy ), shiftNum, offset, clpRng );
+  }
+}
+
 template<>
 void InterPredInterpolation::_initInterPredictionARM<NEON>()
 {
   xFpBiDirOptFlow = BiOptFlow_neon;
+  xFpBDOF16 = BDOF16_neon;
   xFpBDOFGradFilter = gradFilter_neon;
   xFpProfGradFilter = gradFilter_neon<false>;
   xFpPadDmvr = padDmvr_neon;
