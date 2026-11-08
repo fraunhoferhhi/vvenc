@@ -215,6 +215,105 @@ int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, 
   return error;
 }
 
+// The vertical pass and squared error of one vector over rows of horizontally filtered samples (row r: source row
+// r - 1), as motionErrorLumaFrac_loRes2D_neon's vertical pass: output row y takes rows y .. y + 3. No early exit.
+template<FilterCoeffType4 yType>
+static int columnVerticalError_neon( const Pel* org, const ptrdiff_t origStride, const Pel* rows, const int w, const int h,
+                                     const int16_t* yFilter, const Pel maxSampleValue )
+{
+  const int16x4_t yFilterTaps = vld1_s16( yFilter );
+  const int16x4_t yf          = vrshr_n_s16( yFilterTaps, 1 );
+  int32x4_t diffSq0 = vdupq_n_s32( 0 );
+  int32x4_t diffSq1 = vdupq_n_s32( 0 );
+
+  for( int x = 0; x < w; x += 8 )
+  {
+    int16x8_t v[4];
+    v[0] = vld1q_s16( rows + 0 * w + x );
+    v[1] = vld1q_s16( rows + 1 * w + x );
+    v[2] = vld1q_s16( rows + 2 * w + x );
+    for( int y = 0; y < h; y++ )
+    {
+      v[3] = vld1q_s16( rows + ( y + 3 ) * w + x );
+      const int16x8_t pred = motionErrorLumaFrac_loRes1D_neon<yType>( v, yf, maxSampleValue );
+      const int16x8_t orgRow = vld1q_s16( org + y * origStride + x );
+      const int16x8_t diff   = vabdq_s16( pred, orgRow );
+      diffSq0 = vmlal_s16( diffSq0, vget_low_s16( diff ), vget_low_s16( diff ) );
+      diffSq1 = vmlal_s16( diffSq1, vget_high_s16( diff ), vget_high_s16( diff ) );
+      v[0] = v[1];
+      v[1] = v[2];
+      v[2] = v[3];
+    }
+  }
+  return horizontal_add_s32x4( vaddq_s32( diffSq0, diffSq1 ) );
+}
+
+// MCTF::m_motionErrorLumaFracColumn, the NEON version of motionErrorLumaFracColumn_loRes_AVX2 (MCTFX86.h): the exact
+// errors of num vectors with the same horizontal position. The horizontal pass of the union of their rows is done once
+// into a buffer, in 32 bits (exact for every 16-bit input, as the C code's int sums), then the vertical pass per
+// vector, rowOffset[i] rows lower, from samples clipped to [0, max] as motionErrorLumaFrac_loRes2D_neon does it.
+static void motionErrorLumaFracColumn_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w,
+                                                  const int h, const int16_t* xFilter, const int num, const int16_t* const* yFilter,
+                                                  const int* rowOffset, const int bitDepth, int* error )
+{
+  static constexpr int MAX_SIZE = 32;   // the block size of the subpel search, MCTFUnitSize, is at most 32 (vvencCfg)
+  CHECKD( w > MAX_SIZE || h > MAX_SIZE || ( w & 7 ) != 0, "Unsupported block size" );
+
+  const Pel        maxSampleValue = ( 1 << bitDepth ) - 1;
+  const int16x4_t  xf             = vld1_s16( xFilter );
+  const uint16x8_t vmax           = vdupq_n_u16( maxSampleValue );
+
+  // row r of filtered is the horizontal pass of source row r - 1; a vector needs h + 3 rows from its offset on
+  int maxOffset = 0;
+  for( int i = 0; i < num; i++ )
+  {
+    maxOffset = std::max( maxOffset, rowOffset[i] );
+  }
+  CHECKD( maxOffset > 1, "The vectors of a column span more than two rows" );
+  Pel filtered[( MAX_SIZE + 4 ) * MAX_SIZE];
+  for( int r = 0; r < h + 3 + maxOffset; r++ )
+  {
+    const Pel* src = buf + ( r - 1 ) * buffStride - 1;
+    for( int x = 0; x < w; x += 8 )
+    {
+      int16x8_t s[4];
+      load_s16_16x8x4( src + x, 1, s );
+      int32x4_t lo = vmull_lane_s16( vget_low_s16( s[0] ), xf, 0 );
+      int32x4_t hi = vmull_lane_s16( vget_high_s16( s[0] ), xf, 0 );
+      lo = vmlal_lane_s16( lo, vget_low_s16( s[1] ), xf, 1 );
+      hi = vmlal_lane_s16( hi, vget_high_s16( s[1] ), xf, 1 );
+      lo = vmlal_lane_s16( lo, vget_low_s16( s[2] ), xf, 2 );
+      hi = vmlal_lane_s16( hi, vget_high_s16( s[2] ), xf, 2 );
+      lo = vmlal_lane_s16( lo, vget_low_s16( s[3] ), xf, 3 );
+      hi = vmlal_lane_s16( hi, vget_high_s16( s[3] ), xf, 3 );
+      // ( sum + 32 ) >> 6, clipped to [0, max]
+      const uint16x8_t v = vminq_u16( vcombine_u16( vqrshrun_n_s32( lo, 6 ), vqrshrun_n_s32( hi, 6 ) ), vmax );
+      vst1q_s16( filtered + r * w + x, vreinterpretq_s16_u16( v ) );
+    }
+  }
+
+  for( int i = 0; i < num; i++ )
+  {
+    const Pel* rows = filtered + rowOffset[i] * w;
+    switch( selectFilterType4( yFilter[i] ) )
+    {
+    case FilterCoeffType4::SkewLeft:
+      error[i] = columnVerticalError_neon<FilterCoeffType4::SkewLeft>( org, origStride, rows, w, h, yFilter[i], maxSampleValue );
+      break;
+    case FilterCoeffType4::SkewRight:
+      error[i] = columnVerticalError_neon<FilterCoeffType4::SkewRight>( org, origStride, rows, w, h, yFilter[i], maxSampleValue );
+      break;
+    case FilterCoeffType4::FullSymmetric:
+      error[i] = columnVerticalError_neon<FilterCoeffType4::FullSymmetric>( org, origStride, rows, w, h, yFilter[i], maxSampleValue );
+      break;
+    case FilterCoeffType4::Generic:
+    default:
+      error[i] = columnVerticalError_neon<FilterCoeffType4::Generic>( org, origStride, rows, w, h, yFilter[i], maxSampleValue );
+      break;
+    }
+  }
+}
+
 static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                     const ptrdiff_t buffStride, const int w, int h, const int besterror )
 {
@@ -1264,6 +1363,7 @@ template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
+  m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;
   m_applyBlock              = applyBlock_neon;
