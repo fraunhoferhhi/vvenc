@@ -868,23 +868,24 @@ namespace vvenc {
 
 namespace DQInternSimd
 {
-  // The per-coefficient kernels of this SIMD level, for DepQuant::xPopulateTrellis to inline
+  // The per-coefficient kernels of this SIMD level, for DepQuant::xPopulateTrellis to inline. vvenc::DepQuant in full:
+  // MSVC 2019 finds the plain name ambiguous here (DQIntern's friend declaration of DepQuant in DepQuant.h).
   template<X86_VEXT vext>
   struct KernelsX86
   {
-    static void checkAllRdCosts( const DepQuant&, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    static void checkAllRdCosts( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
       DQInternSimd::checkAllRdCosts<vext>( spt, pqData, decisions, state );
     }
-    static void checkAllRdCostsOdd1( const DepQuant&, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    static void checkAllRdCostsOdd1( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
       DQInternSimd::checkAllRdCostsOdd1<vext>( spt, pq_a_dist, pq_b_dist, decisions, state );
     }
-    static void updateStates( const DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr )
+    static void updateStates( const vvenc::DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr )
     {
       DQInternSimd::updateStates<vext>( scanInfo, decisions, curr );
     }
-    static void updateStatesEOS( const DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx )
+    static void updateStatesEOS( const vvenc::DepQuant&, const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx )
     {
       DQInternSimd::updateStatesEOS<vext>( scanInfo, decisions, skip, curr, commonCtx );
     }
