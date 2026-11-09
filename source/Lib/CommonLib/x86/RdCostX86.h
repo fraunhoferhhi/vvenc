@@ -1968,9 +1968,17 @@ static inline __m256i xAddFirstValues16_AVX2( const __m256i a, const __m256i b )
   return _mm256_madd_epi16( _mm256_unpacklo_epi16( a, b ), _mm256_set1_epi16( 1 ) );
 }
 
-// The SATDs of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both), added up as the
-// 16x16 and 32x32 kernels do: ( SATD + 2 ) >> 2 per block.
-static ALWAYS_INLINE uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
+// The Hadamard sums of two 8x8 blocks, one per 128-bit lane: absSum holds four 32-bit partial sums that add up to half
+// the block's sum of absolute coefficients (max( |a|, |b| ) per pair of the last stage), dc the block's DC coefficient in
+// the first 32-bit value of the lane.
+struct HAD8x8PairSums
+{
+  __m256i absSum;
+  __m256i dc;
+};
+
+// The Hadamard sums of two 8x8 blocks of residuals, one per 128-bit lane (register k holds row k of both).
+static ALWAYS_INLINE HAD8x8PairSums xHAD8x8PairSums_AVX2( __m256i rows[8] )
 {
   // the vertical transform and the first horizontal stage on 16-bit values
   xHadamardStage16_AVX2( rows, 4 );
@@ -2005,16 +2013,43 @@ static ALWAYS_INLINE uint32_t xCalcHAD8x8Pair_AVX2( __m256i rows[8] )
     xAddMaxAbsOfPairs32_AVX2( low, iSum );
     xAddMaxAbsOfPairs32_AVX2( high, iSum );
   }
-  const uint32_t absDc[2] = { (uint32_t) abs( _mm256_extract_epi32( dc, 0 ) ), (uint32_t) abs( _mm256_extract_epi32( dc, 4 ) ) };
+  return { iSum, dc };
+}
 
-  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_hadd_epi32( iSum, iSum );   // the sum of each block in the first value of its lane
+// The SATDs of the four 8x8 blocks of two pairs, added up as the 16x16 kernel needs them: per block the sum of absolute
+// coefficients with the DC weighted 1/4, then ( SATD + 2 ) >> 2. All four blocks share one reduction; its 32-bit lanes
+// wrap and shift (logically) as the uint32 arithmetic of xRoundedSATDsOfPair_AVX2, so both give the same sums.
+static ALWAYS_INLINE uint32_t xRoundedSATDsOfTwoPairs_AVX2( const HAD8x8PairSums& a, const HAD8x8PairSums& b )
+{
+  // the doubled sums of a's blocks in elements 0 (low lane) and 4 (high lane), of b's blocks in elements 1 and 5
+  __m256i sum = _mm256_hadd_epi32( _mm256_slli_epi32( a.absSum, 1 ), _mm256_slli_epi32( b.absSum, 1 ) );
+  sum         = _mm256_hadd_epi32( sum, sum );
+  // the DCs in the same elements
+  const __m256i absDc = _mm256_abs_epi32( _mm256_unpacklo_epi32( a.dc, b.dc ) );
+
+  __m256i satd = _mm256_add_epi32( _mm256_sub_epi32( sum, absDc ), _mm256_srli_epi32( absDc, 2 ) );
+  satd         = _mm256_srli_epi32( _mm256_add_epi32( satd, _mm256_set1_epi32( 2 ) ), 2 );
+
+  // elements 0 and 1 of both lanes
+  const __m128i lanes = _mm_add_epi32( _mm256_castsi256_si128( satd ), _mm256_extracti128_si256( satd, 1 ) );
+  return ( uint32_t ) _mm_cvtsi128_si32( lanes ) + ( uint32_t ) _mm_extract_epi32( lanes, 1 );
+}
+
+// The SATDs of one pair's two blocks, rounded and added up as xRoundedSATDsOfTwoPairs_AVX2 does. The 32x32 kernel reduces
+// each pair at once: there its second pair's loads overlap the first pair's reduction, which a shared reduction at the
+// end does not allow (measured slower).
+static ALWAYS_INLINE uint32_t xRoundedSATDsOfPair_AVX2( const HAD8x8PairSums& p )
+{
+  const uint32_t absDc[2] = { ( uint32_t ) abs( _mm256_extract_epi32( p.dc, 0 ) ), ( uint32_t ) abs( _mm256_extract_epi32( p.dc, 4 ) ) };
+
+  __m256i sum = _mm256_slli_epi32( p.absSum, 1 );   // the sum of absolute values after the last horizontal stage
+  sum         = _mm256_hadd_epi32( sum, sum );
+  sum         = _mm256_hadd_epi32( sum, sum );      // the sum of each block in the first value of its lane
 
   uint32_t sad = 0;
   for( int lane = 0; lane < 2; lane++ )
   {
-    uint32_t tmp = lane ? _mm256_extract_epi32( iSum, 4 ) : _mm256_extract_epi32( iSum, 0 );
+    uint32_t tmp = lane ? _mm256_extract_epi32( sum, 4 ) : _mm256_extract_epi32( sum, 0 );
     tmp -= absDc[lane];
     tmp += absDc[lane] >> 2;
     sad += ( tmp + 2 ) >> 2;
@@ -2124,7 +2159,7 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
       piCur += iStrideCur * 2;
       piOrg += iStrideOrg * 2;
     }
-    sad += xCalcHAD8x8Pair_AVX2( rows );
+    sad += xRoundedSATDsOfPair_AVX2( xHAD8x8PairSums_AVX2( rows ) );
   }
 
 #endif
@@ -2139,6 +2174,7 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
   CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
 
   // the SATD of a 16x16 block is the sum of its four 8x8 SATDs, two rows of two blocks
+  HAD8x8PairSums pairs[2];
   for( int l = 0; l < 2; l++ )
   {
     __m256i rows[8];
@@ -2148,8 +2184,9 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
       piCur += iStrideCur;
       piOrg += iStrideOrg;
     }
-    sad += xCalcHAD8x8Pair_AVX2( rows );
+    pairs[l] = xHAD8x8PairSums_AVX2( rows );
   }
+  sad = xRoundedSATDsOfTwoPairs_AVX2( pairs[0], pairs[1] );
 
 #endif
   return ( sad );
