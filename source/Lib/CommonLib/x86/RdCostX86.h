@@ -61,6 +61,19 @@ namespace vvenc {
 typedef Pel Torg;
 typedef Pel Tcur;
 
+#ifdef USE_AVX2
+// The sum of a vector's eight 32-bit lanes, wrapping as 32-bit adds do: the two 128-bit halves added, then within the half by
+// two shuffles and adds. This takes fewer shuffle uops than two hadds and a cross-lane permute (on Intel the shuffles share
+// port 5 with the kernels' own shuffles).
+static ALWAYS_INLINE int32_t xSumOfLanes32_AVX2( const __m256i v )
+{
+  __m128i sum4 = _mm_add_epi32( _mm256_castsi256_si128( v ), _mm256_extracti128_si256( v, 1 ) );
+  sum4         = _mm_add_epi32( sum4, _mm_shuffle_epi32( sum4, 0x4e ) );
+  sum4         = _mm_add_epi32( sum4, _mm_shuffle_epi32( sum4, 0xb1 ) );
+  return _mm_cvtsi128_si32( sum4 );
+}
+#endif
+
 template<X86_VEXT vext >
 Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
 {
@@ -91,9 +104,7 @@ Distortion RdCost::xGetSSE_SIMD( const DistParam &rcDtParam )
       pSrc1   += iStrideSrc1;
       pSrc2   += iStrideSrc2;
     }
-    Sum = _mm256_hadd_epi32( Sum, Sum );
-    Sum = _mm256_hadd_epi32( Sum, Sum );
-    uiRet = ( _mm_cvtsi128_si32( _mm256_castsi256_si128( Sum ) ) + _mm_cvtsi128_si32( _mm256_castsi256_si128( _mm256_permute2x128_si256( Sum, Sum, 0x11 ) ) ) ) >> uiShift;
+    uiRet = xSumOfLanes32_AVX2( Sum ) >> uiShift;
 #endif
   }
   else if( ( iCols & 7 ) == 0 )
@@ -2069,12 +2080,9 @@ static ALWAYS_INLINE uint32_t xCalcHAD16x8Lanes_AVX2( __m256i rows[8] )
     xAddMaxAbsOfPairs32_AVX2( sum, iSum );
     xAddMaxAbsOfPairs32_AVX2( dif, iSum );
   }
-  iSum = _mm256_slli_epi32( iSum, 1 );      // the sum of absolute values after the last horizontal stage
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_hadd_epi32( iSum, iSum );
-  iSum = _mm256_add_epi32( iSum, _mm256_permute2x128_si256( iSum, iSum, 0x11 ) );
-
-  uint32_t sad = _mm_cvtsi128_si32( _mm256_castsi256_si128( iSum ) );
+  // The 32-bit adds of the eight partial sums wrap as the uint32 arithmetic does, so doubling the total equals doubling each
+  // partial sum.
+  uint32_t sad = ( uint32_t ) xSumOfLanes32_AVX2( iSum ) << 1;   // the sum of absolute values after the last horizontal stage
   sad -= absDc;
   sad += absDc >> 2;
   return xScaleHAD( sad, HAD_SCALE_16x8_MULT );
