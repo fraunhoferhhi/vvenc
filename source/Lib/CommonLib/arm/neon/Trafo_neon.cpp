@@ -126,13 +126,13 @@ void cpyResi_neon( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width
 template<>
 void cpyResi_neon<4>( const TCoeff* src, Pel* dst, ptrdiff_t stride, unsigned width, unsigned height )
 {
-  for( ; height > 0; height--, src += width, dst += stride )
+  // the callers take cpyResi8 for widths that are multiples of 8, so with power-of-two widths only 4 is left
+  CHECKD( width != 4, "Width must be 4" );
+
+  for( ; height > 0; height--, src += 4, dst += stride )
   {
-    for( unsigned x = 0; x < width; x += 4 )
-    {
-      const int32x4_t s = vld1q_s32( src + x );
-      vst1_s16( dst + x, vqmovn_s32( s ) );
-    }
+    const int32x4_t s = vld1q_s32( src );
+    vst1_s16( dst, vqmovn_s32( s ) );
   }
 }
 
