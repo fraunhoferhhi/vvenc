@@ -568,8 +568,7 @@ static void getBlkCovarianceCcAlf_neon( AlfCovariance& covarianceCb, AlfCovarian
                                         const Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16],
                                         const Pel yLocal[2][4][4] )
 {
-  AlfCovariance* const chromaCovariance[2] = { &covarianceCb, &covarianceCr };
-  const int            numRows             = numCoeff - 1;
+  const int numRows = numCoeff - 1;
 
   int16x8_t eLow[MAX_NUM_CC_ALF_CHROMA_COEFF];    // samples 0 ... 7 of each ELocal row
   int16x8_t eHigh[MAX_NUM_CC_ALF_CHROMA_COEFF];   // samples 8 ... 15
@@ -578,13 +577,10 @@ static void getBlkCovarianceCcAlf_neon( AlfCovariance& covarianceCb, AlfCovarian
     eLow[k]  = vld1q_s16( &ELocal[k][0] );
     eHigh[k] = vld1q_s16( &ELocal[k][8] );
   }
-  int16x8_t yLow[2];
-  int16x8_t yHigh[2];
-  for( int c = 0; c < 2; c++ )
-  {
-    yLow[c]  = vld1q_s16( &yLocal[c][0][0] );
-    yHigh[c] = vld1q_s16( &yLocal[c][2][0] );
-  }
+  const int16x8_t yLowCb  = vld1q_s16( &yLocal[0][0][0] );   // rows 0 and 1 of Cb's 4x4 block
+  const int16x8_t yHighCb = vld1q_s16( &yLocal[0][2][0] );   // rows 2 and 3
+  const int16x8_t yLowCr  = vld1q_s16( &yLocal[1][0][0] );
+  const int16x8_t yHighCr = vld1q_s16( &yLocal[1][2][0] );
 
   for( int k = 0; k < numRows; k++ )
   {
@@ -592,15 +588,11 @@ static void getBlkCovarianceCcAlf_neon( AlfCovariance& covarianceCb, AlfCovarian
     {
       covarianceCb.E[0][0][k][l] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], eLow[l], eHigh[k], eHigh[l] ) );
     }
-    for( int c = 0; c < 2; c++ )
-    {
-      chromaCovariance[c]->y[0][k] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], yLow[c], eHigh[k], yHigh[c] ) );
-    }
+    covarianceCb.y[0][k] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], yLowCb, eHigh[k], yHighCb ) );
+    covarianceCr.y[0][k] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], yLowCr, eHigh[k], yHighCr ) );
   }
-  for( int c = 0; c < 2; c++ )
-  {
-    chromaCovariance[c]->pixAcc += horizontal_add_s32x4( dot_s16x8x2_neon( yLow[c], yLow[c], yHigh[c], yHigh[c] ) );
-  }
+  covarianceCb.pixAcc += horizontal_add_s32x4( dot_s16x8x2_neon( yLowCb, yLowCb, yHighCb, yHighCb ) );
+  covarianceCr.pixAcc += horizontal_add_s32x4( dot_s16x8x2_neon( yLowCr, yLowCr, yHighCr, yHighCr ) );
 }
 
 void getPreBlkStatsAccum_neon( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
