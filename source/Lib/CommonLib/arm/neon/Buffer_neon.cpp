@@ -88,6 +88,63 @@ static inline int16x4_t addAvg_x4( int16x4_t src0, int16x4_t src1, int16x4_t off
   return vreinterpret_s16_u16( vshl_u16( vqshlu_n_s16( sum, 1 ), shift ) );
 }
 
+// BCW's weighted average ClipPel( ( w0 * src0 + w1 * src1 + offset ) >> shift ), as x86's addWghtAvg_SSE: the products
+// and sums are 32-bit (|w| <= 10, 16-bit inputs: no overflow). The accumulator starts at offset minus the rounding
+// half, which vrshl adds back at full precision, and vqmovun narrows with x86's packs saturation, clipping negative
+// values to 0, so only the maximum is left to clip.
+static inline uint16x4_t wghtAvg4Samples_neon( const int16x4_t src0, const int16x4_t src1, const int32x4_t init,
+                                               const int16_t w0, const int16_t w1, const int32x4_t negShift )
+{
+  const int32x4_t sum = vmlal_n_s16( vmlal_n_s16( init, src0, w0 ), src1, w1 );
+  return vqmovun_s32( vrshlq_s32( sum, negShift ) );
+}
+
+static void addWghtAvg8_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride,
+                              int width, int height, unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+  CHECKD( shift < 1 || ( width & 7 ), "shift >= 1, width a multiple of 8" );
+  const int32x4_t  init     = vdupq_n_s32( offset - ( 1 << ( shift - 1 ) ) );
+  const int32x4_t  negShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const uint16x8_t maxVal   = vdupq_n_u16( clpRng.max() );
+  const int16_t    weight0  = static_cast<int16_t>( w0 );
+  const int16_t    weight1  = static_cast<int16_t>( w1 );
+  for( int row = 0; row < height; row++, src0 += src0Stride, src1 += src1Stride, dst += dstStride )
+  {
+    for( int col = 0; col < width; col += 8 )
+    {
+      const int16x8_t  s0  = vld1q_s16( src0 + col );
+      const int16x8_t  s1  = vld1q_s16( src1 + col );
+      const uint16x4_t lo  = wghtAvg4Samples_neon( vget_low_s16( s0 ), vget_low_s16( s1 ), init, weight0, weight1,
+                                                   negShift );
+      const uint16x4_t hi  = wghtAvg4Samples_neon( vget_high_s16( s0 ), vget_high_s16( s1 ), init, weight0, weight1,
+                                                   negShift );
+      const uint16x8_t avg = vminq_u16( vcombine_u16( lo, hi ), maxVal );
+      vst1q_s16( dst + col, vreinterpretq_s16_u16( avg ) );
+    }
+  }
+}
+
+static void addWghtAvg4_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride,
+                              int width, int height, unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+  CHECKD( shift < 1 || ( width & 3 ), "shift >= 1, width a multiple of 4" );
+  const int32x4_t  init     = vdupq_n_s32( offset - ( 1 << ( shift - 1 ) ) );
+  const int32x4_t  negShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const uint16x4_t maxVal   = vdup_n_u16( clpRng.max() );
+  const int16_t    weight0  = static_cast<int16_t>( w0 );
+  const int16_t    weight1  = static_cast<int16_t>( w1 );
+  for( int row = 0; row < height; row++, src0 += src0Stride, src1 += src1Stride, dst += dstStride )
+  {
+    for( int col = 0; col < width; col += 4 )
+    {
+      const int16x4_t  s0  = vld1_s16( src0 + col );
+      const int16x4_t  s1  = vld1_s16( src1 + col );
+      const uint16x4_t avg = vmin_u16( wghtAvg4Samples_neon( s0, s1, init, weight0, weight1, negShift ), maxVal );
+      vst1_s16( dst + col, vreinterpret_s16_u16( avg ) );
+    }
+  }
+}
+
 void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, unsigned rshift, int offset,
                   const ClpRng& clpRng )
 {
@@ -283,6 +340,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   reco     = recoCore_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
+  wghtAvg4 = addWghtAvg4_neon;
+  wghtAvg8 = addWghtAvg8_neon;
   addAvg16 = addAvg_strided_neon<16>;
 }
 
