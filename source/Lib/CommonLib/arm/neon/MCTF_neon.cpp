@@ -248,11 +248,11 @@ static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, 
   CHECKD( w > 64, "Width must be at most 64" );
 
   // Like every MCTF error kernel, this returns the exact error when it is not above besterror and a value above
-  // besterror otherwise: the callers only test error < besterror. Blocks of up to 16 rows are summed in full with one
+  // besterror otherwise: the callers only test error < besterror. Blocks of up to 8 rows are summed in full with one
   // reduction at the end, since the early exit after a row pair rarely saves enough rows there to pay for the reduction
-  // and the branch after every pair. The sum cannot overflow: at most 64 x 16 samples of at most 10 bits. Taller blocks
+  // and the branch after every pair. The sum cannot overflow: at most 64 x 8 samples of at most 10 bits. Taller blocks
   // check the running error after every row pair.
-  if( h <= 16 )
+  if( h <= 8 )
   {
     int32x4_t accLo = vdupq_n_s32( 0 );
     int32x4_t accHi = vdupq_n_s32( 0 );
