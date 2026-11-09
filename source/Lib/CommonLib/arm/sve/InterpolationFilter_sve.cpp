@@ -58,6 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "../CommonDefARM.h"
 #include "../InterpolationFilter_neon.h"
+#include "../InterPred_neon.h"
 #include "../mem_neon.h"
 #include "../neon/transpose_neon.h"
 #include "neon_sve_bridge.h"
@@ -106,8 +107,9 @@ static inline int16x8x2_t filter_horiz_16x1_N8_sve( Pel const* src, int16x8_t ch
 }
 
 template<bool isLast>
-void simdFilter4x4_N6_sve( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
-                           int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+static ALWAYS_INLINE void simdFilter4x4_N6_sve( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst,
+                                                int dstStride, int width, int height, TFilterCoeff const* coeffH,
+                                                TFilterCoeff const* coeffV )
 {
   CHECKD( width != 4, "Width must be 4" );
   CHECKD( height != 4, "Height must be 4" );
@@ -1311,6 +1313,20 @@ void InterpolationFilter::_initInterpolationFilterARM<SVE>()
   m_filterHor[3][1][0] = simdFilterHor_sve<6, true, false>;
   m_filterHor[3][1][1] = simdFilterHor_sve<6, true, true>;
 }
+
+#if ENABLE_SIMD_OPT_BDOF
+// The affine luma CU kernels with the SVE 4x4 filter, which SVE machines run for their sub-blocks: initialised here,
+// where simdFilter4x4_N6_sve is defined, so that it inlines into them. Runs after the NEON init, which sets the
+// other inter prediction pointers.
+template<>
+void InterPredInterpolation::_initInterPredictionARM<SVE>()
+{
+  xFpAffineLumaCU[0][0] = affineLumaCU_arm<false, simdFilter4x4_N6_sve<true>>;
+  xFpAffineLumaCU[0][1] = affineLumaCU_arm<true, simdFilter4x4_N6_sve<false>>;
+  xFpAffineLumaCU[1][0] = affineLumaCUProf_arm<false, simdFilter4x4_N6_sve<false>>;
+  xFpAffineLumaCU[1][1] = affineLumaCUProf_arm<true, simdFilter4x4_N6_sve<false>>;
+}
+#endif // ENABLE_SIMD_OPT_BDOF
 
 } // namespace vvenc
 #endif
