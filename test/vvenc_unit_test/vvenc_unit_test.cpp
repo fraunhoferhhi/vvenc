@@ -4287,6 +4287,62 @@ static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// CCLM's linear model (linTf4 / linTf8): random scale, shift and offset, with and without the clip, widths in steps
+// of 4 and 8. With the clip any 16-bit sample; without it the C code truncates the result to 16 bits where the SIMD
+// code saturates, so there the samples are small enough for every result to fit.
+static bool check_linTf( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::linTf4 / linTf8\n" );
+  DimensionGenerator rng;
+  auto anyPel   = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  auto smallPel = []() { return Pel( rand() % 2048 - 1024 ); };
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const bool     useLinTf8 = i & 1;
+    const int      width     = useLinTf8 ? 8 * rng.get( 1, 16 ) : 4 * rng.get( 1, 32 );
+    const int      height    = rng.get( 1, 16 );
+    const int      stride    = width + rng.get( 0, 8 );
+    const int      scale     = int( rng.get( 0, 32 ) ) - 16;
+    const unsigned shift     = rng.get( 0, 16 );
+    const bool     bClip     = rng.get( 0, 1 );
+    const int      bitDepth  = rng.getOneOf<int>( { 8, 10, 12 } );
+    const ClpRng   clpRng{ bitDepth };
+    const int      offset    = int( rng.get( 0, 2u << bitDepth ) ) - ( 1 << bitDepth );
+
+    std::vector<Pel> src( stride * height );
+    if( bClip )
+    {
+      std::generate( src.begin(), src.end(), anyPel );
+    }
+    else
+    {
+      std::generate( src.begin(), src.end(), smallPel );
+    }
+    std::vector<Pel> dstRef( stride * height, 0x5a5a ), dstOpt( stride * height, 0x5a5a );
+
+    if( useLinTf8 )
+    {
+      ref->linTf8( src.data(), stride, dstRef.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+      opt->linTf8( src.data(), stride, dstOpt.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+    }
+    else
+    {
+      ref->linTf4( src.data(), stride, dstRef.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+      opt->linTf4( src.data(), stride, dstOpt.data(), stride, width, height, scale, shift, offset, clpRng, bClip );
+    }
+
+    std::ostringstream sstm;
+    sstm << ( useLinTf8 ? "linTf8 " : "linTf4 " ) << width << "x" << height << " scale=" << scale << " shift=" << shift
+         << " offset=" << offset << " bClip=" << bClip;
+    if( !compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), stride * height ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // High-pass correlation of the joint Cb-Cr sign decision: random sizes and strides, 10-bit samples (the SIMD range)
 // and 12-bit samples (the C fallback); the 3x3 filter reads one sample around the block.
 static bool check_highPassCorrelation( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4575,6 +4631,7 @@ static bool test_PelBufferOps()
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
+  passed = check_linTf( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
   passed = check_absGradientSums( &ref, &opt, num_cases ) && passed;

@@ -501,6 +501,62 @@ void downsample2x2_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, co
   }
 }
 
+// CCLM's linear model, as linTfCore: dst = ( scale * src >> shift ) + offset, clipped to [0, max] with bClip. The
+// product and the arithmetic shift in 32 bit as there; vqmovn narrows with saturation like x86's packs, which equals
+// the C code with the clip (its range lies inside 16 bits) and whenever the value fits 16 bits. Without the clip the
+// bounds are those of int16, so the same min / max are a no-op.
+static inline int16x4_t linTf4Lanes_neon( const int16x4_t src, const int32x4_t scale, const int32x4_t negShift,
+                                          const int32x4_t offset )
+{
+  const int32x4_t product = vmulq_s32( vmovl_s16( src ), scale );
+  return vqmovn_s32( vaddq_s32( vshlq_s32( product, negShift ), offset ) );
+}
+
+static void linTf4_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int scale,
+                         unsigned shift, int offset, const ClpRng& clpRng, bool bClip )
+{
+  CHECKD( width & 3, "Width must be a multiple of 4" );
+
+  const int32x4_t vscale    = vdupq_n_s32( scale );
+  const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const int32x4_t voffset   = vdupq_n_s32( offset );
+  const int16x4_t vmin      = vdup_n_s16( static_cast<int16_t>( bClip ? clpRng.min() : INT16_MIN ) );
+  const int16x4_t vmax      = vdup_n_s16( static_cast<int16_t>( bClip ? clpRng.max() : INT16_MAX ) );
+
+  for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+  {
+    for( int x = 0; x < width; x += 4 )
+    {
+      const int16x4_t s = vld1_s16( src + x );
+      const int16x4_t d = linTf4Lanes_neon( s, vscale, vnegShift, voffset );
+      vst1_s16( dst + x, vmin_s16( vmax_s16( d, vmin ), vmax ) );
+    }
+  }
+}
+
+static void linTf8_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int scale,
+                         unsigned shift, int offset, const ClpRng& clpRng, bool bClip )
+{
+  CHECKD( width & 7, "Width must be a multiple of 8" );
+
+  const int32x4_t vscale    = vdupq_n_s32( scale );
+  const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
+  const int32x4_t voffset   = vdupq_n_s32( offset );
+  const int16x8_t vmin      = vdupq_n_s16( static_cast<int16_t>( bClip ? clpRng.min() : INT16_MIN ) );
+  const int16x8_t vmax      = vdupq_n_s16( static_cast<int16_t>( bClip ? clpRng.max() : INT16_MAX ) );
+
+  for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+  {
+    for( int x = 0; x < width; x += 8 )
+    {
+      const int16x8_t s    = vld1q_s16( src + x );
+      const int16x4_t low  = linTf4Lanes_neon( vget_low_s16( s ), vscale, vnegShift, voffset );
+      const int16x4_t high = linTf4Lanes_neon( vget_high_s16( s ), vscale, vnegShift, voffset );
+      vst1q_s16( dst + x, vminq_s16( vmaxq_s16( vcombine_s16( low, high ), vmin ), vmax ) );
+    }
+  }
+}
+
 template<int W>
 void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
                           int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
@@ -609,6 +665,8 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   blockStats4x4       = blockStats4x4_neon;
   highPassCorrelation = highPassCorrelation_neon;
   downsample2x2       = downsample2x2_neon;
+  linTf4              = linTf4_neon;
+  linTf8              = linTf8_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
