@@ -632,14 +632,15 @@ static inline int16x4_t lmDownsample4_neon( const int16x4_t aLeft, const int16x4
   int32x4_t sum = vaddl_s16( aLeft, aRight );
   sum           = vaddw_s16( sum, bLeft );
   sum           = vaddw_s16( sum, bRight );
-  sum           = vmlal_n_s16( sum, aCentre, 2 );
-  sum           = vmlal_n_s16( sum, bCentre, 2 );
+  sum           = vmlaq_n_s32( sum, vaddl_s16( aCentre, bCentre ), 2 );
   return vrshrn_n_s32( sum, 3 );
 }
 
-// vld2 splits a row into its even and odd samples: loaded from 2i - 1 it gives a[2i - 1] and a[2i], from 2i the odd
-// lanes a[2i + 1]. Without a left neighbour a[-1] and b[-1] stand for a[0] and b[0]: the vectors read the samples left
-// of the block all the same (as x86 does), and the first output of each row is computed again.
+// vld2 from 2i - 1 splits a row into a[2i - 1] (val[0]) and a[2i] (val[1]); the right neighbours a[2i + 1] are val[0]
+// moved down one lane, and the last lane's a[2i + 1], one sample past the pairs vld2 read, comes from a duplicating
+// load; the 4-wide step takes them from a second vld2 from 2i. Without a left neighbour a[-1] and b[-1] stand for a[0]
+// and b[0]: the vectors read the samples left of the block all the same (as x86 does), and the first output of each row
+// is computed again.
 static void LMLumaDownsample420_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride,
                                       const int width, const int height, const bool leftAvailable )
 {
@@ -650,17 +651,19 @@ static void LMLumaDownsample420_neon( const Pel* src, const ptrdiff_t srcStride,
     int        x = 0;
     for( ; x + 8 <= width; x += 8 )
     {
-      const int16x8x2_t aLeftCentre  = vld2q_s16( a + 2 * x - 1 );
-      const int16x8x2_t aCentreRight = vld2q_s16( a + 2 * x );
-      const int16x8x2_t bLeftCentre  = vld2q_s16( b + 2 * x - 1 );
-      const int16x8x2_t bCentreRight = vld2q_s16( b + 2 * x );
+      const int16x8x2_t aLeftCentre = vld2q_s16( a + 2 * x - 1 );
+      const int16x8x2_t bLeftCentre = vld2q_s16( b + 2 * x - 1 );
+      const int16x8_t   aNext       = vld1q_dup_s16( a + 2 * x + 15 );
+      const int16x8_t   bNext       = vld1q_dup_s16( b + 2 * x + 15 );
+      const int16x8_t   aRight      = vextq_s16( aLeftCentre.val[0], aNext, 1 );
+      const int16x8_t   bRight      = vextq_s16( bLeftCentre.val[0], bNext, 1 );
 
       const int16x4_t low  = lmDownsample4_neon( vget_low_s16( aLeftCentre.val[0] ), vget_low_s16( aLeftCentre.val[1] ),
-                                                 vget_low_s16( aCentreRight.val[1] ), vget_low_s16( bLeftCentre.val[0] ),
-                                                 vget_low_s16( bLeftCentre.val[1] ), vget_low_s16( bCentreRight.val[1] ) );
+                                                 vget_low_s16( aRight ), vget_low_s16( bLeftCentre.val[0] ),
+                                                 vget_low_s16( bLeftCentre.val[1] ), vget_low_s16( bRight ) );
       const int16x4_t high = lmDownsample4_neon( vget_high_s16( aLeftCentre.val[0] ), vget_high_s16( aLeftCentre.val[1] ),
-                                                 vget_high_s16( aCentreRight.val[1] ), vget_high_s16( bLeftCentre.val[0] ),
-                                                 vget_high_s16( bLeftCentre.val[1] ), vget_high_s16( bCentreRight.val[1] ) );
+                                                 vget_high_s16( aRight ), vget_high_s16( bLeftCentre.val[0] ),
+                                                 vget_high_s16( bLeftCentre.val[1] ), vget_high_s16( bRight ) );
       vst1q_s16( dst + x, vcombine_s16( low, high ) );
     }
     if( x + 4 <= width )
