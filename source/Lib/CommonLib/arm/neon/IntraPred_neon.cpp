@@ -508,18 +508,17 @@ static void IntraPredSampleFilter_neon( PelBuf& dstBuf, const CPelBuf& srcBuf )
 
   if( width == 4 )
   {
-    const int16x4_t wL4  = vld1_s16( weight );
-    const int16x8_t wL   = vcombine_s16( wL4, wL4 );
-    const int16x4_t top4 = vld1_s16( top );
-    const int16x8_t topV = vcombine_s16( top4, top4 );
+    // 4 samples loaded as one 64-bit lane, duplicated into both halves
+    const int16x8_t wL   = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* ) weight ) );
+    const int16x8_t topV = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* ) top ) );
     for( int y = 0; y < topRows; y++ )
     {
       Pel*            row   = dstBuf.buf + y * stride;
-      const int16x4_t val   = vld1_s16( row );
+      const int16x8_t val   = vreinterpretq_s16_u64( vld1q_dup_u64( ( const uint64_t* ) row ) );
       const int16x8_t leftV = vld1q_dup_s16( left + y );
-      vst1_s16( row, vget_low_s16( pdpcSampleFilter_neon( vcombine_s16( val, val ), leftV, topV, wL, weight[y] ) ) );
+      vst1_s16( row, vget_low_s16( pdpcSampleFilter_neon( val, leftV, topV, wL, weight[y] ) ) );
     }
-    const int16x4_t wLRounding = vshl_n_s16( wL4, 9 );
+    const int16x4_t wLRounding = vshl_n_s16( vget_low_s16( wL ), 9 );
     for( int y = topRows; y < height; y++ )
     {
       Pel*            row   = dstBuf.buf + y * stride;
