@@ -1042,37 +1042,60 @@ static bool clipTrial( AlfClipSolver& s, AlfCovariance::TE inp, alf_float_t* rhs
   }
   for( int i = k; i < NumEq; i++ )
   {
-    alf_float_t invDiag = 0.0f;
-    for( int j = i; j < NumEq; j++ )
+    // the diagonal first, so a failing trial stops before the row's other columns are computed
+    alf_float_t diag = inp[i][i];
+    for( int m = i - 1; m >= 0; m-- )
     {
-      alf_float_t scale = inp[i][j];
-      for( int m = i - 1; m >= 0; m-- )
+      diag -= U[m][i] * U[m][i];
+    }
+    if( diag <= REG_SQR )
+    {
+      return false;
+    }
+    const alf_float_t invDiag = alf_float_t( 1.0 ) / ( U[i][i] = sqrt( diag ) );
+
+    // The row's other columns do not depend on each other. Updating all of them for each m does the same operations in the
+    // same order for every column as one column at a time (so gives the same values), but in one loop over contiguous
+    // U[m][j] that the compiler can vectorize, instead of one scalar pass down a column per column.
+    alf_float_t scale[NumEq];
+    for( int j = i + 1; j < NumEq; j++ )
+    {
+      scale[j] = inp[i][j];
+    }
+    for( int m = i - 1; m >= 0; m-- )
+    {
+      const alf_float_t uMi = U[m][i];
+      for( int j = i + 1; j < NumEq; j++ )
       {
-        scale -= U[m][j] * U[m][i];
+        scale[j] -= U[m][j] * uMi;
       }
-      if( i == j )
-      {
-        if( scale <= REG_SQR )
-        {
-          return false;
-        }
-        invDiag = alf_float_t( 1.0 ) / ( U[i][i] = sqrt( scale ) );
-      }
-      else
-      {
-        U[i][j] = scale * invDiag;
-      }
+    }
+    for( int j = i + 1; j < NumEq; j++ )
+    {
+      U[i][j] = scale[j] * invDiag;
     }
   }
+
+  // The forward substitution by columns: aux[i] needs the sum of aux[j] * U[j][i] over j < i, added from 0 in ascending j.
+  // Adding each known aux[j]'s terms to all later sums at once keeps that order for every i (the same values) with
+  // independent chains.
   std::memcpy( s.aux, s.baseAux, k * sizeof( alf_float_t ) );
+  alf_float_t sum[NumEq];
   for( int i = k; i < NumEq; i++ )
   {
-    alf_float_t sum = 0;
-    for( int j = 0; j < i; j++ )
+    sum[i] = 0;
+  }
+  for( int j = 0; j < NumEq; j++ )
+  {
+    if( j >= k )
     {
-      sum += s.aux[j] * U[j][i];
+      s.aux[j] = ( rhs[j] - sum[j] ) / U[j][j];
     }
-    s.aux[i] = ( rhs[i] - sum ) / U[i][i];
+    const alf_float_t auxJ = s.aux[j];
+    for( int i = std::max( j + 1, k ); i < NumEq; i++ )
+    {
+      sum[i] += auxJ * U[j][i];
+    }
   }
   if( f )
   {
