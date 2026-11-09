@@ -939,7 +939,8 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1022,12 +1023,24 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(coeffTemp, lfnstTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
     }
@@ -1043,7 +1056,8 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if ((lfnstIdx || lfnstPrimary == LFNST_PRIMARY_KEEP) && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1123,12 +1137,24 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(lfnstTemp, coeffTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
 
