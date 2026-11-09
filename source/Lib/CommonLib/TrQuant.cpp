@@ -1163,16 +1163,37 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         return;
       }
 
-      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
+      const int zeroOutSize = (tu4x4Flag || tu8x8Flag) ? 8 : 16;   // outputs that can be nonzero; the transform zeroes the rest
+      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, zeroOutSize );
 
-      lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
-      coeffTemp                        = tempCoeff;
-      const ScanElement *scanPtr       = scan;
-      int                lfnstCoeffNum = (sbSize == 4) ? sbSize * sbSize : 48;
-      for (y = 0; y < lfnstCoeffNum; y++)
+      // forward spectral rearrangement: the first 16 (sbSize 4) or 48 (sbSize 8) positions of the scan take the outputs.
+      // They are the top-left 4x4 group, or the 8x8 group without its bottom-right 4x4: where some outputs are zero,
+      // clear that region row by row and place only the first zeroOutSize outputs.
+      coeffTemp = tempCoeff;
+      if (sbSize == 4)
       {
-        coeffTemp[scanPtr->idx] = *lfnstTemp++;
-        scanPtr++;
+        if (zeroOutSize < 16)
+        {
+          for (y = 0; y < 4; y++)
+          {
+            ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+          }
+        }
+      }
+      else   // ( sbSize == 8 ): 48 positions, rows 0-3 of 8 and rows 4-7 of 4
+      {
+        for (y = 0; y < 4; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 8 * sizeof(TCoeff));
+        }
+        for (; y < 8; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+        }
+      }
+      for (y = 0; y < zeroOutSize; y++)
+      {
+        coeffTemp[scan[y].idx] = m_tempOutMatrix[y];
       }
     }
   }
