@@ -239,6 +239,15 @@ void TCoeffOps::initTCoeffOpsARM()
   }
 #endif  // TARGET_SIMD_ARM_SVE
 }
+
+void TrQuant::initTrQuantARM()
+{
+  auto vext = read_arm_extension_flags();
+  if( vext >= NEON )
+  {
+    _initTrQuantARM<NEON>();
+  }
+}
 #endif  // ENABLE_SIMD_TRAFO
 
 #if ENABLE_SIMD_OPT_BDOF

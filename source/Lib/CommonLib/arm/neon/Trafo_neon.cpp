@@ -513,6 +513,125 @@ static void fastForwardDCT2_EvenOdd_neon( const TCoeff* src, TCoeff* dst, int sh
   }
 }
 
+// LFNST with the arithmetic of simdInvLfnstNxN / simdFwdLfnstNxN at SSE4.1: each output is the dot product of the
+// input and one int8 matrix row in 32 bits, wrapping mod 2^32 like _mm_mullo_epi32 and _mm_add_epi32, then + 64 (also
+// wrapping, so no vrshr) and >> 7. When every input read fits int16, the products of int16 and int8 values are taken
+// 8 at a time with vmlal_s16; their sum is at most 48 * 2^15 * 2^7 = 1.5 * 2^27 in magnitude, so it does not wrap
+// and equals the 32-bit sum. Otherwise the 32-bit products are taken 4 at a time with vmlaq_s32.
+
+// true when all n (a multiple of 8) values of src fit int16
+static inline bool lfnstInputFitsInt16( const int* src, const int n )
+{
+  uint32x4_t differs = vdupq_n_u32( 0 );
+  for( int i = 0; i < n; i += 4 )
+  {
+    const int32x4_t v      = vld1q_s32( src + i );
+    const int32x4_t narrow = vmovl_s16( vqmovn_s32( v ) );
+    differs = vorrq_u32( differs, vreinterpretq_u32_s32( veorq_s32( v, narrow ) ) );
+  }
+  const uint32x2_t half = vorr_u32( vget_low_u32( differs ), vget_high_u32( differs ) );
+  return vget_lane_u64( vreinterpret_u64_u32( half ), 0 ) == 0;
+}
+
+// the n (a multiple of 8) values of src as int16, 8 per vector
+static inline void lfnstNarrowInput( const int* src, const int n, int16x8_t* dst )
+{
+  for( int i = 0; i < n; i += 8 )
+  {
+    const int32x4_t lo = vld1q_s32( src + i );
+    const int32x4_t hi = vld1q_s32( src + i + 4 );
+    dst[i / 8] = vcombine_s16( vmovn_s32( lo ), vmovn_s32( hi ) );
+  }
+}
+
+// dot product of the n (8, 16 or 48) int16 inputs and an int8 matrix row, as four 32-bit partial sums
+static inline int32x4_t lfnstDot16( const int16x8_t* in, const int8_t* row, const int n )
+{
+  int32x4_t acc = vdupq_n_s32( 0 );
+  for( int i = 0; i < n; i += 8 )
+  {
+    const int8x8_t  m8 = vld1_s8( row + i );
+    const int16x8_t m  = vmovl_s8( m8 );
+    acc = vmlal_s16( acc, vget_low_s16( in[i / 8] ), vget_low_s16( m ) );
+    acc = vmlal_s16( acc, vget_high_s16( in[i / 8] ), vget_high_s16( m ) );
+  }
+  return acc;
+}
+
+// dot product of the n (8, 16 or 48) int32 inputs and an int8 matrix row, as four 32-bit partial sums (wrapping)
+static inline int32x4_t lfnstDot32( const int* src, const int8_t* row, const int n )
+{
+  int32x4_t acc = vdupq_n_s32( 0 );
+  for( int i = 0; i < n; i += 8 )
+  {
+    const int8x8_t  m8 = vld1_s8( row + i );
+    const int16x8_t m  = vmovl_s8( m8 );
+    const int32x4_t s0 = vld1q_s32( src + i );
+    const int32x4_t s1 = vld1q_s32( src + i + 4 );
+    acc = vmlaq_s32( acc, s0, vmovl_s16( vget_low_s16( m ) ) );
+    acc = vmlaq_s32( acc, s1, vmovl_s16( vget_high_s16( m ) ) );
+  }
+  return acc;
+}
+
+// out[j] = ( dot( src, mat row j ) + 64 ) >> 7 for numOut (a multiple of 4) rows of length n, rows rowStride apart;
+// in16 holds src as int16 when inInt16; clipOutput clips to 16 bits (inverse)
+template<bool inInt16, bool clipOutput>
+static inline void lfnstRows_neon( const int* src, const int16x8_t* in16, int* out, const int8_t* mat,
+                                   const int rowStride, const int n, const int numOut )
+{
+  for( int j = 0; j < numOut; j += 4, out += 4 )
+  {
+    int32x4_t dot[4];
+    for( int k = 0; k < 4; k++, mat += rowStride )
+    {
+      dot[k] = inInt16 ? lfnstDot16( in16, mat, n ) : lfnstDot32( src, mat, n );
+    }
+    int32x4_t res = horizontal_add_4d_s32x4( dot[0], dot[1], dot[2], dot[3] );
+    res = vshrq_n_s32( vaddq_s32( res, vdupq_n_s32( 64 ) ), 7 );
+    if( clipOutput )
+    {
+      res = vminq_s32( vmaxq_s32( res, vdupq_n_s32( -( 1 << 15 ) ) ), vdupq_n_s32( ( 1 << 15 ) - 1 ) );
+    }
+    vst1q_s32( out, res );
+  }
+}
+
+template<bool clipOutput>
+static inline void lfnst_neon( const int* src, int* out, const int8_t* mat, const int rowStride, const int n,
+                               const int numOut )
+{
+  if( lfnstInputFitsInt16( src, n ) )
+  {
+    int16x8_t in16[6] = {};
+    lfnstNarrowInput( src, n, in16 );
+    lfnstRows_neon<true, clipOutput>( src, in16, out, mat, rowStride, n, numOut );
+  }
+  else
+  {
+    lfnstRows_neon<false, clipOutput>( src, nullptr, out, mat, rowStride, n, numOut );
+  }
+}
+
+static void invLfnstNxN_neon( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size,
+                              int zeroOutSize )
+{
+  CHECKD( index > 2 || ( zeroOutSize != 8 && zeroOutSize != 16 ), "Wrong parameters" );
+
+  const int8_t* mat    = size > 4 ? g_lfnstInv8x8[mode][index][0] : g_lfnstInv4x4[mode][index][0];
+  const int     trSize = size > 4 ? 48 : 16;
+  lfnst_neon<true>( src, dst, mat, 16, zeroOutSize, trSize );
+}
+
+static void fwdLfnstNxN_neon( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size,
+                              int zeroOutSize )
+{
+  const int8_t* mat    = size > 4 ? g_lfnstFwd8x8[mode][index][0] : g_lfnstFwd4x4[mode][index][0];
+  const int     trSize = size > 4 ? 48 : 16;
+  lfnst_neon<false>( src, dst, mat, trSize, trSize, zeroOutSize );
+  memset( dst + zeroOutSize, 0, ( trSize - zeroOutSize ) * sizeof( int ) );
+}
+
 template<>
 void TCoeffOps::_initTCoeffOpsARM<NEON>()
 {
@@ -535,6 +654,13 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   fastFwdDCT2[ 2 ] = fastForwardDCT2_EvenOdd_neon<16>;
   fastFwdDCT2[ 3 ] = fastForwardDCT2_EvenOdd_neon<32>;
   fastFwdDCT2[ 4 ] = fastForwardDCT2_EvenOdd_neon<64>;
+}
+
+template<>
+void TrQuant::_initTrQuantARM<NEON>()
+{
+  m_invLfnstNxN = invLfnstNxN_neon;
+  m_fwdLfnstNxN = fwdLfnstNxN_neon;
 }
 
 }  // namespace vvenc
