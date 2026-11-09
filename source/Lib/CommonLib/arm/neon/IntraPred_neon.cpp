@@ -85,17 +85,17 @@ static inline int16x8_t intraCubic8_neon( const int16x8_t p0, const int16x8_t p1
   return vreinterpretq_s16_u16( vminq_u16( vcombine_u16( d_lo, d_hi ), vmax ) );
 }
 
-static inline int16x4_t intraCubic4_neon( const int16x4_t p0, const int16x4_t p1, const int16x4_t p2, const int16x4_t p3,
-                                          const int16x4_t filter, const uint16x4_t vmax )
+// The cubic filter of 4 outputs, rounded and clipped at 0. The caller clips at the maximum, so that two such results
+// can be clipped in one vector.
+static inline uint16x4_t intraCubic4_neon( const int16x4_t p0, const int16x4_t p1, const int16x4_t p2, const int16x4_t p3,
+                                           const int16x4_t filter )
 {
   // Max accumulate is (46 + 28) * 10-bit which will not fit into int16_t so use int32_t.
   int32x4_t sum = vmull_lane_s16( p0, filter, 0 );
   sum = vmlal_lane_s16( sum, p1, filter, 1 );
   sum = vmlal_lane_s16( sum, p2, filter, 2 );
   sum = vmlal_lane_s16( sum, p3, filter, 3 );
-
-  // Only cubic filter has negative coefficients and requires clipping.
-  return vreinterpret_s16_u16( vmin_u16( vqrshrun_n_s32( sum, 6 ), vmax ) );
+  return vqrshrun_n_s32( sum, 6 );
 }
 
 // Smoothing (taps 16 - f / 2, 32 - f / 2, 16 + f / 2, f / 2, which add up to 64): the accumulate is at most unsigned
@@ -163,7 +163,8 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
         const int16x4_t p1 = vld1_s16( pRef + 1 );
         const int16x4_t p2 = vld1_s16( pRef + 2 );
         const int16x4_t p3 = vld1_s16( pRef + 3 );
-        vst1_s16( pDstBuf, intraCubic4_neon( p0, p1, p2, p3, filter, vget_low_u16( vmax ) ) );
+        const uint16x4_t d = intraCubic4_neon( p0, p1, p2, p3, filter );
+        vst1_s16( pDstBuf, vreinterpret_s16_u16( vmin_u16( d, vget_low_u16( vmax ) ) ) );
       }
 
       pDstBuf += dstStride;
@@ -266,13 +267,22 @@ static void intraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, con
         const int16x4_t p1 = vld1_s16( r + 1 );
         const int16x4_t p2 = vld1_s16( r + 2 );
         const int16x4_t p3 = vld1_s16( r + 3 );
-        cols[j] = cubic ? intraCubic4_neon( p0, p1, p2, p3, f, vget_low_u16( vmax ) )
+        cols[j] = cubic ? vreinterpret_s16_u16( intraCubic4_neon( p0, p1, p2, p3, f ) )
                         : intraSmooth4_neon( p0, p1, p2, p3, vreinterpret_u16_s16( f ) );
+      }
+      // columns j and j + 4 side by side, the cubic filter's results clipped at the maximum in one vector
+      int16x8_t pairs[4];
+      for( int j = 0; j < 4; j++ )
+      {
+        pairs[j] = vcombine_s16( cols[j], cols[j + 4] );
+        if( cubic )
+        {
+          pairs[j] = vreinterpretq_s16_u16( vminq_u16( vreinterpretq_u16_s16( pairs[j] ), vmax ) );
+        }
       }
       // t[0], t[1]: rows 0-1 and 2-3 of columns 0-3; t[2], t[3]: the same of columns 4-7
       int16x8_t t[4];
-      transpose_concat_8x4_s16( vcombine_s16( cols[0], cols[4] ), vcombine_s16( cols[1], cols[5] ), vcombine_s16( cols[2], cols[6] ),
-                                vcombine_s16( cols[3], cols[7] ), t[0], t[1], t[2], t[3] );
+      transpose_concat_8x4_s16( pairs[0], pairs[1], pairs[2], pairs[3], t[0], t[1], t[2], t[3] );
       const int16x8x2_t rows01 = vvenc_vtrnq_s64_to_s16( t[0], t[2] );
       const int16x8x2_t rows23 = vvenc_vtrnq_s64_to_s16( t[1], t[3] );
       const int16x8_t   rows[4] = { rows01.val[0], rows01.val[1], rows23.val[0], rows23.val[1] };
