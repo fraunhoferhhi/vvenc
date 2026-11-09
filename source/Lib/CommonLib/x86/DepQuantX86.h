@@ -799,13 +799,23 @@ namespace vvenc {
     template<X86_VEXT vext>
     void findFirstPos( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
     {
-      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
+      if( firstTestPos >= 15 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
       {
         const int sbbSize = tuPars.m_sbbSize;
         // move the pointer to the beginning of the current subblock
         firstTestPos -= ( sbbSize - 1 );
 
         const __m128i xdfTh = _mm_set1_epi32( defaultTh );
+        // for each position in the coefficient scan of a subblock, the raster position it holds
+        static const uint8_t scanToRasterPos[16] = { 0, 4, 1, 8, 5, 2, 12, 9, 6, 3, 13, 10, 7, 14, 11, 15 };
+        const __m128i scanToRaster = _mm_loadu_si128( ( const __m128i* ) scanToRasterPos );
+#if _DEBUG
+        for( int i = 0; i < sbbSize; i++ )
+        {
+          const int base = tuPars.m_scanId2BlkPos[firstTestPos].idx;
+          CHECKD( tuPars.m_scanId2BlkPos[firstTestPos + i].idx != base + ( scanToRasterPos[i] >> 2 ) * tuPars.m_width + ( scanToRasterPos[i] & 3 ), "not the scan of a subblock" );
+        }
+#endif
 
         // for each subblock
         for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
@@ -817,37 +827,27 @@ namespace vvenc {
             continue;
           }
 
-          // read first line of the subblock and check for coefficients larger than the threshold
+          // check each line of the subblock for coefficients larger than the threshold
           // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of tuPars.m_width
           int pos = tuPars.m_scanId2BlkPos[firstTestPos].idx;
-          __m128i xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          __m128i xdf = _mm_cmpgt_epi32( xl0, xdfTh );
-
-          // same for the next line in the subblock
+          const __m128i xdf0 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
-
-          // and the third line
+          const __m128i xdf1 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
-
-          // and the last line
+          const __m128i xdf2 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
           pos += tuPars.m_width;
-          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) );
-          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+          const __m128i xdf3 = _mm_cmpgt_epi32( _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) & tCoeff[pos] ) ), xdfTh );
 
-          // if any of the 16 comparisons were true, break, because this subblock contains a coefficient larger than threshold
-          if( !_mm_testz_si128( xdf, xdf ) ) break;
+          // one bit per coefficient, in scan order: the highest one set is the position wanted, with no loop over the subblock
+          const __m128i xdf  = _mm_packs_epi16( _mm_packs_epi32( xdf0, xdf1 ), _mm_packs_epi32( xdf2, xdf3 ) );
+          const int     mask = _mm_movemask_epi8( _mm_shuffle_epi8( xdf, scanToRaster ) );
+          if( mask )
+          {
+            firstTestPos += Log2( mask );
+            return;
+          }
         }
-
-        if( firstTestPos >= 0 )
-        {
-          // if a coefficient was found, advance the pointer to the end of the current subblock
-          // for the subsequent coefficient-wise refinement.
-          firstTestPos += sbbSize - 1;
-        }
+        return;
       }
 
       for( ; firstTestPos >= 0; firstTestPos-- )
