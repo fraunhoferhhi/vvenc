@@ -860,6 +860,13 @@ static bool check_xFindFirstTestPos( DepQuant* ref, DepQuant* opt, unsigned num_
     {
       return false;
     }
+    // Sparse coefficients, as after the last significant one: about one in 64 is above every threshold, so the
+    // subblock that stops the search mostly has a single one, at any of its 16 positions.
+    auto sparse = [] { return ( rand() & 63 ) ? 0 : ( rand() & 1 ? 200 : -200 ); };
+    if( !check_one_xFindFirstTestPos( ref, opt, false, sparse ) )
+    {
+      return false;
+    }
   }
 
   return true;
