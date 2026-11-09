@@ -1798,19 +1798,26 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
     {
       for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
       {
-        for( int dist = 0; dist < 4; dist++ )
+        for( int dist = 0; dist < 6; dist++ )
         {
           for( unsigned n = 0; n < size; n++ )
           {
             src[n] = dist == 0 ? int( rng.get( 0, 2047 ) ) - 1024
               : dist == 1 ? ( rng.get( 0, 1 ) ? 16383 : -16384 )
               : dist == 2 ? int( rng.get( 0, 32767 ) ) - 16384
-              :             TCoeff( Pel( ( rand() << 8 ) ^ rand() ) );   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 3 ? TCoeff( Pel( ( rand() << 8 ) ^ rand() ) )   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 4 ? ( rng.get( 0, 1 ) ? 8191 : -8192 )         // the extremes of [-8192, 8191]
+              :             -8192;
           }
           if( dist == 2 )
           {
             const int trip[] = { 16384, 32767, -32768 };
             src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+          }
+          if( dist == 5 )
+          {
+            // one value just outside [-8192, 8191] anywhere among -8192s: taken as in range, -8193 would wrap EE
+            src[rng.get( 0, trSize * reducedLine - 1 )] = rng.get( 0, 1 ) ? 8192 : -8193;
           }
           std::fill( dst0, dst0 + size, 0x5a5a5a5a );
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );

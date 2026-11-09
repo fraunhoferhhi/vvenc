@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "sum_neon.h"
 #include "transpose_neon.h"
 
+#include <type_traits>
 #include <cstdint>
 #include <cstring>
 
@@ -414,6 +415,73 @@ static inline void fwdEvenOddRows_neon( const TMatrixCoeff* tc, int row0, const 
   }
 }
 
+// The second even/odd level for N = 32 (at N = 16 its range checks cost what it saves): the even rows are those of a
+// 16-point DCT-II of E and symmetric again, T[j][N/2 - 1 - k] = (-1)^(j/2) T[j][k] for even j, so rows j = 0 mod 4 take
+// EE[k] = E[k] + E[N/2 - 1 - k] and rows j = 2 mod 4 take EO[k] = E[k] - E[N/2 - 1 - k], k < N/4: 3/8 instead of 1/2 of
+// the matrix multiply-adds. Taken only when all x of the 4 lines lie in [-8192, 8191] (x + 8192 has bits 14 and 15
+// clear in every lane of range8192): then E lies in [-16384, 16382] and EE, EO in [-32768, 32764], so they fit int16.
+// Returns false otherwise.
+template<int N>
+static inline bool fwdTwoLevelLines_neon( std::false_type, const TMatrixCoeff*, const int16x4_t*, const int16x4_t*, const int16x8_t, int, TCoeff*,
+                                          int, const int32x4_t )
+{
+  return false;
+}
+
+template<int N>
+static inline bool fwdTwoLevelLines_neon( std::true_type, const TMatrixCoeff* tc, const int16x4_t* even, const int16x4_t* odd,
+                                          const int16x8_t range8192, int cutoff, TCoeff* dst, int line, const int32x4_t vshift )
+{
+  const uint16x4_t range = vreinterpret_u16_s16( vorr_s16( vget_low_s16( range8192 ), vget_high_s16( range8192 ) ) );
+  if( vget_lane_u64( vreinterpret_u64_u16( vshr_n_u16( range, 14 ) ), 0 ) != 0 )
+  {
+    return false;
+  }
+  int16x4_t ee[N / 4], eo[N / 4];
+  for( int k = 0; k < N / 4; k++ )
+  {
+    ee[k] = vadd_s16( even[k], even[N / 2 - 1 - k] );
+    eo[k] = vsub_s16( even[k], even[N / 2 - 1 - k] );
+  }
+  // rows j (EE), j + 1 (O), j + 2 (EO), j + 3 (O); cutoff is a multiple of 4
+  for( int j = 0; j < cutoff; j += 4 )
+  {
+    const TMatrixCoeff* t = tc + j * N;
+    int32x4_t acc0 = vdupq_n_s32( 0 ), acc1 = vdupq_n_s32( 0 ), acc2 = vdupq_n_s32( 0 ), acc3 = vdupq_n_s32( 0 );
+    for( int k = 0; k < N / 4; k += 4 )
+    {
+      const int16x4_t c0 = vld1_s16( t + k );
+      const int16x4_t c2 = vld1_s16( t + 2 * N + k );
+      acc0 = vmlal_lane_s16( acc0, ee[k + 0], c0, 0 );
+      acc2 = vmlal_lane_s16( acc2, eo[k + 0], c2, 0 );
+      acc0 = vmlal_lane_s16( acc0, ee[k + 1], c0, 1 );
+      acc2 = vmlal_lane_s16( acc2, eo[k + 1], c2, 1 );
+      acc0 = vmlal_lane_s16( acc0, ee[k + 2], c0, 2 );
+      acc2 = vmlal_lane_s16( acc2, eo[k + 2], c2, 2 );
+      acc0 = vmlal_lane_s16( acc0, ee[k + 3], c0, 3 );
+      acc2 = vmlal_lane_s16( acc2, eo[k + 3], c2, 3 );
+    }
+    for( int k = 0; k < N / 2; k += 4 )
+    {
+      const int16x4_t c1 = vld1_s16( t + N + k );
+      const int16x4_t c3 = vld1_s16( t + 3 * N + k );
+      acc1 = vmlal_lane_s16( acc1, odd[k + 0], c1, 0 );
+      acc3 = vmlal_lane_s16( acc3, odd[k + 0], c3, 0 );
+      acc1 = vmlal_lane_s16( acc1, odd[k + 1], c1, 1 );
+      acc3 = vmlal_lane_s16( acc3, odd[k + 1], c3, 1 );
+      acc1 = vmlal_lane_s16( acc1, odd[k + 2], c1, 2 );
+      acc3 = vmlal_lane_s16( acc3, odd[k + 2], c3, 2 );
+      acc1 = vmlal_lane_s16( acc1, odd[k + 3], c1, 3 );
+      acc3 = vmlal_lane_s16( acc3, odd[k + 3], c3, 3 );
+    }
+    vst1q_s32( dst + ( j + 0 ) * line, vrshlq_s32( acc0, vshift ) );
+    vst1q_s32( dst + ( j + 1 ) * line, vrshlq_s32( acc1, vshift ) );
+    vst1q_s32( dst + ( j + 2 ) * line, vrshlq_s32( acc2, vshift ) );
+    vst1q_s32( dst + ( j + 3 ) * line, vrshlq_s32( acc3, vshift ) );
+  }
+  return true;
+}
+
 // Forward DCT-II, N = 8, 16, 32 or 64 (TCoeffOps::fastFwdDCT2[5], [2..4]), with the even/odd split of the AVX2
 // fastForwardDCT2_EvenOdd_SIMD: the matrix rows are symmetric, T[j][N - 1 - k] = (-1)^j T[j][k], so output j is row
 // j's first half times E[k] = x[k] + x[N - 1 - k] (j even) or O[k] = x[k] - x[N - 1 - k] (j odd), half the
@@ -442,6 +510,7 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
     int16x4_t even[N / 2], odd[N / 2];   // lanes = lines i .. i + 3
     // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383]
     int16x8_t range = vdupq_n_s16( 0 );
+    int16x8_t range8192 = vdupq_n_s16( 0 );   // the same with x + 8192 for the second even/odd level
     for( int k = 0; k < N / 2; k += 4 )
     {
       // per line x[k .. k + 3] and x[N - 4 - k .. N - 1 - k], truncated to int16 as in fastFwdCore_neon
@@ -452,6 +521,10 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
         const int32x4_t mirror = vld1q_s32( src + l * N + N - 4 - k );
         x[l]  = vcombine_s16( vmovn_s32( first ), vmovn_s32( mirror ) );
         range = vorrq_s16( range, vaddq_s16( x[l], vdupq_n_s16( 16384 ) ) );
+        if( N == 32 )
+        {
+          range8192 = vorrq_s16( range8192, vaddq_s16( x[l], vdupq_n_s16( 8192 ) ) );
+        }
       }
       // t[0]: x[k], x[k + 1] of the 4 lines; t[1]: x[k + 2], x[k + 3]; t[2]: x[N - 4 - k], x[N - 3 - k];
       // t[3]: x[N - 2 - k], x[N - 1 - k]
@@ -477,6 +550,10 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
     if( vget_lane_s64( vreinterpret_s64_s16( vshr_n_s16( rangeAll, 15 ) ), 0 ) != 0 )
     {
       fastFwdCore_neon<N>( tc, src, dst + i, line, 4, cutoff, shift );
+      continue;
+    }
+    if( fwdTwoLevelLines_neon<N>( std::integral_constant<bool, N == 32>(), tc, even, odd, range8192, cutoff, dst + i, line, vshift ) )
+    {
       continue;
     }
     // 4 even and 4 odd rows at a time, then 2 and 2 if cutoff / 2 is not a multiple of 4
