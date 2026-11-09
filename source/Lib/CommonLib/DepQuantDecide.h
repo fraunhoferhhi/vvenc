@@ -362,30 +362,44 @@ inline void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff 
     bool cff02ge4 = pqData[0].absLevel >= 4/* || pqData[2].absLevel >= 4 */;
     bool cff13ge4 = /* pqData[1].absLevel >= 4 || */ pqData[3].absLevel >= 4;
 
-    if( cff02ge4 || cff13ge4 || prev.anyRemRegBinsLt4 )
+    if( prev.anyRemRegBinsLt4 )
     {
       ::memcpy( &decisions, startDec, sizeof( Decisions ) );
 
       // at a block's first position all states still hold rdCostInit, so none of them can beat startDec's cost
       if( scanInfo.scanIdx != m_firstScanIdx )
       {
-        if( prev.anyRemRegBinsLt4 || cff02ge4 )
-        {
-          setRiceParam( 0, scanInfo, prev, cff02ge4 );
-          setRiceParam( 1, scanInfo, prev, cff02ge4 );
-        }
-
-        if( prev.anyRemRegBinsLt4 || cff13ge4 )
-        {
-          setRiceParam( 2, scanInfo, prev, cff13ge4 );
-          setRiceParam( 3, scanInfo, prev, cff13ge4 );
-        }
+        setRiceParam( 0, scanInfo, prev, cff02ge4 );
+        setRiceParam( 1, scanInfo, prev, cff02ge4 );
+        setRiceParam( 2, scanInfo, prev, cff13ge4 );
+        setRiceParam( 3, scanInfo, prev, cff13ge4 );
 
         checkRdCosts( 0, scanInfo.spt, pqData[0], pqData[2], decisions, 0, 2, prev );
         checkRdCosts( 1, scanInfo.spt, pqData[0], pqData[2], decisions, 2, 0, prev );
         checkRdCosts( 2, scanInfo.spt, pqData[3], pqData[1], decisions, 1, 3, prev );
         checkRdCosts( 3, scanInfo.spt, pqData[3], pqData[1], decisions, 3, 1, prev );
       }
+    }
+    else if( cff02ge4 || cff13ge4 )
+    {
+      // Every state has 4 or more regular bins left (and this is not a block's first position, which always takes the
+      // branch above), so only the Rice code of a level of 4 or more differs from checkAllRdCosts. pqData[2] >= 4 only
+      // with pqData[0] >= 4, and pqData[1] >= 4 only with pqData[3] >= 4: the states whose Rice parameter is not set
+      // here only see levels below 4, which don't read it.
+      if( cff02ge4 )
+      {
+        setRiceParam( 0, scanInfo, prev, true );
+        setRiceParam( 1, scanInfo, prev, true );
+      }
+
+      if( cff13ge4 )
+      {
+        setRiceParam( 2, scanInfo, prev, true );
+        setRiceParam( 3, scanInfo, prev, true );
+      }
+
+      // has to be called as a first check, assumes no decision has been made yet
+      Kernels::checkAllRdCostsGe4( *this, scanInfo.spt, pqData, decisions, prev );
     }
     else
     {

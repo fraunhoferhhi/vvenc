@@ -471,7 +471,8 @@ namespace vvenc {
     }
 
     // has to be called as a first check, assumes no decision has been made yet
-    template<X86_VEXT vext>
+    // anyGe4: a level may be 4 or more; its bits then include the Rice code, with the parameter setRiceParam set per state
+    template<X86_VEXT vext, bool anyGe4>
     static void checkAllRdCosts( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
       // State mapping
@@ -514,8 +515,18 @@ namespace vvenc {
       const DQIntern::CoeffFracBits& cff1 = state.m_gtxFracBitsArray[state.ctx.cff[1]];
       const DQIntern::CoeffFracBits& cff2 = state.m_gtxFracBitsArray[state.ctx.cff[2]];
       const DQIntern::CoeffFracBits& cff3 = state.m_gtxFracBitsArray[state.ctx.cff[3]];
-      addA = _mm_setr_epi32( cff0.bits[lvl0], cff1.bits[lvl0], cff2.bits[lvl3], cff3.bits[lvl3] );
-      addB = _mm_setr_epi32( cff0.bits[lvl2], cff1.bits[lvl2], cff2.bits[lvl1], cff3.bits[lvl1] );
+      // a level's bits as in the scalar checkRdCosts: from 4 on, two levels share a gtx entry and the Rice code tells them apart
+      auto levelBits = [&]( const int stateId, const DQIntern::CoeffFracBits& cff, const TCoeff level ) -> int32_t
+      {
+        if( !anyGe4 || level < 4 )
+        {
+          return cff.bits[level];
+        }
+        const unsigned value = ( level - 4 ) >> 1;
+        return cff.bits[level - ( value << 1 )] + DQIntern::g_goRiceBits[state.m_goRicePar[stateId]][std::min<unsigned>( value, RICEMAX - 1 )];
+      };
+      addA = _mm_setr_epi32( levelBits( 0, cff0, lvl0 ), levelBits( 1, cff1, lvl0 ), levelBits( 2, cff2, lvl3 ), levelBits( 3, cff3, lvl3 ) );
+      addB = _mm_setr_epi32( levelBits( 0, cff0, lvl2 ), levelBits( 1, cff1, lvl2 ), levelBits( 2, cff2, lvl1 ), levelBits( 3, cff3, lvl1 ) );
 
       if( spt == DQIntern::SCAN_ISCSBB )
       {
@@ -875,7 +886,11 @@ namespace DQInternSimd
   {
     static void checkAllRdCosts( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
-      DQInternSimd::checkAllRdCosts<vext>( spt, pqData, decisions, state );
+      DQInternSimd::checkAllRdCosts<vext, false>( spt, pqData, decisions, state );
+    }
+    static void checkAllRdCostsGe4( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    {
+      DQInternSimd::checkAllRdCosts<vext, true>( spt, pqData, decisions, state );
     }
     static void checkAllRdCostsOdd1( const vvenc::DepQuant&, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
@@ -895,7 +910,8 @@ namespace DQInternSimd
 template<X86_VEXT vext>
 void DepQuant::_initDepQuantX86()
 {
-  m_checkAllRdCosts     = DQInternSimd::checkAllRdCosts<vext>;
+  m_checkAllRdCosts     = DQInternSimd::checkAllRdCosts<vext, false>;
+  m_checkAllRdCostsGe4  = DQInternSimd::checkAllRdCosts<vext, true>;
   m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1<vext>;
   m_updateStatesEOS     = DQInternSimd::updateStatesEOS<vext>;
   m_updateStates        = DQInternSimd::updateStates<vext>;

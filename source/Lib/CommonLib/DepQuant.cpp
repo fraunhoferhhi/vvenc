@@ -1110,6 +1110,10 @@ struct DepQuant::PointerKernels
   {
     dq.m_checkAllRdCosts( spt, pqData, decisions, state );
   }
+  static void checkAllRdCostsGe4( const DepQuant& dq, const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+  {
+    dq.m_checkAllRdCostsGe4( spt, pqData, decisions, state );
+  }
   static void checkAllRdCostsOdd1( const DepQuant& dq, const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
   {
     dq.m_checkAllRdCostsOdd1( spt, pq_a_dist, pq_b_dist, decisions, state );
@@ -1294,6 +1298,7 @@ DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists, bool ena
   }
 
   m_checkAllRdCosts     = DQIntern::checkAllRdCosts;
+  m_checkAllRdCostsGe4  = DQIntern::checkAllRdCosts;   // the scalar checks add the Rice code's bits themselves
   m_checkAllRdCostsOdd1 = DQIntern::checkAllRdCostsOdd1;
   m_updateStatesEOS     = DQIntern::updateStatesEOS;
   m_updateStates        = DQIntern::updateStates;

@@ -533,6 +533,8 @@ private:
 public:
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
+  // as m_checkAllRdCosts, where a level may be 4 or more: its bits then include the Rice code of the state's m_goRicePar
+  void( *m_checkAllRdCostsGe4 )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCostsOdd1 )( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
