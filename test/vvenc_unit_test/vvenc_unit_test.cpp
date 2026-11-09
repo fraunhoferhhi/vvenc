@@ -716,6 +716,8 @@ static bool check_updateStatesEOS( DepQuant* ref, DepQuant* opt, unsigned num_ca
     scanInfo.sbbPos = rng.get( 0, scanInfo.numSbb - 1 );
     scanInfo.nextSbbRight = 0;
     scanInfo.nextSbbBelow = 0;
+    // as TUParameters sets it: the levels past this SBB that the next SBB's templates reach
+    scanInfo.levelsCopySize = std::max<int>( tuPars.m_scanId2NbInfoOut[scanInfo.scanIdx - 1].maxDist - scanInfo.sbbSize, 0 );
 
     scanInfo.insidePos = 0;
     scanInfo.nextInsidePos = 15;

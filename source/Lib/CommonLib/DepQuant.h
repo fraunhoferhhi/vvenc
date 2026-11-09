@@ -104,6 +104,7 @@ namespace DQIntern
     short         sbbPos; // byte
     short         nextSbbRight;
     short         nextSbbBelow;
+    short         levelsCopySize; // at an SBB's first position: how many levels past the SBB a context copies from its previous one
     int8_t        sbbSize;
     int8_t        insidePos;
     int8_t        nextInsidePos;
@@ -312,7 +313,8 @@ namespace DQIntern
       m_nbOutShuffle16 = tuPars.m_nbOutShuffle16;
       ::memcpy( m_sbbFlagBits, rateEst.sigSbbFracBits(), 2 * sizeof( BinFracBits ) );
       CHECKD( tuPars.m_numSbb > sm_maxNumSbb, "more sub-blocks than the space for their flags" );
-      const int chunkSize = sm_maxNumSbb + tuPars.m_numCoeff;
+      CHECKD( tuPars.m_numCoeff > unsigned( MAX_TB_SIZEY * MAX_TB_SIZEY ), "more coefficients than the space for their levels" );
+      const int chunkSize = sm_maxNumSbb + tuPars.m_numCoeff + sm_levelsStep;
       uint8_t* nextMem = m_memory;
       for( int k = 0; k < 8; k++, nextMem += chunkSize )
       {
@@ -359,6 +361,10 @@ namespace DQIntern
     BinFracBits      m_sbbFlagBits[2];
     // The flags have room for all the sub-blocks of the largest non-zero area, so clearing them has one size.
     static const unsigned sm_maxNumSbb = 64;
+    // The levels are copied in steps of this size; each context's levels are followed by as much padding.
+    static const int sm_levelsStep = 16;
+    // with at most MAX_TB_SIZEY^2 levels (checked in reset), a context's flags, levels and padding fit its share of m_memory
+    static_assert( sm_maxNumSbb + sm_levelsStep <= unsigned( MLS_GRP_NUM ), "the flags and padding must fit m_memory" );
     SbbCtx           m_allSbbCtx[8];
     SbbCtx*          m_currSbbCtx;
     SbbCtx*          m_prevSbbCtx;
@@ -407,6 +413,48 @@ namespace DQIntern
   };
 
   static constexpr size_t StateMemSkipCpySize = offsetof( StateMem, sbbBits1 );
+
+  inline const uint8_t* CommonCtx::updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
+  {
+    uint8_t*    sbbFlags  = m_currSbbCtx[stateId].sbbFlags;
+    uint8_t*    levels    = m_currSbbCtx[stateId].levels;
+    // The flags are copied and cleared in full (sm_maxNumSbb bytes, the space each context has for them), the levels in
+    // steps of sm_levelsStep bytes, into the padding after them: constant sizes let the compiler write both inline. Flags
+    // past numSbb and levels past levelsCopySize are never read: the templates' reach only shrinks as the scan goes back.
+    const int   copySize  = scanInfo.levelsCopySize;
+    uint8_t*    dstLevels = levels + scanInfo.scanIdx + scanInfo.sbbSize;
+    if( prevId >= 0 )
+    {
+      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, sm_maxNumSbb * sizeof( uint8_t ) );
+      const uint8_t* srcLevels = m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + scanInfo.sbbSize;
+      for( int k = 0; k < copySize; k += sm_levelsStep )
+      {
+        ::memcpy( dstLevels + k, srcLevels + k, sm_levelsStep );
+      }
+    }
+    else
+    {
+      ::memset( sbbFlags, 0, sm_maxNumSbb * sizeof( uint8_t ) );
+      for( int k = 0; k < copySize; k += sm_levelsStep )
+      {
+        ::memset( dstLevels + k, 0, sm_levelsStep );
+      }
+    }
+    sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
+
+    const int       sigNSbb = ( ( scanInfo.nextSbbRight ? sbbFlags[scanInfo.nextSbbRight] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[scanInfo.nextSbbBelow] : false ) ? 1 : 0 );
+    curr.refSbbCtxId[stateId] = stateId;
+    const BinFracBits sbbBits = m_sbbFlagBits[sigNSbb];
+
+    curr.sbbBits0[stateId] = sbbBits.intBits[0];
+    curr.sbbBits1[stateId] = sbbBits.intBits[1];
+
+    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
+    {
+      return levels + scanInfo.scanIdx - scanInfo.sbbSize;
+    }
+    return nullptr;
+  }
 }
 
 class DepQuant : public QuantRDOQ2, DQIntern::RateEstimator

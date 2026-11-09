@@ -435,6 +435,9 @@ namespace DQIntern
         const int nextSbbPosX = nextSbbPos - nextSbbPosY * m_widthInSbb;
         scanInfo.nextSbbRight = ( nextSbbPosX < m_widthInSbb  - 1 ? nextSbbPos + 1            : 0 );
         scanInfo.nextSbbBelow = ( nextSbbPosY < m_heightInSbb - 1 ? nextSbbPos + m_widthInSbb : 0 );
+        // the templates of the next SBB reach maxDist past its last position; the first sbbSize levels of that reach are
+        // this SBB's own, which updateStatesEOS stores, the rest a context copies from its previous one
+        scanInfo.levelsCopySize = std::max<int>( m_scanId2NbInfoOut[nextScanIdx].maxDist - int( m_sbbSize ), 0 );
       }
     }
   }
@@ -625,47 +628,6 @@ namespace DQIntern
       cb.bits[4] = fbGt1.intBits[1] + par0 + fbGt2.intBits[1];
       cb.bits[5] = fbGt1.intBits[1] + par1 + fbGt2.intBits[1];
     }
-  }
-
-  const uint8_t* CommonCtx::updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
-  {
-    uint8_t*    sbbFlags  = m_currSbbCtx[stateId].sbbFlags;
-    uint8_t*    levels    = m_currSbbCtx[stateId].levels;
-    uint16_t    maxDist   = m_nbInfo[scanInfo.scanIdx - 1].maxDist;
-    uint16_t    sbbSize   = scanInfo.sbbSize;
-    std::size_t setCpSize = ( maxDist > sbbSize ? maxDist - sbbSize : 0 ) * sizeof( uint8_t );
-    // The flags are copied and cleared in full (sm_maxNumSbb bytes, the space each context has for them): a constant size
-    // lets the compiler write both inline, and flags past numSbb are never read. A quarter of the level ranges are empty.
-    if( prevId >= 0 )
-    {
-      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, sm_maxNumSbb * sizeof( uint8_t ) );
-      if( setCpSize )
-      {
-        ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize, setCpSize );
-      }
-    }
-    else
-    {
-      ::memset( sbbFlags, 0, sm_maxNumSbb * sizeof( uint8_t ) );
-      if( setCpSize )
-      {
-        ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
-      }
-    }
-    sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
-
-    const int       sigNSbb = ( ( scanInfo.nextSbbRight ? sbbFlags[scanInfo.nextSbbRight] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[scanInfo.nextSbbBelow] : false ) ? 1 : 0 );
-    curr.refSbbCtxId[stateId] = stateId;
-    const BinFracBits sbbBits = m_sbbFlagBits[sigNSbb];
-
-    curr.sbbBits0[stateId] = sbbBits.intBits[0];
-    curr.sbbBits1[stateId] = sbbBits.intBits[1];
-
-    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
-    {
-      return levels + scanInfo.scanIdx - scanInfo.sbbSize;
-    }
-    return nullptr;
   }
 
   void CommonCtx::updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const
