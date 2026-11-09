@@ -189,27 +189,26 @@ static inline int32x4x4_t filter_vert_16x1_N4_neon( int16x8x2_t const vsrc[4], i
   return vsum;
 }
 
-static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+// The horizontal stage of the 6-tap 4x4 filter for 4 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over the
+// six non-zero taps t = 1 .. 6 (taps 0 and 7 of the 6-tap table are zero), shifted and narrowed to 16 bits.
+static inline int16x4_t filter_horiz_4x1_N6_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x8_t vsrca0 = vld1q_s16( src + 0 );
-  int16x8_t vsrca1 = vld1q_s16( src + 1 );
-  int16x8_t vsrca2 = vld1q_s16( src + 2 );
-  int16x8_t vsrca3 = vld1q_s16( src + 3 );
+  const int16x4_t vsrc1 = vld1_s16( src + 1 );
+  const int16x4_t vsrc2 = vld1_s16( src + 2 );
+  const int16x4_t vsrc3 = vld1_s16( src + 3 );
+  const int16x4_t vsrc4 = vld1_s16( src + 4 );
+  const int16x4_t vsrc5 = vld1_s16( src + 5 );
+  const int16x4_t vsrc6 = vld1_s16( src + 6 );
 
-  int32x4_t a0 = vmull_s16( vget_low_s16( vsrca0 ), vget_low_s16( ch ) );
-  int32x4_t a1 = vmull_s16( vget_low_s16( vsrca1 ), vget_low_s16( ch ) );
-  int32x4_t a2 = vmull_s16( vget_low_s16( vsrca2 ), vget_low_s16( ch ) );
-  int32x4_t a3 = vmull_s16( vget_low_s16( vsrca3 ), vget_low_s16( ch ) );
+  int32x4_t vsum = vmlal_lane_s16( voffset1, vsrc1, vget_low_s16( ch ), 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc2, vget_low_s16( ch ), 2 );
+  vsum           = vmlal_lane_s16( vsum, vsrc3, vget_low_s16( ch ), 3 );
+  vsum           = vmlal_lane_s16( vsum, vsrc4, vget_high_s16( ch ), 0 );
+  vsum           = vmlal_lane_s16( vsum, vsrc5, vget_high_s16( ch ), 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc6, vget_high_s16( ch ), 2 );
 
-  a0 = vmlal_s16( a0, vget_high_s16( vsrca0 ), vget_high_s16( ch ) );
-  a1 = vmlal_s16( a1, vget_high_s16( vsrca1 ), vget_high_s16( ch ) );
-  a2 = vmlal_s16( a2, vget_high_s16( vsrca2 ), vget_high_s16( ch ) );
-  a3 = vmlal_s16( a3, vget_high_s16( vsrca3 ), vget_high_s16( ch ) );
-
-  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
-  vsuma           = vaddq_s32( vsuma, voffset1 );
-  vsuma           = vshlq_s32( vsuma, invshift1st );
-  return vqmovn_s32( vsuma );
+  vsum = vshlq_s32( vsum, invshift1st );
+  return vqmovn_s32( vsum );
 }
 
 template<bool isLast>
@@ -247,23 +246,23 @@ static ALWAYS_INLINE void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const
   int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
 
   int16x4_t vsrcv[9];
-  vsrcv[0] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[0] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[1] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[1] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[2] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[2] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[3] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[3] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[4] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[4] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[5] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[5] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[6] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[6] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[7] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[7] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
   src += srcStride;
-  vsrcv[8] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
+  vsrcv[8] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
 
   int h = 0;
   do
