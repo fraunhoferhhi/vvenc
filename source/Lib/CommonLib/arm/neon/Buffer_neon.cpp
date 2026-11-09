@@ -239,6 +239,268 @@ static void copyBuffer_neon( const char* src, int srcStride, char* dst, int dstS
   }
 }
 
+// Block statistics. Each kernel returns exactly its C core's result (Buffer.cpp): the sums are formed in wider lanes
+// than any partial sum needs, and only the order of the integer additions differs.
+
+// adds the absolute differences of absGradientSums_neon at the 8 positions from row, those outside mask as 0
+static inline void absGradientStep_neon( const Pel* row, const Pel* below, const uint16x8_t mask, uint32x4_t& hor,
+                                         uint32x4_t& ver, uint32x4_t& down, uint32x4_t& up )
+{
+  const int16x8_t a0 = vld1q_s16( row );
+  const int16x8_t a1 = vld1q_s16( row + 1 );
+  const int16x8_t b0 = vld1q_s16( below );
+  const int16x8_t b1 = vld1q_s16( below + 1 );
+  hor  = vpadalq_u16( hor, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( a1, a0 ) ), mask ) );
+  ver  = vpadalq_u16( ver, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( b0, a0 ) ), mask ) );
+  down = vpadalq_u16( down, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( a1, b0 ) ), mask ) );
+  up   = vpadalq_u16( up, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( b1, a0 ) ), mask ) );
+}
+
+// Sums of the absolute differences between neighbouring samples in four directions over the ( width - 1 ) x
+// ( height - 1 ) top-left positions, as absGradientSumsCore: sums[0] horizontal, sums[1] vertical, sums[2] down-left,
+// sums[3] down-right. For samples in 0 ... 2^15 - 1 a difference fits 16 bits unsigned; vpadal adds the pairs of 8
+// differences to 32-bit lanes. Each row ends with one vector ending at position width - 2 whose lanes counted before
+// are masked off. Blocks narrower than 16 take the C core.
+void absGradientSums_neon( const Pel* src, const ptrdiff_t stride, const int width, const int height, int* sums )
+{
+  if( width < 16 )
+  {
+    absGradientSumsCore( src, stride, width, height, sums );
+    return;
+  }
+
+  static const uint16_t laneIndex16[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+  const uint16x8_t      laneIndex      = vld1q_u16( laneIndex16 );
+  const uint16x8_t      allLanes       = vdupq_n_u16( 0xFFFF );
+  const int             numPos         = width - 1;
+  const int             last           = numPos - 8;
+
+  uint32x4_t hor  = vdupq_n_u32( 0 );
+  uint32x4_t ver  = vdupq_n_u32( 0 );
+  uint32x4_t down = vdupq_n_u32( 0 );
+  uint32x4_t up   = vdupq_n_u32( 0 );
+
+  for( int y = 0; y < height - 1; y++, src += stride )
+  {
+    const Pel* below = src + stride;
+    int        x     = 0;
+    for( ; x + 8 <= numPos; x += 8 )
+    {
+      absGradientStep_neon( src + x, below + x, allLanes, hor, ver, down, up );
+    }
+    if( x < numPos )
+    {
+      const uint16x8_t firstNotCounted = vdupq_n_u16( static_cast<uint16_t>( x - last ) );
+      absGradientStep_neon( src + last, below + last, vcgeq_u16( laneIndex, firstNotCounted ), hor, ver, down, up );
+    }
+  }
+
+  vst1q_s32( sums, vreinterpretq_s32_u32( horizontal_add_4d_u32x4( hor, ver, down, up ) ) );
+}
+
+// The sum of the samples of a block, as sumCore: per row in 32-bit lanes (at most width * 2^15), then in 64 bit.
+int64_t sum_neon( const Pel* src, const ptrdiff_t stride, const int width, const int height )
+{
+  int64x2_t acc  = vdupq_n_s64( 0 );
+  int64_t   tail = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    int32x4_t rowSum = vdupq_n_s32( 0 );
+    int       x      = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const int16x8_t s = vld1q_s16( src + x );
+      rowSum            = vpadalq_s16( rowSum, s );
+    }
+    if( x + 4 <= width )
+    {
+      const int16x4_t s = vld1_s16( src + x );
+      rowSum            = vaddw_s16( rowSum, s );
+      x += 4;
+    }
+    acc = vpadalq_s32( acc, rowSum );
+    for( ; x < width; x++ )
+    {
+      tail += src[x];
+    }
+  }
+  return tail + horizontal_add_s64x2( acc );
+}
+
+// The sum of the samples of a block and of their squares, as sumAndSumSquaresCore. The sums as in sum_neon; each
+// square is at most 2^30, so the two squares that vmull / vmlal add in a lane fit it read as unsigned 32 bit, and
+// vpadal adds the pairs of lanes to 64 bit.
+void sumAndSumSquares_neon( const Pel* src, const ptrdiff_t stride, const int width, const int height, int64_t& sum,
+                            int64_t& sumSquares )
+{
+  int64x2_t  acc    = vdupq_n_s64( 0 );
+  uint64x2_t accSq  = vdupq_n_u64( 0 );
+  int64_t    tail   = 0;
+  int64_t    tailSq = 0;
+  for( int y = 0; y < height; y++, src += stride )
+  {
+    int32x4_t rowSum = vdupq_n_s32( 0 );
+    int       x      = 0;
+    for( ; x + 8 <= width; x += 8 )
+    {
+      const int16x8_t s     = vld1q_s16( src + x );
+      const int32x4_t sqLo  = vmull_s16( vget_low_s16( s ), vget_low_s16( s ) );
+      const int32x4_t sqSum = vmlal_s16( sqLo, vget_high_s16( s ), vget_high_s16( s ) );
+      rowSum                = vpadalq_s16( rowSum, s );
+      accSq                 = vpadalq_u32( accSq, vreinterpretq_u32_s32( sqSum ) );
+    }
+    if( x + 4 <= width )
+    {
+      const int16x4_t s  = vld1_s16( src + x );
+      const int32x4_t sq = vmull_s16( s, s );
+      rowSum             = vaddw_s16( rowSum, s );
+      accSq              = vpadalq_u32( accSq, vreinterpretq_u32_s32( sq ) );
+      x += 4;
+    }
+    acc = vpadalq_s32( acc, rowSum );
+    for( ; x < width; x++ )
+    {
+      tail   += src[x];
+      tailSq += src[x] * src[x];
+    }
+  }
+  sum        = tail + horizontal_add_s64x2( acc );
+  sumSquares = tailSq + static_cast<int64_t>( horizontal_add_u64x2( accSq ) );
+}
+
+// Statistics of a row of 4x4 blocks, as blockStats4x4Core: per block the sample sum s and sum( | s - 16 * p | ). For
+// samples of up to 10 bits, s and 16 * p are at most 16368 and the four absolute deviations of a column at most
+// 65472, so all fit 16 bits; two blocks per vector. Higher bit depths and an odd last block take the C core.
+void blockStats4x4_neon( const Pel* src, const ptrdiff_t stride, const int numBlocks, const int bitDepth, int* sum,
+                         int* absDev )
+{
+  if( bitDepth > 10 )
+  {
+    blockStats4x4Core( src, stride, numBlocks, bitDepth, sum, absDev );
+    return;
+  }
+
+  int b = 0;
+  for( ; b + 2 <= numBlocks; b += 2, src += 8 )
+  {
+    const int16x8_t row0 = vld1q_s16( src );
+    const int16x8_t row1 = vld1q_s16( src + stride );
+    const int16x8_t row2 = vld1q_s16( src + 2 * stride );
+    const int16x8_t row3 = vld1q_s16( src + 3 * stride );
+
+    const int16x8_t columns    = vaddq_s16( vaddq_s16( row0, row1 ), vaddq_s16( row2, row3 ) );
+    const int32x4_t columnPair = vpaddlq_s16( columns );
+    const int32x2_t blockSums  = vpadd_s32( vget_low_s32( columnPair ), vget_high_s32( columnPair ) );   // s0 s1
+
+    // each block's sum in its four lanes
+    const int16x4_t sums16 = vmovn_s32( vcombine_s32( blockSums, blockSums ) );   // s0 s1 s0 s1
+    const int16x8_t s      = vcombine_s16( vdup_lane_s16( sums16, 0 ), vdup_lane_s16( sums16, 1 ) );
+
+    uint16x8_t dev = vreinterpretq_u16_s16( vabdq_s16( s, vshlq_n_s16( row0, 4 ) ) );
+    dev            = vvenc_vabaq_s16( dev, s, vshlq_n_s16( row1, 4 ) );
+    dev            = vvenc_vabaq_s16( dev, s, vshlq_n_s16( row2, 4 ) );
+    dev            = vvenc_vabaq_s16( dev, s, vshlq_n_s16( row3, 4 ) );
+    const uint32x4_t devPair   = vpaddlq_u16( dev );
+    const uint32x2_t blockDevs = vpadd_u32( vget_low_u32( devPair ), vget_high_u32( devPair ) );
+
+    vst1_s32( sum + b, blockSums );
+    vst1_s32( absDev + b, vreinterpret_s32_u32( blockDevs ) );
+  }
+  blockStats4x4Core( src, stride, numBlocks - b, bitDepth, sum + b, absDev + b );
+}
+
+// One row of 8 columns for the 3x3 high-pass: the centre samples and the sums of their left and right neighbours.
+struct HighPassRow
+{
+  int16x8_t centre;
+  int16x8_t sides;
+};
+
+static inline HighPassRow loadHighPassRow( const Pel* p )
+{
+  const int16x8_t left   = vld1q_s16( p - 1 );
+  const int16x8_t right  = vld1q_s16( p + 1 );
+  const int16x8_t centre = vld1q_s16( p );
+  return { centre, vaddq_s16( left, right ) };
+}
+
+// The 3x3 high-pass 12 * c - 2 * ( 4 direct neighbours ) - ( 4 diagonal neighbours ) of the 8 samples of the middle
+// row, from the rows above, at and below them; for samples of up to 10 bits every term and the result fit 16 bits
+// (| hp | <= 12 * 1023).
+static inline int16x8_t highPass3x3_neon( const HighPassRow& above, const HighPassRow& row, const HighPassRow& below )
+{
+  const int16x8_t direct   = vaddq_s16( row.sides, vaddq_s16( above.centre, below.centre ) );
+  const int16x8_t diagonal = vaddq_s16( above.sides, below.sides );
+  return vsubq_s16( vmlsq_n_s16( vmulq_n_s16( row.centre, 12 ), direct, 2 ), diagonal );
+}
+
+// The sum over the block of hp( cb ) * hp( cr ), as highPassCorrelationCore. Strips of 8 columns from top to bottom,
+// so each row is loaded once and serves as the row above, at and below. A product is at most 12276^2 < 2^28, so the
+// two products of a lane fit 32 bits; vpadal adds them to 64 bit. Higher bit depths take the C core, the last
+// width % 8 columns too.
+int64_t highPassCorrelation_neon( const Pel* cb, const ptrdiff_t cbStride, const Pel* cr, const ptrdiff_t crStride,
+                                  const int width, const int height, const int bitDepth )
+{
+  if( bitDepth > 10 )
+  {
+    return highPassCorrelationCore( cb, cbStride, cr, crStride, width, height, bitDepth );
+  }
+
+  int64x2_t acc = vdupq_n_s64( 0 );
+  int       x   = 0;
+  for( ; x + 8 <= width; x += 8 )
+  {
+    HighPassRow cbAbove = loadHighPassRow( cb + x - cbStride );
+    HighPassRow crAbove = loadHighPassRow( cr + x - crStride );
+    HighPassRow cbRow   = loadHighPassRow( cb + x );
+    HighPassRow crRow   = loadHighPassRow( cr + x );
+    for( int y = 0; y < height; y++ )
+    {
+      const HighPassRow cbBelow = loadHighPassRow( cb + x + ( y + 1 ) * cbStride );
+      const HighPassRow crBelow = loadHighPassRow( cr + x + ( y + 1 ) * crStride );
+      const int16x8_t   hpCb    = highPass3x3_neon( cbAbove, cbRow, cbBelow );
+      const int16x8_t   hpCr    = highPass3x3_neon( crAbove, crRow, crBelow );
+      const int32x4_t   prodLo  = vmull_s16( vget_low_s16( hpCb ), vget_low_s16( hpCr ) );
+      const int32x4_t   prodSum = vmlal_s16( prodLo, vget_high_s16( hpCb ), vget_high_s16( hpCr ) );
+      acc                       = vpadalq_s32( acc, prodSum );
+
+      cbAbove = cbRow;
+      crAbove = crRow;
+      cbRow   = cbBelow;
+      crRow   = crBelow;
+    }
+  }
+  const int64_t tail = highPassCorrelationCore( cb + x, cbStride, cr + x, crStride, width - x, height, bitDepth );
+  return tail + horizontal_add_s64x2( acc );
+}
+
+// The 2x2 average ( a + b + c + d + 2 ) >> 2 of each 2x2 block, as downsample2x2Core: the pairs of a row added to
+// 32 bit, those of the row below added on, then the rounding shift narrowing back to 16 bits, where the average of
+// four 16-bit samples fits.
+void downsample2x2_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride,
+                         const int dstWidth, const int dstHeight )
+{
+  for( int y = 0; y < dstHeight; y++, src += 2 * srcStride, dst += dstStride )
+  {
+    const Pel* below = src + srcStride;
+    int        x     = 0;
+    for( ; x + 8 <= dstWidth; x += 8 )
+    {
+      const int16x8_t topLow     = vld1q_s16( src + 2 * x );
+      const int16x8_t topHigh    = vld1q_s16( src + 2 * x + 8 );
+      const int16x8_t bottomLow  = vld1q_s16( below + 2 * x );
+      const int16x8_t bottomHigh = vld1q_s16( below + 2 * x + 8 );
+      const int32x4_t sumsLow    = vpadalq_s16( vpaddlq_s16( topLow ), bottomLow );
+      const int32x4_t sumsHigh   = vpadalq_s16( vpaddlq_s16( topHigh ), bottomHigh );
+      vst1q_s16( dst + x, vcombine_s16( vrshrn_n_s32( sumsLow, 2 ), vrshrn_n_s32( sumsHigh, 2 ) ) );
+    }
+    for( ; x < dstWidth; x++ )
+    {
+      dst[x] = Pel( ( src[2 * x] + below[2 * x] + src[2 * x + 1] + below[2 * x + 1] + 2 ) >> 2 );
+    }
+  }
+}
+
 template<int W>
 void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
                           int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
@@ -341,6 +603,12 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   addAvg   = addAvg_neon;
   reco     = recoCore_neon;
   copyBuffer = copyBuffer_neon;
+  absGradientSums     = absGradientSums_neon;
+  sum                 = sum_neon;
+  sumAndSumSquares    = sumAndSumSquares_neon;
+  blockStats4x4       = blockStats4x4_neon;
+  highPassCorrelation = highPassCorrelation_neon;
+  downsample2x2       = downsample2x2_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
