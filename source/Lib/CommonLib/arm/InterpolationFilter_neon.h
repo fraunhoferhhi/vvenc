@@ -212,8 +212,8 @@ static inline int16x4_t filter_horiz_4x1_N6_neon( Pel const* src, int16x8_t ch, 
 }
 
 template<bool isLast>
-static ALWAYS_INLINE void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
-                                                 int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+static ALWAYS_INLINE void simdFilter4x4_N6_body_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride,
+                                                      int width, int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
   CHECKD( width != 4, "Width must be 4" );
   CHECKD( height != 4, "Height must be 4" );
@@ -284,6 +284,35 @@ static ALWAYS_INLINE void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const
 
     dst += dstStride;
   } while( ++h != 4 );
+}
+
+// The final-output (isLast) filter out of line: inlined into a loop over sub-blocks such as affineLumaCU_neon<false>'s,
+// clang spills its row vectors. The intermediate-output filter stays inline.
+#if defined( _MSC_VER )
+#define FILTER4X4_NOINLINE __declspec( noinline )
+#else
+#define FILTER4X4_NOINLINE __attribute__( ( noinline ) )
+#endif
+static inline FILTER4X4_NOINLINE void simdFilter4x4_N6_last_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst,
+                                                                  int dstStride, int width, int height, TFilterCoeff const* coeffH,
+                                                                  TFilterCoeff const* coeffV )
+{
+  simdFilter4x4_N6_body_neon<true>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+}
+#undef FILTER4X4_NOINLINE
+
+template<bool isLast>
+static ALWAYS_INLINE void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                                                 int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+{
+  if( isLast )
+  {
+    simdFilter4x4_N6_last_neon( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+  }
+  else
+  {
+    simdFilter4x4_N6_body_neon<false>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+  }
 }
 
 } // namespace vvenc
