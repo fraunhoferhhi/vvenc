@@ -348,8 +348,7 @@ void Filter7x7Blk_neon( const AlfClassifier* classifier, const PelUnitBuf& recDs
 template<bool isNonLinear>
 static inline int16x8_t processALF5x5Row_neon( const Pel* pImg0, const int yVb, const int vbPos,
                                                const ptrdiff_t srcStride, const int16x4_t coeff[2],
-                                               const int16x8_t clip[6][2], const int16x8_t minVal,
-                                               const int16x8_t maxVal )
+                                               const int16x8_t clip[6][2], const int16x8_t maxVal )
 {
   constexpr int SHIFT = AdaptiveLoopFilter::m_NUM_BITS - 1;
 
@@ -404,7 +403,8 @@ static inline int16x8_t processALF5x5Row_neon( const Pel* pImg0, const int yVb, 
   }
 
   acc = vaddq_s16( acc, curr );
-  return clip3_neon( acc, minVal, maxVal );
+  // clpRng.min() is always 0
+  return clip3_neon( acc, vdupq_n_s16( 0 ), maxVal );
 }
 
 template<bool isNonLinear>
@@ -456,7 +456,6 @@ void Filter5x5Blk_neon( const AlfClassifier*, const PelUnitBuf& recDst, const CP
     }
   }
 
-  const int16x8_t minVal = vdupq_n_s16( clpRng.min() );
   const int16x8_t maxVal = vdupq_n_s16( clpRng.max() );
 
   for( int i = 0; i < height; i++ )
@@ -465,8 +464,7 @@ void Filter5x5Blk_neon( const AlfClassifier*, const PelUnitBuf& recDst, const CP
 
     for( int j = 0; j < width; j += STEP_X )
     {
-      const int16x8_t res = processALF5x5Row_neon<isNonLinear>( src + j, yVb, vbPos, srcStride, coeff, clip, minVal,
-                                                                maxVal );
+      const int16x8_t res = processALF5x5Row_neon<isNonLinear>( src + j, yVb, vbPos, srcStride, coeff, clip, maxVal );
       if( j + STEP_X <= width )
       {
         vst1q_s16( dst + j, res );
