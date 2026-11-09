@@ -242,18 +242,31 @@ static void copyBuffer_neon( const char* src, int srcStride, char* dst, int dstS
 // Block statistics. Each kernel returns exactly its C core's result (Buffer.cpp): the sums are formed in wider lanes
 // than any partial sum needs, and only the order of the integer additions differs.
 
-// adds the absolute differences of absGradientSums_neon at the 8 positions from row, those outside mask as 0
-static inline void absGradientStep_neon( const Pel* row, const Pel* below, const uint16x8_t mask, uint32x4_t& hor,
-                                         uint32x4_t& ver, uint32x4_t& down, uint32x4_t& up )
+// the absolute differences of absGradientSums_neon at the 8 positions from row: horizontal, vertical, down-left and
+// down-right
+static inline uint16x8x4_t absGradients_neon( const Pel* row, const Pel* below )
 {
   const int16x8_t a0 = vld1q_s16( row );
   const int16x8_t a1 = vld1q_s16( row + 1 );
   const int16x8_t b0 = vld1q_s16( below );
   const int16x8_t b1 = vld1q_s16( below + 1 );
-  hor  = vpadalq_u16( hor, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( a1, a0 ) ), mask ) );
-  ver  = vpadalq_u16( ver, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( b0, a0 ) ), mask ) );
-  down = vpadalq_u16( down, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( a1, b0 ) ), mask ) );
-  up   = vpadalq_u16( up, vandq_u16( vreinterpretq_u16_s16( vabdq_s16( b1, a0 ) ), mask ) );
+
+  uint16x8x4_t gradients;
+  gradients.val[0] = vreinterpretq_u16_s16( vabdq_s16( a1, a0 ) );
+  gradients.val[1] = vreinterpretq_u16_s16( vabdq_s16( b0, a0 ) );
+  gradients.val[2] = vreinterpretq_u16_s16( vabdq_s16( a1, b0 ) );
+  gradients.val[3] = vreinterpretq_u16_s16( vabdq_s16( b1, a0 ) );
+  return gradients;
+}
+
+// adds the gradients of absGradients_neon pairwise to the 32-bit sums of each direction
+static inline void addAbsGradients_neon( const uint16x8x4_t gradients, uint32x4_t& hor, uint32x4_t& ver,
+                                         uint32x4_t& down, uint32x4_t& up )
+{
+  hor  = vpadalq_u16( hor, gradients.val[0] );
+  ver  = vpadalq_u16( ver, gradients.val[1] );
+  down = vpadalq_u16( down, gradients.val[2] );
+  up   = vpadalq_u16( up, gradients.val[3] );
 }
 
 // Sums of the absolute differences between neighbouring samples in four directions over the ( width - 1 ) x
@@ -271,7 +284,6 @@ void absGradientSums_neon( const Pel* src, const ptrdiff_t stride, const int wid
 
   static const uint16_t laneIndex16[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
   const uint16x8_t      laneIndex      = vld1q_u16( laneIndex16 );
-  const uint16x8_t      allLanes       = vdupq_n_u16( 0xFFFF );
   const int             numPos         = width - 1;
   const int             last           = numPos - 8;
 
@@ -286,12 +298,17 @@ void absGradientSums_neon( const Pel* src, const ptrdiff_t stride, const int wid
     int        x     = 0;
     for( ; x + 8 <= numPos; x += 8 )
     {
-      absGradientStep_neon( src + x, below + x, allLanes, hor, ver, down, up );
+      addAbsGradients_neon( absGradients_neon( src + x, below + x ), hor, ver, down, up );
     }
     if( x < numPos )
     {
-      const uint16x8_t firstNotCounted = vdupq_n_u16( static_cast<uint16_t>( x - last ) );
-      absGradientStep_neon( src + last, below + last, vcgeq_u16( laneIndex, firstNotCounted ), hor, ver, down, up );
+      const uint16x8_t notCounted = vcgeq_u16( laneIndex, vdupq_n_u16( static_cast<uint16_t>( x - last ) ) );
+      uint16x8x4_t     gradients  = absGradients_neon( src + last, below + last );
+      gradients.val[0]            = vandq_u16( gradients.val[0], notCounted );
+      gradients.val[1]            = vandq_u16( gradients.val[1], notCounted );
+      gradients.val[2]            = vandq_u16( gradients.val[2], notCounted );
+      gradients.val[3]            = vandq_u16( gradients.val[3], notCounted );
+      addAbsGradients_neon( gradients, hor, ver, down, up );
     }
   }
 
@@ -390,10 +407,10 @@ void blockStats4x4_neon( const Pel* src, const ptrdiff_t stride, const int numBl
 
     const int16x8_t columns    = vaddq_s16( vaddq_s16( row0, row1 ), vaddq_s16( row2, row3 ) );
     const int32x4_t columnPair = vpaddlq_s16( columns );
-    const int32x2_t blockSums  = vpadd_s32( vget_low_s32( columnPair ), vget_high_s32( columnPair ) );   // s0 s1
+    const int32x4_t blockSums  = pairwise_add_s32x4( columnPair, columnPair );   // s0 s1 s0 s1
 
     // each block's sum in its four lanes
-    const int16x4_t sums16 = vmovn_s32( vcombine_s32( blockSums, blockSums ) );   // s0 s1 s0 s1
+    const int16x4_t sums16 = vmovn_s32( blockSums );
     const int16x8_t s      = vcombine_s16( vdup_lane_s16( sums16, 0 ), vdup_lane_s16( sums16, 1 ) );
 
     uint16x8_t dev = vreinterpretq_u16_s16( vabdq_s16( s, vshlq_n_s16( row0, 4 ) ) );
@@ -403,7 +420,7 @@ void blockStats4x4_neon( const Pel* src, const ptrdiff_t stride, const int numBl
     const uint32x4_t devPair   = vpaddlq_u16( dev );
     const uint32x2_t blockDevs = vpadd_u32( vget_low_u32( devPair ), vget_high_u32( devPair ) );
 
-    vst1_s32( sum + b, blockSums );
+    vst1_s32( sum + b, vget_low_s32( blockSums ) );
     vst1_s32( absDev + b, vreinterpret_s32_u32( blockDevs ) );
   }
   blockStats4x4Core( src, stride, numBlocks - b, bitDepth, sum + b, absDev + b );
