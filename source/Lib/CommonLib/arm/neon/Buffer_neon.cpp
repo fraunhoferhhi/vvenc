@@ -432,7 +432,7 @@ static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, 
     return horizontal_add_u64x2( acc0 );
   }
 
-  // widths 8 and above: two accumulators, for two rows (width 8) or the two halves of 16 columns
+  // widths 8 and above: two accumulators (four from width 32), for two rows (width 8) or the two halves of 16 columns
   uint64x2_t acc1 = vdupq_n_u64( 0 );
 
   if( width == 8 )
@@ -470,8 +470,12 @@ static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, 
     return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
   }
 
-  // wider: 16 columns per step; the last width % 16 columns as the 16 ending at the row's end, with the lanes of the
-  // columns already counted set to zero in both sources
+  // wider: 32 columns per step on four accumulators, then 16 columns if that many are left; the last width % 16
+  // columns as the 16 ending at the row's end, with the lanes of the columns already counted set to zero in both
+  // sources
+  uint64x2_t acc2 = vdupq_n_u64( 0 );
+  uint64x2_t acc3 = vdupq_n_u64( 0 );
+
   static const int16_t laneIndex[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
   const int       tail     = width % 16;
   const int       lastX    = width - 16;
@@ -483,7 +487,23 @@ static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, 
 
   for( int y = 0; y < height; y++, src0 += stride0, src1 += stride1 )
   {
-    for( int x = 0; x + 16 <= width; x += 16 )
+    int x = 0;
+    for( ; x + 32 <= width; x += 32 )
+    {
+      const int16x8_t a0 = vld1q_s16( &src0[x] );
+      const int16x8_t b0 = vld1q_s16( &src1[x] );
+      const int16x8_t a1 = vld1q_s16( &src0[x + 8] );
+      const int16x8_t b1 = vld1q_s16( &src1[x + 8] );
+      const int16x8_t a2 = vld1q_s16( &src0[x + 16] );
+      const int16x8_t b2 = vld1q_s16( &src1[x + 16] );
+      const int16x8_t a3 = vld1q_s16( &src0[x + 24] );
+      const int16x8_t b3 = vld1q_s16( &src1[x + 24] );
+      acc0 = addSquares_neon( acc0, a0, b0 );
+      acc1 = addSquares_neon( acc1, a1, b1 );
+      acc2 = addSquares_neon( acc2, a2, b2 );
+      acc3 = addSquares_neon( acc3, a3, b3 );
+    }
+    if( x + 16 <= width )
     {
       const int16x8_t a0 = vld1q_s16( &src0[x] );
       const int16x8_t b0 = vld1q_s16( &src1[x] );
@@ -502,7 +522,7 @@ static uint64_t sumSquaredError_neon( const Pel* src0, const ptrdiff_t stride0, 
       acc1 = addSquares_neon( acc1, vandq_s16( a1, keep1 ), vandq_s16( b1, keep1 ) );
     }
   }
-  return horizontal_add_u64x2( vaddq_u64( acc0, acc1 ) );
+  return horizontal_add_u64x2( vaddq_u64( vaddq_u64( acc0, acc1 ), vaddq_u64( acc2, acc3 ) ) );
 }
 
 template<>
