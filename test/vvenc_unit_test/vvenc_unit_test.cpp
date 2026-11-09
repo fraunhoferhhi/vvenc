@@ -4415,6 +4415,67 @@ static bool check_sumAbsDeviation( PelBufferOps* ref, PelBufferOps* opt, unsigne
   return true;
 }
 
+// QPA visual activity sums (BitAllocation.cpp): HD kernels at any width from 9, the downsampled (UHD) ones at the
+// widths the encoder passes, a CTU plus two guard columns on one or both sides (the x86 kernels differ from the C
+// cores at some other widths), 8- and 10-bit samples and 10-bit extremes. The kernels read up to two rows above the
+// block and one column right of it.
+// HDHighPass is not compared: its SIMD kernels add the columns in pairs before rounding (BufferX86.h).
+static bool check_qpaActivity( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps QPA activity (AvgHighPass, HDHighPass2, AvgHighPassWithDownsampling*)\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int  bitDepth  = i & 1 ? 10 : 8;
+    const bool extremes  = ( i & 3 ) == 3;
+    const int  maxSample = ( 1 << bitDepth ) - 1;
+    const int  ctuWidth  = 8 * rng.get( 1, 16 );
+    const int  hdWidth   = rng.get( 9, 140 );   // the HD kernels' SIMD equals the C at any width >= 9
+    const int  uhdWidth  = ctuWidth + 2 * rng.get( 1, 2 );
+    const int  height    = rng.get( 3, 70 );
+    InputGenerator<Pel> pixels{ unsigned( bitDepth ), /*is_signed=*/false };
+
+    // the picture and the two before it
+    std::vector<Pel> pics[3];
+    int              strides[3];
+    const Pel*       blocks[3];
+    for( int p = 0; p < 3; p++ )
+    {
+      strides[p] = std::max( hdWidth, uhdWidth ) + 1 + rng.get( 0, 16 );
+      pics[p].resize( strides[p] * ( height + 2 ) );
+      for( Pel& sample: pics[p] )
+      {
+        sample = extremes ? ( rand() & 1 ? maxSample : 0 ) : pixels();
+      }
+      blocks[p] = pics[p].data() + 2 * strides[p];
+    }
+
+    std::ostringstream sstm;
+    sstm << " " << hdWidth << "/" << uhdWidth << "x" << height << " bitDepth=" << bitDepth << ( extremes ? " extremes" : "" );
+    const std::string size = sstm.str();
+    bool passed = compare_value( "AvgHighPass" + size, ref->AvgHighPass( hdWidth, height, blocks[0], strides[0] ),
+                                                       opt->AvgHighPass( hdWidth, height, blocks[0], strides[0] ) );
+    passed = passed && compare_value( "HDHighPass2" + size,
+                                      ref->HDHighPass2( hdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ),
+                                      opt->HDHighPass2( hdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsampling" + size,
+                                      ref->AvgHighPassWithDownsampling( uhdWidth, height, blocks[0], strides[0] ),
+                                      opt->AvgHighPassWithDownsampling( uhdWidth, height, blocks[0], strides[0] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsamplingDiff1st" + size,
+                                      ref->AvgHighPassWithDownsamplingDiff1st( uhdWidth, height, blocks[0], blocks[1], strides[0], strides[1] ),
+                                      opt->AvgHighPassWithDownsamplingDiff1st( uhdWidth, height, blocks[0], blocks[1], strides[0], strides[1] ) );
+    passed = passed && compare_value( "AvgHighPassWithDownsamplingDiff2nd" + size,
+                                      ref->AvgHighPassWithDownsamplingDiff2nd( uhdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ),
+                                      opt->AvgHighPassWithDownsamplingDiff2nd( uhdWidth, height, blocks[0], blocks[1], blocks[2], strides[0], strides[1], strides[2] ) );
+    if( !passed )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Test supported SIMD counts; check destination guards against the sentinel,
 // not just ref-vs-opt equality.
 static bool check_copyClip( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4579,6 +4640,7 @@ static bool test_PelBufferOps()
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
   passed = check_absGradientSums( &ref, &opt, num_cases ) && passed;
   passed = check_sumAbsDeviation( &ref, &opt, num_cases ) && passed;
+  passed = check_qpaActivity( &ref, &opt, num_cases ) && passed;
 
   return passed;
 }
