@@ -54,44 +54,65 @@ namespace vvenc
 
 #if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_ARM )
 
+// One sample of the band-offset statistics in a packed table entry: the entry holds count * 2^32 + diffSum.
+static inline void addToBand( int64_t* table, int16_t band, int16_t diff )
+{
+  table[band] += ( int64_t( 1 ) << 32 ) + diff;
+}
+
 void calcSaoStatisticsBo_neon( int width, int endX, int endY, Pel* srcLine, Pel* orgLine, int srcStride, int orgStride,
                                int channelBitDepth, int64_t* count, int64_t* diff )
 {
   const int shift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+  const int16x8_t negShift = vdupq_n_s16( -shift );
 
-  int32_t countTmp[2][32] = { { 0 }, { 0 } };
-  int32_t diffTmp[2][32] = { { 0 }, { 0 } };
+  // Table k takes the samples at x % 8 == k; the tables are summed at the end. Each entry packs count and diffSum: at
+  // most 128 x 128 samples with |org - src| < 2^15 keep |diffSum| < 2^29, so the low 32 bits read as a signed integer
+  // are diffSum and the rest is the count.
+  int64_t packed[8][NUM_SAO_BO_CLASSES] = {};
 
   do
   {
-    for( int x = 0; x < endX; ++x )
+    int x = 0;
+    for( ; x + 8 <= endX; x += 8 )
     {
-      int idx = x & 1;
-      int bandIdx = srcLine[x] >> shift;
-      diffTmp[idx][bandIdx] += orgLine[x] - srcLine[x];
-      countTmp[idx][bandIdx]++;
+      const int16x8_t src = vld1q_s16( srcLine + x );
+      const int16x8_t org = vld1q_s16( orgLine + x );
+      const int16x8_t band = vshlq_s16( src, negShift );
+      const int16x8_t d = vsubq_s16( org, src );
+
+      addToBand( packed[0], vgetq_lane_s16( band, 0 ), vgetq_lane_s16( d, 0 ) );
+      addToBand( packed[1], vgetq_lane_s16( band, 1 ), vgetq_lane_s16( d, 1 ) );
+      addToBand( packed[2], vgetq_lane_s16( band, 2 ), vgetq_lane_s16( d, 2 ) );
+      addToBand( packed[3], vgetq_lane_s16( band, 3 ), vgetq_lane_s16( d, 3 ) );
+      addToBand( packed[4], vgetq_lane_s16( band, 4 ), vgetq_lane_s16( d, 4 ) );
+      addToBand( packed[5], vgetq_lane_s16( band, 5 ), vgetq_lane_s16( d, 5 ) );
+      addToBand( packed[6], vgetq_lane_s16( band, 6 ), vgetq_lane_s16( d, 6 ) );
+      addToBand( packed[7], vgetq_lane_s16( band, 7 ), vgetq_lane_s16( d, 7 ) );
+    }
+    for( ; x < endX; ++x )
+    {
+      addToBand( packed[0], int16_t( srcLine[x] >> shift ), int16_t( orgLine[x] - srcLine[x] ) );
     }
 
     srcLine += srcStride;
     orgLine += orgStride;
   } while( --endY != 0 );
 
-  for( int i = 0; i < 32; i += 4 )
+  for( int i = 0; i < NUM_SAO_BO_CLASSES; i += 2 )
   {
-    int32x4_t c0 = vld1q_s32( countTmp[0] + i );
-    int32x4_t c1 = vld1q_s32( countTmp[1] + i );
-    int32x4_t d0 = vld1q_s32( diffTmp[0] + i );
-    int32x4_t d1 = vld1q_s32( diffTmp[1] + i );
+    int64x2_t sum = vld1q_s64( packed[0] + i );
+    for( int k = 1; k < 8; k++ )
+    {
+      const int64x2_t next = vld1q_s64( packed[k] + i );
+      sum = vaddq_s64( sum, next );
+    }
 
-    int64x2_t cTotal_lo = vaddl_s32( vget_low_s32( c0 ), vget_low_s32( c1 ) );
-    int64x2_t cTotal_hi = vaddl_s32( vget_high_s32( c0 ), vget_high_s32( c1 ) );
-    int64x2_t dTotal_lo = vaddl_s32( vget_low_s32( d0 ), vget_low_s32( d1 ) );
-    int64x2_t dTotal_hi = vaddl_s32( vget_high_s32( d0 ), vget_high_s32( d1 ) );
+    const int64x2_t diffSum = vmovl_s32( vmovn_s64( sum ) );
+    const int64x2_t bandCount = vshrq_n_s64( vsubq_s64( sum, diffSum ), 32 );
 
-    vst1q_s64( count + i + 0, cTotal_lo );
-    vst1q_s64( count + i + 2, cTotal_hi );
-    vst1q_s64( diff + i + 0, dTotal_lo );
-    vst1q_s64( diff + i + 2, dTotal_hi );
+    vst1q_s64( diff + i, diffSum );
+    vst1q_s64( count + i, bandCount );
   }
 }
 
