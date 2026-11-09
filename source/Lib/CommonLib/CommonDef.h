@@ -675,6 +675,14 @@ static inline T* aligned_malloc(size_t len, size_t alignement) {
 #    define ALWAYS_INLINE
 #endif
 
+#ifdef __GNUC__
+#    define NO_INLINE __attribute__((noinline))
+#elif defined _MSC_VER
+#    define NO_INLINE __declspec(noinline)
+#else
+#    define NO_INLINE
+#endif
+
 #if defined( _WIN32 ) && defined( TARGET_SIMD_X86 )
 static inline unsigned int bit_scan_reverse( int a )
 {

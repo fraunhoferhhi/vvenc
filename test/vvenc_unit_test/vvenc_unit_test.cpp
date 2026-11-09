@@ -1771,14 +1771,16 @@ static bool check_dct2_matrix_symmetry()
   return true;
 }
 
-// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed columns) against the scalar
-// matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values that trip
-// its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine / cutoff
-// combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, 12).
+// TCoeffOps::fastFwdDCT2[2..5] (the whole forward DCT-II 16/32/64 and 8 including the zeroed columns) against the
+// scalar matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values
+// that trip its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine /
+// cutoff combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, and 12 from
+// 16 points).
 static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdDCT2 trSize=%d\n", trSize );
-  const TMatrixCoeff* tc = trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = trSize == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : trSize == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   const unsigned coreIdx = Log2( trSize ) - 2;   // fastFwdCore_* index of the same size
   DimensionGenerator rng;
@@ -1994,6 +1996,7 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D_extreme( &ref, &opt, 4, 64 ) && passed;
 
   passed = check_dct2_matrix_symmetry() && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 5, 8 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
