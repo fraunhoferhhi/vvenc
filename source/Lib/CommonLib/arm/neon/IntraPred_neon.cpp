@@ -339,11 +339,70 @@ static void IntraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, con
   }
 }
 
+// Planar, as xPredIntraPlanar_Core with its running sums written out: every sample is
+//   ( ( W - 1 - x ) * H * L[y] + ( x + 1 ) * H * TR + ( H - 1 - y ) * W * T[x] + ( y + 1 ) * W * BL + W * H )
+//   >> ( 1 + log2W + log2H ),
+// with T / L the above / left reference samples, TR = T[W] and BL = L[H]. For 4 columns at a time, the row-0 sum
+// without the L term and the last term (R) and its change per row, W * ( BL - T[x] ), are set up once; each row is R
+// plus the weight ( W - 1 - x ) * H <= 63 * 64 times L[y], and R steps to the next row. W * H is half of
+// 1 << ( 1 + log2W + log2H ), so a rounding shift adds it. The integer sums are C's and stay below 2^31; the result is a
+// weighted mean of the samples, so it fits Pel. Widths 1 and 2 (chroma) as in C.
+static void xPredIntraPlanar_neon( PelBuf& pDst, const CPelBuf& pSrc )
+{
+  const int  width  = pDst.width;
+  const int  height = pDst.height;
+  const int  log2W  = floorLog2( width );
+  const int  log2H  = floorLog2( height );
+  const Pel* top    = pSrc.buf + 1;                 // T[x] = pSrc.at( x + 1, 0 )
+  const Pel* left   = pSrc.buf + pSrc.stride + 1;   // L[y] = pSrc.at( y + 1, 1 )
+  const int  tr     = top[width];
+  const int  bl     = left[height];
+  Pel*       pred   = pDst.buf;
+
+  if( width < 4 )
+  {
+    for( int y = 0; y < height; y++, pred += pDst.stride )
+    {
+      for( int x = 0; x < width; x++ )
+      {
+        const int sum = ( ( width - 1 - x ) * left[y] + ( x + 1 ) * tr ) * height
+                        + ( ( height - 1 - y ) * top[x] + ( y + 1 ) * bl ) * width + width * height;
+        pred[x] = Pel( sum >> ( 1 + log2W + log2H ) );
+      }
+    }
+    return;
+  }
+
+  const int32_t   colInit[4] = { 1, 2, 3, 4 };
+  const int32x4_t col0       = vld1q_s32( colInit );
+  const int32x4_t shift      = vdupq_n_s32( -( 1 + log2W + log2H ) );
+  // a group of 4 columns, down the whole block; its row sum and step stay in registers
+  for( int x = 0; x < width; x += 4 )
+  {
+    const int16x4_t t16        = vld1_s16( top + x );
+    const int32x4_t t          = vmovl_s16( t16 );
+    const int32x4_t col        = vaddq_s32( col0, vdupq_n_s32( x ) );   // x + 1
+    // row 0 without the left term: ( x + 1 ) * H * TR + ( H - 1 ) * W * T[x] + W * BL
+    int32x4_t       rowSum     = vmlaq_n_s32( vdupq_n_s32( width * bl ), col, height * tr );
+    rowSum                     = vmlaq_n_s32( rowSum, t, ( height - 1 ) * width );
+    const int32x4_t rowStep    = vmulq_n_s32( vsubq_s32( vdupq_n_s32( bl ), t ), width );
+    const int16x4_t leftWeight = vmovn_s32( vmulq_n_s32( vsubq_s32( vdupq_n_s32( width ), col ), height ) );
+    Pel*            dst        = pred + x;
+    for( int y = 0; y < height; y++, dst += pDst.stride )
+    {
+      const int32x4_t sum = vmlal_n_s16( rowSum, leftWeight, left[y] );
+      vst1_s16( dst, vmovn_s32( vrshlq_s32( sum, shift ) ) );
+      rowSum = vaddq_s32( rowSum, rowStep );
+    }
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
   IntraPredAngleLuma    = IntraPredAngleLuma_neon;
   IntraPredAngleLumaHor = IntraPredAngleLumaHor_neon;
+  xPredIntraPlanar      = xPredIntraPlanar_neon;
 }
 
 } // namespace vvenc
