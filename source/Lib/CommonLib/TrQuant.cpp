@@ -939,7 +939,8 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1022,12 +1023,24 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(coeffTemp, lfnstTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(coeffTemp, lfnstTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
     }
@@ -1043,7 +1056,8 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if ((lfnstIdx || lfnstPrimary == LFNST_PRIMARY_KEEP) && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
+    const CodingUnit& cu = *tu.cu;
+    CHECKD( tu.cs->getCU( area.pos(), toChannelType( compID ), TREE_D ) != tu.cu, "the TU's CU is not the CU at its position" );
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -1123,12 +1137,24 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
       }
       else
       {
-        for (y = 0; y < sbSize; y++)
+        // a constant size per row lets the compiler copy each row inline, without dispatching on the size
+        if (sbSize == 4)
         {
-          uint32_t uiStride = (y < 4) ? sbSize : 4;
-          ::memcpy(lfnstTemp, coeffTemp, uiStride * sizeof(TCoeff));
-          lfnstTemp += uiStride;
-          coeffTemp += width;
+          for (y = 0; y < 4; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
+        }
+        else   // ( sbSize == 8 ): rows 0-3 hold 8 coefficients, rows 4-7 hold 4
+        {
+          for (y = 0; y < 4; y++, lfnstTemp += 8, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 8 * sizeof(TCoeff));
+          }
+          for (; y < 8; y++, lfnstTemp += 4, coeffTemp += width)
+          {
+            ::memcpy(lfnstTemp, coeffTemp, 4 * sizeof(TCoeff));
+          }
         }
       }
 
@@ -1137,16 +1163,37 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         return;
       }
 
-      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
+      const int zeroOutSize = (tu4x4Flag || tu8x8Flag) ? 8 : 16;   // outputs that can be nonzero; the transform zeroes the rest
+      m_fwdLfnstNxN( m_lfnstFwdIn, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, zeroOutSize );
 
-      lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
-      coeffTemp                        = tempCoeff;
-      const ScanElement *scanPtr       = scan;
-      int                lfnstCoeffNum = (sbSize == 4) ? sbSize * sbSize : 48;
-      for (y = 0; y < lfnstCoeffNum; y++)
+      // forward spectral rearrangement: the first 16 (sbSize 4) or 48 (sbSize 8) positions of the scan take the outputs.
+      // They are the top-left 4x4 group, or the 8x8 group without its bottom-right 4x4: where some outputs are zero,
+      // clear that region row by row and place only the first zeroOutSize outputs.
+      coeffTemp = tempCoeff;
+      if (sbSize == 4)
       {
-        coeffTemp[scanPtr->idx] = *lfnstTemp++;
-        scanPtr++;
+        if (zeroOutSize < 16)
+        {
+          for (y = 0; y < 4; y++)
+          {
+            ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+          }
+        }
+      }
+      else   // ( sbSize == 8 ): 48 positions, rows 0-3 of 8 and rows 4-7 of 4
+      {
+        for (y = 0; y < 4; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 8 * sizeof(TCoeff));
+        }
+        for (; y < 8; y++)
+        {
+          ::memset(coeffTemp + y * width, 0, 4 * sizeof(TCoeff));
+        }
+      }
+      for (y = 0; y < zeroOutSize; y++)
+      {
+        coeffTemp[scan[y].idx] = m_tempOutMatrix[y];
       }
     }
   }
