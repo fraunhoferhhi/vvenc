@@ -180,6 +180,65 @@ void recoCore_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples,
   }
 }
 
+// copyBuffer, as copyBufferCore (one memcpy per row): whole-vector rows are copied with vector loads and stores, 64
+// bytes per step, because for the small blocks the encoder copies most a memcpy call per row costs more than the copy.
+static void copyBuffer_neon( const char* src, int srcStride, char* dst, int dstStride, int width, int height )
+{
+  if( width == srcStride && width == dstStride )
+  {
+    memcpy( dst, src, width * height );
+  }
+  else if( ( width & 15 ) == 0 )
+  {
+    for( ; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      const uint8_t* s = ( const uint8_t* ) src;
+      uint8_t*       d = ( uint8_t* ) dst;
+      int            x = 0;
+      for( ; x + 64 <= width; x += 64 )
+      {
+        const uint8x16_t a = vld1q_u8( s + x );
+        const uint8x16_t b = vld1q_u8( s + x + 16 );
+        const uint8x16_t c = vld1q_u8( s + x + 32 );
+        const uint8x16_t e = vld1q_u8( s + x + 48 );
+        vst1q_u8( d + x, a );
+        vst1q_u8( d + x + 16, b );
+        vst1q_u8( d + x + 32, c );
+        vst1q_u8( d + x + 48, e );
+      }
+      // the 0, 16, 32 or 48 bytes left
+      if( width & 32 )
+      {
+        const uint8x16_t a = vld1q_u8( s + x );
+        const uint8x16_t b = vld1q_u8( s + x + 16 );
+        vst1q_u8( d + x, a );
+        vst1q_u8( d + x + 16, b );
+        x += 32;
+      }
+      if( width & 16 )
+      {
+        const uint8x16_t a = vld1q_u8( s + x );
+        vst1q_u8( d + x, a );
+      }
+    }
+  }
+  else if( width == 8 )
+  {
+    for( ; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      const uint8x8_t a = vld1_u8( ( const uint8_t* ) src );
+      vst1_u8( ( uint8_t* ) dst, a );
+    }
+  }
+  else
+  {
+    for( ; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      memcpy( dst, src, width );
+    }
+  }
+}
+
 template<int W>
 void addAvg_strided_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
                           int width, int height, unsigned rshift, int offset, const ClpRng& clpRng );
@@ -281,6 +340,7 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
   addAvg   = addAvg_neon;
   reco     = recoCore_neon;
+  copyBuffer = copyBuffer_neon;
   addAvg4  = addAvg_strided_neon<4>;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
