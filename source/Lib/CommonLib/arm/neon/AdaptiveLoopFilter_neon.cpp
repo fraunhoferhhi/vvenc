@@ -52,8 +52,10 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/AdaptiveLoopFilter.h"
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "mem_neon.h"
 #include "permute_neon.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -159,8 +161,7 @@ void DeriveClassificationBlk_neon( AlfClassifier* classifier, const CPelBuf& src
     const uint32_t   scale2 = ( z2 == vbPos - 4 || z2 == vbPos ) ? 96 : 64;
     const uint32x4_t scales = vcombine_u32( vdup_n_u32( scale1 ), vdup_n_u32( scale2 ) );
 
-    AlfClassifier* classes1 = &classifier[( i >> 1 ) * ( MAX_CU_SIZE / 4 )];
-    AlfClassifier* classes2 = &classifier[( ( i >> 1 ) + 1 ) * ( MAX_CU_SIZE / 4 )];
+    AlfClassifier* classRow = &classifier[( i >> 1 ) * ( MAX_CU_SIZE / 4 )];
 
     for( int j = 0; j < blk.width; j += 8 )
     {
@@ -184,12 +185,8 @@ void DeriveClassificationBlk_neon( AlfClassifier* classifier, const CPelBuf& src
                                            vaddl_u16( vget_high_u16( r6 ), vget_high_u16( r7 ) ) );
 
       // transposed: one direction per vector, lanes left1, right1, left2, right2
-      const uint32x4x2_t upper = vtrnq_u32( left1, right1 );
-      const uint32x4x2_t lower = vtrnq_u32( left2, right2 );
-      const uint32x4_t sumV  = vcombine_u32( vget_low_u32( upper.val[0] ), vget_low_u32( lower.val[0] ) );
-      const uint32x4_t sumH  = vcombine_u32( vget_low_u32( upper.val[1] ), vget_low_u32( lower.val[1] ) );
-      const uint32x4_t sumD0 = vcombine_u32( vget_high_u32( upper.val[0] ), vget_high_u32( lower.val[0] ) );
-      const uint32x4_t sumD1 = vcombine_u32( vget_high_u32( upper.val[1] ), vget_high_u32( lower.val[1] ) );
+      uint32x4_t sumV = left1, sumH = right1, sumD0 = left2, sumD1 = right2;
+      transpose_4x4_u32( sumV, sumH, sumD0, sumD1 );
 
       // activity = min( 15, ( sumV + sumH ) * scale >> shift ), class th[activity] = ( activity >= 1 ) +
       // ( activity >= 2 ) + ( activity >= 7 ) + ( activity >= 15 ), adding the all-ones compare masks as -1
@@ -225,11 +222,12 @@ void DeriveClassificationBlk_neon( AlfClassifier* classifier, const CPelBuf& src
       const uint32x4_t transposeIdx =
         vaddq_u32( vaddq_u32( vdupq_n_u32( 3 ), dirTempHV ), vaddq_u32( dirTempD, dirTempD ) );
 
-      // AlfClassifier { uint8_t classIdx, transposeIdx }: the left and right block of each block row as 32 bit
+      // AlfClassifier { uint8_t classIdx, transposeIdx }: the left and right block of this block row (lanes 0, 1) and of
+      // the next one (lanes 2, 3), MAX_CU_SIZE / 4 classifiers further
       static_assert( sizeof( AlfClassifier ) == 2, "AlfClassifier must be 16 bits wide" );
       const uint16x4_t classes = vorr_u16( vmovn_u32( classIdx ), vshl_n_u16( vmovn_u32( transposeIdx ), 8 ) );
-      vst1_lane_u32( reinterpret_cast<uint32_t*>( classes1 + ( j >> 2 ) ), vreinterpret_u32_u16( classes ), 0 );
-      vst1_lane_u32( reinterpret_cast<uint32_t*>( classes2 + ( j >> 2 ) ), vreinterpret_u32_u16( classes ), 1 );
+      store_s16x2x2( reinterpret_cast<int16_t*>( classRow + ( j >> 2 ) ), vreinterpret_s16_u16( classes ),
+                     MAX_CU_SIZE / 4 );
     }
   }
 }
