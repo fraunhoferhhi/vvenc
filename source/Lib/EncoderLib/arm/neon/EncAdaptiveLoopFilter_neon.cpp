@@ -559,6 +559,50 @@ void getPreBlkStatsAccumFixedSize_neon( AlfCovariance& alfCovariance, const Pel*
   alfCovariance.pixAcc += horizontal_add_s32x4( dot_s16x8x2_neon( y0, y0, y1, y1 ) );
 }
 
+// The covariance sums of one 4x4 chroma block in EncAdaptiveLoopFilter::getBlkStatsCcAlf, as its C code:
+// E[k][l] += ELocal[k] . ELocal[l] for k <= l (Cb's statistics only), y[k] += ELocal[k] . yLocal[c] and
+// pixAcc += yLocal[c] . yLocal[c] for Cb and Cr. The samples have at most 12 bits, so a difference has at most 13 and
+// the 16 products of a dot product add up to less than 2^30 in 32 bit: each integer sum equals the C code's, and each
+// is added to its floating-point statistic once per block, as there.
+static void getBlkCovarianceCcAlf_neon( AlfCovariance& covarianceCb, AlfCovariance& covarianceCr, const int numCoeff,
+                                        const Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16],
+                                        const Pel yLocal[2][4][4] )
+{
+  AlfCovariance* const chromaCovariance[2] = { &covarianceCb, &covarianceCr };
+  const int            numRows             = numCoeff - 1;
+
+  int16x8_t eLow[MAX_NUM_CC_ALF_CHROMA_COEFF];    // samples 0 ... 7 of each ELocal row
+  int16x8_t eHigh[MAX_NUM_CC_ALF_CHROMA_COEFF];   // samples 8 ... 15
+  for( int k = 0; k < numRows; k++ )
+  {
+    eLow[k]  = vld1q_s16( &ELocal[k][0] );
+    eHigh[k] = vld1q_s16( &ELocal[k][8] );
+  }
+  int16x8_t yLow[2];
+  int16x8_t yHigh[2];
+  for( int c = 0; c < 2; c++ )
+  {
+    yLow[c]  = vld1q_s16( &yLocal[c][0][0] );
+    yHigh[c] = vld1q_s16( &yLocal[c][2][0] );
+  }
+
+  for( int k = 0; k < numRows; k++ )
+  {
+    for( int l = k; l < numRows; l++ )
+    {
+      covarianceCb.E[0][0][k][l] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], eLow[l], eHigh[k], eHigh[l] ) );
+    }
+    for( int c = 0; c < 2; c++ )
+    {
+      chromaCovariance[c]->y[0][k] += horizontal_add_s32x4( dot_s16x8x2_neon( eLow[k], yLow[c], eHigh[k], yHigh[c] ) );
+    }
+  }
+  for( int c = 0; c < 2; c++ )
+  {
+    chromaCovariance[c]->pixAcc += horizontal_add_s32x4( dot_s16x8x2_neon( yLow[c], yLow[c], yHigh[c], yHigh[c] ) );
+  }
+}
+
 void getPreBlkStatsAccum_neon( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                const Pel yLocal[4][4], const int numBins )
 {
@@ -599,6 +643,7 @@ void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilterARM<NEON>()
   m_getPreBlkStatsAccum = getPreBlkStatsAccum_neon;
   // no NEON version of the equal-bins kernel yet: use the NEON/SVE kernel for every block
   m_getPreBlkStatsAccumEqualBins = nullptr;
+  m_getBlkCovarianceCcAlf        = getBlkCovarianceCcAlf_neon;
 }
 
 } // namespace vvenc
