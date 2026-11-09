@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Rom.h"
 #include "neon/permute_neon.h"
 #include "neon/sum_neon.h"
+#include "../InterpolationFilter_neon.h"
 
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
 
@@ -356,6 +357,114 @@ void gradFilter_neon( const Pel* pSrc, int srcStride, int width, int height, int
   }
 }
 
+#if ENABLE_SIMD_OPT_MCIF
+// The luma sub-block loop of xPredAffineBlk without PROF in one call: the same sub-block MVs (stored for the chroma
+// pass) and the same samples. Every sub-block takes the 6-tap 4x4 filter, also where xPredAffineBlk filters in one
+// direction only because a fraction is 0: the filter of fraction 0 is the single tap 1 << IF_FILTER_PREC, which the
+// first stage scales exactly and the second stage rounds as the one-direction filter does.
+template<bool bi>
+static void affineLumaCU_neon( const InterPredInterpolation::AffineLumaCU& cu )
+{
+  for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
+  {
+    Pel* dst = cu.dst + h * cu.dstStride;
+    for( int w = 0; w < cu.width; w += AFFINE_MIN_BLOCK_SIZE )
+    {
+      const AffineLumaSubblockRef r = affineLumaSubblockRef( cu, w, h );
+      simdFilter4x4_N6_neon<!bi>( cu.clpRng, r.ref, cu.refStride, dst + w, cu.dstStride, AFFINE_MIN_BLOCK_SIZE,
+                                  AFFINE_MIN_BLOCK_SIZE, InterpolationFilter::m_lumaFilter4x4[r.xFrac],
+                                  InterpolationFilter::m_lumaFilter4x4[r.yFrac] );
+    }
+  }
+}
+
+// PROF of one 4x4 affine sub-block, as affinePROF4x4_SSE does on x86. pred holds the 4x4 filter's 14-bit output, ref
+// is the sub-block's nearest integer position in the reference, which supplies the one-sample border. Each window row
+// lives in one register (columns -1 .. 6 in lanes 0 .. 7), so both gradients are lane shifts: gradX = right - left two
+// lanes apart, gradY = the row below minus the row above. The arithmetic matches gradFilter_neon< false > followed by
+// applyPROF: 16-bit wrapping border scale and >> 6, the products of the dMv and gradient pairs summed in 32 bit, the
+// clip to the PROF limit, the saturating narrowing and, without bi, the saturating offset add, shift and clip.
+template<bool bi>
+static ALWAYS_INLINE void affinePROF4x4_neon( Pel* dst, int dstStride, const Pel* pred, const Pel* ref, int refStride,
+                                              const int16_t* dMvXY, int shiftNum, Pel offset, const ClpRng& clpRng )
+{
+  static const uint16_t predLanes[8] = { 0, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0, 0, 0 };
+  const uint16x8_t predMask    = vld1q_u16( predLanes );
+  const int16x8_t  borderShift = vdupq_n_s16( shiftNum );
+  const int16x8_t  internalOff = vdupq_n_s16( IF_INTERNAL_OFFS );
+  const int        dILimit     = 1 << std::max<int>( clpRng.bd + 1, 13 );
+  const int32x4_t  dIMin       = vdupq_n_s32( -dILimit );
+  const int32x4_t  dIMax       = vdupq_n_s32( dILimit - 1 );
+
+  // Window rows -1 .. 4: the reference scaled to the prediction's range, the inner rows with the prediction in lanes
+  // 1 .. 4, each >> 6 as the gradient filter does.
+  int16x4_t predRow[4];
+  int16x8_t window[6];
+  for( int r = -1; r < 5; r++ )
+  {
+    const int16x8_t refRow = vld1q_s16( ref + r * refStride - 1 );
+    int16x8_t       row    = vsubq_s16( vshlq_s16( refRow, borderShift ), internalOff );
+    if( r >= 0 && r < 4 )
+    {
+      predRow[r]            = vld1_s16( pred + 4 * r );
+      const int16x8_t moved = vextq_s16( vdupq_n_s16( 0 ), vcombine_s16( predRow[r], predRow[r] ), 7 );
+      row                   = vbslq_s16( predMask, moved, row );
+    }
+    window[r + 1] = vshrq_n_s16( row, 6 );
+  }
+
+  const int16x8_t vOffset = vdupq_n_s16( offset );
+  const int16x8_t vMin    = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vMax    = vdupq_n_s16( clpRng.max() );
+  const int16x8_t vShift  = vdupq_n_s16( -shiftNum );
+  for( int r = 0; r < 4; r += 2 )
+  {
+    int16x4_t dI[2];
+    for( int k = 0; k < 2; k++ )
+    {
+      const int16x8_t w     = window[r + k + 1];
+      const int16x8_t gradX = vsubq_s16( vextq_s16( w, w, 2 ), w );
+      const int16x8_t dY    = vsubq_s16( window[r + k + 2], window[r + k] );
+      const int16x8_t gradY = vextq_s16( dY, dY, 1 );
+      const int16x4x2_t dMv = vld2_s16( dMvXY + 8 * ( r + k ) );   // the (dMvX, dMvY) pairs of the row
+      int32x4_t sum         = vmull_s16( dMv.val[0], vget_low_s16( gradX ) );
+      sum                   = vmlal_s16( sum, dMv.val[1], vget_low_s16( gradY ) );
+      sum                   = vminq_s32( dIMax, vmaxq_s32( dIMin, sum ) );
+      dI[k]                 = vqmovn_s32( sum );
+    }
+    int16x8_t res = vaddq_s16( vcombine_s16( dI[0], dI[1] ), vcombine_s16( predRow[r], predRow[r + 1] ) );
+    if( !bi )
+    {
+      res = vshlq_s16( vqaddq_s16( res, vOffset ), vShift );
+      res = vminq_s16( vMax, vmaxq_s16( vMin, res ) );
+    }
+    vst1_s16( dst + r * dstStride, vget_low_s16( res ) );
+    vst1_s16( dst + ( r + 1 ) * dstStride, vget_high_s16( res ) );
+  }
+}
+
+// The luma sub-block loop of xPredAffineBlk with PROF in one call: the 4x4 filter into a small buffer (14-bit, as PROF
+// takes it), then the PROF of the sub-block. Same MVs and samples as the per-sub-block path.
+template<bool bi>
+static void affineLumaCUProf_neon( const InterPredInterpolation::AffineLumaCU& cu )
+{
+  for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
+  {
+    Pel* dst = cu.dst + h * cu.dstStride;
+    for( int w = 0; w < cu.width; w += AFFINE_MIN_BLOCK_SIZE )
+    {
+      const AffineLumaSubblockRef r = affineLumaSubblockRef( cu, w, h );
+      Pel pred[AFFINE_MIN_BLOCK_SIZE * AFFINE_MIN_BLOCK_SIZE];
+      simdFilter4x4_N6_neon<false>( cu.clpRng, r.ref, cu.refStride, pred, AFFINE_MIN_BLOCK_SIZE, AFFINE_MIN_BLOCK_SIZE,
+                                    AFFINE_MIN_BLOCK_SIZE, InterpolationFilter::m_lumaFilter4x4[r.xFrac],
+                                    InterpolationFilter::m_lumaFilter4x4[r.yFrac] );
+      affinePROF4x4_neon<bi>( dst + w, cu.dstStride, pred, r.nearest, cu.refStride, cu.dMvXY, cu.shiftNum, cu.offset,
+                              cu.clpRng );
+    }
+  }
+}
+#endif // ENABLE_SIMD_OPT_MCIF
+
 // Duplicate the right element once: 0, 1, 2, 3, 4, 5, 6, 6
 static const uint8_t kPad1RightTbl[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 };
 // Duplicate the left element once: 0, 0, 1, 2, 3, 4, 5, 6
@@ -550,6 +659,12 @@ void InterPredInterpolation::_initInterPredictionARM<NEON>()
   xFpBDOFGradFilter = gradFilter_neon;
   xFpProfGradFilter = gradFilter_neon<false>;
   xFpPadDmvr = padDmvr_neon;
+#if ENABLE_SIMD_OPT_MCIF
+  xFpAffineLumaCU[0][0] = affineLumaCU_neon<false>;
+  xFpAffineLumaCU[0][1] = affineLumaCU_neon<true>;
+  xFpAffineLumaCU[1][0] = affineLumaCUProf_neon<false>;
+  xFpAffineLumaCU[1][1] = affineLumaCUProf_neon<true>;
+#endif
 }
 
 } // namespace vvenc
