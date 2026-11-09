@@ -4634,8 +4634,17 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
 
   bool passed = true;
 
+  // One random phase, then fixed ones, as some kernels depend on the taps: the symmetric (half-sample) phases (6-tap: 8
+  // of the 4x4 table and 17, the alternative filter; 4-tap: 8, chroma entry 16) and a phase next to them.
+  std::vector<int> fracs{ -1 };
+  if( N == 8 || N == 4 )
+    fracs.insert( fracs.end(), { 8, 7 } );
+  else if( N == 6 )
+    fracs.insert( fracs.end(), { 8, 17, 9 } );
+
   // The x86 kernels take their shifts as immediates per bit depth: test both of VVenC's internal bit depths.
   // A first pass reads samples: random ones, then 0 or the maximum. A second pass reads what a first pass outputs.
+  for( int fixedFrac : fracs )
   for( unsigned bd : { 8, 10 } )
   for( bool extremes : { false, true } )
   {
@@ -4663,20 +4672,20 @@ static bool check_filter( InterpolationFilter* ref, InterpolationFilter* opt, un
     if( N == 8 )
     {
       tapIdx = 0;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
       pCoeff = InterpolationFilter::m_lumaFilter[frac];
     }
     else if( N == 6 )
     {
       tapIdx = 3;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS + 1 );
       pCoeff = frac == 17 ? InterpolationFilter::m_lumaAltHpelIFilter : InterpolationFilter::m_lumaFilter4x4[frac];
       src_offset += cStride; // some of the 6-tap filter impementations use 8-tap
     }
     else if( N == 4 )
     {
       tapIdx = 1;
-      frac = dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
+      frac = fixedFrac >= 0 ? unsigned( fixedFrac ) : dim.get( 0, LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS );
       pCoeff = InterpolationFilter::m_chromaFilter[frac << 1];
     }
     else // N == 2

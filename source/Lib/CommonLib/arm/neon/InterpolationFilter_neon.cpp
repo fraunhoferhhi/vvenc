@@ -1574,6 +1574,85 @@ void simdInterpolateVerM2_N4_neon( const int16_t* src, int srcStride, int16_t* d
   }
 }
 
+// Symmetric filters (c[k] == c[2 * P - 1 - k]: the half-sample phases of the luma, alternative luma, 4x4 luma and
+// chroma filters): the two samples that share a tap are added first, so each output takes P multiplies instead of
+// 2 * P. The 16-bit pair sums cannot overflow: each input is a sample of at most 10 bits or a first-stage output, which
+// lies in [-14330, 14314] for every 8-tap, 6-tap and 4-tap phase at 10 bits, so a pair lies in [-28660, 28628].
+template<int P>
+static inline int32x4_t mlal_tap_pairs_neon( int32x4_t acc, const int16x4_t* pairs, const int16x4_t taps )
+{
+  acc = vmlal_lane_s16( acc, pairs[0], taps, 0 );
+  acc = vmlal_lane_s16( acc, pairs[1], taps, 1 );
+  if( P > 2 )
+  {
+    acc = vmlal_lane_s16( acc, pairs[2], taps, 2 );
+  }
+  if( P > 3 )
+  {
+    acc = vmlal_lane_s16( acc, pairs[3], taps, 3 );
+  }
+  return acc;
+}
+
+// taps: lanes 0 .. P - 1 hold the taps of samples 0 .. P - 1 (the same taps as samples 2 * P - 1 .. P). Horizontal
+// blocks 4 wide keep the general kernels: there the pair adds measured no gain.
+template<int P, bool isVertical, bool isLast>
+void simdInterpolateSym_neon( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
+                              int shift, int offset, const ClpRng& clpRng, const int16x4_t taps )
+{
+  static_assert( P >= 2 && P <= 4, "Supported taps: 4/6/8" );
+  CHECKD( width % 4 != 0, "Width must be a multiple of 4!" );
+
+  const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
+  const int32x4_t invshift = vdupq_n_s32( -shift );
+  const int step           = isVertical ? srcStride : 1;
+
+  do
+  {
+    int col = 0;
+    for( ; col + 8 <= width; col += 8 )
+    {
+      int16x4_t lo[4], hi[4];
+      for( int k = 0; k < P; k++ )
+      {
+        const int16x8_t pair =
+          vaddq_s16( vld1q_s16( &src[col + k * step] ), vld1q_s16( &src[col + ( 2 * P - 1 - k ) * step] ) );
+        lo[k] = vget_low_s16( pair );
+        hi[k] = vget_high_s16( pair );
+      }
+
+      int32x4_t vsuma = mlal_tap_pairs_neon<P>( vdupq_n_s32( offset ), lo, taps );
+      int32x4_t vsumb = mlal_tap_pairs_neon<P>( vdupq_n_s32( offset ), hi, taps );
+
+      vsuma = vshlq_s32( vsuma, invshift );
+      vsumb = vshlq_s32( vsumb, invshift );
+
+      int16x8_t vsum = pack_sum_s32_to_s16x8<isLast>( vsuma, vsumb, vibdimax );
+
+      vst1q_s16( &dst[col], vsum );
+    }
+    if( col != width ) // Last four samples.
+    {
+      int16x4_t pairs[4];
+      for( int k = 0; k < P; k++ )
+      {
+        pairs[k] = vadd_s16( vld1_s16( &src[col + k * step] ), vld1_s16( &src[col + ( 2 * P - 1 - k ) * step] ) );
+      }
+
+      int32x4_t vsuma = mlal_tap_pairs_neon<P>( vdupq_n_s32( offset ), pairs, taps );
+
+      vsuma = vshlq_s32( vsuma, invshift );
+
+      int16x4_t vsum = pack_sum_s32_to_s16x4<isLast>( vsuma, vget_low_s16( vibdimax ) );
+
+      vst1_s16( &dst[col], vsum );
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  } while( --height != 0 );
+}
+
 template<bool isVertical>
 void simdInterpolate_N2_neon( const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height,
                               int shift, int offset, const ClpRng& clpRng, int16_t const* coeff )
@@ -1673,6 +1752,14 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
   {
     CHECKD( width % 4 != 0 && width != 1, "N6 width must be 1 or multiple of 4! width=" << width );
 
+    // The 6 taps are lanes 1 .. 6 of the 8-entry table.
+    if( width % 4 == 0 && ( isVertical || width >= 8 ) && c[1] == c[6] && c[2] == c[5] && c[3] == c[4] )
+    {
+      simdInterpolateSym_neon<3, isVertical, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset,
+                                                      clpRng, vld1_s16( c + 1 ) );
+      return;
+    }
+
     if( width % 4 == 0 )
     {
       if( !isVertical )
@@ -1715,6 +1802,13 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
       return;
     }
 
+    if( width % 4 == 0 && ( isVertical || width >= 8 ) && c[0] == c[7] && c[1] == c[6] && c[2] == c[5] && c[3] == c[4] )
+    {
+      simdInterpolateSym_neon<4, isVertical, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset,
+                                                      clpRng, vld1_s16( c ) );
+      return;
+    }
+
     if( width % 4 == 0 )
     {
       if( !isVertical )
@@ -1733,6 +1827,13 @@ void simdFilter_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* 
   if( N == 4 )
   {
     CHECKD( width % 4 != 0 && width != 2 && width != 1, "N4 width must be 1 or 2 or multiple of 4! width=" << width );
+
+    if( width % 4 == 0 && ( isVertical || width >= 8 ) && c[0] == c[3] && c[1] == c[2] )
+    {
+      simdInterpolateSym_neon<2, isVertical, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset,
+                                                      clpRng, vld1_s16( c ) );
+      return;
+    }
 
     if( width % 4 == 0 )
     {
