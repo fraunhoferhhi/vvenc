@@ -130,6 +130,86 @@ void addAvg_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, u
   }
 }
 
+// The element-wise kernels below compute in 16 bits, which equals C's int arithmetic stored to Pel (the same low 16
+// bits). Widths are multiples of 8; 16 samples per step, then 8.
+
+// dst = 2 * org - other, as removeHighFreq
+static void removeHighFreq8_neon( Pel* dst, int dstStride, const Pel* org, int orgStride, const Pel* other,
+                                  int otherStride, int width, int height )
+{
+  for( ; height > 0; height--, dst += dstStride, org += orgStride, other += otherStride )
+  {
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t o0 = vld1q_s16( org + x );
+      const int16x8_t o1 = vld1q_s16( org + x + 8 );
+      const int16x8_t p0 = vld1q_s16( other + x );
+      const int16x8_t p1 = vld1q_s16( other + x + 8 );
+      vst1q_s16( dst + x, vsubq_s16( vshlq_n_s16( o0, 1 ), p0 ) );
+      vst1q_s16( dst + x + 8, vsubq_s16( vshlq_n_s16( o1, 1 ), p1 ) );
+    }
+    if( x < width )
+    {
+      const int16x8_t o0 = vld1q_s16( org + x );
+      const int16x8_t p0 = vld1q_s16( other + x );
+      vst1q_s16( dst + x, vsubq_s16( vshlq_n_s16( o0, 1 ), p0 ) );
+    }
+  }
+}
+
+// dest = src0 - src1, as subsCore
+static void sub8_neon( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride,
+                       int width, int height )
+{
+  for( ; height > 0; height--, src0 += src0Stride, src1 += src1Stride, dest += destStride )
+  {
+    int x = 0;
+    for( ; x + 16 <= width; x += 16 )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 + x );
+      const int16x8_t a1 = vld1q_s16( src0 + x + 8 );
+      const int16x8_t b0 = vld1q_s16( src1 + x );
+      const int16x8_t b1 = vld1q_s16( src1 + x + 8 );
+      vst1q_s16( dest + x, vsubq_s16( a0, b0 ) );
+      vst1q_s16( dest + x + 8, vsubq_s16( a1, b1 ) );
+    }
+    if( x < width )
+    {
+      const int16x8_t a0 = vld1q_s16( src0 + x );
+      const int16x8_t b0 = vld1q_s16( src1 + x );
+      vst1q_s16( dest + x, vsubq_s16( a0, b0 ) );
+    }
+  }
+}
+
+// dst = ClipPel( src ) of a contiguous block, as copyClipCore; numSamples is a multiple of 8 or exactly 4
+static void copyClip_neon( const Pel* src, Pel* dst, int numSamples, const ClpRng& clpRng )
+{
+  CHECKD( ( numSamples & 7 ) != 0 && numSamples != 4, "numSamples must be a multiple of 8, or exactly 4" );
+
+  const int16x8_t vmin = vdupq_n_s16( clpRng.min() );
+  const int16x8_t vmax = vdupq_n_s16( clpRng.max() );
+  int             n    = 0;
+  for( ; n + 16 <= numSamples; n += 16 )
+  {
+    const int16x8_t a = vld1q_s16( src + n );
+    const int16x8_t b = vld1q_s16( src + n + 8 );
+    vst1q_s16( dst + n, vminq_s16( vmaxq_s16( a, vmin ), vmax ) );
+    vst1q_s16( dst + n + 8, vminq_s16( vmaxq_s16( b, vmin ), vmax ) );
+  }
+  if( n + 8 <= numSamples )
+  {
+    const int16x8_t a = vld1q_s16( src + n );
+    vst1q_s16( dst + n, vminq_s16( vmaxq_s16( a, vmin ), vmax ) );
+  }
+  else if( n < numSamples )
+  {
+    const int16x4_t a = vld1_s16( src + n );
+    vst1_s16( dst + n, vmin_s16( vmax_s16( a, vget_low_s16( vmin ) ), vget_low_s16( vmax ) ) );
+  }
+}
+
 void recoCore_neon( const Pel* src0, const Pel* src1, Pel* dest, int numSamples, const ClpRng& clpRng )
 {
   CHECKD( numSamples != 4 && numSamples != 8 && ( numSamples & 15 ) != 0,
@@ -282,6 +362,9 @@ void PelBufferOps::_initPelBufOpsARM<NEON>()
   addAvg   = addAvg_neon;
   reco     = recoCore_neon;
   addAvg4  = addAvg_strided_neon<4>;
+  removeHighFreq8 = removeHighFreq8_neon;
+  sub8            = sub8_neon;
+  copyClip        = copyClip_neon;
   addAvg8  = addAvg_strided_neon<8>;
   addAvg16 = addAvg_strided_neon<16>;
 }
