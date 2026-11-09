@@ -454,23 +454,59 @@ namespace DQIntern
     // no real context has these bytes (a state's high byte is at most 0x7f), so the first call per channel type builds
     // the tables (and a kept table set is only read after it was built)
     for( Channel& c : channel ) memset( c.ctxStates, 0xff, sizeof( c.ctxStates ) );
+
+    // where equalCoeffCtxStates expects each set of contexts (the end of the last one is checked above)
+    CHECK( Ctx::SigCoeffGroup[ 1 ].Offset - first !=   2 || Ctx::SigFlag[ 0 ].Offset - first !=   4 || Ctx::SigFlag[ 1 ].Offset - first !=  16
+        || Ctx::SigFlag[ 2 ].Offset - first !=  24 || Ctx::SigFlag[ 3 ].Offset - first !=  36 || Ctx::SigFlag[ 4 ].Offset - first !=  44
+        || Ctx::SigFlag[ 5 ].Offset - first !=  56 || Ctx::ParFlag[ 0 ].Offset - first !=  64 || Ctx::ParFlag[ 1 ].Offset - first !=  85
+        || Ctx::GtxFlag[ 0 ].Offset - first !=  96 || Ctx::GtxFlag[ 1 ].Offset - first != 117 || Ctx::GtxFlag[ 2 ].Offset - first != 128
+        || Ctx::GtxFlag[ 3 ].Offset - first != 149, "the coefficient-coding contexts are not where equalCoeffCtxStates reads them" );
   }
 
-  // true when the two spans of context bytes are equal: an OR of the XORed 64-bit words, which the compiler can
-  // vectorize; unlike memcmp it needs no ordering and no library call (whose speed differs between C runtimes).
-  static inline bool equalCoeffCtxStates( const uint8_t* a, const uint8_t* b )
+  // The OR of the XORed 64-bit words of numCtx context models from firstCtx on (0 when they are equal), which the compiler
+  // can vectorize; unlike memcmp it needs no ordering and no library call (whose speed differs between C runtimes). The
+  // last word may overlap the one before it.
+  template<unsigned firstCtx, unsigned numCtx>
+  static inline uint64_t diffOfCtxs( const uint8_t* a, const uint8_t* b )
   {
-    uint64_t diff = 0;
-    for( unsigned i = 0; i < RateEstimator::sm_coeffCtxBytes; i += 8 )
+    static_assert( numCtx * sizeof( BinProbModel ) >= 8, "diffOfCtxs compares at least one 64-bit word" );
+    const unsigned first = firstCtx * unsigned( sizeof( BinProbModel ) );
+    const unsigned last8 = first + numCtx * unsigned( sizeof( BinProbModel ) ) - 8;
+    uint64_t diff = 0, x, y;
+    for( unsigned i = first; i < last8; i += 8 )
     {
-      uint64_t x, y;
       memcpy( &x, a + i, 8 );
       memcpy( &y, b + i, 8 );
       diff |= x ^ y;
     }
-    return diff == 0;
+    memcpy( &x, a + last8, 8 );
+    memcpy( &y, b + last8, 8 );
+    return diff | ( x ^ y );
   }
-  static_assert( RateEstimator::sm_coeffCtxBytes % 8 == 0, "equalCoeffCtxStates compares 64-bit words" );
+
+  // true when the context bytes the tables of this channel type are built from are equal. The contexts of the other
+  // channel type take turns with these ones in the store, so each set is read on its own (at the indices checked in
+  // RateTablesMemo's constructor).
+  static inline bool equalCoeffCtxStates( const uint8_t* a, const uint8_t* b, const ChannelType chType )
+  {
+    if( chType == CH_L )
+    {
+      return ( diffOfCtxs<  0,  2>( a, b )     // SigCoeffGroup[0]
+             | diffOfCtxs<  4, 12>( a, b )     // SigFlag[0]
+             | diffOfCtxs< 24, 12>( a, b )     // SigFlag[2]
+             | diffOfCtxs< 44, 12>( a, b )     // SigFlag[4]
+             | diffOfCtxs< 64, 21>( a, b )     // ParFlag[0]
+             | diffOfCtxs< 96, 21>( a, b )     // GtxFlag[0]
+             | diffOfCtxs<128, 21>( a, b ) ) == 0;   // GtxFlag[2]
+    }
+    return ( diffOfCtxs<  2,  2>( a, b )       // SigCoeffGroup[1]
+           | diffOfCtxs< 16,  8>( a, b )       // SigFlag[1]
+           | diffOfCtxs< 36,  8>( a, b )       // SigFlag[3]
+           | diffOfCtxs< 56,  8>( a, b )       // SigFlag[5]
+           | diffOfCtxs< 85, 11>( a, b )       // ParFlag[1]
+           | diffOfCtxs<117, 11>( a, b )       // GtxFlag[1]
+           | diffOfCtxs<149, 11>( a, b ) ) == 0;     // GtxFlag[3]
+  }
 
   void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                                RateTablesMemo& memo )
@@ -478,12 +514,12 @@ namespace DQIntern
     m_scanId2Pos = tuPars.m_scanId2BlkPos;
 
     // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
-    // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when the bytes are
+    // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when those are
     // unchanged, as they mostly are, the kept tables are still valid. The result is identical to building them every time.
     const ChannelType chType = tuPars.m_chType;
     RateTablesMemo::Channel& kept = memo.channel[ chType ];
     const uint8_t* ctxStates = reinterpret_cast<const uint8_t*>( &fracBitsAccess[ Ctx::SigCoeffGroup[ 0 ].Offset ] );
-    if( !equalCoeffCtxStates( kept.ctxStates, ctxStates ) )
+    if( !equalCoeffCtxStates( kept.ctxStates, ctxStates, chType ) )
     {
       xSetSigSbbFracBits( fracBitsAccess, chType, kept.tables );
       xSetSigFlagBits   ( fracBitsAccess, chType, kept.tables );
