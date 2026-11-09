@@ -1717,6 +1717,15 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     if( !partitioner.isSepTree( *tempCS ) )
     {
       tempCS->lumaCost = m_cRdCost.calcRdCost( tempCS->fracBits, tempCS->dist );
+      // Without EDO the luma cost is a lower bound of the final cost (chroma and the CU's remaining bits only add to
+      // it): a test whose luma cost already reaches the best cost cannot win, so its chroma and tail are skipped.
+      // With EDO the winner test adds both CUs' deblocking offsets (EncModeCtrl::useModeResult), which still lets
+      // some of these tests win, so the full test stays there.
+      if( !m_EDO && bestCS && bestCS->cost < MAX_DOUBLE && tempCS->lumaCost >= bestCS->cost )
+      {
+        m_CABACEstimator->getCtx() = m_CurrCtx->start;
+        return;
+      }
     }
     if (m_pcEncCfg->m_usePbIntraFast && tempCS->dist == MAX_DISTORTION && tempCS->interHad == 0)
     {
