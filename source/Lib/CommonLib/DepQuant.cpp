@@ -129,6 +129,7 @@ namespace DQIntern
         {
           raster2id[scanId2RP[scanId].idx] = scanId;
           sId2NbSbb[scanId].numInv = 0;
+          sId2NbSbb[scanId].invInMask = 0;
         }
 
         for( unsigned scanId = 0; scanId < totalValues; scanId++ )
@@ -175,6 +176,7 @@ namespace DQIntern
             {
               CHECK( sId2NbSbb[begSbb + inPos[k]].numInv >= 5, "" );
               sId2NbSbb[begSbb + inPos[k]].invInPos[sId2NbSbb[begSbb + inPos[k]].numInv++] = scanId & ( groupSize - 1 );
+              sId2NbSbb[begSbb + inPos[k]].invInMask |= uint16_t( 1 << ( scanId & ( groupSize - 1 ) ) );
             }
           }
           {
@@ -433,6 +435,9 @@ namespace DQIntern
         const int nextSbbPosX = nextSbbPos - nextSbbPosY * m_widthInSbb;
         scanInfo.nextSbbRight = ( nextSbbPosX < m_widthInSbb  - 1 ? nextSbbPos + 1            : 0 );
         scanInfo.nextSbbBelow = ( nextSbbPosY < m_heightInSbb - 1 ? nextSbbPos + m_widthInSbb : 0 );
+        // the templates of the next SBB reach maxDist past its last position; the first sbbSize levels of that reach are
+        // this SBB's own, which updateStatesEOS stores, the rest a context copies from its previous one
+        scanInfo.levelsCopySize = std::max<int>( m_scanId2NbInfoOut[nextScanIdx].maxDist - int( m_sbbSize ), 0 );
       }
     }
   }
@@ -623,39 +628,6 @@ namespace DQIntern
       cb.bits[4] = fbGt1.intBits[1] + par0 + fbGt2.intBits[1];
       cb.bits[5] = fbGt1.intBits[1] + par1 + fbGt2.intBits[1];
     }
-  }
-
-  const uint8_t* CommonCtx::updateSbbFlags( const ScanInfo& scanInfo, const int prevId, int stateId, StateMem& curr )
-  {
-    uint8_t*    sbbFlags  = m_currSbbCtx[stateId].sbbFlags;
-    uint8_t*    levels    = m_currSbbCtx[stateId].levels;
-    uint16_t    maxDist   = m_nbInfo[scanInfo.scanIdx - 1].maxDist;
-    uint16_t    sbbSize   = scanInfo.sbbSize;
-    std::size_t setCpSize = ( maxDist > sbbSize ? maxDist - sbbSize : 0 ) * sizeof( uint8_t );
-    if( prevId >= 0 )
-    {
-      ::memcpy( sbbFlags, m_prevSbbCtx[prevId].sbbFlags, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memcpy( levels + scanInfo.scanIdx + sbbSize, m_prevSbbCtx[prevId].levels + scanInfo.scanIdx + sbbSize, setCpSize );
-    }
-    else
-    {
-      ::memset( sbbFlags, 0, scanInfo.numSbb * sizeof( uint8_t ) );
-      ::memset( levels + scanInfo.scanIdx + sbbSize, 0, setCpSize );
-    }
-    sbbFlags[scanInfo.sbbPos] = !!curr.numSig[stateId];
-
-    const int       sigNSbb = ( ( scanInfo.nextSbbRight ? sbbFlags[scanInfo.nextSbbRight] : false ) || ( scanInfo.nextSbbBelow ? sbbFlags[scanInfo.nextSbbBelow] : false ) ? 1 : 0 );
-    curr.refSbbCtxId[stateId] = stateId;
-    const BinFracBits sbbBits = m_sbbFlagBits[sigNSbb];
-
-    curr.sbbBits0[stateId] = sbbBits.intBits[0];
-    curr.sbbBits1[stateId] = sbbBits.intBits[1];
-
-    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[scanInfo.nextSbbBelow + 1] : false ) )
-    {
-      return levels + scanInfo.scanIdx - scanInfo.sbbSize;
-    }
-    return nullptr;
   }
 
   void CommonCtx::updateTemplates( const ScanInfo& scanInfo, const uint8_t* absLevels, int stateId, StateMem& curr ) const
@@ -1486,7 +1458,9 @@ void DepQuant::xDecide( const DQIntern::ScanInfo& scanInfo, const TCoeff absCoef
   else
   {
     /// start inline prequant
-    qIdx = std::max<TCoeff>( 1, std::min<TCoeff>( m_quant.m_maxQIdx, qIdx ) );
+    // at least 1. qIdx is not negative here, and how often it is 0 is hard to predict: no branch for it
+    qIdx  = std::min<TCoeff>( m_quant.m_maxQIdx, qIdx );
+    qIdx += TCoeff( qIdx == 0 );
     int64_t scaledAdd = qIdx * m_quant.m_DistStepAdd - scaledOrg * m_quant.m_DistOrgFact;
 
     PQData  pqData[4];
