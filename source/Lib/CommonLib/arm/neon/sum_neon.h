@@ -259,14 +259,14 @@ static inline int64x2_t pairwise_add_s64x2( const int64x2_t a, const int64x2_t b
 #endif
 }
 
-// true when any lane of v is non-zero (v usually a compare mask)
-static inline bool any_lane_set_u32x4( const uint32x4_t v )
+// the largest of the four lanes of a
+static inline int32_t horizontal_max_s32x4( const int32x4_t a )
 {
 #if REAL_TARGET_AARCH64
-  return vgetq_lane_u64( vreinterpretq_u64_u32( vpmaxq_u32( v, v ) ), 0 ) != 0;
+  return vmaxvq_s32( a );
 #else
-  const uint32x2_t m = vorr_u32( vget_low_u32( v ), vget_high_u32( v ) );
-  return vget_lane_u64( vreinterpret_u64_u32( m ), 0 ) != 0;
+  const int32x2_t m = vmax_s32( vget_low_s32( a ), vget_high_s32( a ) );
+  return vget_lane_s32( vpmax_s32( m, m ), 0 );
 #endif
 }
 

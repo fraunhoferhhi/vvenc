@@ -63,6 +63,20 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// Local any-lane-set reduction over a u32 all-ones/all-zeros compare
+// mask. vpmaxq_u32 is AArch64-only, so this follows the same
+// #if REAL_TARGET_AARCH64 workaround pattern as the pairwise_add_*
+// helpers in sum_neon.h for armv7.
+static inline bool any_lane_set_u32x4( const uint32x4_t v )
+{
+#if REAL_TARGET_AARCH64
+  return vgetq_lane_u64( vreinterpretq_u64_u32( vpmaxq_u32( v, v ) ), 0 ) != 0;
+#else
+  const uint32x2_t m = vorr_u32( vget_low_u32( v ), vget_high_u32( v ) );
+  return vget_lane_u64( vreinterpret_u64_u32( m ), 0 ) != 0;
+#endif
+}
+
 // Mirrors needRdoqCore (Quant.cpp): a reduction over the coefficient
 // buffer that returns true as soon as any coefficient survives
 // quantization. Real call sites always pass a numCoeff that is a

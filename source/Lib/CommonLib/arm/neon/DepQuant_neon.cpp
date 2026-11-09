@@ -450,7 +450,6 @@ void findFirstPos_neon( int& firstTestPos, const TCoeff* tCoeff, const TUParamet
   {
     const int       sbbSize = tuPars.m_sbbSize;
     const ptrdiff_t stride  = tuPars.m_width;
-    const int32x4_t th      = vdupq_n_s32( defaultTh );
 
     // move to the start of the current subblock
     firstTestPos -= sbbSize - 1;
@@ -473,7 +472,7 @@ void findFirstPos_neon( int& firstTestPos, const TCoeff* tCoeff, const TUParamet
       const int32x4_t max01  = vmaxq_s32( vabsq_s32( row0 ), vabsq_s32( row1 ) );
       const int32x4_t max23  = vmaxq_s32( vabsq_s32( row2 ), vabsq_s32( row3 ) );
       const int32x4_t maxAbs = vmaxq_s32( max01, max23 );
-      if( any_lane_set_u32x4( vcgtq_s32( maxAbs, th ) ) )
+      if( horizontal_max_s32x4( maxAbs ) > defaultTh )
       {
         break;
       }
