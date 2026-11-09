@@ -45,12 +45,12 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <cstdlib>
-#include <math.h>
 #include <limits>
 
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/RdCost.h"
+#include "RdCost_neon.h"
 #include "permute_neon.h"
 #include "reverse_neon.h"
 #include "sum_neon.h"
@@ -467,7 +467,7 @@ Distortion xCalcHAD16x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( int )( sad / sqrt( 16.0 * 8 ) * 2 );
+  sad = xScaleHAD( sad, HAD_SCALE_16x8_MULT );
 
   return sad;
 }
@@ -570,7 +570,7 @@ Distortion xCalcHAD8x16_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( uint32_t )( ( ( double )sad / sqrt( 16.0 * 8.0 ) ) * 2.0 );
+  sad = xScaleHAD( sad, HAD_SCALE_16x8_MULT );
 
   return sad;
 }
@@ -642,7 +642,7 @@ Distortion xCalcHAD8x4_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+  sad = xScaleHAD( sad, HAD_SCALE_8x4_MULT );
 
   return sad;
 }
@@ -708,7 +708,7 @@ Distortion xCalcHAD4x8_neon( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
 
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+  sad = xScaleHAD( sad, HAD_SCALE_8x4_MULT );
 
   return sad;
 }
