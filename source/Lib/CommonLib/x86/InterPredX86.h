@@ -956,6 +956,109 @@ static ALWAYS_INLINE const Pel* affineLumaPredict4x4( const InterPredInterpolati
 }
 
 #if USE_AVX2
+// The model terms that do not change from row to row of a CU's sub-blocks, for affineLumaRowRefs_AVX2: the MV change
+// across the 8 sub-blocks of a group (lane k at the centre of sub-block k) and from one group to the next.
+struct AffineLumaRowTerms
+{
+  __m256i horLane, verLane;   // dMvHorX * ( half + 4 k ), dMvHorY * ( half + 4 k )
+  __m256i horGroup, verGroup; // dMvHorX * 32, dMvHorY * 32
+  __m256i colLane;            // 4 k: the sub-block's column in the group
+};
+
+static ALWAYS_INLINE AffineLumaRowTerms affineLumaRowTerms_AVX2( const InterPredInterpolation::AffineLumaCU& cu )
+{
+  const __m256i col  = _mm256_setr_epi32( 0, 4, 8, 12, 16, 20, 24, 28 );
+  const __m256i x    = _mm256_add_epi32( col, _mm256_set1_epi32( AFFINE_MIN_BLOCK_SIZE >> 1 ) );
+  AffineLumaRowTerms t;
+  t.horLane  = _mm256_mullo_epi32( _mm256_set1_epi32( cu.dMvHorX ), x );
+  t.verLane  = _mm256_mullo_epi32( _mm256_set1_epi32( cu.dMvHorY ), x );
+  t.horGroup = _mm256_set1_epi32( cu.dMvHorX * 8 * AFFINE_MIN_BLOCK_SIZE );
+  t.verGroup = _mm256_set1_epi32( cu.dMvHorY * 8 * AFFINE_MIN_BLOCK_SIZE );
+  t.colLane  = col;
+  return t;
+}
+
+// roundAffineMv on 32-bit lanes: ( mv + offset - ( mv >= 0 ) ) >> shift, arithmetic
+static ALWAYS_INLINE __m256i roundAffineMv_AVX2( const __m256i mv, const __m256i offset, const __m128i shift )
+{
+  const __m256i nonNegative = _mm256_cmpgt_epi32( mv, _mm256_set1_epi32( -1 ) );   // -1 where mv >= 0
+  return _mm256_sra_epi32( _mm256_add_epi32( _mm256_add_epi32( mv, offset ), nonNegative ), shift );
+}
+
+// affineLumaSubblockRef for the whole sub-block row h of the CU, 8 sub-blocks per vector: the same MVs (stored for the
+// chroma pass), window clamp, fractions and positions, in the same 32-bit integer arithmetic. The row holds an even
+// number of sub-blocks, 2 to 32 (CU widths are powers of 2 from 8); rows of 2 or 4 use the low lanes and store only
+// their own MVs.
+static ALWAYS_INLINE void affineLumaRowRefs_AVX2( const InterPredInterpolation::AffineLumaCU& cu, const AffineLumaRowTerms& t,
+                                                  int h, AffineLumaSubblockRef* rowRefs )
+{
+  const int     numSub = cu.width / AFFINE_MIN_BLOCK_SIZE;
+  const int     y      = ( AFFINE_MIN_BLOCK_SIZE >> 1 ) + h;
+  const __m128i shift  = _mm_cvtsi32_si128( cu.roundShift );
+  const __m256i offset = _mm256_set1_epi32( 1 << ( cu.roundShift - 1 ) );
+  const __m256i mvMin  = _mm256_set1_epi32( -( 1 << 17 ) );   // clipToStorageBitDepth
+  const __m256i mvMax  = _mm256_set1_epi32( ( 1 << 17 ) - 1 );
+  const __m256i stride = _mm256_set1_epi32( cu.refStride );
+  __m256i hor = _mm256_add_epi32( _mm256_set1_epi32( cu.mvScaleHor + cu.dMvVerX * y ), t.horLane );
+  __m256i ver = _mm256_add_epi32( _mm256_set1_epi32( cu.mvScaleVer + cu.dMvVerY * y ), t.verLane );
+  Mv*     stored = cu.storedMv + ( h / AFFINE_MIN_BLOCK_SIZE ) * cu.storedMvStride;
+
+  for( int i = 0; i < numSub; i += 8 )
+  {
+    const __m256i mvHor = _mm256_min_epi32( mvMax, _mm256_max_epi32( mvMin, roundAffineMv_AVX2( hor, offset, shift ) ) );
+    const __m256i mvVer = _mm256_min_epi32( mvMax, _mm256_max_epi32( mvMin, roundAffineMv_AVX2( ver, offset, shift ) ) );
+
+    // the Mvs { hor, ver } of sub-blocks 0-3 and 4-7 in memory order
+    const __m256i lo    = _mm256_unpacklo_epi32( mvHor, mvVer );   // 0, 1 | 4, 5
+    const __m256i hi    = _mm256_unpackhi_epi32( mvHor, mvVer );   // 2, 3 | 6, 7
+    const __m256i first = _mm256_permute2x128_si256( lo, hi, 0x20 );
+    if( numSub >= 8 )
+    {
+      _mm256_storeu_si256( ( __m256i* ) ( stored + i ), first );
+      _mm256_storeu_si256( ( __m256i* ) ( stored + i + 4 ), _mm256_permute2x128_si256( lo, hi, 0x31 ) );
+    }
+    else if( numSub == 4 )
+    {
+      _mm256_storeu_si256( ( __m256i* ) stored, first );
+    }
+    else
+    {
+      _mm_storeu_si128( ( __m128i* ) stored, _mm256_castsi256_si128( first ) );
+    }
+
+    // the reference fetch: the MV clamped to the window, its fractions, and the sample offsets from cu.ref of the
+    // position and of the nearest integer position
+    const __m256i refHor  = _mm256_min_epi32( _mm256_set1_epi32( cu.horMax ), _mm256_max_epi32( _mm256_set1_epi32( cu.horMin ), mvHor ) );
+    const __m256i refVer  = _mm256_min_epi32( _mm256_set1_epi32( cu.verMax ), _mm256_max_epi32( _mm256_set1_epi32( cu.verMin ), mvVer ) );
+    const __m256i xFrac   = _mm256_and_si256( refHor, _mm256_set1_epi32( 15 ) );
+    const __m256i yFrac   = _mm256_and_si256( refVer, _mm256_set1_epi32( 15 ) );
+    const __m256i column  = _mm256_add_epi32( _mm256_set1_epi32( i * AFFINE_MIN_BLOCK_SIZE ), t.colLane );
+    const __m256i row     = _mm256_add_epi32( _mm256_set1_epi32( h ), _mm256_srai_epi32( refVer, 4 ) );
+    const __m256i pos     = _mm256_add_epi32( _mm256_mullo_epi32( row, stride ), _mm256_add_epi32( column, _mm256_srai_epi32( refHor, 4 ) ) );
+    const __m256i nearest = _mm256_add_epi32( pos, _mm256_add_epi32( _mm256_mullo_epi32( _mm256_srli_epi32( yFrac, 3 ), stride ),
+                                                                     _mm256_srli_epi32( xFrac, 3 ) ) );
+    alignas( 32 ) int posOf[8], nearestOf[8], xFracOf[8], yFracOf[8];
+    _mm256_store_si256( ( __m256i* ) posOf, pos );
+    _mm256_store_si256( ( __m256i* ) nearestOf, nearest );
+    _mm256_store_si256( ( __m256i* ) xFracOf, xFrac );
+    _mm256_store_si256( ( __m256i* ) yFracOf, yFrac );
+    const int count = std::min( 8, numSub - i );
+    for( int k = 0; k < count; k++ )
+    {
+      // field by field: MSVC 19.44 was seen to miscompile a braced aggregate assignment in a loop like this one
+      AffineLumaSubblockRef& r = rowRefs[i + k];
+      r.ref                    = cu.ref + posOf[k];
+      r.nearest                = cu.ref + nearestOf[k];
+      r.xFrac                  = xFracOf[k];
+      r.yFrac                  = yFracOf[k];
+    }
+    hor = _mm256_add_epi32( hor, t.horGroup );
+    ver = _mm256_add_epi32( ver, t.verGroup );
+  }
+}
+#endif
+
+#if USE_AVX2
 // Coefficient pair (k, k + 1) of the left sub-block's filter in the low 128-bit lane, of the right one's in the high lane.
 static ALWAYS_INLINE __m256i coeffPairLanes( const TFilterCoeff* left, const TFilterCoeff* right, int k )
 {
@@ -1132,12 +1235,15 @@ static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu
     {
       dMvRows[r] = _mm256_broadcastsi128_si256( _mm_loadu_si128( ( const __m128i* ) ( cu.dMvXY + 8 * r ) ) );
     }
+    const AffineLumaRowTerms rowTerms = affineLumaRowTerms_AVX2( cu );
+    AffineLumaSubblockRef    rowRefs[MAX_CU_SIZE / AFFINE_MIN_BLOCK_SIZE];
     for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
     {
+      affineLumaRowRefs_AVX2( cu, rowTerms, h, rowRefs );
       for( int w = 0; w < cu.width; w += 2 * AFFINE_MIN_BLOCK_SIZE )
       {
-        const AffineLumaSubblockRef left  = affineLumaSubblockRef( cu, w, h );
-        const AffineLumaSubblockRef right = affineLumaSubblockRef( cu, w + AFFINE_MIN_BLOCK_SIZE, h );
+        const AffineLumaSubblockRef& left  = rowRefs[w / AFFINE_MIN_BLOCK_SIZE];
+        const AffineLumaSubblockRef& right = rowRefs[w / AFFINE_MIN_BLOCK_SIZE + 1];
         __m256i pred[2];
         affineLumaFilter4x4Pair_AVX2<false>( left.ref, right.ref, cu.refStride,
                                       InterpolationFilter::m_lumaFilter4x4[left.xFrac], InterpolationFilter::m_lumaFilter4x4[right.xFrac],
@@ -1157,16 +1263,16 @@ static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu
     // filter's loads then do not wait for each sub-block's MV arithmetic.
     const int             numSub = cu.width / AFFINE_MIN_BLOCK_SIZE;
     AffineLumaSubblockRef rowRefs[MAX_CU_SIZE / AFFINE_MIN_BLOCK_SIZE];
+#if USE_AVX2
+    const AffineLumaRowTerms rowTerms = affineLumaRowTerms_AVX2( cu );
+#endif
     for( int h = 0; h < cu.height; h += AFFINE_MIN_BLOCK_SIZE )
     {
-      for( int i = 0; i < numSub; i++ )
-      {
-        rowRefs[i] = affineLumaSubblockRef( cu, i * AFFINE_MIN_BLOCK_SIZE, h );
-      }
       Pel* dst = cu.dst + h * cu.dstStride;
 #if USE_AVX2
       if( vext >= AVX2 )
       {
+        affineLumaRowRefs_AVX2( cu, rowTerms, h, rowRefs );
         // two sub-blocks per pass, one per 128-bit lane; every row of an affine CU holds an even number of them
         for( int i = 0; i < numSub; i += 2, dst += 2 * AFFINE_MIN_BLOCK_SIZE )
         {
@@ -1183,6 +1289,10 @@ static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu
         continue;
       }
 #endif
+      for( int i = 0; i < numSub; i++ )
+      {
+        rowRefs[i] = affineLumaSubblockRef( cu, i * AFFINE_MIN_BLOCK_SIZE, h );
+      }
       for( int i = 0; i < numSub; i++, dst += AFFINE_MIN_BLOCK_SIZE )
       {
         affineLumaFilter4x4<vext, isLast>( cu.clpRng, rowRefs[i].ref, cu.refStride, dst, cu.dstStride,
