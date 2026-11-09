@@ -327,12 +327,17 @@ static uint64_t AvgHighPass_neon( const int width, const int height, const Pel* 
 // (narrower ones take the C core). The last vector starts at an odd column, so that it pairs the columns as the x86
 // kernel does; its lanes past column width - 2 and those the vectors before it summed are zeroed before the pairs are
 // added.
-static inline uint32x4_t hdHighPassPairs_neon( const uint16_t* src, const uint16_t* srcM1, const uint16x8_t laneMask )
+static inline uint16x8_t hdHighPassAbsDiff_neon( const uint16_t* src, const uint16_t* srcM1 )
 {
   const uint16x8_t s  = vld1q_u16( src );
   const uint16x8_t m1 = vld1q_u16( srcM1 );
-  const uint16x8_t t  = vandq_u16( vabdq_u16( s, m1 ), laneMask );
-  const uint32x4_t p  = vpaddlq_u16( t );
+  return vabdq_u16( s, m1 );
+}
+
+// ( 1 + 3 ( | t0 | + | t1 | ) ) >> 1 for each lane pair of absDiff
+static inline uint32x4_t hdHighPassPairs_neon( const uint16x8_t absDiff )
+{
+  const uint32x4_t p = vpaddlq_u16( absDiff );
   return vrhaddq_u32( p, vshlq_n_u32( p, 1 ) );
 }
 
@@ -346,7 +351,6 @@ static uint64_t HDHighPass_neon( const int width, const int height, const Pel* p
 
   const int        last      = ( width - 9 ) | 1;   // odd, last + 7 <= width - 1
   const uint16x8_t laneIndex = vld1q_u16( qpaLaneIndex16 );
-  const uint16x8_t allLanes  = vdupq_n_u16( 0xffff );
   const uint16x8_t inBlock   = vcleq_u16( laneIndex, vdupq_n_u16( static_cast<uint16_t>( width - 2 - last ) ) );
   uint64x2_t       sum       = vdupq_n_u64( 0 );
 
@@ -358,11 +362,12 @@ static uint64_t HDHighPass_neon( const int width, const int height, const Pel* p
     int             x      = 1;
     for( ; x < last; x += 8 )
     {
-      rowSum = vaddq_u32( rowSum, hdHighPassPairs_neon( src + x, srcM1 + x, allLanes ) );
+      rowSum = vaddq_u32( rowSum, hdHighPassPairs_neon( hdHighPassAbsDiff_neon( src + x, srcM1 + x ) ) );
     }
     const uint16x8_t firstNotSummed = vdupq_n_u16( static_cast<uint16_t>( x - last ) );
     const uint16x8_t notSummed      = vandq_u16( vcgeq_u16( laneIndex, firstNotSummed ), inBlock );
-    rowSum = vaddq_u32( rowSum, hdHighPassPairs_neon( src + last, srcM1 + last, notSummed ) );
+    const uint16x8_t lastAbsDiff    = vandq_u16( hdHighPassAbsDiff_neon( src + last, srcM1 + last ), notSummed );
+    rowSum = vaddq_u32( rowSum, hdHighPassPairs_neon( lastAbsDiff ) );
     sum    = vpadalq_u32( sum, rowSum );
   }
   return horizontal_add_u64x2( sum );
