@@ -84,6 +84,15 @@ static inline void transpose_concat_8x4_s16( int16x8_t a0, int16x8_t a1, int16x8
   b3 = b23.val[1];
 }
 
+// 4x4 transpose of 16-bit rows held two per vector: v[0] = [r0 r1], v[1] = [r2 r3] -> v[0] = [c0 c1], v[1] = [c2 c3]
+static inline void transpose_4x4_s16_paired( int16x8_t* v )
+{
+  const int16x8x2_t z = vzipq_s16( v[0], v[1] );   // r0[i] r2[i] ..., r1[i] r3[i] ...
+  const int16x8x2_t c = vzipq_s16( z.val[0], z.val[1] );
+  v[0] = c.val[0];
+  v[1] = c.val[1];
+}
+
 static inline int16x8x2_t vvenc_vtrnq_s64_to_s16( int16x8_t a0, int16x8_t a1 )
 {
   int16x8x2_t b0;
