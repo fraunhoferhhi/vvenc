@@ -472,8 +472,9 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
       odd[k + 2]  = vget_low_s16( odd23 );
       odd[k + 3]  = vget_high_s16( odd23 );
     }
-    const int16x4_t rangeAll = vorr_s16( vget_low_s16( range ), vget_high_s16( range ) );
-    if( vget_lane_s64( vreinterpret_s64_s16( vshr_n_s16( rangeAll, 15 ) ), 0 ) != 0 )
+    // the high bytes of the eight lanes keep their sign bits
+    const uint64_t highBytes = vget_lane_u64( vreinterpret_u64_s8( vshrn_n_s16( range, 8 ) ), 0 );
+    if( ( highBytes & 0x8080808080808080ull ) != 0 )
     {
       fastFwdCore_neon<N>( tc, src, dst + i, line, 4, cutoff, shift );
       continue;
