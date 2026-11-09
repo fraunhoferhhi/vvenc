@@ -204,6 +204,25 @@ static inline __m128i alfRowDots4( const AlfRow& rowK, const Pel* rows )
 }
 #endif
 
+// The 2 or 3 cells at the end of covariance row k that the 4-wide steps leave over, in one vector add instead of one
+// scalar add each. dots holds the dot products with the last four rows (numCoeff - 4 .. numCoeff - 1), so its last t lanes
+// belong to the t leftover cells; cov points at cell numCoeff - 4 of the row, which holds 13 floats, so the 16-byte access
+// stays inside it. The other lanes are written back as loaded (blend after the add), so every cell gets exactly the one
+// float add of the scalar path. A single leftover cell keeps the scalar path: one add would not pay for four dots.
+static constexpr int ALF_MIN_VECTOR_TAIL = 2;
+
+static inline __m128 alfTailMask( const int numTailCells )
+{
+  // lane j is selected when j >= 4 - numTailCells
+  return _mm_castsi128_ps( _mm_cmpgt_epi32( _mm_setr_epi32( 0, 1, 2, 3 ), _mm_set1_epi32( 3 - numTailCells ) ) );
+}
+
+static inline void alfAddTailCells( alf_float_t* cov, const __m128 dots, const __m128 tailMask )
+{
+  const __m128 old = _mm_loadu_ps( cov );
+  _mm_storeu_ps( cov, _mm_blendv_ps( old, _mm_add_ps( old, dots ), tailMask ) );
+}
+
 template<X86_VEXT vext>
 void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                               const Pel yLocal[4][4], const int numBins )
@@ -215,6 +234,10 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
       const Pel* Elocalk = &GET_ALF_COVAR( ELocal, b0, k, 0 );
 
       const AlfRow rowK = alfLoadRow( Elocalk );
+
+      const int    numTailCells = ( shape.numCoeff - k ) & 3;
+      const int    tailStart    = shape.numCoeff - 4;
+      const __m128 tailMask     = alfTailMask( numTailCells );
 
       for( int b1 = 0; b1 < numBins; b1++ )
       {
@@ -233,6 +256,13 @@ void simdGetPreBlkStatsAccum( AlfCovariance& alfCovariance, const AlfFilterShape
           _mm_storeu_ps( cov, mcov );
 
           cov += 4;
+        }
+
+        if( numTailCells >= ALF_MIN_VECTOR_TAIL )
+        {
+          const __m128 dots = _mm_cvtepi32_ps( alfRowDots4( rowK, &GET_ALF_COVAR( ELocal, b1, tailStart, 0 ) ) );
+          alfAddTailCells( &alfCovariance.E[b0][b1][k][tailStart], dots, tailMask );
+          continue;
         }
 
         for( ; l < shape.numCoeff; l++ )
@@ -281,6 +311,10 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
 
       const AlfRow rowK = alfLoadRow( Elocalk );
 
+      const int    numTailCells = ( shape.numCoeff - k ) & 3;
+      const int    tailStart    = shape.numCoeff - 4;
+      const __m128 tailMask     = alfTailMask( numTailCells );
+
       for( int r1 = 0; r1 < runs.numRuns; r1++ )
       {
         const int firstBin1 = runs.first[r1], endBin1 = firstBin1 + runs.size[r1];
@@ -301,6 +335,20 @@ void simdGetPreBlkStatsAccumEqualBins( AlfCovariance& alfCovariance, const AlfFi
               _mm_storeu_ps( cov, _mm_add_ps( _mm_loadu_ps( cov ), mmaccf ) );
             }
           }
+        }
+
+        if( numTailCells >= ALF_MIN_VECTOR_TAIL )
+        {
+          const __m128 dots = _mm_cvtepi32_ps( alfRowDots4( rowK, &GET_ALF_COVAR( ELocal, firstBin1, tailStart, 0 ) ) );
+
+          for( int b0 = firstBin0; b0 < endBin0; b0++ )
+          {
+            for( int b1 = firstBin1; b1 < endBin1; b1++ )
+            {
+              alfAddTailCells( &alfCovariance.E[b0][b1][k][tailStart], dots, tailMask );
+            }
+          }
+          continue;
         }
 
         for( ; l < shape.numCoeff; l++ )
