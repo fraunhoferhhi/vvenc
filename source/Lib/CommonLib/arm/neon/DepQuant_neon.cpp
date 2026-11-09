@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/DepQuant.h"
 #include "CommonLib/arm/mem_neon.h"
 #include "CommonLib/arm/neon/permute_neon.h"
+#include "CommonLib/arm/neon/sum_neon.h"
 
 #include <string.h>
 
@@ -438,6 +439,66 @@ void checkAllRdCostsOdd1_neon( const ScanPosType spt, const int64_t pq_a_dist, c
   store_s8x4( decisions.prevId, prevId );
 }
 
+// findFirstPos with the control flow of the x86 kernel: whole 4x4 subblocks from the last one backwards until one holds
+// a coefficient above the threshold, then coefficient by coefficient. A subblock's test is one compare of the largest
+// absolute value of its four rows; vabsq_s32 wraps INT32_MIN like _mm_abs_epi32 and the signed max keeps it the
+// smallest, so the test is true exactly when x86's is.
+void findFirstPos_neon( int& firstTestPos, const TCoeff* tCoeff, const TUParameters& tuPars, int defaultTh,
+                        bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight )
+{
+  if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 )
+  {
+    const int       sbbSize = tuPars.m_sbbSize;
+    const ptrdiff_t stride  = tuPars.m_width;
+
+    // move to the start of the current subblock
+    firstTestPos -= sbbSize - 1;
+
+    for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
+    {
+      const ScanElement& sbbStart = tuPars.m_scanId2BlkPos[firstTestPos];
+      if( zeroOutForThres && ( sbbStart.x >= zeroOutWidth || sbbStart.y >= zeroOutHeight ) )
+      {
+        continue;
+      }
+
+      // the subblock is dense: 4 rows of 4 in raster order
+      const TCoeff*   row  = &tCoeff[sbbStart.idx];
+      const int32x4_t row0 = vld1q_s32( row );
+      const int32x4_t row1 = vld1q_s32( row + stride );
+      const int32x4_t row2 = vld1q_s32( row + 2 * stride );
+      const int32x4_t row3 = vld1q_s32( row + 3 * stride );
+
+      const int32x4_t max01  = vmaxq_s32( vabsq_s32( row0 ), vabsq_s32( row1 ) );
+      const int32x4_t max23  = vmaxq_s32( vabsq_s32( row2 ), vabsq_s32( row3 ) );
+      const int32x4_t maxAbs = vmaxq_s32( max01, max23 );
+      if( horizontal_max_s32x4( maxAbs ) > defaultTh )
+      {
+        break;
+      }
+    }
+
+    if( firstTestPos >= 0 )
+    {
+      // a coefficient was found: back to the end of its subblock for the coefficient-wise search
+      firstTestPos += sbbSize - 1;
+    }
+  }
+
+  for( ; firstTestPos >= 0; firstTestPos-- )
+  {
+    const ScanElement& pos = tuPars.m_scanId2BlkPos[firstTestPos];
+    if( zeroOutForThres && ( pos.x >= zeroOutWidth || pos.y >= zeroOutHeight ) )
+    {
+      continue;
+    }
+    if( abs( tCoeff[pos.idx] ) > defaultTh )
+    {
+      break;
+    }
+  }
+}
+
 } // namespace DQInternSimd
 
 template<>
@@ -446,6 +507,7 @@ void DepQuant::_initDepQuantARM<NEON>()
   m_checkAllRdCostsOdd1 = DQInternSimd::checkAllRdCostsOdd1_neon;
   m_updateStates = DQInternSimd::updateStates_neon;
   m_updateStatesEOS = DQInternSimd::updateStatesEOS_neon;
+  m_findFirstPos = DQInternSimd::findFirstPos_neon;
 }
 
 } // namespace vvenc

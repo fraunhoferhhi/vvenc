@@ -259,6 +259,17 @@ static inline int64x2_t pairwise_add_s64x2( const int64x2_t a, const int64x2_t b
 #endif
 }
 
+// the largest of the four lanes of a
+static inline int32_t horizontal_max_s32x4( const int32x4_t a )
+{
+#if REAL_TARGET_AARCH64
+  return vmaxvq_s32( a );
+#else
+  const int32x2_t m = vmax_s32( vget_low_s32( a ), vget_high_s32( a ) );
+  return vget_lane_s32( vpmax_s32( m, m ), 0 );
+#endif
+}
+
 } // namespace vvenc
 
 #endif
