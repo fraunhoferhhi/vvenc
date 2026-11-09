@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
 #include "permute_neon.h"
+#include "sum_neon.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -60,6 +61,178 @@ POSSIBILITY OF SUCH DAMAGE.
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_ALF
 namespace vvenc
 {
+
+// ALF classification of a block, as AdaptiveLoopFilter::deriveClassificationBlk and the x86 kernel
+// simdDeriveClassificationBlk, whose data flow this follows. The first pass forms, for every second row and column,
+// the vertical, horizontal and two diagonal Laplacians | 2 c - a - b | (at most 8190 for 12-bit samples) and sums them
+// per pair of rows and group of 4 columns in 16 bit (at most 8 * 8190, unsigned). The second pass adds those of each
+// 4x4 block in 32 bit and derives its activity class, direction and transpose index with the C code's integer
+// arithmetic: the products d1 * hv0 and hv1 * d0 are compared as uint32, as there.
+void DeriveClassificationBlk_neon( AlfClassifier* classifier, const CPelBuf& srcLuma, const Area& blkDst,
+                                   const Area& blk, const int shift, const int vbCTUHeight, int vbPos )
+{
+  CHECK( ( blk.height & 7 ) != 0, "Block height must be a multiple of 8" );
+  CHECK( ( blk.width & 7 ) != 0, "Block width must be a multiple of 8" );
+  CHECK( ( vbCTUHeight & ( vbCTUHeight - 1 ) ) != 0, "vbCTUHeight must be a power of 2" );
+
+  const ptrdiff_t stride    = srcLuma.stride;
+  const int       heightExt = blk.height + 4;
+  const int       widthExt  = blk.width + 4;
+
+  // per pair of rows and group of 4 columns: the sums of the four Laplacians, in the order V, H, D0, D1
+  uint16_t colSums[( AdaptiveLoopFilter::m_CLASSIFICATION_BLK_SIZE + 4 ) >> 1]
+                  [AdaptiveLoopFilter::m_CLASSIFICATION_BLK_SIZE + 8];
+
+  static const uint16_t evenLanes16[8] = { 0xFFFF, 0, 0xFFFF, 0, 0xFFFF, 0, 0xFFFF, 0 };
+  const uint16x8_t      evenLanes      = vld1q_u16( evenLanes16 );
+
+  for( int i = 0; i < heightExt; i += 2 )
+  {
+    const Pel* row0 = srcLuma.buf + ( i + blk.pos().y - 3 ) * stride + blk.pos().x - 3;
+    const Pel* row1 = row0 + stride;
+    const Pel* row2 = row0 + 2 * stride;
+    const Pel* row3 = row0 + 3 * stride;
+
+    // the rows beyond the virtual boundary are replaced by the nearest row before it
+    const int pos      = blkDst.pos().y - 2 + i;
+    const int posInCTU = pos & ( vbCTUHeight - 1 );
+    if( pos > 0 && posInCTU == vbPos - 2 )
+    {
+      row3 = row2;
+    }
+    else if( pos > 0 && posInCTU == vbPos )
+    {
+      row0 = row1;
+    }
+
+    int16x8_t prev = vdupq_n_s16( 0 );
+    for( int j = 0; j < widthExt; j += 8 )
+    {
+      const int16x8_t x0 = vld1q_s16( row0 + j );
+      const int16x8_t x1 = vld1q_s16( row1 + j );
+      const int16x8_t x2 = vld1q_s16( row2 + j );
+      const int16x8_t x3 = vld1q_s16( row3 + j );
+      const int16x8_t x4 = vld1q_s16( row0 + j + 2 );
+      const int16x8_t x5 = vld1q_s16( row1 + j + 2 );
+      const int16x8_t x6 = vld1q_s16( row2 + j + 2 );
+      const int16x8_t x7 = vld1q_s16( row3 + j + 2 );
+
+      // even lanes: the Laplacians at the sample of row 1, odd lanes: those at the sample of row 2 one column on
+      const int16x8_t nw     = vbslq_s16( evenLanes, x0, x1 );
+      const int16x8_t n      = vbslq_s16( evenLanes, x5, x0 );
+      const int16x8_t ne     = vbslq_s16( evenLanes, x4, x5 );
+      const int16x8_t w      = vbslq_s16( evenLanes, x1, x2 );
+      const int16x8_t e      = vbslq_s16( evenLanes, x5, x6 );
+      const int16x8_t sw     = vbslq_s16( evenLanes, x2, x3 );
+      const int16x8_t s      = vbslq_s16( evenLanes, x7, x2 );
+      const int16x8_t se     = vbslq_s16( evenLanes, x6, x7 );
+      const int16x8_t centre = vbslq_s16( evenLanes, x6, x1 );
+      const int16x8_t c      = vaddq_s16( centre, centre );
+      const int16x8_t d      = vrev32q_s16( c );   // the lanes of each pair swapped
+
+      const int16x8_t ver   = vabdq_s16( c, vaddq_s16( n, s ) );
+      const int16x8_t hor   = vabdq_s16( d, vaddq_s16( w, e ) );
+      const int16x8_t diag0 = vabdq_s16( d, vaddq_s16( nw, se ) );
+      const int16x8_t diag1 = vabdq_s16( d, vaddq_s16( ne, sw ) );
+
+      // per group of two columns V, H, D0, D1 (for columns j ... j + 3 and j + 4 ... j + 7), then the groups of 4
+      // columns, the first one with the last group of the vector before
+      const int16x8_t verHor   = pairwise_add_s16x8( ver, hor );
+      const int16x8_t diags    = pairwise_add_s16x8( diag0, diag1 );
+      const int16x8_t all      = pairwise_add_s16x8( verHor, diags );
+      const int16x8_t withPrev = vbslq_s16( evenLanes, all, prev );
+      vst1q_u16( &colSums[i >> 1][j], vreinterpretq_u16_s16( pairwise_add_s16x8( withPrev, all ) ) );
+      prev = all;
+    }
+  }
+
+  const int32x4_t  negShift = vdupq_n_s32( -shift );
+  const uint16x8_t zero     = vdupq_n_u16( 0 );
+  const uint32x4_t five     = vdupq_n_u32( 5 );
+
+  for( int i = 0; i < ( blk.height >> 1 ); i += 4 )
+  {
+    // two rows of 4x4 blocks; at the virtual boundary their outer pair of rows is left out and the activity scaled
+    const int        z      = ( 2 * i + blkDst.pos().y ) & ( vbCTUHeight - 1 );
+    const int        z2     = ( 2 * i + 4 + blkDst.pos().y ) & ( vbCTUHeight - 1 );
+    const uint32_t   scale1 = ( z == vbPos - 4 || z == vbPos ) ? 96 : 64;
+    const uint32_t   scale2 = ( z2 == vbPos - 4 || z2 == vbPos ) ? 96 : 64;
+    const uint32x4_t scales = vcombine_u32( vdup_n_u32( scale1 ), vdup_n_u32( scale2 ) );
+
+    AlfClassifier* classes1 = &classifier[( i >> 1 ) * ( MAX_CU_SIZE / 4 )];
+    AlfClassifier* classes2 = &classifier[( ( i >> 1 ) + 1 ) * ( MAX_CU_SIZE / 4 )];
+
+    for( int j = 0; j < blk.width; j += 8 )
+    {
+      const uint16x8_t r0 = z == vbPos ? zero : vld1q_u16( &colSums[i][j + 4] );
+      const uint16x8_t r1 = vld1q_u16( &colSums[i + 1][j + 4] );
+      const uint16x8_t r2 = vld1q_u16( &colSums[i + 2][j + 4] );
+      const uint16x8_t r3 = z == vbPos - 4 ? zero : vld1q_u16( &colSums[i + 3][j + 4] );
+      const uint16x8_t r4 = z2 == vbPos ? zero : vld1q_u16( &colSums[i + 2][j + 4] );
+      const uint16x8_t r5 = vld1q_u16( &colSums[i + 3][j + 4] );
+      const uint16x8_t r6 = vld1q_u16( &colSums[i + 4][j + 4] );
+      const uint16x8_t r7 = z2 == vbPos - 4 ? zero : vld1q_u16( &colSums[i + 5][j + 4] );
+
+      // V, H, D0, D1 of the left and right block of each block row
+      const uint32x4_t left1  = vaddq_u32( vaddl_u16( vget_low_u16( r0 ), vget_low_u16( r1 ) ),
+                                           vaddl_u16( vget_low_u16( r2 ), vget_low_u16( r3 ) ) );
+      const uint32x4_t right1 = vaddq_u32( vaddl_u16( vget_high_u16( r0 ), vget_high_u16( r1 ) ),
+                                           vaddl_u16( vget_high_u16( r2 ), vget_high_u16( r3 ) ) );
+      const uint32x4_t left2  = vaddq_u32( vaddl_u16( vget_low_u16( r4 ), vget_low_u16( r5 ) ),
+                                           vaddl_u16( vget_low_u16( r6 ), vget_low_u16( r7 ) ) );
+      const uint32x4_t right2 = vaddq_u32( vaddl_u16( vget_high_u16( r4 ), vget_high_u16( r5 ) ),
+                                           vaddl_u16( vget_high_u16( r6 ), vget_high_u16( r7 ) ) );
+
+      // transposed: one direction per vector, lanes left1, right1, left2, right2
+      const uint32x4x2_t upper = vtrnq_u32( left1, right1 );
+      const uint32x4x2_t lower = vtrnq_u32( left2, right2 );
+      const uint32x4_t sumV  = vcombine_u32( vget_low_u32( upper.val[0] ), vget_low_u32( lower.val[0] ) );
+      const uint32x4_t sumH  = vcombine_u32( vget_low_u32( upper.val[1] ), vget_low_u32( lower.val[1] ) );
+      const uint32x4_t sumD0 = vcombine_u32( vget_high_u32( upper.val[0] ), vget_high_u32( lower.val[0] ) );
+      const uint32x4_t sumD1 = vcombine_u32( vget_high_u32( upper.val[1] ), vget_high_u32( lower.val[1] ) );
+
+      // activity = min( 15, ( sumV + sumH ) * scale >> shift ), class th[activity] = ( activity >= 1 ) +
+      // ( activity >= 2 ) + ( activity >= 7 ) + ( activity >= 15 ), adding the all-ones compare masks as -1
+      const uint32x4_t activity =
+        vminq_u32( vshlq_u32( vmulq_u32( vaddq_u32( sumV, sumH ), scales ), negShift ), vdupq_n_u32( 15 ) );
+      uint32x4_t classIdx = vdupq_n_u32( 0 );
+      classIdx            = vsubq_u32( classIdx, vcgeq_u32( activity, vdupq_n_u32( 1 ) ) );
+      classIdx            = vsubq_u32( classIdx, vcgeq_u32( activity, vdupq_n_u32( 2 ) ) );
+      classIdx            = vsubq_u32( classIdx, vcgeq_u32( activity, vdupq_n_u32( 7 ) ) );
+      classIdx            = vsubq_u32( classIdx, vcgeq_u32( activity, vdupq_n_u32( 15 ) ) );
+
+      const uint32x4_t dirTempHV = vcgtq_u32( sumV, sumH );   // all ones where dirTempHV is 0
+      const uint32x4_t hv1       = vmaxq_u32( sumV, sumH );
+      const uint32x4_t hv0       = vminq_u32( sumV, sumH );
+      const uint32x4_t dirTempD  = vcgtq_u32( sumD0, sumD1 );   // all ones where dirTempD is 0
+      const uint32x4_t d1        = vmaxq_u32( sumD0, sumD1 );
+      const uint32x4_t d0        = vminq_u32( sumD0, sumD1 );
+
+      const uint32x4_t diagonal = vcgtq_u32( vmulq_u32( d1, hv0 ), vmulq_u32( hv1, d0 ) );   // dirIdx 0
+      const uint32x4_t hvd1     = vbslq_u32( diagonal, d1, hv1 );
+      const uint32x4_t hvd0     = vbslq_u32( diagonal, d0, hv0 );
+
+      // + 5 where hvd1 > 2 hvd0, + 5 more where 2 hvd1 > 9 hvd0, and for HV + 10 more where hvd1 > 2 hvd0
+      const uint32x4_t strength1 = vcgtq_u32( hvd1, vaddq_u32( hvd0, hvd0 ) );
+      const uint32x4_t strength2 = vcgtq_u32( vaddq_u32( hvd1, hvd1 ), vaddq_u32( hvd0, vshlq_n_u32( hvd0, 3 ) ) );
+      const uint32x4_t offset    = vandq_u32( strength1, five );
+      const uint32x4_t offsetHV  = vbicq_u32( offset, diagonal );
+      classIdx                   = vaddq_u32( classIdx, offset );
+      classIdx                   = vaddq_u32( classIdx, vandq_u32( strength2, five ) );
+      classIdx                   = vaddq_u32( classIdx, vaddq_u32( offsetHV, offsetHV ) );
+
+      // transposeIdx = 2 * dirTempD + dirTempHV = 3 - 2 * ( dirTempD == 0 ) - ( dirTempHV == 0 )
+      const uint32x4_t transposeIdx =
+        vaddq_u32( vaddq_u32( vdupq_n_u32( 3 ), dirTempHV ), vaddq_u32( dirTempD, dirTempD ) );
+
+      // AlfClassifier { uint8_t classIdx, transposeIdx }: the left and right block of each block row as 32 bit
+      static_assert( sizeof( AlfClassifier ) == 2, "AlfClassifier must be 16 bits wide" );
+      const uint16x4_t classes = vorr_u16( vmovn_u32( classIdx ), vshl_n_u16( vmovn_u32( transposeIdx ), 8 ) );
+      vst1_lane_u32( reinterpret_cast<uint32_t*>( classes1 + ( j >> 2 ) ), vreinterpret_u32_u16( classes ), 0 );
+      vst1_lane_u32( reinterpret_cast<uint32_t*>( classes2 + ( j >> 2 ) ), vreinterpret_u32_u16( classes ), 1 );
+    }
+  }
+}
 
 constexpr int ALF_7x7_VB_FOLD_MIN_DIST = -2;
 constexpr int ALF_7x7_VB_FOLD_MAX_DIST = 3;
@@ -337,6 +510,7 @@ template<>
 void AdaptiveLoopFilter::_initAdaptiveLoopFilterARM<NEON>()
 {
   m_filter7x7Blk[0] = Filter7x7Blk_neon;
+  m_deriveClassificationBlk = DeriveClassificationBlk_neon;
 }
 
 } // namespace vvenc
