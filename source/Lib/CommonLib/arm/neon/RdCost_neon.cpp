@@ -1153,7 +1153,61 @@ static inline Distortion xGetSAD_generic_neon( const DistParam& rcDtParam, const
   CHECKD( ( iRows & ( iRows - 1 ) ) != 0, "Height can only be power of two!" );
 
   Distortion uiSum = 0;
-  if( ( iCols & 15 ) == 0 )
+  if( ( iCols & 31 ) == 0 )
+  {
+    // Four u16 accumulators, one per 8 columns of a 32-column step. Each lane takes iCols / 32 differences per row, so
+    // widening every 32 * 32 / iCols rows keeps it at 32 differences, which fit 16 bits: |org - cur| <= 2047 at up to
+    // 10 bits, and 32 * 2047 < 65536. The rows are a power of two, so the chunks divide them exactly.
+    uint32x4_t sum_u32_lo = vdupq_n_u32( 0 );
+    uint32x4_t sum_u32_hi = vdupq_n_u32( 0 );
+
+    int       sampled_rows = iRows / iSubStep;
+    const int height_limit = std::min( 32 * 32 / iCols, sampled_rows );
+    do
+    {
+      uint16x8_t sum_u16_0 = vdupq_n_u16( 0 );
+      uint16x8_t sum_u16_1 = vdupq_n_u16( 0 );
+      uint16x8_t sum_u16_2 = vdupq_n_u16( 0 );
+      uint16x8_t sum_u16_3 = vdupq_n_u16( 0 );
+
+      int row = 0;
+      do
+      {
+        int col = 0;
+        do
+        {
+          const int16x8_t org_0 = vld1q_s16( piOrg + col + 0 );
+          const int16x8_t org_1 = vld1q_s16( piOrg + col + 8 );
+          const int16x8_t org_2 = vld1q_s16( piOrg + col + 16 );
+          const int16x8_t org_3 = vld1q_s16( piOrg + col + 24 );
+          const int16x8_t cur_0 = vld1q_s16( piCur + col + 0 );
+          const int16x8_t cur_1 = vld1q_s16( piCur + col + 8 );
+          const int16x8_t cur_2 = vld1q_s16( piCur + col + 16 );
+          const int16x8_t cur_3 = vld1q_s16( piCur + col + 24 );
+
+          sum_u16_0 = vvenc_vabaq_s16( sum_u16_0, org_0, cur_0 );
+          sum_u16_1 = vvenc_vabaq_s16( sum_u16_1, org_1, cur_1 );
+          sum_u16_2 = vvenc_vabaq_s16( sum_u16_2, org_2, cur_2 );
+          sum_u16_3 = vvenc_vabaq_s16( sum_u16_3, org_3, cur_3 );
+
+          col += 32;
+        } while( col != iCols );
+
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+      } while( ++row != height_limit );
+
+      sum_u32_lo = vpadalq_u16( sum_u32_lo, sum_u16_0 );
+      sum_u32_hi = vpadalq_u16( sum_u32_hi, sum_u16_1 );
+      sum_u32_lo = vpadalq_u16( sum_u32_lo, sum_u16_2 );
+      sum_u32_hi = vpadalq_u16( sum_u32_hi, sum_u16_3 );
+
+      sampled_rows -= height_limit;
+    } while( sampled_rows != 0 );
+
+    uiSum = horizontal_add_u32x4( vaddq_u32( sum_u32_lo, sum_u32_hi ) );
+  }
+  else if( ( iCols & 15 ) == 0 )
   {
     uint32x4_t sum_u32_lo = vdupq_n_u32( 0 );
     uint32x4_t sum_u32_hi = vdupq_n_u32( 0 );
