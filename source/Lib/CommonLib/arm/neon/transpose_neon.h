@@ -97,6 +97,34 @@ static inline int16x8x2_t vvenc_vtrnq_s64_to_s16( int16x8_t a0, int16x8_t a1 )
   return b0;
 }
 
+// Transposes 8 vectors of 8 16-bit values in place (v[i] lane j -> v[j] lane i), with vtrn and 64-bit halves only.
+static inline void transpose_8x8_s16( int16x8_t* v )
+{
+  const int16x8x2_t t01 = vtrnq_s16( v[0], v[1] );
+  const int16x8x2_t t23 = vtrnq_s16( v[2], v[3] );
+  const int16x8x2_t t45 = vtrnq_s16( v[4], v[5] );
+  const int16x8x2_t t67 = vtrnq_s16( v[6], v[7] );
+
+  // e.g. u02.val[0] holds lane 0 of v[0..3], then lane 4 of v[0..3]; w02 the same of v[4..7]
+  const int32x4x2_t u02 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[0] ), vreinterpretq_s32_s16( t23.val[0] ) );
+  const int32x4x2_t u13 = vtrnq_s32( vreinterpretq_s32_s16( t01.val[1] ), vreinterpretq_s32_s16( t23.val[1] ) );
+  const int32x4x2_t w02 = vtrnq_s32( vreinterpretq_s32_s16( t45.val[0] ), vreinterpretq_s32_s16( t67.val[0] ) );
+  const int32x4x2_t w13 = vtrnq_s32( vreinterpretq_s32_s16( t45.val[1] ), vreinterpretq_s32_s16( t67.val[1] ) );
+
+  const int16x8x2_t c04 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u02.val[0] ), vreinterpretq_s16_s32( w02.val[0] ) );
+  const int16x8x2_t c15 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u13.val[0] ), vreinterpretq_s16_s32( w13.val[0] ) );
+  const int16x8x2_t c26 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u02.val[1] ), vreinterpretq_s16_s32( w02.val[1] ) );
+  const int16x8x2_t c37 = vvenc_vtrnq_s64_to_s16( vreinterpretq_s16_s32( u13.val[1] ), vreinterpretq_s16_s32( w13.val[1] ) );
+  v[0] = c04.val[0];
+  v[1] = c15.val[0];
+  v[2] = c26.val[0];
+  v[3] = c37.val[0];
+  v[4] = c04.val[1];
+  v[5] = c15.val[1];
+  v[6] = c26.val[1];
+  v[7] = c37.val[1];
+}
+
 } // namespace vvenc
 
 #endif
