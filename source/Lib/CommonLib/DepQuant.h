@@ -184,12 +184,12 @@ namespace DQIntern
     void initCtx  ( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                     RateTablesMemo& memo );
 
-    inline const BinFracBits *sigSbbFracBits() const { return m_sigSbbFracBits; }
+    inline const BinFracBits *sigSbbFracBits() const { return m_tables->sigSbb; }
     inline const BinFracBits *sigFlagBits(unsigned stateId) const
     {
-      return m_sigFracBits[std::max(((int) stateId) - 1, 0)];
+      return m_tables->sig[std::max(((int) stateId) - 1, 0)];
     }
-    inline const CoeffFracBits *gtxFracBits() const { return m_gtxFracBits; }
+    inline const CoeffFracBits *gtxFracBits() const { return m_tables->gtx; }
     inline int32_t              lastOffset(unsigned scanIdx) const
     {
       return m_lastBitsX[m_scanId2Pos[scanIdx].x] + m_lastBitsY[m_scanId2Pos[scanIdx].y];
@@ -197,9 +197,6 @@ namespace DQIntern
 
   private:
     void  xSetLastCoeffOffset ( const FracBitsAccess& fracBitsAccess, const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID );
-    void  xSetSigSbbFracBits  ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
-    void  xSetSigFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
-    void  xSetGtxFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType );
 
   public:
     static const unsigned sm_numCtxSetsSig    = 3;
@@ -212,13 +209,23 @@ namespace DQIntern
     static const unsigned sm_numCoeffCtx      = 4 + 60 + 32 + 64;
     static const unsigned sm_coeffCtxBytes    = sm_numCoeffCtx * sizeof( BinProbModel );
 
+    // the tables of one channel type
+    struct RateTables
+    {
+      BinFracBits   sigSbb[ sm_maxNumSigSbbCtx ];
+      BinFracBits   sig   [ sm_numCtxSetsSig ][ sm_maxNumSigCtx ];
+      CoeffFracBits gtx   [ sm_maxNumGtxCtx ];
+    };
+
   private:
+    void  xSetSigSbbFracBits  ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+    void  xSetSigFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+    void  xSetGtxFlagBits     ( const FracBitsAccess& fracBitsAccess, ChannelType chType, RateTables& tables );
+
     const ScanElement * m_scanId2Pos;
     int32_t             m_lastBitsX      [ MAX_TB_SIZEY ];
     int32_t             m_lastBitsY      [ MAX_TB_SIZEY ];
-    BinFracBits         m_sigSbbFracBits [ sm_maxNumSigSbbCtx ];
-    BinFracBits         m_sigFracBits    [ sm_numCtxSetsSig   ][ sm_maxNumSigCtx ];
-    CoeffFracBits       m_gtxFracBits                          [ sm_maxNumGtxCtx ];
+    const RateTables*   m_tables = nullptr;   // the tables of the current block's channel type, held in the memo
   };
 
   // The memo of RateEstimator::initCtx: per channel type, the sig / gtx tables last built for it and the raw bytes of
@@ -229,13 +236,10 @@ namespace DQIntern
     RateTablesMemo();
     struct Channel
     {
-      uint8_t       ctxStates[ RateEstimator::sm_coeffCtxBytes ];
-      BinFracBits   sigSbb   [ RateEstimator::sm_maxNumSigSbbCtx ];
-      BinFracBits   sig      [ RateEstimator::sm_numCtxSetsSig ][ RateEstimator::sm_maxNumSigCtx ];
-      CoeffFracBits gtx      [ RateEstimator::sm_maxNumGtxCtx ];
+      uint8_t                   ctxStates[ RateEstimator::sm_coeffCtxBytes ];
+      RateEstimator::RateTables tables;
     };
     Channel channel[ MAX_NUM_CH ];
-    int     current = -1;   // the channel type whose tables RateEstimator holds now (-1: none yet)
   };
 
   /*================================================================================*/
@@ -250,11 +254,45 @@ namespace DQIntern
     int64_t deltaDist;
   };
 
-  class Quantizer
+  // What Quantizer::initQuantBlock works out for a block.
+  struct QuantBlockParams
+  {
+    // quantization
+    int               m_QShift;
+    int64_t           m_QAdd;
+    int64_t           m_QScale;
+    TCoeff            m_maxQIdx;
+    TCoeff            m_thresLast;
+    TCoeff            m_thresSSbb;
+    TCoeff            m_thresDefault;   // the threshold on absolute coefficients without scaling lists
+    // distortion normalization
+    int               m_DistShift;
+    int64_t           m_DistAdd;
+    int64_t           m_DistStepAdd;
+    int64_t           m_DistOrgFact;
+  };
+
+  // The memo of Quantizer::initQuantBlock with no gValue. With the transform skip path excluded, the result depends
+  // only on the channel type, the block size, QP and lambda, and on values fixed for the sequence, and those four rarely
+  // change from one block of a size to the next. Log2( width ) + Log2( height ) is enough for the size: it gives the transform
+  // shift and whether the sqrt(2) adjustment applies.
+  struct QuantBlockMemo
+  {
+    struct Entry
+    {
+      double           lambda = 0;
+      int              qpDQ   = std::numeric_limits<int>::min();
+      QuantBlockParams params;
+    };
+    Entry entry[ MAX_NUM_CH ][ 2 * 6 + 1 ];
+  };
+
+  class Quantizer : public QuantBlockParams
   {
   public:
     Quantizer() {}
     void   init            ( int dqThrVal ) { m_DqThrVal = dqThrVal; }
+    void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, QuantBlockMemo& memo );
     void   dequantBlock    ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef ) const;
     void   initQuantBlock  ( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue = -1 );
     bool   preQuantCoeff   ( const TCoeff absCoeff, PQData *pqData, int quanCoeff ) const;
@@ -263,19 +301,7 @@ namespace DQIntern
 
     int64_t getQScale      () const { return m_QScale; }
 
-    // quantization
     int               m_DqThrVal;
-    int               m_QShift;
-    int64_t           m_QAdd;
-    int64_t           m_QScale;
-    TCoeff            m_maxQIdx;
-    TCoeff            m_thresLast;
-    TCoeff            m_thresSSbb;
-    // distortion normalization
-    int               m_DistShift;
-    int64_t           m_DistAdd;
-    int64_t           m_DistStepAdd;
-    int64_t           m_DistOrgFact;
   };
 
 #define RICEMAX 32
@@ -432,6 +458,8 @@ private:
   DQIntern::StateMem  m_state_curr;
   DQIntern::StateMem  m_state_skip;
   DQIntern::RateTablesMemo m_rateTablesMemo;   // after the trellis and state arrays: see RateTablesMemo
+  DQIntern::QuantBlockMemo m_quantBlockMemo;
+  int                 m_firstScanIdx = 0;   // the scan position the current block's trellis starts at
 
   // has to be called as a first check, assumes no decision has been made yet!!!
   void( *m_checkAllRdCosts )( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state );
