@@ -65,6 +65,7 @@ namespace DQIntern
   {
     uint8_t   numInv;
     uint8_t   invInPos[5];
+    uint16_t  invInMask;    // the positions of invInPos as bits
   };
   struct NbInfoOut
   {

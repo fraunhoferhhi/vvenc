@@ -559,19 +559,28 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
     std::memset( &curr_opt, 0xCD, sizeof( curr_opt ) );
 
     // The settings below are chosen to satisfy the updateStates() constraints:
-    // insidePos = ( nextInsidePos + 1 ) % sbbSize.
-    // All scanInfo.currNbInfoSbb.invInPos are smaller than insidePos.
+    // insidePos = nextInsidePos + 1: position 0 of an SBB goes to updateStatesEOS().
+    // All scanInfo.currNbInfoSbb.invInPos are different and smaller than insidePos.
     // scanInfo.currNbInfoSbb.numInv <= std::min(insidePos, 5).
     scanInfo.sbbSize = rng.getOneOf<int8_t>( { 4, 16 } );
-    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 1 );
-    scanInfo.insidePos = ( scanInfo.nextInsidePos + 1 ) % scanInfo.sbbSize;
+    scanInfo.nextInsidePos = rng.get( 0, scanInfo.sbbSize - 2 );
+    scanInfo.insidePos = scanInfo.nextInsidePos + 1;
     scanInfo.gtxCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.sigCtxOffsetNext = ( int8_t )rng.get( 0, 200 );
     scanInfo.currNbInfoSbb.numInv = ( uint8_t )rng.get( 0, std::min<int>( scanInfo.insidePos, 5 ) );
 
+    uint8_t positions[16];
+    std::iota( positions, positions + 16, uint8_t( 0 ) );
+    scanInfo.currNbInfoSbb.invInMask = 0;
     for( int inv = 0; inv < 5; ++inv )
     {
-      scanInfo.currNbInfoSbb.invInPos[inv] = ( uint8_t )rng.get( 0, std::max<int>( 0, scanInfo.insidePos - 1 ) );
+      scanInfo.currNbInfoSbb.invInPos[inv] = 0;
+      if( inv < scanInfo.currNbInfoSbb.numInv )
+      {
+        std::swap( positions[inv], positions[rng.get( inv, scanInfo.insidePos - 1 )] );
+        scanInfo.currNbInfoSbb.invInPos[inv] = positions[inv];
+        scanInfo.currNbInfoSbb.invInMask |= uint16_t( 1 << positions[inv] );
+      }
     }
 
     for( int idx = 0; idx < 4; ++idx )
@@ -625,14 +634,16 @@ static bool check_updateStates( DepQuant* ref, DepQuant* opt, unsigned num_cases
       passed =
           compare_value( sstm.str() + " refSbbCtxId", curr_ref.refSbbCtxId[idx], curr_opt.refSbbCtxId[idx] ) && passed;
 
+      // only what is read later: tplAcc and sum1st at the positions still to come, absVal at this one and above
+      const unsigned pos = scanInfo.insidePos;
       passed =
-          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " tplAcc", &curr_ref.tplAcc[0][idx], &curr_opt.tplAcc[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " sum1st", &curr_ref.sum1st[0][idx], &curr_opt.sum1st[0][idx], pos, 1, 4 ) &&
           passed;
       passed =
-          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[0][idx], &curr_opt.absVal[0][idx], 16, 1, 4 ) &&
+          compare_values_2d( sstm.str() + " absVal", &curr_ref.absVal[pos][idx], &curr_opt.absVal[pos][idx], 16 - pos, 1, 4 ) &&
           passed;
 
       if( curr_ref.remRegBins[idx] >= 4 )

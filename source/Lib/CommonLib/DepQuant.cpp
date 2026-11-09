@@ -129,6 +129,7 @@ namespace DQIntern
         {
           raster2id[scanId2RP[scanId].idx] = scanId;
           sId2NbSbb[scanId].numInv = 0;
+          sId2NbSbb[scanId].invInMask = 0;
         }
 
         for( unsigned scanId = 0; scanId < totalValues; scanId++ )
@@ -175,6 +176,7 @@ namespace DQIntern
             {
               CHECK( sId2NbSbb[begSbb + inPos[k]].numInv >= 5, "" );
               sId2NbSbb[begSbb + inPos[k]].invInPos[sId2NbSbb[begSbb + inPos[k]].numInv++] = scanId & ( groupSize - 1 );
+              sId2NbSbb[begSbb + inPos[k]].invInMask |= uint16_t( 1 << ( scanId & ( groupSize - 1 ) ) );
             }
           }
           {
