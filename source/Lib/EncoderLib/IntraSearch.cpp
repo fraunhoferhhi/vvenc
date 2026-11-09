@@ -665,7 +665,8 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
       // determine residual for partition
       cs.initSubStructure(*csTemp, partitioner.chType, cs.area, true);
       int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0)) || disableLFNST) ? -mode : mode;
-      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS);
+      // the contexts are ctxStart's on entry (the reset below follows every call)
+      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS, ctxStart);
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
@@ -704,7 +705,7 @@ bool IntraSearch::xEstIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, 
         }
       }
 
-      // reset context models
+      // reset context models (xIntraCodingLumaQT leaves its last test's contexts, not its best's: nothing reads them)
       m_CABACEstimator->getCtx() = ctxStart;
 
       csTemp->releaseIntermediateData();
@@ -1493,7 +1494,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
 }
 
-void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS)
+void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS, const Ctx& ctxStart)
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 0, _TPROF, P_INTRA_RD_SEARCH_LUMA, &cs, partitioner.chType );
   const UnitArea& currArea  = partitioner.currArea();
@@ -1552,8 +1553,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     Distortion       singleDistTmpLuma = 0;
     uint64_t         singleTmpFracBits = 0;
     double           singleCostTmp     = 0;
-    const TempCtx    ctxStart          (m_CtxCache, m_CABACEstimator->getCtx());
-          TempCtx    ctxBest           (m_CtxCache);
     CodingStructure &saveCS            = *m_pSaveCS[cu.ispMode?0:1];
     TransformUnit *  tmpTU             = nullptr;
     int              bestLfnstIdx      = 0;
@@ -1861,8 +1860,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
               tmpTU->copyComponentFrom(tu, COMP_Y);
             }
-
-            ctxBest = m_CABACEstimator->getCtx();
           }
       
         }
@@ -1924,8 +1921,6 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
 
           tu.copyComponentFrom(*tmpTU, COMP_Y);
         }
-
-        m_CABACEstimator->getCtx() = ctxBest;
       }
 
       // otherwise this would've happened in useSubStructure
