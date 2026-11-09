@@ -1651,19 +1651,26 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
   else if( tu.cs->slice->depQuantEnabled && tu.mtsIdx[compID] != MTS_SKIP )
   {
     //===== scaling matrix ====
-    const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
-    const int         qpPer           = qpDQ / 6;
-    const int         qpRem           = qpDQ - 6 * qpPer;
-    const CompArea    &rect           = tu.blocks[compID];
-    const int         width           = rect.width;
-    const int         height          = rect.height;
-    uint32_t          scalingListType = getScalingListType(tu.cu->predMode, compID);
-    CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
-    const uint32_t    log2TrWidth     = Log2(width);
-    const uint32_t    log2TrHeight    = Log2(height);
-    const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
-    const bool enableScalingLists     = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
-    xQuantDQ( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
+    // without scaling lists there is no table to find, and this runs for every transform block
+    bool enableScalingLists = false;
+    int* quantCoeff         = nullptr;
+    if( getScalingListEnabled() )
+    {
+      const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
+      const int         qpPer           = qpDQ / 6;
+      const int         qpRem           = qpDQ - 6 * qpPer;
+      const CompArea    &rect           = tu.blocks[compID];
+      const int         width           = rect.width;
+      const int         height          = rect.height;
+      uint32_t          scalingListType = getScalingListType(tu.cu->predMode, compID);
+      CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
+      const uint32_t    log2TrWidth     = Log2(width);
+      const uint32_t    log2TrHeight    = Log2(height);
+      const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
+      enableScalingLists                = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
+      quantCoeff                        = Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight);
+    }
+    xQuantDQ( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, quantCoeff );
   }
   else
   {
@@ -1675,19 +1682,26 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
 {
   if( tu.cs->slice->depQuantEnabled && (tu.mtsIdx[compID] != MTS_SKIP) )
   {
-    const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
-    const int         qpPer           = qpDQ / 6;
-    const int         qpRem           = qpDQ - 6 * qpPer;
-    const CompArea    &rect           = tu.blocks[compID];
-    const int         width           = rect.width;
-    const int         height          = rect.height;
-    uint32_t          scalingListType = getScalingListType(tu.cu->predMode, compID);
-    CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
-    const uint32_t    log2TrWidth    = Log2(width);
-    const uint32_t    log2TrHeight   = Log2(height);
-    const bool isLfnstApplied        = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
-    const bool enableScalingLists    = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
-    xDequantDQ( tu, dstCoeff, compID, cQP, enableScalingLists, Quant::getDequantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
+    // without scaling lists there is no table to find, and this runs for every transform block
+    bool enableScalingLists = false;
+    int* dequantCoeff       = nullptr;
+    if( getScalingListEnabled() )
+    {
+      const int         qpDQ            = cQP.Qp(tu.mtsIdx[compID]==MTS_SKIP) + 1;
+      const int         qpPer           = qpDQ / 6;
+      const int         qpRem           = qpDQ - 6 * qpPer;
+      const CompArea    &rect           = tu.blocks[compID];
+      const int         width           = rect.width;
+      const int         height          = rect.height;
+      uint32_t          scalingListType = getScalingListType(tu.cu->predMode, compID);
+      CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
+      const uint32_t    log2TrWidth     = Log2(width);
+      const uint32_t    log2TrHeight    = Log2(height);
+      const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
+      enableScalingLists                = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
+      dequantCoeff                      = Quant::getDequantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight);
+    }
+    xDequantDQ( tu, dstCoeff, compID, cQP, enableScalingLists, dequantCoeff );
   }
   else
   {
