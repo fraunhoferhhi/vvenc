@@ -45,7 +45,6 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <arm_neon.h>
-#include <math.h>
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/RdCost.h"
@@ -362,7 +361,7 @@ Distortion xCalcHAD8x4_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+  sad = xScaleHAD( sad, HAD_SCALE_8x4_MULT );
 
   return sad;
 }
@@ -430,7 +429,7 @@ Distortion xCalcHAD4x8_sve2( const Pel* piOrg, const Pel* piCur, const ptrdiff_t
   sad <<= 1; // Apply the deferred doubling from the last butterfly.
   sad -= absDC;
   sad += absDC >> 2;
-  sad = ( uint32_t )( ( double )sad / sqrt( 4.0 * 8.0 ) * 2.0 );
+  sad = xScaleHAD( sad, HAD_SCALE_8x4_MULT );
 
   return sad;
 }
