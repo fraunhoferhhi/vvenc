@@ -476,54 +476,13 @@ namespace vvenc {
 
       const TCoeff lvl0 = pqData[0].absLevel, lvl1 = pqData[1].absLevel, lvl2 = pqData[2].absLevel, lvl3 = pqData[3].absLevel;
 
-#if USE_AVX2
-      static_assert( sizeof( state.m_gtxFracBitsArray[0] ) == 24, "CoeffFracBits has to be 6 x int32_t" );
-      static_assert( sizeof( state.m_gtxFracBitsArray[0].bits[0] ) == 4, "bits has to be int32_t" );
-
-      __m128i absLvl = _mm_setr_epi32( lvl0, lvl1, lvl2, lvl3 );
-      __m128i cffs   = _mm_loadu_si32( ( const void* ) state.ctx.cff );
-      cffs           = _mm_cvtepi8_epi32( cffs );
-      cffs           = _mm_slli_epi32( cffs, 1 );
-      cffs           = _mm_add_epi32 ( cffs, _mm_slli_epi32( cffs, 1 ) ); // 6 x cff, is the CoeffFracBits offset in multiples of int32_t
-
-      __m128i idxA   = _mm_shuffle_epi32( absLvl, 0 + ( 0 << 2 ) + ( 3 << 4 ) + ( 3 << 6 ) );
-      __m128i idxB   = _mm_shuffle_epi32( absLvl, 2 + ( 2 << 2 ) + ( 1 << 4 ) + ( 1 << 6 ) );
-      idxA           = _mm_add_epi32( idxA, cffs );
-      idxB           = _mm_add_epi32( idxB, cffs );
-
-      addA           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxA, 4 );
-      addB           = _mm_i32gather_epi32( ( const int32_t* ) state.m_gtxFracBitsArray, idxB, 4 );
-#else
-      {
-        // coeff context is indepndent of state
-        auto& base = state.m_gtxFracBitsArray;
-
-        int32_t cffBitsArr[4] =
-        {
-          base[state.ctx.cff[0]].bits[lvl2],
-          base[state.ctx.cff[1]].bits[lvl2],
-          base[state.ctx.cff[2]].bits[lvl1],
-          base[state.ctx.cff[3]].bits[lvl1],
-        };
-
-        addB = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-      }
-
-      {
-        // coeff context is indepndent of state
-        auto& base = state.m_gtxFracBitsArray;
-
-        int32_t cffBitsArr[4] =
-        {
-          base[state.ctx.cff[0]].bits[lvl0],
-          base[state.ctx.cff[1]].bits[lvl0],
-          base[state.ctx.cff[2]].bits[lvl3],
-          base[state.ctx.cff[3]].bits[lvl3],
-        };
-
-        addA  = _mm_loadu_si128( ( const __m128i* ) cffBitsArr );
-      }
-#endif
+      // plain loads and inserts: a gather is slower on many cores, and storing to an array and loading it as one stalls
+      const DQIntern::CoeffFracBits& cff0 = state.m_gtxFracBitsArray[state.ctx.cff[0]];
+      const DQIntern::CoeffFracBits& cff1 = state.m_gtxFracBitsArray[state.ctx.cff[1]];
+      const DQIntern::CoeffFracBits& cff2 = state.m_gtxFracBitsArray[state.ctx.cff[2]];
+      const DQIntern::CoeffFracBits& cff3 = state.m_gtxFracBitsArray[state.ctx.cff[3]];
+      addA = _mm_setr_epi32( cff0.bits[lvl0], cff1.bits[lvl0], cff2.bits[lvl3], cff3.bits[lvl3] );
+      addB = _mm_setr_epi32( cff0.bits[lvl2], cff1.bits[lvl2], cff2.bits[lvl1], cff3.bits[lvl1] );
 
       if( spt == DQIntern::SCAN_ISCSBB )
       {
