@@ -497,8 +497,15 @@ public:
 private:
   void    xQuantDQ          ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff );
   void    xDequantDQ        ( const TransformUnit& tu, CoeffBuf& recCoeff, const ComponentID compID, const QpParam& cQP, bool enableScalingLists, int* quantCoeff );
+  // DepQuantDecide.h: templates on the set of per-coefficient kernels (PointerKernels in DepQuant.cpp, one per x86 SIMD level)
+  template<class Kernels>
   void    xDecideAndUpdate  ( const TCoeff absCoeff, const DQIntern::ScanInfo& scanInfo, bool zeroOut, int quantCoeff);
+  template<class Kernels>
   void    xDecide           ( const DQIntern::ScanInfo &scanInfo, const TCoeff absCoeff, const int lastOffset, DQIntern::Decisions &decisions, bool zeroOut, int quantCoeff );
+  template<class Kernels>
+  static void xPopulateTrellis( DepQuant& dq, const DQIntern::TUParameters& tuPars, const int firstTestPos, const TCoeff* tCoeff,
+                                const bool zeroOut, const int effWidth, const int effHeight, const int quantCoeff );
+  struct PointerKernels;
 
   DQIntern::CommonCtx m_commonCtx;
   std::shared_ptr<DQIntern::Rom>
@@ -531,6 +538,9 @@ public:
   void( *m_updateStates )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, DQIntern::StateMem& curr );
   void( *m_updateStatesEOS )( const DQIntern::ScanInfo& scanInfo, const DQIntern::Decisions& decisions, const DQIntern::StateMem& skip, DQIntern::StateMem& curr, DQIntern::CommonCtx& commonCtx );
   void( *m_findFirstPos )( int& firstTestPos, const TCoeff* tCoeff, const DQIntern::TUParameters& tuPars, int defaultTh, bool zeroOutForThres, int zeroOutWidth, int zeroOutHeight );
+  // xPopulateTrellis with the kernels of the SIMD level in use; without scaling lists the only indirect call of a block's trellis
+  void( *m_populateTrellis )( DepQuant& dq, const DQIntern::TUParameters& tuPars, const int firstTestPos, const TCoeff* tCoeff,
+                              const bool zeroOut, const int effWidth, const int effHeight, const int quantCoeff );
 };
 
 } // namespace vvenc
