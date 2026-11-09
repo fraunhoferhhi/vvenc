@@ -3414,7 +3414,12 @@ void EncAdaptiveLoopFilter::getFrameStat( AlfCovariance* frameCov, AlfCovariance
       {
         for( int classIdx = 0; classIdx < numClasses; classIdx++ )
         {
-          frameCov[classIdx] += ctbCov[ctuIdx][classIdx];
+          // a class without samples in this ASU holds only zeros (all0), so adding it changes nothing: skip its up to
+          // 4x4 bin pairs of 13x13 sums. Often most luma classes of an ASU are empty.
+          if( !ctbCov[ctuIdx][classIdx].all0 )
+          {
+            frameCov[classIdx] += ctbCov[ctuIdx][classIdx];
+          }
         }
       }
     }
