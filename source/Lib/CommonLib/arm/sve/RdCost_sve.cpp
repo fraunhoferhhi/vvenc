@@ -140,10 +140,88 @@ Distortion xGetSADwMask_sve( const DistParam& rcDtParam )
   return sum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
 }
 
+// The squared differences of one vector of 8, added to acc in one 16-bit dot product (64-bit lanes).
+static inline int64x2_t sseAccumulate8_sve( const Pel* org, const Pel* cur, const int64x2_t acc )
+{
+  const int16x8_t o    = vld1q_s16( org );
+  const int16x8_t c    = vld1q_s16( cur );
+  const int16x8_t diff = vsubq_s16( o, c );
+  return vvenc_sdotq_s16( acc, diff, diff );
+}
+
+// DF_SSE8 .. DF_SSE128 as xGetSSE_NxN_neon, with each vector's eight squares added in one dot product into four
+// independent accumulators: the exact sum in 64 bits, as the C code. The NEON kernel's wrapping 32-bit lanes give the
+// same sum for samples of up to 10 bits (a lane of a 128 x 128 block takes 512 squares below 2^20), but not for deeper
+// samples, where this kernel stays exact.
+template<int iWidth>
+Distortion xGetSSE_NxN_sve( const DistParam& rcDtParam )
+{
+  const Pel*     org       = rcDtParam.org.buf;
+  const Pel*     cur       = rcDtParam.cur.buf;
+  const int      rows      = rcDtParam.org.height;
+  const int      orgStride = rcDtParam.org.stride;
+  const int      curStride = rcDtParam.cur.stride;
+  const uint32_t shift     = DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) << 1;
+
+  int64x2_t acc[4];
+  for( int k = 0; k < 4; k++ )
+  {
+    acc[k] = vdupq_n_s64( 0 );
+  }
+
+  if( iWidth == 8 || iWidth == 16 )
+  {
+    // two rows per step: 2 (W 8) or 4 (W 16) chains
+    int y = 0;
+    for( ; y + 2 <= rows; y += 2, org += 2 * orgStride, cur += 2 * curStride )
+    {
+      acc[0] = sseAccumulate8_sve( org, cur, acc[0] );
+      acc[1] = sseAccumulate8_sve( org + orgStride, cur + curStride, acc[1] );
+      if( iWidth == 16 )
+      {
+        acc[2] = sseAccumulate8_sve( org + 8, cur + 8, acc[2] );
+        acc[3] = sseAccumulate8_sve( org + orgStride + 8, cur + curStride + 8, acc[3] );
+      }
+    }
+    if( y < rows )
+    {
+      acc[0] = sseAccumulate8_sve( org, cur, acc[0] );
+      if( iWidth == 16 )
+      {
+        acc[2] = sseAccumulate8_sve( org + 8, cur + 8, acc[2] );
+      }
+    }
+  }
+  else
+  {
+    // one row per step, the vectors of 8 in turn on 4 chains
+    for( int y = 0; y < rows; y++, org += orgStride, cur += curStride )
+    {
+      for( int x = 0; x < iWidth; x += 32 )
+      {
+        acc[0] = sseAccumulate8_sve( org + x + 0, cur + x + 0, acc[0] );
+        acc[1] = sseAccumulate8_sve( org + x + 8, cur + x + 8, acc[1] );
+        acc[2] = sseAccumulate8_sve( org + x + 16, cur + x + 16, acc[2] );
+        acc[3] = sseAccumulate8_sve( org + x + 24, cur + x + 24, acc[3] );
+      }
+    }
+  }
+
+  const int64x2_t sum = vaddq_s64( vaddq_s64( acc[0], acc[1] ), vaddq_s64( acc[2], acc[3] ) );
+  return Distortion( horizontal_add_s64x2( sum ) ) >> shift;
+}
+
 template<>
 void RdCost::_initRdCostARM<SVE>()
 {
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_sve;
+
+  // DF_SSE4 stays with xGetSSE_NxN_neon<4>
+  m_afpDistortFunc[0][DF_SSE8]   = xGetSSE_NxN_sve<8>;
+  m_afpDistortFunc[0][DF_SSE16]  = xGetSSE_NxN_sve<16>;
+  m_afpDistortFunc[0][DF_SSE32]  = xGetSSE_NxN_sve<32>;
+  m_afpDistortFunc[0][DF_SSE64]  = xGetSSE_NxN_sve<64>;
+  m_afpDistortFunc[0][DF_SSE128] = xGetSSE_NxN_sve<128>;
 }
 
 #endif // defined( TARGET_SIMD_ARM )
