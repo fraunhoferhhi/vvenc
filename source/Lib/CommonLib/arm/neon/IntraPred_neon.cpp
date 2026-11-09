@@ -397,12 +397,78 @@ static void xPredIntraPlanar_neon( PelBuf& pDst, const CPelBuf& pSrc )
   }
 }
 
+// IntraAnglePDPC's blend of 8 samples: pred + vqrdmulh( left - pred, wL << 9 ) = pred + ( ( left - pred ) * wL + 32 ) >> 6
+// exactly, as in intraPdpcRow_neon (weights at most 2^14: no saturation); weight 0 keeps the sample
+static inline int16x8_t pdpcBlend_neon( const int16x8_t pred, const int16x8_t left, const int16x8_t weight )
+{
+  return vaddq_s16( pred, vqrdmulhq_s16( vsubq_s16( left, pred ), weight ) );
+}
+
+// IntraAnglePDPC (vertical angular modes): for x < n = min( 3 << scale, width ),
+//   pred[y][x] += ( wL( x ) * ( refSide[y + off( x ) + 1] - pred[y][x] ) + 32 ) >> 6,
+// off( x ) = ( ( x + 1 ) * invAngle + 256 ) >> 9, wL( x ) = 32 >> ( 2 * x >> scale ). Column x's left samples are
+// consecutive down the block, so per 8 rows each column's samples are one load and a transpose gives each row's left
+// samples. Lanes from n on have weight 0 and load column n - 1's samples. Reads: the samples C reads, and for height
+// 4 the 4 after them, inside the extended reference rows (IntraPrediction::ExtRefRows) like the x86 kernel's loads.
+// width >= 4, height 4 or a multiple of 8.
+static void IntraAnglePDPC_neon( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height,
+                                 int scale, int invAngle )
+{
+  // wL << 9 of columns 0 .. 15 at each scale (0 from column 3 << scale on)
+  static const int16_t weights[3][16] = {
+    { 32 << 9,  8 << 9,  2 << 9,       0,      0,      0,      0,      0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 32 << 9, 16 << 9,  8 << 9,  4 << 9, 2 << 9, 1 << 9,      0,      0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 32 << 9, 32 << 9, 16 << 9, 16 << 9, 8 << 9, 8 << 9, 4 << 9, 4 << 9, 2 << 9, 2 << 9, 1 << 9, 1 << 9, 0, 0, 0, 0 } };
+  CHECKD( width < 4 || ( height != 4 && height % 8 != 0 ), "unexpected PDPC block size" );
+
+  const int n          = std::min( 3 << scale, width );
+  const int tileHeight = std::min( height, 8 );
+  // columns 0 .. 7, and 8 .. 11 for n = 12
+  for( int x0 = 0; x0 < n; x0 += 8 )
+  {
+    const int  count = std::min( n - x0, 8 );
+    const Pel* left[8];
+    for( int i = 0; i < 8; i++ )
+    {
+      left[i] = refSide + 1 + ( ( ( x0 + std::min( i, count - 1 ) + 1 ) * invAngle + 256 ) >> 9 );
+    }
+    const int16x8_t weight = vld1q_s16( &weights[scale][x0] );
+
+    for( int y = 0; y < height; y += tileHeight )
+    {
+      // l[i] = column x0 + i's left samples of rows y .. y + 7, then after the transpose l[r] = row y + r's
+      int16x8_t l[8];
+      for( int i = 0; i < 8; i++ )
+      {
+        l[i] = vld1q_s16( left[i] + y );
+      }
+      transpose_8x8_s16( l );
+
+      Pel* dst = pDsty + y * dstStride + x0;
+      for( int r = 0; r < tileHeight; r++, dst += dstStride )
+      {
+        if( width == 4 )
+        {
+          const int16x4_t pred = vld1_s16( dst );
+          vst1_s16( dst, vget_low_s16( pdpcBlend_neon( vcombine_s16( pred, pred ), l[r], weight ) ) );
+        }
+        else
+        {
+          const int16x8_t pred = vld1q_s16( dst );
+          vst1q_s16( dst, pdpcBlend_neon( pred, l[r], weight ) );
+        }
+      }
+    }
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
   IntraPredAngleLuma    = IntraPredAngleLuma_neon;
   IntraPredAngleLumaHor = IntraPredAngleLumaHor_neon;
   xPredIntraPlanar      = xPredIntraPlanar_neon;
+  IntraAnglePDPC        = IntraAnglePDPC_neon;
 }
 
 } // namespace vvenc
