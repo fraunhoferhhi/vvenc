@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "TrQuant.h"
 #include "TrQuant_EMT.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 #include <cstdint>
 #include <cstring>
@@ -177,6 +178,90 @@ void roundClip_neon<8>( TCoeff* dst, unsigned width, unsigned height, unsigned s
 
     dst += stride;
   } while( --height != 0 );
+}
+
+// Inverse DCT-II of 8 points (TCoeffOps::fastInvDCT2[2]), as fastInverseDCT2_B8_Core: 4 lines at a time, one per
+// lane. The sums are C's in 32 bits: the inputs are 16-bit coefficients and the matrix entries at most 89, so they stay
+// below 2^25 in magnitude; the even part's entries 64 and -64 are shifts by 6. C's ( d + add ) >> shift is a rounding
+// shift (it cannot overflow either), then the clip to the output range.
+
+// lines j..j+3: s[r] = src[r * line + j..j+3], out[8 * i + r] = result r of line j + i
+static inline void invDCT2_B8_4lines_neon( const TMatrixCoeff* iT, const TCoeff* src, int line, TCoeff* out,
+                                           const int32x4_t shift, const int32x4_t vmin, const int32x4_t vmax )
+{
+  int32x4_t s[8];
+  for( int r = 0; r < 8; r++ )
+  {
+    s[r] = vld1q_s32( src + r * line );
+  }
+
+  int32x4_t O[4];
+  for( int k = 0; k < 4; k++ )
+  {
+    O[k] = vmulq_n_s32( s[1], iT[1 * 8 + k] );
+    O[k] = vmlaq_n_s32( O[k], s[3], iT[3 * 8 + k] );
+    O[k] = vmlaq_n_s32( O[k], s[5], iT[5 * 8 + k] );
+    O[k] = vmlaq_n_s32( O[k], s[7], iT[7 * 8 + k] );
+  }
+  const int32x4_t EO0 = vmlaq_n_s32( vmulq_n_s32( s[2], iT[2 * 8 + 0] ), s[6], iT[6 * 8 + 0] );
+  const int32x4_t EO1 = vmlaq_n_s32( vmulq_n_s32( s[2], iT[2 * 8 + 1] ), s[6], iT[6 * 8 + 1] );
+  const int32x4_t EE0 = vshlq_n_s32( vaddq_s32( s[0], s[4] ), 6 );
+  const int32x4_t EE1 = vshlq_n_s32( vsubq_s32( s[0], s[4] ), 6 );
+  const int32x4_t E[4] = { vaddq_s32( EE0, EO0 ), vaddq_s32( EE1, EO1 ), vsubq_s32( EE1, EO1 ), vsubq_s32( EE0, EO0 ) };
+
+  int32x4_t d[8];
+  for( int k = 0; k < 4; k++ )
+  {
+    d[k]     = vaddq_s32( E[k], O[k] );
+    d[k + 4] = vsubq_s32( E[3 - k], O[3 - k] );
+  }
+  for( int r = 0; r < 8; r++ )
+  {
+    d[r] = vminq_s32( vmaxq_s32( vrshlq_s32( d[r], shift ), vmin ), vmax );
+  }
+
+  // d[r] holds result r of the 4 lines: after the transposes, d[i] and d[i + 4] are line j + i's 8 results
+  transpose_4x4_s32( d[0], d[1], d[2], d[3] );
+  transpose_4x4_s32( d[4], d[5], d[6], d[7] );
+  for( int i = 0; i < 4; i++ )
+  {
+    vst1q_s32( out + 8 * i, d[i] );
+    vst1q_s32( out + 8 * i + 4, d[i + 4] );
+  }
+}
+
+static void fastInverseDCT2_B8_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine, int iSkipLine2,
+                                     const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  const TMatrixCoeff* iT = g_trCoreDCT2P8[TRANSFORM_INVERSE][0];
+  CHECKD( iT[0] != 64 || iT[4 * 8] != 64 || iT[1] != 64 || iT[4 * 8 + 1] != -64, "unexpected DCT-II coefficients" );
+  const int32x4_t vshift      = vdupq_n_s32( -shift );
+  const int32x4_t vmin        = vdupq_n_s32( outputMinimum );
+  const int32x4_t vmax        = vdupq_n_s32( outputMaximum );
+  const int       reducedLine = line - iSkipLine;
+
+  int j = 0;
+  for( ; j + 4 <= reducedLine; j += 4 )
+  {
+    invDCT2_B8_4lines_neon( iT, src + j, line, dst + 8 * j, vshift, vmin, vmax );
+  }
+  if( j < reducedLine )
+  {
+    // the last 1 to 3 lines through a copy padded with zero lines
+    TCoeff paddedSrc[8 * 4] = { 0 };
+    TCoeff paddedDst[8 * 4];
+    for( int r = 0; r < 8; r++ )
+    {
+      memcpy( paddedSrc + 4 * r, src + r * line + j, ( reducedLine - j ) * sizeof( TCoeff ) );
+    }
+    invDCT2_B8_4lines_neon( iT, paddedSrc, 4, paddedDst, vshift, vmin, vmax );
+    memcpy( dst + 8 * j, paddedDst, 8 * ( reducedLine - j ) * sizeof( TCoeff ) );
+  }
+
+  if( iSkipLine )
+  {
+    memset( dst + 8 * reducedLine, 0, 8 * iSkipLine * sizeof( TCoeff ) );
+  }
 }
 
 template<unsigned trSize>
@@ -379,6 +464,8 @@ static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff*
 template<>
 void TCoeffOps::_initTCoeffOpsARM<NEON>()
 {
+  fastInvDCT2[ 2 ] = fastInverseDCT2_B8_neon;
+
   cpyCoeff4  = cpyCoeff_neon<4>;
   cpyCoeff8  = cpyCoeff_neon<8>;
   roundClip4 = roundClip_neon<4>;

@@ -125,6 +125,19 @@ static inline void transpose_8x8_s16( int16x8_t* v )
   v[7] = c37.val[1];
 }
 
+// Transpose 32-bit 4x4 in place: a0 becomes the old a0[0] a1[0] a2[0] a3[0], a1 the old lanes 1, and so on.
+static inline void transpose_4x4_s32( int32x4_t& a0, int32x4_t& a1, int32x4_t& a2, int32x4_t& a3 )
+{
+  // a01.val[0]: a0[0] a1[0] a0[2] a1[2], a01.val[1]: a0[1] a1[1] a0[3] a1[3]; a23 alike
+  const int32x4x2_t a01 = vtrnq_s32( a0, a1 );
+  const int32x4x2_t a23 = vtrnq_s32( a2, a3 );
+
+  a0 = vcombine_s32( vget_low_s32( a01.val[0] ), vget_low_s32( a23.val[0] ) );
+  a1 = vcombine_s32( vget_low_s32( a01.val[1] ), vget_low_s32( a23.val[1] ) );
+  a2 = vcombine_s32( vget_high_s32( a01.val[0] ), vget_high_s32( a23.val[0] ) );
+  a3 = vcombine_s32( vget_high_s32( a01.val[1] ), vget_high_s32( a23.val[1] ) );
+}
+
 } // namespace vvenc
 
 #endif
