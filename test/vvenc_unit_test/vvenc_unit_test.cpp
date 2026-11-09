@@ -528,6 +528,49 @@ static bool check_checkAllRdCostsOdd1( DepQuant* ref, DepQuant* opt, unsigned nu
     }
   }
 
+  // Test 4: every combination of "decision k takes its second candidate". With all bits 0 and SCAN_ISCSBB, decision 0
+  // takes it if rdCost[0] - rdCost[1] > pq_b_dist and decision 2 if rdCost[0] - rdCost[1] > -pq_b_dist; decisions 1 and 3
+  // the same with rdCost[2] - rdCost[3] and pq_a_dist. Each row gives one of the four outcomes of such a pair:
+  // ( cost difference, distance ) for ( neither, only decision 2 or 3, only decision 0 or 1, both ). A negative distance
+  // does not occur in encodes but is a valid input to both implementations.
+  static const int64_t pairSetup[4][2] = { { -100, 10 }, { 0, 10 }, { 0, -10 }, { 100, 10 } };
+  std::set<int> outcomes;
+  for( int mask = 0; mask < 16; mask++ )   // bit k: decision k takes its second candidate
+  {
+    setup_state_and_decisions();
+    for( int j = 0; j < 4; ++j )
+    {
+      state.ctx.sig[j]  = 0;
+      state.ctx.cff[j]  = state.cffBitsCtxOffset;
+      state.sbbBits1[j] = 0;
+      sigBuf[j][0].intBits[0] = sigBuf[j][0].intBits[1] = 0;
+    }
+    state.cffBits1[state.cffBitsCtxOffset] = 0;
+
+    const int64_t* pair02 = pairSetup[( mask & 1 ) * 2 + ( ( mask >> 2 ) & 1 )];
+    const int64_t* pair13 = pairSetup[( ( mask >> 1 ) & 1 ) * 2 + ( ( mask >> 3 ) & 1 )];
+    state.rdCost[0] = 1000 + pair02[0];
+    state.rdCost[1] = 1000;
+    state.rdCost[2] = 1000 + pair13[0];
+    state.rdCost[3] = 1000;
+
+    passed = check_one_checkAllRdCostsOdd1( ref, opt, DQIntern::SCAN_ISCSBB, pair13[1], pair02[1], decisions_ref,
+                                            decisions_opt, state,
+                                            "DepQuant checkAllRdCostsOdd1 all choices mask=" + std::to_string( mask ) ) &&
+             passed;
+    int outcome = 0;
+    for( int k = 0; k < 4; k++ )
+    {
+      outcome = outcome * 8 + decisions_ref.absLevel[k] * 4 + decisions_ref.prevId[k];
+    }
+    outcomes.insert( outcome );
+  }
+  if( outcomes.size() != 16 )
+  {
+    printf( "DepQuant checkAllRdCostsOdd1 all choices: only %d of the 16 outcomes reached\n", int( outcomes.size() ) );
+    passed = false;
+  }
+
   return passed;
 }
 
