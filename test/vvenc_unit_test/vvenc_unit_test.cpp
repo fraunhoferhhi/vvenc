@@ -5404,6 +5404,119 @@ static bool check_deriveClassificationBlk( AdaptiveLoopFilter* ref, AdaptiveLoop
 }
 
 template<typename G>
+static bool check_one_filterBlkCcAlf( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, CodingStructure& cs,
+                                      ComponentID compId, int w, int h, int bitDepth, int vbCTUHeight, int dstX,
+                                      int dstY, int dstStride, const int16_t* coeff, G input_generator )
+{
+  const ChromaFormat chromaFormat = cs.slice->sps->chromaFormatIdc;
+  const int          vbPos        = vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA;
+  const int          scaleX       = getComponentScaleX( compId, chromaFormat );
+  const int          scaleY       = getComponentScaleY( compId, chromaFormat );
+
+  std::ostringstream sstm;
+  sstm << "filterBlkCcAlf chromaFormat=" << int( chromaFormat ) << " compId=" << int( compId ) << " w=" << w
+       << " h=" << h << " bitDepth=" << bitDepth << " vbCTUHeight=" << vbCTUHeight << " dstX=" << dstX
+       << " dstY=" << dstY << " dstStride=" << dstStride << " coeff=";
+  for( int i = 0; i < MAX_NUM_CC_ALF_CHROMA_COEFF; i++ )
+  {
+    sstm << ( i ? "," : "" ) << coeff[i];
+  }
+
+  // The luma of the block, with a margin for the taps one row above, two rows below and one column to each side, and
+  // for whole vector loads.
+  constexpr int    margin  = 16;
+  const int        lumaW   = ( w << scaleX ) + 2 * margin;
+  const int        lumaH   = ( h << scaleY ) + 2 * margin;
+  std::vector<Pel> luma( lumaW * lumaH );
+  std::generate( luma.begin(), luma.end(), input_generator );
+  const AreaBuf<const Pel> lumaBuf( luma.data(), lumaW, Size( lumaW, lumaH ) );
+  const CPelUnitBuf        recSrc( chromaFormat, lumaBuf, lumaBuf, lumaBuf );
+  const Area               blkSrc( margin, margin, w << scaleX, h << scaleY );
+
+  // The filter adds to the chroma samples in place. The buffer ends after the block: a store past it is caught by the
+  // sanitizers, one into the stride or next to the block by the compare of the whole buffer.
+  const Area       blkDst( dstX, dstY, w, h );
+  std::vector<Pel> chromaRef( ( dstY + h - 1 ) * dstStride + dstX + w );
+  std::generate( chromaRef.begin(), chromaRef.end(), input_generator );
+  std::vector<Pel> chromaOpt = chromaRef;
+  const PelBuf     dstRef( chromaRef.data(), dstStride, Size( dstX + w, dstY + h ) );
+  const PelBuf     dstOpt( chromaOpt.data(), dstStride, Size( dstX + w, dstY + h ) );
+
+  ClpRngs clpRngs;
+  clpRngs.bd = bitDepth;
+
+  ref->m_filterCcAlf( dstRef, recSrc, blkDst, blkSrc, compId, coeff, clpRngs, cs, vbCTUHeight, vbPos );
+  opt->m_filterCcAlf( dstOpt, recSrc, blkDst, blkSrc, compId, coeff, clpRngs, cs, vbCTUHeight, vbPos );
+
+  return compare_values_1d( sstm.str(), chromaRef.data(), chromaOpt.data(), unsigned( chromaRef.size() ) );
+}
+
+static bool check_filterBlkCcAlf( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt )
+{
+  printf( "Testing AdaptiveLoopFilter::filterBlkCcAlf\n" );
+
+  // SPS holds arrays sized by MAX_NUM_SUB_PICS, too large for the stack.
+  auto            sps = std::make_unique<SPS>();
+  Slice           slice;
+  XUCache         xuCache;
+  std::mutex      csMutex;
+  CodingStructure cs{ xuCache, &csMutex };
+  slice.sps = sps.get();
+  cs.slice  = &slice;
+
+  // The coefficients of the bitstream: 0 and +-2^k up to 64; the eighth is padding, 0 as in the encoder's arrays.
+  static const std::vector<int16_t> coeffValues{ 0, 1, 2, 4, 8, 16, 32, 64, -1, -2, -4, -8, -16, -32, -64 };
+
+  // 4:2:2 is left out: the x86 kernels filter it with the 4:2:0 path, which does not skip the two luma rows at the
+  // virtual boundary that the C code skips when chroma has full height, so they differ from C there.
+  DimensionGenerator rng;
+  for( ChromaFormat chromaFormat : { CHROMA_420, CHROMA_444 } )
+  {
+    sps->chromaFormatIdc = chromaFormat;
+    for( int bitDepth : { 8, 10 } )
+    {
+      InputGenerator<Pel>  randomSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+      MinMaxGenerator<Pel> extremeSamples{ static_cast<unsigned>( bitDepth ), /*is_signed=*/false };
+      for( int vbCTUHeight : { 32, 64, 128 } )
+      {
+        for( int w : { 4, 8, 12, 16, 32, 64 } )
+        {
+          for( int h : { 4, 8, 16, 32, 64 } )
+          {
+            const ComponentID compId = rng.getOneOf<ComponentID>( { COMP_Cb, COMP_Cr } );
+            const int         scaleY = getComponentScaleY( compId, chromaFormat );
+            // a block starting at the 4-row group of the virtual boundary or the one above it, or anywhere in the first
+            // two CTUs
+            const int vbGroup = ( ( vbCTUHeight - ALF_VB_POS_ABOVE_CTUROW_LUMA ) >> scaleY ) & ~3;
+            const int anyRow  = rng.get( 0, ( 2 * vbCTUHeight ) >> scaleY, 4 );
+            const int dstY    = rng.getOneOf<int>( { vbGroup - 4, vbGroup, anyRow } );
+            const int dstX      = rng.get( 0, 64, 4 );
+            const int dstStride = dstX + w + rng.getOneOf<int>( { 0, int( rng.get( 1, 64 ) ) } );
+
+            int16_t randomCoeff[MAX_NUM_CC_ALF_CHROMA_COEFF] = { 0 };
+            int16_t extremeCoeff[MAX_NUM_CC_ALF_CHROMA_COEFF] = { 0 };
+            for( int i = 0; i < MAX_NUM_CC_ALF_CHROMA_COEFF - 1; i++ )
+            {
+              randomCoeff[i]  = rng.getOneOf<int16_t>( coeffValues );
+              extremeCoeff[i] = rng.getOneOf<int16_t>( { -64, 64 } );
+            }
+
+            if( !check_one_filterBlkCcAlf( ref, opt, cs, compId, w, h, bitDepth, vbCTUHeight, dstX, dstY, dstStride,
+                                           randomCoeff, randomSamples ) ||
+                !check_one_filterBlkCcAlf( ref, opt, cs, compId, w, h, bitDepth, vbCTUHeight, dstX, dstY, dstStride,
+                                           extremeCoeff, extremeSamples ) )
+            {
+              return false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+template<typename G>
 static bool check_one_filterBlk( AdaptiveLoopFilter* ref, AdaptiveLoopFilter* opt, int srcStride, int dstStride,
                                  unsigned int w, unsigned int h, G input_generator, unsigned int linearIndex )
 {
@@ -5868,6 +5981,7 @@ static bool test_AdaptiveLoopFilter()
   passed = test_AlfCovariance( num_cases ) && passed;
   passed = test_EncAdaptiveLoopFilter( num_cases ) && passed;
   passed = check_deriveClassificationBlk( &ref, &opt ) && passed;
+  passed = check_filterBlkCcAlf( &ref, &opt ) && passed;
 
   for( unsigned w : { 8, 16, 32, 48, 64, 128 } )
   {

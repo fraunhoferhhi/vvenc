@@ -234,6 +234,117 @@ void DeriveClassificationBlk_neon( AlfClassifier* classifier, const CPelBuf& src
   }
 }
 
+// CC-ALF of 4 chroma samples of a 4:2:0 row, as AdaptiveLoopFilter::filterBlkCcAlf. The 7 luma differences to the
+// sample at the chroma position come from the even / odd lanes (vuzp) of 8-sample loads of the luma rows; they are
+// weighted by the coefficients in 32 bit and rounded as there, ( sum + 64 ) >> 7, by vrshrn: for 12-bit samples and
+// coefficients up to 64 the result fits 16 bits. The clips to [0, max] add the signed delta to unsigned values with
+// saturation (vsqadd) and take the minimum with max.
+static inline void filterCcAlfRow4_neon( const Pel* srcCross, Pel* srcSelf, const ptrdiff_t offset1,
+                                         const ptrdiff_t offset2, const ptrdiff_t offset3, const int16x8_t coeff,
+                                         const uint16x4_t offset, const uint16x4_t maxVal )
+{
+  static constexpr int scaleBits = 7;   // AdaptiveLoopFilter::m_scaleBits
+
+  const int16x8_t above     = vld1q_s16( srcCross + offset2 );
+  const int16x8_t left      = vld1q_s16( srcCross - 1 );
+  const int16x8_t centre    = vld1q_s16( srcCross );
+  const int16x8_t belowLeft = vld1q_s16( srcCross + offset1 - 1 );
+  const int16x8_t below     = vld1q_s16( srcCross + offset1 );
+  const int16x8_t below2    = vld1q_s16( srcCross + offset3 );
+
+  // low half: taps 0, 2, 3, 6; high half: taps 1, 5, 4
+  const int16x8_t curr       = vuzpq_s16( centre, centre ).val[0];
+  const int16x8_t taps01     = vuzpq_s16( above, left ).val[0];
+  const int16x8_t taps25     = vuzpq_s16( centre, below ).val[1];
+  const int16x8_t taps34     = vuzpq_s16( belowLeft, below ).val[0];
+  const int16x8_t tap6       = vuzpq_s16( below2, below2 ).val[0];
+  const int16x8_t diff01     = vsubq_s16( taps01, curr );
+  const int16x8_t diff25     = vsubq_s16( taps25, curr );
+  const int16x8_t diff34     = vsubq_s16( taps34, curr );
+  const int16x8_t diff6      = vsubq_s16( tap6, curr );
+  const int16x4_t coeffLow   = vget_low_s16( coeff );
+  const int16x4_t coeffHigh  = vget_high_s16( coeff );
+
+  int32x4_t sum = vmull_lane_s16( vget_low_s16( diff01 ), coeffLow, 0 );
+  sum           = vmlal_lane_s16( sum, vget_high_s16( diff01 ), coeffLow, 1 );
+  sum           = vmlal_lane_s16( sum, vget_low_s16( diff25 ), coeffLow, 2 );
+  sum           = vmlal_lane_s16( sum, vget_low_s16( diff34 ), coeffLow, 3 );
+  sum           = vmlal_lane_s16( sum, vget_high_s16( diff34 ), coeffHigh, 0 );
+  sum           = vmlal_lane_s16( sum, vget_high_s16( diff25 ), coeffHigh, 1 );
+  sum           = vmlal_lane_s16( sum, vget_low_s16( diff6 ), coeffHigh, 2 );
+
+  // delta = clip( sum + offset, 0, max ) - offset
+  const int16x4_t rounded = vrshrn_n_s32( sum, scaleBits );
+  const int16x4_t delta =
+    vreinterpret_s16_u16( vsub_u16( vmin_u16( vvenc_vsqadd_u16( offset, rounded ), maxVal ), offset ) );
+
+  const uint16x4_t self = vreinterpret_u16_s16( vld1_s16( srcSelf ) );
+  vst1_s16( srcSelf, vreinterpret_s16_u16( vmin_u16( vvenc_vsqadd_u16( self, delta ), maxVal ) ) );
+}
+
+// CC-ALF of a chroma block, as AdaptiveLoopFilter::filterBlkCcAlf, for 4:2:0; other formats take the C code. Rows next
+// to the virtual boundary use the same reduced luma neighbourhood as there.
+void FilterBlkCcAlf_neon( const PelBuf& dstBuf, const CPelUnitBuf& recSrc, const Area& blkDst, const Area& blkSrc,
+                          const ComponentID compId, const int16_t* filterCoeff, const ClpRngs& clpRngs,
+                          CodingStructure& cs, int vbCTUHeight, int vbPos )
+{
+  CHECKD( 1 << floorLog2( vbCTUHeight ) != vbCTUHeight, "Not a power of 2" );
+  CHECKD( !isChroma( compId ), "Must be chroma" );
+
+  const ChromaFormat chromaFormat = cs.slice->sps->chromaFormatIdc;
+  const int          scaleX       = getComponentScaleX( compId, chromaFormat );
+  const int          scaleY       = getComponentScaleY( compId, chromaFormat );
+  if( scaleX != 1 || scaleY != 1 )
+  {
+    AdaptiveLoopFilter::filterBlkCcAlf<CC_ALF>( dstBuf, recSrc, blkDst, blkSrc, compId, filterCoeff, clpRngs, cs,
+                                                vbCTUHeight, vbPos );
+    return;
+  }
+
+  CHECKD( blkDst.y % 4 || blkDst.x % 4 || blkDst.height % 4 || blkDst.width % 4, "Wrong block in filtering" );
+  CHECKD( blkDst.height <= 0 || blkDst.width <= 0, "Empty block in filtering" );
+
+  const CPelBuf&  srcBuf       = recSrc.get( COMP_Y );
+  const ptrdiff_t lumaStride   = srcBuf.stride;
+  const Pel*      lumaPtr      = srcBuf.buf + blkSrc.y * lumaStride + blkSrc.x;
+  const ptrdiff_t chromaStride = dstBuf.stride;
+  Pel*            chromaPtr    = dstBuf.buf + blkDst.y * chromaStride + blkDst.x;
+
+  const uint16x4_t offset = vdup_n_u16( static_cast<uint16_t>( 1 << ( clpRngs.bd - 1 ) ) );
+  const uint16x4_t maxVal = vdup_n_u16( static_cast<uint16_t>( clpRngs.max() ) );
+  const int16x8_t  coeff  = vld1q_s16( filterCoeff );
+
+  for( int i = 0; i < blkDst.height; i += 4, chromaPtr += 4 * chromaStride, lumaPtr += 8 * lumaStride )
+  {
+    // distance of the group's first luma row from the virtual boundary; its 4 chroma rows cover 8 luma rows
+    const int firstDistance = vbPos - ( ( ( blkDst.y + i ) << 1 ) & ( vbCTUHeight - 1 ) );
+    for( int ii = 0; ii < 4; ii++ )
+    {
+      const int distance = firstDistance - 2 * ii;
+      ptrdiff_t offset1  = lumaStride;
+      ptrdiff_t offset2  = -lumaStride;
+      ptrdiff_t offset3  = 2 * lumaStride;
+      if( distance == 2 || distance == -1 )
+      {
+        offset3 = offset1;
+      }
+      else if( distance == 1 || distance == 0 )
+      {
+        offset1 = 0;
+        offset2 = 0;
+        offset3 = 0;
+      }
+
+      const Pel* srcCrossRow = lumaPtr + 2 * ii * lumaStride;
+      Pel*       srcSelfRow  = chromaPtr + ii * chromaStride;
+      for( int j = 0; j < blkDst.width; j += 4 )
+      {
+        filterCcAlfRow4_neon( srcCrossRow + 2 * j, srcSelfRow + j, offset1, offset2, offset3, coeff, offset, maxVal );
+      }
+    }
+  }
+}
+
 constexpr int ALF_7x7_VB_FOLD_MIN_DIST = -2;
 constexpr int ALF_7x7_VB_FOLD_MAX_DIST = 3;
 
@@ -511,6 +622,7 @@ void AdaptiveLoopFilter::_initAdaptiveLoopFilterARM<NEON>()
 {
   m_filter7x7Blk[0] = Filter7x7Blk_neon;
   m_deriveClassificationBlk = DeriveClassificationBlk_neon;
+  m_filterCcAlf             = FilterBlkCcAlf_neon;
 }
 
 } // namespace vvenc
