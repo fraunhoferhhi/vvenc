@@ -1665,6 +1665,61 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
   return true;
 }
 
+// TCoeffOps::fastInvDCT2[3..5] (the whole inverse DCT-II 16/32/64 including the zeroed skip lines) against the matrix
+// multiply fastInverseDCT2_MM, at the shifts of the callers (7 for the first stage, 20 - bitDepth for the second). The
+// inputs stay within the bound that keeps every output in the int16 range, where roundClip8's clip has no effect (the
+// NEON roundClip8 does not clip): random values and the bound's extremes; every line / reducedLine / cutoff
+// combination the callers use.
+static bool check_fastInvDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
+{
+  printf( "Testing TCoeffOps::fastInvDCT2 trSize=%d\n", trSize );
+  DimensionGenerator rng;
+
+  const unsigned size = trSize * 64;
+  TCoeff* src  = ( TCoeff* ) xMalloc( TCoeff, size );
+  TCoeff* dst0 = ( TCoeff* ) xMalloc( TCoeff, size + 16 );
+  TCoeff* dst1 = ( TCoeff* ) xMalloc( TCoeff, size + 16 );
+  bool passed  = true;
+
+  for( unsigned line : { 1, 2, 4, 8, 16, 32, 64 } )
+  {
+    for( unsigned reducedLine = line <= 2 ? line : 4; reducedLine <= line; reducedLine += line <= 2 ? line : 4 )
+    {
+      for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
+      {
+        for( int shift : { 7, 8, 10, 12 } )
+        {
+          // |sum| <= cutoff * 90 * maxAbs, so that ( sum + round ) >> shift fits int16
+          const int maxAbs = int( std::min<int64_t>( 32767, ( int64_t( 32767 ) << shift ) / ( cutoff * 90 ) ) );
+          for( int dist = 0; dist < 2; dist++ )
+          {
+            for( unsigned n = 0; n < size; n++ )
+            {
+              src[n] = dist == 0 ? int( rng.get( 0, 2 * maxAbs ) ) - maxAbs : ( rng.get( 0, 1 ) ? maxAbs : -maxAbs );
+            }
+            std::fill( dst0, dst0 + size + 16, 0x5a5a5a5a );
+            std::fill( dst1, dst1 + size + 16, 0x5a5a5a5a );
+
+            ref->fastInvDCT2[idx]( src, dst0, shift, line, line - reducedLine, trSize - cutoff, INT16_MIN, INT16_MAX );
+            opt->fastInvDCT2[idx]( src, dst1, shift, line, line - reducedLine, trSize - cutoff, INT16_MIN, INT16_MAX );
+
+            std::ostringstream sstm;
+            sstm << "fastInvDCT2 trSize=" << trSize << " line=" << line << " reducedLine=" << reducedLine << " cutoff=" << cutoff
+                 << " shift=" << shift << " inputs=" << dist;
+            passed = compare_values_1d( sstm.str(), dst0, dst1, size + 16 ) && passed;   // stray writes fail too
+          }
+        }
+      }
+    }
+  }
+
+  xFree( src );
+  xFree( dst0 );
+  xFree( dst1 );
+
+  return passed;
+}
+
 static bool check_fastFwdCore_2D( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdCore_2D trSize=%d\n", trSize );
@@ -1980,6 +2035,9 @@ static bool test_TCoeffOps()
   passed = check_fastInvCore( &ref, &opt, num_cases, 2, 16 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 3, 32 ) && passed;
   passed = check_fastInvCore( &ref, &opt, num_cases, 4, 64 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 3, 16 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 4, 32 ) && passed;
+  passed = check_fastInvDCT2( &ref, &opt, 5, 64 ) && passed;
 
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_2D( &ref, &opt, num_cases, 1, 8 ) && passed;

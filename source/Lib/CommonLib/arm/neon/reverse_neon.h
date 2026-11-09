@@ -67,6 +67,12 @@ static inline int16x8_t reverse_vector_s16x8( int16x8_t x )
 #endif
 }
 
+static inline int32x4_t reverse_vector_s32x4( int32x4_t x )
+{
+  const int32x4_t rev_pairs = vrev64q_s32( x );   // lanes 1 0 3 2
+  return vextq_s32( rev_pairs, rev_pairs, 2 );     // lanes 3 2 1 0
+}
+
 static inline int16x8_t load_deinterleave_reverse_s16x8( const int16_t* ptr )
 {
 #if REAL_TARGET_AARCH64

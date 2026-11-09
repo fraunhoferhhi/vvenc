@@ -51,6 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "TrQuant.h"
 #include "TrQuant_EMT.h"
+#include "reverse_neon.h"
 #include "sum_neon.h"
 
 #include <cstdint>
@@ -252,6 +253,172 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
   }
 }
 
+// Stores one output line's columns j .. j + 3 ( E + O ) and N - 4 - j .. N - 1 - j ( E - O, in reverse order ) of the
+// inverse DCT-II below, each with the rounding shift.
+template<int N>
+static inline void storeInvEvenOdd_neon( TCoeff* dstLine, int j, int32x4_t e, int32x4_t o, int32x4_t negShift )
+{
+  const int32x4_t first = vrshlq_s32( vaddq_s32( e, o ), negShift );
+  const int32x4_t last  = vrshlq_s32( vsubq_s32( e, o ), negShift );
+  vst1q_s32( dstLine + j, first );
+  vst1q_s32( dstLine + N - 4 - j, reverse_vector_s32x4( last ) );
+}
+
+// Stores one output line's columns of the four column pairs jLow, jHigh = N / 2 - 4 - jLow of the inverse DCT-II
+// below (columns jLow, jHigh, N - 4 - jHigh and N - 4 - jLow, four each): E is EE + EO at jLow and EE - EO, in reverse
+// order, at jHigh.
+template<int N>
+static inline void storeInvEvenEvenOdd_neon( TCoeff* dstLine, int jLow, int jHigh, int32x4_t ee, int32x4_t eo,
+                                             int32x4_t oLow, int32x4_t oHigh, int32x4_t negShift )
+{
+  const int32x4_t eHighReversed = vsubq_s32( ee, eo );   // E at columns jHigh + 3 .. jHigh
+  storeInvEvenOdd_neon<N>( dstLine, jLow, vaddq_s32( ee, eo ), oLow, negShift );
+  storeInvEvenOdd_neon<N>( dstLine, jHigh, reverse_vector_s32x4( eHighReversed ), oHigh, negShift );
+}
+
+// Inverse DCT-II, N = 16, 32 or 64 (TCoeffOps::fastInvDCT2[3..5]): fastInvCore_neon's matrix multiply followed by
+// roundClip_neon<8>'s rounding shift, with fewer multiply-adds. The DCT-II basis is symmetric,
+// T[k][N - 1 - j] = (-1)^k T[k][j], so for j < N / 2 output j is E + O and output N - 1 - j is E - O, where E sums the
+// products of the even rows k and O those of the odd rows (half the multiply-adds; E splits once more below). Exact:
+// the same inputs truncated to int16 (vmovn), the same int32 products and their sum in another order (int32 additions
+// wrap alike), the same rounding shift. Like roundClip_neon<8> it does not clip: the output range is int16 and the
+// shift at least 7 (its CHECKDs).
+template<int N>
+static void fastInverseDCT2_EvenOdd_neon( const TCoeff* src, TCoeff* dst, int shift, int line, int iSkipLine,
+                                          int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
+{
+  CHECKD( outputMinimum != INT16_MIN || outputMaximum != INT16_MAX, "Output range must be int16" );
+  CHECKD( shift < 7, "Shift must be >= 7" );
+
+  const TMatrixCoeff* it = N == 16 ? g_trCoreDCT2P16[TRANSFORM_INVERSE][0]
+                         : N == 32 ? g_trCoreDCT2P32[TRANSFORM_INVERSE][0]
+                         :           g_trCoreDCT2P64[TRANSFORM_INVERSE][0];
+  const int reducedLine  = line - iSkipLine;
+  const int cutoff       = N - iSkipLine2;
+  CHECKD( cutoff <= 0 || ( cutoff & 3 ), "Cut-off must be a positive multiple of four" );
+  const int32x4_t negShift = vdupq_n_s32( -shift );
+
+  // Four lines at a time, one accumulator per line, lanes = four output columns. A second level splits E: the even rows
+  // restricted to the columns j < N / 2 are the DCT-II of size N / 2, so for j < N / 4, E at column j is EE + EO and E
+  // at column N / 2 - 1 - j is EE - EO, where EE sums the products of the rows k = 0 mod 4 and EO those of the rows
+  // k = 2 mod 4. Each step takes the four columns jLow and the four columns jHigh = N / 2 - 4 - jLow.
+  int i = 0;
+  for( ; i + 4 <= reducedLine; i += 4 )
+  {
+    TCoeff* dstLine = dst + i * N;
+    for( int jLow = 0; jLow < N / 4; jLow += 4 )
+    {
+      const int jHigh = N / 2 - 4 - jLow;
+      int32x4_t ee0 = vdupq_n_s32( 0 );
+      int32x4_t ee1 = vdupq_n_s32( 0 );
+      int32x4_t ee2 = vdupq_n_s32( 0 );
+      int32x4_t ee3 = vdupq_n_s32( 0 );
+      int32x4_t eo0 = vdupq_n_s32( 0 );
+      int32x4_t eo1 = vdupq_n_s32( 0 );
+      int32x4_t eo2 = vdupq_n_s32( 0 );
+      int32x4_t eo3 = vdupq_n_s32( 0 );
+      int32x4_t oLow0 = vdupq_n_s32( 0 );
+      int32x4_t oLow1 = vdupq_n_s32( 0 );
+      int32x4_t oLow2 = vdupq_n_s32( 0 );
+      int32x4_t oLow3 = vdupq_n_s32( 0 );
+      int32x4_t oHigh0 = vdupq_n_s32( 0 );
+      int32x4_t oHigh1 = vdupq_n_s32( 0 );
+      int32x4_t oHigh2 = vdupq_n_s32( 0 );
+      int32x4_t oHigh3 = vdupq_n_s32( 0 );
+
+      const TCoeff*       srck = src + i;
+      const TMatrixCoeff* itk  = it;
+      for( int k = 0; k < cutoff; k += 4 )
+      {
+        const int32x4_t src0    = vld1q_s32( srck );
+        const int32x4_t src1    = vld1q_s32( srck + line );
+        const int32x4_t src2    = vld1q_s32( srck + 2 * line );
+        const int32x4_t src3    = vld1q_s32( srck + 3 * line );
+        const int16x4_t s0      = vmovn_s32( src0 );
+        const int16x4_t s1      = vmovn_s32( src1 );
+        const int16x4_t s2      = vmovn_s32( src2 );
+        const int16x4_t s3      = vmovn_s32( src3 );
+        const int16x4_t cEE     = vld1_s16( itk + jLow );
+        const int16x4_t cO1Low  = vld1_s16( itk + N + jLow );
+        const int16x4_t cO1High = vld1_s16( itk + N + jHigh );
+        const int16x4_t cEO     = vld1_s16( itk + 2 * N + jLow );
+        const int16x4_t cO3Low  = vld1_s16( itk + 3 * N + jLow );
+        const int16x4_t cO3High = vld1_s16( itk + 3 * N + jHigh );
+
+        ee0    = vmlal_lane_s16( ee0, cEE, s0, 0 );
+        eo0    = vmlal_lane_s16( eo0, cEO, s2, 0 );
+        oLow0  = vmlal_lane_s16( oLow0, cO1Low, s1, 0 );
+        oLow0  = vmlal_lane_s16( oLow0, cO3Low, s3, 0 );
+        oHigh0 = vmlal_lane_s16( oHigh0, cO1High, s1, 0 );
+        oHigh0 = vmlal_lane_s16( oHigh0, cO3High, s3, 0 );
+
+        ee1    = vmlal_lane_s16( ee1, cEE, s0, 1 );
+        eo1    = vmlal_lane_s16( eo1, cEO, s2, 1 );
+        oLow1  = vmlal_lane_s16( oLow1, cO1Low, s1, 1 );
+        oLow1  = vmlal_lane_s16( oLow1, cO3Low, s3, 1 );
+        oHigh1 = vmlal_lane_s16( oHigh1, cO1High, s1, 1 );
+        oHigh1 = vmlal_lane_s16( oHigh1, cO3High, s3, 1 );
+
+        ee2    = vmlal_lane_s16( ee2, cEE, s0, 2 );
+        eo2    = vmlal_lane_s16( eo2, cEO, s2, 2 );
+        oLow2  = vmlal_lane_s16( oLow2, cO1Low, s1, 2 );
+        oLow2  = vmlal_lane_s16( oLow2, cO3Low, s3, 2 );
+        oHigh2 = vmlal_lane_s16( oHigh2, cO1High, s1, 2 );
+        oHigh2 = vmlal_lane_s16( oHigh2, cO3High, s3, 2 );
+
+        ee3    = vmlal_lane_s16( ee3, cEE, s0, 3 );
+        eo3    = vmlal_lane_s16( eo3, cEO, s2, 3 );
+        oLow3  = vmlal_lane_s16( oLow3, cO1Low, s1, 3 );
+        oLow3  = vmlal_lane_s16( oLow3, cO3Low, s3, 3 );
+        oHigh3 = vmlal_lane_s16( oHigh3, cO1High, s1, 3 );
+        oHigh3 = vmlal_lane_s16( oHigh3, cO3High, s3, 3 );
+
+        srck += 4 * line;
+        itk  += 4 * N;
+      }
+
+      storeInvEvenEvenOdd_neon<N>( dstLine + 0 * N, jLow, jHigh, ee0, eo0, oLow0, oHigh0, negShift );
+      storeInvEvenEvenOdd_neon<N>( dstLine + 1 * N, jLow, jHigh, ee1, eo1, oLow1, oHigh1, negShift );
+      storeInvEvenEvenOdd_neon<N>( dstLine + 2 * N, jLow, jHigh, ee2, eo2, oLow2, oHigh2, negShift );
+      storeInvEvenEvenOdd_neon<N>( dstLine + 3 * N, jLow, jHigh, ee3, eo3, oLow3, oHigh3, negShift );
+    }
+  }
+
+  // the remaining lines one at a time
+  for( ; i < reducedLine; i++ )
+  {
+    for( int j = 0; j < N / 2; j += 4 )
+    {
+      int32x4_t e = vdupq_n_s32( 0 );
+      int32x4_t o = vdupq_n_s32( 0 );
+
+      const TCoeff*       srck = src + i;
+      const TMatrixCoeff* itk  = it + j;
+      for( int k = 0; k < cutoff; k += 2 )
+      {
+        const int16x4_t cEven = vld1_s16( itk );
+        const int16x4_t cOdd  = vld1_s16( itk + N );
+
+        const int16_t   sEven = static_cast<int16_t>( srck[0] );
+        const int16_t   sOdd  = static_cast<int16_t>( srck[line] );
+
+        e = vmlal_n_s16( e, cEven, sEven );
+        o = vmlal_n_s16( o, cOdd, sOdd );
+
+        srck += 2 * line;
+        itk  += 2 * N;
+      }
+
+      storeInvEvenOdd_neon<N>( dst + i * N, j, e, o, negShift );
+    }
+  }
+
+  if( iSkipLine )
+  {
+    memset( dst + reducedLine * N, 0, iSkipLine * N * sizeof( TCoeff ) );
+  }
+}
+
 template<unsigned trSize>
 static void fastFwdCore_neon( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line,
                               unsigned reducedLine, unsigned cutoff, int shift )
@@ -389,6 +556,9 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   fastInvCore[ 2 ]    = fastInvCore_neon<16>;
   fastInvCore[ 3 ]    = fastInvCore_neon<32>;
   fastInvCore[ 4 ]    = fastInvCore_neon<64>;
+  fastInvDCT2[ 3 ]    = fastInverseDCT2_EvenOdd_neon<16>;
+  fastInvDCT2[ 4 ]    = fastInverseDCT2_EvenOdd_neon<32>;
+  fastInvDCT2[ 5 ]    = fastInverseDCT2_EvenOdd_neon<64>;
   fastFwdCore_2D[ 0 ] = fastFwdCore_neon<4>;
   fastFwdCore_2D[ 1 ] = fastFwdCore_neon<8>;
   fastFwdCore_2D[ 2 ] = fastFwdCore_neon<16>;
