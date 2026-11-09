@@ -702,20 +702,30 @@ namespace DQIntern
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
   }
 
+  // The coefficient rows dequantBlock and DepQuant::xQuantDQ clear. A block of 64 rows has coefficients only in its first
+  // 32 (JVET-C0024 zero-out), and nothing reads the rows past them. For the dequantized buffer: neither the inverse
+  // transform (TrQuant::xIT) nor the encoder's next forward transform and quantization of the buffer. For the quantized
+  // levels: the dequantization and the residual coding read only scan positions, which lie in the first 32 rows. The LFNST
+  // cut (xIT reads 4 or 8 rows) can't be used the same way: the encoder reuses the dequantized buffer in its next forward
+  // LFNST pass, and the streams change without the full clear there.
+  static int rowsToClear( const int height )
+  {
+    return std::min( height, JVET_C0024_ZERO_OUT_TH );
+  }
+
   void Quantizer::dequantBlock( const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, CoeffBuf& recCoeff, bool enableScalingLists, int* piDequantCoef) const
   {
 
     //----- set basic parameters -----
     const CompArea&     area      = tu.blocks[ compID ];
-    const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
     const ScanElement  *scan      = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
     const TCoeffSig*    qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 
-    //----- reset coefficients and get last scan index -----
-    ::memset( tCoeff, 0, numCoeff * sizeof( TCoeff ) );
+    //----- reset the coefficients that are read and get last scan index -----
+    ::memset( tCoeff, 0, rowsToClear( area.height ) * area.width * sizeof( TCoeff ) );
     int lastScanIdx = tu.lastPos[compID];
     if( lastScanIdx < 0 )
     {
@@ -1265,8 +1275,7 @@ void DepQuant::xQuantDQ( TransformUnit& tu, const CCoeffBuf& srcCoeff, const Com
   m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
   TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
   const TCoeff* tCoeff      = srcCoeff.buf;
-  const int     numCoeff    = tu.blocks[compID].area();
-  ::memset( qCoeff, 0x00, numCoeff * sizeof( TCoeffSig ) );
+  ::memset( qCoeff, 0x00, rowsToClear( tu.blocks[compID].height ) * tu.blocks[compID].width * sizeof( TCoeffSig ) );
   absSum                    = 0;
 
   const CompArea& area      = tu.blocks[ compID ];
