@@ -414,7 +414,7 @@ static inline void fwdEvenOddRows_neon( const TMatrixCoeff* tc, int row0, const 
   }
 }
 
-// Forward DCT-II, N = 16, 32 or 64 (TCoeffOps::fastFwdDCT2[2..4]), with the even/odd split of the AVX2
+// Forward DCT-II, N = 8, 16, 32 or 64 (TCoeffOps::fastFwdDCT2[5], [2..4]), with the even/odd split of the AVX2
 // fastForwardDCT2_EvenOdd_SIMD: the matrix rows are symmetric, T[j][N - 1 - k] = (-1)^j T[j][k], so output j is row
 // j's first half times E[k] = x[k] + x[N - 1 - k] (j even) or O[k] = x[k] - x[N - 1 - k] (j odd), half the
 // multiply-adds of the matrix multiply. Exact with fastFwdCore_neon, which the C default (fastForwardDCT2_MM) runs:
@@ -429,7 +429,8 @@ static NO_INLINE void fwdEvenOddLines_neon( const TCoeff* src, TCoeff* dst, int 
   const int cutoff      = N - iSkipLine2;
   CHECKD( cutoff % 4 != 0 || cutoff == 0, "cutoff should be a non-zero multiple of four" );
 
-  const TMatrixCoeff* tc = N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = N == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0]
                          :           g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   const int32x4_t vshift = vdupq_n_s32( -shift );
@@ -535,6 +536,7 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
   fastFwdDCT2[ 2 ] = fastForwardDCT2_EvenOdd_neon<16>;
   fastFwdDCT2[ 3 ] = fastForwardDCT2_EvenOdd_neon<32>;
   fastFwdDCT2[ 4 ] = fastForwardDCT2_EvenOdd_neon<64>;
+  fastFwdDCT2[ 5 ] = fastForwardDCT2_EvenOdd_neon<8>;
 }
 
 }  // namespace vvenc

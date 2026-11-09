@@ -387,12 +387,14 @@ inline void _fastForwardMM( const TCoeff *src, TCoeff *dst, int shift, int line,
 template<int N>
 void fastForwardDCT2_MM( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 )
 {
-  const TMatrixCoeff* tc = N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = N == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : N == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : N == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0]
                          :           g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   _fastForwardMM<N>( src, dst, shift, line, iSkipLine, iSkipLine2, tc );
 }
 
+template void fastForwardDCT2_MM<8>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<16>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<32>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
 template void fastForwardDCT2_MM<64>( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2 );
@@ -453,8 +455,10 @@ void fastForwardDCT2_B8( const TCoeff *src, TCoeff *dst, int shift, int line, in
       dst += line;
     }
   }
+#elif ENABLE_SIMD_TRAFO
+  g_tCoeffOps.fastFwdDCT2[5]( src, dst, shift, line, iSkipLine, iSkipLine2 );
 #else
-  _fastForwardMM< 8 >( src, dst, shift, line, iSkipLine, iSkipLine2, g_trCoreDCT2P8[TRANSFORM_FORWARD][0] );
+  fastForwardDCT2_MM<8>( src, dst, shift, line, iSkipLine, iSkipLine2 );
 #endif
 }
 
@@ -2077,6 +2081,7 @@ TCoeffOps::TCoeffOps()
   fastFwdDCT2[2]    = fastForwardDCT2_MM<16>;
   fastFwdDCT2[3]    = fastForwardDCT2_MM<32>;
   fastFwdDCT2[4]    = fastForwardDCT2_MM<64>;
+  fastFwdDCT2[5]    = fastForwardDCT2_MM<8>;
   fastFwdDST7_4     = fastForwardDST7_B4_Core;
   fastFwdDCT8_4     = fastForwardDCT8_B4_Core;
 }
