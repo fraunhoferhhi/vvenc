@@ -1067,12 +1067,12 @@ static ALWAYS_INLINE __m256i coeffPairLanes( const TFilterCoeff* left, const TFi
 }
 
 // The 4x4 6-tap filter of two side-by-side sub-blocks in one pass, the left one in the low 128-bit lane and the right
-// one in the high lane, each with its own fractions. Per lane these are the sums of simdFilter4x4_N6_AVX2<isLast>: the
-// same sample pairs and coefficient pairs, the same multiply-add order and the same saturating packs and clip, so the
-// results are identical. Used for all luma sub-blocks at AVX2: without PROF it stores through storeRowsOfPair_AVX2, in
-// four rows of 8 samples each per pair. The output is in the layout affinePROF4x4Pair_AVX2 works in:
-// pred[0] holds rows 0 and 1 of each sub-block (row 0 in the low 64 bits of its lane), pred[1] rows 2 and 3. Unlike
-// a filter per sub-block, the hand-off to PROF needs no reorder across the lanes and no trip through memory.
+// one in the high lane, each with its own fractions. Per lane these are the sums of simdFilter4x4_N6_AVX2<isLast>, with
+// the first stage's offset moved into the second stage (see below), and the same clip, so the results are identical.
+// Used for all luma sub-blocks at AVX2: without PROF it stores through storeRowsOfPair_AVX2, in four rows of 8 samples
+// each per pair. The output is in the layout affinePROF4x4Pair_AVX2 works in: pred[0] holds rows 0 and 1 of each
+// sub-block (row 0 in the low 64 bits of its lane), pred[1] rows 2 and 3. Unlike a filter per sub-block, the hand-off
+// to PROF needs no reorder across the lanes and no trip through memory.
 // srcLeft and srcRight point at the sub-blocks; the reads are those of the single 4x4 filter.
 template<bool isLast>
 static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, const Pel* srcRight, int srcStride,
@@ -1085,9 +1085,13 @@ static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, cons
   const __m256i h12 = coeffPairLanes( coeffHLeft, coeffHRight, 1 );
   const __m256i h34 = coeffPairLanes( coeffHLeft, coeffHRight, 3 );
   const __m256i h56 = coeffPairLanes( coeffHLeft, coeffHRight, 5 );
-  const __m256i off = _mm256_set1_epi32( rnd.offset1st );
 
-  // horizontal filter of the 9 rows the 4 output rows need: rows[y] holds row y of both sub-blocks as 32-bit values
+  // horizontal filter of the 9 rows the 4 output rows need: rows[y] holds row y of both sub-blocks as 32-bit values.
+  // The first stage's offset is left out: offset1st = -( IF_INTERNAL_OFFS << shift1st ) is a multiple of 1 << shift1st,
+  // so ( sum + offset1st ) >> shift1st = ( sum >> shift1st ) - IF_INTERNAL_OFFS exactly, and as each vertical filter's
+  // taps sum up to 1 << IF_FILTER_PREC, the second stage subtracts IF_INTERNAL_OFFS << IF_FILTER_PREC once instead (off2).
+  // Without the offset the rows lie in [-5627, 21994] (taps: at most 86 positive, 22 negative; bit depth 8 or 10), so
+  // they still fit 16 bits. At bit depth 8 shift1st is 0, and the first stage is the multiply-adds alone.
   __m256i rows[9];
   for( int y = 0; y < 9; y++ )
   {
@@ -1103,22 +1107,21 @@ static ALWAYS_INLINE void affineLumaFilter4x4Pair_AVX2( const Pel* srcLeft, cons
     __m256i sum = _mm256_madd_epi16( samplePairs0, h12 );
     sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs2, h34 ) );
     sum = _mm256_add_epi32( sum, _mm256_madd_epi16( samplePairs4, h56 ) );
-    rows[y] = _mm256_srai_epi32( _mm256_add_epi32( sum, off ), rnd.shift1st );
+    rows[y] = _mm256_srai_epi32( sum, rnd.shift1st );
   }
 
   // vertical filter: rowPairs[y] holds rows y and y + 1 as interleaved 16-bit values, so output row y is three
-  // multiply-adds, of the pairs (y, y + 1), (y + 2, y + 3) and (y + 4, y + 5)
-  const __m256i interleave = _mm256_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15,
-                                               0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 );
+  // multiply-adds, of the pairs (y, y + 1), (y + 2, y + 3) and (y + 4, y + 5). As the rows fit 16 bits, the low half
+  // of each 32-bit value is the row's value: a pair is row y's low half and row y + 1's low half shifted up.
   __m256i rowPairs[8];
   for( int y = 0; y < 8; y++ )
   {
-    rowPairs[y] = _mm256_shuffle_epi8( _mm256_packs_epi32( rows[y], rows[y + 1] ), interleave );
+    rowPairs[y] = _mm256_blend_epi16( rows[y], _mm256_slli_epi32( rows[y + 1], 16 ), 0xAA );
   }
   const __m256i v12  = coeffPairLanes( coeffVLeft, coeffVRight, 1 );
   const __m256i v34  = coeffPairLanes( coeffVLeft, coeffVRight, 3 );
   const __m256i v56  = coeffPairLanes( coeffVLeft, coeffVRight, 5 );
-  const __m256i off2 = _mm256_set1_epi32( rnd.offset2nd );
+  const __m256i off2 = _mm256_set1_epi32( rnd.offset2nd - ( IF_INTERNAL_OFFS << IF_FILTER_PREC ) );
   __m256i out[4];
   for( int y = 0; y < 4; y++ )
   {
@@ -1222,7 +1225,9 @@ template<X86_VEXT vext, bool prof, bool bi, int bitDepth>
 static void affineLumaCUBitDepth( const InterPredInterpolation::AffineLumaCU& cu )
 {
   constexpr bool isLast   = !prof && !bi;   // as in xPredAffineBlk: PROF works on the 14-bit prediction
+  static_assert( bitDepth == 8 || bitDepth == 10, "affineLumaFilter4x4Pair_AVX2's 16-bit rows hold for bit depths 8 and 10" );
   constexpr Filter4x4N6Rounding rnd = filter4x4N6Rounding<isLast>( bitDepth );
+  static_assert( rnd.offset1st == -( IF_INTERNAL_OFFS << rnd.shift1st ), "affineLumaFilter4x4Pair_AVX2 moves this offset into its second stage" );
   constexpr int  shiftNum = std::max<int>( 2, IF_INTERNAL_PREC - bitDepth );
   CHECKD( cu.shiftNum != shiftNum, "affine shiftNum" );
 
