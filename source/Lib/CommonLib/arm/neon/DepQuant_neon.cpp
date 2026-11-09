@@ -278,6 +278,53 @@ static inline void updateAllLvls_neon( const ScanInfo& scanInfo, const uint8_t* 
   }
 }
 
+// CommonCtx::updateTemplates for the 16 positions of a 4x4 SBB at once, as x86's templateSums16. absLevels points to the
+// SBB's start; nbSbb and shuffle give where the outside neighbours of its positions lie: each neighbour is a table
+// lookup in the 16 levels of one neighbouring SBB (index 0x80 gives 0, as for pshufb). All sums fit bytes: sum1st =
+// min( 255, sumAbs ) is a saturating byte sum, sumAbs1 <= 5 * 5 and sumNum <= 5, so sumNum << 5 stays in the byte.
+static inline void templateSums16_neon( const uint8_t* absLevels, const NbSbbStarts& nbSbb,
+                                        const NbOutShuffle16& shuffle, uint8x16_t& tplAcc, uint8x16_t& sum1st )
+{
+  uint8x16_t levels[NUM_NB_SBB];
+  for( int s = 0; s < NUM_NB_SBB; s++ )
+  {
+    levels[s] = nbSbb.start[s] >= 0 ? vld1q_u8( absLevels + nbSbb.start[s] ) : vdupq_n_u8( 0 );
+  }
+
+  // (x+1,y) and (x+2,y) lie in the right SBB, (x,y+1) and (x,y+2) in the one below, (x+1,y+1) in any of the three
+  const uint8x16_t idxRight0 = vld1q_u8( shuffle.idx[0][NB_SBB_RIGHT] );
+  const uint8x16_t idxRight1 = vld1q_u8( shuffle.idx[1][NB_SBB_RIGHT] );
+  const uint8x16_t idxRight2 = vld1q_u8( shuffle.idx[2][NB_SBB_RIGHT] );
+  const uint8x16_t idxBelow2 = vld1q_u8( shuffle.idx[2][NB_SBB_BELOW] );
+  const uint8x16_t idxDiag2  = vld1q_u8( shuffle.idx[2][NB_SBB_DIAG] );
+  const uint8x16_t idxBelow3 = vld1q_u8( shuffle.idx[3][NB_SBB_BELOW] );
+  const uint8x16_t idxBelow4 = vld1q_u8( shuffle.idx[4][NB_SBB_BELOW] );
+
+  const uint8x16_t diagRight = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight2 );
+  const uint8x16_t diagBelow = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow2 );
+  const uint8x16_t diagDiag  = vvenc_vqtbl1q_u8( levels[NB_SBB_DIAG], idxDiag2 );
+
+  uint8x16_t nbLevel[5];
+  nbLevel[0] = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight0 );
+  nbLevel[1] = vvenc_vqtbl1q_u8( levels[NB_SBB_RIGHT], idxRight1 );
+  nbLevel[2] = vorrq_u8( vorrq_u8( diagRight, diagBelow ), diagDiag );
+  nbLevel[3] = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow3 );
+  nbLevel[4] = vvenc_vqtbl1q_u8( levels[NB_SBB_BELOW], idxBelow4 );
+
+  uint8x16_t sumAbs  = vdupq_n_u8( 0 );
+  uint8x16_t sumAbs1 = vdupq_n_u8( 0 );
+  uint8x16_t sumNum  = vdupq_n_u8( 0 );
+  for( int k = 0; k < 5; k++ )
+  {
+    const uint8x16_t t = nbLevel[k];
+    sumAbs  = vqaddq_u8( sumAbs, t );
+    sumAbs1 = vaddq_u8( sumAbs1, vminq_u8( t, vaddq_u8( vandq_u8( t, vdupq_n_u8( 1 ) ), vdupq_n_u8( 4 ) ) ) );   // min( 4 + ( t & 1 ), t )
+    sumNum  = vaddq_u8( sumNum, vminq_u8( t, vdupq_n_u8( 1 ) ) );                                              // !!t
+  }
+  tplAcc = vorrq_u8( vshlq_n_u8( sumNum, 5 ), sumAbs1 );
+  sum1st = sumAbs;
+}
+
 void updateStatesEOS_neon( const ScanInfo& scanInfo, const Decisions& decisions, const StateMem& skip, StateMem& curr,
                            CommonCtx& commonCtx )
 {
@@ -313,17 +360,46 @@ void updateStatesEOS_neon( const ScanInfo& scanInfo, const Decisions& decisions,
   updateAllLvls_neon( scanInfo, absValBuf, commonCtx );
 
   memset( curr.absVal, 0, sizeof( curr.absVal ) );
-  memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
-  memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
 
+  // the context each state continues from, or -2 for none (the state is not used); each state's update below writes
+  // only its own refSbbCtxId, so reading all four first gives the same values
+  int refId[regSize];
   for( int i = 0; i < regSize; i++ )
   {
     const int prevId = decisions.prevId[i];
+    refId[i] = prevId <= -2 ? -2 : prevId < 0 ? -1 : prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4;
+  }
 
-    if( prevId > -2 )
+  if( const NbSbbStarts* nbSbb = commonCtx.nbSbbStarts( scanInfo ) )
+  {
+    // 4x4 SBBs: the template sums of the four states in registers; vst4q stores state i into column i of [16][4]
+    uint8x16x4_t tplAcc, sum1st;
+    for( int i = 0; i < regSize; i++ )
     {
-      const int refId = prevId < 0 ? -1 : prevId < 4 ? curr.refSbbCtxId[i] : prevId - 4;
-      commonCtx.update( scanInfo, refId, i, curr );
+      tplAcc.val[i] = vdupq_n_u8( 0 );
+      sum1st.val[i] = vdupq_n_u8( 0 );
+      if( refId[i] > -2 )
+      {
+        if( const uint8_t* absLevels = commonCtx.updateSbbFlags( scanInfo, refId[i], i, curr ) )
+        {
+          templateSums16_neon( absLevels, *nbSbb, commonCtx.nbOutShuffle16(), tplAcc.val[i], sum1st.val[i] );
+        }
+      }
+    }
+    vst4q_u8( &curr.tplAcc[0][0], tplAcc );
+    vst4q_u8( &curr.sum1st[0][0], sum1st );
+  }
+  else
+  {
+    memset( curr.tplAcc, 0, sizeof( curr.tplAcc ) );
+    memset( curr.sum1st, 0, sizeof( curr.sum1st ) );
+
+    for( int i = 0; i < regSize; i++ )
+    {
+      if( refId[i] > -2 )
+      {
+        commonCtx.update( scanInfo, refId[i], i, curr );
+      }
     }
   }
 
