@@ -1661,23 +1661,23 @@ Distortion xGetSSE_NxN_neon( const DistParam& rcDtParam )
   if( iWidth == 8 || iWidth == 16 )
   {
     // two rows per step: 4 (W 8) or 8 (W 16) chains
-    constexpr int perRow = iWidth / 8;
-    int           y      = 0;
+    int y = 0;
     for( ; y + 2 <= rows; y += 2, org += 2 * orgStride, cur += 2 * curStride )
     {
-      for( int r = 0; r < 2; r++ )
+      sseAccumulate8_neon( org, cur, lo[0], hi[0] );
+      sseAccumulate8_neon( org + orgStride, cur + curStride, lo[1], hi[1] );
+      if( iWidth == 16 )
       {
-        for( int x = 0; x < perRow; x++ )
-        {
-          sseAccumulate8_neon( org + r * orgStride + 8 * x, cur + r * curStride + 8 * x, lo[r * perRow + x], hi[r * perRow + x] );
-        }
+        sseAccumulate8_neon( org + 8, cur + 8, lo[2], hi[2] );
+        sseAccumulate8_neon( org + orgStride + 8, cur + curStride + 8, lo[3], hi[3] );
       }
     }
     if( y < rows )
     {
-      for( int x = 0; x < perRow; x++ )
+      sseAccumulate8_neon( org, cur, lo[0], hi[0] );
+      if( iWidth == 16 )
       {
-        sseAccumulate8_neon( org + 8 * x, cur + 8 * x, lo[x], hi[x] );
+        sseAccumulate8_neon( org + 8, cur + 8, lo[2], hi[2] );
       }
     }
   }
@@ -1686,19 +1686,21 @@ Distortion xGetSSE_NxN_neon( const DistParam& rcDtParam )
     // one row per step, the vectors of 8 in turn on 4 pairs of chains
     for( int y = 0; y < rows; y++, org += orgStride, cur += curStride )
     {
-      for( int x = 0; x < iWidth; x += 8 )
+      for( int x = 0; x < iWidth; x += 32 )
       {
-        sseAccumulate8_neon( org + x, cur + x, lo[( x >> 3 ) & 3], hi[( x >> 3 ) & 3] );
+        sseAccumulate8_neon( org + x + 0, cur + x + 0, lo[0], hi[0] );
+        sseAccumulate8_neon( org + x + 8, cur + x + 8, lo[1], hi[1] );
+        sseAccumulate8_neon( org + x + 16, cur + x + 16, lo[2], hi[2] );
+        sseAccumulate8_neon( org + x + 24, cur + x + 24, lo[3], hi[3] );
       }
     }
   }
 
-  const uint32x4_t loSum = vreinterpretq_u32_s32( vaddq_s32( vaddq_s32( lo[0], lo[1] ), vaddq_s32( lo[2], lo[3] ) ) );
-  const uint32x4_t hiSum = vreinterpretq_u32_s32( vaddq_s32( vaddq_s32( hi[0], hi[1] ), vaddq_s32( hi[2], hi[3] ) ) );
-  // the SIMDe lanes: 0 and 1 from the low halves, 2 and 3 from the high halves
-  const uint32x4_t lanes = vcombine_u32( vpadd_u32( vget_low_u32( loSum ), vget_high_u32( loSum ) ),
-                                         vpadd_u32( vget_low_u32( hiSum ), vget_high_u32( hiSum ) ) );
-  return Distortion( horizontal_add_u64x2( vpaddlq_u32( lanes ) ) ) >> shift;
+  const int32x4_t loSum = vaddq_s32( vaddq_s32( lo[0], lo[1] ), vaddq_s32( lo[2], lo[3] ) );
+  const int32x4_t hiSum = vaddq_s32( vaddq_s32( hi[0], hi[1] ), vaddq_s32( hi[2], hi[3] ) );
+  // the SIMDe lanes (each wraps on its own): 0 and 1 from the low halves, 2 and 3 from the high halves
+  const int32x4_t lanes = pairwise_add_s32x4( loSum, hiSum );
+  return Distortion( horizontal_add_long_u32x4( vreinterpretq_u32_s32( lanes ) ) ) >> shift;
 }
 
 template<>
