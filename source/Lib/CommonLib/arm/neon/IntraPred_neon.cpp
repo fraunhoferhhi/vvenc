@@ -566,6 +566,63 @@ static void IntraPredSampleFilter_neon( PelBuf& dstBuf, const CPelBuf& srcBuf )
   }
 }
 
+void IntraHorVerPDPC_Core( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height, int scale,
+                           const Pel* refMain, const ClpRng& clpRng );
+
+// IntraHorVerPDPC (pure horizontal and vertical modes): every row is refMain[1 .. width], for x < 3 << scale (at
+// most 12) as ClipPel( pred + ( ( wL( x ) * d + 32 ) >> 6 ) ), d = left - topLeft, wL( x ) = 32 >> ( 2 * x >> scale ).
+// d is one value per row, so the blend is vqrdmulh( wL << 9, d ) = ( wL * d + 32 ) >> 6 exactly (wL << 9 <= 2^14: no
+// saturation). The first 8 columns, 16 at scale 2, take the blend, the others are copies of refMain. Widths 1 and 2
+// as in C.
+static void IntraHorVerPDPC_neon( Pel* pDsty, const int dstStride, Pel* refSide, const int width, const int height,
+                                  int scale, const Pel* refMain, const ClpRng& clpRng )
+{
+  if( width < 4 )
+  {
+    IntraHorVerPDPC_Core( pDsty, dstStride, refSide, width, height, scale, refMain, clpRng );
+    return;
+  }
+
+  CHECKD( scale > 2, "PDPC: scale > 2" );
+  static const int16_t weightTab[3][16] = { { 32, 8, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+                                            { 32, 16, 8, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+                                            { 32, 32, 16, 16, 8, 8, 4, 4, 2, 2, 1, 1, 0, 0, 0, 0 } };
+  const int16x8_t wL0     = vshlq_n_s16( vld1q_s16( weightTab[scale] ), 9 );
+  const int16x8_t wL1     = vshlq_n_s16( vld1q_s16( weightTab[scale] + 8 ), 9 );
+  const int16x8_t minVal  = vdupq_n_s16( clpRng.min() );
+  const int16x8_t maxVal  = vdupq_n_s16( clpRng.max() );
+  const Pel       topLeft = refMain[0];
+
+  if( width == 4 )
+  {
+    const int16x4_t ref4 = vld1_s16( refMain + 1 );
+    for( int y = 0; y < height; y++, pDsty += dstStride )
+    {
+      const int16x4_t term = vqrdmulh_n_s16( vget_low_s16( wL0 ), static_cast<int16_t>( refSide[1 + y] - topLeft ) );
+      const int16x4_t pred = vadd_s16( ref4, term );
+      vst1_s16( pDsty, vmin_s16( vget_low_s16( maxVal ), vmax_s16( vget_low_s16( minVal ), pred ) ) );
+    }
+    return;
+  }
+
+  // the first 8 or 16 columns, blended per row; the rest, copied
+  const int blendEnd = scale == 2 && width >= 16 ? 16 : 8;
+  for( int y = 0; y < height; y++, pDsty += dstStride )
+  {
+    const int16_t d = static_cast<int16_t>( refSide[1 + y] - topLeft );
+    for( int x = 0; x < blendEnd; x += 8 )
+    {
+      const int16x8_t ref  = vld1q_s16( refMain + 1 + x );
+      const int16x8_t term = vqrdmulhq_n_s16( x ? wL1 : wL0, d );
+      vst1q_s16( pDsty + x, vminq_s16( maxVal, vmaxq_s16( minVal, vaddq_s16( ref, term ) ) ) );
+    }
+    for( int x = blendEnd; x < width; x += 8 )
+    {
+      vst1q_s16( pDsty + x, vld1q_s16( refMain + 1 + x ) );
+    }
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
@@ -574,6 +631,7 @@ void IntraPrediction::_initIntraPredictionARM<NEON>()
   xPredIntraPlanar      = xPredIntraPlanar_neon;
   IntraAnglePDPC        = IntraAnglePDPC_neon;
   IntraPredSampleFilter = IntraPredSampleFilter_neon;
+  IntraHorVerPDPC       = IntraHorVerPDPC_neon;
 }
 
 } // namespace vvenc
