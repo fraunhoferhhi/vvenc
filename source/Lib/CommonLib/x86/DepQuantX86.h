@@ -619,24 +619,6 @@ namespace vvenc {
       _mm_storeu_si32( decisions.prevId, valIdxBest );
     }
 
-#if USE_AVX2
-    // The absLevel and prevId of the four decisions of checkAllRdCostsOdd1 for each set of bits "decision k takes its
-    // second candidate", indexed directly by the compare's movemask, whose bits are decisions 0, 2, 1, 3: decisions 0 and
-    // 1 choose between level 0 (from states 0, 2) and level 1 (from 1, 3), decisions 2 and 3 between level 1 (from states
-    // 0, 2) and level 0 (from 1, 3).
-    struct Odd1Choice
-    {
-      TCoeffSig absLevel[4];
-      int8_t    prevId[4];
-    };
-    static const Odd1Choice odd1Choices[16] = {
-      { { 0, 0, 1, 1 }, { 0, 2, 0, 2 } }, { { 1, 0, 1, 1 }, { 1, 2, 0, 2 } }, { { 0, 0, 0, 1 }, { 0, 2, 1, 2 } }, { { 1, 0, 0, 1 }, { 1, 2, 1, 2 } },
-      { { 0, 1, 1, 1 }, { 0, 3, 0, 2 } }, { { 1, 1, 1, 1 }, { 1, 3, 0, 2 } }, { { 0, 1, 0, 1 }, { 0, 3, 1, 2 } }, { { 1, 1, 0, 1 }, { 1, 3, 1, 2 } },
-      { { 0, 0, 1, 0 }, { 0, 2, 0, 3 } }, { { 1, 0, 1, 0 }, { 1, 2, 0, 3 } }, { { 0, 0, 0, 0 }, { 0, 2, 1, 3 } }, { { 1, 0, 0, 0 }, { 1, 2, 1, 3 } },
-      { { 0, 1, 1, 0 }, { 0, 3, 0, 3 } }, { { 1, 1, 1, 0 }, { 1, 3, 0, 3 } }, { { 0, 1, 0, 0 }, { 0, 3, 1, 3 } }, { { 1, 1, 0, 0 }, { 1, 3, 1, 3 } },
-    };
-#endif
-
     // has to be called as a first check, assumes no decision has been made yet!!!
     template<X86_VEXT vext>
     static inline void checkAllRdCostsOdd1( const DQIntern::ScanPosType spt, const int64_t pq_a_dist, const int64_t pq_b_dist, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
@@ -752,9 +734,16 @@ namespace vvenc {
       const __m256i best   = _mm256_permute4x64_epi64( _mm256_blendv_epi8( first, second, chng ), 0xD8 );   // d0 d1 d2 d3
       _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[0], _mm256_castsi256_si128( best ) );
       _mm_storeu_si128( ( __m128i* ) &decisions.rdCost[2], _mm256_extracti128_si256( best, 1 ) );
-      const Odd1Choice& choice = odd1Choices[_mm256_movemask_pd( _mm256_castsi256_pd( chng ) )];   // bits: decisions 0, 2, 1, 3
-      memcpy( decisions.absLevel, choice.absLevel, sizeof( decisions.absLevel ) );
-      memcpy( decisions.prevId,   choice.prevId,   sizeof( decisions.prevId ) );
+      // absLevel and prevId without a table lookup: each second candidate is its first with bit 0 flipped (levels 0 and
+      // 1, previous states 0 and 1 or 2 and 3), so bit 0 is flipped where chng is set. The dwords 0, 4, 2, 6 of chng hold
+      // decisions 0, 1, 2, 3; a byte of each goes to the low byte of absLevel[k] (bytes 0-7, 16 bits each) and to
+      // prevId[k] (bytes 8-11).
+      const __m128i chngDw  = _mm256_castsi256_si128( _mm256_permutevar8x32_epi32( chng, _mm256_setr_epi32( 0, 4, 2, 6, 0, 4, 2, 6 ) ) );
+      const __m128i flip    = _mm_and_si128( _mm_shuffle_epi8( chngDw, _mm_setr_epi8( 0, -1, 4, -1, 8, -1, 12, -1, 0, 4, 8, 12, -1, -1, -1, -1 ) ), _mm_set1_epi8( 1 ) );
+      const __m128i firstLp = _mm_setr_epi8( 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 0, 2, 0, 0, 0, 0 );   // absLevel 0, 0, 1, 1; prevId 0, 2, 0, 2
+      const __m128i choice  = _mm_xor_si128( firstLp, flip );
+      _mm_storeu_si64( decisions.absLevel, choice );
+      _mm_storeu_si32( decisions.prevId, _mm_unpackhi_epi64( choice, choice ) );
 #else
       rdCostZ01 = _mm_add_epi64( rdCostZ01, _mm_cvtepi32_epi64( addZ ) );
       rdCostZ23 = _mm_add_epi64( rdCostZ23, _mm_cvtepi32_epi64( _mm_unpackhi_epi64( addZ, addZ ) ) );
