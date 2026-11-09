@@ -58,8 +58,74 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <arm_neon.h>
 
+#include "transpose_neon.h"
+
 namespace vvenc
 {
+
+// The 4-tap filters of IntraPredAngleLuma_neon on 8 (or 4) outputs, from the 4 vectors p0..p3 of reference samples
+// starting 0..3 samples after the first output's integer position.
+// Cubic (the chroma filter of the fraction, rounded, clipped to [0, max]): the accumulate of taps 0 and 3 is at most
+// (-6 + -4) * 10-bit, so int16_t; that of taps 1 and 2 (46 + 28) * 10-bit, so int32_t.
+static inline int16x8_t intraCubic8_neon( const int16x8_t p0, const int16x8_t p1, const int16x8_t p2, const int16x8_t p3,
+                                          const int16x4_t filter, const uint16x8_t vmax )
+{
+  int16x8_t sum = vmulq_lane_s16( p0, filter, 0 );
+  sum = vmlaq_lane_s16( sum, p3, filter, 3 );
+  int32x4_t sum_lo = vmull_lane_s16( vget_low_s16( p1 ), filter, 1 );
+  sum_lo = vmlal_lane_s16( sum_lo, vget_low_s16( p2 ), filter, 2 );
+  sum_lo = vaddw_s16( sum_lo, vget_low_s16( sum ) );
+  int32x4_t sum_hi = vmull_lane_s16( vget_high_s16( p1 ), filter, 1 );
+  sum_hi = vmlal_lane_s16( sum_hi, vget_high_s16( p2 ), filter, 2 );
+  sum_hi = vaddw_s16( sum_hi, vget_high_s16( sum ) );
+
+  // Only cubic filter has negative coefficients and requires clipping.
+  const uint16x4_t d_lo = vqrshrun_n_s32( sum_lo, 6 );
+  const uint16x4_t d_hi = vqrshrun_n_s32( sum_hi, 6 );
+  return vreinterpretq_s16_u16( vminq_u16( vcombine_u16( d_lo, d_hi ), vmax ) );
+}
+
+static inline int16x4_t intraCubic4_neon( const int16x4_t p0, const int16x4_t p1, const int16x4_t p2, const int16x4_t p3,
+                                          const int16x4_t filter, const uint16x4_t vmax )
+{
+  // Max accumulate is (46 + 28) * 10-bit which will not fit into int16_t so use int32_t.
+  int32x4_t sum = vmull_lane_s16( p0, filter, 0 );
+  sum = vmlal_lane_s16( sum, p1, filter, 1 );
+  sum = vmlal_lane_s16( sum, p2, filter, 2 );
+  sum = vmlal_lane_s16( sum, p3, filter, 3 );
+
+  // Only cubic filter has negative coefficients and requires clipping.
+  return vreinterpret_s16_u16( vmin_u16( vqrshrun_n_s32( sum, 6 ), vmax ) );
+}
+
+// Smoothing (taps 16 - f / 2, 32 - f / 2, 16 + f / 2, f / 2, which add up to 64): the accumulate is at most unsigned
+// 10-bit << 6, so uint16_t, and needs no clip.
+static inline uint16x4_t intraSmoothingFilter_neon( const int deltaFract )
+{
+  static const int16_t base[4] = { 16, 32, 16, 0 };
+  static const int16_t sign[4] = { -1, -1, 1, 1 };
+  return vreinterpret_u16_s16( vmla_n_s16( vld1_s16( base ), vld1_s16( sign ), int16_t( deltaFract >> 1 ) ) );
+}
+
+static inline int16x8_t intraSmooth8_neon( const int16x8_t p0, const int16x8_t p1, const int16x8_t p2, const int16x8_t p3,
+                                           const uint16x4_t filter )
+{
+  uint16x8_t sum = vmulq_lane_u16( vreinterpretq_u16_s16( p0 ), filter, 0 );
+  sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p1 ), filter, 1 );
+  sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p2 ), filter, 2 );
+  sum = vmlaq_lane_u16( sum, vreinterpretq_u16_s16( p3 ), filter, 3 );
+  return vreinterpretq_s16_u16( vrshrq_n_u16( sum, 6 ) );
+}
+
+static inline int16x4_t intraSmooth4_neon( const int16x4_t p0, const int16x4_t p1, const int16x4_t p2, const int16x4_t p3,
+                                           const uint16x4_t filter )
+{
+  uint16x4_t sum = vmul_lane_u16( vreinterpret_u16_s16( p0 ), filter, 0 );
+  sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p1 ), filter, 1 );
+  sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p2 ), filter, 2 );
+  sum = vmla_lane_u16( sum, vreinterpret_u16_s16( p3 ), filter, 3 );
+  return vreinterpret_s16_u16( vrshr_n_u16( sum, 6 ) );
+}
 
 void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refMain, int width, int height,
                               int deltaPos, int intraPredAngle, const TFilterCoeff* /* ff_unused */,
@@ -70,64 +136,34 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
   CHECK( ( width & 7 ) && ( width != 4 ), "Invalid width. Must be 4 or a multiple of 8" );
   CHECK( clpRng.bd > 10, "Invalid bit-depth. Must be <= 10" );
 
-  static constexpr int shift = 6;
-  static constexpr int round = 1 << ( shift - 1 );
-
   if( useCubicFilter )
   {
+    const uint16x8_t vmax = vdupq_n_u16( clpRng.max() );
     do
     {
       const int deltaInt = deltaPos >> 5;
       const int deltaFract = deltaPos & ( 32 - 1 );
 
       // Chroma Filter max value is 64.
-      const TFilterCoeff* f = InterpolationFilter::getChromaFilterTable( deltaFract );
-      const int16x4_t filter = vld1_s16( f );
+      const int16x4_t filter = vld1_s16( InterpolationFilter::getChromaFilterTable( deltaFract ) );
 
       const Pel* pRef = refMain + deltaInt;
       for( int w = 0; w <= width - 8; w += 8 )
       {
-        int16x8_t p0 = vld1q_s16( pRef + 0 );
-        int16x8_t p1 = vld1q_s16( pRef + 1 );
-        int16x8_t p2 = vld1q_s16( pRef + 2 );
-        int16x8_t p3 = vld1q_s16( pRef + 3 );
-
-        // Max accumulate for filter[0,3] is (-6 + -4) * 10-bit so use int16_t.
-        int16x8_t sum = vmulq_lane_s16( p0, filter, 0 );
-        sum = vmlaq_lane_s16( sum, p3, filter, 3 );
-        // Max accumulate for filter[1,2] is (46 + 28) * 10-bit so use int32_t.
-        int32x4_t sum_lo = vmull_lane_s16( vget_low_s16( p1 ), filter, 1 );
-        sum_lo = vmlal_lane_s16( sum_lo, vget_low_s16( p2 ), filter, 2 );
-        sum_lo = vaddw_s16( sum_lo, vget_low_s16( sum ) );
-        int32x4_t sum_hi = vmull_lane_s16( vget_high_s16( p1 ), filter, 1 );
-        sum_hi = vmlal_lane_s16( sum_hi, vget_high_s16( p2 ), filter, 2 );
-        sum_hi = vaddw_s16( sum_hi, vget_high_s16( sum ) );
-
-        // Only cubic filter has negative coefficients and requires clipping.
-        uint16x4_t d_lo = vqrshrun_n_s32( sum_lo, shift );
-        uint16x4_t d_hi = vqrshrun_n_s32( sum_hi, shift );
-        uint16x8_t d = vminq_u16( vcombine_u16( d_lo, d_hi ), vdupq_n_u16( clpRng.max() ) );
-        vst1q_s16( pDstBuf + w, vreinterpretq_s16_u16( d ) );
-
+        const int16x8_t p0 = vld1q_s16( pRef + 0 );
+        const int16x8_t p1 = vld1q_s16( pRef + 1 );
+        const int16x8_t p2 = vld1q_s16( pRef + 2 );
+        const int16x8_t p3 = vld1q_s16( pRef + 3 );
+        vst1q_s16( pDstBuf + w, intraCubic8_neon( p0, p1, p2, p3, filter, vmax ) );
         pRef += 8;
       }
       if( width == 4 )
       {
-        int16x4_t p0 = vld1_s16( pRef + 0 );
-        int16x4_t p1 = vld1_s16( pRef + 1 );
-        int16x4_t p2 = vld1_s16( pRef + 2 );
-        int16x4_t p3 = vld1_s16( pRef + 3 );
-
-        // Max accumulate is (46 + 28) * 10-bit which will not fit into int16_t so use int32_t.
-        int32x4_t sum = vmull_lane_s16( p0, filter, 0 );
-        sum = vmlal_lane_s16( sum, p1, filter, 1 );
-        sum = vmlal_lane_s16( sum, p2, filter, 2 );
-        sum = vmlal_lane_s16( sum, p3, filter, 3 );
-
-        // Only cubic filter has negative coefficients and requires clipping.
-        uint16x4_t d = vqrshrun_n_s32( sum, shift );
-        d = vmin_u16( d, vdup_n_u16( clpRng.max() ) );
-        vst1_s16( pDstBuf, vreinterpret_s16_u16( d ) );
+        const int16x4_t p0 = vld1_s16( pRef + 0 );
+        const int16x4_t p1 = vld1_s16( pRef + 1 );
+        const int16x4_t p2 = vld1_s16( pRef + 2 );
+        const int16x4_t p3 = vld1_s16( pRef + 3 );
+        vst1_s16( pDstBuf, intraCubic4_neon( p0, p1, p2, p3, filter, vget_low_u16( vmax ) ) );
       }
 
       pDstBuf += dstStride;
@@ -141,47 +177,25 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
       const int deltaInt = deltaPos >> 5;
       const int deltaFract = deltaPos & ( 32 - 1 );
 
-      // Smoothing Filter max value is 31. Total adds up to 64.
-      static const uint16_t intraSmoothingFilter[4] = { 16, 32, 16, 0 };
-      const uint16x4_t vIntraSmoothingFilter = vld1_u16( intraSmoothingFilter );
-      const uint16x4_t vDeltaFract = vdup_n_u16( deltaFract >> 1 );
-      const uint16x4_t filter01 = vsub_u16( vIntraSmoothingFilter, vDeltaFract );
-      const uint16x4_t filter23 = vadd_u16( vIntraSmoothingFilter, vDeltaFract );
+      const uint16x4_t filter = intraSmoothingFilter_neon( deltaFract );
 
       const Pel* pRef = refMain + deltaInt;
       for( int w = 0; w <= width - 8; w += 8 )
       {
-        uint16x8_t p0 = vreinterpretq_u16_s16( vld1q_s16( pRef + 0 ) );
-        uint16x8_t p1 = vreinterpretq_u16_s16( vld1q_s16( pRef + 1 ) );
-        uint16x8_t p2 = vreinterpretq_u16_s16( vld1q_s16( pRef + 2 ) );
-        uint16x8_t p3 = vreinterpretq_u16_s16( vld1q_s16( pRef + 3 ) );
-
-        // Max accumulate is unsigned 10-bit << 6, so use uint16_t.
-        uint16x8_t sum = vmlaq_lane_u16( vdupq_n_u16( round ), p0, filter01, 0 );
-        sum = vmlaq_lane_u16( sum, p1, filter01, 1 );
-        sum = vmlaq_lane_u16( sum, p2, filter23, 2 );
-        sum = vmlaq_lane_u16( sum, p3, filter23, 3 );
-
-        uint16x8_t d = vshrq_n_u16( sum, shift );
-        vst1q_s16( pDstBuf + w, vreinterpretq_s16_u16( d ) );
-
+        const int16x8_t p0 = vld1q_s16( pRef + 0 );
+        const int16x8_t p1 = vld1q_s16( pRef + 1 );
+        const int16x8_t p2 = vld1q_s16( pRef + 2 );
+        const int16x8_t p3 = vld1q_s16( pRef + 3 );
+        vst1q_s16( pDstBuf + w, intraSmooth8_neon( p0, p1, p2, p3, filter ) );
         pRef += 8;
       }
       if( width == 4 )
       {
-        uint16x4_t p0 = vreinterpret_u16_s16( vld1_s16( pRef + 0 ) );
-        uint16x4_t p1 = vreinterpret_u16_s16( vld1_s16( pRef + 1 ) );
-        uint16x4_t p2 = vreinterpret_u16_s16( vld1_s16( pRef + 2 ) );
-        uint16x4_t p3 = vreinterpret_u16_s16( vld1_s16( pRef + 3 ) );
-
-        // Max accumulate is unsigned 10-bit << 6, so use uint16_t.
-        uint16x4_t sum = vmla_lane_u16( vdup_n_u16( round ), p0, filter01, 0 );
-        sum = vmla_lane_u16( sum, p1, filter01, 1 );
-        sum = vmla_lane_u16( sum, p2, filter23, 2 );
-        sum = vmla_lane_u16( sum, p3, filter23, 3 );
-
-        uint16x4_t d = vshr_n_u16( sum, shift );
-        vst1_s16( pDstBuf, vreinterpret_s16_u16( d ) );
+        const int16x4_t p0 = vld1_s16( pRef + 0 );
+        const int16x4_t p1 = vld1_s16( pRef + 1 );
+        const int16x4_t p2 = vld1_s16( pRef + 2 );
+        const int16x4_t p3 = vld1_s16( pRef + 3 );
+        vst1_s16( pDstBuf, intraSmooth4_neon( p0, p1, p2, p3, filter ) );
       }
 
       pDstBuf += dstStride;
@@ -190,10 +204,205 @@ void IntraPredAngleLuma_neon( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refM
   }
 }
 
+// IntraAnglePDPC's blend of one row in the block's own orientation: pred + ( ( wL * ( left - pred ) + 32 ) >> 6 ) with
+// weight = wL << 9, as vqrdmulh( d, wL << 9 ) = ( 2 * d * wL * 512 + 2^15 ) >> 16 = ( d * wL + 32 ) >> 6 exactly
+// (|d| < 2^11 and wL <= 32: no saturation). Weight 0 keeps the row.
+static inline int16x8_t intraPdpcRow_neon( const int16x8_t pred, const Pel* left, const int16_t weight )
+{
+  return vaddq_s16( pred, vqrdmulhq_n_s16( vsubq_s16( vld1q_s16( left ), pred ), weight ) );
+}
+
+// Horizontal luma modes predicted in the block's own orientation (the contract of IntraPredAngleLumaHor_SIMD,
+// IntraPredX86.h): IntraPredAngleLuma_neon and IntraAnglePDPC of the transposed block, transposed, without the
+// temporary block. Block column x is row x of the transposed block: its integer position i_x and fraction from
+// deltaPos = angle * ( x + 1 + mri ) and its filter are constant down the column, and its outputs in rows y .. y + 7
+// read the consecutive samples refMain[i_x + y + k .. i_x + y + k + 7], k = 0..3. So per tile of 8 columns and 8 rows
+// (4 for blocks of height 4) each column is filtered as one vector with IntraPredAngleLuma_neon's arithmetic, and a
+// transpose in registers gives the rows. With PDPC (positive angles, reference line 0) rows y < n = min( 3 << scale,
+// height ) then get the blend with their left samples refSide[x + off( y )], consecutive in x. Reads: the samples the
+// C code reads, no others. width a multiple of 8, height 4 or a multiple of 8, at most 10 bits.
+template<bool cubic, bool pdpc>
+static void intraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, const Pel* refMain, const Pel* refSide,
+                                        const int width, const int height, const int intraPredAngle,
+                                        const int multiRefIdx, const int scale, const int invAngle, const ClpRng& clpRng )
+{
+  const uint16x8_t vmax = vdupq_n_u16( clpRng.max() );
+
+  // PDPC: rows y < n with their left sample offset (+ 1) and weight << 9; the other rows of the tiles that have such
+  // rows get weight 0 and row n - 1's offset (a valid address)
+  int     n = 0;
+  int     off[16];
+  int16_t wgt[16];
+  if( pdpc )
+  {
+    n = std::min( 3 << scale, height );
+    for( int y = 0; y < 16; y++ )
+    {
+      off[y] = ( ( ( std::min( y, n - 1 ) + 1 ) * invAngle + 256 ) >> 9 ) + 1;
+      wgt[y] = y < n ? int16_t( ( 32 >> ( 2 * y >> scale ) ) << 9 ) : 0;
+    }
+  }
+
+  for( int x0 = 0; x0 < width; x0 += 8, dst += 8 )
+  {
+    const Pel* ref[8];
+    int16x4_t  filter[8];
+    for( int j = 0; j < 8; j++ )
+    {
+      const int deltaPos = intraPredAngle * ( x0 + j + 1 + multiRefIdx );
+      ref[j]    = refMain + ( deltaPos >> 5 );
+      filter[j] = cubic ? vld1_s16( InterpolationFilter::getChromaFilterTable( deltaPos & 31 ) )
+                        : vreinterpret_s16_u16( intraSmoothingFilter_neon( deltaPos & 31 ) );
+    }
+
+    if( height == 4 )
+    {
+      int16x4_t cols[8];
+      for( int j = 0; j < 8; j++ )
+      {
+        const Pel*      r  = ref[j];
+        const int16x4_t f  = filter[j];
+        const int16x4_t p0 = vld1_s16( r );
+        const int16x4_t p1 = vld1_s16( r + 1 );
+        const int16x4_t p2 = vld1_s16( r + 2 );
+        const int16x4_t p3 = vld1_s16( r + 3 );
+        cols[j] = cubic ? intraCubic4_neon( p0, p1, p2, p3, f, vget_low_u16( vmax ) )
+                        : intraSmooth4_neon( p0, p1, p2, p3, vreinterpret_u16_s16( f ) );
+      }
+      // t[0], t[1]: rows 0-1 and 2-3 of columns 0-3; t[2], t[3]: the same of columns 4-7
+      int16x8_t t[4];
+      transpose_concat_8x4_s16( vcombine_s16( cols[0], cols[4] ), vcombine_s16( cols[1], cols[5] ), vcombine_s16( cols[2], cols[6] ),
+                                vcombine_s16( cols[3], cols[7] ), t[0], t[1], t[2], t[3] );
+      const int16x8x2_t rows01 = vvenc_vtrnq_s64_to_s16( t[0], t[2] );
+      const int16x8x2_t rows23 = vvenc_vtrnq_s64_to_s16( t[1], t[3] );
+      const int16x8_t   rows[4] = { rows01.val[0], rows01.val[1], rows23.val[0], rows23.val[1] };
+      for( int y = 0; y < 4; y++ )
+      {
+        int16x8_t row = rows[y];
+        if( pdpc )
+        {
+          row = intraPdpcRow_neon( row, refSide + x0 + off[y], wgt[y] );
+        }
+        vst1q_s16( dst + y * dstStride, row );
+      }
+      continue;
+    }
+
+    for( int y0 = 0; y0 < height; y0 += 8 )
+    {
+      int16x8_t v[8];
+      for( int j = 0; j < 8; j++ )
+      {
+        const Pel*      r  = ref[j] + y0;
+        const int16x4_t f  = filter[j];
+        const int16x8_t p0 = vld1q_s16( r );
+        const int16x8_t p1 = vld1q_s16( r + 1 );
+        const int16x8_t p2 = vld1q_s16( r + 2 );
+        const int16x8_t p3 = vld1q_s16( r + 3 );
+        v[j] = cubic ? intraCubic8_neon( p0, p1, p2, p3, f, vmax )
+                     : intraSmooth8_neon( p0, p1, p2, p3, vreinterpret_u16_s16( f ) );
+      }
+      transpose_8x8_s16( v );   // v[y]: row y0 + y of the 8 columns
+
+      if( pdpc && y0 < n )
+      {
+        for( int y = 0; y < 8; y++ )
+        {
+          v[y] = intraPdpcRow_neon( v[y], refSide + x0 + off[y0 + y], wgt[y0 + y] );
+        }
+      }
+      for( int y = 0; y < 8; y++ )
+      {
+        vst1q_s16( dst + ( y0 + y ) * dstStride, v[y] );
+      }
+    }
+  }
+}
+
+static void IntraPredAngleLumaHor_neon( Pel* dst, const ptrdiff_t dstStride, const Pel* refMain, const Pel* refSide,
+                                        const int width, const int height, const int intraPredAngle,
+                                        const int multiRefIdx, const int scale, const int invAngle,
+                                        const bool useCubicFilter, const bool applyPDPC, const ClpRng& clpRng )
+{
+  CHECKD( width < 8 || ( width & 7 ) != 0 || ( height != 4 && ( height & 7 ) != 0 ), "block size not supported" );
+  CHECKD( clpRng.bd > 10, "Only bit-depths of up to 10 bits supported!" );
+
+  if( useCubicFilter )
+  {
+    if( applyPDPC ) intraPredAngleLumaHor_neon<true, true >( dst, dstStride, refMain, refSide, width, height, intraPredAngle, multiRefIdx, scale, invAngle, clpRng );
+    else            intraPredAngleLumaHor_neon<true, false>( dst, dstStride, refMain, refSide, width, height, intraPredAngle, multiRefIdx, scale, invAngle, clpRng );
+  }
+  else
+  {
+    if( applyPDPC ) intraPredAngleLumaHor_neon<false, true >( dst, dstStride, refMain, refSide, width, height, intraPredAngle, multiRefIdx, scale, invAngle, clpRng );
+    else            intraPredAngleLumaHor_neon<false, false>( dst, dstStride, refMain, refSide, width, height, intraPredAngle, multiRefIdx, scale, invAngle, clpRng );
+  }
+}
+
+// Planar, as xPredIntraPlanar_Core with its running sums written out: every sample is
+//   ( ( W - 1 - x ) * H * L[y] + ( x + 1 ) * H * TR + ( H - 1 - y ) * W * T[x] + ( y + 1 ) * W * BL + W * H )
+//   >> ( 1 + log2W + log2H ),
+// with T / L the above / left reference samples, TR = T[W] and BL = L[H]. For 4 columns at a time, the row-0 sum
+// without the L term and the last term (R) and its change per row, W * ( BL - T[x] ), are set up once; each row is R
+// plus the weight ( W - 1 - x ) * H <= 63 * 64 times L[y], and R steps to the next row. W * H is half of
+// 1 << ( 1 + log2W + log2H ), so a rounding shift adds it. The integer sums are C's and stay below 2^31; the result is a
+// weighted mean of the samples, so it fits Pel. Widths 1 and 2 (chroma) as in C.
+static void xPredIntraPlanar_neon( PelBuf& pDst, const CPelBuf& pSrc )
+{
+  const int  width  = pDst.width;
+  const int  height = pDst.height;
+  const int  log2W  = floorLog2( width );
+  const int  log2H  = floorLog2( height );
+  const Pel* top    = pSrc.buf + 1;                 // T[x] = pSrc.at( x + 1, 0 )
+  const Pel* left   = pSrc.buf + pSrc.stride + 1;   // L[y] = pSrc.at( y + 1, 1 )
+  const int  tr     = top[width];
+  const int  bl     = left[height];
+  Pel*       pred   = pDst.buf;
+
+  if( width < 4 )
+  {
+    for( int y = 0; y < height; y++, pred += pDst.stride )
+    {
+      for( int x = 0; x < width; x++ )
+      {
+        const int sum = ( ( width - 1 - x ) * left[y] + ( x + 1 ) * tr ) * height
+                        + ( ( height - 1 - y ) * top[x] + ( y + 1 ) * bl ) * width + width * height;
+        pred[x] = Pel( sum >> ( 1 + log2W + log2H ) );
+      }
+    }
+    return;
+  }
+
+  const int32_t   colInit[4] = { 1, 2, 3, 4 };
+  const int32x4_t col0       = vld1q_s32( colInit );
+  const int32x4_t shift      = vdupq_n_s32( -( 1 + log2W + log2H ) );
+  // a group of 4 columns, down the whole block; its row sum and step stay in registers
+  for( int x = 0; x < width; x += 4 )
+  {
+    const int16x4_t t16        = vld1_s16( top + x );
+    const int32x4_t t          = vmovl_s16( t16 );
+    const int32x4_t col        = vaddq_s32( col0, vdupq_n_s32( x ) );   // x + 1
+    // row 0 without the left term: ( x + 1 ) * H * TR + ( H - 1 ) * W * T[x] + W * BL
+    int32x4_t       rowSum     = vmlaq_n_s32( vdupq_n_s32( width * bl ), col, height * tr );
+    rowSum                     = vmlaq_n_s32( rowSum, t, ( height - 1 ) * width );
+    const int32x4_t rowStep    = vmulq_n_s32( vsubq_s32( vdupq_n_s32( bl ), t ), width );
+    const int16x4_t leftWeight = vmovn_s32( vmulq_n_s32( vsubq_s32( vdupq_n_s32( width ), col ), height ) );
+    Pel*            dst        = pred + x;
+    for( int y = 0; y < height; y++, dst += pDst.stride )
+    {
+      const int32x4_t sum = vmlal_n_s16( rowSum, leftWeight, left[y] );
+      vst1_s16( dst, vmovn_s32( vrshlq_s32( sum, shift ) ) );
+      rowSum = vaddq_s32( rowSum, rowStep );
+    }
+  }
+}
+
 template<>
 void IntraPrediction::_initIntraPredictionARM<NEON>()
 {
-  IntraPredAngleLuma = IntraPredAngleLuma_neon;
+  IntraPredAngleLuma    = IntraPredAngleLuma_neon;
+  IntraPredAngleLumaHor = IntraPredAngleLumaHor_neon;
+  xPredIntraPlanar      = xPredIntraPlanar_neon;
 }
 
 } // namespace vvenc
