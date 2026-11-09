@@ -604,6 +604,7 @@ static inline BdofTerms16 bdofRowTerms16( const Pel* pred0, const Pel* pred1, co
     const int16x8_t gX = vhaddq_s16( gradX0, gradX1 );
     const int16x8_t gY = vhaddq_s16( gradY0, gradY1 );
     const int16x8_t dI = vsubq_s16( vshrq_n_s16( s1, 4 ), vshrq_n_s16( s0, 4 ) );
+
     terms.absGX[h]    = vabsq_s16( gX );
     terms.absGY[h]    = vabsq_s16( gY );
     terms.dIX[h]      = bdofSign( dI, gX );
@@ -619,41 +620,43 @@ static inline BdofTerms16 bdofRowTerms16( const Pel* pred0, const Pel* pred1, co
 // p_2k+2.
 static inline int32x4_t bdofWindowSums16( const int16x8_t* v )
 {
-  const int16x8_t  first   = vextq_s16( vdupq_lane_s16( vget_low_s16( v[0] ), 0 ), v[0], 7 );   // c0, c0, c1 .. c6
-  const int16x8_t  second  = vextq_s16( v[0], v[1], 7 );                                        // c7 .. c14
-  const int32x4_t  pairs03 = vpaddlq_s16( first );                                              // p0 .. p3
-  const int32x4_t  pairs47 = vpaddlq_s16( second );                                             // p4 .. p7
-  const int32x4_t  p8      = vdupq_n_s32( 2 * vgetq_lane_s16( v[1], 7 ) );                       // 2 c15
-  const int32x4x2_t evenOdd = vuzpq_s32( pairs03, pairs47 );   // p0, p2, p4, p6 | p1, p3, p5, p7
-  const int32x4_t  next    = vextq_s32( evenOdd.val[0], p8, 1 );                                 // p2, p4, p6, p8
-  return vaddq_s32( vaddq_s32( evenOdd.val[0], evenOdd.val[1] ), next );
+  const int16x8_t first   = vextq_s16( vdupq_lane_s16( vget_low_s16( v[0] ), 0 ), v[0], 7 );   // c0, c0, c1 .. c6
+  const int16x8_t second  = vextq_s16( v[0], v[1], 7 );                                        // c7 .. c14
+  const int32x4_t pairs03 = vpaddlq_s16( first );                                              // p0 .. p3
+  const int32x4_t pairs47 = vpaddlq_s16( second );                                             // p4 .. p7
+  const int32x4_t p8      = vdupq_n_s32( 2 * vgetq_lane_s16( v[1], 7 ) );                       // 2 c15
+  const int32x4_t even    = vuzpq_s32( pairs03, pairs47 ).val[0];                              // p0, p2, p4, p6
+  const int32x4_t next    = vextq_s32( even, p8, 1 );                                          // p2, p4, p6, p8
+  return vaddq_s32( pairwise_add_s32x4( pairs03, pairs47 ), next );                            // p_2k + p_2k+1 + p_2k+2
 }
 
 // n >> floor( log2( d ) ) per lane, clipped to [-limit, limit], 0 where d is 0 (calcBIOSums_neon's rightShiftMSB)
 static inline int32x4_t bdofRefine( const int32x4_t numer, const int32x4_t denom, const int32x4_t vLimit )
 {
-  const int32x4_t  msb    = vsubq_s32( vdupq_n_s32( 31 ), vclzq_s32( denom ) );
+  const int32x4_t  msb     = vsubq_s32( vdupq_n_s32( 31 ), vclzq_s32( denom ) );
   const int32x4_t  shifted = vshlq_s32( numer, vnegq_s32( msb ) );
   const int32x4_t  clipped = vminq_s32( vLimit, vmaxq_s32( vnegq_s32( vLimit ), shifted ) );
   const uint32x4_t isZero  = vceqq_s32( denom, vdupq_n_s32( 0 ) );
   return vbicq_s32( clipped, vreinterpretq_s32_u32( isZero ) );
 }
 
-// the corrected average of 4 samples of subblock k (columns 4k .. 4k+3) of one row (addBIOAvg4_x2_neon's arithmetic)
+// the corrected average of 4 samples of subblock k (columns 4k .. 4k+3) of one row (addBIOAvg4_x2_neon's arithmetic),
+// clipped to [0, max]: ClpRng::min() is 0, so the saturating narrowing does the clip at 0
 template<int k>
 static inline int16x4_t bdofAverage4( const Pel* pred0, const Pel* pred1, const BdofGradDiff16& gradDiff, const int16x4_t tmpx,
                                       const int16x4_t tmpy, const int32x4_t vOffset, const int32x4_t vShift,
-                                      const int32x4_t vMin, const int32x4_t vMax )
+                                      const uint16x4_t vMax )
 {
   const int16x4_t gradDiffX = vld1_s16( gradDiff.x + 4 * k );
   const int16x4_t gradDiffY = vld1_s16( gradDiff.y + 4 * k );
   const int16x4_t src0      = vld1_s16( pred0 + 4 * k );
   const int16x4_t src1      = vld1_s16( pred1 + 4 * k );
+
   int32x4_t sum = vaddl_s16( src0, src1 );
-  sum = vmlal_lane_s16( sum, gradDiffX, tmpx, k );
-  sum = vmlal_lane_s16( sum, gradDiffY, tmpy, k );
-  sum = vshlq_s32( vaddq_s32( sum, vOffset ), vShift );
-  return vmovn_s32( vminq_s32( vMax, vmaxq_s32( vMin, sum ) ) );
+  sum           = vmlal_lane_s16( sum, gradDiffX, tmpx, k );
+  sum           = vmlal_lane_s16( sum, gradDiffY, tmpy, k );
+  sum           = vshlq_s32( vaddq_s32( sum, vOffset ), vShift );
+  return vreinterpret_s16_u16( vmin_u16( vqmovun_s32( sum ), vMax ) );
 }
 
 // the corrected average of 4 rows; tmpx, tmpy: lane k = subblock k
@@ -661,17 +664,16 @@ static inline void bdofAverage4Rows16( const Pel* pred0, const Pel* pred1, const
                                        Pel* dst, const ptrdiff_t dstStride, const int16x4_t tmpx, const int16x4_t tmpy,
                                        const int shiftNum, const int offset, const ClpRng& clpRng )
 {
-  const int32x4_t vOffset = vdupq_n_s32( offset );
-  const int32x4_t vShift  = vdupq_n_s32( -shiftNum );
-  const int32x4_t vMin    = vdupq_n_s32( clpRng.min() );
-  const int32x4_t vMax    = vdupq_n_s32( clpRng.max() );
+  const int32x4_t  vOffset = vdupq_n_s32( offset );
+  const int32x4_t  vShift  = vdupq_n_s32( -shiftNum );
+  const uint16x4_t vMax    = vdup_n_u16( clpRng.max() );
 
   for( int y = 0; y < 4; y++, pred0 += predStride, pred1 += predStride, gradDiff++, dst += dstStride )
   {
-    const int16x4_t avg0 = bdofAverage4<0>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
-    const int16x4_t avg1 = bdofAverage4<1>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
-    const int16x4_t avg2 = bdofAverage4<2>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
-    const int16x4_t avg3 = bdofAverage4<3>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMin, vMax );
+    const int16x4_t avg0 = bdofAverage4<0>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMax );
+    const int16x4_t avg1 = bdofAverage4<1>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMax );
+    const int16x4_t avg2 = bdofAverage4<2>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMax );
+    const int16x4_t avg3 = bdofAverage4<3>( pred0, pred1, *gradDiff, tmpx, tmpy, vOffset, vShift, vMax );
     vst1q_s16( dst, vcombine_s16( avg0, avg1 ) );
     vst1q_s16( dst + 8, vcombine_s16( avg2, avg3 ) );
   }
