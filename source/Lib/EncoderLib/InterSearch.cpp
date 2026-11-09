@@ -876,10 +876,13 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
                                             Distortion& uiDistBest,
                                             int& patternId,
                                             CPelBuf* pattern,
-                                            bool useAltHpelIf )
+                                            bool useAltHpelIf,
+                                            Distortion centreDistNoMv,
+                                            Distortion& bestDistNoMv )
 {
   Distortion  uiDist;
   uiDistBest = m_pcEncCfg->m_fastSubPel == 1 ? uiDistBest : MAX_DISTORTION;
+  bestDistNoMv = MAX_DISTORTION;
   uint32_t        uiDirecBest = 0;
   const int reduceTap = m_pcEncCfg->m_meReduceTap;
 
@@ -977,16 +980,27 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
     cMvTest += rcMvFrac;
 
 
-    m_cDistParam.cur.buf    = piRefPos;
-    m_cDistParam.cur.stride = integerPos ? pattern->stride : iRefStride;
-    uiDist = m_cDistParam.distFunc( m_cDistParam );
-    uiDist += m_pcRdCost->getCostOfVectorWithPredictor( cMvTest.hor, cMvTest.ver, 0 );
+    Distortion distNoMv;
+    if( 0 == i && centreDistNoMv != MAX_DISTORTION )
+    {
+      // the centre is the previous stage's winner: the same block of the same filtered buffer (the quarter-pel
+      // up-sampling writes only the quarter positions), measured in full there (a winner never exits early)
+      distNoMv = centreDistNoMv;
+    }
+    else
+    {
+      m_cDistParam.cur.buf    = piRefPos;
+      m_cDistParam.cur.stride = integerPos ? pattern->stride : iRefStride;
+      distNoMv = m_cDistParam.distFunc( m_cDistParam );
+    }
+    uiDist = distNoMv + m_pcRdCost->getCostOfVectorWithPredictor( cMvTest.hor, cMvTest.ver, 0 );
 
     distH[ i ] = uiDist;
     if ( uiDist < uiDistBest )
     {
-      uiDistBest  = uiDist;
-      uiDirecBest = i;
+      uiDistBest   = uiDist;
+      uiDirecBest  = i;
+      bestDistNoMv = distNoMv;
       m_cDistParam.maximumDistortionForEarlyExit = uiDist;
     }
   }
@@ -2866,7 +2880,9 @@ void InterSearch::xPatternSearchFracDIF(
   Mv baseRefMv(0, 0);
   Distortion  uiDistBest = MAX_DISTORTION;
   int patternId = 41;
-  ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 2, rcMvHalf, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
+  Distortion halfPelBestDistNoMv;
+  ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 2, rcMvHalf, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf,
+                                MAX_DISTORTION, halfPelBestDistNoMv );
   patternId -= ( m_pcEncCfg->m_fastSubPel == 1 ? 41 : 0 );
 
 
@@ -2881,7 +2897,10 @@ void InterSearch::xPatternSearchFracDIF(
 
     rcMvQter = rcMvInt;    rcMvQter <<= 1;    // for mv-cost
     rcMvQter += rcMvHalf;  rcMvQter <<= 1;
-    ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 1, rcMvQter, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
+    // the quarter-pel centre is the half-pel winner, already measured
+    Distortion quarterPelBestDistNoMv;
+    ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 1, rcMvQter, uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf,
+                                  halfPelBestDistNoMv, quarterPelBestDistNoMv );
   }
 
 }

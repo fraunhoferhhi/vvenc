@@ -524,8 +524,10 @@ private:
   const unsigned* xGetBvBitsRow     ( const int x0, const int xStep, const int count, const int y, const bool useIMV );
   const unsigned* xGetBvBitsColumn  ( const int x, const int y0, const int yStep, const int count, const bool useIMV );
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
-  /// sub-function for motion vector refinement used in fractional-pel accuracy
-  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
+  /// sub-function for motion vector refinement used in fractional-pel accuracy; centreDistNoMv is the centre position's
+  /// distortion without the MV cost when already known (else MAX_DISTORTION), bestDistNoMv returns the winner's
+  Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf,
+                                      Distortion centreDistNoMv, Distortion& bestDistNoMv );
 
    typedef struct
    {
