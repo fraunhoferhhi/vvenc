@@ -54,7 +54,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "sum_neon.h"
 
 #include <cstdint>
-#include <cstring>
 
 //! \ingroup CommonLib
 //! \{
@@ -187,8 +186,7 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
   CHECK( rows % 4 != 0, "rows should be a multiple of four" );
   CHECK( rows == 0, "rows should be non-zero" );
 
-  memset( dst, 0, reducedLines * trSize * sizeof( TCoeff ) );
-
+  // Every element of dst[0, reducedLines * trSize) is stored below, so dst needs no clearing first.
   unsigned i = 0;
   for( ; i != ( reducedLines & ~3U ); i += 4 )
   {
@@ -199,12 +197,19 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
       const TMatrixCoeff* itj = it + j;
       TCoeff* dstij           = dst + i * trSize + j;
 
-      int32x4_t d0 = vld1q_s32( dstij + 0 * trSize );
-      int32x4_t d1 = vld1q_s32( dstij + 1 * trSize );
-      int32x4_t d2 = vld1q_s32( dstij + 2 * trSize );
-      int32x4_t d3 = vld1q_s32( dstij + 3 * trSize );
+      // The first row starts the sums.
+      int16x4_t s0 = vmovn_s32( vld1q_s32( srci ) );
+      int16x4_t c0 = vld1_s16( itj );
 
-      unsigned k = rows;
+      int32x4_t d0 = vmull_lane_s16( c0, s0, 0 );
+      int32x4_t d1 = vmull_lane_s16( c0, s0, 1 );
+      int32x4_t d2 = vmull_lane_s16( c0, s0, 2 );
+      int32x4_t d3 = vmull_lane_s16( c0, s0, 3 );
+
+      srci += lines;
+      itj += trSize;
+
+      unsigned k = rows - 1;
       do
       {
         int16x4_t s = vmovn_s32( vld1q_s32( srci ) );
@@ -237,7 +242,7 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
       const TMatrixCoeff* itj = it + j;
       TCoeff* dstij           = dst + i * trSize + j;
 
-      int32_t d0 = *dstij;
+      int32_t d0 = 0;
       unsigned k = rows;
       do
       {
