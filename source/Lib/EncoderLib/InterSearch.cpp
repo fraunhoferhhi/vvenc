@@ -3723,7 +3723,8 @@ uint8_t InterSearch::skipSbtByRDCost( int width, int height, int mtDepth, uint8_
   return MAX_UCHAR;
 }
 
-void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist /*= NULL*/)
+// ctxStart: a copy of the estimator's contexts on entry (the callers save them right before the call); every test starts from it
+void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &partitioner, const Ctx& ctxStart, Distortion *puiZeroDist /*= NULL*/)
 {
   const UnitArea& currArea = partitioner.currArea();
   const SPS &sps           = *cs.sps;
@@ -3756,7 +3757,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   Distortion uiSingleDist         = 0;
   Distortion uiSingleDistComp [3] = { 0, 0, 0 };
 
-  const TempCtx ctxStart  ( m_CtxCache, m_CABACEstimator->getCtx() );
   TempCtx       ctxBest   ( m_CtxCache );
 
   if (bCheckFull)
@@ -4276,7 +4276,8 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
     do
     {
-      xEstimateInterResidualQT(*csSplit, partitioner, bCheckFull ? nullptr : puiZeroDist );
+      const TempCtx ctxSubStart( m_CtxCache, m_CABACEstimator->getCtx() );
+      xEstimateInterResidualQT(*csSplit, partitioner, ctxSubStart, bCheckFull ? nullptr : puiZeroDist );
 
       csSplit->cost = m_pcRdCost->calcRdCost( csSplit->fracBits, csSplit->dist );
     } while( partitioner.nextPart( *csSplit ) );
@@ -4392,7 +4393,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
 
   m_tuResiBitsValid = false;
-  xEstimateInterResidualQT(cs, partitioner, &zeroDistortion );
+  xEstimateInterResidualQT(cs, partitioner, ctxStart, &zeroDistortion );
   TransformUnit& firstTU = *cs.getTU( partitioner.chType );
 
   cu.rootCbf = false;
