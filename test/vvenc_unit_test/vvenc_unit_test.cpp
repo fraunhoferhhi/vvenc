@@ -1243,7 +1243,7 @@ static bool check_IntraPredAngleLumaModes( IntraPrediction* ref, IntraPrediction
 // IntraPredAngleLumaHor (horizontal luma modes in the block's own orientation) against the reference implementation's
 // IntraPredAngleLuma on the transposed block, its IntraAnglePDPC (positive angles, reference line 0) and a transpose:
 // every block width 8..64 and height 4..64 (aspect ratios up to 16:1), every horizontal mode after the wide-angle
-// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8, 10 and 12. Samples:
+// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8 and 10. Samples:
 // random, alternating 0 / max (the cubic clip), a ramp, and the PDPC extremes (prediction 0 with side samples at max,
 // and the reverse). Main and side samples outside the ranges the scalar code reads differ between the two runs;
 // destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers, compared whole.
@@ -1259,7 +1259,7 @@ static bool check_IntraPredAngleLumaHor( IntraPrediction* ref, IntraPrediction* 
   std::vector<Pel> tmp( MAX_CU_SIZE * MAX_CU_SIZE ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
   const unsigned size = static_cast<unsigned>( dstRef.size() );
   bool passed = true;
-  for( int bd : { 8, 10, 12 } )
+  for( int bd : { 8, 10 } )   // the internal bit depths VVenC codes (the NEON kernel refuses more than 10)
   for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
   for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
   for( bool cubic : { true, false } )
