@@ -245,7 +245,7 @@ public:
 
     const std::streamoff offset = frameSize * numFrames;
 
-    std::istream& inStream = m_readStdin ? std::cin : m_cHandle;
+    std::istream& inStream = m_readStdin ? stdinStream() : m_cHandle;
 
     // check for file size
     if( !m_readStdin )
@@ -318,7 +318,7 @@ public:
         yuvPlane.stride = yuvPlane.width;
       }
 
-      std::istream& inStream = m_readStdin ? std::cin : m_cHandle;
+      std::istream& inStream = m_readStdin ? stdinStream() : m_cHandle;
 
       if( m_y4mMode && comp == 0 )
       {
