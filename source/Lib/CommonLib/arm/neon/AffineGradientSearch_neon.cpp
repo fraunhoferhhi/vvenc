@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 // ====================================================================================================================
 
 #include <algorithm>
+#include <cstring>
 
 #include "../CommonDefARM.h"
 #include "CommonLib/AffineGradientSearch.h"
@@ -173,9 +174,123 @@ void simdEqualCoeffComputer_neon( Pel* const pResidue, const int residueStride, 
   eqCoeffMatrixFromBlockTotals<b6Param>( totals, height / 4, pEqualCoeff );
 }
 
+// Stores the 8 outputs of a column strip at dst, or only the first 6 for the last strip of a row (x = width - 7), whose
+// last two would be the edge column and one past the block.
+static inline void storeSobelStrip( Pel* dst, const int16x8_t out, const bool lastStrip )
+{
+  if( lastStrip )
+  {
+    vst1_s16( dst, vget_low_s16( out ) );
+    vst1q_lane_s32( reinterpret_cast<int32_t*>( dst + 4 ), vreinterpretq_s32_s16( out ), 2 );
+  }
+  else
+  {
+    vst1q_s16( dst, out );
+  }
+}
+
+// The edges of a Sobel derivative, as the C and x86 kernels set them: columns 0 and width - 1 copied from their inner
+// neighbours in rows 1 .. height - 2, then rows 0 and height - 1 copied from rows 1 and height - 2.
+static void copySobelEdges( Pel* const pDerivate, const int derivateBufStride, const int width, const int height )
+{
+  for( int y = 1; y < height - 1; y++ )
+  {
+    Pel* row       = pDerivate + y * derivateBufStride;
+    row[0]         = row[1];
+    row[width - 1] = row[width - 2];
+  }
+  std::memcpy( pDerivate, pDerivate + derivateBufStride, width * sizeof( Pel ) );
+  std::memcpy( pDerivate + ( height - 1 ) * derivateBufStride, pDerivate + ( height - 2 ) * derivateBufStride,
+               width * sizeof( Pel ) );
+}
+
+// Horizontal Sobel filter ( -1 0 1 / -2 0 2 / -1 0 1 ). A strip of 8 columns walks down the rows: each row's difference
+// d(y) = p(y, x + 1) - p(y, x - 1) is computed once, and so is the sum of two neighbouring rows' differences
+// t(y) = d(y) + d(y + 1); out(y) = d(y - 1) + 2 * d(y) + d(y + 1) = t(y - 1) + t(y). A row costs 2 loads and 3 adds.
+// The 16-bit sums wrap as the C code's do when stored to Pel.
+static void horizontalSobelFilter_neon( Pel* const pPred, const int predStride, Pel* const pDerivate,
+                                        const int derivateBufStride, const int width, const int height )
+{
+  CHECKD( width % 8, "Width must be a multiple of 8" );
+
+  for( int x = 1; x < width - 1; x += 8 )
+  {
+    const bool lastStrip = x + 8 > width - 1;
+    const Pel* src       = pPred + x;
+
+    const int16x8_t left0  = vld1q_s16( src - 1 );
+    const int16x8_t right0 = vld1q_s16( src + 1 );
+    const int16x8_t diff0  = vsubq_s16( right0, left0 );
+    src += predStride;
+    const int16x8_t left1  = vld1q_s16( src - 1 );
+    const int16x8_t right1 = vld1q_s16( src + 1 );
+    int16x8_t diff         = vsubq_s16( right1, left1 );
+    int16x8_t pairAbove    = vaddq_s16( diff0, diff );
+
+    for( int y = 1; y < height - 1; y++ )
+    {
+      src += predStride;
+      const int16x8_t left      = vld1q_s16( src - 1 );
+      const int16x8_t right     = vld1q_s16( src + 1 );
+      const int16x8_t diffBelow = vsubq_s16( right, left );
+      const int16x8_t pair      = vaddq_s16( diff, diffBelow );
+
+      storeSobelStrip( pDerivate + y * derivateBufStride + x, vaddq_s16( pairAbove, pair ), lastStrip );
+
+      pairAbove = pair;
+      diff      = diffBelow;
+    }
+  }
+
+  copySobelEdges( pDerivate, derivateBufStride, width, height );
+}
+
+// p(y, x - 1) + 2 * p(y, x) + p(y, x + 1) for the 8 columns starting at src.
+static inline int16x8_t sobelRowSum_neon( const Pel* src )
+{
+  const int16x8_t left   = vld1q_s16( src - 1 );
+  const int16x8_t centre = vld1q_s16( src );
+  const int16x8_t right  = vld1q_s16( src + 1 );
+  return vaddq_s16( vaddq_s16( left, right ), vshlq_n_s16( centre, 1 ) );
+}
+
+// Vertical Sobel filter ( -1 -2 -1 / 0 0 0 / 1 2 1 ). A strip of 8 columns walks down the rows: each row's sum
+// s(y) = p(y, x - 1) + 2 * p(y, x) + p(y, x + 1) is computed once and used for two outputs, out(y) = s(y + 1) - s(y - 1),
+// so a row costs 3 loads instead of 6. The 16-bit sums wrap as the C code's do when stored to Pel.
+static void verticalSobelFilter_neon( Pel* const pPred, const int predStride, Pel* const pDerivate,
+                                      const int derivateBufStride, const int width, const int height )
+{
+  CHECKD( width % 8, "Width must be a multiple of 8" );
+
+  for( int x = 1; x < width - 1; x += 8 )
+  {
+    const bool lastStrip = x + 8 > width - 1;
+    const Pel* src       = pPred + x;
+
+    int16x8_t sumAbove = sobelRowSum_neon( src );
+    src += predStride;
+    int16x8_t sum = sobelRowSum_neon( src );
+
+    for( int y = 1; y < height - 1; y++ )
+    {
+      src += predStride;
+      const int16x8_t sumBelow = sobelRowSum_neon( src );
+
+      storeSobelStrip( pDerivate + y * derivateBufStride + x, vsubq_s16( sumBelow, sumAbove ), lastStrip );
+
+      sumAbove = sum;
+      sum      = sumBelow;
+    }
+  }
+
+  copySobelEdges( pDerivate, derivateBufStride, width, height );
+}
+
 template<>
 void AffineGradientSearch::_initAffineGradientSearchARM<NEON>()
 {
+  m_HorizontalSobelFilter = horizontalSobelFilter_neon;
+  m_VerticalSobelFilter   = verticalSobelFilter_neon;
   m_EqualCoeffComputer[0] = simdEqualCoeffComputer_neon<false>;
   m_EqualCoeffComputer[1] = simdEqualCoeffComputer_neon<true>;
 }
