@@ -53,9 +53,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
+#include "../Buffer_neon.h"
 #include "sum_neon.h"
 #include "transpose_neon.h"
-#include "../Buffer_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
