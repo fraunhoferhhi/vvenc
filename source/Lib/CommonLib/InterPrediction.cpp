@@ -439,16 +439,16 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
     CHECK(CU::isIBC(cu) && cu.refIdx[refList] != MAX_NUM_REF, "Invalid reference index for ibc mode");
     CHECK((CU::isInter(cu) && cu.refIdx[refList] >= cu.cs->slice->numRefIdx[ refPicList ]), "Invalid reference index");
 
-    puBuf[refList] = m_yuvPred[refList].getCompactBuf( cu );
+    if( cu.refIdx[0] < 0 || cu.refIdx[1] < 0 )
+    {
+      // uni-prediction: the filters already write the final samples (clipped, or unclipped high precision for GEO's
+      // later blend), so predict straight into yuvPred instead of into m_yuvPred plus a copy
+      xPredInterUni( cu, refPicList, yuvPred, cu.geo, bdofApplied );
+      return;
+    }
 
-    if( cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 )
-    {
-      xPredInterUni ( cu, refPicList, puBuf[refList], true, bdofApplied );
-    }
-    else
-    {
-      xPredInterUni( cu, refPicList, puBuf[refList], cu.geo, bdofApplied );
-    }
+    puBuf[refList] = m_yuvPred[refList].getCompactBuf( cu );
+    xPredInterUni ( cu, refPicList, puBuf[refList], true, bdofApplied );
   }
 
   xWeightedAverage( cu, puBuf[0], puBuf[1], yuvPred, bdofApplied, yuvPredTmp );
@@ -991,48 +991,35 @@ void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const PelUn
 
   CHECK( chromaOnly && lumaOnly, "should not happen" );
 
+  // uni-prediction is written straight into the destination (xPredInterBi)
+  CHECKD( cu.refIdx[0] < 0 || cu.refIdx[1] < 0, "xWeightedAverage needs bi-prediction" );
+
   const ClpRngs& clpRngs  = cu.slice->clpRngs;
-  const int      iRefIdx0 = cu.refIdx[0];
-  const int      iRefIdx1 = cu.refIdx[1];
 
-  if( iRefIdx0 >= 0 && iRefIdx1 >= 0 )
+  if( cu.BcwIdx != BCW_DEFAULT && ( yuvPredTmp || !cu.ciip ) )
   {
-    if( cu.BcwIdx != BCW_DEFAULT && ( yuvPredTmp || !cu.ciip ) )
-    {
-      CHECK( bdofApplied, "BCW is disallowed with BIO" );
+    CHECK( bdofApplied, "BCW is disallowed with BIO" );
 
-      pcYuvDst.addWeightedAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, cu.BcwIdx, chromaOnly, lumaOnly );
+    pcYuvDst.addWeightedAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, cu.BcwIdx, chromaOnly, lumaOnly );
 
-      if( yuvPredTmp )
-      {
-        yuvPredTmp->addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
-      }
-      return;
-    }
-    
-    if( bdofApplied && !chromaOnly )
+    if( yuvPredTmp )
     {
-      xApplyBDOF( pcYuvDst.Y(), clpRngs[COMP_Y] );
+      yuvPredTmp->addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
     }
-    if( !bdofApplied && ( lumaOnly || chromaOnly ) )
-    {
-      pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
-    }
-    else if( !lumaOnly )   // with BDOF the luma is done above, and only chroma is left to average
-    {
-      pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, bdofApplied );
-    }
+    return;
   }
-  else
+
+  if( bdofApplied && !chromaOnly )
   {
-    if( cu.geo )
-    {
-      pcYuvDst.copyFrom( iRefIdx0 >= 0 ? pcYuvSrc0 : pcYuvSrc1 );
-    }
-    else
-    {
-      pcYuvDst.copyClip( iRefIdx0 >= 0 ? pcYuvSrc0 : pcYuvSrc1, clpRngs, lumaOnly, chromaOnly );
-    }
+    xApplyBDOF( pcYuvDst.Y(), clpRngs[COMP_Y] );
+  }
+  if( !bdofApplied && ( lumaOnly || chromaOnly ) )
+  {
+    pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
+  }
+  else if( !lumaOnly )   // with BDOF the luma is done above, and only chroma is left to average
+  {
+    pcYuvDst.addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, bdofApplied );
   }
 }
 
