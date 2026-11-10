@@ -4133,6 +4133,42 @@ static bool check_sub4( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases
   return true;
 }
 
+// sub8 with any Pel values (the SIMD versions wrap around like C) for the widths AreaBuf::subtract passes it (multiples of
+// 8); the whole destination is compared, so that writes beyond the block are found
+static bool check_sub8( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::sub8\n" );
+  DimensionGenerator rng;
+  auto anyPel = []() { return Pel( ( rand() << 8 ) ^ rand() ); };
+  static constexpr int maxStride = 128 + 16, maxHeight = 64;
+  Pel* src0 = ( Pel* ) xMalloc( Pel, maxStride * maxHeight );
+  Pel* src1 = ( Pel* ) xMalloc( Pel, maxStride * maxHeight );
+
+  bool ok = true;
+  for( unsigned i = 0; ok && i < num_cases; i++ )
+  {
+    const int width      = rng.getOneOf<int>( { 8, 16, 24, 32, 48, 64, 128 } );
+    const int height     = rng.get( 1, maxHeight );
+    const int src0Stride = ( ( width + 7 ) & ~7 ) + 8 * rng.get( 0, 2 );
+    const int src1Stride = ( ( width + 7 ) & ~7 ) + 8 * rng.get( 0, 2 );
+    const int dstStride  = width + rng.get( 0, 9 );
+    std::generate( src0, src0 + src0Stride * height, anyPel );
+    std::generate( src1, src1 + src1Stride * height, anyPel );
+    std::vector<Pel> dstRef( dstStride * height, 0x5a5a ), dstOpt( dstStride * height, 0x5a5a );
+
+    ref->sub8( src0, src0Stride, src1, src1Stride, dstRef.data(), dstStride, width, height );
+    opt->sub8( src0, src0Stride, src1, src1Stride, dstOpt.data(), dstStride, width, height );
+
+    std::ostringstream sstm;
+    sstm << "sub8 " << width << "x" << height << " strides=" << src0Stride << "," << src1Stride << "," << dstStride;
+    ok = compare_values_1d( sstm.str(), dstRef.data(), dstOpt.data(), dstStride * height );
+  }
+
+  xFree( src0 );
+  xFree( src1 );
+  return ok;
+}
+
 // Block statistics: sumSquaredError, sum and sumAndSumSquares over random sizes and strides; sample values up to
 // 15 bit (the documented range of the SIMD sums of squares), and signed 16-bit values for the sums.
 static bool check_blockStatistics( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4600,6 +4636,7 @@ static bool test_PelBufferOps()
   passed = check_copyClipScalarTail( &ref, num_cases ) && passed;
   passed = check_width2Ops( &ref, &opt, num_cases ) && passed;
   passed = check_sub4( &ref, &opt, num_cases ) && passed;
+  passed = check_sub8( &ref, &opt, num_cases ) && passed;
   passed = check_pictureChecksum( &ref, &opt, num_cases ) && passed;
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;

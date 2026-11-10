@@ -1314,20 +1314,43 @@ void sub_SSE( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, 
 {
   if( W == 8 )
   {
-    while( height-- )
+#if USE_AVX2
+    if( ( width & 15 ) == 0 && vext >= AVX2 )
     {
-      for( int x = 0; x < width; x += 8 )
+      while( height-- )
       {
-        __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src0[x] );
-        __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src1[x] );
-        __m128i vdest = _mm_sub_epi16 ( vsrc0, vsrc1 );
+        for( int x = 0; x < width; x += 16 )
+        {
+          __m256i vsrc0 = _mm256_loadu_si256( ( const __m256i* ) &src0[x] );
+          __m256i vsrc1 = _mm256_loadu_si256( ( const __m256i* ) &src1[x] );
+          __m256i vdest = _mm256_sub_epi16  ( vsrc0, vsrc1 );
 
-        _mm_storeu_si128( ( __m128i* ) &dest[x], vdest );
+          _mm256_storeu_si256( ( __m256i* ) &dest[x], vdest );
+        }
+
+        src0 += src0Stride;
+        src1 += src1Stride;
+        dest += destStride;
       }
+    }
+    else
+#endif
+    {
+      while( height-- )
+      {
+        for( int x = 0; x < width; x += 8 )
+        {
+          __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src0[x] );
+          __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src1[x] );
+          __m128i vdest = _mm_sub_epi16 ( vsrc0, vsrc1 );
 
-      src0 += src0Stride;
-      src1 += src1Stride;
-      dest += destStride;
+          _mm_storeu_si128( ( __m128i* ) &dest[x], vdest );
+        }
+
+        src0 += src0Stride;
+        src1 += src1Stride;
+        dest += destStride;
+      }
     }
   }
   else if( W == 4 )
