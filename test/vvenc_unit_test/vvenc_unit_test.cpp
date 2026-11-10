@@ -3848,6 +3848,61 @@ static bool check_EqualCoeffComputer( AffineGradientSearch* ref, AffineGradientS
   return passed;
 }
 
+template<typename G>
+static bool check_SobelFilter( AffineGradientSearch* ref, AffineGradientSearch* opt, unsigned num_cases, G inp_gen )
+{
+  DimensionGenerator dim;
+
+  // The source has a margin of one row and column around the block, and the SIMD kernels read up to column width + 1.
+  static constexpr int maxSrcStride = MAX_CU_SIZE + 8;
+  std::vector<Pel> src( ( MAX_CU_SIZE + 2 ) * maxSrcStride + 8 );
+  std::vector<Pel> dstRef( MAX_CU_SIZE * MAX_CU_SIZE );
+  std::vector<Pel> dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
+
+  bool passed = true;
+
+  for( int vertical : { 0, 1 } )
+  {
+    std::ostringstream sstm_test;
+    sstm_test << "AffineGradientSearch::" << ( vertical ? "Vertical" : "Horizontal" )
+              << "SobelFilter Input=" << inp_gen.input_type();
+    std::cout << "Testing " << sstm_test.str() << std::endl;
+
+    for( unsigned n = 0; n < num_cases; n++ )
+    {
+      const int width     = dim.get( 8, MAX_CU_SIZE, 8 );
+      const int height    = dim.get( 8, MAX_CU_SIZE, 4 );
+      const int srcStride = dim.get( width + 2, maxSrcStride );
+      const int dstStride = dim.get( width, MAX_CU_SIZE );
+
+      std::generate( src.begin(), src.end(), inp_gen );
+      // The same canary in both outputs, compared over the whole buffer, catches writes outside the block.
+      std::fill( dstRef.begin(), dstRef.end(), Pel( 0x5a5a ) );
+      std::fill( dstOpt.begin(), dstOpt.end(), Pel( 0x5a5a ) );
+
+      Pel* block = src.data() + srcStride + 1;
+      if( vertical )
+      {
+        ref->m_VerticalSobelFilter( block, srcStride, dstRef.data(), dstStride, width, height );
+        opt->m_VerticalSobelFilter( block, srcStride, dstOpt.data(), dstStride, width, height );
+      }
+      else
+      {
+        ref->m_HorizontalSobelFilter( block, srcStride, dstRef.data(), dstStride, width, height );
+        opt->m_HorizontalSobelFilter( block, srcStride, dstOpt.data(), dstStride, width, height );
+      }
+
+      std::ostringstream sstm_subtest;
+      sstm_subtest << sstm_test.str() << " srcStride=" << srcStride << " dstStride=" << dstStride << " width=" << width
+                   << " height=" << height;
+
+      passed = compare_values_2d( sstm_subtest.str(), dstRef.data(), dstOpt.data(), MAX_CU_SIZE, MAX_CU_SIZE ) && passed;
+    }
+  }
+
+  return passed;
+}
+
 static bool test_AffineGradientSearch()
 {
   AffineGradientSearch ref{ /*enableOpt=*/false };
@@ -3863,6 +3918,8 @@ static bool test_AffineGradientSearch()
 
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, random_gen ) && passed;
   passed = check_EqualCoeffComputer( &ref, &opt, num_cases, minmax_gen ) && passed;
+  passed = check_SobelFilter( &ref, &opt, num_cases, random_gen ) && passed;
+  passed = check_SobelFilter( &ref, &opt, num_cases, minmax_gen ) && passed;
 
   return passed;
 }
