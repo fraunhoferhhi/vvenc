@@ -65,6 +65,31 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// Adds the squared differences of two rows of w samples (w a multiple of 8) to accLo and accHi.
+static inline void addRowPairSquaredDiffs_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                                const ptrdiff_t buffStride, const int w, int32x4_t& accLo,
+                                                int32x4_t& accHi )
+{
+  int x1 = 0;
+  do
+  {
+    int16x8_t o1 = vld1q_s16( org + x1 );
+    int16x8_t b1 = vld1q_s16( buf + x1 );
+    int16x8_t o2 = vld1q_s16( org + origStride + x1 );
+    int16x8_t b2 = vld1q_s16( buf + buffStride + x1 );
+
+    int16x8_t diff1 = vabdq_s16( o1, b1 );
+    int16x8_t diff2 = vabdq_s16( o2, b2 );
+    accLo = vmlal_s16( accLo, vget_low_s16( diff1 ), vget_low_s16( diff1 ) );
+    accHi = vmlal_s16( accHi, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
+
+    accLo = vmlal_s16( accLo, vget_low_s16( diff2 ), vget_low_s16( diff2 ) );
+    accHi = vmlal_s16( accHi, vget_high_s16( diff2 ), vget_high_s16( diff2 ) );
+
+    x1 += 8;
+  } while( x1 != w );
+}
+
 template<FilterCoeffType4 xType, FilterCoeffType4 yType>
 static inline int motionErrorLumaFrac_loRes2D_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                                     const ptrdiff_t buffStride, int w, int h, const int16_t* xFilter,
@@ -220,34 +245,35 @@ static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, 
 {
   CHECKD( w % 8 != 0, "Width must be a multiple of eight" );
   CHECKD( h % 2 != 0, "Height must be a multiple of two" );
+  CHECKD( w > 64, "Width must be at most 64" );
+
+  // Like every MCTF error kernel, this returns the exact error when it is not above besterror and a value above
+  // besterror otherwise: the callers only test error < besterror. Blocks of up to 8 rows are summed in full with one
+  // reduction at the end, since the early exit after a row pair rarely saves enough rows there to pay for the reduction
+  // and the branch after every pair. The sum cannot overflow: at most 64 x 8 samples of at most 10 bits. Taller blocks
+  // check the running error after every row pair.
+  if( h <= 8 )
+  {
+    int32x4_t accLo = vdupq_n_s32( 0 );
+    int32x4_t accHi = vdupq_n_s32( 0 );
+    do
+    {
+      addRowPairSquaredDiffs_neon( org, origStride, buf, buffStride, w, accLo, accHi );
+      org += 2 * origStride;
+      buf += 2 * buffStride;
+      h -= 2;
+    } while( h != 0 );
+    return horizontal_add_s32x4( vaddq_s32( accLo, accHi ) );
+  }
 
   int error = 0;
   do
   {
-    int32x4_t acc_lo = vdupq_n_s32( 0 );
-    int32x4_t acc_hi = vdupq_n_s32( 0 );
+    int32x4_t accLo = vdupq_n_s32( 0 );
+    int32x4_t accHi = vdupq_n_s32( 0 );
+    addRowPairSquaredDiffs_neon( org, origStride, buf, buffStride, w, accLo, accHi );
 
-    int x1 = 0;
-    do
-    {
-      int16x8_t o1 = vld1q_s16( org + x1 );
-      int16x8_t b1 = vld1q_s16( buf + x1 );
-      int16x8_t o2 = vld1q_s16( org + origStride + x1 );
-      int16x8_t b2 = vld1q_s16( buf + buffStride + x1 );
-
-      int16x8_t diff1 = vabdq_s16( o1, b1 );
-      int16x8_t diff2 = vabdq_s16( o2, b2 );
-      acc_lo = vmlal_s16( acc_lo, vget_low_s16( diff1 ), vget_low_s16( diff1 ) );
-      acc_hi = vmlal_s16( acc_hi, vget_high_s16( diff1 ), vget_high_s16( diff1 ) );
-
-      acc_lo = vmlal_s16( acc_lo, vget_low_s16( diff2 ), vget_low_s16( diff2 ) );
-      acc_hi = vmlal_s16( acc_hi, vget_high_s16( diff2 ), vget_high_s16( diff2 ) );
-
-      x1 += 8;
-    } while( x1 != w );
-
-    int32x4_t diff2_sum = vaddq_s32( acc_lo, acc_hi );
-    error += horizontal_add_s32x4( diff2_sum );
+    error += horizontal_add_s32x4( vaddq_s32( accLo, accHi ) );
     if( error > besterror )
     {
       return error;
