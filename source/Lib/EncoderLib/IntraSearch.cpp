@@ -2341,7 +2341,8 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         currTU.copyComponentFrom(tmpTUcur, COMP_Cb);
         currTU.copyComponentFrom(tmpTUcur, COMP_Cr);
 
-        m_CABACEstimator->getCtx() = ctxBestTUL;
+        // swapped, not copied: ctxBestTUL is not read again without joint CbCr
+        m_CABACEstimator->getCtx().swap( ctxBestTUL );
       }
     }
 
@@ -2356,8 +2357,9 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
         tmpTU.copyComponentFrom(tmpTUcur, COMP_Cb);
         tmpTU.copyComponentFrom(tmpTUcur, COMP_Cr);
-        m_CABACEstimator->getCtx() = ctxBestTUL;
-        ctxBest = m_CABACEstimator->getCtx();
+        // the best contexts go to ctxBest only (swapped, not copied): every joint candidate below starts from ctxStartTU, and
+        // when none is coded the contexts are restored from ctxBest at the end
+        static_cast<Ctx&>( ctxBest ).swap( ctxBestTUL );
       }
       // Test using joint chroma residual coding
       double     bestCostCbCr = bestCostCb + bestCostCr;
@@ -2529,7 +2531,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         cs.cus[0]->lfnstIdx = bestLfnstIdx;
         currTU.copyComponentFrom(tmpTU, COMP_Cb);
         currTU.copyComponentFrom(tmpTU, COMP_Cr);
-        m_CABACEstimator->getCtx() = ctxBest;
+        m_CABACEstimator->getCtx().swap( ctxBest );   // ctxBest is not read again
       }
       currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) || TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
     } // jointCbCr
