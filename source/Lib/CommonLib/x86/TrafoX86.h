@@ -526,6 +526,100 @@ static ALWAYS_INLINE void fwdEvenOdd_avx2( const __m256i* vx, __m256i* ve, __m25
   }
 }
 
+// Forward matrix multiply with the lines across the lanes, AVX2: 16 inputs (the E or O half of a 32-point DCT-II) of 8
+// source lines, vsrc[l] = the 16 int16 of line l, numRows output rows. Row r uses the 16 coefficients at itPtr + r *
+// rowStride; its 8 outputs, one per line, are stored rounded and shifted at dstPtr + r * dstStride (consecutive lines).
+// An 8 x 8 transpose of the lines' int32 pairs gives vpair[p] = the pair (x[2p], x[2p+1]) of all 8 lines, so a row is
+// the sum over p of vpmaddwd( vpair[p], coefficients (2p, 2p+1) in every lane ): no horizontal adds, unlike
+// fwdMatMulRows_avx2. The int32 sums are the same in any order, so the output equals that kernel's.
+template<unsigned rowStride>
+static ALWAYS_INLINE void fwdMatMul16Cols8Lines_avx2( const TMatrixCoeff* itPtr, const __m256i* vsrc, unsigned numRows,
+                                                      TCoeff* dstPtr, ptrdiff_t dstStride, int rnd_factor, int shift )
+{
+  // a line's pairs 0-3 are in its low 128-bit half, 4-7 in the high half; the unpacks work within the halves
+  const __m256i t0 = _mm256_unpacklo_epi32( vsrc[0], vsrc[1] ), t1 = _mm256_unpackhi_epi32( vsrc[0], vsrc[1] );
+  const __m256i t2 = _mm256_unpacklo_epi32( vsrc[2], vsrc[3] ), t3 = _mm256_unpackhi_epi32( vsrc[2], vsrc[3] );
+  const __m256i t4 = _mm256_unpacklo_epi32( vsrc[4], vsrc[5] ), t5 = _mm256_unpackhi_epi32( vsrc[4], vsrc[5] );
+  const __m256i t6 = _mm256_unpacklo_epi32( vsrc[6], vsrc[7] ), t7 = _mm256_unpackhi_epi32( vsrc[6], vsrc[7] );
+  // u0 = pair 0 of lines 0-3 (low half) and pair 4 of lines 0-3 (high half), u1 pairs 1 and 5, ...; u4-u7 lines 4-7
+  const __m256i u0 = _mm256_unpacklo_epi64( t0, t2 ), u1 = _mm256_unpackhi_epi64( t0, t2 );
+  const __m256i u2 = _mm256_unpacklo_epi64( t1, t3 ), u3 = _mm256_unpackhi_epi64( t1, t3 );
+  const __m256i u4 = _mm256_unpacklo_epi64( t4, t6 ), u5 = _mm256_unpackhi_epi64( t4, t6 );
+  const __m256i u6 = _mm256_unpacklo_epi64( t5, t7 ), u7 = _mm256_unpackhi_epi64( t5, t7 );
+  const __m256i vpair[8] = { _mm256_permute2x128_si256( u0, u4, 0x20 ), _mm256_permute2x128_si256( u1, u5, 0x20 ),
+                             _mm256_permute2x128_si256( u2, u6, 0x20 ), _mm256_permute2x128_si256( u3, u7, 0x20 ),
+                             _mm256_permute2x128_si256( u0, u4, 0x31 ), _mm256_permute2x128_si256( u1, u5, 0x31 ),
+                             _mm256_permute2x128_si256( u2, u6, 0x31 ), _mm256_permute2x128_si256( u3, u7, 0x31 ) };
+  const __m256i vrnd   = _mm256_set1_epi32( rnd_factor );
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+
+  for( unsigned r = 0; r < numRows; r++, itPtr += rowStride, dstPtr += dstStride )
+  {
+    __m256i vsum = vrnd;
+
+    for( int p = 0; p < 8; p++ )
+    {
+      int32_t coeffPair;   // coefficient 2p in the low int16, 2p + 1 in the high one, as vpmaddwd pairs the inputs
+      memcpy( &coeffPair, itPtr + 2 * p, sizeof( coeffPair ) );
+      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vpair[p], _mm256_set1_epi32( coeffPair ) ) );
+    }
+
+    _mm256_storeu_si256( ( __m256i* ) dstPtr, _mm256_sra_epi32( vsum, vshift ) );
+  }
+}
+
+// The two products of a 32-point forward DCT-II after the even/odd split, for 8 lines (ve[l], vo[l]: E and O of line
+// l): E gives the cutoff / 2 even output rows, O the cutoff / 2 odd ones, at dst[row * line].
+static ALWAYS_INLINE void fwdDCT2_32Products8Lines_avx2( const __m256i* ve, const __m256i* vo, int cutoff, TCoeff* dst,
+                                                         int line, int rnd_factor, int shift )
+{
+  const TMatrixCoeff* tc = g_trCoreDCT2P32[TRANSFORM_FORWARD][0];
+  fwdMatMul16Cols8Lines_avx2<64>( tc,      ve, cutoff >> 1, dst,        2 * line, rnd_factor, shift );
+  fwdMatMul16Cols8Lines_avx2<64>( tc + 32, vo, cutoff >> 1, dst + line, 2 * line, rnd_factor, shift );
+}
+
+// A 32-point forward DCT-II of 8 lines of int32 inputs (the second stage), when all of them lie in [-16384, 16383] so
+// that the int16 even/odd split cannot wrap: returns false, having written nothing, otherwise.
+static ALWAYS_INLINE bool fwdDCT2_32In8Lines_avx2( const TCoeff* src, TCoeff* dst, int line, int cutoff, int rnd_factor, int shift )
+{
+  __m256i ve[8], vo[8];
+  // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383] (saturated packs included)
+  __m256i vrange = _mm256_setzero_si256();
+
+  for( int l = 0; l < 8; l++ )
+  {
+    __m256i vx[2];
+    fwdPackLine_avx2<2>( src + l * 32, vx );
+    vrange = _mm256_or_si256( vrange, _mm256_add_epi16( vx[0], _mm256_set1_epi16( 16384 ) ) );
+    vrange = _mm256_or_si256( vrange, _mm256_add_epi16( vx[1], _mm256_set1_epi16( 16384 ) ) );
+    fwdEvenOdd_avx2<2>( vx, &ve[l], &vo[l] );
+  }
+
+  if( !_mm256_testz_si256( vrange, _mm256_set1_epi16( -32768 ) ) )
+  {
+    return false;
+  }
+
+  fwdDCT2_32Products8Lines_avx2( ve, vo, cutoff, dst, line, rnd_factor, shift );
+  return true;
+}
+
+// The first stage of a 32-point forward DCT-II, 8 lines of residuals
+static ALWAYS_INLINE void fwdPelDCT2_32In8Lines_avx2( const Pel* src, ptrdiff_t stride, TCoeff* dst, int line, int cutoff,
+                                                      int rnd_factor, int shift )
+{
+  __m256i ve[8], vo[8];
+
+  for( int l = 0; l < 8; l++ )
+  {
+    const __m256i vx[2] = { _mm256_loadu_si256( ( const __m256i* ) &src[l * stride] ),
+                            _mm256_loadu_si256( ( const __m256i* ) &src[l * stride + 16] ) };
+    fwdEvenOdd_avx2<2>( vx, &ve[l], &vo[l] );
+  }
+
+  fwdDCT2_32Products8Lines_avx2( ve, vo, cutoff, dst, line, rnd_factor, shift );
+}
+
 #endif
 template<X86_VEXT vext, int trSize>
 void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
@@ -772,6 +866,15 @@ void fastForwardDCT2_EvenOdd_SIMD( const TCoeff* src, TCoeff* dst, int shift, in
 #endif
   for( int i = 0; i < reducedLine; i += groupLines, src += groupLines * N )
   {
+    // N = 32: 8 lines at a time with the lines across the lanes, when they fit; this group of 4 and the next are done then
+    if( N == 32 && fourLines && ( i & 7 ) == 0 && i + 8 <= reducedLine
+        && fwdDCT2_32In8Lines_avx2( src, dst + i, line, cutoff, rnd_factor, shift ) )
+    {
+      i   += 4;
+      src += 4 * N;
+      continue;
+    }
+
     __m256i vx[4][trLoops];
     // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383]: OR all of them, test the signs
     __m256i vrange = _mm256_setzero_si256();
@@ -1908,6 +2011,18 @@ static void fastFwdPelDCT2_EvenOdd( const Pel* src, ptrdiff_t stride, TCoeff* ds
   }
 
   const int  rnd_factor = 1 << ( shift - 1 );
+
+  if( N == 32 && ( line & 7 ) == 0 )
+  {
+    // 8 lines at a time with the lines across the lanes
+    for( int i = 0; i < line; i += 8, src += 8 * stride )
+    {
+      fwdPelDCT2_32In8Lines_avx2( src, stride, dst + i, line, cutoff, rnd_factor, shift );
+    }
+    _mm256_zeroupper();
+    return;
+  }
+
   const bool fourLines  = line != 2;
   const int  groupLines = fourLines ? 4 : 2;
 

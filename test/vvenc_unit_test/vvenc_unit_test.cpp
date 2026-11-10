@@ -1807,8 +1807,17 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
           }
           if( dist == 2 )
           {
-            const int trip[] = { 16384, 32767, -32768 };
-            src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+            // values the range check must catch, in a line that changes with the cut-off (m * 5 % reducedLine: with
+            // reducedLine 8, lines 5, 2, 7 and 4 for the cut-offs 8, 16, 24 and 32) and, for the cut-off 24, also in the
+            // line 4 further on: a group of 8 lines sees them in its second half, its first half and both
+            const int      trip[]   = { 16384, 32767, -32768 };
+            const unsigned m        = cutoff / 8;
+            const unsigned tripLine = m * 5 % reducedLine;
+            src[tripLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            if( m == 3 )
+            {
+              src[( tripLine + 4 ) % reducedLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            }
           }
           std::fill( dst0, dst0 + size, 0x5a5a5a5a );
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );
