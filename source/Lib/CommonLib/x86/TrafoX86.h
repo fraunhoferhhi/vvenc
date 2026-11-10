@@ -620,6 +620,86 @@ static ALWAYS_INLINE void fwdPelDCT2_32In8Lines_avx2( const Pel* src, ptrdiff_t 
   fwdDCT2_32Products8Lines_avx2( ve, vo, cutoff, dst, line, rnd_factor, shift );
 }
 
+// Forward matrix multiply with the lines across the lanes, AVX2, for 8 inputs (the E or O half of a 16-point DCT-II) of
+// 8 source lines in four registers, vsrc[l] = [the 8 int16 of line l | of line l + 4], l = 0 .. 3; numRows output rows,
+// stored as in fwdMatMul16Cols8Lines_avx2. A 4 x 4 transpose of the int32 pairs within each 128-bit half gives vpair[p]
+// = the pair (x[2p], x[2p+1]) of lines 0-3 | of lines 4-7, already in line order, so a row is four vpmaddwd with a
+// broadcast coefficient pair. The row loop is that of fwdMatMul16Cols8Lines_avx2 with 4 pairs, kept apart so that the
+// 32-point kernel stays as it is: as one shared template it measured no faster.
+template<unsigned rowStride>
+static ALWAYS_INLINE void fwdMatMul8Cols8Lines_avx2( const TMatrixCoeff* itPtr, const __m256i* vsrc, unsigned numRows,
+                                                     TCoeff* dstPtr, ptrdiff_t dstStride, int rnd_factor, int shift )
+{
+  // t0 = pairs 0, 1 of lines 0, 1 (low half) and 4, 5 (high half), t1 pairs 2, 3; t2, t3 the same for lines 2, 3 | 6, 7
+  const __m256i t0 = _mm256_unpacklo_epi32( vsrc[0], vsrc[1] ), t1 = _mm256_unpackhi_epi32( vsrc[0], vsrc[1] );
+  const __m256i t2 = _mm256_unpacklo_epi32( vsrc[2], vsrc[3] ), t3 = _mm256_unpackhi_epi32( vsrc[2], vsrc[3] );
+  const __m256i vpair[4] = { _mm256_unpacklo_epi64( t0, t2 ), _mm256_unpackhi_epi64( t0, t2 ),
+                             _mm256_unpacklo_epi64( t1, t3 ), _mm256_unpackhi_epi64( t1, t3 ) };
+  const __m256i vrnd   = _mm256_set1_epi32( rnd_factor );
+  const __m128i vshift = _mm_cvtsi32_si128( shift );
+
+  for( unsigned r = 0; r < numRows; r++, itPtr += rowStride, dstPtr += dstStride )
+  {
+    __m256i vsum = vrnd;
+
+    for( int p = 0; p < 4; p++ )
+    {
+      int32_t coeffPair;   // coefficient 2p in the low int16, 2p + 1 in the high one, as vpmaddwd pairs the inputs
+      memcpy( &coeffPair, itPtr + 2 * p, sizeof( coeffPair ) );
+      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vpair[p], _mm256_set1_epi32( coeffPair ) ) );
+    }
+
+    _mm256_storeu_si256( ( __m256i* ) dstPtr, _mm256_sra_epi32( vsum, vshift ) );
+  }
+}
+
+// The 16-point forward DCT-II of 8 lines after their even/odd split, vx[l] = the 16 int16 inputs of line l: E and O are
+// built as [line l | line l + 4] for fwdMatMul8Cols8Lines_avx2; E gives the cutoff / 2 even output rows, O the odd ones.
+static ALWAYS_INLINE void fwdDCT2_16Products8Lines_avx2( const __m256i* vx, int cutoff, TCoeff* dst, int line, int rnd_factor,
+                                                         int shift )
+{
+  // reverses the 8 int16 within each 128-bit half
+  const __m256i vrev = _mm256_setr_epi8( 14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1,
+                                         14, 15, 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1 );
+  __m256i ve[4], vo[4];
+
+  for( int l = 0; l < 4; l++ )
+  {
+    // [x[0..7] of line l | of line l + 4] and [x[15..8] of line l | of line l + 4]
+    const __m256i vfirst  = _mm256_permute2x128_si256( vx[l], vx[l + 4], 0x20 );
+    const __m256i vmirror = _mm256_shuffle_epi8( _mm256_permute2x128_si256( vx[l], vx[l + 4], 0x31 ), vrev );
+    ve[l] = _mm256_add_epi16( vfirst, vmirror );
+    vo[l] = _mm256_sub_epi16( vfirst, vmirror );
+  }
+
+  const TMatrixCoeff* tc = g_trCoreDCT2P16[TRANSFORM_FORWARD][0];
+  fwdMatMul8Cols8Lines_avx2<32>( tc,      ve, cutoff >> 1, dst,        2 * line, rnd_factor, shift );
+  fwdMatMul8Cols8Lines_avx2<32>( tc + 16, vo, cutoff >> 1, dst + line, 2 * line, rnd_factor, shift );
+}
+
+// A 16-point forward DCT-II of 8 lines of int32 inputs (the second stage), when all of them lie in [-16384, 16383] so
+// that the int16 even/odd split cannot wrap: returns false, having written nothing, otherwise.
+static ALWAYS_INLINE bool fwdDCT2_16In8Lines_avx2( const TCoeff* src, TCoeff* dst, int line, int cutoff, int rnd_factor, int shift )
+{
+  __m256i vx[8];
+  // x + 16384 wraps to a negative int16 exactly when x lies outside [-16384, 16383] (saturated packs included)
+  __m256i vrange = _mm256_setzero_si256();
+
+  for( int l = 0; l < 8; l++ )
+  {
+    fwdPackLine_avx2<1>( src + l * 16, &vx[l] );
+    vrange = _mm256_or_si256( vrange, _mm256_add_epi16( vx[l], _mm256_set1_epi16( 16384 ) ) );
+  }
+
+  if( !_mm256_testz_si256( vrange, _mm256_set1_epi16( -32768 ) ) )
+  {
+    return false;
+  }
+
+  fwdDCT2_16Products8Lines_avx2( vx, cutoff, dst, line, rnd_factor, shift );
+  return true;
+}
+
 #endif
 template<X86_VEXT vext, int trSize>
 void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
@@ -938,6 +1018,14 @@ void fastForwardDCT2_EvenOdd16_SIMD( const TCoeff* src, TCoeff* dst, int shift, 
 
   for( int i = 0; i < reducedLine; i += 2, src += 32 )
   {
+    // 8 lines at a time with the lines across the lanes, when they fit; these 2 lines and the next 6 are done then
+    if( ( i & 7 ) == 0 && i + 8 <= reducedLine && fwdDCT2_16In8Lines_avx2( src, dst + i, line, cutoff, rnd_factor, shift ) )
+    {
+      i   += 6;
+      src += 6 * 16;
+      continue;
+    }
+
     __m256i vx[2][1];   // the 16 packed inputs of lines i and i + 1
     fwdPackLine_avx2<1>( src,      vx[0] );
     fwdPackLine_avx2<1>( src + 16, vx[1] );
@@ -1971,6 +2059,24 @@ static void fastFwdPelDCT2_16( const Pel* src, ptrdiff_t stride, TCoeff* dst, in
   if( cutoff & 7 )
   {
     fwdPelMatMul_avx2<16>( tc, src, stride, dst, shift, line, cutoff );
+    _mm256_zeroupper();
+    return;
+  }
+
+  if( ( line & 7 ) == 0 )
+  {
+    // 8 lines at a time with the lines across the lanes
+    for( int i = 0; i < line; i += 8, src += 8 * stride )
+    {
+      __m256i vx[8];
+
+      for( int l = 0; l < 8; l++ )
+      {
+        vx[l] = _mm256_loadu_si256( ( const __m256i* ) &src[l * stride] );
+      }
+
+      fwdDCT2_16Products8Lines_avx2( vx, cutoff, dst + i, line, rnd_factor, shift );
+    }
     _mm256_zeroupper();
     return;
   }
