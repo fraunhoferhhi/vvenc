@@ -1771,14 +1771,16 @@ static bool check_dct2_matrix_symmetry()
   return true;
 }
 
-// TCoeffOps::fastFwdDCT2[2..4] (the whole forward DCT-II 16/32/64 including the zeroed columns) against the scalar
-// matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values that trip
-// its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine / cutoff
-// combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, 12).
+// TCoeffOps::fastFwdDCT2[2..5] (the whole forward DCT-II 16/32/64 and 8 including the zeroed columns) against the
+// scalar matrix multiply. Inputs: residuals, the extremes of the SIMD even/odd split's range (16383, -16384), values
+// that trip its range check (16384, 32767, -32768, at one random position) and random int16; every line / reducedLine /
+// cutoff combination the callers use, plus line 1 and cutoffs the split leaves to the matrix multiply (4, and 12 from
+// 16 points).
 static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize )
 {
   printf( "Testing TCoeffOps::fastFwdDCT2 trSize=%d\n", trSize );
-  const TMatrixCoeff* tc = trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
+  const TMatrixCoeff* tc = trSize == 8  ? g_trCoreDCT2P8[TRANSFORM_FORWARD][0]
+                         : trSize == 16 ? g_trCoreDCT2P16[TRANSFORM_FORWARD][0]
                          : trSize == 32 ? g_trCoreDCT2P32[TRANSFORM_FORWARD][0] : g_trCoreDCT2P64[TRANSFORM_FORWARD][0];
   const unsigned coreIdx = Log2( trSize ) - 2;   // fastFwdCore_* index of the same size
   DimensionGenerator rng;
@@ -1796,19 +1798,26 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
     {
       for( unsigned cutoff = 4; cutoff <= std::min( trSize, 32u ); cutoff += 4 )
       {
-        for( int dist = 0; dist < 4; dist++ )
+        for( int dist = 0; dist < 6; dist++ )
         {
           for( unsigned n = 0; n < size; n++ )
           {
             src[n] = dist == 0 ? int( rng.get( 0, 2047 ) ) - 1024
               : dist == 1 ? ( rng.get( 0, 1 ) ? 16383 : -16384 )
               : dist == 2 ? int( rng.get( 0, 32767 ) ) - 16384
-              :             TCoeff( Pel( ( rand() << 8 ) ^ rand() ) );   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 3 ? TCoeff( Pel( ( rand() << 8 ) ^ rand() ) )   // any int16 value (RAND_MAX may be only 2^15 - 1)
+              : dist == 4 ? ( rng.get( 0, 1 ) ? 8191 : -8192 )         // the extremes of [-8192, 8191]
+              :             -8192;
           }
           if( dist == 2 )
           {
             const int trip[] = { 16384, 32767, -32768 };
             src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+          }
+          if( dist == 5 )
+          {
+            // one value just outside [-8192, 8191] anywhere among -8192s: taken as in range, -8193 would wrap EE
+            src[rng.get( 0, trSize * reducedLine - 1 )] = rng.get( 0, 1 ) ? 8192 : -8193;
           }
           std::fill( dst0, dst0 + size, 0x5a5a5a5a );
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );
@@ -1994,6 +2003,7 @@ static bool test_TCoeffOps()
   passed = check_fastFwdCore_2D_extreme( &ref, &opt, 4, 64 ) && passed;
 
   passed = check_dct2_matrix_symmetry() && passed;
+  passed = check_fastFwdDCT2( &ref, &opt, 5, 8 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
