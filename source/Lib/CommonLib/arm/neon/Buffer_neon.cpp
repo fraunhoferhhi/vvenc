@@ -70,8 +70,8 @@ namespace vvenc
 // weights so that each vector holds one tap of 16 outputs, and each tap adds weight * input[k] to the 16 sums. For
 // K = 8, each output's 8 weights times the 8 inputs are taken with vmull_s16 / vmlal_s16, and the 4 partial sums of
 // each output are reduced with horizontal_add_4d_s32x4. The weights are below 128 and |input| < 2^12, so products and
-// sums are C's in 32 bits; offset holds C's rounding term. The saturating narrow then the clip to 0..maxVal equal C's
-// clip of the 32-bit value.
+// sums are C's in 32 bits; offset holds C's rounding term. vqshrun shifts, clips negative values to 0 and saturates to
+// 16 bits, so with the min to maxVal it equals C's clip of the 32-bit value.
 static inline int32x4_t mipOffset_neon( const Pel* input, const int inputSize, const int inputOffset )
 {
   int sum = 0;
@@ -93,11 +93,11 @@ static inline void mipAddTap_neon( int32x4_t* acc, const uint8x16_t tap, const P
   acc[3] = vmlal_n_s16( acc[3], vget_high_s16( hi ), input );
 }
 
-static inline int16x8_t mipClip_neon( const int32x4_t sum0, const int32x4_t sum1, const int16x8_t vmax )
+static inline int16x8_t mipClip_neon( const int32x4_t sum0, const int32x4_t sum1, const uint16x8_t vmax )
 {
-  const int16x8_t res = vcombine_s16( vqmovn_s32( vshrq_n_s32( sum0, MIP_SHIFT_MATRIX ) ),
-                                      vqmovn_s32( vshrq_n_s32( sum1, MIP_SHIFT_MATRIX ) ) );
-  return vminq_s16( vmaxq_s16( res, vdupq_n_s16( 0 ) ), vmax );
+  const uint16x8_t res =
+    vcombine_u16( vqshrun_n_s32( sum0, MIP_SHIFT_MATRIX ), vqshrun_n_s32( sum1, MIP_SHIFT_MATRIX ) );
+  return vreinterpretq_s16_u16( vminq_u16( res, vmax ) );
 }
 
 // the dot products of the 8 inputs with the 8 weights of each of 4 outputs (32 bytes at weight): lane j is output j,
@@ -123,7 +123,7 @@ static inline int32x4_t mipDots4Outputs8Inputs_neon( const uint8_t* weight, cons
 
 // 16 outputs of 8 inputs from 128 weight bytes, clipped: outputs 0..7 in rows[0], 8..15 in rows[1]
 static inline void mip16Outputs8Inputs_neon( const uint8_t* weight, const Pel* input, const int32x4_t offset,
-                                             const int16x8_t vmax, int16x8_t* rows )
+                                             const uint16x8_t vmax, int16x8_t* rows )
 {
   const int16x8_t in = vld1q_s16( input );
   int32x4_t       acc[4];
@@ -147,8 +147,8 @@ static void mipMatrixMul_4_4_neon( Pel* res, const Pel* input, const uint8_t* we
   {
     mipAddTap_neon( acc, w.val[k], input[k] );
   }
-  const int16x8_t vmax    = vdupq_n_s16( maxVal );
-  int16x8_t       rows[2] = { mipClip_neon( acc[0], acc[1], vmax ), mipClip_neon( acc[2], acc[3], vmax ) };
+  const uint16x8_t vmax    = vdupq_n_u16( maxVal );
+  int16x8_t        rows[2] = { mipClip_neon( acc[0], acc[1], vmax ), mipClip_neon( acc[2], acc[3], vmax ) };
   if( transpose )
   {
     transpose_4x4_s16_paired( rows );
@@ -162,7 +162,7 @@ static void mipMatrixMul_8_4_neon( Pel* res, const Pel* input, const uint8_t* we
                                    const int inputOffset, bool transpose )
 {
   int16x8_t rows[2];
-  mip16Outputs8Inputs_neon( weight, input, mipOffset_neon( input, 8, inputOffset ), vdupq_n_s16( maxVal ), rows );
+  mip16Outputs8Inputs_neon( weight, input, mipOffset_neon( input, 8, inputOffset ), vdupq_n_u16( maxVal ), rows );
   if( transpose )
   {
     transpose_4x4_s16_paired( rows );
@@ -175,8 +175,8 @@ static void mipMatrixMul_8_4_neon( Pel* res, const Pel* input, const uint8_t* we
 static void mipMatrixMul_8_8_neon( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal,
                                    const int inputOffset, bool transpose )
 {
-  const int32x4_t offset = mipOffset_neon( input, 8, inputOffset );
-  const int16x8_t vmax   = vdupq_n_s16( maxVal );
+  const int32x4_t  offset = mipOffset_neon( input, 8, inputOffset );
+  const uint16x8_t vmax   = vdupq_n_u16( maxVal );
 
   int16x8_t rows[8];
   for( int i = 0; i < 4; i++ )
