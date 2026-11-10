@@ -455,6 +455,10 @@ protected:
   uint32_t          m_auiMVPIdxCost[AMVP_MAX_NUM_CANDS+1][AMVP_MAX_NUM_CANDS+1];
   Distortion        m_estMinDistSbt[NUMBER_SBT_MODE + 1]; // estimated minimum SSE value of the PU if using a SBT mode
   uint8_t           m_sbtRdoOrder[NUMBER_SBT_MODE];       // order of SBT mode in RDO
+  uint64_t          m_tuResiBits[MAX_NUM_TBLOCKS];        // residual bits per component of the CU's single TU
+  bool              m_tuResiBitsValid = false;
+  Ctx               m_tuLumaCtx;                          // what luma's coefficients of that TU left in the coefficient contexts
+  Ctx               m_tuChromaCtx;                        // what chroma's left there
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
   BcwMotionParam    m_uniMotions;
@@ -493,7 +497,8 @@ public:
   bool predInterSearch              ( CodingUnit& cu, Partitioner& partitioner, double& bestCostInter);
 
   /// set ME search range
-  void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
+  // bestCost: the cost to beat. A candidate at or above it needs no contexts left behind.
+  void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual, const double bestCost = MAX_DOUBLE );
 
   void setSearchRange               ( const Slice* slice, const VVEncCfg& encCfg );
 
@@ -714,7 +719,7 @@ private:
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );
 
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
-  void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
+  void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, const Ctx& ctxStart, Distortion *puiZeroDist = NULL );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
   void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
   void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost );

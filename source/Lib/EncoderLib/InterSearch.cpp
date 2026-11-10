@@ -215,8 +215,29 @@ InterSearch::~InterSearch()
   destroy();
 }
 
+// residual_coding, outside transform skip, changes only these contexts of its channel type and its transform skip flag. They lie back to
+// back (checked in InterSearch::init in debug builds).
+static CtxSet coeffCtxSpan()
+{
+  return CtxSet( Ctx::SigCoeffGroup[0].Offset, Ctx::LastY[1].Offset + Ctx::LastY[1].Size - Ctx::SigCoeffGroup[0].Offset );
+}
+
+static void saveCoeffCtx( Ctx& dst, const Ctx& src )
+{
+  dst = SubCtx( coeffCtxSpan(), src );
+  dst = SubCtx( Ctx::TransformSkipFlag, src );
+}
+
 void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
+#if _DEBUG
+  for( const CtxSet* set : { &Ctx::SigCoeffGroup[1], &Ctx::SigFlag[0], &Ctx::SigFlag[1], &Ctx::SigFlag[2], &Ctx::SigFlag[3], &Ctx::SigFlag[4], &Ctx::SigFlag[5],
+                             &Ctx::ParFlag[0], &Ctx::ParFlag[1], &Ctx::GtxFlag[0], &Ctx::GtxFlag[1], &Ctx::GtxFlag[2], &Ctx::GtxFlag[3], &Ctx::LastX[0], &Ctx::LastX[1], &Ctx::LastY[0] } )
+  {
+    CHECKD( set->Offset < coeffCtxSpan().Offset || set->Offset + set->Size > coeffCtxSpan().Offset + coeffCtxSpan().Size, "a coefficient context lies outside the span" );
+  }
+#endif
+
   InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_ifpLines );
   m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
@@ -3430,7 +3451,19 @@ void InterSearch::xEncodeInterResidualQT(CodingStructure &cs, Partitioner &parti
         }
         if( TU::getCbf( currTU, compID ) )
         {
-          m_CABACEstimator->residual_coding( currTU, compID );
+          if( cu.sbtInfo && compID == COMP_Y )
+          {
+            m_CABACEstimator->addEstFracBits( m_tuResiBits[COMP_Y] );
+          }
+          else
+          {
+            const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
+            m_CABACEstimator->residual_coding( currTU, compID );
+            if( cu.sbtInfo )
+            {
+              m_tuResiBits[compID] = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
+            }
+          }
         }
       }
     }
@@ -3690,7 +3723,8 @@ uint8_t InterSearch::skipSbtByRDCost( int width, int height, int mtDepth, uint8_
   return MAX_UCHAR;
 }
 
-void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist /*= NULL*/)
+// ctxStart: a copy of the estimator's contexts on entry (the callers save them right before the call); every test starts from it
+void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &partitioner, const Ctx& ctxStart, Distortion *puiZeroDist /*= NULL*/)
 {
   const UnitArea& currArea = partitioner.currArea();
   const SPS &sps           = *cs.sps;
@@ -3723,7 +3757,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   Distortion uiSingleDist         = 0;
   Distortion uiSingleDistComp [3] = { 0, 0, 0 };
 
-  const TempCtx ctxStart  ( m_CtxCache, m_CABACEstimator->getCtx() );
   TempCtx       ctxBest   ( m_CtxCache );
 
   if (bCheckFull)
@@ -3738,6 +3771,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     tu.checkTuNoResidual( partitioner.currPartIdx() );
 
     double minCost [MAX_NUM_TBLOCKS];
+    uint64_t resiBits = 0, bestLumaResiBits = 0;
 
     m_CABACEstimator->resetBits();
 
@@ -3755,7 +3789,24 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     bestTU.initData();
     bestTU.UnitArea::operator=( currArea );
 
-    bool ctxIsStart = true;   // nothing coded since ctxStart was saved: the first restore below can be skipped
+    // What the estimator coded since it last held ctxStart's contexts (at entry it does): nothing, only the zero cbf of one
+    // component (its QtCbf contexts), or more. A restore puts back only what changed.
+    enum class CtxChange { NONE, ZERO_CBF, ANY };
+    CtxChange   ctxChange   = CtxChange::NONE;
+    ComponentID zeroCbfComp = COMP_Y;   // read only in the ZERO_CBF state
+    auto restoreCtxStart = [&]()
+    {
+      if( ctxChange == CtxChange::ANY )
+      {
+        m_CABACEstimator->getCtx() = ctxStart;
+      }
+      else if( ctxChange == CtxChange::ZERO_CBF )
+      {
+        m_CABACEstimator->getCtx() = SubCtx( Ctx::QtCbf[zeroCbfComp], ctxStart );
+      }
+      ctxChange = CtxChange::NONE;
+    };
+
     for( uint32_t c = 0; c < numTBlocks; c++ )
     {
       const ComponentID compID    = ComponentID(c);
@@ -3799,11 +3850,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
 
 
-        if( !ctxIsStart )
-        {
-          m_CABACEstimator->getCtx() = ctxStart;
-        }
-        ctxIsStart = false;
+        restoreCtxStart();
         m_CABACEstimator->resetBits();
 
         if (bestTU.mtsIdx[compID] == MTS_SKIP && m_pcEncCfg->m_TS)
@@ -3855,6 +3902,9 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           {
             const bool prevCbf = (compID == COMP_Cr ? tu.cbf[COMP_Cb] : false);
             m_CABACEstimator->cbf_comp(*tu.cu, false, compArea, currDepth, prevCbf);
+            // the only bin coded since restoreCtxStart at the top of this mode
+            ctxChange   = CtxChange::ZERO_CBF;
+            zeroCbfComp = compID;
           }
 
           nonCoeffFracBits = m_CABACEstimator->getEstFracBits();
@@ -3870,12 +3920,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         {
           if (isFirstMode)
           {
-            // since ctxStart (restored above, or never left) only the zero cbf was coded; checktransformsNxN and
-            // transformNxN only read the contexts
-            m_CABACEstimator->getCtx() = SubCtx( Ctx::QtCbf[compID], ctxStart );
+            // since restoreCtxStart above only the zero cbf was coded (checktransformsNxN and transformNxN only read the
+            // contexts)
+            restoreCtxStart();
             m_CABACEstimator->resetBits();
           }
 
+          ctxChange = CtxChange::ANY;
           const bool prevCbf = ( compID == COMP_Cr ? tu.cbf[COMP_Cb] : false );
           m_CABACEstimator->cbf_comp( *tu.cu, true, compArea, currDepth, prevCbf );
           if( compID == COMP_Cr )
@@ -3886,7 +3937,9 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           CUCtx cuCtx;
           cuCtx.isDQPCoded = true;
           cuCtx.isChromaQpAdjCoded = true;
+          const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
           m_CABACEstimator->residual_coding(tu, compID, &cuCtx);
+          resiBits = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
           m_CABACEstimator->mts_idx(cu, &cuCtx);
 
           currCompFracBits = m_CABACEstimator->getEstFracBits();
@@ -3927,6 +3980,14 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           uiSingleDistComp[compID] = currCompDist;
           minCost[compID]          = currCompCost;
+          if( compID == COMP_Y )
+          {
+            bestLumaResiBits = resiBits;
+            if( currDepth == 0 && !cu.sbtInfo && currAbsSum > 0 )
+            {
+              saveCoeffCtx( m_tuLumaCtx, m_CABACEstimator->getCtx() );
+            }
+          }
           if (transformMode != (nNumTransformCands - 1))
           {
             bestTU.copyComponentFrom(tu, compID);
@@ -4033,7 +4094,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             m_pcTrQuant->scaleLambda(1.05);
           }
 
-          m_CABACEstimator->getCtx() = ctxStart;
+          restoreCtxStart();
           m_CABACEstimator->resetBits();
 
           PelBuf cbResi = csFull->getResiBuf(cbArea);
@@ -4095,6 +4156,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           }
           if (currAbsSum > 0)
           {
+            ctxChange = CtxChange::ANY;
             m_CABACEstimator->cbf_comp(*tu.cu, codedCbfMask >> 1, cbArea, currDepth, false);
             m_CABACEstimator->cbf_comp(*tu.cu, codedCbfMask & 1, crArea, currDepth, codedCbfMask >> 1);
             m_CABACEstimator->joint_cb_cr(tu, codedCbfMask);
@@ -4141,9 +4203,21 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
     }
 
-    m_CABACEstimator->getCtx() = ctxStart;
+    // The bits of the TU. Luma's coefficients were coded above from the same contexts, and chroma's share none with them unless in
+    // transform skip. Only a TU at depth 0 can skip them: a following TU would start from the contexts they leave behind, and here the
+    // caller goes back to ctxStart.
+    const bool reuseLumaBits = currDepth == 0 && !cu.sbtInfo && tu.mtsIdx[COMP_Y] != MTS_SKIP;
+    // The TU of an SBT CU: the caller codes the bits of the whole CU again after its TUs, and the other TU codes nothing, so these bits
+    // and the contexts they leave behind are never read. The caller takes luma's coefficients from here: they start from ctxStart in both
+    // places, and the cbfs before them there use other contexts. An SBT TU has no transform skip.
+    const bool bitsUnused = cu.sbtInfo && currDepth > 0;
+    if( bitsUnused && !tu.noResidual )
+    {
+      m_tuResiBits[COMP_Y] = bestLumaResiBits;
+    }
+    restoreCtxStart();
     m_CABACEstimator->resetBits();
-    if( !tu.noResidual )
+    if( !tu.noResidual && !bitsUnused )
     {
       static const ComponentID cbf_getComp[3] = { COMP_Cb, COMP_Cr, COMP_Y };
       for( unsigned c = 0; c < numTBlocks; c++)
@@ -4162,14 +4236,24 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       const ComponentID compID = ComponentID(ch);
       if (tu.blocks[compID].valid())
       {
-        if( compID == COMP_Cr )
+        if( compID == COMP_Cr && !bitsUnused )
         {
           const int cbfMask = ( TU::getCbf( tu, COMP_Cb ) ? 2 : 0 ) + ( TU::getCbf( tu, COMP_Cr ) ? 1 : 0 );
           m_CABACEstimator->joint_cb_cr(tu, cbfMask);
         }
-        if( TU::getCbf( tu, compID ) )
+        if( TU::getCbf( tu, compID ) && !bitsUnused )
         {
-          m_CABACEstimator->residual_coding( tu, compID );
+          if( reuseLumaBits && compID == COMP_Y )
+          {
+            m_CABACEstimator->addEstFracBits( bestLumaResiBits );
+            m_tuResiBits[COMP_Y] = bestLumaResiBits;
+          }
+          else
+          {
+            const uint64_t bitsBeforeResi = m_CABACEstimator->getEstFracBits();
+            m_CABACEstimator->residual_coding( tu, compID );
+            m_tuResiBits[compID] = m_CABACEstimator->getEstFracBits() - bitsBeforeResi;
+          }
         }
         uiSingleDist += uiSingleDistComp[compID];
       }
@@ -4177,6 +4261,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     if( tu.noResidual )
     {
       CHECK( m_CABACEstimator->getEstFracBits() > 0, "no residual TU's bits shall be 0" );
+    }
+    m_tuResiBitsValid = reuseLumaBits;
+    if( reuseLumaBits )
+    {
+      saveCoeffCtx( m_tuChromaCtx, m_CABACEstimator->getCtx() );
     }
 
     csFull->fracBits += m_CABACEstimator->getEstFracBits();
@@ -4205,7 +4294,8 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
     do
     {
-      xEstimateInterResidualQT(*csSplit, partitioner, bCheckFull ? nullptr : puiZeroDist );
+      const TempCtx ctxSubStart( m_CtxCache, m_CABACEstimator->getCtx() );
+      xEstimateInterResidualQT(*csSplit, partitioner, ctxSubStart, bCheckFull ? nullptr : puiZeroDist );
 
       csSplit->cost = m_pcRdCost->calcRdCost( csSplit->fracBits, csSplit->dist );
     } while( partitioner.nextPart( *csSplit ) );
@@ -4248,11 +4338,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       csSplit->fracBits = m_CABACEstimator->getEstFracBits();
       csSplit->cost     = m_pcRdCost->calcRdCost(csSplit->fracBits, csSplit->dist);
+      m_tuResiBitsValid = cu.sbtInfo != 0;   // only one TU has coefficients, and what it coded above is what the CU will code
     }
   }
 }
 
-void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual )
+void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual, const double bestCost )
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
@@ -4319,7 +4410,8 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
 
-  xEstimateInterResidualQT(cs, partitioner, &zeroDistortion );
+  m_tuResiBitsValid = false;
+  xEstimateInterResidualQT(cs, partitioner, ctxStart, &zeroDistortion );
   TransformUnit& firstTU = *cs.getTU( partitioner.chType );
 
   cu.rootCbf = false;
@@ -4352,7 +4444,12 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // all decisions now made. Fully encode the CU, including the headers:
   m_CABACEstimator->getCtx() = ctxStart;
 
+  // The headers before the residuals use other contexts, and with no transform skip (see reuseLumaBits) chroma shares none with luma, so the
+  // residuals cost the bits they did in xEstimateInterResidualQT. mts_idx would read what residual_coding leaves in CUCtx.
+  const bool useTuResiBits = m_tuResiBitsValid && cu.rootCbf && !CU::isMTSAllowed( cu, COMP_Y );
+  m_CABACEstimator->setTuResiBits( useTuResiBits ? m_tuResiBits : nullptr );
   uint64_t finalFracBits = xGetSymbolFracBitsInter( cs, partitioner );
+  m_CABACEstimator->setTuResiBits( nullptr );
   // we've now encoded the CU, and so have a valid bit cost
   if (!cu.rootCbf)
   {
@@ -4403,6 +4500,46 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   cs.dist     = finalDistortion;
   cs.fracBits = finalFracBits;
   cs.cost     = m_pcRdCost->calcRdCost(cs.fracBits, cs.dist);
+
+  // The contexts after the CU are only kept if it wins, and the bits still to come can't lower its cost.
+  if( useTuResiBits && cs.cost < bestCost )
+  {
+    const TransformUnit& firstTU = *cs.tus.front();
+    const bool chromaCbf = numValidComponents > 1 && ( TU::getCbf( firstTU, COMP_Cb ) || TU::getCbf( firstTU, COMP_Cr ) );
+    // The one TU of a CU without SBT coded them from these same contexts in xEstimateInterResidualQT: luma's, and then chroma's after it,
+    // which share none. In transform skip chroma uses other contexts.
+    if( !cu.sbtInfo && ( !chromaCbf || ( firstTU.mtsIdx[COMP_Cb] != MTS_SKIP && firstTU.mtsIdx[COMP_Cr] != MTS_SKIP ) ) )
+    {
+      Ctx& ctx = m_CABACEstimator->getCtx();
+      if( chromaCbf )
+      {
+        ctx = SubCtx( coeffCtxSpan(), m_tuChromaCtx );
+        ctx = SubCtx( CtxSet( Ctx::TransformSkipFlag.Offset + 1, 1 ), m_tuChromaCtx );
+      }
+      if( TU::getCbf( firstTU, COMP_Y ) )
+      {
+        // luma's sets: SigFlag and GtxFlag take turns between the channel types (luma at the even indices), the others are [ ChannelType ]
+        for( const CtxSet* set : { &Ctx::SigCoeffGroup[0], &Ctx::SigFlag[0], &Ctx::SigFlag[2], &Ctx::SigFlag[4], &Ctx::ParFlag[0], &Ctx::GtxFlag[0], &Ctx::GtxFlag[2], &Ctx::LastX[0], &Ctx::LastY[0] } )
+        {
+          ctx = SubCtx( *set, m_tuLumaCtx );
+        }
+        ctx = SubCtx( CtxSet( Ctx::TransformSkipFlag.Offset, 1 ), m_tuLumaCtx );
+      }
+    }
+    else
+    {
+      for( const TransformUnit* tu : cs.tus )
+      {
+        for( uint32_t ch = 0; ch < numValidComponents; ch++ )
+        {
+          if( TU::getCbf( *tu, ComponentID( ch ) ) )
+          {
+            m_CABACEstimator->residual_coding( *tu, ComponentID( ch ) );
+          }
+        }
+      }
+    }
+  }
 
   CHECK(cs.tus.size() == 0, "No TUs present");
 }
