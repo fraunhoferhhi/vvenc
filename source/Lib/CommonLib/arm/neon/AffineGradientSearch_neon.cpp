@@ -53,6 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "../CommonDefARM.h"
 #include "CommonLib/AffineGradientSearch.h"
+#include "mem_neon.h"
 #include "sum_neon.h"
 
 //! \ingroup CommonLib
@@ -181,7 +182,7 @@ static inline void storeSobelStrip( Pel* dst, const int16x8_t out, const bool la
   if( lastStrip )
   {
     vst1_s16( dst, vget_low_s16( out ) );
-    vst1q_lane_s32( reinterpret_cast<int32_t*>( dst + 4 ), vreinterpretq_s32_s16( out ), 2 );
+    store_s16x2( dst + 4, vget_high_s16( out ) );
   }
   else
   {
