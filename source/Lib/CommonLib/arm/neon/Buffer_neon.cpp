@@ -502,14 +502,14 @@ void downsample2x2_neon( const Pel* src, const ptrdiff_t srcStride, Pel* dst, co
 }
 
 // CCLM's linear model, as linTfCore: dst = ( scale * src >> shift ) + offset, clipped to [0, max] with bClip. The
-// product and the arithmetic shift in 32 bit as there; vqmovn narrows with saturation like x86's packs, which equals
-// the C code with the clip (its range lies inside 16 bits) and whenever the value fits 16 bits. Without the clip the
-// bounds are those of int16, so the same min / max are a no-op.
-static inline int16x4_t linTf4Lanes_neon( const int16x4_t src, const int32x4_t scale, const int32x4_t negShift,
-                                          const int32x4_t offset )
+// product and the arithmetic shift are in 32 bit as there. With the clip, vqmovun narrows to 0..65535 and the min to
+// max completes the C code's clip (ClpRng::min() is 0). Without it, vqmovn narrows with saturation like x86's packs,
+// which equals the C code whenever the value fits 16 bits.
+static inline int32x4_t linTf4Wide_neon( const int16x4_t src, const int32x4_t scale, const int32x4_t negShift,
+                                         const int32x4_t offset )
 {
   const int32x4_t product = vmulq_s32( vmovl_s16( src ), scale );
-  return vqmovn_s32( vaddq_s32( vshlq_s32( product, negShift ), offset ) );
+  return vaddq_s32( vshlq_s32( product, negShift ), offset );
 }
 
 static void linTf4_neon( const Pel* src, int srcStride, Pel* dst, int dstStride, int width, int height, int scale,
@@ -520,16 +520,29 @@ static void linTf4_neon( const Pel* src, int srcStride, Pel* dst, int dstStride,
   const int32x4_t vscale    = vdupq_n_s32( scale );
   const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
   const int32x4_t voffset   = vdupq_n_s32( offset );
-  const int16x4_t vmin      = vdup_n_s16( static_cast<int16_t>( bClip ? clpRng.min() : INT16_MIN ) );
-  const int16x4_t vmax      = vdup_n_s16( static_cast<int16_t>( bClip ? clpRng.max() : INT16_MAX ) );
 
-  for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+  if( bClip )
   {
-    for( int x = 0; x < width; x += 4 )
+    const uint16x4_t vmax = vdup_n_u16( clpRng.max() );
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
     {
-      const int16x4_t s = vld1_s16( src + x );
-      const int16x4_t d = linTf4Lanes_neon( s, vscale, vnegShift, voffset );
-      vst1_s16( dst + x, vmin_s16( vmax_s16( d, vmin ), vmax ) );
+      for( int x = 0; x < width; x += 4 )
+      {
+        const int16x4_t  s = vld1_s16( src + x );
+        const uint16x4_t d = vqmovun_s32( linTf4Wide_neon( s, vscale, vnegShift, voffset ) );
+        vst1_s16( dst + x, vreinterpret_s16_u16( vmin_u16( d, vmax ) ) );
+      }
+    }
+  }
+  else
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 4 )
+      {
+        const int16x4_t s = vld1_s16( src + x );
+        vst1_s16( dst + x, vqmovn_s32( linTf4Wide_neon( s, vscale, vnegShift, voffset ) ) );
+      }
     }
   }
 }
@@ -542,17 +555,32 @@ static void linTf8_neon( const Pel* src, int srcStride, Pel* dst, int dstStride,
   const int32x4_t vscale    = vdupq_n_s32( scale );
   const int32x4_t vnegShift = vdupq_n_s32( -static_cast<int>( shift ) );
   const int32x4_t voffset   = vdupq_n_s32( offset );
-  const int16x8_t vmin      = vdupq_n_s16( static_cast<int16_t>( bClip ? clpRng.min() : INT16_MIN ) );
-  const int16x8_t vmax      = vdupq_n_s16( static_cast<int16_t>( bClip ? clpRng.max() : INT16_MAX ) );
 
-  for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+  if( bClip )
   {
-    for( int x = 0; x < width; x += 8 )
+    const uint16x8_t vmax = vdupq_n_u16( clpRng.max() );
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
     {
-      const int16x8_t s    = vld1q_s16( src + x );
-      const int16x4_t low  = linTf4Lanes_neon( vget_low_s16( s ), vscale, vnegShift, voffset );
-      const int16x4_t high = linTf4Lanes_neon( vget_high_s16( s ), vscale, vnegShift, voffset );
-      vst1q_s16( dst + x, vminq_s16( vmaxq_s16( vcombine_s16( low, high ), vmin ), vmax ) );
+      for( int x = 0; x < width; x += 8 )
+      {
+        const int16x8_t  s    = vld1q_s16( src + x );
+        const uint16x4_t low  = vqmovun_s32( linTf4Wide_neon( vget_low_s16( s ), vscale, vnegShift, voffset ) );
+        const uint16x4_t high = vqmovun_s32( linTf4Wide_neon( vget_high_s16( s ), vscale, vnegShift, voffset ) );
+        vst1q_s16( dst + x, vreinterpretq_s16_u16( vminq_u16( vcombine_u16( low, high ), vmax ) ) );
+      }
+    }
+  }
+  else
+  {
+    for( int y = 0; y < height; y++, src += srcStride, dst += dstStride )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        const int16x8_t s    = vld1q_s16( src + x );
+        const int16x4_t low  = vqmovn_s32( linTf4Wide_neon( vget_low_s16( s ), vscale, vnegShift, voffset ) );
+        const int16x4_t high = vqmovn_s32( linTf4Wide_neon( vget_high_s16( s ), vscale, vnegShift, voffset ) );
+        vst1q_s16( dst + x, vcombine_s16( low, high ) );
+      }
     }
   }
 }
