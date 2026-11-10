@@ -198,117 +198,40 @@ void simdInterpolateN2_2D_neon( const ClpRng& clpRng, const Pel* src, const int 
   } while( height != 0 );
 }
 
-static inline int16x4_t filter_horiz_4x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
-{
-  int16x8_t vsrca0 = vld1q_s16( src + 0 );
-  int16x8_t vsrca1 = vld1q_s16( src + 1 );
-  int16x8_t vsrca2 = vld1q_s16( src + 2 );
-  int16x8_t vsrca3 = vld1q_s16( src + 3 );
-
-  int32x4_t a0 = vmull_s16( vget_low_s16( vsrca0 ), vget_low_s16( ch ) );
-  int32x4_t a1 = vmull_s16( vget_low_s16( vsrca1 ), vget_low_s16( ch ) );
-  int32x4_t a2 = vmull_s16( vget_low_s16( vsrca2 ), vget_low_s16( ch ) );
-  int32x4_t a3 = vmull_s16( vget_low_s16( vsrca3 ), vget_low_s16( ch ) );
-
-  a0 = vmlal_s16( a0, vget_high_s16( vsrca0 ), vget_high_s16( ch ) );
-  a1 = vmlal_s16( a1, vget_high_s16( vsrca1 ), vget_high_s16( ch ) );
-  a2 = vmlal_s16( a2, vget_high_s16( vsrca2 ), vget_high_s16( ch ) );
-  a3 = vmlal_s16( a3, vget_high_s16( vsrca3 ), vget_high_s16( ch ) );
-
-  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
-  vsuma           = vaddq_s32( vsuma, voffset1 );
-  vsuma           = vshlq_s32( vsuma, invshift1st );
-  return vqmovn_s32( vsuma );
-}
-
+// The horizontal stage of the 8-tap filters for 8 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over t = 0 .. 7,
+// in 32 bits for the low and the high four outputs, shifted and narrowed to 16 bits.
 static inline int16x8_t filter_horiz_8x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t lo = filter_horiz_4x1_N8_neon( src + 0, ch, voffset1, invshift1st );
-  int16x4_t hi = filter_horiz_4x1_N8_neon( src + 4, ch, voffset1, invshift1st );
-  return vcombine_s16( lo, hi );
-}
+  const int16x8_t vsrc0 = vld1q_s16( src + 0 );
+  const int16x8_t vsrc1 = vld1q_s16( src + 1 );
+  const int16x8_t vsrc2 = vld1q_s16( src + 2 );
+  const int16x8_t vsrc3 = vld1q_s16( src + 3 );
+  const int16x8_t vsrc4 = vld1q_s16( src + 4 );
+  const int16x8_t vsrc5 = vld1q_s16( src + 5 );
+  const int16x8_t vsrc6 = vld1q_s16( src + 6 );
+  const int16x8_t vsrc7 = vld1q_s16( src + 7 );
 
-static inline int16x8x2_t filter_horiz_16x1_N8_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
-{
-  int16x8x2_t result;
-  result.val[0] = filter_horiz_8x1_N8_neon( src + 0, ch, voffset1, invshift1st );
-  result.val[1] = filter_horiz_8x1_N8_neon( src + 8, ch, voffset1, invshift1st );
-  return result; // explicit return since MSVC for arm64 does not support direct return with typecast
-}
+  int32x4_t vsuma = vmlal_lane_s16( voffset1, vget_low_s16( vsrc0 ), vget_low_s16( ch ), 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc1 ), vget_low_s16( ch ), 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc2 ), vget_low_s16( ch ), 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc3 ), vget_low_s16( ch ), 3 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc4 ), vget_high_s16( ch ), 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc5 ), vget_high_s16( ch ), 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc6 ), vget_high_s16( ch ), 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc7 ), vget_high_s16( ch ), 3 );
 
-template<bool isLast>
-void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
-                            int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
-{
-  CHECKD( width != 4, "Width must be 4" );
-  CHECKD( height != 4, "Height must be 4" );
-  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
+  int32x4_t vsumb = vmlal_lane_s16( voffset1, vget_high_s16( vsrc0 ), vget_low_s16( ch ), 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc1 ), vget_low_s16( ch ), 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc2 ), vget_low_s16( ch ), 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc3 ), vget_low_s16( ch ), 3 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc4 ), vget_high_s16( ch ), 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc5 ), vget_high_s16( ch ), 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc6 ), vget_high_s16( ch ), 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc7 ), vget_high_s16( ch ), 3 );
 
-  OFFSET( src, srcStride, -3, -2 );
-
-  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
-  const int shift1st = IF_FILTER_PREC - headRoom;
-  const int shift2nd = IF_FILTER_PREC + headRoom;
-
-  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
-  int offset2nd;
-  if( isLast )
-  {
-    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
-  }
-  else
-  {
-    offset2nd = 0;
-  }
-  const int32x4_t voffset1 = vdupq_n_s32( offset1st );
-  const int32x4_t voffset2 = vdupq_n_s32( offset2nd );
-  const int16x4_t vibdimax = vdup_n_s16( clpRng.max() );
-
-  int16x8_t ch = vld1q_s16( coeffH );
-  int16x8_t cv = vld1q_s16( coeffV );
-
-  int32x4_t invshift1st = vdupq_n_s32( -shift1st );
-  int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
-
-  int16x4_t vsrcv[9];
-  vsrcv[0] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[1] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[2] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[3] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[4] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[5] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[6] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[7] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[8] = filter_horiz_4x1_N8_neon( src, ch, voffset1, invshift1st );
-
-  int h = 0;
-  do
-  {
-    int32x4_t vsum0 = filter_vert_4x1_N6_neon( vsrcv + h, cv, voffset2 );
-
-    int16x4_t vsum01;
-    if( isLast ) // clip
-    {
-      uint16x4_t usum01 = vqmovun_s32( vshlq_s32( vsum0, invshift2nd ) );
-      vsum01 = vmin_s16( vibdimax, vreinterpret_s16_u16( usum01 ) );
-    }
-    else
-    {
-      vsum01 = vqshrn_n_s32( vsum0, IF_FILTER_PREC );
-    }
-
-    vst1_s16( dst, vsum01 );
-
-    dst += dstStride;
-  } while( ++h != 4 );
+  vsuma = vshlq_s32( vsuma, invshift1st );
+  vsumb = vshlq_s32( vsumb, invshift1st );
+  return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
 }
 
 template<bool isLast>
@@ -397,130 +320,57 @@ void simdFilter8xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride,
   } while( --height != 0 );
 }
 
+// The 16-wide filter as two 8-wide strips: each output depends only on its own column's taps, so the strips give the
+// same samples.
 template<bool isLast>
 void simdFilter16xH_N8_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
                              int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
   CHECKD( width != 16, "Width must be 16" );
-  CHECKD( height < 4, "Height must be >= 4" );
-  CHECKD( height % 4 != 0, "Height must be a multiple of 4" );
-  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
 
-  OFFSET( src, srcStride, -3, -3 );
-
-  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
-  const int shift1st = IF_FILTER_PREC - headRoom;
-  const int shift2nd = IF_FILTER_PREC + headRoom;
-
-  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
-  int offset2nd;
-  if( isLast )
-  {
-    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
-  }
-  else
-  {
-    offset2nd = 0;
-  }
-  const int32x4_t voffset1 = vdupq_n_s32( offset1st );
-  const int32x4_t voffset2 = vdupq_n_s32( offset2nd );
-  const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
-
-  int16x8_t ch = vld1q_s16( coeffH );
-  int16x8_t cv = vld1q_s16( coeffV );
-
-  int32x4_t invshift1st = vdupq_n_s32( -shift1st );
-  int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
-
-  int16x8x2_t vsrcv[8];
-  vsrcv[0] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[1] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[2] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[3] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[4] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[5] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[6] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-
-  do
-  {
-    vsrcv[7] = filter_horiz_16x1_N8_neon( src, ch, voffset1, invshift1st );
-    src += srcStride;
-
-    int32x4x4_t vsum = filter_vert_16x1_N8_neon( vsrcv, cv, voffset2 );
-
-    int16x8_t vsum01, vsum23;
-    if( isLast ) // clip
-    {
-      int32x4_t vsum0 = vshlq_s32( vsum.val[0], invshift2nd );
-      int32x4_t vsum1 = vshlq_s32( vsum.val[1], invshift2nd );
-      int32x4_t vsum2 = vshlq_s32( vsum.val[2], invshift2nd );
-      int32x4_t vsum3 = vshlq_s32( vsum.val[3], invshift2nd );
-
-      uint16x8_t usum01 = vcombine_u16( vqmovun_s32( vsum0 ), vqmovun_s32( vsum1 ) );
-      uint16x8_t usum23 = vcombine_u16( vqmovun_s32( vsum2 ), vqmovun_s32( vsum3 ) );
-
-      vsum01 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum01 ) );
-      vsum23 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum23 ) );
-    }
-    else
-    {
-      vsum01 = vcombine_s16( vqshrn_n_s32( vsum.val[0], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[1], IF_FILTER_PREC ) );
-      vsum23 = vcombine_s16( vqshrn_n_s32( vsum.val[2], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[3], IF_FILTER_PREC ) );
-    }
-
-    vsrcv[0] = vsrcv[1];
-    vsrcv[1] = vsrcv[2];
-    vsrcv[2] = vsrcv[3];
-    vsrcv[3] = vsrcv[4];
-    vsrcv[4] = vsrcv[5];
-    vsrcv[5] = vsrcv[6];
-    vsrcv[6] = vsrcv[7];
-
-    vst1q_s16( dst + 0, vsum01 );
-    vst1q_s16( dst + 8, vsum23 );
-
-    dst += dstStride;
-  } while( --height != 0 );
+  simdFilter8xH_N8_neon<isLast>( clpRng, src, srcStride, dst, dstStride, 8, height, coeffH, coeffV );
+  simdFilter8xH_N8_neon<isLast>( clpRng, src + 8, srcStride, dst + 8, dstStride, 8, height, coeffH, coeffV );
 }
 
+// The horizontal stage of the 4-tap filters for 4 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over
+// t = 0 .. 3, shifted and narrowed to 16 bits.
 static inline int16x4_t filter_horiz_4x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t vsrca0 = vld1_s16( src + 0 );
-  int16x4_t vsrca1 = vld1_s16( src + 1 );
-  int16x4_t vsrca2 = vld1_s16( src + 2 );
-  int16x4_t vsrca3 = vld1_s16( src + 3 );
+  const int16x4_t vsrc0 = vld1_s16( src + 0 );
+  const int16x4_t vsrc1 = vld1_s16( src + 1 );
+  const int16x4_t vsrc2 = vld1_s16( src + 2 );
+  const int16x4_t vsrc3 = vld1_s16( src + 3 );
 
-  int32x4_t a0 = vmull_s16( vsrca0, ch );
-  int32x4_t a1 = vmull_s16( vsrca1, ch );
-  int32x4_t a2 = vmull_s16( vsrca2, ch );
-  int32x4_t a3 = vmull_s16( vsrca3, ch );
+  int32x4_t vsum = vmlal_lane_s16( voffset1, vsrc0, ch, 0 );
+  vsum           = vmlal_lane_s16( vsum, vsrc1, ch, 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc2, ch, 2 );
+  vsum           = vmlal_lane_s16( vsum, vsrc3, ch, 3 );
 
-  int32x4_t vsuma = horizontal_add_4d_s32x4( a0, a1, a2, a3 );
-  vsuma           = vaddq_s32( vsuma, voffset1 );
-  vsuma           = vshlq_s32( vsuma, invshift1st );
-  return vqmovn_s32( vsuma );
+  vsum = vshlq_s32( vsum, invshift1st );
+  return vqmovn_s32( vsum );
 }
 
+// The same for 8 outputs, in 32 bits for the low and the high four.
 static inline int16x8_t filter_horiz_8x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
 {
-  int16x4_t lo = filter_horiz_4x1_N4_neon( src + 0, ch, voffset1, invshift1st );
-  int16x4_t hi = filter_horiz_4x1_N4_neon( src + 4, ch, voffset1, invshift1st );
-  return vcombine_s16( lo, hi );
-}
+  const int16x8_t vsrc0 = vld1q_s16( src + 0 );
+  const int16x8_t vsrc1 = vld1q_s16( src + 1 );
+  const int16x8_t vsrc2 = vld1q_s16( src + 2 );
+  const int16x8_t vsrc3 = vld1q_s16( src + 3 );
 
-static inline int16x8x2_t filter_horiz_16x1_N4_neon( Pel const* src, int16x4_t ch, int32x4_t voffset1, int32x4_t invshift1st )
-{
-  int16x8x2_t result;
-  result.val[0] = filter_horiz_8x1_N4_neon( src + 0, ch, voffset1, invshift1st );
-  result.val[1] = filter_horiz_8x1_N4_neon( src + 8, ch, voffset1, invshift1st );
-  return result;
+  int32x4_t vsuma = vmlal_lane_s16( voffset1, vget_low_s16( vsrc0 ), ch, 0 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc1 ), ch, 1 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc2 ), ch, 2 );
+  vsuma           = vmlal_lane_s16( vsuma, vget_low_s16( vsrc3 ), ch, 3 );
+
+  int32x4_t vsumb = vmlal_lane_s16( voffset1, vget_high_s16( vsrc0 ), ch, 0 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc1 ), ch, 1 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc2 ), ch, 2 );
+  vsumb           = vmlal_lane_s16( vsumb, vget_high_s16( vsrc3 ), ch, 3 );
+
+  vsuma = vshlq_s32( vsuma, invshift1st );
+  vsumb = vshlq_s32( vsumb, invshift1st );
+  return vcombine_s16( vqmovn_s32( vsuma ), vqmovn_s32( vsumb ) );
 }
 
 template<bool isLast>
@@ -715,141 +565,15 @@ void simdFilter8xH_N4_neon( const ClpRng& clpRng, Pel const* src, int srcStride,
   }
 }
 
+// The 16-wide chroma filter as two 8-wide strips, as for luma above: each output depends only on its own column's taps.
 template<bool isLast>
 void simdFilter16xH_N4_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
                              int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
 {
   CHECKD( width != 16, "Width must be 16" );
-  CHECKD( height < 2, "Height must be >= 2" );
-  CHECKD( height % 4 != 0 && height != 2, "Height must be a multiple of 4" );
-  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
 
-  OFFSET( src, srcStride, -1, -1 );
-
-  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
-  const int shift1st = IF_FILTER_PREC - headRoom;
-  const int shift2nd = IF_FILTER_PREC + headRoom;
-
-  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
-  int offset2nd;
-  if( isLast )
-  {
-    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
-  }
-  else
-  {
-    offset2nd = 0;
-  }
-  const int32x4_t voffset1 = vdupq_n_s32( offset1st );
-  const int32x4_t voffset2 = vdupq_n_s32( offset2nd );
-  const int16x8_t vibdimax = vdupq_n_s16( clpRng.max() );
-
-  int16x4_t ch = vld1_s16( coeffH );
-  int16x4_t cv = vld1_s16( coeffV );
-
-  int32x4_t invshift1st = vdupq_n_s32( -shift1st );
-  int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
-
-  int16x8x2_t vsrcv[7];
-  vsrcv[0] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[1] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-  vsrcv[2] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-  src += srcStride;
-
-  if( height >= 4 )
-  {
-    do
-    {
-      vsrcv[3] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-      src += srcStride;
-      vsrcv[4] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-      src += srcStride;
-      vsrcv[5] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-      src += srcStride;
-      vsrcv[6] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-      src += srcStride;
-
-      int h = 0;
-      do
-      {
-        int32x4x4_t vsum = filter_vert_16x1_N4_neon( vsrcv + h, cv, voffset2 );
-
-        int16x8_t vsum01, vsum23;
-        if( isLast ) // clip
-        {
-          int32x4_t vsum0 = vshlq_s32( vsum.val[0], invshift2nd );
-          int32x4_t vsum1 = vshlq_s32( vsum.val[1], invshift2nd );
-          int32x4_t vsum2 = vshlq_s32( vsum.val[2], invshift2nd );
-          int32x4_t vsum3 = vshlq_s32( vsum.val[3], invshift2nd );
-
-          uint16x8_t usum01 = vcombine_u16( vqmovun_s32( vsum0 ), vqmovun_s32( vsum1 ) );
-          uint16x8_t usum23 = vcombine_u16( vqmovun_s32( vsum2 ), vqmovun_s32( vsum3 ) );
-
-          vsum01 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum01 ) );
-          vsum23 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum23 ) );
-        }
-        else
-        {
-          vsum01 =
-              vcombine_s16( vqshrn_n_s32( vsum.val[0], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[1], IF_FILTER_PREC ) );
-          vsum23 =
-              vcombine_s16( vqshrn_n_s32( vsum.val[2], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[3], IF_FILTER_PREC ) );
-        }
-
-        vst1q_s16( dst + 0, vsum01 );
-        vst1q_s16( dst + 8, vsum23 );
-
-        dst += dstStride;
-      } while( ++h != 4 );
-
-      vsrcv[0] = vsrcv[4];
-      vsrcv[1] = vsrcv[5];
-      vsrcv[2] = vsrcv[6];
-
-      height -= 4;
-    } while( height != 0 );
-  }
-  else // height == 2
-  {
-    vsrcv[3] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-    src += srcStride;
-    vsrcv[4] = filter_horiz_16x1_N4_neon( src, ch, voffset1, invshift1st );
-
-    int h = 0;
-    do
-    {
-      int32x4x4_t vsum = filter_vert_16x1_N4_neon( vsrcv + h, cv, voffset2 );
-
-      int16x8_t vsum01, vsum23;
-      if( isLast ) // clip
-      {
-        int32x4_t vsum0 = vshlq_s32( vsum.val[0], invshift2nd );
-        int32x4_t vsum1 = vshlq_s32( vsum.val[1], invshift2nd );
-        int32x4_t vsum2 = vshlq_s32( vsum.val[2], invshift2nd );
-        int32x4_t vsum3 = vshlq_s32( vsum.val[3], invshift2nd );
-
-        uint16x8_t usum01 = vcombine_u16( vqmovun_s32( vsum0 ), vqmovun_s32( vsum1 ) );
-        uint16x8_t usum23 = vcombine_u16( vqmovun_s32( vsum2 ), vqmovun_s32( vsum3 ) );
-
-        vsum01 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum01 ) );
-        vsum23 = vminq_s16( vibdimax, vreinterpretq_s16_u16( usum23 ) );
-      }
-      else
-      {
-        vsum01 =
-            vcombine_s16( vqshrn_n_s32( vsum.val[0], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[1], IF_FILTER_PREC ) );
-        vsum23 =
-            vcombine_s16( vqshrn_n_s32( vsum.val[2], IF_FILTER_PREC ), vqshrn_n_s32( vsum.val[3], IF_FILTER_PREC ) );
-      }
-
-      vst1q_s16( dst + 0, vsum01 );
-      vst1q_s16( dst + 8, vsum23 );
-
-      dst += dstStride;
-    } while( ++h != 2 );
-  }
+  simdFilter8xH_N4_neon<isLast>( clpRng, src, srcStride, dst, dstStride, 8, height, coeffH, coeffV );
+  simdFilter8xH_N4_neon<isLast>( clpRng, src + 8, srcStride, dst + 8, dstStride, 8, height, coeffH, coeffV );
 }
 
 template<bool isLast>
