@@ -514,11 +514,11 @@ static void fastForwardDCT2_EvenOdd_neon( const TCoeff* src, TCoeff* dst, int sh
 }
 
 // LFNST with the arithmetic of simdInvLfnstNxN / simdFwdLfnstNxN at SSE4.1: each output is the dot product of the
-// input and one int8 matrix row in 32 bits, wrapping mod 2^32 like _mm_mullo_epi32 and _mm_add_epi32, then + 64 and
-// >> 7. When every input read fits int16, the products of int16 and int8 values are taken 8 at a time with vmlal_s16;
-// their sum is at most 48 * 2^15 * 2^7 = 1.5 * 2^27 in magnitude, so it does not wrap, equals the 32-bit sum and is
-// rounded with vrshr. Otherwise the 32-bit products are taken 4 at a time with vmlaq_s32, and the + 64 wraps like
-// _mm_add_epi32 (vrshr would not).
+// input and one int8 matrix row in 32 bits, wrapping mod 2^32 like _mm_mullo_epi32 and _mm_add_epi32, then rounded
+// to ( sum + 64 ) >> 7 with vrshr. When every input read fits int16, the products of int16 and int8 values are taken 8
+// at a time with vmlal_s16; their sum is at most 48 * 2^15 * 2^7 = 1.5 * 2^27 in magnitude, so it does not wrap and
+// equals the 32-bit sum. Otherwise the 32-bit products are taken 4 at a time with vmlaq_s32. vrshr does not wrap the
+// + 64 as _mm_add_epi32 does, which differs only for sums within 64 of INT32_MAX, where the C code's + 64 overflows.
 
 // true when all n (a multiple of 8) values of src fit int16
 static inline bool lfnstInputFitsInt16( const int* src, const int n )
@@ -530,8 +530,7 @@ static inline bool lfnstInputFitsInt16( const int* src, const int n )
     // v minus its value saturated to int16: zero exactly where v fits
     differs = vorrq_u32( differs, vreinterpretq_u32_s32( vsubw_s16( v, vqmovn_s32( v ) ) ) );
   }
-  // the saturating narrowing keeps every non-zero lane non-zero
-  return vget_lane_u64( vreinterpret_u64_u16( vqmovn_u32( differs ) ), 0 ) == 0;
+  return !any_lane_set_u32x4( differs );
 }
 
 // the n (a multiple of 8) values of src as int16, 8 per vector
@@ -588,15 +587,7 @@ static inline void lfnstRows_neon( const int* src, const int16x8_t* in16, int* o
     {
       dot[k] = inInt16 ? lfnstDot16( in16, mat, n ) : lfnstDot32( src, mat, n );
     }
-    int32x4_t res = horizontal_add_4d_s32x4( dot[0], dot[1], dot[2], dot[3] );
-    if( inInt16 )
-    {
-      res = vrshrq_n_s32( res, 7 );
-    }
-    else
-    {
-      res = vshrq_n_s32( vaddq_s32( res, vdupq_n_s32( 64 ) ), 7 );
-    }
+    int32x4_t res = vrshrq_n_s32( horizontal_add_4d_s32x4( dot[0], dot[1], dot[2], dot[3] ), 7 );
     if( clipOutput )
     {
       res = vminq_s32( vmaxq_s32( res, vdupq_n_s32( -( 1 << 15 ) ) ), vdupq_n_s32( ( 1 << 15 ) - 1 ) );
