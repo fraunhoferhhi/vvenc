@@ -47,6 +47,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/InterpolationFilter.h"
+#include "neon/sum_neon.h"
 
 #include <arm_neon.h>
 
@@ -185,6 +187,132 @@ static inline int32x4x4_t filter_vert_16x1_N4_neon( int16x8x2_t const vsrc[4], i
   vsum.val[2] = vmlal_lane_s16( vsum.val[2], vget_low_s16( vsrc[3].val[1] ), cv, 3 );
   vsum.val[3] = vmlal_lane_s16( vsum.val[3], vget_high_s16( vsrc[3].val[1] ), cv, 3 );
   return vsum;
+}
+
+// The horizontal stage of the 6-tap 4x4 filter for 4 outputs, tap by tap: offset + sum of ch[t] * src[x + t] over the
+// six non-zero taps t = 1 .. 6 (taps 0 and 7 of the 6-tap table are zero), shifted and narrowed to 16 bits.
+static inline int16x4_t filter_horiz_4x1_N6_neon( Pel const* src, int16x8_t ch, int32x4_t voffset1, int32x4_t invshift1st )
+{
+  const int16x4_t vsrc1 = vld1_s16( src + 1 );
+  const int16x4_t vsrc2 = vld1_s16( src + 2 );
+  const int16x4_t vsrc3 = vld1_s16( src + 3 );
+  const int16x4_t vsrc4 = vld1_s16( src + 4 );
+  const int16x4_t vsrc5 = vld1_s16( src + 5 );
+  const int16x4_t vsrc6 = vld1_s16( src + 6 );
+
+  int32x4_t vsum = vmlal_lane_s16( voffset1, vsrc1, vget_low_s16( ch ), 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc2, vget_low_s16( ch ), 2 );
+  vsum           = vmlal_lane_s16( vsum, vsrc3, vget_low_s16( ch ), 3 );
+  vsum           = vmlal_lane_s16( vsum, vsrc4, vget_high_s16( ch ), 0 );
+  vsum           = vmlal_lane_s16( vsum, vsrc5, vget_high_s16( ch ), 1 );
+  vsum           = vmlal_lane_s16( vsum, vsrc6, vget_high_s16( ch ), 2 );
+
+  vsum = vshlq_s32( vsum, invshift1st );
+  return vqmovn_s32( vsum );
+}
+
+template<bool isLast>
+static ALWAYS_INLINE void simdFilter4x4_N6_body_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride,
+                                                      int width, int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+{
+  CHECKD( width != 4, "Width must be 4" );
+  CHECKD( height != 4, "Height must be 4" );
+  CHECKD( IF_INTERNAL_PREC - clpRng.bd < 2, "Bit depth headroom must be at least 2" );
+
+  src -= 3 + 2 * srcStride;
+
+  const int headRoom = IF_INTERNAL_PREC - clpRng.bd;
+  const int shift1st = IF_FILTER_PREC - headRoom;
+  const int shift2nd = IF_FILTER_PREC + headRoom;
+
+  const int offset1st = -IF_INTERNAL_OFFS * ( 1 << shift1st );
+  int offset2nd;
+  if( isLast )
+  {
+    offset2nd = ( 1 << ( shift2nd - 1 ) ) + ( IF_INTERNAL_OFFS << IF_FILTER_PREC );
+  }
+  else
+  {
+    offset2nd = 0;
+  }
+  const int32x4_t voffset1 = vdupq_n_s32( offset1st );
+  const int32x4_t voffset2 = vdupq_n_s32( offset2nd );
+  const int16x4_t vibdimax = vdup_n_s16( clpRng.max() );
+
+  int16x8_t ch = vld1q_s16( coeffH );
+  int16x8_t cv = vld1q_s16( coeffV );
+
+  int32x4_t invshift1st = vdupq_n_s32( -shift1st );
+  int32x4_t invshift2nd = vdupq_n_s32( -shift2nd );
+
+  int16x4_t vsrcv[9];
+  vsrcv[0] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[1] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[2] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[3] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[4] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[5] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[6] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[7] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+  src += srcStride;
+  vsrcv[8] = filter_horiz_4x1_N6_neon( src, ch, voffset1, invshift1st );
+
+  int h = 0;
+  do
+  {
+    int32x4_t vsum0 = filter_vert_4x1_N6_neon( vsrcv + h, cv, voffset2 );
+
+    int16x4_t vsum01;
+    if( isLast ) // clip
+    {
+      uint16x4_t usum01 = vqmovun_s32( vshlq_s32( vsum0, invshift2nd ) );
+      vsum01 = vmin_s16( vibdimax, vreinterpret_s16_u16( usum01 ) );
+    }
+    else
+    {
+      vsum01 = vqshrn_n_s32( vsum0, IF_FILTER_PREC );
+    }
+
+    vst1_s16( dst, vsum01 );
+
+    dst += dstStride;
+  } while( ++h != 4 );
+}
+
+// The final-output (isLast) filter out of line: inlined into a loop over sub-blocks such as affineLumaCU_neon<false>'s,
+// clang spills its row vectors. The intermediate-output filter stays inline.
+#if defined( _MSC_VER )
+#define FILTER4X4_NOINLINE __declspec( noinline )
+#else
+#define FILTER4X4_NOINLINE __attribute__( ( noinline ) )
+#endif
+static inline FILTER4X4_NOINLINE void simdFilter4x4_N6_last_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst,
+                                                                  int dstStride, int width, int height, TFilterCoeff const* coeffH,
+                                                                  TFilterCoeff const* coeffV )
+{
+  simdFilter4x4_N6_body_neon<true>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+}
+#undef FILTER4X4_NOINLINE
+
+template<bool isLast>
+static ALWAYS_INLINE void simdFilter4x4_N6_neon( const ClpRng& clpRng, Pel const* src, int srcStride, Pel* dst, int dstStride, int width,
+                                                 int height, TFilterCoeff const* coeffH, TFilterCoeff const* coeffV )
+{
+  if( isLast )
+  {
+    simdFilter4x4_N6_last_neon( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+  }
+  else
+  {
+    simdFilter4x4_N6_body_neon<false>( clpRng, src, srcStride, dst, dstStride, width, height, coeffH, coeffV );
+  }
 }
 
 } // namespace vvenc
