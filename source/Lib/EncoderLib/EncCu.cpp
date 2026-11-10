@@ -659,8 +659,8 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
     if( m_modeCtrl.useModeResult( encTestMode, tempCS, partitioner, useEDO ) )
     {
       std::swap( tempCS, bestCS );
-      // store temp best CI for next CU coding
-      m_CurrCtx->best = m_CABACEstimator->getCtx();
+      // store temp best CI for next CU coding (swapped, not copied: the reset below overwrites the estimator's contexts)
+      m_CurrCtx->best.swap( m_CABACEstimator->getCtx() );
       bestCSUpdated = true;
     }
   }
