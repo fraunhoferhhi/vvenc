@@ -215,6 +215,30 @@ int motionErrorLumaFrac_loRes_neon( const Pel* org, const ptrdiff_t origStride, 
   return error;
 }
 
+// The squared differences of the column kernel in two 32-bit accumulators, one per half of the row: at most 32 x 32
+// squares of differences below 2^10, so the int32 sums are exact.
+struct SquareSumNeon
+{
+  int32x4_t lo = vdupq_n_s32( 0 );
+  int32x4_t hi = vdupq_n_s32( 0 );
+
+  void add( const int16x8_t diff )
+  {
+    lo = vmlal_s16( lo, vget_low_s16( diff ), vget_low_s16( diff ) );
+    hi = vmlal_s16( hi, vget_high_s16( diff ), vget_high_s16( diff ) );
+  }
+  int sum() const { return horizontal_add_s32x4( vaddq_s32( lo, hi ) ); }
+};
+
+static void motionErrorLumaFracColumn_loRes_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
+                                                  const ptrdiff_t buffStride, const int w, const int h,
+                                                  const int16_t* xFilter, const int num, const int16_t* const* yFilter,
+                                                  const int* rowOffset, const int bitDepth, int* error )
+{
+  motionErrorLumaFracColumn_loRes_common<SquareSumNeon>( org, origStride, buf, buffStride, w, h, xFilter, num, yFilter,
+                                                         rowOffset, bitDepth, error );
+}
+
 static int motionErrorLumaInt_neon( const Pel* org, const ptrdiff_t origStride, const Pel* buf,
                                     const ptrdiff_t buffStride, const int w, int h, const int besterror )
 {
@@ -1264,6 +1288,7 @@ template<>
 void MCTF::_initMCTF_ARM<NEON>()
 {
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
+  m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;
   m_applyBlock              = applyBlock_neon;
