@@ -53,6 +53,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "Rom.h"
 #include "neon/permute_neon.h"
 #include "neon/sum_neon.h"
+#include "../InterpolationFilter_neon.h"
+#include "../InterPred_neon.h"
 
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_ARM )
 
@@ -550,6 +552,12 @@ void InterPredInterpolation::_initInterPredictionARM<NEON>()
   xFpBDOFGradFilter = gradFilter_neon;
   xFpProfGradFilter = gradFilter_neon<false>;
   xFpPadDmvr = padDmvr_neon;
+#if ENABLE_SIMD_OPT_MCIF
+  xFpAffineLumaCU[0][0] = affineLumaCU_arm<false, simdFilter4x4_N6_neon<true>>;
+  xFpAffineLumaCU[0][1] = affineLumaCU_arm<true, simdFilter4x4_N6_neon<false>>;
+  xFpAffineLumaCU[1][0] = affineLumaCUProf_arm<false, simdFilter4x4_N6_neon<false>>;
+  xFpAffineLumaCU[1][1] = affineLumaCUProf_arm<true, simdFilter4x4_N6_neon<false>>;
+#endif
 }
 
 } // namespace vvenc
