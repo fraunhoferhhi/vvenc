@@ -478,6 +478,10 @@ public:
   // identical result; nullptr where only m_getPreBlkStatsAccum is optimised
   void ( *m_getPreBlkStatsAccumEqualBins )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                             const Pel yLocal[4][4], const int equalBinsMask );
+  // the covariance sums of one 4x4 chroma block in getBlkStatsCcAlf (E of Cb, y and pixAcc of Cb and Cr) from its ELocal
+  // rows and yLocal residuals, with the identical result; nullptr where getBlkStatsCcAlf's own code is used
+  void ( *m_getBlkCovarianceCcAlf )( AlfCovariance& covarianceCb, AlfCovariance& covarianceCr, const int numCoeff,
+                                     const Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const Pel yLocal[2][4][4] );
 
                                            private:
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF

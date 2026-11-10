@@ -49,6 +49,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <arm_sve.h>
 
 #include "EncoderLib/EncAdaptiveLoopFilter.h"
+#include "EncoderLib/arm/EncAdaptiveLoopFilter_neon.h"
 #include "CommonLib/arm/neon/sum_neon.h"
 #include "CommonLib/arm/sve/neon_sve_bridge.h"
 
@@ -169,10 +170,22 @@ void getPreBlkStatsAccum_sve( AlfCovariance& alfCovariance, const AlfFilterShape
   CHECK( true, "Unsupported ALF filter shape or number of bins" );
 }
 
+// The NEON equal-bins kernel, but the blocks it gives to the 16-pair kernel take the SVE one.
+static void getPreBlkStatsAccumEqualBins_sve( AlfCovariance& alfCovariance, const AlfFilterShape& shape,
+                                              const Pel* ELocal, const Pel yLocal[4][4], const int equalBinsMask )
+{
+  if( !alfEqualBinsKernelTakes( shape.numCoeff, equalBinsMask ) )
+  {
+    return getPreBlkStatsAccum_sve( alfCovariance, shape, ELocal, yLocal, AdaptiveLoopFilter::AlfNumClippingValues );
+  }
+  getPreBlkStatsAccumEqualBins_neon( alfCovariance, shape, ELocal, yLocal, equalBinsMask );
+}
+
 template<>
 void EncAdaptiveLoopFilter::_initEncAdaptiveLoopFilterARM<SVE>()
 {
-  m_getPreBlkStatsAccum = getPreBlkStatsAccum_sve;
+  m_getPreBlkStatsAccum          = getPreBlkStatsAccum_sve;
+  m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins_sve;
 }
 
 } // namespace vvenc

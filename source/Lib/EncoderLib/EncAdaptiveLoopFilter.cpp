@@ -1255,6 +1255,7 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter( bool enableOpt )
   m_getPreBlkStatsAccum = getPreBlkStatsAccum;
   m_getPreBlkStatsWeightedAccum = getPreBlkStatsWeightedAccum;
   m_getPreBlkStatsAccumEqualBins = getPreBlkStatsAccumEqualBins;
+  m_getBlkCovarianceCcAlf = nullptr;
 
   if( enableOpt )
   {
@@ -6563,6 +6564,11 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &covarianceCb, AlfCov
         calcCovariance4CcAlf( ELocal, 12, recLine[3] + ( j << getChannelTypeScaleX( CH_C, m_chromaFormat ) ), recStride, shape, vbDistance3 );
       }
 
+      if( m_getBlkCovarianceCcAlf )
+      {
+        m_getBlkCovarianceCcAlf( covarianceCb, covarianceCr, shape.numCoeff, ELocal, yLocal );
+      }
+      else
       {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
         if( useSimd )
