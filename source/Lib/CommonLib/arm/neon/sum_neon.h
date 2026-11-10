@@ -55,6 +55,17 @@ POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc
 {
 
+// true when any of the four lanes of v is non-zero
+static inline bool any_lane_set_u32x4( const uint32x4_t v )
+{
+#if REAL_TARGET_AARCH64
+  return vgetq_lane_u64( vreinterpretq_u64_u32( vpmaxq_u32( v, v ) ), 0 ) != 0;
+#else
+  const uint32x2_t m = vorr_u32( vget_low_u32( v ), vget_high_u32( v ) );
+  return vget_lane_u64( vreinterpret_u64_u32( m ), 0 ) != 0;
+#endif
+}
+
 static inline uint16x8_t vvenc_vabaq_s16( uint16x8_t acc, int16x8_t x, int16x8_t y )
 {
   return vreinterpretq_u16_s16( vabaq_s16( vreinterpretq_s16_u16( acc ), x, y ) );
