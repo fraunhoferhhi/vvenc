@@ -55,9 +55,15 @@ namespace vvenc
 #if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_ARM )
 
 // One sample of the band-offset statistics in a packed table entry: the entry holds count * 2^32 + diffSum.
-static inline void addToBand( int64_t* table, int16_t band, int16_t diff )
+static inline void addToBand( int64_t* table, const int band, const int diff )
 {
   table[band] += ( int64_t( 1 ) << 32 ) + diff;
+}
+
+// Lane j (0 to 3) of four int16 values packed in a uint64
+static inline int lane16( const uint64_t lanes, const int j )
+{
+  return int16_t( lanes >> ( 16 * j ) );
 }
 
 void calcSaoStatisticsBo_neon( int width, int endX, int endY, Pel* srcLine, Pel* orgLine, int srcStride, int orgStride,
@@ -81,18 +87,23 @@ void calcSaoStatisticsBo_neon( int width, int endX, int endY, Pel* srcLine, Pel*
       const int16x8_t band = vshlq_s16( src, negShift );
       const int16x8_t d = vsubq_s16( org, src );
 
-      addToBand( packed[0], vgetq_lane_s16( band, 0 ), vgetq_lane_s16( d, 0 ) );
-      addToBand( packed[1], vgetq_lane_s16( band, 1 ), vgetq_lane_s16( d, 1 ) );
-      addToBand( packed[2], vgetq_lane_s16( band, 2 ), vgetq_lane_s16( d, 2 ) );
-      addToBand( packed[3], vgetq_lane_s16( band, 3 ), vgetq_lane_s16( d, 3 ) );
-      addToBand( packed[4], vgetq_lane_s16( band, 4 ), vgetq_lane_s16( d, 4 ) );
-      addToBand( packed[5], vgetq_lane_s16( band, 5 ), vgetq_lane_s16( d, 5 ) );
-      addToBand( packed[6], vgetq_lane_s16( band, 6 ), vgetq_lane_s16( d, 6 ) );
-      addToBand( packed[7], vgetq_lane_s16( band, 7 ), vgetq_lane_s16( d, 7 ) );
+      // the differences are moved to general registers as two uint64 and taken from them with shifts, the bands lane
+      // by lane
+      const uint64_t diffLo = vgetq_lane_u64( vreinterpretq_u64_s16( d ), 0 );
+      const uint64_t diffHi = vgetq_lane_u64( vreinterpretq_u64_s16( d ), 1 );
+
+      addToBand( packed[0], vgetq_lane_s16( band, 0 ), lane16( diffLo, 0 ) );
+      addToBand( packed[1], vgetq_lane_s16( band, 1 ), lane16( diffLo, 1 ) );
+      addToBand( packed[2], vgetq_lane_s16( band, 2 ), lane16( diffLo, 2 ) );
+      addToBand( packed[3], vgetq_lane_s16( band, 3 ), lane16( diffLo, 3 ) );
+      addToBand( packed[4], vgetq_lane_s16( band, 4 ), lane16( diffHi, 0 ) );
+      addToBand( packed[5], vgetq_lane_s16( band, 5 ), lane16( diffHi, 1 ) );
+      addToBand( packed[6], vgetq_lane_s16( band, 6 ), lane16( diffHi, 2 ) );
+      addToBand( packed[7], vgetq_lane_s16( band, 7 ), lane16( diffHi, 3 ) );
     }
     for( ; x < endX; ++x )
     {
-      addToBand( packed[0], int16_t( srcLine[x] >> shift ), int16_t( orgLine[x] - srcLine[x] ) );
+      addToBand( packed[0], srcLine[x] >> shift, orgLine[x] - srcLine[x] );
     }
 
     srcLine += srcStride;
