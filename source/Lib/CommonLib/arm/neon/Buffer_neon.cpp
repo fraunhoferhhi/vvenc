@@ -54,6 +54,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Unit.h"
 #include "CommonLib/Buffer.h"
 #include "sum_neon.h"
+#include "transpose_neon.h"
 
 #if defined( TARGET_SIMD_ARM ) && ENABLE_SIMD_OPT_BUFFER
 
@@ -63,6 +64,134 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc
 {
+
+// MIP matrix multiply, as mipMatrixMulCore: res[n] = Clip( 0, maxVal, ( sum_k input[k] * weight[K * n + k] + offset ) >> 6 )
+// for K = 4 or 8 inputs and 16 or 64 outputs, then transposed for `transpose`. For K = 4, vld4q_u8 de-interleaves the
+// weights so that each vector holds one tap of 16 outputs, and each tap adds weight * input[k] to the 16 sums. For
+// K = 8, each output's 8 weights times the 8 inputs are taken with vmull_s16 / vmlal_s16, and the 4 partial sums of
+// each output are reduced with horizontal_add_4d_s32x4. The weights are below 128 and |input| < 2^12, so products and
+// sums are C's in 32 bits; offset holds C's rounding term. vqshrun shifts, clips negative values to 0 and saturates to
+// 16 bits, so with the min to maxVal it equals C's clip of the 32-bit value.
+static inline int32x4_t mipOffset_neon( const Pel* input, const int inputSize, const int inputOffset )
+{
+  int sum = 0;
+  for( int i = 0; i < inputSize; i++ )
+  {
+    sum += input[i];
+  }
+  return vdupq_n_s32( ( 1 << ( MIP_SHIFT_MATRIX - 1 ) ) - MIP_OFFSET_MATRIX * sum + ( inputOffset << MIP_SHIFT_MATRIX ) );
+}
+
+// acc[i] lane j: sum of output 4 i + j; tap lane n: the weight of output n for this input
+static inline void mipAddTap_neon( int32x4_t* acc, const uint8x16_t tap, const Pel input )
+{
+  const int16x8_t lo = vreinterpretq_s16_u16( vmovl_u8( vget_low_u8( tap ) ) );
+  const int16x8_t hi = vreinterpretq_s16_u16( vmovl_u8( vget_high_u8( tap ) ) );
+  acc[0] = vmlal_n_s16( acc[0], vget_low_s16( lo ), input );
+  acc[1] = vmlal_n_s16( acc[1], vget_high_s16( lo ), input );
+  acc[2] = vmlal_n_s16( acc[2], vget_low_s16( hi ), input );
+  acc[3] = vmlal_n_s16( acc[3], vget_high_s16( hi ), input );
+}
+
+static inline int16x8_t mipClip_neon( const int32x4_t sum0, const int32x4_t sum1, const uint16x8_t vmax )
+{
+  const uint16x8_t res =
+    vcombine_u16( vqshrun_n_s32( sum0, MIP_SHIFT_MATRIX ), vqshrun_n_s32( sum1, MIP_SHIFT_MATRIX ) );
+  return vreinterpretq_s16_u16( vminq_u16( res, vmax ) );
+}
+
+// the dot products of the 8 inputs with the 8 weights of each of 4 outputs (32 bytes at weight): lane j is output j,
+// without the offset
+static inline int32x4_t mipDots4Outputs8Inputs_neon( const uint8_t* weight, const int16x8_t in )
+{
+  const uint8x16_t w01 = vld1q_u8( weight );
+  const uint8x16_t w23 = vld1q_u8( weight + 16 );
+  const int16x8_t  w0  = vreinterpretq_s16_u16( vmovl_u8( vget_low_u8( w01 ) ) );
+  const int16x8_t  w1  = vreinterpretq_s16_u16( vmovl_u8( vget_high_u8( w01 ) ) );
+  const int16x8_t  w2  = vreinterpretq_s16_u16( vmovl_u8( vget_low_u8( w23 ) ) );
+  const int16x8_t  w3  = vreinterpretq_s16_u16( vmovl_u8( vget_high_u8( w23 ) ) );
+  int32x4_t d0 = vmull_s16( vget_low_s16( w0 ), vget_low_s16( in ) );
+  int32x4_t d1 = vmull_s16( vget_low_s16( w1 ), vget_low_s16( in ) );
+  int32x4_t d2 = vmull_s16( vget_low_s16( w2 ), vget_low_s16( in ) );
+  int32x4_t d3 = vmull_s16( vget_low_s16( w3 ), vget_low_s16( in ) );
+  d0 = vmlal_s16( d0, vget_high_s16( w0 ), vget_high_s16( in ) );
+  d1 = vmlal_s16( d1, vget_high_s16( w1 ), vget_high_s16( in ) );
+  d2 = vmlal_s16( d2, vget_high_s16( w2 ), vget_high_s16( in ) );
+  d3 = vmlal_s16( d3, vget_high_s16( w3 ), vget_high_s16( in ) );
+  return horizontal_add_4d_s32x4( d0, d1, d2, d3 );
+}
+
+// 16 outputs of 8 inputs from 128 weight bytes, clipped: outputs 0..7 in rows[0], 8..15 in rows[1]
+static inline void mip16Outputs8Inputs_neon( const uint8_t* weight, const Pel* input, const int32x4_t offset,
+                                             const uint16x8_t vmax, int16x8_t* rows )
+{
+  const int16x8_t in = vld1q_s16( input );
+  int32x4_t       acc[4];
+  for( int i = 0; i < 4; i++ )
+  {
+    acc[i] = vaddq_s32( offset, mipDots4Outputs8Inputs_neon( weight + 32 * i, in ) );
+  }
+  rows[0] = mipClip_neon( acc[0], acc[1], vmax );
+  rows[1] = mipClip_neon( acc[2], acc[3], vmax );
+}
+
+// 4 inputs, 4 x 4 outputs
+static void mipMatrixMul_4_4_neon( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal,
+                                   const int inputOffset, bool transpose )
+{
+  const int32x4_t   offset = mipOffset_neon( input, 4, inputOffset );
+  const uint8x16x4_t w     = vld4q_u8( weight );   // w.val[k]: tap k of outputs 0..15
+
+  int32x4_t acc[4] = { offset, offset, offset, offset };
+  for( int k = 0; k < 4; k++ )
+  {
+    mipAddTap_neon( acc, w.val[k], input[k] );
+  }
+  const uint16x8_t vmax    = vdupq_n_u16( maxVal );
+  int16x8_t        rows[2] = { mipClip_neon( acc[0], acc[1], vmax ), mipClip_neon( acc[2], acc[3], vmax ) };
+  if( transpose )
+  {
+    transpose_4x4_s16_paired( rows );
+  }
+  vst1q_s16( res, rows[0] );
+  vst1q_s16( res + 8, rows[1] );
+}
+
+// 8 inputs, 4 x 4 outputs
+static void mipMatrixMul_8_4_neon( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal,
+                                   const int inputOffset, bool transpose )
+{
+  int16x8_t rows[2];
+  mip16Outputs8Inputs_neon( weight, input, mipOffset_neon( input, 8, inputOffset ), vdupq_n_u16( maxVal ), rows );
+  if( transpose )
+  {
+    transpose_4x4_s16_paired( rows );
+  }
+  vst1q_s16( res, rows[0] );
+  vst1q_s16( res + 8, rows[1] );
+}
+
+// 8 inputs, 8 x 8 outputs
+static void mipMatrixMul_8_8_neon( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal,
+                                   const int inputOffset, bool transpose )
+{
+  const int32x4_t  offset = mipOffset_neon( input, 8, inputOffset );
+  const uint16x8_t vmax   = vdupq_n_u16( maxVal );
+
+  int16x8_t rows[8];
+  for( int i = 0; i < 4; i++ )
+  {
+    mip16Outputs8Inputs_neon( weight + 128 * i, input, offset, vmax, rows + 2 * i );
+  }
+  if( transpose )
+  {
+    transpose_8x8_s16( rows );
+  }
+  for( int i = 0; i < 8; i++ )
+  {
+    vst1q_s16( res + 8 * i, rows[i] );
+  }
+}
 
 // The averaging kernels compute ClipPel( ( src0 + src1 + offset ) >> rshift ) like addAvgCore, for any 16-bit inputs.
 // The inputs are unclipped predictions, which overshoot the sample range at edges, so the sum can be negative or need
@@ -279,6 +408,10 @@ void addAvg_strided_neon<4>( const Pel* src0, int src0Stride, const Pel* src1, i
 template<>
 void PelBufferOps::_initPelBufOpsARM<NEON>()
 {
+  mipMatrixMul_4_4 = mipMatrixMul_4_4_neon;
+  mipMatrixMul_8_4 = mipMatrixMul_8_4_neon;
+  mipMatrixMul_8_8 = mipMatrixMul_8_8_neon;
+
   addAvg   = addAvg_neon;
   reco     = recoCore_neon;
   addAvg4  = addAvg_strided_neon<4>;

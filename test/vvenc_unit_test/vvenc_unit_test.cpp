@@ -1243,7 +1243,7 @@ static bool check_IntraPredAngleLumaModes( IntraPrediction* ref, IntraPrediction
 // IntraPredAngleLumaHor (horizontal luma modes in the block's own orientation) against the reference implementation's
 // IntraPredAngleLuma on the transposed block, its IntraAnglePDPC (positive angles, reference line 0) and a transpose:
 // every block width 8..64 and height 4..64 (aspect ratios up to 16:1), every horizontal mode after the wide-angle
-// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8, 10 and 12. Samples:
+// mapping with a fractional |angle| <= 29, reference lines 0, 1 and 2, both filters, bit depths 8 and 10. Samples:
 // random, alternating 0 / max (the cubic clip), a ramp, and the PDPC extremes (prediction 0 with side samples at max,
 // and the reverse). Main and side samples outside the ranges the scalar code reads differ between the two runs;
 // destination strides of the block width and of MAX_CU_SIZE in canary-filled buffers, compared whole.
@@ -1259,7 +1259,7 @@ static bool check_IntraPredAngleLumaHor( IntraPrediction* ref, IntraPrediction* 
   std::vector<Pel> tmp( MAX_CU_SIZE * MAX_CU_SIZE ), dstRef( MAX_CU_SIZE * MAX_CU_SIZE ), dstOpt( MAX_CU_SIZE * MAX_CU_SIZE );
   const unsigned size = static_cast<unsigned>( dstRef.size() );
   bool passed = true;
-  for( int bd : { 8, 10, 12 } )
+  for( int bd : { 8, 10 } )   // the internal bit depths VVenC codes (the NEON kernel refuses more than 10)
   for( int log2W : INTRA_LOG2_SIZES ) for( int log2H : INTRA_LOG2_SIZES )
   for( int mode = 2; mode < NUM_LUMA_MODE; mode++ )
   for( bool cubic : { true, false } )
@@ -4224,6 +4224,46 @@ static bool check_downsample2x2( PelBufferOps* ref, PelBufferOps* opt, unsigned 
   return true;
 }
 
+// MIP matrix multiply: the three sizes, transposed or not, 10- and 12-bit, with the input range of
+// MatrixIntraPrediction (boundary differences, |input| < 2^bitDepth) and weights below 128 like the MIP matrices.
+static bool check_mipMatrixMul( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
+{
+  printf( "Testing PelBufferOps::mipMatrixMul_4_4, mipMatrixMul_8_4, mipMatrixMul_8_8\n" );
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; i++ )
+  {
+    const int  bitDepth  = rng.getOneOf<int>( { 10, 12 } );
+    const int  sizeId    = int( rng.get( 0, 2 ) );
+    const bool transpose = rng.get( 0, 1 ) != 0;
+    const int  inputSize = sizeId ? 8 : 4;
+    const int  outSize   = sizeId == 2 ? 8 : 4;
+    InputGenerator<Pel> inputs{ unsigned( bitDepth + 1 ), /*is_signed=*/true };
+
+    alignas( 32 ) Pel     input[8];
+    alignas( 32 ) uint8_t weight[64 * 8];
+    alignas( 32 ) Pel     resRef[64];
+    alignas( 32 ) Pel     resOpt[64];
+    std::generate( input, input + inputSize, inputs );
+    std::generate( weight, weight + inputSize * outSize * outSize, [] { return uint8_t( rand() & 127 ); } );
+    const int maxVal      = ( 1 << bitDepth ) - 1;
+    const int inputOffset = int( rng.get( 0, unsigned( maxVal ) ) );
+
+    auto mul = []( PelBufferOps* ops, const int sizeId )
+    { return sizeId == 0 ? ops->mipMatrixMul_4_4 : sizeId == 1 ? ops->mipMatrixMul_8_4 : ops->mipMatrixMul_8_8; };
+    mul( ref, sizeId )( resRef, input, weight, maxVal, inputOffset, transpose );
+    mul( opt, sizeId )( resOpt, input, weight, maxVal, inputOffset, transpose );
+
+    std::ostringstream sstm;
+    sstm << "mipMatrixMul_" << inputSize << "_" << outSize << " transpose=" << transpose << " bitDepth=" << bitDepth;
+    if( !compare_values_1d( sstm.str(), resRef, resOpt, outSize * outSize ) )
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // MIP upsampling: all reduced sizes and factors, 12-bit samples (the documented range of the SIMD version). The
 // vertical pass is also run in place, with its source rows inside the destination as in MatrixIntraPrediction::predBlock.
 static bool check_mipUpsampling( PelBufferOps* ref, PelBufferOps* opt, unsigned num_cases )
@@ -4574,6 +4614,7 @@ static bool test_PelBufferOps()
   passed = check_blockStatistics( &ref, &opt, num_cases ) && passed;
   passed = check_padHorizontal( &ref, &opt, num_cases ) && passed;
   passed = check_downsample2x2( &ref, &opt, num_cases ) && passed;
+  passed = check_mipMatrixMul( &ref, &opt, num_cases ) && passed;
   passed = check_mipUpsampling( &ref, &opt, num_cases ) && passed;
   passed = check_highPassCorrelation( &ref, &opt, num_cases ) && passed;
   passed = check_blockStats4x4( &ref, &opt, num_cases ) && passed;
