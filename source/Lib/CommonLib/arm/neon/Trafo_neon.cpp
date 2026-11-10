@@ -49,11 +49,11 @@ POSSIBILITY OF SUCH DAMAGE.
 //  ====================================================================================================================
 #include "CommonDefARM.h"
 #include "CommonLib/CommonDef.h"
+#include "../Trafo_neon.h"
 #include "TrQuant.h"
 #include "TrQuant_EMT.h"
 #include "sum_neon.h"
 #include "transpose_neon.h"
-#include "../Trafo_neon.h"
 
 #include <cstdint>
 #include <cstring>
