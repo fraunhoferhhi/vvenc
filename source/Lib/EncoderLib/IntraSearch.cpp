@@ -176,6 +176,41 @@ static inline bool xCostCannotEnterList( const Distortion dist, const static_vec
   return costs.size() >= numCands && ( double ) dist >= costs[numCands - 1];
 }
 
+// Within one candidate loop of xEstimateLumaRdModeList (MIP, MRL and ISP fixed) every intra_luma_pred_mode estimate starts from
+// the same contexts and reads each of them at most once, so a mode's bits depend only on its class: the first mode of a class
+// is coded, the others of that class take its bits.
+static constexpr int NUM_MODE_BIT_CLASSES = NUM_MOST_PROBABLE_MODES + 2;
+
+// The number of symbols of a truncated binary code of numSymbols (<= 256) symbols that take one bin less than the others
+// (see CABACWriter::xWriteTruncBinCode)
+static constexpr int truncBinNumShort( const int numSymbols )
+{
+  return ( 2 << g_tbMax[numSymbols] ) - numSymbols;
+}
+
+// A regular mode's class: its index in the MPM list, else the length of the truncated binary code of its rank among the other
+// modes
+static inline int lumaModeBitsClass( const unsigned mode, const unsigned* mpmLst )
+{
+  static constexpr int numShort = truncBinNumShort( NUM_LUMA_MODE - NUM_MOST_PROBABLE_MODES );
+  int rank = mode;
+  for( int i = 0; i < NUM_MOST_PROBABLE_MODES; i++ )
+  {
+    if( mode == mpmLst[i] )
+    {
+      return i;
+    }
+    rank -= mpmLst[i] < mode ? 1 : 0;
+  }
+  return NUM_MOST_PROBABLE_MODES + ( rank < numShort ? 0 : 1 );
+}
+
+// A MIP mode's class: the length of its truncated binary code (the transposed flag is one bypass bin either way)
+static inline int mipModeBitsClass( const unsigned mode, const int numModes )
+{
+  return int( mode ) < truncBinNumShort( numModes ) ? 0 : 1;
+}
+
 void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
@@ -227,6 +262,25 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   bool satdChecked[NUM_INTRA_MODE] = { false };
 
   const unsigned* mpmLst = m_searchMpmLst;   // derived for this CU in estIntraPredLumaQT
+
+  // the bits of each class (see lumaModeBitsClass) in the current candidate loop, unknownBits until its first mode is coded
+  const uint64_t unknownBits = std::numeric_limits<uint64_t>::max();
+  uint64_t classBits[NUM_MODE_BIT_CLASSES];
+  std::fill_n( classBits, NUM_MODE_BIT_CLASSES, unknownBits );
+  auto fracModeBitsOfClass = [&]( const int cls ) -> uint64_t
+  {
+#if !defined( _DEBUG )   // debug builds code every mode and check it against its class
+    if( classBits[cls] != unknownBits )
+    {
+      return classBits[cls];
+    }
+#endif
+    const uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
+    m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+    CHECKD( classBits[cls] != unknownBits && classBits[cls] != fracModeBits, "intra mode bits differ within a class" );
+    classBits[cls] = fracModeBits;
+    return fracModeBits;
+  };
 
   const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
 
@@ -294,10 +348,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
           continue;
         }
 
-        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-        //restore ctx
-        m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+        const uint64_t fracModeBits = fracModeBitsOfClass( lumaModeBitsClass( mode, mpmLst ) );
 
         double cost = ( double ) minSadHad + ( double ) fracModeBits * sqrtLambdaForFirstPass;
         DTRACE( g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode );
@@ -376,6 +427,8 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
     const int transpOff    = getNumModesMip( cu.Y() );
     const int numModesFull = (transpOff << 1);
+    std::fill_n( classBits, NUM_MODE_BIT_CLASSES, unknownBits );   // MIP's own classes
+
     for( uint32_t uiModeFull = 0; uiModeFull < numModesFull; uiModeFull++ )
     {
       const bool     isTransposed = (uiModeFull >= transpOff ? true : false);
@@ -390,10 +443,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       // SAD is scaled by 2 to align with the scaling of HAD
       Distortion minSadHad = distParam.distFunc(distParam);
 
-      uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-      //restore ctx
-      m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
+      const uint64_t fracModeBits = fracModeBitsOfClass( mipModeBitsClass( uiMode, transpOff ) );
 
       double cost = double(minSadHad) + double(fracModeBits) * sqrtLambdaForFirstPass;
       mipHadCost[uiModeFull] = cost;
