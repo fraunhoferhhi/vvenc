@@ -472,8 +472,9 @@ namespace vvenc {
 
     // has to be called as a first check, assumes no decision has been made yet
     // anyGe4: a level may be 4 or more; its bits then include the Rice code, with the parameter setRiceParam set per state
+    // Forced inline: xPopulateTrellis calls it for every coefficient
     template<X86_VEXT vext, bool anyGe4>
-    static void checkAllRdCosts( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
+    static ALWAYS_INLINE void checkAllRdCosts( const DQIntern::ScanPosType spt, const DQIntern::PQData* pqData, DQIntern::Decisions& decisions, const DQIntern::StateMem& state )
     {
       // State mapping
       // decision 0: either A from 0 (pq0), or B from 1 (pq2), or 0 from 0
