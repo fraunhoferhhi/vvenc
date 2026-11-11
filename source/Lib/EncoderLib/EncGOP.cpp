@@ -1495,11 +1495,14 @@ void EncGOP::xIssueFgaTask( Picture& pic, int codingNum )
 
   // The result applies from the picture after the previously analysed one; when PreProcess found a scene cut in
   // between, from the cut, so that the pictures before it keep the parameters of their scene. The first analysis
-  // applies to all pictures before it as well. Pictures already written keep theirs (xAddFilmGrainParameters).
+  // applies to all pictures before it as well. Pictures already written keep theirs (xAddFilmGrainParameters). The
+  // analysis of the picture after a shot start restarts the shot's statistics without the start's one-sided
+  // analysis (MCTF::filter), from this picture on.
   const bool first  = m_fgaPrevAnalysedPoc == std::numeric_limits<int>::min();
   const int  cutPoc = pic.m_picShared->fgaSceneCut() ? pic.poc : pic.m_picShared->fgaLastSceneCutPoc();
-  task->sceneCut    = !first && cutPoc > m_fgaPrevAnalysedPoc;
-  task->startPoc    = first ? std::numeric_limits<int>::min() : task->sceneCut ? cutPoc : m_fgaPrevAnalysedPoc + 1;
+  const bool newCut = cutPoc > m_fgaPrevAnalysedPoc;
+  task->sceneCut    = !first && ( newCut || pic.m_picShared->fgaShotRestart() );
+  task->startPoc    = first ? std::numeric_limits<int>::min() : newCut ? cutPoc : m_fgaPrevAnalysedPoc + 1;
   m_fgaPrevAnalysedPoc = pic.poc;
   const Barrier* previous = m_fgaLast ? &m_fgaLast->counter.done : nullptr;
   m_fgaLast = task;

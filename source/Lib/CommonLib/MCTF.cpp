@@ -743,14 +743,35 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   uint64_t sumSRmsAcrossPic    = 0;
   uint16_t nMax = 0, maxRmsCTU = 0;
   bool  isFilterThisFrame      = mctfIdx >= 0 && ( pic->useMCTF || pic->gopEntry->m_isStartOfGop );
-  // A picture the film grain analysis looks at (GOPCfg::xSetFgaPictures) that MCTF does not filter: its motion is
-  // estimated for the analysis copies only, nothing that changes the coding (the filtered picture, the QP offsets).
-  const bool fgaOnly           = m_encCfg->m_fga && m_isFinalPass && pic->gopEntry->m_isFgaPicture && !isFilterThisFrame;
+  // The film grain analysis looks at the first picture of every GOP, the pictures FgaIntervalLog2 adds
+  // (GOPCfg::xSetFgaPictures) and the first picture of every shot: the sequence's first picture and the scene cuts
+  // PreProcess finds, so that no shot is given the grain of another. PreProcess marks a cut when the picture after it
+  // has passed, which MCTF's future references guarantee here; with the look-ahead, pictures reach the analysis in
+  // coding order, where only GOP starts keep the analyses in POC order (EncGOP::xAnalyzeFilmGrain).
+  const bool fgaShots          = !m_encCfg->m_LookAhead && m_encCfg->m_vvencMCTF.MCTFFutureReference;
+  const bool fgaShotStart      = fgaShots && ( pic->poc == 0 || pic->m_picShared->fgaSceneCut() );
+  // A shot start has no neighbour before it in its shot, so its temporal residual is one-sided and overshoots the
+  // grain (11-28 % in the fine band on a 4K film shot, where two-sided analyses inside the shot land at 0.88-0.95).
+  // So with the improved analysis (--fga 2) the picture after it, whose neighbours are both inside the shot, is analysed
+  // as well and restarts the shot's statistics without the start's analysis (EncGOP::xIssueFgaTask), which then serves
+  // the start picture alone. PreProcess has marked the cut on the picture before it by then (fgaLastSceneCutPoc).
+  const bool fgaShotRestart    = fgaShots && m_encCfg->m_fga >= 2
+                                 && ( pic->poc == 1 || pic->m_picShared->fgaLastSceneCutPoc() == pic->poc - 1 );
+  const bool fgaPicture        = m_encCfg->m_fga && m_isFinalPass
+                                 && ( pic->gopEntry->m_isStartOfGop || pic->gopEntry->m_isFgaPicture || fgaShotStart || fgaShotRestart );
+  if( fgaPicture && fgaShotRestart )
+  {
+    pic->m_picShared->fgaShotRestart() = true;
+  }
+  // A picture the analysis looks at that MCTF does not filter: its motion is estimated for the analysis copies only,
+  // nothing that changes the coding (the filtered picture, the QP offsets).
+  const bool fgaOnly           = fgaPicture && !isFilterThisFrame;
 
   int dropFrames = ( m_encCfg->m_usePerceptQPA ? VVENC_MCTF_RANGE >> 1 : 0 );
   if( isFilterThisFrame || fgaOnly )
   {
-    // the reference range of the picture's temporal level (for an analysis-only picture, of its position in the GOP)
+    // the reference range of the picture's temporal level (for an analysis-only picture, of its position in the GOP;
+    // a shot start off the FgaIntervalLog2 positions keeps m_fgaLayer 0, the full range of a GOP start)
     const int idxTLayer = isFilterThisFrame ? m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1) : pic->gopEntry->m_fgaLayer;
     const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
@@ -868,10 +889,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     }
 
     // The film grain analysis compares the original with a filtered copy of fixed strength, independent of the
-    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5). It analyses
-    // the start picture of every GOP and the pictures FgaIntervalLog2 adds (GOPCfg::xSetFgaPictures), whose motion has
-    // just been estimated.
-    if( m_encCfg->m_fga && m_isFinalPass && ( pic->gopEntry->m_isStartOfGop || pic->gopEntry->m_isFgaPicture ) )
+    // filtering for the encoding, as the dedicated temporal filter of the VTM analysis does (strength 1.5), on the
+    // pictures chosen above (fgaPicture), whose motion has just been estimated.
+    if( fgaPicture )
     {
       static constexpr double FGA_FILTER_STRENGTH = 1.5;
       if( isFilterThisFrame && pic->useMCTF && overallStrength == FGA_FILTER_STRENGTH )
