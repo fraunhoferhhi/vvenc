@@ -1409,6 +1409,7 @@ void MCTF::_initMCTF_ARM<NEON>()
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_neon;
   m_motionErrorLumaFracColumn = motionErrorLumaFracColumn_loRes_neon;
   m_motionErrorLumaInt8     = motionErrorLumaInt_neon;
+  m_motionErrorLumaInt4     = motionErrorLumaInt4Loop<motionErrorLumaInt_neon>;
   m_applyPlanarCorrection   = applyPlanarCorrection_neon;
   m_applyBlock              = applyBlock_neon;
   m_applyFrac[0][0]         = applyFrac6Tap_8x_neon;

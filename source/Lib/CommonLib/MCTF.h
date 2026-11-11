@@ -158,8 +158,29 @@ public:
   static const int16_t m_interpolationFilter4[16][4];
   static const int16_t m_interpolationFilter8[16][8];
 
+  // The largest block whose squared error cannot overflow 32 bits: 2048 * 1023^2 < 2^31 (samples of at most 10 bits).
+  static constexpr int MAX_EXACT_INT_AREA = 2048;
+
   int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
   int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
+  // m_motionErrorLumaInt8 for the four reference positions refs[0..3] in one call, into errors[0..3]: w is a multiple of
+  // 16 and w * h at most MAX_EXACT_INT_AREA. The error of position k is exact when it is not above bound k, the
+  // smallest of besterror and the errors of positions 0 to k - 1; otherwise it is some value above bound k (it may be a
+  // partial sum, as with the one-position kernels). Comparing the errors in order thus gives the same best vector as
+  // testing the four positions one after another.
+  void ( *m_motionErrorLumaInt4 )( const Pel* org, const ptrdiff_t origStride, const Pel* const* refs, const ptrdiff_t buffStride, const int w, const int h, const int besterror, int* errors );
+  // m_motionErrorLumaInt4 from a one-position kernel: the four positions one after another, each stopping early against
+  // bound k as the one-position search does. The C code and the SIMD levels without a four-position kernel use it.
+  template<int ( *motionErrorLumaInt )( const Pel*, const ptrdiff_t, const Pel*, const ptrdiff_t, const int, const int, const int )>
+  static void motionErrorLumaInt4Loop( const Pel* org, const ptrdiff_t origStride, const Pel* const* refs, const ptrdiff_t buffStride, const int w, const int h, const int besterror, int* errors )
+  {
+    int bound = besterror;
+    for( int k = 0; k < 4; k++ )
+    {
+      errors[k] = motionErrorLumaInt( org, origStride, refs[k], buffStride, w, h, bound );
+      bound     = std::min( bound, errors[k] );
+    }
+  }
 
   int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
   int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
