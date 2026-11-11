@@ -32,9 +32,12 @@ def append_json(path,row):
         f.flush();os.fsync(f.fileno())
 
 def make_env(spec,rank):
-    if spec["gpu_ids"]:os.environ["CUDA_VISIBLE_DEVICES"]=spec["gpu_ids"][rank%len(spec["gpu_ids"])]
+    device=f"cuda:{spec['gpu_ids'][rank%len(spec['gpu_ids'])]}" if spec["gpu_ids"] else "cpu"
     catalog=VideoCatalog(spec["input_root"],spec["ffmpeg"],spec["ffprobe"])
-    detector=FrozenDetector(spec["yolo_repo"],spec["weights"],"cuda:0" if spec["gpu_ids"] else "cpu")
+    detector=FrozenDetector(spec["yolo_repo"],spec["weights"],device)
+    print("COLLECTOR_READY",json.dumps({"rank":rank,"pid":os.getpid(),
+          "cuda_visible_devices":os.environ.get("CUDA_VISIBLE_DEVICES"),
+          "detector_device":str(detector.device)}),flush=True)
     return VVenCEnv(catalog,detector,spec["encoder"],Path(spec["output"])/"episodes"/f"worker{rank}",
                     frame_limit=spec["frames"],threads=spec["encoder_threads"])
 
