@@ -57,277 +57,208 @@ POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-// Rows kBegin up to kEnd of the inverse matrix multiply, two at a time. With firstRows, dst isn't set yet, so these rows write it and
-// later rows add to it. They write all of it too, so only later rows skip lines whose coefficients are zero: on the first rows the
-// multiply gives the zeros.
-template<X86_VEXT vext, unsigned trSize, bool firstRows>
-static ALWAYS_INLINE void fastInvRows_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, int kBegin, int kEnd )
+// The inverse matrix multiply works on groups of up to 4 lines (as many as there are, if fewer). For each pair of rows k, k + 1
+// with a nonzero coefficient in the group's lines, kPairs[p] = k and pairs[p][l] holds the int16 pair ( src[k][i + l],
+// src[k + 1][i + l] ) of line l as one dword, ready to be broadcast as the vpmaddwd factor of that line: each output is then the
+// sum over these row pairs of the products with the matrix rows k and k + 1 interleaved. A pair that is zero in all the lines
+// adds nothing and is left out without a branch: it is written, then overwritten by the next. Returns the number of pairs kept.
+static ALWAYS_INLINE unsigned invScalePairs_SSE( const TCoeff* src, unsigned lines, unsigned groupLines, unsigned rows, int32_t* pairs, unsigned* kPairs )
 {
-  unsigned maxLoopL = std::min<int>( reducedLines, 4 );
+  unsigned n = 0;
+  const __m128i interleave = _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 );
+
+  for( unsigned k = 0; k < rows; k += 2 )
+  {
+    const TCoeff* src0 = &src[ k      * lines];
+    const TCoeff* src1 = &src[(k + 1) * lines];
+
+    // rows k and k + 1 of the group's lines, packed to int16, then interleaved by line
+    const __m128i xscale = groupLines == 4 ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* ) src0 ), _mm_loadu_si128( ( const __m128i* ) src1 ) )
+                         : groupLines == 2 ? _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* ) src0 ), _vv_loadl_epi64( ( const __m128i* ) src1 ) )
+                         :                   _mm_packs_epi32( _mm_cvtsi32_si128( src0[0] ), _mm_cvtsi32_si128( src1[0] ) );
+    _mm_store_si128( ( __m128i* ) &pairs[4 * n], _mm_shuffle_epi8( xscale, interleave ) );
+    kPairs[n] = k;
+    n += !_mm_test_all_zeros( xscale, xscale );
+  }
+  return n;
+}
 
 #if USE_AVX2
-  if( trSize >= 8 && vext >= AVX2 )
+// Adds to the sums of the 4 lines of a group the products of numPairs row pairs (kPairs[p] and the next row, with the scale pairs
+// pairs[p]) for the 16 columns at col, or the 8 of trSize 8: acc[l][0] and acc[l][1] hold columns 0-3 | 8-11 and 4-7 | 12-15 of
+// line l (columns 0-7 in acc[l][0] for trSize 8). A nonzero fixedPairs is the count, known at compile time, so the loop unrolls.
+template<unsigned trSize, unsigned fixedPairs>
+static ALWAYS_INLINE void invSums_avx2( const TMatrixCoeff* it, const int32_t ( *pairs )[4], const unsigned* kPairs, unsigned numPairs,
+                                        unsigned col, __m256i ( *acc )[2] )
+{
+  for( unsigned p = 0; p < ( fixedPairs ? fixedPairs : numPairs ); p++ )
   {
-    if( ( trSize & 15 ) == 0 )
+    const unsigned k = kPairs[p];
+    __m256i itPair[2];
+    if( trSize >= 16 )
     {
-      static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
-
-      for( int k = kBegin; k < kEnd; k += 2 )
-      {
-              TCoeff* dstPtr =  dst;
-
-        const TCoeff* srcPtr0 = &src[ k      * lines];
-        const TCoeff* srcPtr1 = &src[(k + 1) * lines];
-
-        __m256i vsrc1v[trLoops][2];
-        
-        const TMatrixCoeff*  itPtr0 = &it[ k      * trSize];
-        const TMatrixCoeff*  itPtr1 = &it[(k + 1) * trSize];
-
-        for( int col = 0; col < trLoops; col++, itPtr0 += 16, itPtr1 += 16 )
-        {
-#if defined( _MSC_VER ) && _MSC_VER > 1900
-          __m256i vit16_0 = _mm256_permute4x64_epi64( _mm256_stream_load_si256( ( const __m256i * ) itPtr0 ), ( 0 << 0 ) + ( 1 << 4 ) + ( 2 << 2 ) + ( 3 << 6 ) );
-          __m256i vit16_1 = _mm256_permute4x64_epi64( _mm256_stream_load_si256( ( const __m256i * ) itPtr1 ), ( 0 << 0 ) + ( 1 << 4 ) + ( 2 << 2 ) + ( 3 << 6 ) );
-#else
-          __m256i vit16_0 = _mm256_permute4x64_epi64( _mm256_stream_load_si256( (       __m256i * ) itPtr0 ), ( 0 << 0 ) + ( 1 << 4 ) + ( 2 << 2 ) + ( 3 << 6 ) );
-          __m256i vit16_1 = _mm256_permute4x64_epi64( _mm256_stream_load_si256( (       __m256i * ) itPtr1 ), ( 0 << 0 ) + ( 1 << 4 ) + ( 2 << 2 ) + ( 3 << 6 ) );
-#endif
-
-          vsrc1v[col][0] = _mm256_unpacklo_epi16( vit16_0, vit16_1 );
-          vsrc1v[col][1] = _mm256_unpackhi_epi16( vit16_0, vit16_1 );
-        }
-
-        for( int i = 0; i < reducedLines; i += 4, srcPtr0 += maxLoopL, srcPtr1 += maxLoopL )
-        {
-          __m128i xscale = maxLoopL == 4
-                         ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                         : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
-          xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
-
-          if( !firstRows && _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
-
-          for( int l = 0; l < maxLoopL; l++ )
-          {
-            __m256i
-            vscale = _mm256_broadcastd_epi32( xscale );
-            xscale = _mm_bsrli_si128( xscale, 4 );
-
-            for( int col = 0; col < trLoops; col++, dstPtr += 16 )
-            {
-              __m256i
-              vsrc1 = vsrc1v[col][0];
-              vsrc1 = _mm256_madd_epi16    ( vsrc1, vscale );
-              if( !firstRows )
-              {
-                vsrc1 = _mm256_add_epi32   ( vsrc1, _mm256_load_si256( ( const __m256i * ) dstPtr ) );
-              }
-
-              _mm256_store_si256           ( ( __m256i * ) dstPtr, vsrc1 );
-
-              vsrc1 = vsrc1v[col][1];
-              vsrc1 = _mm256_madd_epi16    ( vsrc1, vscale );
-              if( !firstRows )
-              {
-                vsrc1 = _mm256_add_epi32   ( vsrc1, _mm256_load_si256( ( const __m256i * ) &dstPtr[8] ) );
-              }
-
-              _mm256_store_si256           ( ( __m256i * ) &dstPtr[8], vsrc1 );
-            }
-          }
-        }
-      }
+      // the 16-bit unpacks work within the 128-bit halves: itPair[0] pairs columns 0-3 | 8-11, itPair[1] 4-7 | 12-15
+      const __m256i it0 = _mm256_load_si256( ( const __m256i* ) &it[ k      * trSize + col] );
+      const __m256i it1 = _mm256_load_si256( ( const __m256i* ) &it[(k + 1) * trSize + col] );
+      itPair[0] = _mm256_unpacklo_epi16( it0, it1 );
+      itPair[1] = _mm256_unpackhi_epi16( it0, it1 );
     }
     else
     {
-      for( int k = kBegin; k < kEnd; k += 2 )
-      {
-              TCoeff* dstPtr  =  dst;
-
-        const TCoeff* srcPtr0 = &src[ k      * lines];
-        const TCoeff* srcPtr1 = &src[(k + 1) * lines];
-
-        const TMatrixCoeff*  itPtr0 = &it[  k      * trSize];
-        const TMatrixCoeff*  itPtr1 = &it[( k + 1 ) * trSize];
-
-        __m256i vit;
-
-        {
-#if defined( _MSC_VER ) && _MSC_VER > 1900
-          __m256i vsrc1 = _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_stream_load_si128( ( const __m128i * ) itPtr0 ) ), ( 0 << 0 ) + ( 1 << 4 ) );
-#else
-          __m256i vsrc1 = _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_stream_load_si128( ( __m128i * ) itPtr0 ) ), ( 0 << 0 ) + ( 1 << 4 ) );
-#endif
-#if defined( _MSC_VER ) && _MSC_VER > 1900
-          __m256i vsrc2 = _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_stream_load_si128( ( const __m128i * ) itPtr1 ) ), ( 0 << 0 ) + ( 1 << 4 ) );
-#else
-          __m256i vsrc2 = _mm256_permute4x64_epi64( _mm256_castsi128_si256( _mm_stream_load_si128( ( __m128i * ) itPtr1 ) ), ( 0 << 0 ) + ( 1 << 4 ) );
-#endif
-
-          vit = _mm256_unpacklo_epi16( vsrc1, vsrc2 );
-        }
-        
-        for( int i = 0; i < reducedLines; i += 4, srcPtr0 += maxLoopL, srcPtr1 += maxLoopL )
-        {
-          __m128i xscale = maxLoopL == 4
-                         ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                         : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
-          xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
-
-          if( !firstRows && _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
-
-          for( int l = 0; l < maxLoopL; l++ )
-          {
-            __m256i
-            vscale = _mm256_broadcastd_epi32( xscale );
-            xscale = _mm_bsrli_si128( xscale, 4 );
-
-            for( int col = 0; col < trSize; col += 8, dstPtr += 8, itPtr0 += 8, itPtr1 += 8 )
-            {
-              __m256i
-              vsrc1 = _mm256_madd_epi16    ( vit, vscale );
-              if( !firstRows )
-              {
-                vsrc1 = _mm256_add_epi32   ( vsrc1, _mm256_load_si256( ( const __m256i * ) dstPtr ) );
-              }
-
-              _mm256_store_si256           ( ( __m256i * ) dstPtr, vsrc1 );
-            }
-          }
-        }
-      }
+      // rows k and k + 1 of the 8-column matrix lie next to each other: put columns 0-3 of both in the low half, 4-7 in
+      // the high half, then interleave them; the pairs are in column order
+      const __m256i it01 = _mm256_permute4x64_epi64( _mm256_loadu_si256( ( const __m256i* ) &it[k * trSize] ), 0xD8 );
+      itPair[0] = _mm256_shuffle_epi8( it01, _mm256_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15,
+                                                               0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
     }
-  }
-#else
-  if( trSize >= 8 )
-  {
-    for( int k = kBegin; k < kEnd; k += 2 )
+
+    for( int l = 0; l < 4; l++ )
     {
-            TCoeff* dstPtr  =  dst;
-
-      const TCoeff* srcPtr0 = &src[ k      * lines];
-      const TCoeff* srcPtr1 = &src[(k + 1) * lines];
-        
-      for( int i = 0; i < reducedLines; i += 4, srcPtr0 += maxLoopL, srcPtr1 += maxLoopL )
+      const __m256i vscale = _mm256_set1_epi32( pairs[p][l] );
+      acc[l][0] = _mm256_add_epi32( acc[l][0], _mm256_madd_epi16( itPair[0], vscale ) );
+      if( trSize >= 16 )
       {
-        __m128i xscale = maxLoopL == 4
-                        ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                        : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
-        xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
-
-        if( !firstRows && _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
-
-        for( int l = 0; l < maxLoopL; l++ )
-        {
-          const TMatrixCoeff*  itPtr0 = &it[k      * trSize];
-          const TMatrixCoeff*  itPtr1 = &it[( k + 1 ) * trSize];
-
-          __m128i
-          vscale = _mm_set1_epi32( _mm_cvtsi128_si32( xscale ) );
-          xscale = _mm_bsrli_si128( xscale, 4 );
-
-          for( int col = 0; col < trSize; col += 8, dstPtr += 8, itPtr0 += 8, itPtr1 += 8 )
-          {
-#if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m128i vit16_0 = _mm_stream_load_si128( ( const __m128i * ) itPtr0 );
-            __m128i vit16_1 = _mm_stream_load_si128( ( const __m128i * ) itPtr1 );
-#else
-            __m128i vit16_0 = _mm_stream_load_si128( (       __m128i * ) itPtr0 );
-            __m128i vit16_1 = _mm_stream_load_si128( (       __m128i * ) itPtr1 );
-#endif
-
-            __m128i vsrc1 = _mm_unpacklo_epi16( vit16_0, vit16_1 );
-
-            vsrc1 = _mm_madd_epi16 ( vsrc1, vscale );
-            if( !firstRows )
-            {
-              vsrc1 = _mm_add_epi32( vsrc1, _mm_load_si128( ( const __m128i * ) dstPtr ) );
-            }
-
-            _mm_store_si128        ( ( __m128i * ) dstPtr, vsrc1 );
-
-            vsrc1 = _mm_unpackhi_epi16( vit16_0, vit16_1 );
-
-            vsrc1 = _mm_madd_epi16 ( vsrc1, vscale );
-            if( !firstRows )
-            {
-              vsrc1 = _mm_add_epi32( vsrc1, _mm_load_si128( ( const __m128i * ) &dstPtr[4] ) );
-            }
-
-            _mm_store_si128        ( ( __m128i * ) &dstPtr[4], vsrc1 );
-          }
-        }
+        acc[l][1] = _mm256_add_epi32( acc[l][1], _mm256_madd_epi16( itPair[1], vscale ) );
       }
     }
-  }
-#endif
-  else if( trSize >= 4 )
-  {
-    CHECKD( trSize != 4, "trSize needs to be '4'!" );
-
-    for( int k = kBegin; k < kEnd; k += 2 )
-    {
-            TCoeff* dstPtr  =  dst;
-
-      const TCoeff* srcPtr0 = &src[ k      * lines];
-      const TCoeff* srcPtr1 = &src[(k + 1) * lines];
-
-      const TMatrixCoeff*  itPtr0 = &it[  k       * trSize];
-      const TMatrixCoeff*  itPtr1 = &it[( k + 1 ) * trSize];
-
-      __m128i vit = _mm_unpacklo_epi16( _vv_loadl_epi64( ( const __m128i * ) itPtr0 ), _vv_loadl_epi64( ( const __m128i * ) itPtr1 ) );
- 
-      for( int i = 0; i < reducedLines; i += 4, srcPtr0 += maxLoopL, srcPtr1 += maxLoopL )
-      {
-        __m128i xscale = maxLoopL == 4
-                        ? _mm_packs_epi32( _mm_loadu_si128( ( const __m128i* )srcPtr0 ), _mm_loadu_si128( ( const __m128i* )srcPtr1 ) )
-                        : _mm_packs_epi32( _vv_loadl_epi64( ( const __m128i* )srcPtr0 ), _vv_loadl_epi64( ( const __m128i* )srcPtr1 ) );
-        xscale = _mm_shuffle_epi8( xscale, _mm_setr_epi8( 0, 1, 8, 9, 2, 3, 10, 11, 4, 5, 12, 13, 6, 7, 14, 15 ) );
-
-        if( !firstRows && _mm_test_all_zeros( xscale, xscale ) ) { dstPtr += ( trSize * maxLoopL ); continue; }
-
-        for( int l = 0; l < maxLoopL; l++ )
-        {
-          __m128i
-          vscale = _mm_set1_epi32( _mm_cvtsi128_si32( xscale ) );
-          xscale = _mm_bsrli_si128( xscale, 4 );
-
-          for( int col = 0; col < trSize; col += 4, dstPtr += 4 )
-          {
-            __m128i
-            vsrc1 = _mm_madd_epi16 ( vit, vscale );
-            if( !firstRows )
-            {
-              vsrc1 = _mm_add_epi32( vsrc1, _mm_load_si128( ( const __m128i * ) dstPtr ) );
-            }
-
-            _mm_store_si128        ( ( __m128i * ) dstPtr, vsrc1 );
-          }
-        }
-      }
-    }
-  }
-  else
-  {
-    THROW( "Unsupported size" );
   }
 }
 
+#endif
+
+// The inverse matrix multiply with its rounding shift and clip: dst[i][j] = Clip3( outputMin, outputMax, ( sum over k < rows of
+// src[k][i] * it[k][j] + round ) >> shift ) for the lines i < reducedLines (lines are written in groups of 4, as many as there
+// are if fewer). The sums of 4 lines and one block of columns stay in registers over the nonzero row pairs; each output is
+// stored once.
 template<X86_VEXT vext, unsigned trSize>
-void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
+void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows,
+                  const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift )
 {
+  static_assert( trSize >= 4, "Unsupported size" );
+
   if( rows == 0 )
   {
+    // the round and shift of 0 give 0, inside any clip range
     memset( dst, 0, reducedLines * trSize * sizeof( TCoeff ) );
     return;
   }
 
-  fastInvRows_SSE<vext, trSize, true >( it, src, dst, lines, reducedLines, 0, 2 );
-  fastInvRows_SSE<vext, trSize, false>( it, src, dst, lines, reducedLines, 2, rows );
-#if USE_AVX2
+  // reducedLines is the number of lines when they are fewer than 4 (1 or 2), else a multiple of 4
+  CHECKD( reducedLines == 3, "3 lines aren't supported" );
+  const unsigned groupLines = std::min( reducedLines, 4u );
+  alignas( 16 ) int32_t pairs[MAX_TB_SIZEY / 2][4];
+  unsigned kPairs[MAX_TB_SIZEY / 2];
 
-  _mm256_zeroupper();
+#if USE_AVX2
+  if( trSize >= 8 && vext >= AVX2 )
+  {
+    const __m256i vmin = _mm256_set1_epi32( outputMin );
+    const __m256i vmax = _mm256_set1_epi32( outputMax );
+    const __m256i vrnd = _mm256_set1_epi32( round );
+
+    for( unsigned i = 0; i < reducedLines; i += 4, src += groupLines, dst += 4 * trSize )
+    {
+      const unsigned numPairs = invScalePairs_SSE( src, lines, groupLines, rows, pairs[0], kPairs );
+
+      // a block of 16 columns, or of 8 for trSize 8
+      for( unsigned col = 0; col < trSize; col += 16 )
+      {
+        __m256i acc[4][2];
+        for( int l = 0; l < 4; l++ ) { acc[l][0] = acc[l][1] = _mm256_setzero_si256(); }
+
+        // the pair counts of rows 4 and 8 unrolled
+        switch( numPairs )
+        {
+        case 1:  invSums_avx2<trSize, 1>( it, pairs, kPairs, 1, col, acc ); break;
+        case 2:  invSums_avx2<trSize, 2>( it, pairs, kPairs, 2, col, acc ); break;
+        case 3:  invSums_avx2<trSize, 3>( it, pairs, kPairs, 3, col, acc ); break;
+        case 4:  invSums_avx2<trSize, 4>( it, pairs, kPairs, 4, col, acc ); break;
+        default: invSums_avx2<trSize, 0>( it, pairs, kPairs, numPairs, col, acc ); break;
+        }
+
+        for( int l = 0; l < 4; l++ )
+        {
+          if( l < groupLines )
+          {
+            TCoeff* dstPtr = &dst[l * trSize + col];
+            if( trSize >= 16 )
+            {
+              // back to column order
+              const __m256i lo = _mm256_permute2x128_si256( acc[l][0], acc[l][1], 0x20 );
+              const __m256i hi = _mm256_permute2x128_si256( acc[l][0], acc[l][1], 0x31 );
+              _mm256_store_si256( ( __m256i* ) &dstPtr[0], _mm256_min_epi32( _mm256_max_epi32( _mm256_srai_epi32( _mm256_add_epi32( lo, vrnd ), shift ), vmin ), vmax ) );
+              _mm256_store_si256( ( __m256i* ) &dstPtr[8], _mm256_min_epi32( _mm256_max_epi32( _mm256_srai_epi32( _mm256_add_epi32( hi, vrnd ), shift ), vmin ), vmax ) );
+            }
+            else
+            {
+              _mm256_store_si256( ( __m256i* ) &dstPtr[0], _mm256_min_epi32( _mm256_max_epi32( _mm256_srai_epi32( _mm256_add_epi32( acc[l][0], vrnd ), shift ), vmin ), vmax ) );
+            }
+          }
+        }
+      }
+    }
+
+    _mm256_zeroupper();
+    return;
+  }
 #endif
+
+  const __m128i vmin = _mm_set1_epi32( outputMin );
+  const __m128i vmax = _mm_set1_epi32( outputMax );
+  const __m128i vrnd = _mm_set1_epi32( round );
+
+  for( unsigned i = 0; i < reducedLines; i += 4, src += groupLines, dst += 4 * trSize )
+  {
+    const unsigned numPairs = invScalePairs_SSE( src, lines, groupLines, rows, pairs[0], kPairs );
+
+    // a block of 8 columns, or of 4 for trSize 4
+    for( unsigned col = 0; col < trSize; col += 8 )
+    {
+      __m128i acc[4][2];
+      for( int l = 0; l < 4; l++ ) { acc[l][0] = acc[l][1] = _mm_setzero_si128(); }
+
+      for( unsigned p = 0; p < numPairs; p++ )
+      {
+        const unsigned k = kPairs[p];
+        // itPair[0] pairs columns 0-3 of rows k and k + 1, itPair[1] columns 4-7
+        __m128i itPair[2];
+        if( trSize >= 8 )
+        {
+          const __m128i it0 = _mm_load_si128( ( const __m128i* ) &it[ k      * trSize + col] );
+          const __m128i it1 = _mm_load_si128( ( const __m128i* ) &it[(k + 1) * trSize + col] );
+          itPair[0] = _mm_unpacklo_epi16( it0, it1 );
+          itPair[1] = _mm_unpackhi_epi16( it0, it1 );
+        }
+        else
+        {
+          itPair[0] = _mm_unpacklo_epi16( _vv_loadl_epi64( ( const __m128i* ) &it[k * trSize] ), _vv_loadl_epi64( ( const __m128i* ) &it[( k + 1 ) * trSize] ) );
+        }
+
+        for( int l = 0; l < 4; l++ )
+        {
+          const __m128i vscale = _mm_set1_epi32( pairs[p][l] );
+          acc[l][0] = _mm_add_epi32( acc[l][0], _mm_madd_epi16( itPair[0], vscale ) );
+          if( trSize >= 8 )
+          {
+            acc[l][1] = _mm_add_epi32( acc[l][1], _mm_madd_epi16( itPair[1], vscale ) );
+          }
+        }
+      }
+
+      for( int l = 0; l < 4; l++ )
+      {
+        if( l < groupLines )
+        {
+          TCoeff* dstPtr = &dst[l * trSize + col];
+          _mm_store_si128( ( __m128i* ) &dstPtr[0], _mm_min_epi32( _mm_max_epi32( _mm_srai_epi32( _mm_add_epi32( acc[l][0], vrnd ), shift ), vmin ), vmax ) );
+          if( trSize >= 8 )
+          {
+            _mm_store_si128( ( __m128i* ) &dstPtr[4], _mm_min_epi32( _mm_max_epi32( _mm_srai_epi32( _mm_add_epi32( acc[l][1], vrnd ), shift ), vmin ), vmax ) );
+          }
+        }
+      }
+    }
+  }
 }
 
 #if USE_AVX2
@@ -2596,7 +2527,6 @@ void TCoeffOps::_initTCoeffOpsX86()
   cpyResi8     = cpyResi_SSE  <vext, 8>;
   cpyCoeff4    = cpyCoeff_SSE <vext, 4>;
   cpyCoeff8    = cpyCoeff_SSE <vext, 8>;
-  roundClip4   = roundClip_SSE<vext, 4>;
   roundClip8   = roundClip_SSE<vext, 8>;
 
   fastInvCore[0] = fastInv_SSE<vext,  4>;

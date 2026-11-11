@@ -106,8 +106,7 @@ inline void _fastInverseMM<4>( const TCoeff *src, TCoeff *dst, int shift, int li
   const int cutoff      = 4 - iSkipLine2;
 
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.fastInvCore[0]( iT, src, dst, line, reducedLine, cutoff );
-  g_tCoeffOps.roundClip4( dst, 4, reducedLine, 4, outputMinimum, outputMaximum, rnd_factor, shift );
+  g_tCoeffOps.fastInvCore[0]( iT, src, dst, line, reducedLine, cutoff, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
   memset( dst, 0, reducedLine * 4 * sizeof( TCoeff ) );
 
@@ -147,8 +146,7 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
   const int  cutoff      = uiTrSize - iSkipLine2;
 
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff );
-  g_tCoeffOps.roundClip8( dst, uiTrSize, reducedLine, uiTrSize, outputMinimum, outputMaximum, rnd_factor, shift );
+  g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
   memset( dst, 0, reducedLine * uiTrSize * sizeof( TCoeff ) );
 
@@ -1953,7 +1951,8 @@ void clipCore( TCoeff *dst, unsigned width, unsigned height, unsigned stride, co
 
 
 template<unsigned trSize>
-void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
+void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows,
+                   const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift )
 {
   if( rows == 0 )
   {
@@ -1984,6 +1983,8 @@ void fastInvCore_( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsig
       srcPtr++;
     }
   }
+
+  clipCore( dst, trSize, reducedLines, trSize, outputMin, outputMax, round, shift );
 }
 
 
@@ -2023,7 +2024,6 @@ TCoeffOps::TCoeffOps()
   cpyResi8        = cpyResiCore;
   cpyCoeff4       = cpyCoeffCore;
   cpyCoeff8       = cpyCoeffCore;
-  roundClip4      = clipCore;
   roundClip8      = clipCore;
   fastInvCore[0]  = fastInvCore_< 4>;
   fastInvCore[1]  = fastInvCore_< 8>;
