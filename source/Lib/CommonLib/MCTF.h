@@ -158,8 +158,15 @@ public:
   static const int16_t m_interpolationFilter4[16][4];
   static const int16_t m_interpolationFilter8[16][8];
 
+  // The largest block whose squared error cannot overflow 32 bits: 2048 * 1023^2 < 2^31 (samples of at most 10 bits).
+  static constexpr int MAX_EXACT_INT_AREA = 2048;
+
   int ( *m_motionErrorLumaIntX )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
   int ( *m_motionErrorLumaInt8 )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror );
+  // m_motionErrorLumaInt8 for the four reference positions refs[0..3] in one call, into errors[0..3]: w is a multiple of
+  // 16 and w * h at most MAX_EXACT_INT_AREA. An error above besterror may be a partial sum, as with the one-position
+  // kernels. nullptr where no such kernel exists.
+  void ( *m_motionErrorLumaInt4 )( const Pel* org, const ptrdiff_t origStride, const Pel* const* refs, const ptrdiff_t buffStride, const int w, const int h, const int besterror, int* errors );
 
   int ( *m_motionErrorLumaFracX[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
   int ( *m_motionErrorLumaFrac8[2] )( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
