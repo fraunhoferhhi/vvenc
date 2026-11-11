@@ -120,6 +120,11 @@ namespace vvenc {
     bool            scRelax;
     int             bitDepth;
     int64_t         bitsUsed;
+    // Completed-picture counters used only by the RL observation adapter.
+    // Unlike POC, these progress in RC-update order under GOP reordering.
+    int64_t         rlCompletedPictures;
+    int64_t         rlLastPictureBits;
+    int             rlLastPictureQP;
     int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
     double          rateBoostFac;

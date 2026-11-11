@@ -57,7 +57,7 @@ def main():
                 raise RuntimeError(f"Duplicate or unexpected POC={state.poc}")
             if args.mode=="zero":
                 delta=[0]*600
-                rec={"poc":state.poc,"proxy":state.proxy,"global":list(state.globals),
+                rec={"poc":state.poc,"policy_step":len(seen)+1,"proxy":state.proxy,"global":list(state.globals),
                      "local":[list(m) for m in state.maps],"discrete_action":delta,
                      "raw_action":None,"old_logp":None,"old_value":None}
             else:
@@ -67,7 +67,7 @@ def main():
                 with torch.no_grad():
                     raw,lp,value,_=model.sample(spatial,glob)
                 delta=interpolate_qp(raw[0],max_delta=args.max_delta)
-                rec={"poc":state.poc,"proxy":state.proxy,"global":list(state.globals),
+                rec={"poc":state.poc,"policy_step":len(seen)+1,"proxy":state.proxy,"global":list(state.globals),
                      "local":[list(m) for m in state.maps],"discrete_action":delta,
                      "raw_action":raw[0].tolist(),"old_logp":float(lp.item()),
                      "old_value":float(value.item())}

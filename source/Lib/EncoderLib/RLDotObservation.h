@@ -78,17 +78,22 @@ public:
     const double meanQp = rc && rc->encRCSeq && rc->encRCSeq->lastAverageQP >= 0
                         ? double(rc->encRCSeq->lastAverageQP) : double(slice.sliceQp);
     const double usedBits = rc && rc->encRCSeq ? double(rc->encRCSeq->bitsUsed) : 0.0;
-    const double codedBps = slice.poc > 0 && fps > 0 ? usedBits * fps / double(slice.poc) : target;
-    // G03,G06-G12 are NOT available as causal exact measurements in this
-    // revision. They are zero-marked and tagged DOT_PROXY, never DOT_STATE.
+    const int64_t completed = rc && rc->encRCSeq ? rc->encRCSeq->rlCompletedPictures : 0;
+    const double codedBps = completed > 0 && fps > 0 ? usedBits * fps / double(completed) : target;
+    const double lastPicBits = rc && rc->encRCSeq ? double(rc->encRCSeq->rlLastPictureBits) : 0.0;
+    const double lastPicQP = rc && rc->encRCSeq && rc->encRCSeq->rlLastPictureQP >= 0
+                              ? double(rc->encRCSeq->rlLastPictureQP) : double(slice.sliceQp);
+    // G03 and G04 are previous completed-picture *encoder* statistics, not
+    // exact Annex-B AU bits or per-block QP. G06-G12 remain unavailable.
+    // Emit DOT_PROXY until the full paper feature mapping is implemented.
     const std::array<double,16> g = {{
       double(slice.sliceQp)/63.0,
       double(slice.poc)/frames,
-      0.0,
-      meanQp/63.0,
+      fps > 0 && target > 0 ? lastPicBits / (target/fps) : 0.0,
+      lastPicQP/63.0,
       meanQp/63.0,
       0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-      double(slice.poc)/frames,
+      double(completed)/frames,
       target > 0 ? std::tanh(std::log(std::max(1.0,codedBps)/target)) : 0.0,
       slice.isIntra() ? 1.0 : 0.0,
       complexitySum/600.0

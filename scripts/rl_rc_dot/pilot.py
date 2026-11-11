@@ -71,6 +71,8 @@ def encode_dot(args,ref:Path,out:Path):
                 records=[json.loads(line) for line in stream if line.strip()]
             if len(records)!=args.frames or set(r["poc"] for r in records)!=set(range(args.frames)):
                 raise ValueError("DOT trajectory missing or duplicate POCs")
+            if [r.get("policy_step") for r in records] != list(range(1,args.frames+1)):
+                raise ValueError("DOT trajectory missing continuous policy decision index")
             aus=read_au_bits(out/"au_bits.csv",bitstream,args.frames)
             return bitstream,trajectory,aus
         finally:

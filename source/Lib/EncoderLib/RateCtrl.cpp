@@ -69,6 +69,9 @@ EncRCSeq::EncRCSeq()
   gopSize             = 0;
   intraPeriod         = 0;
   bitsUsed            = 0;
+  rlCompletedPictures = 0;
+  rlLastPictureBits   = 0;
+  rlLastPictureQP     = -1;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
   rateBoostFac        = 1.0;
@@ -105,6 +108,9 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int ma
   maxEstLambda = 65535.9375 * pow( 2.0, bitdepthLumaScale );
 
   bitsUsed            = 0;
+  rlCompletedPictures = 0;
+  rlLastPictureBits   = 0;
+  rlLastPictureQP     = -1;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
   std::memset (qpCorrection, 0, sizeof (qpCorrection));
@@ -119,6 +125,7 @@ void EncRCSeq::destroy()
 
 void EncRCSeq::updateAfterPic (const int actBits, const int tgtBits)
 {
+  ++rlCompletedPictures;
   estimatedBitUsage += tgtBits;
 
   if (isLookAhead)
@@ -1164,6 +1171,8 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
   encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
+  encRCSeq->rlLastPictureBits = pic->actualTotalBits;
+  encRCSeq->rlLastPictureQP   = pic->slices[0]->sliceQp;
 
   if ( encRCSeq->isLookAhead )
   {

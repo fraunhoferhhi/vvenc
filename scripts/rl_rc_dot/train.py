@@ -37,7 +37,9 @@ def main():
     pocs=[r["poc"] for r in trajectory]
     if set(pocs)!=set(range(n)) or len(pocs)!=len(set(pocs)):
         raise ValueError("Missing, duplicate or unexpected POC")
-    for r in trajectory:
+    for step,r in enumerate(trajectory,start=1):
+        if r.get("policy_step") != step:
+            raise ValueError("Incorrect policy decision order in trajectory")
         if r.get("proxy") and not args.allow_proxy_state:
             raise ValueError("DOT_PROXY cannot be used for scientific training")
         if len(r.get("global",[]))!=16 or len(r.get("local",[]))!=4 or any(len(c)!=600 for c in r["local"]):
