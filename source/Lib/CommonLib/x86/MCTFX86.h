@@ -71,11 +71,8 @@ static inline int sumOfLanes_AVX2( const __m256i v )
   return _mm_cvtsi128_si32( x );
 }
 
-// The largest block whose squared error cannot overflow 32 bits: 2048 * 1023^2 < 2^31 (samples of at most 10 bits).
-static constexpr int MAX_EXACT_INT_AREA = 2048;
-
-// motionErrorLumaInt_SIMD for blocks of a width that is a multiple of 16 and at most MAX_EXACT_INT_AREA samples. It
-// returns the exact error when that is not above besterror and a partial sum above besterror otherwise, as every other
+// motionErrorLumaInt_SIMD for blocks of a width that is a multiple of 16 and at most MCTF::MAX_EXACT_INT_AREA samples.
+// It returns the exact error when that is not above besterror and a partial sum above besterror otherwise, as every other
 // kernel does (only a smaller error replaces the best, so the values above besterror are never used). Blocks of up to
 // 16 rows are summed in full: for them the checks cost more than the early exits save. Taller blocks check the exact
 // running sum after every 4 rows, which never computes more rows than the general path's check after every row pair
@@ -108,13 +105,67 @@ static int motionErrorLumaInt_AVX2( const Pel* org, const ptrdiff_t origStride, 
   }
   return sumOfLanes_AVX2( vsum );
 }
+
+// The squared error of two rows of 16 samples each against one reference position, added to sum.
+static inline __m256i addErrorOfRows_AVX2( const __m256i sum, const __m256i org0, const __m256i org1, const Pel* row0, const Pel* row1 )
+{
+  const __m256i diff0 = _mm256_sub_epi16( org0, _mm256_loadu_si256( ( const __m256i* ) row0 ) );
+  const __m256i diff1 = _mm256_sub_epi16( org1, _mm256_loadu_si256( ( const __m256i* ) row1 ) );
+  return _mm256_add_epi32( sum, _mm256_add_epi32( _mm256_madd_epi16( diff0, diff0 ), _mm256_madd_epi16( diff1, diff1 ) ) );
+}
+
+// The four sums of the lanes of sum0 to sum3.
+static inline void storeSumsOfLanes_AVX2( const __m256i sum0, const __m256i sum1, const __m256i sum2, const __m256i sum3, int* errors )
+{
+  const __m256i sums = _mm256_hadd_epi32( _mm256_hadd_epi32( sum0, sum1 ), _mm256_hadd_epi32( sum2, sum3 ) );
+  _mm_storeu_si128( ( __m128i* ) errors, _mm_add_epi32( _mm256_castsi256_si128( sums ), _mm256_extracti128_si256( sums, 1 ) ) );
+}
+
+// MCTF::m_motionErrorLumaInt4: motionErrorLumaInt_AVX2 for four reference positions at once. Each pair of original rows
+// is loaded once and subtracted from the four references' rows, instead of once per position, and the four sums leave
+// the vectors together. An error is exact when not above besterror. As in motionErrorLumaInt_AVX2, blocks of up to 16
+// rows are summed in full and taller ones check after every 4 rows; they stop only once all four sums are above
+// besterror, so the caller gets an exact error for every position that can still win.
+static void motionErrorLumaInt4_AVX2( const Pel* org, const ptrdiff_t origStride, const Pel* const* refs, const ptrdiff_t buffStride,
+                                      const int w, const int h, const int besterror, int* errors )
+{
+  const bool check = h > 16;
+  __m256i sum0 = _mm256_setzero_si256(), sum1 = sum0, sum2 = sum0, sum3 = sum0;
+  for( int y = 0; y < h; y += 2 )
+  {
+    const Pel* orgRow = org + y * origStride;
+    const Pel* ref0   = refs[0] + y * buffStride;
+    const Pel* ref1   = refs[1] + y * buffStride;
+    const Pel* ref2   = refs[2] + y * buffStride;
+    const Pel* ref3   = refs[3] + y * buffStride;
+    for( int x = 0; x < w; x += 16 )
+    {
+      const __m256i org0 = _mm256_loadu_si256( ( const __m256i* ) ( orgRow + x ) );
+      const __m256i org1 = _mm256_loadu_si256( ( const __m256i* ) ( orgRow + origStride + x ) );
+      sum0 = addErrorOfRows_AVX2( sum0, org0, org1, ref0 + x, ref0 + buffStride + x );
+      sum1 = addErrorOfRows_AVX2( sum1, org0, org1, ref1 + x, ref1 + buffStride + x );
+      sum2 = addErrorOfRows_AVX2( sum2, org0, org1, ref2 + x, ref2 + buffStride + x );
+      sum3 = addErrorOfRows_AVX2( sum3, org0, org1, ref3 + x, ref3 + buffStride + x );
+    }
+    // after rows 4, 8, ...; the last check is the final sum
+    if( check && ( y & 2 ) && y + 2 < h )
+    {
+      storeSumsOfLanes_AVX2( sum0, sum1, sum2, sum3, errors );
+      if( std::min( std::min( errors[0], errors[1] ), std::min( errors[2], errors[3] ) ) > besterror )
+      {
+        return;
+      }
+    }
+  }
+  storeSumsOfLanes_AVX2( sum0, sum1, sum2, sum3, errors );
+}
 #endif
 
 template<X86_VEXT vext>
 int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int w, const int h, const int besterror )
 {
 #if USE_AVX2
-  if( vext >= AVX2 && ( w & 15 ) == 0 && w * h <= MAX_EXACT_INT_AREA )
+  if( vext >= AVX2 && ( w & 15 ) == 0 && w * h <= MCTF::MAX_EXACT_INT_AREA )
   {
     return motionErrorLumaInt_AVX2( org, origStride, buf, buffStride, w, h, besterror );
   }
@@ -1947,6 +1998,12 @@ template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
 {
   m_motionErrorLumaInt8     = motionErrorLumaInt_SIMD<vext>;
+#if USE_AVX2
+  if( vext >= AVX2 )
+  {
+    m_motionErrorLumaInt4 = motionErrorLumaInt4_AVX2;
+  }
+#endif
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac_SIMD<vext>;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_SIMD<vext>;
 #if USE_AVX2

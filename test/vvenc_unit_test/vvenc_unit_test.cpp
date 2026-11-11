@@ -2613,6 +2613,76 @@ static bool check_motionErrorLumaInt8( MCTF* ref, MCTF* opt, unsigned num_cases,
   return true;
 }
 
+// The four-position kernel against the one-position reference. The positions' samples have different amplitudes, so their
+// errors lie far apart; besterror runs over the errors of the first rows of every position (and one below and above).
+// The contract per position is the one-position kernel's: the exact error when it is not above besterror, a value above
+// besterror otherwise.
+static bool check_motionErrorLumaInt4( MCTF* ref, MCTF* opt, unsigned num_cases, int w, int h )
+{
+  if( !opt->m_motionErrorLumaInt4 || ( w & 15 ) || w * h > MCTF::MAX_EXACT_INT_AREA )
+  {
+    return true;
+  }
+  printf( "Testing MCTF::motionErrorLumaInt4 w=%d h=%d\n", w, h );
+  InputGenerator<Pel> g{ 10, /*is_signed=*/false };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    const unsigned orgStride = rng.get( w, 128 );
+    const unsigned bufStride = rng.get( w, 128 );
+    std::vector<Pel> org( orgStride * h );
+    std::vector<Pel> buf( 4 * bufStride * h );
+    std::generate( org.begin(), org.end(), [&]() { return Pel( g() >> 7 ); } );
+    const Pel* refs[4];
+    for( int k = 0; k < 4; k++ )
+    {
+      Pel* block = buf.data() + k * bufStride * h;
+      std::generate( block, block + bufStride * h, [&]() { return Pel( g() >> ( 3 * k ) ); } );
+      refs[k] = block;
+    }
+
+    int exact[4], errors[4];
+    for( int k = 0; k < 4; k++ )
+    {
+      exact[k] = ref->m_motionErrorLumaInt8( org.data(), orgStride, refs[k], bufStride, w, h, INT_MAX );
+    }
+    opt->m_motionErrorLumaInt4( org.data(), orgStride, refs, bufStride, w, h, INT_MAX, errors );
+    for( int k = 0; k < 4; k++ )
+    {
+      std::ostringstream sstm;
+      sstm << "motionErrorLumaInt4 w=" << w << " h=" << h << " position " << k;
+      if( !compare_value( sstm.str(), exact[k], errors[k] ) )
+      {
+        return false;
+      }
+    }
+
+    // besterror from each position in turn: from the position of the smallest error it lies below all four running sums,
+    // which is when the kernel may stop early
+    for( int k0 = 0; k0 < 4; k0++ )
+    {
+      for( int rows = 1; rows <= h; rows++ )
+      {
+        const int prefix = ref->m_motionErrorLumaInt8( org.data(), orgStride, refs[k0], bufStride, w, rows, INT_MAX );
+        for( int besterror : { prefix - 1, prefix, prefix + 1 } )
+        {
+          opt->m_motionErrorLumaInt4( org.data(), orgStride, refs, bufStride, w, h, besterror, errors );
+          for( int k = 0; k < 4; k++ )
+          {
+            if( exact[k] <= besterror ? errors[k] != exact[k] : errors[k] <= besterror )
+            {
+              printf( "FAILED motionErrorLumaInt4 early exit w=%d h=%d besterror=%d: position %d exact %d, returned %d\n", w, h, besterror, k, exact[k], errors[k] );
+              return false;
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
 // calcVar's mean uses a Log2(w)+Log2(h) shift, so the optimized path only
 // matches the scalar reference for power-of-two block sizes. MCTF edge blocks
 // can be non-power-of-two multiples of 8 (e.g. 24), where the optimized result
@@ -2704,6 +2774,7 @@ static bool test_MCTF()
       passed = check_motionErrorLumaFrac8</*lowRes=*/false>( &ref, &opt, w, h ) && passed;
 
       passed = check_motionErrorLumaInt8( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_motionErrorLumaInt4( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
   passed = check_motionErrorLumaFracColumn( &ref, &opt, num_cases ) && passed;

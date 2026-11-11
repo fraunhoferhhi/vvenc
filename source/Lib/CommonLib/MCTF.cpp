@@ -554,6 +554,7 @@ MCTF::MCTF( bool enableOpt )
 {
   m_motionErrorLumaIntX     = motionErrorLumaInt;
   m_motionErrorLumaInt8     = motionErrorLumaInt;
+  m_motionErrorLumaInt4     = nullptr;
   m_motionErrorLumaFracX[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFracX[1] = motionErrorLumaFrac4;
@@ -1364,6 +1365,15 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
   const Pel* window     = nullptr;   // fetched at the first vector to test
   ptrdiff_t  windowStride = 0;
 
+  // With a four-position kernel the vectors wait until four are queued and are then compared in their original order,
+  // so the result is the same as one vector at a time: a partial sum is above the best error at the call, later best
+  // errors are not larger, so it is above them too; only exact errors can win. The last 1-3 vectors take the
+  // one-position kernel.
+  const bool queueVectors = oneWindow && m_motionErrorLumaInt4 && ( w & 15 ) == 0 && w * h <= MAX_EXACT_INT_AREA;
+  int        queuedX[4], queuedY[4];
+  const Pel* queuedRef[4];
+  int        queued = 0;
+
   for( int y2 = -range; y2 <= range; y2 += step )
   {
     for( int x2 = -range; x2 <= range; x2 += step )
@@ -1381,6 +1391,26 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
         {
           window = getRefBlock( buffer.Y(), refMargin, x + centerX - range, y + centerY - range, windowW, windowH, windowStride );
         }
+        if( queueVectors )
+        {
+          queuedX[queued]     = vx;
+          queuedY[queued]     = vy;
+          queuedRef[queued++] = window + ( y2 + range ) * windowStride + x2 + range;
+          if( queued == 4 )
+          {
+            int errors[4];
+            m_motionErrorLumaInt4( org, origStride, queuedRef, windowStride, w, h, best.error, errors );
+            for( int k = 0; k < 4; k++ )
+            {
+              if( errors[k] < best.error )
+              {
+                best.set( queuedX[k], queuedY[k], errors[k] );
+              }
+            }
+            queued = 0;
+          }
+          continue;
+        }
         error = m_motionErrorLumaInt8( org, origStride, window + ( y2 + range ) * windowStride + x2 + range, windowStride, w, h, best.error );
       }
       else
@@ -1391,6 +1421,14 @@ void MCTF::testIntegerLattice( const PelStorage& orig, const PelStorage& buffer,
       {
         best.set( vx, vy, error );
       }
+    }
+  }
+  for( int k = 0; k < queued; k++ )
+  {
+    const int error = m_motionErrorLumaInt8( org, origStride, queuedRef[k], windowStride, w, h, best.error );
+    if( error < best.error )
+    {
+      best.set( queuedX[k], queuedY[k], error );
     }
   }
 }
