@@ -193,6 +193,20 @@ constexpr double MOTION_FAILURE_RATIO      = 4.0;   // a flat block above this r
 constexpr double MIN_SPATIAL_STDDEV        = 0.5;   // 8-bit units: clean flat blocks (black) must not fail by rounding alone
 constexpr double MAX_MOTION_FAILURE_SHARE  = 0.5;   // a picture with more failed flat luma blocks updates nothing
 
+// Repeated grain: lossy sources (UHD Blu-ray HEVC) partly repeat the grain from picture to picture (the encoder of the
+// source skips or bi-predicts flat areas), and both estimates above are temporal: they read such grain at a fraction.
+// The high frequencies of the original itself see all of the grain, so the residual's grain variance is scaled up by the
+// median ratio of the two over the flat blocks, per intensity bin: bright flat areas (sky) repeat more than dark ones
+// (Top Gun, 8-bit intensity: 1.6 at 32-63, 2.7 at 64-79, 3.9-4.2 at 80-111, 6.2 at 112-127). Only the finest frequencies
+// count, where static texture in flat blocks has less energy than grain: fresh grain reads 1.1 (nocturne) to 1.3-1.6
+// (Beekeeper) with them, 1.2 to 1.4-1.75 from u + v >= 6. Texture or dither in flat blocks still raises the ratio
+// somewhat; the median and the limit bound that.
+constexpr int    REPEATED_GRAIN_MIN_FREQ   = 10;    // DCT coefficients with u + v at least this are the high frequencies
+constexpr int    REPEATED_GRAIN_BIN_BITS   = 4;     // log2 of the intensity bins
+constexpr int    NUM_REPEATED_GRAIN_BINS   = 1 << REPEATED_GRAIN_BIN_BITS;
+constexpr int    MIN_REPEATED_GRAIN_BIN_BLOCKS = 32;   // a bin with fewer blocks takes the picture's ratio
+constexpr double MAX_REPEATED_GRAIN_RATIO  = 16.0;  // largest variance scale (4x in standard deviation)
+
 constexpr double LOW_THRESHOLD_RATIO       = 0.1;   // Canny: low threshold relative to the strongest gradient
 constexpr int    HIGH_THRESHOLD_RATIO      = 3;     // Canny: high threshold relative to the low threshold
 constexpr double LOW_INTENSITY_RATIO       = 0.1;   // samples below this share of the range are not analysed
@@ -390,6 +404,30 @@ static bool isFlatBlock( const FgaRowKernels& k, const Plane& mask, const Plane&
   }
   stats = meanStdDev( k, denoised, x, y );
   return 2 * stats.stddev < ( maxStrength >> 1 );
+}
+
+// Energy of the high frequencies (REPEATED_GRAIN_MIN_FREQ) of the 16x16 DCT of a block.
+static double highFrequencyEnergy( const FgaRowKernels& k, const Pel* src, int stride, int bitDepth )
+{
+  constexpr int N = 16;   // squaredDct16's block size
+  double spectrum[ N * N ] = {};
+  k.squaredDct16( src, stride, ( 1 << ( bitDepth + 4 ) ) - 1, spectrum );
+  double energy = 0.0;
+  for( int u = 0; u < N; u++ )
+  {
+    for( int v = std::max( 0, REPEATED_GRAIN_MIN_FREQ - u ); v < N; v++ )
+    {
+      energy += spectrum[ u * N + v ];
+    }
+  }
+  return energy;
+}
+
+// Median of a non-empty list (reorders it).
+static double median( std::vector<double>& values )
+{
+  std::nth_element( values.begin(), values.begin() + values.size() / 2, values.end() );
+  return values[ values.size() / 2 ];
 }
 
 // Expected power of the coefficients of the orthonormal 16x16 DCT-II of grain made by the AR filter of vvdec's SEI AR
@@ -1032,6 +1070,7 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
     const CPelBuf o = orig.get( compId );
     const CPelBuf d = denoised.get( compId );
     Plane& spatial = m_scratch.spatial;   // the spatial grain estimate, needed beside the temporal residual
+    m_repeatedGrainRatio[ c ].assign( NUM_REPEATED_GRAIN_BINS, 1.0 );
     m_denoised[ c ].resize( d.width, d.height );
     m_grain   [ c ].resize( d.width, d.height );
     if( residual )
@@ -1065,6 +1104,10 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
         // purpose: a failed picture at a cut keeps the old scene's model until the next good picture, which resets the
         // statistics only when its grain differs by more than GRAIN_CHANGE_RATIO (else old and new data mix).
         return;
+      }
+      if( residual )
+      {
+        measureRepeatedGrain( compId );   // needs this component's spatial estimate, which the next one overwrites
       }
     }
   }
@@ -1114,6 +1157,68 @@ bool FGAnalyzer::markMotionFailures( ComponentID compId )
     }
   }
   return isLuma( compId ) && numFlat >= GRAIN_CHANGE_MIN_BLOCKS && numFailed > MAX_MOTION_FAILURE_SHARE * numFlat;
+}
+
+// The share of the grain that repeats from picture to picture, which the temporal residual does not see: per flat block
+// that markMotionFailures kept, the high-frequency energy of the original over that of the residual per grain variance.
+// m_repeatedGrainRatio gets, per intensity bin, the median of its blocks (the picture's median for a bin with fewer than
+// MIN_REPEATED_GRAIN_BIN_BLOCKS), limited to [ 1, MAX_REPEATED_GRAIN_RATIO ] (see REPEATED_GRAIN_MIN_FREQ). A block
+// whose original has no high frequencies counts with ratio 0: nothing repeats there (Top Gun's almost grain-free chroma).
+void FGAnalyzer::measureRepeatedGrain( ComponentID compId )
+{
+  const int    bitDepth    = m_bitDepths[ toChannelType( compId ) ];
+  const int    maxStrength = MAX_REAL_SCALE << ( bitDepth - BIT_DEPTH_8 );
+  const int    binShift    = bitDepth - REPEATED_GRAIN_BIN_BITS;
+  const Plane& denoised    = m_denoised[ compId ];
+  const Plane& residual    = m_grain[ compId ];
+  const int    blocksX     = denoised.width / BLOCK_SIZE;
+  std::vector<double>& ratios = m_scratch.repeatedGrainRatios;
+  std::vector<std::vector<double>>& binRatios = m_scratch.repeatedGrainBinRatios;
+  ratios.clear();
+  binRatios.resize( NUM_REPEATED_GRAIN_BINS );
+  for( std::vector<double>& v : binRatios )
+  {
+    v.clear();
+  }
+  for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
+  {
+    for( int x = 0; x + BLOCK_SIZE <= denoised.width; x += BLOCK_SIZE )
+    {
+      BlockStats picStats;
+      if( m_motionFailed[ compId ][ ( y / BLOCK_SIZE ) * blocksX + x / BLOCK_SIZE ]
+          || !isFlatBlock( m_kernels, m_mask[ compId ], denoised, x, y, maxStrength, picStats ) )
+      {
+        continue;
+      }
+      Pel original[ BLOCK_SIZE * BLOCK_SIZE ];   // denoised minus the spatial estimate (denoised - original)
+      for( int j = 0; j < BLOCK_SIZE; j++ )
+      {
+        const Pel* rd = denoised.row( y + j ) + x;
+        const Pel* rs = m_scratch.spatial.row( y + j ) + x;
+        for( int i = 0; i < BLOCK_SIZE; i++ )
+        {
+          original[ j * BLOCK_SIZE + i ] = (Pel) ( rd[ i ] - rs[ i ] );
+        }
+      }
+      const double residualEnergy = highFrequencyEnergy( m_kernels, residual.row( y ) + x, residual.width, bitDepth );
+      if( residualEnergy > 0.0 )
+      {
+        const double ratio = highFrequencyEnergy( m_kernels, original, BLOCK_SIZE, bitDepth ) * m_grainWeight / residualEnergy;
+        ratios.push_back( ratio );
+        binRatios[ picStats.mean >> binShift ].push_back( ratio );
+      }
+    }
+  }
+  if( (int) ratios.size() < GRAIN_CHANGE_MIN_BLOCKS )
+  {
+    return;   // too few blocks to tell: the ratios stay 1
+  }
+  const double pictureRatio = median( ratios );
+  for( int i = 0; i < NUM_REPEATED_GRAIN_BINS; i++ )
+  {
+    const double ratio = (int) binRatios[ i ].size() >= MIN_REPEATED_GRAIN_BIN_BLOCKS ? median( binRatios[ i ] ) : pictureRatio;
+    m_repeatedGrainRatio[ compId ][ i ] = Clip3( 1.0, MAX_REPEATED_GRAIN_RATIO, ratio );
+  }
 }
 
 // Mask of the samples that are not part of a flat area: edges found at full, half and quarter resolution, dilated.
@@ -1190,9 +1295,9 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
   {
     int    x, y, mean;
     double stddev;     // grain standard deviation
+    double weight;     // variance of m_grain per grain variance
   };
   std::vector<FlatBlock> blocks;
-  const double weightStddev = std::sqrt( (double) m_grainWeight );   // standard deviation of m_grain per grain standard deviation
   for( int x = 0; x + BLOCK_SIZE <= denoised.width; x += BLOCK_SIZE )
   {
     for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
@@ -1206,7 +1311,10 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
       {
         continue;   // the motion compensation of the temporal residual failed here (markMotionFailures)
       }
-      blocks.push_back( { x, y, picStats.mean, meanStdDev( m_kernels, grain, x, y ).stddev / weightStddev } );
+      // the residual's weight, less the grain it misses because it repeats (measureRepeatedGrain)
+      const int    bin    = picStats.mean >> ( bitDepth - REPEATED_GRAIN_BIN_BITS );
+      const double weight = m_grainWeight / m_repeatedGrainRatio[ compId ][ bin ];
+      blocks.push_back( { x, y, picStats.mean, meanStdDev( m_kernels, grain, x, y ).stddev / std::sqrt( weight ), weight } );
     }
   }
 
@@ -1284,7 +1392,7 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
       m_kernels.squaredDct16( grain.row( b.y ) + b.x, grain.width, ( 1 << ( bitDepth + 4 ) ) - 1, blockDct.data() );
       for( int i = 0; i < BLOCK_SIZE * BLOCK_SIZE; i++ )
       {
-        dctSum[ i ] += blockDct[ i ] / m_grainWeight;
+        dctSum[ i ] += blockDct[ i ] / b.weight;
       }
     }
     m_numDctBlocks[ compId ][ b.mean ]++;

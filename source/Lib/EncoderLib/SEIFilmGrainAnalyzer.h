@@ -215,6 +215,7 @@ private:
   int               m_grainWeight = 1;            // variance of m_grain relative to the grain variance
   Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
   std::vector<uint8_t> m_motionFailed[ MAX_NUM_COMP ];   // per 16x16 block: the temporal residual's compensation failed
+  std::vector<double> m_repeatedGrainRatio[ MAX_NUM_COMP ];   // per intensity bin: grain variance per variance the residual sees
 
   // Scratch planes and lists of the mask search, kept to avoid allocating and clearing them for every picture.
   struct Scratch
@@ -223,6 +224,8 @@ private:
     Plane            spatial;   // denoised minus original of the component being prepared, beside a temporal residual
     std::vector<int> positions, weakX, weakY, columnStart;
     std::vector<Pel> wide, top, bottom, left, right;
+    std::vector<double> repeatedGrainRatios;   // per flat block, measureRepeatedGrain
+    std::vector<std::vector<double>> repeatedGrainBinRatios;   // the same, per intensity bin
   };
   Scratch           m_scratch;
 
@@ -231,6 +234,7 @@ private:
   void findMask              ( ComponentID compId );
   void maskForScale          ( const Plane& picture, Plane& mask, int bitDepth, int numDilations );
   bool markMotionFailures    ( ComponentID compId );
+  void measureRepeatedGrain  ( ComponentID compId );
 
   // parameter estimation
   void estimateComponent     ( ComponentID compId );
