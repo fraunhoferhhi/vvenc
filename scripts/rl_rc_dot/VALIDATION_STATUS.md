@@ -21,7 +21,11 @@ This describes engineering checks, not a trained-policy result.
 - Evaluation math covers rate scaling, duplicate rates, nonoverlap and invalid
   RD points. BD-Precision is not mAP.
 - Two spawned CPU collectors pass a shared on-policy update. Explicit GPU routing and loader restoration have mock regression coverage; actual T4 placement remains a pilot gate.
-- No real BDD100K/YOLO Kaggle T4×2 training/quality result has been produced
-  during this source repair. It remains the next acceptance experiment.
+- A user-supplied real BDD100K/YOLO Kaggle T4×2 smoke export subsequently
+  completed 256 transitions, two PPO updates and paired reduced validation.
+  Observed approximate KL was 3.95 and 69.14; clip fractions were 0.799
+  and 0.938. This is technical feasibility, **not** a convergence or coding
+  efficiency claim. Revised PPO learning rate/epochs/KL guard are unvalidated
+  on real Kaggle data until a new 256-step smoke run is executed.
 - No claim of bit-identical x264 feature extraction or published paper gains
   is made. METHOD_MAPPING.md lists the codec adaptations and limitations.

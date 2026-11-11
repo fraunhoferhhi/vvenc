@@ -22,8 +22,11 @@ Read [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md) before experiments
 - Gaussian 5×7 action → floating bilinear 20×30 map → actual VVC QG pooling.
   The encoder echoes the consumed map; the bridge and rollout buffer verify it.
 - Stable-Baselines3 **2.7.0 PPO**, shared CNN/64 latent, actor, critic and
-  block reward-prediction head. PPO defaults apply except an additional
-  **0.1 × uniform block MSE** and the explicitly selected number of environments.
+  block reward-prediction head. After the observed 256-step Kaggle pilot,
+  the **provisional PPO stability trial** uses learning rate **3e-5**,
+  **3** optimizer epochs and **target KL 0.05** (instead of SB3 defaults
+  3e-4, 10, and no KL guard). Auxiliary **0.1 × uniform block MSE** is kept.
+  This is a declared training adaptation, not a claim of original-paper fidelity.
 - Finite checks on observations, actions, old logprobs, rewards, losses,
   gradients, parameters and optimizer state. The entire rollout is checked
   against the collecting policy before the first optimizer step.
@@ -112,12 +115,18 @@ full experiment. The CLI's default full-video training horizon is preserved.
       --output /kaggle/working/rcdot_pilot --mode new \
       --workers 2 --gpu-ids 0,1 --encoder-threads 2 \
       --rollout-steps 64 --additional-timesteps 256 \
+      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05 \
       --validation-videos 2 --validation-rates 50,120 --validation-frames 64 \
-      --val-every-updates 2 --max-hours 1
+      --val-every-updates 2 --max-hours 10
 
 Inspect metrics, validation, action spread, target/actual bitrate, KL,
-clip fraction and native evidence. A finite optimizer update alone does not
-prove a good policy. Do not select reward/hyperparameters using Test100.
+clip fraction, `max_approx_kl_observed` and `stopped_by_target_kl`.
+The prior real-data smoke completed 256 interactions and two PPO updates,
+but saw approximate KL 3.95/69.14 and clip fractions 0.799/0.938. The tuned
+settings are **untested on Kaggle** until a new run is completed. Do not
+resume the old smoke checkpoint: changes to method/source are deliberately
+blocked by the strict resume contract. A finite optimizer update alone does
+not prove a good policy. Do not select reward/hyperparameters using Test100.
 
 ## Full experiment
 
@@ -133,7 +142,15 @@ runtime. A reduced frame budget must be reported as a reduced experiment.
       --encoder /path/vvencapp --decoder /path/vvdecapp \
       --yolo-repo /path/yolov5 --weights /path/yolov5n_v7_locked.pt \
       --output /kaggle/working/rcdot_official --mode new \
-      --workers 2 --gpu-ids 0,1 --max-hours 11.75
+      --workers 2 --gpu-ids 0,1 --max-hours 11.75 \
+      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05
+
+For a **bounded new run**, add `--additional-timesteps 20480`; the 20M
+maximum remains in place, but the session stops at the smaller budget.
+An optional `--validation-frames 64` explicitly reduces validation cost;
+keep it unchanged when resuming and report it as a reduced validation
+protocol. Before final Test100 claims, do an appropriately long held-out
+Validation assessment. Never use Test100 to choose policy hyperparameters.
 
 max-hours includes this command's setup/preflight. To count notebook setup
 too, pass --session-start-utc with time.time() captured in its first cell.
@@ -154,7 +171,8 @@ exports and verified extracted folders are supported.
       --yolo-repo /path/yolov5 --weights /path/yolov5n_v7_locked.pt \
       --output /kaggle/working/rcdot_official --mode resume \
       --resume-from /kaggle/input/MY_DATASET/session_payload.bin \
-      --workers 2 --gpu-ids 0,1 --max-hours 11.75
+      --workers 2 --gpu-ids 0,1 --max-hours 11.75 \
+      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05
 
 Keep the same training and validation configuration as the imported run.
 Do not promote a reduced pilot's validation score into the full experiment.
@@ -205,8 +223,10 @@ VVenC anchor here is the matched CTU32 profile described above.
 
 CPU tests and real codec fixtures validate implementation contracts.
 YOLO fixtures in unit tests are labelled synthetic and prove no detection
-gain. A Kaggle T4×2 pilot with real BDD100K/YOLO is still the acceptance step
-before spending a long training budget.
+gain. A 256-interaction Kaggle T4×2 pilot with real BDD100K/YOLO has now
+confirmed end-to-end execution, while revealing unstable PPO updates.
+The new stability configuration still requires a **fresh Kaggle 256-step
+smoke test**, followed by a longer controlled training/validation run.
 
 Method sources:
 - https://arxiv.org/html/2501.12216v2
