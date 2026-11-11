@@ -4216,7 +4216,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 uint64_t EncCu::xCalcPuMeBits( const CodingUnit &cu )
 {
   CHECK( !cu.mergeFlag, "Should only be used for merge!" );
-  CHECK( CU::isIBC( cu ), "Shound not be used for IBC" );
+  CHECK( CU::isIBC( cu ), "Should not be used for IBC" );
 
   m_CABACEstimator->resetBits();
   m_CABACEstimator->merge_flag(cu);

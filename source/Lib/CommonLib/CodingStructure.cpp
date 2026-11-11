@@ -138,7 +138,7 @@ CodingUnit* CodingStructure::getLumaCU( const Position& pos )
 
 CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effChType, const TreeType _treeType )
 {
-  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr && _treeType == TREE_C && effChType == CH_L, "parent shall be valid; consider using function getLumaCU()");
+  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr, "parent shall be valid; consider using function getLumaCU()");
 
   CodingStructure* cs = _treeType == TREE_C && effChType == CH_L ? parent : this;
   while (cs && !cs->area.blocks[effChType].contains(pos)) cs = cs->parent;
@@ -156,7 +156,7 @@ CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effCh
 
 const CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effChType, const TreeType _treeType ) const
 {
-  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr && _treeType == TREE_C && effChType == CH_L, "parent shall be valid; consider using function getLumaCU()");
+  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr, "parent shall be valid; consider using function getLumaCU()");
 
   const CodingStructure* cs = _treeType == TREE_C && effChType == CH_L ? parent : this;
   while (cs && !cs->area.blocks[effChType].contains(pos)) cs = cs->parent;

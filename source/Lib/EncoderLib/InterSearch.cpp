@@ -4829,7 +4829,6 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
           mvTmp[1] = Mv(vx, vy);
           mvTmp[1].clipToStorageBitDepth();
           clipMv(mvTmp[1], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
-          mvTmp[0].roundAffinePrecInternal2Amvr(cu.imv);
           mvTmp[1].roundAffinePrecInternal2Amvr(cu.imv);
           Distortion tmpCost = xGetAffineTemplateCost(cu, origBuf, predBuf, mvTmp, aaiMvpIdx[iRefList][iRefIdxTemp], AMVP_MAX_NUM_CANDS, refPicList, iRefIdxTemp);
           if (affineAmvrEnabled)
