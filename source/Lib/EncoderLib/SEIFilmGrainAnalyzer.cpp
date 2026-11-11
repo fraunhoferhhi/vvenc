@@ -170,7 +170,7 @@ constexpr double GRAIN_CHANGE_RATIO        = 2.0;
 constexpr int    GRAIN_CHANGE_MIN_BLOCKS   = 64;
 
 // The auto-regressive model (--fga 3): vvdec's synthesis makes grain of standard deviation
-// scale * AR_PATTERN_STDDEV * sqrt( energy ) / 2^( log2ScaleFactor + bitDepth - 10 ) for the AR filter whose impulse
+// scale * AR_PATTERN_STDDEV * sqrt( energy ) / 2^( log2ScaleFactor + 10 - bitDepth ) for the AR filter whose impulse
 // response has the given energy (its quantized coefficients, as the synthesis computes them). Measured with vvdec on
 // flat grey 1920x1088 10-bit pictures over 24 filters (left coefficient 0 to 0.375) and log2 scale factors 3 to 7:
 // the ratio stays within 3% of these values.
@@ -940,9 +940,15 @@ void FGAnalyzer::getVtmParameters( double strength, int& log2ScaleFactor, SeiFgc
 // The parameters of the auto-regressive model: model values scale, a1, 0 (no correlation between the components), a3,
 // r and a5, the last four in units of 2^-log2ScaleFactor. The scaling factors are calibrated with the impulse response
 // energy of the quantized filter (AR_PATTERN_STDDEV); the log2 scale factor is the largest (2 to 7) at which they stay
-// at MAX_SCALING_FACTOR or below, for the finest steps of both the scaling factors and the filter coefficients.
+// at MAX_SCALING_FACTOR or below and every filter coefficient fits [MIN_AR_COEF, MAX_AR_COEF], for the finest steps of
+// both the scaling factors and the filter coefficients.
 void FGAnalyzer::getArParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const
 {
+  // H.274 limits the model values of the auto-regressive model to +-2^(film grain bit depth - 1). Without a separate colour
+  // description in the SEI (as here) FFmpeg takes that bit depth as 8, so it accepts only [-128, 127] and drops the whole
+  // access unit otherwise. r above 1 (grain correlated further vertically than horizontally) reached 145 to 469 at log2 7
+  // on film sources (game_of_death, sintel_trailer, tears_of_steel).
+  constexpr int MIN_AR_COEF = -128, MAX_AR_COEF = 127;
   for( log2ScaleFactor = 7; log2ScaleFactor >= 2; log2ScaleFactor-- )
   {
     const int one = 1 << log2ScaleFactor;
@@ -957,8 +963,16 @@ void FGAnalyzer::getArParameters( double strength, int& log2ScaleFactor, SeiFgc:
         cm.presentFlag = false;
         continue;
       }
-      const int coef[ 6 ] = { 0, (int) std::lround( f.a1 * one ), 0, (int) std::lround( f.a3 * one ), (int) std::lround( f.r * one ),
-                              (int) std::lround( f.a5 * one ) };
+      int coef[ 6 ] = { 0, (int) std::lround( f.a1 * one ), 0, (int) std::lround( f.a3 * one ), (int) std::lround( f.r * one ),
+                        (int) std::lround( f.a5 * one ) };
+      for( int k = 1; k < 6; k++ )
+      {
+        fits = fits && coef[ k ] >= MIN_AR_COEF && coef[ k ] <= MAX_AR_COEF;
+        if( log2ScaleFactor == 2 )   // the last step: clamp before the energy calibration below, so both use the signalled
+        {                            // filter (only r can exceed the range there, |a| < 0.98; a smaller r is more stable)
+          coef[ k ] = Clip3( MIN_AR_COEF, MAX_AR_COEF, coef[ k ] );
+        }
+      }
       const int bitDepth = m_bitDepths[ toChannelType( ComponentID( c ) ) ];
       const double patternStddev = AR_PATTERN_STDDEV[ c == COMP_Y ? 0 : 1 ] * std::sqrt( arEnergy( coef, log2ScaleFactor ) );
       bool anyGrain = false;
