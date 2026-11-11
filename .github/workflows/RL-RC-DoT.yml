@@ -22,7 +22,9 @@ jobs:
       - name: Contracts, PPO, resume, validation, metrics and color protocol
         env:
           OMP_NUM_THREADS: '2'
-        run: python -m unittest discover -s scripts/rl_rc_dot -p 'test_*.py' -v
+        run: |
+          python -m unittest discover -s scripts/rl_rc_dot -p 'test_*.py' -v
+          python -c "from scripts.rl_rc_dot.pixels import verify_conversion; print(verify_conversion())"
 
   native:
     runs-on: ubuntu-22.04
