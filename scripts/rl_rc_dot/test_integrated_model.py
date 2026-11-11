@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 import torch
 import gymnasium as gym
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv
 from scripts.rl_rc_dot.model import OBSERVATIONS,ACTIONS,AuxPPO,AuxiliaryLabels,build
 from scripts.rl_rc_dot.method import action_map,wire_map
 
@@ -34,6 +34,14 @@ class Fixture(gym.Env):
     def suspend_episode(self):pass
 
 class IntegratedModel(unittest.TestCase):
+    def test_two_spawned_collectors_share_one_on_policy_update(self):
+        model=build(SubprocVecEnv([Fixture,Fixture],start_method="spawn"),7,n_steps=4,batch_size=4,n_epochs=1,device="cpu")
+        try:
+            model.learn(8)
+            self.assertEqual(model.completed_rollouts,1)
+            self.assertEqual(model.trained_frames,8)
+            model.assert_checkpoint_finite()
+        finally:model.get_env().close()
     def test_sb3_update_checkpoint_reload_and_fresh_resume(self):
         env=DummyVecEnv([Fixture])
         model=build(env,7,n_steps=4,batch_size=4,n_epochs=2,device="cpu")
