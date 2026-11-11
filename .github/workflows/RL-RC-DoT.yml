@@ -1,40 +1,87 @@
 name: RL-RC-DoT checks
 on:
   push:
-    branches:
-      - feature/rl-rc-dot-vvc
+    branches: [feature/rl-rc-dot-vvc]
+  workflow_dispatch:
+
 jobs:
-  linux:
+  python-contracts:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Python contract
-        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
-      - name: Auxiliary label tests
-        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
-      - name: Growing state stream regression tests
-        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_bridge.py' -v
-      - name: POC and spatial QP evidence contracts
-        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_codec_contract.py' -v
-      - name: Configure
-        run: cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0
-      - name: Compile
-        run: cmake --build build/dot --parallel 2
-      - name: Real VVenC deltaQP smoke
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencies without CUDA replacement
         run: |
-          ENCODER=$(find bin build -type f -name vvencapp | head -n 1)
-          test -n "$ENCODER"
-          python3 scripts/rl_rc_dot/smoke_codec.py --encoder "$ENCODER" --output /tmp/rl-dot-codec-smoke
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libswscale-dev libavutil-dev
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r scripts/rl_rc_dot/requirements.txt
+      - name: Contracts, PPO, resume, validation, metrics and color protocol
+        env:
+          OMP_NUM_THREADS: '2'
+        run: python -m unittest discover -s scripts/rl_rc_dot -p 'test_*.py' -v
 
-  ppo-cpu:
+  native:
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Install CPU PyTorch
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Native dependencies
         run: |
-          python3 -m pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Execute real PPO forward/backward tests
+          python -m pip install numpy
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake build-essential ffmpeg
+      - name: Build VVenC
         run: |
-          python3 -c "import torch; print('torch',torch.__version__)"
-          python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVVENC_ENABLE_THIRDPARTY_JSON=ON -DVVENC_ENABLE_INSTALL=OFF
+          cmake --build build --target vvencapp --parallel 2
+      - name: Pin and build VVdeC
+        run: |
+          git clone --no-checkout https://github.com/fraunhoferhhi/vvdec.git tools/vvdec
+          git -C tools/vvdec fetch --no-tags origin 649f0b2fafee977c998d7e4d674f8b88d952e3a3
+          git -C tools/vvdec checkout --detach 649f0b2fafee977c998d7e4d674f8b88d952e3a3
+          cmake -S tools/vvdec -B tools/vvdec/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build tools/vvdec/build --target vvdecapp --parallel 2
+      - name: Real state/action/AU/CU/decoder and isolated POC gates
+        run: |
+          python -m scripts.rl_rc_dot.preflight --encoder bin/release-static/vvencapp --decoder tools/vvdec/bin/release-static/vvdecapp --output checks/native --frames 32
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-binaries
+          path: |
+            bin/release-static/vvencapp
+            tools/vvdec/bin/release-static/vvdecapp
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codec-evidence
+          path: checks/native
 
+  native-ppo:
+    needs: native
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-binaries
+      - name: Python dependencies
+        run: |
+          chmod +x bin/release-static/vvencapp
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r scripts/rl_rc_dot/requirements.txt
+      - name: Real codec to PPO update to fresh checkpoint rollout
+        env:
+          RCDOT_TEST_ENCODER: ${{ github.workspace }}/bin/release-static/vvencapp
+          OMP_NUM_THREADS: '2'
+        run: python -m unittest scripts.rl_rc_dot.test_native_integrated -v
