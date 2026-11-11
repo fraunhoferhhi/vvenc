@@ -244,7 +244,7 @@ private:
   void extendPoints          ( std::vector<int>& dataX, std::vector<int>& dataY, int bitDepth ) const;
   bool lloydMax              ( std::vector<double>& scalingVec, std::vector<int>& quantizedVec, int numQuantizedLevels, int bitDepth ) const;
   void setEstimatedParameters( std::vector<int>& quantizedVec, int bitDepth, ComponentID compId );
-  void holdEdgeStrengths     ( std::vector<int>& quantizedVec, int bitDepth ) const;
+  void holdDarkStrength      ( std::vector<int>& quantizedVec, int bitDepth ) const;
   void mergeIntervals        ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
   void scaleDown             ( std::vector<std::vector<int>>& parameters, int bitDepth ) const;
 

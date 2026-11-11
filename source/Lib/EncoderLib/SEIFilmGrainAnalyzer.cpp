@@ -64,7 +64,7 @@ constexpr int    INTERVAL_SIZE             = 8;
 constexpr int    MIN_ELEMENTS_PER_INTERVAL = 8;
 constexpr int    POINT_STEP                = 16;    // step size of the point extension
 constexpr int    MAX_POINTS_TO_EXTEND      = 4;
-constexpr double POINT_SCALE               = 1.25;  // scaling of the point extension (VTM; the improved analysis keeps the level)
+constexpr double POINT_SCALE               = 1.25;  // scaling of the point extension (VTM; the improved analysis keeps the dark side's level)
 constexpr double VAR_SCALE_DOWN            = 1.2;   // filter out points far below the fitted function
 constexpr double VAR_SCALE_UP              = 0.6;   // filter out points far above the fitted function
 constexpr int    NUM_PASSES                = 2;     // the second pass of the fit filters the data points
@@ -1777,8 +1777,9 @@ bool FGAnalyzer::fitFunction( std::vector<int>& dataX, std::vector<int>& dataY, 
   return true;
 }
 
-// Adds up to four points beyond the lowest and the highest intensity, each a step further and weaker, then drops the
-// points outside the usable intensity range.
+// Adds up to four points beyond the lowest and the highest intensity, each a step further and weaker (the improved
+// analysis keeps the level on the dark side only, see holdDarkStrength), then drops the points outside the usable
+// intensity range.
 void FGAnalyzer::extendPoints( std::vector<int>& dataX, std::vector<int>& dataY, int bitDepth ) const
 {
   const int minInt = bitDepth < 10 ? MIN_INTENSITY >> ( 10 - bitDepth ) : MIN_INTENSITY << ( bitDepth - 10 );
@@ -1812,7 +1813,7 @@ void FGAnalyzer::extendPoints( std::vector<int>& dataX, std::vector<int>& dataY,
   while( xmax + POINT_STEP <= ( 1 << bitDepth ) - 1 && ymax > m_strengthScale && numRight > 0 )
   {
     xmax += POINT_STEP;
-    ymax = m_improved ? ymax : (int) ( ymax / POINT_SCALE );
+    ymax = (int) ( ymax / POINT_SCALE );   // both analyses: the grain fades out above the brightest measured blocks
     dataX.push_back( xmax );
     dataY.push_back( ymax );
     numRight--;
@@ -1973,7 +1974,16 @@ void FGAnalyzer::setEstimatedParameters( std::vector<int>& quantizedVec, int bit
   }
   if( m_improved )
   {
-    holdEdgeStrengths( quantizedVec, bitDepth );
+    holdDarkStrength( quantizedVec, bitDepth );
+    if( isLuma( compId ) )
+    {
+      // Digital black (letterbox bars, clipped shadows) carries no grain in the source, but the held or extended
+      // strength reached it: on Beekeeper's bars the synthesis drew grain of std 2.6 (10 bit) where the source has none.
+      // The analyzer does not know the signal range; limited-range black is 16 << ( bitDepth - 8 ), and for full-range
+      // content this only drops the 8-bit intensities 10 to 16 (the analysis starts at MIN_INTENSITY).
+      const int black = std::min<int>( 16 << ( bitDepth - 8 ), (int) quantizedVec.size() - 1 );
+      std::fill( quantizedVec.begin(), quantizedVec.begin() + black + 1, 0 );
+    }
   }
 
   std::vector<std::vector<int>> parameters( 3 );   // lower bounds, upper bounds, scaling factors
@@ -2042,34 +2052,24 @@ void FGAnalyzer::setEstimatedParameters( std::vector<int>& quantizedVec, int bit
 }
 
 // The scaling function only covers the intensities with flat blocks, plus a few extension points. VTM lets it fall off
-// by a factor of 1.25 per extension point and signals no grain beyond, but film grain goes on there: on Beekeeper the
-// darkest intensities have the strongest grain of the scene, and they got half of it. The improved analysis keeps the
-// level of the extension points (extendPoints()) and here holds the first and last strength out to the intensity
-// limits of the analysis (MIN_INTENSITY and MAX_INTENSITY).
-void FGAnalyzer::holdEdgeStrengths( std::vector<int>& quantizedVec, int bitDepth ) const
+// by a factor of 1.25 per extension point and signals no grain beyond, but on the dark side film grain goes on there:
+// on Beekeeper the darkest intensities have the strongest grain of the scene, and they got half of it. The improved
+// analysis keeps the level of the dark extension points (extendPoints()) and here holds the first strength down to
+// MIN_INTENSITY (setEstimatedParameters() then clears digital black). The bright side keeps VTM's fall-off: above the
+// brightest flat blocks the grain of a PQ or gamma-coded film fades (Beekeeper HDR at 8-bit 161-192: source fine grain
+// 0.37 against 0.28 coded, where a held strength synthesized 1.8-2.3x what the coding removed).
+void FGAnalyzer::holdDarkStrength( std::vector<int>& quantizedVec, int bitDepth ) const
 {
   const int minInt = bitDepth < 10 ? MIN_INTENSITY >> ( 10 - bitDepth ) : MIN_INTENSITY << ( bitDepth - 10 );
-  const int maxInt = bitDepth < 10 ? MAX_INTENSITY >> ( 10 - bitDepth ) : MAX_INTENSITY << ( bitDepth - 10 );
-  int first = -1, last = -1;
-  for( int i = 0; i < (int) quantizedVec.size(); i++ )
-  {
-    if( quantizedVec[ i ] > 0 )
-    {
-      first = first < 0 ? i : first;
-      last  = i;
-    }
-  }
-  if( first < 0 )
+  const auto firstGrain = std::find_if( quantizedVec.begin(), quantizedVec.end(), []( int q ) { return q > 0; } );
+  if( firstGrain == quantizedVec.end() )
   {
     return;   // no grain
   }
+  const int first = (int) ( firstGrain - quantizedVec.begin() );
   for( int i = minInt; i < first; i++ )
   {
     quantizedVec[ i ] = quantizedVec[ first ];
-  }
-  for( int i = last + 1; i <= maxInt && i < (int) quantizedVec.size(); i++ )
-  {
-    quantizedVec[ i ] = quantizedVec[ last ];
   }
 }
 
