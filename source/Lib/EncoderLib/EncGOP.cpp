@@ -56,6 +56,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BitAllocation.h"
 #include "EncHRD.h"
 #include "GOPCfg.h"
+#include "RCDot.h"
 
 #include <list>
 
@@ -442,6 +443,17 @@ void EncGOP::xProcessPictures( AccessUnitList& auList, PicList& doneList )
       m_procList.remove( pic );
 
       xEncodePicture( pic, picEncoder );
+      // A live RL step needs its completed AU before the next policy query.
+      // Keep CTU threading, then serialize the final-pass frame boundary.
+      if( rcdot::enabled() && !m_isPreAnalysis )
+      {
+        if( m_pcEncCfg->m_numThreads > 0 )
+        {
+          std::unique_lock<std::mutex> lock(m_gopEncMutex);
+          m_gopEncCond.wait(lock,[pic] { return pic->isReconstructed.load(); });
+        }
+        break;
+      }
     }
   }
 
@@ -2064,6 +2076,8 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     const uint32_t cuLumaQpSubdiv = (m_pcEncCfg->m_cuQpDeltaSubdiv > 0 ? (uint32_t) m_pcEncCfg->m_cuQpDeltaSubdiv : 0);
 
     slice->picHeader->cuQpDeltaSubdivInter = m_pcEncCfg->m_usePerceptQPA ? 0 : cuLumaQpSubdiv;
+    if( rcdot::enabled() && !m_isPreAnalysis )
+      slice->picHeader->cuQpDeltaSubdivInter = cuLumaQpSubdiv;
     slice->picHeader->cuQpDeltaSubdivIntra = cuLumaQpSubdiv;
   }
   if( slice->pps->chromaQpOffsetListLen > 0)
@@ -2485,6 +2499,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
 
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
+  rcdot::outputPicture(pic,au);
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
 }
