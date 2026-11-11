@@ -53,7 +53,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "BitAllocation.h"
 #include "EncStage.h"
 #include "RLQpAction.h"
-#include "RLDotAction.h"
+#include "RCDot.h"
 
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/Picture.h"
@@ -533,45 +533,6 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
       nLumaCus, nLumaCus ? minLumaQp : -1, nLumaCus ? maxLumaQp : -1 );
   }
 
-  // Instrument only the winning CU tree after xCompressCtu has completed.
-  // Never infer actual CU QP from requested action alone.
-  if( rl::DotAction::traceEnabled() && !pic->isPreAnalysis )
-  {
-    int minLumaQp = MAX_QP, maxLumaQp = -MAX_QP;
-    unsigned nLumaCus = 0;
-    double weightedQp = 0.0, validLumaArea = 0.0;
-    if( m_wppMutex ) m_wppMutex->lock();
-    for( const CodingUnit* cu : cs.cus )
-    {
-      if( cu->chType != CH_L || cu->lumaPos().x < pos.x ||
-          cu->lumaPos().x >= pos.x + (int)pcv.maxCUSize ||
-          cu->lumaPos().y < pos.y ||
-          cu->lumaPos().y >= pos.y + (int)pcv.maxCUSize )
-        continue;
-      const unsigned xx = (unsigned) cu->lumaPos().x, yy = (unsigned) cu->lumaPos().y;
-      if( xx >= (unsigned)cs.area.Y().width || yy >= (unsigned)cs.area.Y().height ) continue;
-      const unsigned ww = std::min( (unsigned)cu->lumaSize().width, (unsigned)cs.area.Y().width - xx );
-      const unsigned hh = std::min( (unsigned)cu->lumaSize().height, (unsigned)cs.area.Y().height - yy );
-      const double area = double(ww) * hh;
-      nLumaCus++;
-      minLumaQp = std::min(minLumaQp, (int)cu->qp);
-      maxLumaQp = std::max(maxLumaQp, (int)cu->qp);
-      weightedQp += area * (int)cu->qp;
-      validLumaArea += area;
-    }
-    if( m_wppMutex ) m_wppMutex->unlock();
-    const unsigned lumaWidth = std::min((unsigned)pcv.maxCUSize,
-        (unsigned)cs.area.Y().width - (unsigned)pos.x);
-    const unsigned lumaHeight = std::min((unsigned)pcv.maxCUSize,
-        (unsigned)cs.area.Y().height - (unsigned)pos.y);
-    const int delta = rl::DotAction::deltaFor(slice->poc,
-        (unsigned)pos.x,(unsigned)pos.y,lumaWidth,lumaHeight);
-    rl::DotAction::traceFinalCtu(slice->poc,(unsigned)ctuRsAddr,
-        (unsigned)pos.x,(unsigned)pos.y,delta,nLumaCus,
-        nLumaCus?minLumaQp:-1,nLumaCus?maxLumaQp:-1,
-        validLumaArea?weightedQp/validLumaArea:-1.0);
-  }
-
   m_CABACEstimator->resetBits();
   m_CABACEstimator->coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr, true, true );
 
@@ -871,7 +832,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
     else if (m_pcEncCfg->m_usePerceptQPA && slice.isIntra()) // currSubdiv 2 - use sub-CTU QPA
     {
-      CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
+      // CTU32 permits rectangular 32x16 QGs in the research profile.
+      // applyQPAdaptationSubCtu clips its source region on each axis.
+      if( !rcdot::enabled() )
+        CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
       tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcRateCtrl->getMinNoiseLevels());
 
       if (m_pcEncCfg->m_internalUsePerceptQPATempFiltISlice == 2)
@@ -881,6 +845,17 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
       updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true);
     }
+  }
+
+  if( rcdot::controlsQp() && !slice.pic->isPreAnalysis && pps.useDQP &&
+      isLuma(partitioner.chType) && partitioner.currQgEnable() )
+  {
+    Picture* const pic = bestCS->picture;
+    const uint32_t ctu = getCtuAddr(partitioner.currQgPos,*pps.pcv);
+    const int qp = rcdot::requestedQp(slice,lumaArea);
+    tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+    bestCS->currQP[partitioner.chType] = bestCS->baseQP = qp;
+    updateLambda(slice,pic->ctuQpaLambda[ctu],pic->ctuAdaptedQP[ctu],qp,true);
   }
 
   // Research extension: one fixed PPO-QP action map per POC (first-stage integration).
@@ -923,34 +898,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
                             (unsigned) partitioner.currSubdiv,
                             (unsigned) partitioner.currDepth,
                             (unsigned) lumaArea.width, (unsigned) lumaArea.height );
-  }
-
-  // Separate RL-RC-DoT 30x20 action adapter; no legacy PPO map may coexist.
-  // This path is explicitly CTU/QG-area averaged, not native 16x16 QP signalling.
-  if( rl::DotAction::enabled() && !slice.pic->isPreAnalysis &&
-      m_pcEncCfg->m_usePerceptQPA && pps.useDQP &&
-      isLuma(partitioner.chType) && partitioner.currQgEnable() &&
-      (partitioner.currSubdiv == 0 || slice.isIntra()) )
-  {
-    if( rl::QpActionMap::enabled() )
-      throw std::runtime_error("RL-RC-DoT: disable legacy VVENC_RL_* action variables");
-    const auto& pcv = *pps.pcv;
-    auto* pic = bestCS->picture;
-    const auto ctuAddr = getCtuAddr(partitioner.currQgPos, pcv);
-    const int delta = rl::DotAction::deltaFor(slice.poc,
-      (unsigned)partitioner.currQgPos.x,
-      (unsigned)partitioner.currQgPos.y,
-      (unsigned)lumaArea.width,
-      (unsigned)lumaArea.height);
-    const int baseQp = tempCS->baseQP;
-    const int applied = Clip3(-sps.qpBDOffset[CH_L], MAX_QP, baseQp + delta);
-    if( applied != baseQp )
-    {
-      tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-      bestCS->currQP[partitioner.chType] = bestCS->baseQP = applied;
-      updateLambda(slice, pic->ctuQpaLambda[ctuAddr],
-                   pic->ctuAdaptedQP[ctuAddr], applied, true);
-    }
   }
 
   if (partitioner.currQtDepth == 0)
