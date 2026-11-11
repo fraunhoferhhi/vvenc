@@ -1,0 +1,7 @@
+# Preserve the installed Kaggle CUDA Torch; SB3 accepts torch>=2.3,<3.
+stable-baselines3==2.7.0
+gymnasium==1.2.1
+setuptools==80.9.0
+numpy>=1.24,<3
+scipy>=1.10,<2
+matplotlib>=3.7
