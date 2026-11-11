@@ -10,6 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import math
 
 def main():
     p=argparse.ArgumentParser()
@@ -23,12 +24,13 @@ def main():
     p.add_argument("--allow-proxy-state",action="store_true")
     p.add_argument("--seed",type=int,default=7)
     args=p.parse_args()
+    sys.path.insert(0,str(Path(__file__).resolve().parent))
     sys.path.insert(0,str(Path(__file__).resolve().parent.parent/"rl"))
     from au_rate_audit import read_au_bits
     from reward_join import read_detections
     from reward_metrics import match_one_to_one
     from reward import paper_reward
-    from agent import RLRCDoT,PPOTrainer,Transition
+    from agent import RLRCDoT,PPOTrainer,Transition,interpolate_qp
     from auxiliary import block_reward_targets
     import torch
     if args.output.exists():p.error("Checkpoint output already exists")
@@ -47,6 +49,11 @@ def main():
             raise ValueError("Not a 16+4 state")
         if len(r.get("raw_action") or [])!=35 or len(r.get("discrete_action") or [])!=600:
             raise ValueError("Missing genuine 35-D PPO actions (zero-policy not trainable)")
+        scalars=[r["old_logp"],r["old_value"],*r["raw_action"],*r["global"],*(v for channel in r["local"] for v in channel)]
+        if not all(isinstance(v,(int,float)) and math.isfinite(v) for v in scalars):
+            raise ValueError("Nonfinite or invalid trajectory value")
+        expected=interpolate_qp(torch.tensor(r["raw_action"]),max_delta=r.get("max_delta",12))
+        if r["discrete_action"]!=expected:raise ValueError("Raw action and discrete action mismatch")
     source=read_detections(args.source_detections,args.video_id,set(range(n)))
     decoded=read_detections(args.decoded_detections,args.video_id,set(range(n)))
     au=read_au_bits(args.au_csv,args.bitstream,n)
@@ -87,7 +94,7 @@ def main():
         lp,v,_,_=model.evaluate(local,global_,raw)
         max_logp=max(abs(float(lp[i])-s.old_logp) for i,s in enumerate(steps))
         max_value=max(abs(float(v[i])-s.old_value) for i,s in enumerate(steps))
-    if max_logp>1e-3 or max_value>1e-3:
+    if not math.isfinite(max_logp) or not math.isfinite(max_value) or max_logp>1e-3 or max_value>1e-3:
         raise RuntimeError(f"Off-policy rollout (max logprob err={max_logp}, value err={max_value})")
     metrics=trainer.update(steps)
     args.output.parent.mkdir(parents=True,exist_ok=True)
@@ -99,4 +106,9 @@ def main():
                       "on_policy_logp_error":max_logp,"on_policy_value_error":max_value,
                       "checkpoint":str(args.output),"metrics":metrics},indent=2))
 if __name__=="__main__":
-    main()
+    if "--trajectory" in sys.argv:
+        main() # engineering replay validator for archived DOT_PROXY fixtures
+    else:
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+        from scripts.rl_rc_dot.session import main as run_session
+        run_session()
