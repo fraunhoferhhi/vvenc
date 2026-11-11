@@ -86,6 +86,7 @@ def main():
                      "raw_action":raw[0].tolist(),"old_logp":float(lp.item()),
                      "old_value":float(value.item())}
             write_action(args.actions,state.poc,delta)
+            rec["max_delta"]=args.max_delta
             out.write(json.dumps(rec,separators=(",",":"))+"\n")
             out.flush()
             seen.add(state.poc)
