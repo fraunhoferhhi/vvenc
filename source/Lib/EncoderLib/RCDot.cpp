@@ -59,7 +59,10 @@ Map readAction( int poc )
   const char* directory = setting("VVENC_RCDOT_ACTION_DIR");
   if( !directory ) throw std::runtime_error("RL-RC-DoT: missing action directory");
   const std::string path = std::string(directory) + "/" + std::to_string(poc) + ".txt";
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(300);
+  // Collectors may wait while the parent optimizes a full PPO rollout.
+  // Encoding-event timeouts are separate; a valid CPU PPO update must not
+  // kill a paused codec after the former five-minute action timeout.
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3600);
   for( ;; )
   {
     std::ifstream input(path);
@@ -241,7 +244,7 @@ int requestedQp( const Slice& slice, const Area& area )
 
 void recordCu( const CodingUnit& cu )
 {
-  if( !enabled() || cu.slice->pic->isPreAnalysis || !cu.Y().valid() ) return;
+  if( !enabled() || cu.slice->pic->isPreAnalysis || cu.chType != CH_L || !cu.Y().valid() ) return;
   Session& s = session();
   const Area& area = cu.Y();
   const int width = std::min(WIDTH-area.x,int(area.width));
