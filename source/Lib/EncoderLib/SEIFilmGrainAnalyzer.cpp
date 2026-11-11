@@ -185,15 +185,13 @@ constexpr int    NUM_OUTLIER_BINS          = 16;
 constexpr double OUTLIER_VARIANCE_RATIO    = 4.0;
 constexpr int    MIN_OUTLIER_BIN_BLOCKS    = 8;
 
-// Temporal residual: motion search range in samples of the 4x downsampled pictures (12 or 20 samples at full
-// resolution), and the share of the zero motion SAD a vector must stay below, as 17 / 20 = 0.85.
-constexpr int    RESIDUAL_RANGE            = 3;
-constexpr int    RESIDUAL_RANGE_WIDE       = 5;     // pictures wider than 2048
-constexpr int    ZERO_BIAS_NUM             = 17;
-constexpr int    ZERO_BIAS_DEN             = 20;
-// A neighbour whose mean absolute difference is above twice that of the other neighbour, plus this many sample
-// values, is left out of the residual.
-constexpr double NEIGHBOUR_SAD_MARGIN      = 1.0;
+// Motion compensation failures of the temporal residual, block by block: where the compensation works, the grain variance
+// from the residual is about twice that of the spatial estimate (denoised minus original, which sees about half the grain:
+// median ratio 1.7-2.2 on gangster_chase, nocturne and crowd); where it fails (fast motion, whip pans) the residual keeps
+// picture structure and the ratio reads 5-8. The existing per-bin outlier test cannot see this when most blocks fail.
+constexpr double MOTION_FAILURE_RATIO      = 4.0;   // a flat block above this ratio is left out
+constexpr double MIN_SPATIAL_STDDEV        = 0.5;   // 8-bit units: clean flat blocks (black) must not fail by rounding alone
+constexpr double MAX_MOTION_FAILURE_SHARE  = 0.5;   // a picture with more failed flat luma blocks updates nothing
 
 constexpr double LOW_THRESHOLD_RATIO       = 0.1;   // Canny: low threshold relative to the strongest gradient
 constexpr int    HIGH_THRESHOLD_RATIO      = 3;     // Canny: high threshold relative to the low threshold
@@ -379,6 +377,19 @@ BlockStats meanStdDev( const FgaRowKernels& k, const Plane& p, int x0, int y0 )
   const int n = 16 * 16;
   const double variance = ( (double) sumSq - (double) sum * sum / n ) / n;
   return { (int) ( sum / n ), std::sqrt( std::max( variance, 0.0 ) ) };
+}
+
+// A flat 16x16 block: no edge of the mask in it, and the denoised block flat enough that the mask did not miss texture.
+// stats receives the denoised block's mean and standard deviation.
+static bool isFlatBlock( const FgaRowKernels& k, const Plane& mask, const Plane& denoised, int x, int y, int maxStrength,
+                         BlockStats& stats )
+{
+  if( !k.isZeroBlock( mask.row( y ) + x, mask.width ) )
+  {
+    return false;
+  }
+  stats = meanStdDev( k, denoised, x, y );
+  return 2 * stats.stddev < ( maxStrength >> 1 );
 }
 
 // Expected power of the coefficients of the orthonormal 16x16 DCT-II of grain made by the AR filter of vvdec's SEI AR
@@ -651,35 +662,6 @@ void fgaBlockSumsCore( const Pel* src, int stride, int64_t& sum, int64_t& sumSq 
   }
 }
 
-void fgaDownsample4Core( const Pel* src, int stride, int n, Pel* dst )
-{
-  for( int x = 0; x < n; x++, src += 4 )
-  {
-    int sum = 8;
-    for( int y = 0; y < 4; y++ )
-    {
-      sum += src[ y * stride ] + src[ y * stride + 1 ] + src[ y * stride + 2 ] + src[ y * stride + 3 ];
-    }
-    dst[ x ] = (Pel) ( sum >> 4 );
-  }
-}
-
-void fgaSad4x4RowCore( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad )
-{
-  for( int b = 0; b < n; b++ )
-  {
-    int sum = 0;
-    for( int y = 0; y < 4; y++ )
-    {
-      for( int x = 4 * b; x < 4 * b + 4; x++ )
-      {
-        sum += abs( cur[ y * curStride + x ] - ref[ y * refStride + x ] );
-      }
-    }
-    sad[ b ] = sum;
-  }
-}
-
 void fgaResidualRowCore( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst )
 {
   if( next )
@@ -825,8 +807,6 @@ void FGAnalyzer::initKernels( FgaRowKernels& k )
   k.isZeroBlock  = fgaIsZeroBlockCore;
   k.blockSums    = fgaBlockSumsCore;
   k.squaredDct16 = fgaSquaredDct16Core;
-  k.downsample4  = fgaDownsample4Core;
-  k.sad4x4Row    = fgaSad4x4RowCore;
   k.residualRow  = fgaResidualRowCore;
 #if ENABLE_SIMD_OPT_FGA && defined( TARGET_SIMD_X86 )
   initFGAnalyzerX86( k );
@@ -885,164 +865,6 @@ void FGAnalyzer::resetStatistics( int c )
   m_storedMeanIntensity[ c ].clear();
   m_storedStrengthIntensity[ c ].clear();
   m_storedElementsPerInterval[ c ].clear();
-}
-
-// ====================================================================================================================
-// Temporal residual
-// ====================================================================================================================
-
-FgaTemporalResidual::FgaTemporalResidual()
-{
-  FGAnalyzer::initKernels( m_kernels );
-}
-
-void FgaTemporalResidual::downsample( const CPelBuf& src, FGAnalyzer::Plane& dst ) const
-{
-  dst.resize( src.width / 4, src.height / 4 );
-  for( int y = 0; y < dst.height; y++ )
-  {
-    m_kernels.downsample4( src.bufAt( 0, 4 * y ), (int) src.stride, dst.width, dst.row( y ) );
-  }
-}
-
-void FgaTemporalResidual::search( const FGAnalyzer::Plane& cur, const FGAnalyzer::Plane& ref, int numBlocksX, int numBlocksY, Motion& motion ) const
-{
-  const int numBlocks = numBlocksX * numBlocksY;
-  const int range     = cur.width * 4 > 2048 ? RESIDUAL_RANGE_WIDE : RESIDUAL_RANGE;
-  motion.dx.assign( numBlocks, 0 );
-  motion.dy.assign( numBlocks, 0 );
-  std::vector<int> bestSad( numBlocks ), bestScore( numBlocks ), sad( numBlocksX );
-
-  // zero motion; another vector must have a SAD below ZERO_BIAS_NUM / ZERO_BIAS_DEN of it
-  for( int by = 0; by < numBlocksY; by++ )
-  {
-    int* s = &bestSad[ by * numBlocksX ];
-    m_kernels.sad4x4Row( cur.row( 4 * by ), cur.width, ref.row( 4 * by ), ref.width, numBlocksX, s );
-    for( int bx = 0; bx < numBlocksX; bx++ )
-    {
-      bestScore[ by * numBlocksX + bx ] = s[ bx ] * ZERO_BIAS_NUM;
-    }
-  }
-  for( int dy = -range; dy <= range; dy++ )
-  {
-    for( int dx = -range; dx <= range; dx++ )
-    {
-      if( dx == 0 && dy == 0 )
-      {
-        continue;
-      }
-      // the blocks whose displaced block lies inside the reference
-      const int bx0 = dx < 0 ? ( 3 - dx ) / 4 : 0;
-      const int bx1 = ref.width - 4 - dx < 0 ? 0 : std::min( numBlocksX, ( ref.width - 4 - dx ) / 4 + 1 );
-      if( bx1 <= bx0 )
-      {
-        continue;
-      }
-      for( int by = 0; by < numBlocksY; by++ )
-      {
-        const int ry = 4 * by + dy;
-        if( ry < 0 || ry + 4 > ref.height )
-        {
-          continue;
-        }
-        m_kernels.sad4x4Row( cur.row( 4 * by ) + 4 * bx0, cur.width, ref.row( ry ) + 4 * bx0 + dx, ref.width, bx1 - bx0, sad.data() );
-        for( int bx = bx0; bx < bx1; bx++ )
-        {
-          const int b = by * numBlocksX + bx;
-          const int score = sad[ bx - bx0 ] * ZERO_BIAS_DEN;
-          if( score < bestScore[ b ] )
-          {
-            bestScore[ b ] = score;
-            bestSad  [ b ] = sad[ bx - bx0 ];
-            motion.dx[ b ] = (int8_t) dx;
-            motion.dy[ b ] = (int8_t) dy;
-          }
-        }
-      }
-    }
-  }
-  int64_t sum = 0;
-  for( int s : bestSad )
-  {
-    sum += s;
-  }
-  motion.meanSad = (double) sum / ( 16.0 * numBlocks );
-}
-
-int FgaTemporalResidual::compute( const CPelUnitBuf& cur, const CPelUnitBuf* prev, const CPelUnitBuf* next, PelStorage& residual ) const
-{
-  const CPelBuf curY = cur.get( COMP_Y );
-  const int numBlocksX = curY.width  / 16;
-  const int numBlocksY = curY.height / 16;
-  if( ( !prev && !next ) || numBlocksX == 0 || numBlocksY == 0 )
-  {
-    return 0;
-  }
-
-  FGAnalyzer::Plane curQ, refQ;
-  downsample( curY, curQ );
-  Motion motionPrev, motionNext;
-  if( prev )
-  {
-    downsample( prev->get( COMP_Y ), refQ );
-    search( curQ, refQ, numBlocksX, numBlocksY, motionPrev );
-  }
-  if( next )
-  {
-    downsample( next->get( COMP_Y ), refQ );
-    search( curQ, refQ, numBlocksX, numBlocksY, motionNext );
-  }
-  if( prev && next )
-  {
-    if( motionPrev.meanSad > 2 * motionNext.meanSad + NEIGHBOUR_SAD_MARGIN )
-    {
-      prev = nullptr;
-    }
-    else if( motionNext.meanSad > 2 * motionPrev.meanSad + NEIGHBOUR_SAD_MARGIN )
-    {
-      next = nullptr;
-    }
-  }
-  // the first neighbour of the residual, and the second one if both are used
-  const CPelUnitBuf* first  = prev ? prev : next;
-  const CPelUnitBuf* second = prev ? next : nullptr;
-  const Motion& motionFirst  = prev ? motionPrev : motionNext;
-  const Motion& motionSecond = motionNext;
-
-  residual.destroy();
-  residual.create( cur.chromaFormat, Area( 0, 0, curY.width, curY.height ) );
-  residual.fill( 0 );   // the samples outside the 16x16 blocks are not analysed
-  for( int c = 0; c < getNumberValidComponents( cur.chromaFormat ); c++ )
-  {
-    const ComponentID compId = ComponentID( c );
-    const int csx = getComponentScaleX( compId, cur.chromaFormat );
-    const int csy = getComponentScaleY( compId, cur.chromaFormat );
-    const int bw  = 16 >> csx;
-    const int bh  = 16 >> csy;
-    const CPelBuf o  = cur.get( compId );
-    const CPelBuf f  = first->get( compId );
-    const CPelBuf s  = second ? second->get( compId ) : CPelBuf();
-    PelBuf        r  = residual.get( compId );
-    for( int by = 0; by < numBlocksY; by++ )
-    {
-      for( int bx = 0; bx < numBlocksX; bx++ )
-      {
-        const int b  = by * numBlocksX + bx;
-        const int x0 = bx * bw;
-        const int y0 = by * bh;
-        // vectors in samples of this component (4 full resolution samples per downsampled sample)
-        const int fx = ( 4 * motionFirst.dx[ b ] ) >> csx, fy = ( 4 * motionFirst.dy[ b ] ) >> csy;
-        const int sx = second ? ( 4 * motionSecond.dx[ b ] ) >> csx : 0;
-        const int sy = second ? ( 4 * motionSecond.dy[ b ] ) >> csy : 0;
-        for( int y = 0; y < bh; y++ )
-        {
-          m_kernels.residualRow( o.bufAt( x0, y0 + y ), f.bufAt( x0 + fx, y0 + y + fy ),
-                                 second ? s.bufAt( x0 + sx, y0 + y + sy ) : nullptr, bw, r.bufAt( x0, y0 + y ) );
-        }
-      }
-    }
-  }
-  return second ? 6 : 2;
 }
 
 // VTM's scaling factors: twice the standard deviation, at log2 scale factor 2. As in getSignalledParameters(), the 4:2:0
@@ -1204,41 +1026,51 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
 {
   const int numComp = getNumberValidComponents( m_chromaFormat );
   m_grainWeight = residual ? residualWeight : 1;
-  for( int c = 0; sceneCut && c < numComp; c++ )
-  {
-    resetStatistics( c );
-  }
   for( int c = 0; c < numComp; c++ )
   {
     const ComponentID compId = ComponentID( c );
     const CPelBuf o = orig.get( compId );
     const CPelBuf d = denoised.get( compId );
+    Plane& spatial = m_scratch.spatial;   // the spatial grain estimate, needed beside the temporal residual
     m_denoised[ c ].resize( d.width, d.height );
     m_grain   [ c ].resize( d.width, d.height );
+    if( residual )
+    {
+      spatial.resize( d.width, d.height );
+    }
     for( int y = 0; y < (int) o.height; y++ )
     {
       const Pel* ro = o.bufAt( 0, y );
       const Pel* rd = d.bufAt( 0, y );
       Pel* td = m_denoised[ c ].row( y );
-      Pel* tg = m_grain   [ c ].row( y );
+      Pel* tg = residual ? spatial.row( y ) : m_grain[ c ].row( y );
       std::copy( rd, rd + o.width, td );
+      for( int x = 0; x < (int) o.width; x++ )
+      {
+        tg[ x ] = (Pel) ( rd[ x ] - ro[ x ] );
+      }
       if( residual )
       {
         const Pel* rr = residual->get( compId ).bufAt( 0, y );
-        std::copy( rr, rr + o.width, tg );
-      }
-      else
-      {
-        for( int x = 0; x < (int) o.width; x++ )
-        {
-          tg[ x ] = (Pel) ( rd[ x ] - ro[ x ] );
-        }
+        std::copy( rr, rr + o.width, m_grain[ c ].row( y ) );
       }
     }
     if( m_doAnalysis[ c ] )
     {
       findMask( compId );
+      if( residual && markMotionFailures( compId ) )
+      {
+        // The motion compensation failed on most of the picture: its grain measurement is mostly picture structure.
+        // Nothing is updated, so the model of the last good picture stays. This comes before the scene-cut reset on
+        // purpose: a failed picture at a cut keeps the old scene's model until the next good picture, which resets the
+        // statistics only when its grain differs by more than GRAIN_CHANGE_RATIO (else old and new data mix).
+        return;
+      }
     }
+  }
+  for( int c = 0; sceneCut && c < numComp; c++ )
+  {
+    resetStatistics( c );
   }
 
   m_cutoffPairs[ COMP_Y ] = m_cutoffPairs[ COMP_Cb ] = m_cutoffPairs[ COMP_Cr ] = 0;
@@ -1246,6 +1078,42 @@ void FGAnalyzer::estimateGrainParameters( const CPelUnitBuf& orig, const CPelUni
   {
     estimateComponent( ComponentID( c ) );
   }
+}
+
+// Marks the flat blocks of one component whose temporal residual reads far more grain than the spatial estimate
+// (MOTION_FAILURE_RATIO). Returns true when luma failed on most flat blocks of the picture (MAX_MOTION_FAILURE_SHARE,
+// with at least GRAIN_CHANGE_MIN_BLOCKS flat blocks): then the picture is not used.
+bool FGAnalyzer::markMotionFailures( ComponentID compId )
+{
+  const int    bitDepth    = m_bitDepths[ toChannelType( compId ) ];
+  const int    maxStrength = MAX_REAL_SCALE << ( bitDepth - BIT_DEPTH_8 );
+  const double minSpatial  = MIN_SPATIAL_STDDEV * ( 1 << ( bitDepth - BIT_DEPTH_8 ) );
+  const Plane& denoised    = m_denoised[ compId ];
+  const int    blocksX     = denoised.width / BLOCK_SIZE;
+  std::vector<uint8_t>& failed = m_motionFailed[ compId ];
+  failed.assign( (size_t) blocksX * ( denoised.height / BLOCK_SIZE ), 0 );
+
+  int numFlat = 0, numFailed = 0;
+  for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
+  {
+    for( int x = 0; x + BLOCK_SIZE <= denoised.width; x += BLOCK_SIZE )
+    {
+      BlockStats picStats;
+      if( !isFlatBlock( m_kernels, m_mask[ compId ], denoised, x, y, maxStrength, picStats ) )
+      {
+        continue;
+      }
+      const double temporal = meanStdDev( m_kernels, m_grain[ compId ], x, y ).stddev;
+      const double spatial  = std::max( meanStdDev( m_kernels, m_scratch.spatial, x, y ).stddev, minSpatial );
+      numFlat++;
+      if( temporal * temporal > MOTION_FAILURE_RATIO * m_grainWeight * spatial * spatial )
+      {
+        failed[ ( y / BLOCK_SIZE ) * blocksX + x / BLOCK_SIZE ] = 1;
+        numFailed++;
+      }
+    }
+  }
+  return isLuma( compId ) && numFlat >= GRAIN_CHANGE_MIN_BLOCKS && numFailed > MAX_MOTION_FAILURE_SHARE * numFlat;
 }
 
 // Mask of the samples that are not part of a flat area: edges found at full, half and quarter resolution, dilated.
@@ -1329,14 +1197,14 @@ void FGAnalyzer::estimateComponent( ComponentID compId )
   {
     for( int y = 0; y + BLOCK_SIZE <= denoised.height; y += BLOCK_SIZE )
     {
-      if( !m_kernels.isZeroBlock( mask.row( y ) + x, mask.width ) )
+      BlockStats picStats;
+      if( !isFlatBlock( m_kernels, mask, denoised, x, y, maxStrength, picStats ) )
       {
-        continue;   // not flat
+        continue;
       }
-      const BlockStats picStats = meanStdDev( m_kernels, denoised, x, y );
-      if( 2 * picStats.stddev >= ( maxStrength >> 1 ) )
+      if( m_grainWeight > 1 && m_motionFailed[ compId ][ ( y / BLOCK_SIZE ) * ( denoised.width / BLOCK_SIZE ) + x / BLOCK_SIZE ] )
       {
-        continue;   // the denoised block is not flat enough: the mask missed some texture
+        continue;   // the motion compensation of the temporal residual failed here (markMotionFailures)
       }
       blocks.push_back( { x, y, picStats.mean, meanStdDev( m_kernels, grain, x, y ).stddev / weightStddev } );
     }

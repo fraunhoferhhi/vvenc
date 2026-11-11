@@ -565,6 +565,7 @@ MCTF::MCTF( bool enableOpt )
   m_applyFrac[1][1]         = applyFrac8Core_4Tap;
   m_applyPlanarCorrection   = applyPlanarCorrectionCore;
   m_applyBlock              = applyBlockCore;
+  FGAnalyzer::initKernels( m_fgaKernels );
   m_calcVar                 = calcVarCore;
 
   if( enableOpt )
@@ -675,6 +676,7 @@ void MCTF::motionEstimationMCTF(Picture* curPic, std::deque<TemporalFilterSource
   srcPic.picBuffer.createFromBuf(curPic->getOrigBuf());
   srcPic.mvs.allocate(wInBlks, hInBlks);
   srcPic.index = std::min(5, std::abs(curPic->poc - m_filterPoc) - 1);
+  srcPic.poc   = curPic->poc;
 
 
   {
@@ -886,21 +888,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       }
 
       // The filtered picture gives the flat areas. With the improvements (--fga 2) the grain itself is measured from the
-      // temporal residual of the picture and its neighbours, which are only available here.
-      Picture* prevPic = nullptr;
-      Picture* nextPic = nullptr;
-      if( m_encCfg->m_fga >= 2 )
-      {
-        for( Picture* p : picFifo )
-        {
-          prevPic = p->poc == pic->poc - 1 ? p : prevPic;
-          nextPic = p->poc == pic->poc + 1 ? p : nextPic;
-        }
-      }
-      const CPelUnitBuf prevBuf = prevPic ? CPelUnitBuf( prevPic->getOrigBuffer() ) : CPelUnitBuf();
-      const CPelUnitBuf nextBuf = nextPic ? CPelUnitBuf( nextPic->getOrigBuffer() ) : CPelUnitBuf();
-      pic->m_picShared->fgaResidualWeight() = m_fgaResidual.compute( origBuf, prevPic ? &prevBuf : nullptr, nextPic ? &nextBuf : nullptr,
-                                                                     pic->m_picShared->getFgaResidualBuf() );
+      // temporal residual of the picture and its neighbours, whose motion has just been estimated.
+      pic->m_picShared->fgaResidualWeight() = m_encCfg->m_fga >= 2
+        ? fgaTemporalResidual( origBuf, pic->poc, srcFrameInfo, pic->m_picShared->getFgaResidualBuf() ) : 0;
     }
 
     if( m_encCfg->hasBlockQpOffsets() || m_encCfg->m_usePerceptQPA || pic->gopEntry->m_isStartOfGop )
@@ -1117,6 +1107,155 @@ void MCTF::subsampleLuma(const PelStorage &input, PelStorage &output, const int 
   CHECK( factor != 2, "Only 2x2 subsampling is supported" );
   g_pelBufOP.downsample2x2( input.Y().buf, input.Y().stride, output.Y().buf, output.Y().stride, newWidth, newHeight );
   output.extendBorderPel(m_padding, m_padding);
+}
+
+// Film grain analysis (--fga 2): a neighbour whose mean RMS motion compensation error is above twice that of the other
+// neighbour, plus this many 10-bit sample values, is left out of the temporal residual (a scene cut).
+static constexpr double FGA_NEIGHBOUR_RMS_MARGIN = 1.0;
+
+// Mean RMS motion compensation error of the blocks with an estimate, in 10-bit sample values; -1 without any.
+static double fgaMeanMotionRms( const Array2D<MotionVector>& mvs )
+{
+  double sum = 0.0;
+  int    num = 0;
+  for( int y = 0; y < mvs.h(); y++ )
+  {
+    for( int x = 0; x < mvs.w(); x++ )
+    {
+      const MotionVector& mv = mvs.get( x, y );
+      if( mv.error < INT_LEAST32_MAX )
+      {
+        sum += mv.rmsme;
+        num++;
+      }
+    }
+  }
+  return num ? sum / num : -1.0;
+}
+
+// The w x h block of ref at (x, y), in full samples. The input pictures keep MCTF_FRAME_MARGIN samples of replicated
+// border, scaled down for chroma to margin; a block that leaves it is copied into tmp with clamped coordinates, which
+// gives the same samples as a wider replicated border.
+static const Pel* fgaRefBlock( const CPelBuf& ref, int margin, int x, int y, int w, int h, Pel* tmp, ptrdiff_t& stride )
+{
+  if( x >= -margin && y >= -margin && x + w <= ( int ) ref.width + margin && y + h <= ( int ) ref.height + margin )
+  {
+    stride = ref.stride;
+    return ref.buf + y * ref.stride + x;
+  }
+  for( int r = 0; r < h; r++ )
+  {
+    const Pel* src = ref.buf + Clip3( 0, ( int ) ref.height - 1, y + r ) * ref.stride;
+    for( int c = 0; c < w; c++ )
+    {
+      tmp[ r * w + c ] = src[ Clip3( 0, ( int ) ref.width - 1, x + c ) ];
+    }
+  }
+  stride = w;
+  return tmp;
+}
+
+// The vector of a block for the temporal residual. MCTF refines its vectors on the pictures with their grain, so on
+// static content they partly line the neighbour's grain up with this picture's, and the residual reads the grain low
+// (5-15 % on Beekeeper and nocturne). A vector that rounds to within one luma sample of zero is taken as zero, for all
+// components alike (decided on luma: a halved chroma vector would round differently by its sign). The choice does not
+// look at the residual, so it adds no bias of its own. On flat blocks a motion below one sample misaligns nothing that
+// matters; where the block has texture the analyzer leaves it out (FGAnalyzer::markMotionFailures). Known limit: a
+// slow pan of about one sample per picture is measured with zero vectors.
+static MotionVector fgaResidualVector( const MotionVector& mv )
+{
+  if( std::abs( ( mv.x + 8 ) >> 4 ) <= 1 && std::abs( ( mv.y + 8 ) >> 4 ) <= 1 )
+  {
+    MotionVector zero = mv;
+    zero.x = zero.y = 0;
+    return zero;
+  }
+  return mv;
+}
+
+// For grain that is independent from picture to picture, the residual e = 2 O - P - N of a picture O and its motion
+// compensated neighbours P and N has six times the grain variance and the spectrum of the grain, whatever the filter
+// keeps of it (one neighbour: e = O - P, twice the grain variance). The vectors are the filter's own (hierarchical
+// search over a wide range, 1/16 sample), rounded to full samples: interpolating the neighbours would low-pass their
+// grain and bias the measured spectrum.
+int MCTF::fgaTemporalResidual( const PelStorage& orig, int poc, const std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo,
+                               PelStorage& residual ) const
+{
+  const TemporalFilterSourcePicInfo* prev = nullptr;
+  const TemporalFilterSourcePicInfo* next = nullptr;
+  for( const TemporalFilterSourcePicInfo& src : srcFrameInfo )
+  {
+    prev = src.poc == poc - 1 ? &src : prev;
+    next = src.poc == poc + 1 ? &src : next;
+  }
+  if( prev && next )
+  {
+    const double rmsPrev = fgaMeanMotionRms( prev->mvs );
+    const double rmsNext = fgaMeanMotionRms( next->mvs );
+    if( rmsPrev > 2.0 * rmsNext + FGA_NEIGHBOUR_RMS_MARGIN && rmsNext >= 0.0 )
+    {
+      prev = nullptr;
+    }
+    else if( rmsNext > 2.0 * rmsPrev + FGA_NEIGHBOUR_RMS_MARGIN && rmsPrev >= 0.0 )
+    {
+      next = nullptr;
+    }
+  }
+  if( !prev && !next )
+  {
+    return 0;
+  }
+  // the first neighbour of the residual, and the second one if both are used
+  const TemporalFilterSourcePicInfo* first  = prev ? prev : next;
+  const TemporalFilterSourcePicInfo* second = prev ? next : nullptr;
+
+  const ChromaFormat chromaFormat = m_encCfg->m_internChromaFormat;
+  residual.destroy();
+  residual.create( chromaFormat, Area( 0, 0, orig.Y().width, orig.Y().height ) );
+  std::vector<Pel> tmpFirst( m_mctfUnitSize * m_mctfUnitSize ), tmpSecond( m_mctfUnitSize * m_mctfUnitSize );
+  for( int c = 0; c < getNumberValidComponents( chromaFormat ); c++ )
+  {
+    const ComponentID compId = ComponentID( c );
+    const int csx    = getComponentScaleX( compId, chromaFormat );
+    const int csy    = getComponentScaleY( compId, chromaFormat );
+    const int bw     = m_mctfUnitSize >> csx;
+    const int bh     = m_mctfUnitSize >> csy;
+    const int margin = MCTF_FRAME_MARGIN >> std::max( csx, csy );
+    const CPelBuf o  = orig.get( compId );
+    PelBuf        r  = residual.get( compId );
+    for( int by = 0; by < first->mvs.h(); by++ )
+    {
+      const int y0 = by * bh;
+      const int h  = std::min( bh, ( int ) o.height - y0 );
+      for( int bx = 0; bx < first->mvs.w(); bx++ )
+      {
+        const int x0 = bx * bw;
+        const int w  = std::min( bw, ( int ) o.width - x0 );
+        if( w <= 0 || h <= 0 )
+        {
+          continue;
+        }
+        // the vectors in full samples of this component, rounded (1/16 luma samples, ( 1 << csx ) luma samples per sample)
+        const MotionVector mvFirst = fgaResidualVector( first->mvs.get( bx, by ) );
+        ptrdiff_t strideFirst = 0, strideSecond = 0;
+        const Pel* f = fgaRefBlock( first->picBuffer.get( compId ), margin, x0 + ( ( mvFirst.x + ( 8 << csx ) ) >> ( 4 + csx ) ),
+                                    y0 + ( ( mvFirst.y + ( 8 << csy ) ) >> ( 4 + csy ) ), w, h, tmpFirst.data(), strideFirst );
+        const Pel* s = nullptr;
+        if( second )
+        {
+          const MotionVector mvSecond = fgaResidualVector( second->mvs.get( bx, by ) );
+          s = fgaRefBlock( second->picBuffer.get( compId ), margin, x0 + ( ( mvSecond.x + ( 8 << csx ) ) >> ( 4 + csx ) ),
+                           y0 + ( ( mvSecond.y + ( 8 << csy ) ) >> ( 4 + csy ) ), w, h, tmpSecond.data(), strideSecond );
+        }
+        for( int y = 0; y < h; y++ )
+        {
+          m_fgaKernels.residualRow( o.bufAt( x0, y0 + y ), f + y * strideFirst, s ? s + y * strideSecond : nullptr, w,
+                                    r.bufAt( x0, y0 + y ) );
+        }
+      }
+    }
+  }
+  return second ? 6 : 2;
 }
 
 // The interpolation kernels above read up to 2 samples before and 3 samples after a block. The

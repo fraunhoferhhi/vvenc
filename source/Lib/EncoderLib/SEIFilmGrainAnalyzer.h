@@ -46,8 +46,8 @@ POSSIBILITY OF SUCH DAMAGE.
  *
  * For every analysed picture, the grain is estimated as the difference between the original and a temporally filtered
  * (denoised) version of it, as in VTM (--fga 1). With the improvements (--fga 2) it is estimated from the temporal
- * residual instead, twice the picture minus its motion compensated neighbours (FgaTemporalResidual), which also holds
- * the part of the grain that the filter keeps.
+ * residual instead, twice the picture minus its neighbours motion compensated with the vectors of the temporal filter
+ * (MCTF::fgaTemporalResidual), which also holds the part of the grain that the filter keeps.
  * Flat blocks are found with a multi-scale Canny edge detector and morphological dilation on the denoised picture. On
  * 16x16 flat blocks the analysis collects
  *  - the block mean and the grain strength (twice the standard deviation of the grain), from which a polynomial
@@ -96,11 +96,7 @@ struct FgaRowKernels
   // coefficients are added to sum[ horizontal * 16 + vertical ].
   void ( *squaredDct16 )( const Pel* src, int stride, int maxRange, double* sum );
 
-  // Temporal residual kernels (FgaTemporalResidual).
-  // 4x downsampling of n samples: dst[ x ] = ( sum of the 4x4 samples from src[ 4 x ] on + 8 ) >> 4.
-  void ( *downsample4 ) ( const Pel* src, int stride, int n, Pel* dst );
-  // Sums of absolute differences of n 4x4 blocks next to each other: sad[ b ] of the blocks at x = 4 b.
-  void ( *sad4x4Row )   ( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad );
+  // Temporal residual kernel (MCTF::fgaTemporalResidual).
   // Temporal residual of n samples: 2 cur - prev - next, or cur - prev when next is null.
   void ( *residualRow ) ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 };
@@ -116,8 +112,6 @@ void fgaClassifyCore( Pel* row, int n, Pel low, Pel high, Pel weak, Pel strong )
 bool fgaIsZeroBlockCore ( const Pel* src, int stride );
 void fgaBlockSumsCore   ( const Pel* src, int stride, int64_t& sum, int64_t& sumSq );
 void fgaSquaredDct16Core( const Pel* src, int stride, int maxRange, double* sum );
-void fgaDownsample4Core ( const Pel* src, int stride, int n, Pel* dst );
-void fgaSad4x4RowCore   ( const Pel* cur, int curStride, const Pel* ref, int refStride, int n, int* sad );
 void fgaResidualRowCore ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 
 class FGAnalyzer
@@ -130,7 +124,7 @@ public:
   void init( int width, int height, ChromaFormat chromaFormat, const int bitDepths[ MAX_NUM_CH ], const bool doAnalysis[ MAX_NUM_COMP ], bool improved, bool arModel = false );
 
   // Analyses one picture: orig is the original, denoised its temporally filtered version (same size). residual is the
-  // temporal residual of FgaTemporalResidual, whose variance is residualWeight times the grain variance; without it
+  // temporal residual of MCTF::fgaTemporalResidual, whose variance is residualWeight times the grain variance; without it
   // the grain is estimated as denoised minus orig. With sceneCut the statistics of the previous pictures are dropped
   // first, as they describe another scene.
   void estimateGrainParameters( const CPelUnitBuf& orig, const CPelUnitBuf& denoised, const CPelUnitBuf* residual = nullptr, int residualWeight = 0,
@@ -220,11 +214,13 @@ private:
   Plane             m_grain   [ MAX_NUM_COMP ];   // temporal residual, or denoised minus original
   int               m_grainWeight = 1;            // variance of m_grain relative to the grain variance
   Plane             m_mask    [ MAX_NUM_COMP ];   // non-zero where the picture is not flat
+  std::vector<uint8_t> m_motionFailed[ MAX_NUM_COMP ];   // per 16x16 block: the temporal residual's compensation failed
 
   // Scratch planes and lists of the mask search, kept to avoid allocating and clearing them for every picture.
   struct Scratch
   {
     Plane            magnitude, direction, morph, half, quarter, lowMask;
+    Plane            spatial;   // denoised minus original of the component being prepared, beside a temporal residual
     std::vector<int> positions, weakX, weakY, columnStart;
     std::vector<Pel> wide, top, bottom, left, right;
   };
@@ -234,6 +230,7 @@ private:
   void resetStatistics       ( int c );
   void findMask              ( ComponentID compId );
   void maskForScale          ( const Plane& picture, Plane& mask, int bitDepth, int numDilations );
+  bool markMotionFailures    ( ComponentID compId );
 
   // parameter estimation
   void estimateComponent     ( ComponentID compId );
@@ -271,36 +268,6 @@ private:
   template <arm_simd::ARM_VEXT vext>
   static void _initFGAnalyzerARM( FgaRowKernels& k );
 #endif
-};
-
-// Temporal residual of the film grain for the improved analysis (--fga 2). For grain that is independent from picture
-// to picture, the residual e = 2 O - P - N of a picture O and its motion compensated neighbours P and N has six times
-// the grain variance and the spectrum of the grain, whatever the denoiser would have kept of it. MCTF computes it for
-// the analysed pictures, while their neighbours are available.
-class FgaTemporalResidual
-{
-public:
-  FgaTemporalResidual();
-
-  // Computes the residual of cur from the previous and next picture (null when missing) into residual (created here).
-  // The motion is searched per 16x16 block on 4x downsampled luma, with a bias towards zero motion, so that the vectors
-  // do not follow the grain in flat areas. A neighbour that matches much worse than the other (a scene cut) is left
-  // out. Returns the variance of the residual relative to the grain variance: 6 with both neighbours, 2 with one, and
-  // 0, with no residual made, without neighbours or for pictures smaller than one block.
-  int compute( const CPelUnitBuf& cur, const CPelUnitBuf* prev, const CPelUnitBuf* next, PelStorage& residual ) const;
-
-private:
-  // Block motion in samples of the 4x downsampled pictures, per 16x16 block of the full picture.
-  struct Motion
-  {
-    std::vector<int8_t> dx, dy;
-    double              meanSad = 0.0;   // mean absolute difference per downsampled sample, at the chosen vectors
-  };
-
-  void downsample( const CPelBuf& src, FGAnalyzer::Plane& dst ) const;
-  void search    ( const FGAnalyzer::Plane& cur, const FGAnalyzer::Plane& ref, int numBlocksX, int numBlocksY, Motion& motion ) const;
-
-  FgaRowKernels m_kernels;
 };
 
 } // namespace vvenc
