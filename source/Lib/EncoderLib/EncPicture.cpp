@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "EncPicture.h"
+#include "RCDot.h"
 #include "EncGOP.h"
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/CommonDef.h"
@@ -152,6 +153,7 @@ void EncPicture::finalizePicture( Picture& pic )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
 
   xCalcDistortion( pic, *slice->sps );
+  rcdot::finishPicture(pic);
 
   // finalize
   if ( m_pcEncCfg->m_useAMaxBT )
