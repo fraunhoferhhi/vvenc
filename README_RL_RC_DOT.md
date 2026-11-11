@@ -66,6 +66,13 @@ for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
+    python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_bridge.py' -v
+    python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_codec_contract.py' -v
+
+The bridge waits for a complete newline-terminated state before parsing or
+publishing an action. Empty-detection minibatches still train the auxiliary
+zero targets using `aux_empty_weight=0.05`; setting that weight to zero
+explicitly disables supervision of unoccupied cells.
 
 Export VVENC_DOT_QP_TRACE_FILE=/tmp/dot_final_qp.csv to audit winning
 luma CU min/max and area-weighted QP for each POC+CTU. A trace without
@@ -84,10 +91,13 @@ encoder environment variables:
     export VVENC_DOT_ACTION_DIR=/tmp/dot_actions
 
 Then run the locked 480x320, 30fps, QPA-on VVenC command for 16 frames.
-CI now verifies zero-action/vanilla bitstream parity and distinct positive,
-negative, spatially varied and per-POC action outcomes on synthetic YUV.
-These hash tests do NOT verify independent 16x16 QP control or VVdeC decode;
-those checks and full baseline parity remain mandatory BEFORE training.
+The synthetic-YUV smoke gate requires complete state POC coverage, exact
+requested-map/CTU pooling, zero-action/vanilla bitstream parity, positive and
+negative action outcomes, and the expected left/right QP direction on the
+first policy decision. Two further runs share a zero-action prefix and vary
+only the last decision POC, checking that its final QP responds while earlier
+POC QPs remain unchanged. These are CTU-level checks; independent 16x16 QP
+control and VVdeC decoding remain separate requirements before training.
 
 Do not simultaneously set VVENC_RL_QP_MAP / VVENC_RL_ACTION_DIR and
 VVENC_DOT_ACTION_DIR.
@@ -111,3 +121,4 @@ rejects untrusted/missing detections and off-policy trajectories.
 5. Retain original experimental setup / PPO reward-head mapping in the
    methodology documentation; do not claim published results before
    these gates pass.
+
