@@ -69,12 +69,6 @@ EncRCSeq::EncRCSeq()
   gopSize             = 0;
   intraPeriod         = 0;
   bitsUsed            = 0;
-  rlCompletedPictures = 0;
-  rlLastPictureBits   = 0;
-  rlLastPictureQP     = -1;
-  rlLastPctIntra     = 0.0;
-  rlLastPctInter     = 0.0;
-  rlLastPctSkip      = 0.0;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
   rateBoostFac        = 1.0;
@@ -111,12 +105,6 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int ma
   maxEstLambda = 65535.9375 * pow( 2.0, bitdepthLumaScale );
 
   bitsUsed            = 0;
-  rlCompletedPictures = 0;
-  rlLastPictureBits   = 0;
-  rlLastPictureQP     = -1;
-  rlLastPctIntra     = 0.0;
-  rlLastPctInter     = 0.0;
-  rlLastPctSkip      = 0.0;
   bitsUsedQPLimDiff   = 0;
   estimatedBitUsage   = 0;
   std::memset (qpCorrection, 0, sizeof (qpCorrection));
@@ -131,7 +119,6 @@ void EncRCSeq::destroy()
 
 void EncRCSeq::updateAfterPic (const int actBits, const int tgtBits)
 {
-  ++rlCompletedPictures;
   estimatedBitUsage += tgtBits;
 
   if (isLookAhead)
@@ -1177,41 +1164,6 @@ void RateCtrl::updateAfterPicEncRC( const Picture* pic )
   encRCPic->updateAfterPicture( pic->isMeanQPLimited ? clipBits : pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
-  encRCSeq->rlLastPictureBits = pic->actualTotalBits;
-  encRCSeq->rlLastPictureQP   = pic->slices[0]->sliceQp;
-  // Count winning luma CU areas only; do NOT count chroma CUs again.
-  // This reports actual VVC mode areas, not x264 Macroblock classifications.
-  uint64_t intraArea = 0, interArea = 0, skipArea = 0, covered = 0;
-  const unsigned picW = (unsigned) pic->cs->area.Y().width;
-  const unsigned picH = (unsigned) pic->cs->area.Y().height;
-  for( const CodingUnit* cu : pic->cs->cus )
-  {
-    if( cu->chType != CH_L ) continue;
-    const unsigned x = (unsigned) cu->lumaPos().x;
-    const unsigned y = (unsigned) cu->lumaPos().y;
-    if( x >= picW || y >= picH ) continue;
-    const uint64_t width  = std::min( (unsigned) cu->lumaSize().width,  picW-x );
-    const uint64_t height = std::min( (unsigned) cu->lumaSize().height, picH-y );
-    const uint64_t area = width * height;
-    covered += area;
-    if( cu->skip ) skipArea += area;
-    else if( cu->predMode == MODE_INTER ) interArea += area;
-    else intraArea += area; // Intra, IBC, PLT (explicitly documented grouping).
-  }
-  // If the CU list is ever unavailable/incomplete, do not manufacture
-  // fractions; the entire observation remains DOT_PROXY.
-  if( covered == (uint64_t)picW * picH && covered > 0 )
-  {
-    encRCSeq->rlLastPctIntra = double(intraArea) / double(covered);
-    encRCSeq->rlLastPctInter = double(interArea) / double(covered);
-    encRCSeq->rlLastPctSkip  = double(skipArea)  / double(covered);
-  }
-  else
-  {
-    encRCSeq->rlLastPctIntra = 0.0;
-    encRCSeq->rlLastPctInter = 0.0;
-    encRCSeq->rlLastPctSkip  = 0.0;
-  }
 
   if ( encRCSeq->isLookAhead )
   {
