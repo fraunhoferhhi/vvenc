@@ -34,8 +34,11 @@ Action is a 30x20 requested map, but actual QP signalling follows v1.14.0
 QPA/QG constraints. The mapping is area-averaged over the available QG;
 it is not independent 16x16 Inter QP signalling.
 
-The masked auxiliary reward head is present, but the current train.py does
-not supply block reward targets. It is not yet paper-faithful.
+The masked auxiliary reward head now receives a centre-of-detection surrogate
+block target: one-to-one matched YOLO predictions score 1; unmatched boxes
+score 0, with occupied-cell masks including zero-reward false positives.
+This activates auxiliary training but the exact original block-target
+mapping remains unverified; it is NOT yet paper-faithful.
 Full-video 65-train/7-val/100-test orchestration, frozen-YOLO collection
 for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
 
@@ -47,6 +50,7 @@ for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
     cmake --build build/dot --parallel 2
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
     python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
+    python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
 
 ## Smoke test protocol
 

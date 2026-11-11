@@ -10,6 +10,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Python contract
         run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
+      - name: Auxiliary label tests
+        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
       - name: Configure
         run: cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0
       - name: Compile
@@ -19,3 +21,15 @@ jobs:
           ENCODER=$(find bin build -type f -name vvencapp | head -n 1)
           test -n "$ENCODER"
           python3 scripts/rl_rc_dot/smoke_codec.py --encoder "$ENCODER" --output /tmp/rl-dot-codec-smoke
+
+  ppo-cpu:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CPU PyTorch
+        run: |
+          python3 -m pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Execute real PPO forward/backward tests
+        run: |
+          python3 -c "import torch; print('torch',torch.__version__)"
+          python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v

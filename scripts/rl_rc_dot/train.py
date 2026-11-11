@@ -29,6 +29,7 @@ def main():
     from reward_metrics import match_one_to_one
     from reward import paper_reward
     from agent import RLRCDoT,PPOTrainer,Transition
+    from auxiliary import block_reward_targets
     import torch
     if args.output.exists():p.error("Checkpoint output already exists")
     trajectory=[json.loads(line) for line in args.trajectory.read_text().splitlines() if line.strip()]
@@ -66,11 +67,16 @@ def main():
         counts=match_one_to_one(source[poc],decoded[poc],iou_threshold=.5)
         value=paper_reward(counts.precision,accbits,index+1,args.fps,
                            args.target_bps,args.task_weight,bool(source[poc]))
+        # Explicit surrogate auxiliary labels: reward for predictions is
+        # located at bbox centres; false positives remain masked-in at zero.
+        block_values, block_mask = block_reward_targets(source[poc],decoded[poc])
         steps.append(Transition(
             torch.tensor(row["local"],dtype=torch.float32).view(4,20,30),
             torch.tensor(row["global"],dtype=torch.float32),
             torch.tensor(row["raw_action"],dtype=torch.float32),
-            float(row["old_logp"]),float(row["old_value"]),value,index==n-1))
+            float(row["old_logp"]),float(row["old_value"]),value,index==n-1,
+            aux_target=torch.tensor(block_values,dtype=torch.float32).view(20,30),
+            aux_mask=torch.tensor(block_mask,dtype=torch.float32).view(20,30)))
         rewards.append(value)
     # Critical on-policy gate: the checkpoint model must be exactly the
     # collecting policy; all raw-action logprobs and values must match.
