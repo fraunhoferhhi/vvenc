@@ -12,6 +12,10 @@ jobs:
         run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
       - name: Auxiliary label tests
         run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_auxiliary.py' -v
+      - name: Growing state stream regression tests
+        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_bridge.py' -v
+      - name: POC and spatial QP evidence contracts
+        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_codec_contract.py' -v
       - name: Configure
         run: cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0
       - name: Compile
@@ -33,3 +37,4 @@ jobs:
         run: |
           python3 -c "import torch; print('torch',torch.__version__)"
           python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
+
