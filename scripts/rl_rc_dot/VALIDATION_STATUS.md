@@ -3,7 +3,7 @@
 This describes engineering checks, not a trained-policy result.
 
 - Windows / GCC15.2 / CMake Release / JSON ON / SIMD OFF: build successful.
-- 41 tests executed:40 passed;1 shared-libswscale RGB test skipped on Windows.
+- 44 tests executed:43 passed;1 shared-libswscale RGB test skipped on Windows.
   The skipped test is mandatory in Linux CI/Kaggle setup.
 - Real native tests include source→codec→policy→SB3 update→checkpoint→fresh
   rollout and a final-update paired validation/best-checkpoint selection.
@@ -20,6 +20,7 @@ This describes engineering checks, not a trained-policy result.
   have regression coverage.
 - Evaluation math covers rate scaling, duplicate rates, nonoverlap and invalid
   RD points. BD-Precision is not mAP.
+- Two spawned CPU collectors pass a shared on-policy update. Explicit GPU routing and loader restoration have mock regression coverage; actual T4 placement remains a pilot gate.
 - No real BDD100K/YOLO Kaggle T4×2 training/quality result has been produced
   during this source repair. It remains the next acceptance experiment.
 - No claim of bit-identical x264 feature extraction or published paper gains
