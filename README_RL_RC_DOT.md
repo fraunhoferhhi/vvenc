@@ -1,0 +1,87 @@
+# RL-RC-DoT + VVenC v1.14.0 — isolated research branch
+
+Branch: feature/rl-rc-dot-vvc, derived from rl-agent-dev.
+Baseline: VVenC v1.14.0 at 9428ea8636ae7f443ecde89999d16b2dfc421524.
+
+## Source delivered in this branch
+
+- source/Lib/EncoderLib/RLDotObservation.h: causal 16 globals plus 4 x 20 x 30 maps
+- source/Lib/EncoderLib/RLDotAction.h: 600-int per-POC deltaQP file protocol,
+  area-weighted QP action on real CTU/QG, delta in [-12,12]
+- scripts/rl_rc_dot/agent.py: PPO with 3-layer CNN, 16 globals, 64-D latent,
+  5x7 Gaussian action, bilinear interpolation, actor/critic/auxiliary block head
+- scripts/rl_rc_dot/bridge.py: strict POC-keyed live inference and action files
+- scripts/rl_rc_dot/train.py: verified on-policy PPO update joining true AU bits
+  and frozen-YOLO detections; checkpoint of both model and optimizer
+- scripts/rl_rc_dot/reward.py: precision/bitrate reward with lambda=20
+- scripts/rl_rc_dot/test_contract.py and test_agent.py
+- The established 8+3, 4x3 rl-agent-dev pilot code is preserved.
+
+## Scientific status: PROTOTYPE, not full reproduction
+
+The encoder writes DOT_PROXY, not DOT_STATE, to make gaps explicit. The
+current 16-entry observation has zero placeholders for G03 and G06-G12.
+L01 is luma-only AC variance; L02 is spatial prediction error rather than
+true lookahead intra SATD; L03 is temporal SAD rather than MB-tree propagated
+cost; L04 is QPA scale proxy rather than x264 inverse qscale. G15 is an
+Intra flag, not full I/P/B encoding.
+
+The bridge and the trainer REJECT DOT_PROXY unless --allow-proxy-state is
+explicitly provided. That flag is for transport and optimizer smoke tests
+ONLY. Do not report its metrics as scientific RL-RC-DoT reproduction.
+
+Action is a 30x20 requested map, but actual QP signalling follows v1.14.0
+QPA/QG constraints. The mapping is area-averaged over the available QG;
+it is not independent 16x16 Inter QP signalling.
+
+The masked auxiliary reward head is present, but the current train.py does
+not supply block reward targets. It is not yet paper-faithful.
+Full-video 65-train/7-val/100-test orchestration, frozen-YOLO collection
+for this NEW 16+4 bridge, and final BD-rate results remain unvalidated.
+
+## Build and unit tests
+
+    git clone -b feature/rl-rc-dot-vvc https://github.com/youngan2810/vvenc_rl.git
+    cd vvenc_rl
+    cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release
+    cmake --build build/dot --parallel 2
+    python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
+    python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_agent.py' -v
+
+## Smoke test protocol
+
+Start the bridge in background using a fresh directory and the matching
+encoder environment variables:
+
+    python3 scripts/rl_rc_dot/bridge.py --states /tmp/dot_states.txt \
+      --actions /tmp/dot_actions --trajectory /tmp/dot_trajectory.jsonl \
+      --frames 16 --mode zero --allow-proxy-state &
+    export VVENC_DOT_STATE_FILE=/tmp/dot_states.txt
+    export VVENC_DOT_ACTION_DIR=/tmp/dot_actions
+
+Then run the locked 480x320, 30fps, QPA-on VVenC command for 16 frames.
+Zero-action/vanilla bitstream parity, +/- action response, correct POC
+matching and VVdeC decode must be demonstrated BEFORE training.
+
+Do not simultaneously set VVENC_RL_QP_MAP / VVENC_RL_ACTION_DIR and
+VVENC_DOT_ACTION_DIR.
+
+For a pilot, use --mode ppo and --allow-proxy-state to generate a
+trajectory. Real reward/update requires the SAME 100%-verified baseline
+YOLO preprocessing, frame-by-frame source/decoded detection JSONL and
+the exact AU bits file from VVENC_RL_AU_BITS_FILE. The train.py update
+rejects untrusted/missing detections and off-policy trajectories.
+
+## Next steps for scientific reproduction
+
+1. Replace all proxy features with causal faithful x264-equivalent
+   statistics from VVenC; instrument actual final-CU modes, PSNR/SSIM,
+   motion/coeff bits and valid temporal dependency information.
+2. Establish finer independent Inter-QG QP control, or explicitly report
+   the coarser CTU adaptation as a limitation.
+3. Build and run Kaggle encoder/decoder tests, then train on all 65 train
+   videos; freeze validation decisions on 7 videos; protect 100 test.
+4. Use baseline-matched precision/recall, bitrate, PSNR and BD-rate.
+5. Retain original experimental setup / PPO reward-head mapping in the
+   methodology documentation; do not claim published results before
+   these gates pass.

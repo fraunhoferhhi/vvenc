@@ -1,0 +1,16 @@
+name: RL-RC-DoT checks
+on:
+  push:
+    branches:
+      - feature/rl-rc-dot-vvc
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python contract
+        run: python3 -m unittest discover -s scripts/rl_rc_dot -p 'test_contract.py' -v
+      - name: Configure
+        run: cmake -S . -B build/dot -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=0
+      - name: Compile
+        run: cmake --build build/dot --parallel 2
