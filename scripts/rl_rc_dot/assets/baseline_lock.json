@@ -1,0 +1,112 @@
+{
+  "schema": "vvc-anchor-configuration-lock/1",
+  "status": "LOCKED",
+  "source_manifest_sha256": "f7a600f501de622f66ace04bb0b12ec5da0dab988cd54732d614f6b16495aaea",
+  "config_sha256": "86307186d584d1d887280beb4aef582159822f4f44e49c4280c1e0e935ea941c",
+  "config": {
+    "protocol_version": "vvc-pilot-1.2",
+    "dataset_manifest_sha256": "f7a600f501de622f66ace04bb0b12ec5da0dab988cd54732d614f6b16495aaea",
+    "source_zip_sha256": "f1061b8737ce06bd89bf8f7c316c0e7fbf510b8699cc300734af4842f88ad619",
+    "preprocessing": {
+      "width": 480,
+      "height": 320,
+      "fps": 30,
+      "filter_template": "fps=30,colorspace=ispace=<matrix>:iprimaries=<primaries>:itrc=<trc>:irange=<range>:space=bt709:primaries=bt709:trc=bt709:range=tv:format=yuv420p,scale=480:320:flags=bicubic,format=yuv420p",
+      "pix_fmt": "yuv420p",
+      "autorotate": true,
+      "display_reference": "decoded BDD100K MOV; not sensor raw",
+      "color_target": "bt709_tv",
+      "source_color_fallback": "bt709",
+      "source_primaries_fallback": "bt709",
+      "source_transfer_fallback": "bt709",
+      "source_range_fallback": "tv",
+      "matrix": "bt709",
+      "range": "tv"
+    },
+    "encoder": {
+      "name": "VVenC",
+      "tag": "v1.14.0",
+      "commit": "9428ea8636ae7f443ecde89999d16b2dfc421524",
+      "binary": "vvencapp",
+      "preset": "medium",
+      "passes": 1,
+      "qpa": 1,
+      "bitrate_control": "VBR",
+      "intra_period_frames_requested": 32,
+      "refresh_type": "cra",
+      "threads": 4,
+      "input_format": "yuv420_8",
+      "expected_decoder_format": "yuv420p10le",
+      "sdr": "sdr_709",
+      "gop_size_requested": 32,
+      "lookahead_enabled_requested": 1,
+      "mt_profile_requested": -1,
+      "expert_arg": "GOPSize=32:LookAhead=1",
+      "effective_verification": "manual review of encoder source/log required"
+    },
+    "decoder": {
+      "name": "VVdeC",
+      "tag": "v3.2.0",
+      "commit": "649f0b2fafee977c998d7e4d674f8b88d952e3a3",
+      "threads": 4
+    },
+    "detector": {
+      "repo": "ultralytics/yolov5",
+      "tag": "v7.0",
+      "commit": "915bbf294bb74c859f0b41f1c23bc395014ea679",
+      "weights": "yolov5n.pt",
+      "weights_sha256": "4f180cf23ba0717ada0badd6c685026d73d48f184d00fc159c2641284b2ac0a3",
+      "autoshape_max_size": 640,
+      "tensor_size": "dynamic rectangular stride-aligned; 480x320 often 448x640, not guaranteed 640x640",
+      "conf": 0.25,
+      "nms_iou": 0.45,
+      "match_iou": 0.5,
+      "class_id": 2,
+      "classes": [
+        "car"
+      ],
+      "device_precision": "FP32",
+      "pseudo_gt_reference": "detector-on-preprocessed-uncompressed-encoder-input",
+      "reconstruction_to_detector": "uint8 clip((decoded_10bit + 2) // 4), then identical BT.709 limited YUV420p -> RGB"
+    },
+    "metrics": {
+      "actual_bitrate": "bitstream bytes *8 *fps /frames /1000",
+      "psnr_y": "10-bit domain, ref Y<<2, peak=1023",
+      "matching": "greedy confidence-ordered one-to-one",
+      "undefined_metric": "null (N/A); do not silently exclude frames"
+    },
+    "pilot_grid_kbps": [
+      50,
+      80,
+      120,
+      160,
+      200
+    ]
+  },
+  "target_bitrate_grid_kbps": [
+    50,
+    80,
+    120,
+    160,
+    200
+  ],
+  "actual_bitrates_measured_in": "pilot_results.csv",
+  "evaluation_split": "test",
+  "test_video_count": 100,
+  "test_locked": true,
+  "pilot_report_sha256": "e08ba12e2808fb4b5dc9c668447c0f7cc5f50d9a7d3ed27d8bd9ef7b6951a597",
+  "manual_evidence": {
+    "colour": "Reviewed figures/SMOKE_00a820ef-d655700e_120kbps_150f_colour_QA.png (daytime, 3 paired reference/decoded frames) and figures/SMOKE_00b04b12-a7d7eb85_120kbps_150f_colour_QA.png (nighttime, 3 paired frames): no evident systematic hue reversal, channel swap or gross color-range mismatch; reconstruction blur/quality loss is visible. All 7 validation source videos include nonempty ffprobe color metadata; no fallback was used; both reference and decoded detector paths use matched BT.709 limited color conversion. Visual sampling does not certify each frame or all 100 Test videos.",
+    "encoder": "All 35 logs/CALIBRATION_*_encode.log and run_records/CALIBRATION_*.json: vvencapp v1.14.0 reports VBR single-pass, QPA Enabled, intra period 32, refresh CRA, threads 4; each executed CLI contains --mtprofile -1 --additional GOPSize=32:LookAhead=1. Pinned VVenC source commit 9428ea8636ae7f443ecde89999d16b2dfc421524: source/Lib/apputils/VVEncAppCfg.h documents that additional options separated by colon are parsed after other options, and defines GOPSize and LookAhead parameters; source/Lib/vvenc/vvencCfg.cpp requires look-ahead for one-pass RC. The simple vvencapp runtime log does not expose a direct post-initialization dump of GOPSize/LookAhead. Effective values assessed by source parsing + unmodified successfully completed CLI, not API inspection."
+  },
+  "encoder_effective_review": {
+    "gop_size": 32,
+    "intra_period_frames": 32,
+    "lookahead": 1,
+    "mt_profile_cli_arg": -1,
+    "evidence": "All 35 logs/CALIBRATION_*_encode.log and run_records/CALIBRATION_*.json: vvencapp v1.14.0 reports VBR single-pass, QPA Enabled, intra period 32, refresh CRA, threads 4; each executed CLI contains --mtprofile -1 --additional GOPSize=32:LookAhead=1. Pinned VVenC source commit 9428ea8636ae7f443ecde89999d16b2dfc421524: source/Lib/apputils/VVEncAppCfg.h documents that additional options separated by colon are parsed after other options, and defines GOPSize and LookAhead parameters; source/Lib/vvenc/vvencCfg.cpp requires look-ahead for one-pass RC. The simple vvencapp runtime log does not expose a direct post-initialization dump of GOPSize/LookAhead. Effective values assessed by source parsing + unmodified successfully completed CLI, not API inspection.",
+    "evidence_type": "archived successful vvencapp CLI logs + pinned VVenC v1.14.0 source review; no post-init config API dump"
+  },
+  "warning": "Pseudo-ground-truth is a detector consistency reference, not manually annotated GT",
+  "lock_sha256": "54aa575cba547e4452b5ab03422c491cd5f103db5f66f4e0e80b1a2268315213"
+}
