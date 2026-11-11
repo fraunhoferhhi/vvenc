@@ -427,7 +427,7 @@ inline void DepQuant::xDecideAndUpdate( const TCoeff absCoeff, const DQIntern::S
 
   Decisions* decisions = &m_trellis[scanInfo.scanIdx][0];
 
-  xDecide<Kernels>( scanInfo, absCoeff, lastOffset( scanInfo.scanIdx ), *decisions, zeroOut, quantCoeff );
+  xDecide<Kernels>( scanInfo, absCoeff, lastOffset( scanInfo ), *decisions, zeroOut, quantCoeff );
 
   if( scanInfo.scanIdx )
   {
