@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "CABACWriter.h"
+#include "RCDot.h"
 #include "EncLib.h"
 #include "CommonLib/Contexts.h"
 #include "CommonLib/UnitTools.h"
@@ -640,6 +641,7 @@ void CABACWriter::split_cu_mode( const PartSplit split, const CodingStructure& c
 
 void CABACWriter::coding_unit( const CodingUnit& cu, Partitioner& partitioner, CUCtx& cuCtx )
 {
+  if( isEncoding() ) rcdot::recordCu(cu);
   DTRACE( g_trace_ctx, D_SYNTAX, "coding_unit() treeType=%d modeType=%d\n", cu.treeType, cu.modeType );
   STAT_COUNT_CU_MODES( isEncoding() && partitioner.chType == CH_L, g_cuCounters1D[CU_CODED_FINALLY][0][!cu.slice->isIntra() + cu.slice->depth] );
   STAT_COUNT_CU_MODES( isEncoding() && partitioner.chType == CH_L && !cu.slice->isIntra(), g_cuCounters2D[CU_CODED_FINALLY][Log2( cu.lheight() )][Log2( cu.lwidth() )] );
@@ -1386,6 +1388,7 @@ void CABACWriter::cu_palette_info(const CodingUnit& cu, ComponentID compBegin, u
 
 void CABACWriter::prediction_unit( const CodingUnit& cu )
 {
+  rcdot::SyntaxScope motionBits(m_BinEncoder,*cu.slice->pic,true);
   CHECK( cu.treeType == TREE_C, "cannot be chroma CU" );
   if( cu.skip )
   {
@@ -2239,6 +2242,7 @@ void CABACWriter::joint_cb_cr( const TransformUnit& tu, const int cbfMask )
 
 void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, CUCtx* cuCtx )
 {
+  rcdot::SyntaxScope transformBits(m_BinEncoder,*tu.cu->slice->pic,false);
   const CodingUnit& cu = *tu.cu;
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_coding() etype=%d pos=(%d,%d) size=%dx%d predMode=%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height, cu.predMode );
 
