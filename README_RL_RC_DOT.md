@@ -6,7 +6,9 @@ The old DOT_PROXY pilot is retired and fails fast. Existing v3/v4 and
 custom-PPO prototype checkpoints are **not compatible** with this schema.
 
 This is an implementation of the method on H.266 with explicitly declared
-codec adaptations. It is not the authors' released implementation, and
+codec adaptations. **After the 4096-transition Trial, the critic branch is
+isolated from the actor/auxiliary branch, gradients are clipped per branch,
+state cumulative bits are log-scaled and auxiliary output is bounded.** It is not the authors' released implementation, and
 working tests do not establish convergence or the paper's performance.
 Read [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md) before experiments.
 
@@ -21,11 +23,12 @@ Read [METHOD_MAPPING.md](scripts/rl_rc_dot/METHOD_MAPPING.md) before experiments
   dependency-cost approximation, not a relabelled temporal SAD.
 - Gaussian 5×7 action → floating bilinear 20×30 map → actual VVC QG pooling.
   The encoder echoes the consumed map; the bridge and rollout buffer verify it.
-- Stable-Baselines3 **2.7.0 PPO**, shared CNN/64 latent, actor, critic and
-  block reward-prediction head. After the observed 256-step Kaggle pilot,
-  the **provisional PPO stability trial** uses learning rate **3e-5**,
-  **3** optimizer epochs and **target KL 0.05** (instead of SB3 defaults
-  3e-4, 10, and no KL guard). Auxiliary **0.1 × uniform block MSE** is kept.
+- Stable-Baselines3 **2.7.0 PPO**, with independent actor and critic CNN/64
+  latents, auxiliary block reward-prediction head on the actor branch and
+  separate actor/critic gradient clipping. This isolates large critic return-MSE
+  gradients observed in the 4096-step Trial. The auxiliary head now uses sigmoid
+  outputs in [0,1], matching its labels. Provisional settings: learning rate
+  **3e-5**, **3** optimizer epochs, **target KL 0.05**, auxiliary MSE coefficient **0.1**.
   This is a declared training adaptation, not a claim of original-paper fidelity.
 - Finite checks on observations, actions, old logprobs, rewards, losses,
   gradients, parameters and optimizer state. The entire rollout is checked
@@ -115,17 +118,22 @@ full experiment. The CLI's default full-video training horizon is preserved.
       --output /kaggle/working/rcdot_pilot --mode new \
       --workers 2 --gpu-ids 0,1 --encoder-threads 2 \
       --rollout-steps 64 --additional-timesteps 256 \
-      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05 \
+      --ppo-learning-rate 3e-5 --ppo-epochs 3 --ppo-target-kl 0.05 --ppo-aux-loss-coef 0.1 \
       --validation-videos 2 --validation-rates 50,120 --validation-frames 64 \
       --val-every-updates 2 --max-hours 10
 
 Inspect metrics, validation, action spread, target/actual bitrate, KL,
 clip fraction, `max_approx_kl_observed` and `stopped_by_target_kl`.
 The prior real-data smoke completed 256 interactions and two PPO updates,
-but saw approximate KL 3.95/69.14 and clip fractions 0.799/0.938. The tuned
-settings are **untested on Kaggle** until a new run is completed. Do not
-resume the old smoke checkpoint: changes to method/source are deliberately
-blocked by the strict resume contract. A finite optimizer update alone does
+with approximate KL 3.95/69.14 before the first stabilization. A subsequent
+stabilized 4096-transition Trial ran end-to-end but saw degraded Validation
+reward after update2, 5/8 target-KL stops, growing auxiliary MSE (0.7→426.8)
+and enormous critic-dominated global gradients (up to 220k). See
+[specific diagnosis](scripts/rl_rc_dot/TRIAL_4096_DIAGNOSIS.md).
+
+**The corrected policy architecture is not compatible with those previous
+checkpoints. Start MODE=new, PHASE=pilot for a fresh 256-step smoke; only
+advance to a new Trial after checking the persisted diagnostic metrics.** A finite optimizer update alone does
 not prove a good policy. Do not select reward/hyperparameters using Test100.
 
 ## Full experiment
