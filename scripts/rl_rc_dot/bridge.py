@@ -10,6 +10,20 @@ import sys
 import time
 from spec import parse_state,write_action
 
+def read_complete_line(stream):
+    """Read only newline-terminated records from a growing state file.
+
+    readline() may return a partial record at the current EOF. Rewind to
+    its start so the next poll includes the remaining fields once written.
+    A partial record must neither produce an action nor reset the timeout.
+    """
+    start=stream.tell()
+    line=stream.readline()
+    if line and not line.endswith("\n"):
+        stream.seek(start)
+        return ""
+    return line
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--states",type=Path,required=True)
@@ -45,7 +59,7 @@ def main():
     seen=set()
     with args.states.open(encoding="utf-8") as inp,args.trajectory.open("x",encoding="utf-8") as out:
         while len(seen)<args.frames:
-            line=inp.readline()
+            line=read_complete_line(inp)
             if not line:
                 if time.monotonic()-touched>args.idle_timeout:
                     raise TimeoutError(f"Waiting for observation: got {len(seen)} / {args.frames}")
@@ -79,3 +93,4 @@ def main():
 
 if __name__=="__main__":
     main()
+
