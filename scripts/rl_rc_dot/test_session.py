@@ -35,4 +35,38 @@ class Session(unittest.TestCase):
                 self.assertEqual(m["num_timesteps"],4)
             finally:model.get_env().close()
 
+    def test_detector_gpu_routing_does_not_remask_visible_devices(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        import os
+        import torch
+        from scripts.rl_rc_dot.data import detector_device
+        helper=SimpleNamespace(__file__=str(Path("fixture_yolo/utils/torch_utils.py").resolve()),
+                               select_device=lambda *args: "original")
+        original=helper.select_device
+        before=os.environ.get("CUDA_VISIBLE_DEVICES")
+        with patch("torch.cuda.is_available",return_value=True), \
+             patch("torch.cuda.device_count",return_value=2), \
+             patch("torch.cuda.set_device") as select, \
+             patch("scripts.rl_rc_dot.data.importlib.import_module",return_value=helper):
+            with detector_device("fixture_yolo","cuda:1") as device:
+                self.assertEqual(str(device),"cuda:1")
+                self.assertEqual(helper.select_device("cuda:0"),torch.device("cuda:1"))
+            select.assert_called_once_with(torch.device("cuda:1"))
+        self.assertIs(helper.select_device,original)
+        self.assertEqual(os.environ.get("CUDA_VISIBLE_DEVICES"),before)
+
+    def test_detector_loader_restores_helper_after_failure(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        from scripts.rl_rc_dot.data import detector_device
+        helper=SimpleNamespace(__file__=str(Path("fixture_yolo/utils/torch_utils.py").resolve()),
+                               select_device=lambda *args: "original")
+        original=helper.select_device
+        with patch("scripts.rl_rc_dot.data.importlib.import_module",return_value=helper):
+            with self.assertRaisesRegex(RuntimeError,"load failed"):
+                with detector_device("fixture_yolo","cpu"):
+                    raise RuntimeError("load failed")
+        self.assertIs(helper.select_device,original)
+
 if __name__=="__main__":unittest.main()
