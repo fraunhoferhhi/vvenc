@@ -5749,11 +5749,58 @@ static bool check_getPreBlkStatsAccumEqualBins( EncAdaptiveLoopFilter* ref, EncA
   return passed;
 }
 
+// The linear statistics inputs of a 4x4 block, for each filter shape and transposeIdx: random 10-bit samples, and samples
+// over the whole 16-bit range, where the sums wrap.
+static bool check_getLinBlkInputs( EncAdaptiveLoopFilter* ref, EncAdaptiveLoopFilter* opt, int filterSize, unsigned num_cases )
+{
+  std::cout << "Testing EncAdaptiveLoopFilter::getLinBlkInputs filterSize=" << filterSize << '\n';
+
+  const int halfFilterLength = filterSize >> 1;
+  constexpr int binSize = MAX_NUM_ALF_LUMA_COEFF << 4;   // Pels of the first bin in ELocal
+  bool passed = true;
+
+  InputGenerator<Pel> g10{ 10, /*is_signed=*/false };
+  InputGenerator<Pel> g16{ 16, /*is_signed=*/true };
+  DimensionGenerator rng;
+
+  for( unsigned i = 0; i < num_cases; ++i )
+  {
+    InputGenerator<Pel>& g = i & 1 ? g16 : g10;
+    // the block at ( halfFilterLength, halfFilterLength ) with its filter margin
+    const int recStride = rng.get( 4 + 2 * halfFilterLength, 64 );
+    const int orgStride = rng.get( 4, 64 );
+    std::vector<Pel> rec( recStride * ( 4 + 2 * halfFilterLength ) );
+    std::vector<Pel> org( orgStride * 4 );
+    std::generate( rec.begin(), rec.end(), g );
+    std::generate( org.begin(), org.end(), g );
+    const Pel* block = rec.data() + halfFilterLength * recStride + halfFilterLength;
+
+    for( int transposeIdx = 0; transposeIdx < 4; transposeIdx++ )
+    {
+      std::vector<Pel> eRef( binSize, 0 ), eOpt( binSize, 0 );
+      Pel yRef[4][4], yOpt[4][4];
+      ref->m_getLinBlkInputs( eRef.data(), yRef, org.data(), orgStride, block, recStride, halfFilterLength, transposeIdx );
+      opt->m_getLinBlkInputs( eOpt.data(), yOpt, org.data(), orgStride, block, recStride, halfFilterLength, transposeIdx );
+
+      std::ostringstream sstm;
+      sstm << "EncAdaptiveLoopFilter::getLinBlkInputs filterSize=" << filterSize << " transposeIdx=" << transposeIdx;
+      passed = compare_values_1d( sstm.str() + " ELocal", eRef.data(), eOpt.data(), binSize ) && passed;
+      passed = compare_values_1d( sstm.str() + " yLocal", &yRef[0][0], &yOpt[0][0], 16 ) && passed;
+    }
+  }
+  return passed;
+}
+
 static bool test_EncAdaptiveLoopFilter( unsigned num_cases )
 {
   EncAdaptiveLoopFilter ref( /*enableOpt=*/false );
   EncAdaptiveLoopFilter opt( /*enableOpt=*/true );
   bool passed = true;
+
+  for( int filterSize : { 5, 7 } )
+  {
+    passed = check_getLinBlkInputs( &ref, &opt, filterSize, num_cases ) && passed;
+  }
 
   for( int numBin : { 1, AdaptiveLoopFilter::AlfNumClippingValues } )
   {

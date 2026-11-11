@@ -474,6 +474,10 @@ public:
                                    const Pel yLocal[4][4], const int numBins );
   void ( *m_getPreBlkStatsWeightedAccum )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
                                            const Pel yLocal[4][4], const alf_float_t weight[4][4], const int numBins );
+  // The inputs of linear ALF's statistics for a 4x4 block whose rows are not clipped at a virtual boundary: the sample
+  // differences of every filter tap into ELocal (calcLinCovariance4 of each row) and org - rec into yLocal.
+  void ( *m_getLinBlkInputs )( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                               const int halfFilterLength, const int transposeIdx );
   // m_getPreBlkStatsAccum for a block with all clipping bins in use and some of them equal (AlfEqualBinRuns), with the
   // identical result; nullptr where only m_getPreBlkStatsAccum is optimised
   void ( *m_getPreBlkStatsAccumEqualBins )( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const Pel* ELocal,
@@ -510,7 +514,10 @@ public:
   template<bool clipToBdry, bool simd>
   void   calcCovariance4         ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx, ChannelType channel, int clipTopRow, int clipBotRow );
   template<bool clipToBdry, bool simd>
-  void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx,                      int clipTopRow, int clipBotRow );
+  static void calcLinCovariance4 ( Pel* ELocal, const Pel* rec, const int stride, const int halfFilterLength, const int transposeIdx,                      int clipTopRow, int clipBotRow );
+  template<bool simd>
+  static void getLinBlkInputs    ( Pel* ELocal, Pel yLocal[4][4], const Pel* org, const int orgStride, const Pel* rec, const int recStride,
+                                   const int halfFilterLength, const int transposeIdx );
   void   getBlkStatsCcAlf        ( AlfCovariance& covarianceCb, AlfCovariance& covarianceCr, const AlfFilterShape& shape, const PelUnitBuf& orgYuv,
                                    const PelUnitBuf &recYuv, const UnitArea &areaDst, const UnitArea &area,
                                    const int yPos);
