@@ -41,5 +41,33 @@ class ModelTest(unittest.TestCase):
         raw=torch.full((1,35),15.)
         self.assertTrue(torch.isfinite(model.logprob(dist,raw)).all())
 
+    def test_empty_detection_minibatch_trains_auxiliary_head(self):
+        self._check_empty_auxiliary_update(empty_weight=.05,expected_update=True)
+
+    def test_zero_empty_weight_skips_unlabelled_minibatch(self):
+        self._check_empty_auxiliary_update(empty_weight=0.,expected_update=False)
+
+    def _check_empty_auxiliary_update(self,empty_weight,expected_update):
+        from agent import RLRCDoT,PPOTrainer,Transition
+        torch.manual_seed(31)
+        model=RLRCDoT()
+        with torch.no_grad():
+            model.reward_head[-1].bias.fill_(1.)
+        local=torch.rand(2,4,20,30)
+        glob=torch.rand(2,16)
+        with torch.no_grad():
+            raw,lp,value,_=model.sample(local,glob)
+        before=model.reward_head[-1].bias.detach().clone()
+        steps=[Transition(local[i],glob[i],raw[i],lp[i].item(),value[i].item(),
+                          1.,i==1,torch.zeros(20,30),torch.zeros(20,30))
+               for i in range(2)]
+        PPOTrainer(model,epochs=1,minibatch=2,aux_empty_weight=empty_weight).update(steps)
+        changed=not torch.equal(before,model.reward_head[-1].bias.detach())
+        self.assertEqual(changed,expected_update)
+        if expected_update:
+            self.assertIsNotNone(model.reward_head[-1].bias.grad)
+            self.assertTrue(torch.isfinite(model.reward_head[-1].bias.grad).all())
+
 if __name__=="__main__":
     unittest.main()
+
