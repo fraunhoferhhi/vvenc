@@ -120,16 +120,6 @@ namespace vvenc {
     bool            scRelax;
     int             bitDepth;
     int64_t         bitsUsed;
-    // Completed-picture counters used only by the RL observation adapter.
-    // Unlike POC, these progress in RC-update order under GOP reordering.
-    int64_t         rlCompletedPictures;
-    int64_t         rlLastPictureBits;
-    int             rlLastPictureQP;
-    // Area-weighted statistics of winning luma CUs from last completed pic.
-    // Mode mapping: intra includes native intra/IBC/PLT; inter excludes skip.
-    double          rlLastPctIntra;
-    double          rlLastPctInter;
-    double          rlLastPctSkip;
     int64_t         bitsUsedQPLimDiff;
     int64_t         estimatedBitUsage;
     double          rateBoostFac;
