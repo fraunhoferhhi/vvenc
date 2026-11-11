@@ -1496,11 +1496,8 @@ static bool check_cpyResi( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases )
   return passed;
 }
 
-template<int W>
-static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
+static bool check_roundClip8( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases, unsigned width, unsigned height )
 {
-  static_assert( W == 4 || W == 8, "W must be either 4 or 8" );
-
   static constexpr size_t buf_size = MAX_CU_SIZE * MAX_CU_SIZE;
 
   // Use xMalloc to create aligned buffers for x86.
@@ -1521,7 +1518,7 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
   const TCoeff outputMax = INT16_MAX;
 
   std::ostringstream sstm_test;
-  sstm_test << "TCoeffOps::roundClip" << W << " w=" << width << " h=" << height << " stride=" << stride;
+  sstm_test << "TCoeffOps::roundClip8 w=" << width << " h=" << height << " stride=" << stride;
   std::cout << "Testing " << sstm_test.str() << std::endl;
 
   for( unsigned output_bd : { 8, 10 } )
@@ -1538,16 +1535,8 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
       std::generate( dst_ref, dst_ref + buf_size, inp_gen );
       std::memcpy( dst_opt, dst_ref, buf_size * sizeof( TCoeff ) );
 
-      if( W == 8 )
-      {
-        ref->roundClip8( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
-        opt->roundClip8( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
-      }
-      else // W == 4
-      {
-        ref->roundClip4( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
-        opt->roundClip4( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
-      }
+      ref->roundClip8( dst_ref, width, height, stride, outputMin, outputMax, round, shift );
+      opt->roundClip8( dst_opt, width, height, stride, outputMin, outputMax, round, shift );
 
       passed = compare_values_2d( sstm_subtest.str(), dst_ref, dst_opt, height, stride ) && passed;
     }
@@ -1561,7 +1550,7 @@ static bool check_roundClip( TCoeffOps* ref, TCoeffOps* opt, unsigned num_cases,
 
 template<typename G, typename T>
 static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, unsigned trSize, unsigned lines,
-                                   unsigned reducedLines, unsigned rows, G input_generator, T trafo_generator )
+                                   unsigned reducedLines, unsigned rows, TCoeff shift, G input_generator, T trafo_generator )
 {
   CHECK( lines == 0, "Lines must be non-zero" );
   CHECK( reducedLines > lines, "ReducedLines must be less than or equal to lines" );
@@ -1570,7 +1559,8 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
   CHECK( rows > trSize, "Rows must not be larger than transformation size" );
 
   std::ostringstream sstm;
-  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows;
+  sstm << "fastInvCore trSize=" << trSize << " lines=" << lines << " reducedLines=" << reducedLines << " rows=" << rows
+       << " shift=" << shift;
 
   TMatrixCoeff *it   = ( TMatrixCoeff* ) xMalloc( TMatrixCoeff, trSize * trSize );
   TCoeff       *src  = ( TCoeff* )       xMalloc( TCoeff,       trSize * lines );
@@ -1586,8 +1576,13 @@ static bool check_one_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned idx,
   std::generate_n( dst0, trSize * lines, input_generator );  // Kernels set dst themselves.
   std::copy_n( dst0, trSize * lines, dst1 );
 
-  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows );
-  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows );
+  // The clip range of the callers.
+  const TCoeff outputMin = INT16_MIN;
+  const TCoeff outputMax = INT16_MAX;
+  const TCoeff round     = 1 << ( shift - 1 );
+
+  ref->fastInvCore[ idx ]( it, src, dst0, lines, reducedLines, rows, outputMin, outputMax, round, shift );
+  opt->fastInvCore[ idx ]( it, src, dst1, lines, reducedLines, rows, outputMin, outputMax, round, shift );
 
   auto ret = compare_values_2d( sstm.str(), dst0, dst1, trSize, lines );
 
@@ -1651,12 +1646,14 @@ static bool check_fastInvCore( TCoeffOps* ref, TCoeffOps* opt, unsigned num_case
 
   for( unsigned i = 0; i < num_cases; ++i )
   {
-    // Clamp lines down to the next multiple of four when generating
-    // reducedLines to avoid existing x86 implementations over-writing.
-    unsigned lines        = 1 << rng.get( 1, 6 );
-    unsigned reducedLines = lines == 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
+    // reducedLines as the callers pass it: all lines when they are fewer than 4, else a multiple of four (the x86
+    // kernels write whole groups of 4 lines).
+    unsigned lines        = 1 << rng.get( 0, 6 );
+    unsigned reducedLines = lines <= 2 ? lines : std::min( 32u, rng.get( 4, lines, 4 ) );
     unsigned rows         = rng.get( 4, trSize, 4 );  // Cutoff must be a non-zero multiple of four.
-    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, g, t ) )
+    // The first stage's shift: most sums clip, at both ends. A second stage's: few do.
+    TCoeff   shift        = i & 1 ? 12 : 7;
+    if( !check_one_fastInvCore( ref, opt, idx, trSize, lines, reducedLines, rows, shift, g, t ) )
     {
       return false;
     }
@@ -1807,8 +1804,17 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
           }
           if( dist == 2 )
           {
-            const int trip[] = { 16384, 32767, -32768 };
-            src[rng.get( 0, trSize * reducedLine - 1 )] = trip[rng.get( 0, 2 )];
+            // values the range check must catch, in a line that changes with the cut-off (m * 5 % reducedLine: with
+            // reducedLine 8, lines 5, 2, 7 and 4 for the cut-offs 8, 16, 24 and 32) and, for the cut-off 24, also in the
+            // line 4 further on: a group of 8 lines sees them in its second half, its first half and both
+            const int      trip[]   = { 16384, 32767, -32768 };
+            const unsigned m        = cutoff / 8;
+            const unsigned tripLine = m * 5 % reducedLine;
+            src[tripLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            if( m == 3 )
+            {
+              src[( tripLine + 4 ) % reducedLine * trSize + rng.get( 0, trSize - 1 )] = trip[rng.get( 0, 2 )];
+            }
           }
           std::fill( dst0, dst0 + size, 0x5a5a5a5a );
           std::fill( dst1, dst1 + size, 0x5a5a5a5a );
@@ -1831,6 +1837,91 @@ static bool check_fastFwdDCT2( TCoeffOps* ref, TCoeffOps* opt, unsigned idx, uns
   xFree( src );
   xFree( dst0 );
   xFree( dst1 );
+
+  return passed;
+}
+
+static const TMatrixCoeff* trCoreMatrix( int dir, int trType, int sizeIdx )
+{
+  switch( trType * 10 + sizeIdx )
+  {
+  case  0: return g_trCoreDCT2P2 [dir][0];
+  case  1: return g_trCoreDCT2P4 [dir][0];
+  case  2: return g_trCoreDCT2P8 [dir][0];
+  case  3: return g_trCoreDCT2P16[dir][0];
+  case  4: return g_trCoreDCT2P32[dir][0];
+  case  5: return g_trCoreDCT2P64[dir][0];
+  case 11: return g_trCoreDCT8P4 [dir][0];
+  case 12: return g_trCoreDCT8P8 [dir][0];
+  case 13: return g_trCoreDCT8P16[dir][0];
+  case 14: return g_trCoreDCT8P32[dir][0];
+  case 21: return g_trCoreDST7P4 [dir][0];
+  case 22: return g_trCoreDST7P8 [dir][0];
+  case 23: return g_trCoreDST7P16[dir][0];
+  case 24: return g_trCoreDST7P32[dir][0];
+  default: return nullptr;
+  }
+}
+
+// TCoeffOps::fastFwdPel against the matrix multiply it stands for, for all transform types and sizes and every line
+// count and cutoff. The inputs reach the range the even/odd split takes. The whole destination is compared: stray
+// writes fail.
+static bool check_fastPelKernels( TCoeffOps* opt )
+{
+  printf( "Testing TCoeffOps::fastFwdPel\n" );
+  DimensionGenerator rng;
+  bool passed = true;
+
+  for( int trType = 0; trType < NUM_TRANS_TYPE; trType++ )
+  {
+    for( int sizeIdx = 0; sizeIdx < 6; sizeIdx++ )
+    {
+      const int N = 2 << sizeIdx;
+
+      for( int line : { 2, 4, 8, 16, 32, 64 } )
+      {
+        const int stride = N + 3;
+
+        for( int cutoff = N <= 4 ? N : 4; cutoff <= std::min( N, 32 ); cutoff += N <= 4 ? N : 4 )
+        {
+          for( int dist = 0; dist < 2; dist++ )
+          {
+            if( opt->fastFwdPel[trType][sizeIdx] )
+            {
+              const TMatrixCoeff* tc = trCoreMatrix( TRANSFORM_FORWARD, trType, sizeIdx );
+              const int shift = rng.get( N == 2 ? 0 : 1, 16 );
+              const int rnd   = shift ? 1 << ( shift - 1 ) : 0;
+
+              std::vector<Pel> src( stride * line + 8 );
+              for( Pel& v : src )
+              {
+                v = Pel( dist ? ( rng.get( 0, 1 ) ? 16383 : -16384 ) : int( rng.get( 0, 4095 ) ) - 2048 );
+              }
+
+              std::vector<TCoeff> dst0( N * line, 0x5a5a5a5a ), dst1( N * line, 0x5a5a5a5a );
+              for( int i = 0; i < line; i++ )
+              {
+                for( int j = 0; j < cutoff; j++ )
+                {
+                  int sum = 0;
+                  for( int k = 0; k < N; k++ )
+                  {
+                    sum += src[i * stride + k] * tc[j * N + k];
+                  }
+                  dst0[j * line + i] = ( sum + rnd ) >> shift;
+                }
+              }
+              opt->fastFwdPel[trType][sizeIdx]( src.data(), stride, dst1.data(), shift, line, N - cutoff );
+
+              std::ostringstream sstm;
+              sstm << "fastFwdPel trType=" << trType << " N=" << N << " line=" << line << " cutoff=" << cutoff << " shift=" << shift << " inputs=" << dist;
+              passed = compare_values_1d( sstm.str(), dst0.data(), dst1.data(), N * line ) && passed;
+            }
+          }
+        }
+      }
+    }
+  }
 
   return passed;
 }
@@ -1967,11 +2058,9 @@ static bool test_TCoeffOps()
 
   for( unsigned h : { 1, 2, 4, 8, 16, 32, 64 } )
   {
-    passed = check_roundClip<4>( &ref, &opt, num_cases, 4, h ) && passed;
-
     for( unsigned w : { 8, 16, 32, 64 } )
     {
-      passed = check_roundClip<8>( &ref, &opt, num_cases, w, h ) && passed;
+      passed = check_roundClip8( &ref, &opt, num_cases, w, h ) && passed;
     }
   }
 
@@ -1997,6 +2086,7 @@ static bool test_TCoeffOps()
   passed = check_fastFwdDCT2( &ref, &opt, 2, 16 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 3, 32 ) && passed;
   passed = check_fastFwdDCT2( &ref, &opt, 4, 64 ) && passed;
+  passed = check_fastPelKernels( &opt ) && passed;
 
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 0, 4 ) && passed;
   passed = check_fastFwdCore_1D( &ref, &opt, num_cases, 1, 8 ) && passed;

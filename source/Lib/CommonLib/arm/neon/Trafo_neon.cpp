@@ -123,30 +123,6 @@ void roundClip_neon( TCoeff* dst, unsigned width, unsigned height, unsigned stri
                      const TCoeff outputMax, const TCoeff round, const TCoeff shift );
 
 template<>
-void roundClip_neon<4>( TCoeff* dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin,
-                        const TCoeff outputMax, const TCoeff round, const TCoeff shift )
-{
-  CHECKD( height < 1, "Height must be >= 1" );
-  CHECKD( width != 4, "Width must be 4" );
-  CHECKD( round != 1 << ( shift - 1 ), "Round must be 1 << ( shift - 1 )" );
-  CHECKD( outputMin != INT16_MIN, "OutputMin should be -32768" );
-  CHECKD( outputMax != INT16_MAX, "OutputMax should be 32767" );
-
-  // Current call to this function guarantees a minimum rshift of 7.
-  // If dst max bit-depth is 23-bit, we do not need to do clipping to int16 range.
-  CHECKD( shift < 7, "Shift must be >= 7" );
-
-  do
-  {
-    int32x4_t d = vld1q_s32( dst );
-    d = vrshlq_s32( d, vdupq_n_s32( -shift ) );
-    vst1q_s32( dst, d );
-
-    dst += stride;
-  } while( --height != 0 );
-}
-
-template<>
 void roundClip_neon<8>( TCoeff* dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin,
                         const TCoeff outputMax, const TCoeff round, const TCoeff shift )
 {
@@ -181,8 +157,17 @@ void roundClip_neon<8>( TCoeff* dst, unsigned width, unsigned height, unsigned s
 
 template<unsigned trSize>
 static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines,
-                              unsigned reducedLines, unsigned rows )
+                              unsigned reducedLines, unsigned rows, const TCoeff outputMin, const TCoeff outputMax,
+                              const TCoeff round, const TCoeff shift )
 {
+  CHECKD( round != 1 << ( shift - 1 ), "Round must be 1 << ( shift - 1 )" );
+
+  // the rounding shift (vrshl by -shift adds 1 << ( shift - 1 ) first) and the clip of each sum
+  const int32x4_t vshift = vdupq_n_s32( -shift );
+  const int32x4_t vmin   = vdupq_n_s32( outputMin );
+  const int32x4_t vmax   = vdupq_n_s32( outputMax );
+  auto roundClip = [&]( int32x4_t d ) { return vminq_s32( vmaxq_s32( vrshlq_s32( d, vshift ), vmin ), vmax ); };
+
   static_assert( trSize % 4 == 0, "trSize should be a multiple of four" );
   CHECK( rows % 4 != 0, "rows should be a multiple of four" );
   CHECK( rows == 0, "rows should be non-zero" );
@@ -219,10 +204,10 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
         itj += trSize;
       } while( --k != 0 );
 
-      vst1q_s32( dstij + 0 * trSize, d0 );
-      vst1q_s32( dstij + 1 * trSize, d1 );
-      vst1q_s32( dstij + 2 * trSize, d2 );
-      vst1q_s32( dstij + 3 * trSize, d3 );
+      vst1q_s32( dstij + 0 * trSize, roundClip( d0 ) );
+      vst1q_s32( dstij + 1 * trSize, roundClip( d1 ) );
+      vst1q_s32( dstij + 2 * trSize, roundClip( d2 ) );
+      vst1q_s32( dstij + 3 * trSize, roundClip( d3 ) );
 
       j += 4;
     } while( j != trSize );
@@ -247,7 +232,7 @@ static void fastInvCore_neon( const TMatrixCoeff* it, const TCoeff* src, TCoeff*
         itj += trSize;
       } while( --k != 0 );
 
-      *dstij = d0;
+      *dstij = Clip3<TCoeff>( outputMin, outputMax, ( TCoeff ) shift_and_round( d0, shift ) );
     } while( ++j != trSize );
   }
 }
@@ -381,7 +366,6 @@ void TCoeffOps::_initTCoeffOpsARM<NEON>()
 {
   cpyCoeff4  = cpyCoeff_neon<4>;
   cpyCoeff8  = cpyCoeff_neon<8>;
-  roundClip4 = roundClip_neon<4>;
   roundClip8 = roundClip_neon<8>;
 
   fastInvCore[ 0 ]    = fastInvCore_neon<4>;
