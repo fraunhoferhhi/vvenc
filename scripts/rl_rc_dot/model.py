@@ -4,6 +4,7 @@ The PPO optimization follows SB3's MIT-licensed PPO update. Environment,
 buffer and finite-value checks bind rewards to the action consumed by VVenC.
 """
 from typing import NamedTuple
+import time
 import numpy as np
 import torch
 from torch import nn
@@ -134,6 +135,7 @@ class AuxPPO(PPO):
                     raise ValueError("Off-policy rollout; no update performed")
         records=[]
         stop=False
+        heartbeat=time.monotonic()
         for epoch in range(self.n_epochs):
             for data in self.rollout_buffer.get(self.batch_size):
                 values,logp,entropy=self.policy.evaluate_actions(data.observations,data.actions)
@@ -163,6 +165,9 @@ class AuxPPO(PPO):
                     "auxiliary_loss":auxiliary.item(),"entropy_loss":entropy_loss.item(),"approx_kl":kl.item(),
                     "clip_fraction":((ratio-1).abs()>clip).float().mean().item(),"gradient_norm":norm.item()})
             self._n_updates+=1
+            if time.monotonic()-heartbeat>=15:
+                print("PPO_OPTIMIZING",f"epoch={epoch+1}/{self.n_epochs}",f"optimizer_steps={len(records)}",flush=True)
+                heartbeat=time.monotonic()
             if stop:break
         if not records:raise RuntimeError("PPO completed no optimizer steps")
         self.completed_rollouts+=1
