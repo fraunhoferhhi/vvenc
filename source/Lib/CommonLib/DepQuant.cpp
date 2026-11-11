@@ -517,8 +517,6 @@ namespace DQIntern
   void RateEstimator::initCtx( const TUParameters& tuPars, const TransformUnit& tu, const ComponentID compID, const FracBitsAccess& fracBitsAccess,
                                RateTablesMemo& memo )
   {
-    m_scanId2Pos = tuPars.m_scanId2BlkPos;
-
     // The sig and gtx tables depend only on the channel type and the states of the coefficient-coding contexts. The
     // memo keeps, per channel type, the last tables built and the raw context bytes they came from: when those are
     // unchanged, as they mostly are, the kept tables are still valid. The result is identical to building them every time.
