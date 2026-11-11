@@ -114,6 +114,8 @@ void fgaBlockSumsCore   ( const Pel* src, int stride, int64_t& sum, int64_t& sum
 void fgaSquaredDct16Core( const Pel* src, int stride, int maxRange, double* sum );
 void fgaResidualRowCore ( const Pel* cur, const Pel* prev, const Pel* next, int n, Pel* dst );
 
+struct LostGrainSpectrum;   // CommonLib/Picture.h
+
 class FGAnalyzer
 {
 public:
@@ -136,6 +138,29 @@ public:
   // The parameters to signal in the FGC SEI, with the grain strength set to strength percent of the analysed grain:
   // the log2 scale factor and the component models, with scaling factors calibrated against the synthesis.
   void getSignalledParameters( double strength, int& log2ScaleFactor, SeiFgc::CompModel compModel[ MAX_NUM_COMP ] ) const;
+
+  // The film grain SEI fitted to the grain the coding lost. lostGrainSpectra: for one component of a coded picture, the
+  // summed 16x16 DCT power of the original's flat blocks and of the same blocks of the reconstruction, per 8-bit block
+  // mean, in ascending order (read by several threads at once: it changes no state).
+  void lostGrainSpectra( const CPelBuf& org, const CPelBuf& rec, int bitDepth, std::vector<LostGrainSpectrum>& spectra ) const;
+  // An intensity interval's summed spectra reduced to the mean power per block in each u + v frequency group of the fit
+  // (once per interval: it does not depend on the cut-offs tried).
+  struct LostGrainPower
+  {
+    static constexpr int GROUPS = 5;
+    double orig[ GROUPS ] = {};
+    double reco[ GROUPS ] = {};
+    int    blocks         = 0;
+  };
+  static LostGrainPower lostGrainPower( const double orig[ 256 ], const double reco[ 256 ], int blocks );
+  // The scaling factor (0 .. MAX_STANDARD_DEVIATION) at cut-offs (h, w) whose synthesized grain, added to the
+  // reconstruction, best matches the original's power per u + v frequency group (least squares of the log ratio); the
+  // synthesized power is capped at that of the analyzer's scale s0 at its cut-offs (h0, w0). Returns the cost, -1: nothing
+  // to fit.
+  static double lostGrainFit( const LostGrainPower& power, int bitDepth, bool chroma420, int log2ScaleFactor, int s0, int h0,
+                              int w0, int h, int w, int& scale );
+  // The scaling factor at cut-offs (h, w) whose synthesized in-block power equals that of scale s at (h0, w0).
+  static int equalPowerScale( int s, bool chroma420, int h0, int w0, int h, int w );
 
   // A plane of samples with its own storage; the analysis works on whole planes.
   struct Plane
